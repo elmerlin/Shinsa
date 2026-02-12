@@ -21,8 +21,7 @@ function initializeDb() {
       date TEXT,
       phase TEXT DEFAULT 'SETUP',
       current_round INT DEFAULT 0,
-      swiss_rounds INT DEFAULT 3,
-      koth_top_n INT DEFAULT 8,
+      total_rounds INT DEFAULT 3,
       config TEXT DEFAULT '{}',
       created_at TEXT DEFAULT (datetime('now'))
     );
@@ -31,13 +30,12 @@ function initializeDb() {
       id TEXT PRIMARY KEY,
       tournament_id TEXT NOT NULL,
       name TEXT NOT NULL,
-      bio TEXT DEFAULT '',
-      avatar_url TEXT DEFAULT '',
       skill_title TEXT DEFAULT '',
+      skill_level INT DEFAULT 1,
       pumbility INT DEFAULT 0,
       wins INT DEFAULT 0,
       losses INT DEFAULT 0,
-      draws INT DEFAULT 0,
+      points INT DEFAULT 0,
       buchholz REAL DEFAULT 0,
       seed_rank INT DEFAULT 0,
       is_active INT DEFAULT 1,
@@ -52,8 +50,8 @@ function initializeDb() {
       jacket_url TEXT DEFAULT '',
       mode TEXT NOT NULL,
       level INT NOT NULL,
-      category TEXT DEFAULT '',
-      bpm TEXT DEFAULT ''
+      bpm TEXT DEFAULT '',
+      song_key TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS matches (
@@ -63,10 +61,8 @@ function initializeDb() {
       player1_id TEXT,
       player2_id TEXT,
       winner_id TEXT,
-      stage_phase TEXT NOT NULL,
       difficulty_min INT,
       difficulty_max INT,
-      koth_position INT,
       is_bye INT DEFAULT 0,
       status TEXT DEFAULT 'PENDING',
       drawn_songs TEXT DEFAULT '[]',

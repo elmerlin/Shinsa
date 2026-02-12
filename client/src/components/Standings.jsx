@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 export default function Standings({ players, matches, showFinal }) {
   const [expandedId, setExpandedId] = useState(null);
 
-  // Sort by wins -> buchholz -> pumbility
   const sorted = [...players].sort((a, b) => {
     if (b.wins !== a.wins) return b.wins - a.wins;
     if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
@@ -15,7 +14,6 @@ export default function Standings({ players, matches, showFinal }) {
 
   const getPlayerMatches = (playerId) => {
     return matches.filter(m =>
-      m.stage_phase === 'SWISS' &&
       m.status === 'COMPLETED' &&
       (m.player1_id === playerId || m.player2_id === playerId)
     );
@@ -28,6 +26,11 @@ export default function Standings({ players, matches, showFinal }) {
     return 'text-gray-600';
   };
 
+  const formatScore = (score) => {
+    if (!score && score !== 0) return '-';
+    return Number(score).toLocaleString();
+  };
+
   return (
     <div>
       <h2 className="section-title mb-4">
@@ -35,15 +38,14 @@ export default function Standings({ players, matches, showFinal }) {
       </h2>
 
       <div className="card overflow-hidden p-0">
-        {/* Header */}
         <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-piu-dark text-xs text-gray-400 font-display uppercase tracking-wider">
           <div className="col-span-1">#</div>
           <div className="col-span-4">Player</div>
           <div className="col-span-1 text-center">W</div>
           <div className="col-span-1 text-center">L</div>
-          <div className="col-span-2 text-center">Buchholz</div>
+          <div className="col-span-1 text-center">Pts</div>
           <div className="col-span-2 text-center">Pumbility</div>
-          <div className="col-span-1"></div>
+          <div className="col-span-2 text-center">Buchholz</div>
         </div>
 
         {sorted.map((player, idx) => {
@@ -56,16 +58,16 @@ export default function Standings({ players, matches, showFinal }) {
               <div
                 onClick={() => setExpandedId(isExpanded ? null : player.id)}
                 className={`grid grid-cols-12 gap-2 px-4 py-3 items-center cursor-pointer transition-colors
-                  ${isExpanded ? 'bg-piu-accent/5' : 'hover:bg-piu-dark/50'}
+                  ${isExpanded ? 'bg-piu-accent/10 border-l-2 border-l-piu-accent' : 'hover:bg-piu-dark/50 border-l-2 border-l-transparent'}
                   ${idx > 0 ? 'border-t border-piu-border/50' : ''}`}
               >
-                <div className={`col-span-1 font-display font-bold ${getMedalColor(rank)}`}>
+                <div className={`col-span-1 font-display font-bold text-lg ${getMedalColor(rank)}`}>
                   {rank}
                 </div>
                 <div className="col-span-4 flex items-center gap-2">
                   <span className="font-display font-bold">{player.name}</span>
                   {player.skill_title && (
-                    <span className="text-xs text-gray-500">{player.skill_title}</span>
+                    <span className="text-xs text-gray-500 hidden sm:inline">{player.skill_title}</span>
                   )}
                 </div>
                 <div className="col-span-1 text-center text-piu-green font-mono font-bold">
@@ -74,52 +76,83 @@ export default function Standings({ players, matches, showFinal }) {
                 <div className="col-span-1 text-center text-red-400 font-mono">
                   {player.losses}
                 </div>
-                <div className="col-span-2 text-center text-gray-400 font-mono">
-                  {player.buchholz.toFixed(1)}
+                <div className="col-span-1 text-center text-piu-gold font-mono font-bold">
+                  {player.points || player.wins}
                 </div>
                 <div className="col-span-2 text-center text-piu-gold font-mono">
-                  {player.pumbility || '-'}
+                  {player.pumbility ? player.pumbility.toLocaleString() : '-'}
                 </div>
-                <div className="col-span-1 text-right text-gray-600">
-                  {isExpanded ? '&#9650;' : '&#9660;'}
+                <div className="col-span-2 text-center text-gray-400 font-mono text-sm">
+                  {(player.buchholz || 0).toFixed(1)}
                 </div>
               </div>
 
               {/* Expanded match history */}
               {isExpanded && (
-                <div className="px-4 py-3 bg-piu-dark/30 border-t border-piu-border/30 animate-fade-in">
-                  <p className="text-xs text-gray-500 mb-2 font-display uppercase">Match History</p>
+                <div className="px-4 py-4 bg-piu-dark/40 border-t border-piu-border/30 border-l-2 border-l-piu-accent animate-fade-in">
+                  <p className="text-xs text-piu-accent mb-3 font-display uppercase tracking-wider font-bold">
+                    Match History ({playerMatches.length} matches)
+                  </p>
                   {playerMatches.length === 0 ? (
                     <p className="text-sm text-gray-600">No matches played yet</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {playerMatches.map(m => {
                         const opponentId = m.player1_id === player.id ? m.player2_id : m.player1_id;
                         const opponent = playerMap[opponentId];
                         const isWin = m.winner_id === player.id;
                         const scores = m.scores || {};
                         const playedSongs = m.played_songs || [];
+                        const isP1 = m.player1_id === player.id;
 
                         return (
-                          <div key={m.id} className="flex items-center gap-3 text-sm">
-                            <span className={`font-bold ${isWin ? 'text-piu-green' : 'text-red-400'}`}>
-                              {isWin ? 'W' : 'L'}
-                            </span>
-                            <span className="text-gray-300">
-                              vs {opponent?.name || 'BYE'}
-                            </span>
-                            {(scores.player1_wins !== undefined) && (
-                              <span className="text-gray-500">
-                                ({m.player1_id === player.id
-                                  ? `${scores.player1_wins}-${scores.player2_wins}`
-                                  : `${scores.player2_wins}-${scores.player1_wins}`})
-                              </span>
-                            )}
-                            <span className="text-gray-600 text-xs">Round {m.round_number}</span>
+                          <div key={m.id} className={`rounded-lg p-3 ${isWin ? 'bg-piu-green/5 border border-piu-green/20' : 'bg-red-500/5 border border-red-500/20'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-display font-bold text-sm px-2 py-0.5 rounded ${isWin ? 'bg-piu-green/20 text-piu-green' : 'bg-red-500/20 text-red-400'}`}>
+                                  {isWin ? 'WIN' : 'LOSS'}
+                                </span>
+                                <span className="text-gray-300 font-display">
+                                  vs {opponent?.name || 'Unknown'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="font-display font-bold">
+                                  {isP1 ? scores.player1_wins : scores.player2_wins}-{isP1 ? scores.player2_wins : scores.player1_wins}
+                                </span>
+                                <span className="text-gray-600">R{m.round_number} Lv.{m.difficulty_min}-{m.difficulty_max}</span>
+                              </div>
+                            </div>
+
                             {playedSongs.length > 0 && (
-                              <span className="text-gray-600 text-xs truncate">
-                                {playedSongs.map(s => `${s.title || s.song?.title} ${s.mode?.[0] || ''}${s.level || s.song?.level}`).join(', ')}
-                              </span>
+                              <div className="space-y-1 mt-2">
+                                {playedSongs.map((s, si) => {
+                                  const songMode = s.mode || s.song?.mode || 'Single';
+                                  const songLevel = s.level || s.song?.level;
+                                  const songTitle = s.title || s.song?.title;
+                                  const myScore = isP1 ? s.p1_score : s.p2_score;
+                                  const theirScore = isP1 ? s.p2_score : s.p1_score;
+                                  const iSongWin = s.song_winner_id === player.id;
+
+                                  return (
+                                    <div key={si} className="flex items-center gap-2 text-sm">
+                                      <span className={`w-8 text-center text-xs font-display font-bold px-1 rounded ${
+                                        songMode === 'Single' ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-300'
+                                      }`}>
+                                        {songMode[0]}{songLevel}
+                                      </span>
+                                      <span className="text-gray-300 flex-1 truncate text-xs">{songTitle}</span>
+                                      <span className={`font-mono text-xs ${iSongWin ? 'text-piu-green font-bold' : 'text-gray-500'}`}>
+                                        {formatScore(myScore)}
+                                      </span>
+                                      <span className="text-gray-700 text-xs">vs</span>
+                                      <span className={`font-mono text-xs ${!iSongWin ? 'text-red-400 font-bold' : 'text-gray-500'}`}>
+                                        {formatScore(theirScore)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
                         );

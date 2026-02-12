@@ -21,27 +21,24 @@ export const deleteTournament = (id) => request(`/tournaments/${id}`, { method: 
 
 // Players
 export const getPlayers = (tournamentId) => request(`/players/tournament/${tournamentId}`);
-export const getPlayer = (id) => request(`/players/${id}`);
 export const createPlayer = (data) => request('/players', { method: 'POST', body: JSON.stringify(data) });
 export const updatePlayer = (id, data) => request(`/players/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deletePlayer = (id) => request(`/players/${id}`, { method: 'DELETE' });
 
 // Matches
-export const getMatches = (tournamentId, filters = {}) => {
-  const params = new URLSearchParams(filters).toString();
-  return request(`/matches/tournament/${tournamentId}${params ? `?${params}` : ''}`);
+export const getMatches = (tournamentId, round) => {
+  let url = `/matches/tournament/${tournamentId}`;
+  if (round) url += `?round=${round}`;
+  return request(url);
 };
 export const getMatch = (id) => request(`/matches/${id}`);
-export const generateSwissRound = (tournamentId) => request(`/matches/tournament/${tournamentId}/swiss-round`, { method: 'POST' });
+export const generateRoundRobin = (tournamentId) => request(`/matches/tournament/${tournamentId}/round-robin`, { method: 'POST' });
 export const drawCards = (matchId) => request(`/matches/${matchId}/draw`, { method: 'POST' });
 export const vetoSong = (matchId, data) => request(`/matches/${matchId}/veto`, { method: 'POST', body: JSON.stringify(data) });
 export const submitResult = (matchId, data) => request(`/matches/${matchId}/result`, { method: 'POST', body: JSON.stringify(data) });
-export const generateKoth = (tournamentId) => request(`/matches/tournament/${tournamentId}/koth`, { method: 'POST' });
-export const advanceKoth = (matchId) => request(`/matches/${matchId}/koth-advance`, { method: 'POST' });
 
 // Songs
-export const getSongs = (filters = {}) => {
-  const params = new URLSearchParams(filters).toString();
-  return request(`/songs${params ? `?${params}` : ''}`);
+export const getSongs = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs${qs ? `?${qs}` : ''}`);
 };
-export const getSongStats = () => request('/songs/stats');

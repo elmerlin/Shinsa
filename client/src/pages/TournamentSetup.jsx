@@ -8,8 +8,7 @@ export default function TournamentSetup() {
     name: '',
     location: '',
     date: new Date().toISOString().split('T')[0],
-    swiss_rounds: 3,
-    koth_top_n: 8,
+    total_rounds: 3,
   });
   const [levels, setLevels] = useState([
     { round: 1, min: 18, max: 19 },
@@ -26,7 +25,7 @@ export default function TournamentSetup() {
 
   const handleRoundsChange = (val) => {
     const n = parseInt(val) || 1;
-    setForm(f => ({ ...f, swiss_rounds: n }));
+    setForm(f => ({ ...f, total_rounds: n }));
     const newLevels = [];
     for (let i = 0; i < n; i++) {
       newLevels.push(levels[i] || { round: i + 1, min: 18 + i * 2, max: 19 + i * 2 });
@@ -42,15 +41,10 @@ export default function TournamentSetup() {
       const tournament = await createTournament({
         ...form,
         config: {
-          swiss_levels: levels,
-          koth_start_level: 20,
-          koth_level_increment: 1,
-          koth_max_level: 27,
+          round_levels: levels,
           cards_per_draw: 5,
           vetoes_per_player: 1,
           best_of: 3,
-          finals_best_of: 5,
-          modes: ['Single', 'Double'],
         },
       });
       navigate(`/tournament/${tournament.id}`);
@@ -74,7 +68,7 @@ export default function TournamentSetup() {
             <input
               type="text"
               className="input-field"
-              placeholder='e.g. "The Big One 2024"'
+              placeholder='e.g. "Shinsa Season 1"'
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               required
@@ -87,7 +81,7 @@ export default function TournamentSetup() {
               <input
                 type="text"
                 className="input-field"
-                placeholder='e.g. "Pump Dojo"'
+                placeholder='e.g. "Round 1 Arcade"'
                 value={form.location}
                 onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
               />
@@ -105,40 +99,29 @@ export default function TournamentSetup() {
         </div>
 
         <div className="card space-y-4">
-          <h2 className="font-display font-bold text-lg text-piu-accent">Tournament Format</h2>
+          <h2 className="font-display font-bold text-lg text-piu-accent">Round Robin Format</h2>
+          <p className="text-sm text-gray-500">Each round is a full round robin - every player plays every other player. Best of 3 songs per match.</p>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Swiss Rounds</label>
-              <input
-                type="number"
-                className="input-field"
-                min="1"
-                max="10"
-                value={form.swiss_rounds}
-                onChange={e => handleRoundsChange(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">KotH Top N Players</label>
-              <input
-                type="number"
-                className="input-field"
-                min="2"
-                max="32"
-                value={form.koth_top_n}
-                onChange={e => setForm(f => ({ ...f, koth_top_n: parseInt(e.target.value) || 8 }))}
-              />
-            </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Number of Rounds</label>
+            <input
+              type="number"
+              className="input-field w-32"
+              min="1"
+              max="10"
+              value={form.total_rounds}
+              onChange={e => handleRoundsChange(e.target.value)}
+            />
           </div>
         </div>
 
         <div className="card space-y-4">
           <h2 className="font-display font-bold text-lg text-piu-accent">Difficulty Levels per Round</h2>
+          <p className="text-sm text-gray-500">Song draws will pull charts from this level range. Must have Single and Double charts available.</p>
 
           {levels.map((lvl, idx) => (
             <div key={idx} className="flex items-center gap-4">
-              <span className="text-sm text-gray-400 w-20">Round {idx + 1}</span>
+              <span className="text-sm text-gray-400 w-20 font-display font-bold">Round {idx + 1}</span>
               <div className="flex items-center gap-2 flex-1">
                 <label className="text-xs text-gray-500">Min</label>
                 <input
@@ -162,6 +145,17 @@ export default function TournamentSetup() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="card p-3 bg-piu-dark/50 border-piu-accent/20">
+          <h3 className="font-display font-bold text-sm text-piu-accent mb-2">Match Rules</h3>
+          <ul className="text-xs text-gray-400 space-y-1">
+            <li>5 cards drawn per match (min 2 Single + 2 Double)</li>
+            <li>1 veto per player (higher seed bans first)</li>
+            <li>Best of 3 songs (match ends early if 2-0)</li>
+            <li>Score per song: 0 - 1,000,000</li>
+            <li>Single charts = Red, Double charts = Green</li>
+          </ul>
         </div>
 
         <div className="flex gap-3">

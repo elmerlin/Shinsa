@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import { createPlayer, deletePlayer, updatePlayer } from '../utils/api';
+import { createPlayer, deletePlayer } from '../utils/api';
 
-const SKILL_TITLES = [
-  '', 'Beginner', 'Intermediate', 'Advanced', 'Expert',
-  'Specialist', 'Master', 'Grand Master', 'Legend',
-];
+const SKILL_TITLES = ['Beginning', 'Intermediate', 'Advanced', 'Expert'];
 
 export default function PlayerRegistration({ tournamentId, players, isSetup, onUpdate }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    name: '', bio: '', avatar_url: '', skill_title: '', pumbility: '',
+    name: '', skill_title: 'Beginning', skill_level: 1, pumbility: '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -20,10 +17,12 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
     try {
       await createPlayer({
         tournament_id: tournamentId,
-        ...form,
+        name: form.name,
+        skill_title: `${form.skill_title} lvl. ${form.skill_level}`,
+        skill_level: parseInt(form.skill_level) || 1,
         pumbility: parseInt(form.pumbility) || 0,
       });
-      setForm({ name: '', bio: '', avatar_url: '', skill_title: '', pumbility: '' });
+      setForm({ name: '', skill_title: 'Beginning', skill_level: 1, pumbility: '' });
       setShowForm(false);
       onUpdate();
     } catch (err) {
@@ -40,6 +39,20 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
   };
 
   const getInitials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+  const skillColors = {
+    Beginning: 'bg-green-500/20 text-green-400 border-green-500/30',
+    Intermediate: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    Advanced: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    Expert: 'bg-red-500/20 text-red-400 border-red-500/30',
+  };
+
+  const getSkillColor = (title) => {
+    for (const [key, val] of Object.entries(skillColors)) {
+      if (title && title.startsWith(key)) return val;
+    }
+    return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+  };
 
   const avatarColors = [
     'from-piu-accent to-purple-700',
@@ -99,31 +112,21 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                 onChange={e => setForm(f => ({ ...f, skill_title: e.target.value }))}
               >
                 {SKILL_TITLES.map(t => (
-                  <option key={t} value={t}>{t || 'Select...'}</option>
+                  <option key={t} value={t}>{t}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Avatar URL</label>
+              <label className="block text-sm text-gray-400 mb-1">Skill Level (1-10)</label>
               <input
-                type="text"
+                type="number"
                 className="input-field"
-                placeholder="https://..."
-                value={form.avatar_url}
-                onChange={e => setForm(f => ({ ...f, avatar_url: e.target.value }))}
+                min="1"
+                max="10"
+                value={form.skill_level}
+                onChange={e => setForm(f => ({ ...f, skill_level: Math.max(1, Math.min(10, parseInt(e.target.value) || 1)) }))}
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Bio</label>
-            <textarea
-              className="input-field"
-              rows="2"
-              placeholder="Short bio..."
-              value={form.bio}
-              onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-            />
           </div>
 
           <button type="submit" className="btn-primary w-full" disabled={saving}>
@@ -136,34 +139,27 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
         {players.map((player, idx) => (
           <div key={player.id} className="card flex items-center gap-4 group">
             <div className="text-gray-600 font-mono text-sm w-6 text-right">
-              #{player.seed_rank || idx + 1}
+              #{idx + 1}
             </div>
 
-            {player.avatar_url ? (
-              <img
-                src={player.avatar_url}
-                alt={player.name}
-                className="w-10 h-10 rounded-full object-cover border border-piu-border"
-              />
-            ) : (
-              <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} flex items-center justify-center font-display font-bold text-sm`}>
-                {getInitials(player.name)}
-              </div>
-            )}
+            <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} flex items-center justify-center font-display font-bold text-sm`}>
+              {getInitials(player.name)}
+            </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-display font-bold">{player.name}</span>
                 {player.skill_title && (
-                  <span className="badge bg-piu-blue/20 text-piu-blue">{player.skill_title}</span>
+                  <span className={`badge border ${getSkillColor(player.skill_title)}`}>
+                    {player.skill_title}
+                  </span>
                 )}
               </div>
-              {player.bio && <p className="text-sm text-gray-500 truncate">{player.bio}</p>}
             </div>
 
             <div className="text-right">
               {player.pumbility > 0 && (
-                <div className="text-sm text-piu-gold font-mono">{player.pumbility}</div>
+                <div className="text-sm text-piu-gold font-mono font-bold">{player.pumbility.toLocaleString()}</div>
               )}
               <div className="text-xs text-gray-500">
                 {player.wins}W - {player.losses}L

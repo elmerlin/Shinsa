@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { getTournaments, deleteTournament } from '../utils/api';
 
 const PHASE_LABELS = {
   SETUP: 'Setup',
-  SWISS: 'Swiss Rounds',
-  KOTH: 'King of the Hill',
+  ROUND_ROBIN: 'Round Robin',
   COMPLETED: 'Completed',
 };
 
 export default function Dashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     getTournaments()
@@ -36,7 +34,7 @@ export default function Dashboard() {
           <h1 className="text-4xl font-display font-bold tracking-wider">
             TOURNAMENTS
           </h1>
-          <p className="text-gray-400 mt-1">Pump It Up Tournament Manager</p>
+          <p className="text-gray-400 mt-1">Pump It Up Round Robin Tournament Manager</p>
         </div>
         <Link to="/tournament/new" className="btn-primary text-lg">
           + New Tournament
@@ -47,7 +45,7 @@ export default function Dashboard() {
         <div className="text-center py-20 text-gray-500">Loading...</div>
       ) : tournaments.length === 0 ? (
         <div className="text-center py-20">
-          <div className="text-6xl mb-4 opacity-30">&#9733;</div>
+          <div className="text-6xl mb-4 opacity-30 font-display">&#23529;&#26619;</div>
           <p className="text-gray-400 text-lg">No tournaments yet</p>
           <p className="text-gray-600 mt-2">Create your first tournament to get started</p>
           <Link to="/tournament/new" className="btn-primary mt-6 inline-block">

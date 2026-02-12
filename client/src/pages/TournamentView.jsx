@@ -1,27 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { getTournament, getPlayers, getMatches, updateTournament, generateSwissRound, generateKoth } from '../utils/api';
+import { useParams } from 'react-router-dom';
+import { getTournament, getPlayers, getMatches, generateRoundRobin } from '../utils/api';
 import PlayerRegistration from '../components/PlayerRegistration';
 import SwissRound from '../components/SwissRound';
 import Standings from '../components/Standings';
-import KothBracket from '../components/KothBracket';
 
 const PHASE_TABS = {
-  SETUP: ['players', 'settings'],
-  SWISS: ['rounds', 'standings', 'players'],
-  KOTH: ['gauntlet', 'standings', 'players'],
-  COMPLETED: ['results', 'standings'],
+  SETUP: ['players'],
+  ROUND_ROBIN: ['rounds', 'standings', 'players'],
+  COMPLETED: ['standings', 'players'],
 };
 
 export default function TournamentView() {
   const { id } = useParams();
-  const location = useLocation();
-  const navigate = useNavigate();
   const [tournament, setTournament] = useState(null);
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
   const [activeTab, setActiveTab] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedRound, setSelectedRound] = useState(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -37,19 +34,22 @@ export default function TournamentView() {
         const tabs = PHASE_TABS[t.phase] || ['players'];
         setActiveTab(tabs[0]);
       }
+      if (t.current_round > 0 && !selectedRound) {
+        setSelectedRound(t.current_round);
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [id, activeTab]);
+  }, [id, activeTab, selectedRound]);
 
   useEffect(() => { loadData(); }, [id]);
 
-  const handleStartSwiss = async () => {
+  const handleStartRound = async () => {
     if (players.length < 2) return alert('Need at least 2 players');
     try {
-      await generateSwissRound(id);
+      await generateRoundRobin(id);
       await loadData();
       setActiveTab('rounds');
     } catch (err) {
@@ -57,20 +57,11 @@ export default function TournamentView() {
     }
   };
 
-  const handleNextSwissRound = async () => {
+  const handleNextRound = async () => {
     try {
-      await generateSwissRound(id);
+      await generateRoundRobin(id);
       await loadData();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const handleStartKoth = async () => {
-    try {
-      await generateKoth(id);
-      await loadData();
-      setActiveTab('gauntlet');
+      setSelectedRound((tournament?.current_round || 0) + 1);
     } catch (err) {
       alert(err.message);
     }
@@ -81,12 +72,18 @@ export default function TournamentView() {
 
   const config = tournament.config || {};
   const tabs = PHASE_TABS[tournament.phase] || ['players'];
-  const swissMatches = matches.filter(m => m.stage_phase === 'SWISS');
-  const kothMatches = matches.filter(m => m.stage_phase === 'KOTH');
   const currentRound = tournament.current_round;
-  const allRoundsDone = currentRound >= tournament.swiss_rounds;
-  const roundMatches = swissMatches.filter(m => m.round_number === currentRound);
-  const allCurrentDone = roundMatches.every(m => m.status === 'COMPLETED');
+  const totalRounds = tournament.total_rounds || 3;
+  const allRoundsDone = currentRound >= totalRounds;
+
+  const currentRoundMatches = matches.filter(m => m.round_number === currentRound);
+  const allCurrentDone = currentRoundMatches.length > 0 && currentRoundMatches.every(m => m.status === 'COMPLETED');
+
+  const displayRound = selectedRound || currentRound;
+  const displayMatches = matches.filter(m => m.round_number === displayRound);
+
+  const playerCount = players.length;
+  const matchesPerRound = playerCount > 1 ? (playerCount * (playerCount - 1)) / 2 : 0;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
@@ -98,14 +95,15 @@ export default function TournamentView() {
             tournament.phase === 'SETUP' ? 'badge-pending' :
             tournament.phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
           }`}>
-            {tournament.phase}
+            {tournament.phase === 'ROUND_ROBIN' ? 'Round Robin' : tournament.phase}
           </span>
         </div>
         <div className="flex gap-4 text-sm text-gray-400">
           {tournament.location && <span>{tournament.location}</span>}
           {tournament.date && <span>{tournament.date}</span>}
           <span>{players.length} players</span>
-          {currentRound > 0 && <span>Round {currentRound}/{tournament.swiss_rounds}</span>}
+          {currentRound > 0 && <span>Round {currentRound}/{totalRounds}</span>}
+          {matchesPerRound > 0 && <span>{matchesPerRound} matches/round</span>}
         </div>
       </div>
 
@@ -113,36 +111,33 @@ export default function TournamentView() {
       {tournament.phase === 'SETUP' && (
         <div className="card mb-6 flex items-center justify-between">
           <div>
-            <p className="font-display font-bold">Ready to start?</p>
-            <p className="text-sm text-gray-400">{players.length} players registered</p>
+            <p className="font-display font-bold">Ready to start Round Robin?</p>
+            <p className="text-sm text-gray-400">{players.length} players = {matchesPerRound} matches per round</p>
           </div>
-          <button onClick={handleStartSwiss} className="btn-primary" disabled={players.length < 2}>
-            Start Swiss Round 1
+          <button onClick={handleStartRound} className="btn-primary" disabled={players.length < 2}>
+            Start Round 1
           </button>
         </div>
       )}
 
-      {tournament.phase === 'SWISS' && allCurrentDone && !allRoundsDone && (
+      {tournament.phase === 'ROUND_ROBIN' && allCurrentDone && !allRoundsDone && (
         <div className="card mb-6 flex items-center justify-between border-piu-green/30">
           <div>
             <p className="font-display font-bold text-piu-green">Round {currentRound} Complete!</p>
-            <p className="text-sm text-gray-400">All matches have been played</p>
+            <p className="text-sm text-gray-400">All {currentRoundMatches.length} matches have been played</p>
           </div>
-          <button onClick={handleNextSwissRound} className="btn-primary">
-            Generate Round {currentRound + 1}
+          <button onClick={handleNextRound} className="btn-primary">
+            Start Round {currentRound + 1}
           </button>
         </div>
       )}
 
-      {tournament.phase === 'SWISS' && allRoundsDone && allCurrentDone && (
+      {tournament.phase === 'ROUND_ROBIN' && allRoundsDone && allCurrentDone && (
         <div className="card mb-6 flex items-center justify-between border-piu-gold/30">
           <div>
-            <p className="font-display font-bold text-piu-gold">Swiss Phase Complete!</p>
-            <p className="text-sm text-gray-400">Top {tournament.koth_top_n} players advance to King of the Hill</p>
+            <p className="font-display font-bold text-piu-gold">Tournament Complete!</p>
+            <p className="text-sm text-gray-400">All {totalRounds} rounds finished. Check standings for final results.</p>
           </div>
-          <button onClick={handleStartKoth} className="btn-gold">
-            Start King of the Hill
-          </button>
         </div>
       )}
 
@@ -177,24 +172,34 @@ export default function TournamentView() {
         <div className="space-y-6">
           {/* Round selector */}
           {currentRound > 1 && (
-            <div className="flex gap-2">
-              {Array.from({ length: currentRound }, (_, i) => i + 1).map(r => (
-                <RoundTab
-                  key={r}
-                  round={r}
-                  matches={swissMatches.filter(m => m.round_number === r)}
-                  players={players}
-                  currentRound={currentRound}
-                  config={config}
-                  onUpdate={loadData}
-                  tournamentId={id}
-                />
-              ))}
+            <div className="flex gap-2 flex-wrap">
+              {Array.from({ length: currentRound }, (_, i) => i + 1).map(r => {
+                const rMatches = matches.filter(m => m.round_number === r);
+                const rDone = rMatches.every(m => m.status === 'COMPLETED');
+                const rLevel = (config.round_levels || []).find(l => l.round === r);
+                return (
+                  <button
+                    key={r}
+                    onClick={() => setSelectedRound(r)}
+                    className={`px-4 py-2 rounded-lg font-display font-bold text-sm transition-all ${
+                      displayRound === r
+                        ? 'bg-piu-accent text-white'
+                        : rDone
+                          ? 'bg-piu-green/10 text-piu-green border border-piu-green/30 hover:bg-piu-green/20'
+                          : 'bg-piu-card text-gray-400 border border-piu-border hover:border-piu-accent/50'
+                    }`}
+                  >
+                    R{r} {rLevel ? `(Lv.${rLevel.min}-${rLevel.max})` : ''}
+                    {rDone && ' '}
+                  </button>
+                );
+              })}
             </div>
           )}
+
           <SwissRound
-            round={currentRound}
-            matches={roundMatches}
+            round={displayRound}
+            matches={displayMatches}
             players={players}
             config={config}
             onUpdate={loadData}
@@ -204,26 +209,12 @@ export default function TournamentView() {
       )}
 
       {activeTab === 'standings' && (
-        <Standings players={players} matches={matches} />
-      )}
-
-      {activeTab === 'gauntlet' && (
-        <KothBracket
-          matches={kothMatches}
+        <Standings
           players={players}
-          tournament={tournament}
-          onUpdate={loadData}
+          matches={matches}
+          showFinal={tournament.phase === 'COMPLETED' || (allRoundsDone && allCurrentDone)}
         />
-      )}
-
-      {activeTab === 'results' && (
-        <Standings players={players} matches={matches} showFinal />
       )}
     </div>
   );
-}
-
-function RoundTab({ round, matches, players, currentRound }) {
-  const done = matches.every(m => m.status === 'COMPLETED');
-  return null; // Handled inline by SwissRound
 }
