@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-piu-bg text-white antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-piu-dark;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-piu-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-piu-accent;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-piu-accent hover:bg-pink-600 text-white font-semibold py-2 px-6 rounded-lg
+           transition-all duration-200 shadow-lg hover:shadow-piu-accent/30 active:scale-95;
+  }
+
+  .btn-secondary {
+    @apply bg-piu-card hover:bg-piu-border text-white font-medium py-2 px-6 rounded-lg
+           border border-piu-border transition-all duration-200 active:scale-95;
+  }
+
+  .btn-gold {
+    @apply bg-gradient-to-r from-yellow-600 to-yellow-500 hover:from-yellow-500 hover:to-yellow-400
+           text-black font-bold py-2 px-6 rounded-lg transition-all duration-200 active:scale-95;
+  }
+
+  .card {
+    @apply bg-piu-card border border-piu-border rounded-xl p-4 transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:border-piu-accent/50 hover:shadow-lg hover:shadow-piu-accent/10 cursor-pointer;
+  }
+
+  .input-field {
+    @apply bg-piu-dark border border-piu-border rounded-lg px-4 py-2 text-white
+           placeholder-gray-500 focus:outline-none focus:border-piu-accent focus:ring-1
+           focus:ring-piu-accent transition-colors w-full;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-pending {
+    @apply badge bg-yellow-500/20 text-yellow-400;
+  }
+
+  .badge-active {
+    @apply badge bg-piu-accent/20 text-piu-accent;
+  }
+
+  .badge-completed {
+    @apply badge bg-piu-green/20 text-piu-green;
+  }
+
+  .section-title {
+    @apply text-2xl font-display font-bold tracking-wide;
+  }
+}

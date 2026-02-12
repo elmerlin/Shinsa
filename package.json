@@ -1,0 +1,22 @@
+{
+  "name": "shinsa-piu-tournament",
+  "version": "1.0.0",
+  "description": "Pump It Up Tournament Web App - Swiss Rounds & King of the Hill",
+  "private": true,
+  "scripts": {
+    "server": "node server/index.js",
+    "client": "cd client && npx vite --host",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "cd client && npx vite build",
+    "seed": "node server/db/seed.js",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "concurrently": "^9.1.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1",
+    "uuid": "^10.0.0"
+  }
+}
