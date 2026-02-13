@@ -318,12 +318,46 @@ router.post('/:id/veto', (req, res) => {
   vetoedSongs.push({ song_id, player_id, song: songToVeto });
   const newStatus = vetoedSongs.length >= 2 ? 'READY' : 'VETOING';
 
-  db.prepare('UPDATE matches SET vetoed_songs = ?, status = ? WHERE id = ?')
-    .run(JSON.stringify(vetoedSongs), newStatus, req.params.id);
+  let selectedSongs = null;
+  if (newStatus === 'READY') {
+    // Both vetoes done - randomly select 2 of the remaining 3 songs, ensuring 1 Single + 1 Double
+    const remaining = drawnSongs.filter(s => !vetoedSongs.find(v => v.song_id === s.id));
+    const singles = remaining.filter(s => s.mode === 'Single');
+    const doubles = remaining.filter(s => s.mode === 'Double');
+
+    // Shuffle helper
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    if (singles.length >= 1 && doubles.length >= 1) {
+      // Pick 1 random Single and 1 random Double
+      const chosenSingle = pick(singles);
+      const chosenDouble = pick(doubles);
+      // Randomize order
+      selectedSongs = Math.random() < 0.5
+        ? [chosenSingle, chosenDouble]
+        : [chosenDouble, chosenSingle];
+    } else {
+      // Fallback: shuffle remaining and pick first 2
+      const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+      selectedSongs = shuffled.slice(0, 2);
+    }
+  }
+
+  const updateFields = selectedSongs
+    ? { vetoed_songs: JSON.stringify(vetoedSongs), status: newStatus, played_songs: JSON.stringify(selectedSongs.map(s => ({ song_id: s.id, song: s, title: s.title, mode: s.mode, level: s.level }))) }
+    : { vetoed_songs: JSON.stringify(vetoedSongs), status: newStatus };
+
+  if (selectedSongs) {
+    db.prepare('UPDATE matches SET vetoed_songs = ?, status = ?, played_songs = ? WHERE id = ?')
+      .run(updateFields.vetoed_songs, updateFields.status, updateFields.played_songs, req.params.id);
+  } else {
+    db.prepare('UPDATE matches SET vetoed_songs = ?, status = ? WHERE id = ?')
+      .run(updateFields.vetoed_songs, updateFields.status, req.params.id);
+  }
   db.close();
 
   const playedSongs = drawnSongs.filter(s => !vetoedSongs.find(v => v.song_id === s.id));
-  res.json({ vetoed_songs: vetoedSongs, played_songs: playedSongs, status: newStatus });
+  res.json({ vetoed_songs: vetoedSongs, played_songs: playedSongs, status: newStatus, selected_songs: selectedSongs });
 });
 
 // POST submit match result

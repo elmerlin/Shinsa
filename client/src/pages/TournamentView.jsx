@@ -5,12 +5,13 @@ import PlayerRegistration from '../components/PlayerRegistration';
 import SwissRound from '../components/SwissRound';
 import Standings from '../components/Standings';
 import Gauntlet from '../components/Gauntlet';
+import FinalStandings from '../components/FinalStandings';
 
 const PHASE_TABS = {
   SETUP: ['players'],
   ROUND_ROBIN: ['rounds', 'standings', 'players'],
-  GAUNTLET: ['gauntlet', 'standings', 'players'],
-  COMPLETED: ['standings', 'gauntlet', 'players'],
+  GAUNTLET: ['gauntlet', 'rounds', 'standings', 'players'],
+  COMPLETED: ['final', 'rounds', 'gauntlet', 'standings', 'players'],
 };
 
 export default function TournamentView() {
@@ -87,9 +88,13 @@ export default function TournamentView() {
   const gauntletMatches = matches.filter(m => m.match_type === 'gauntlet');
   const hasGauntletMatches = gauntletMatches.length > 0;
   let tabs = PHASE_TABS[tournament.phase] || ['players'];
-  // Only show gauntlet tab in COMPLETED phase if gauntlet was enabled and matches exist
-  if (tournament.phase === 'COMPLETED' && !hasGauntletMatches) {
+  // Hide gauntlet tab if no gauntlet matches exist
+  if (!hasGauntletMatches) {
     tabs = tabs.filter(t => t !== 'gauntlet');
+  }
+  // Hide final tab if tournament isn't completed
+  if (tournament.phase !== 'COMPLETED') {
+    tabs = tabs.filter(t => t !== 'final');
   }
   const currentRound = tournament.current_round;
   const totalRounds = tournament.total_rounds || 3;
@@ -185,7 +190,7 @@ export default function TournamentView() {
                 : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
-            {tab === 'rounds' ? `Rounds (${currentRound})` : tab}
+            {tab === 'rounds' ? `Rounds (${currentRound})` : tab === 'final' ? 'Final' : tab}
           </button>
         ))}
       </div>
@@ -245,6 +250,14 @@ export default function TournamentView() {
           matches={matches}
           players={players}
           onUpdate={loadData}
+        />
+      )}
+
+      {activeTab === 'final' && (
+        <FinalStandings
+          players={players}
+          matches={matches}
+          config={config}
         />
       )}
 

@@ -10,6 +10,51 @@ const GENDER_OPTIONS = [
 ];
 const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
+const COUNTRIES = [
+  { code: '', name: 'Not specified', flag: '' },
+  { code: 'AR', name: 'Argentina', flag: '\u{1F1E6}\u{1F1F7}' },
+  { code: 'AU', name: 'Australia', flag: '\u{1F1E6}\u{1F1FA}' },
+  { code: 'BR', name: 'Brazil', flag: '\u{1F1E7}\u{1F1F7}' },
+  { code: 'CA', name: 'Canada', flag: '\u{1F1E8}\u{1F1E6}' },
+  { code: 'CL', name: 'Chile', flag: '\u{1F1E8}\u{1F1F1}' },
+  { code: 'CN', name: 'China', flag: '\u{1F1E8}\u{1F1F3}' },
+  { code: 'CO', name: 'Colombia', flag: '\u{1F1E8}\u{1F1F4}' },
+  { code: 'CR', name: 'Costa Rica', flag: '\u{1F1E8}\u{1F1F7}' },
+  { code: 'DE', name: 'Germany', flag: '\u{1F1E9}\u{1F1EA}' },
+  { code: 'EC', name: 'Ecuador', flag: '\u{1F1EA}\u{1F1E8}' },
+  { code: 'ES', name: 'Spain', flag: '\u{1F1EA}\u{1F1F8}' },
+  { code: 'FR', name: 'France', flag: '\u{1F1EB}\u{1F1F7}' },
+  { code: 'GB', name: 'United Kingdom', flag: '\u{1F1EC}\u{1F1E7}' },
+  { code: 'GT', name: 'Guatemala', flag: '\u{1F1EC}\u{1F1F9}' },
+  { code: 'HK', name: 'Hong Kong', flag: '\u{1F1ED}\u{1F1F0}' },
+  { code: 'ID', name: 'Indonesia', flag: '\u{1F1EE}\u{1F1E9}' },
+  { code: 'IN', name: 'India', flag: '\u{1F1EE}\u{1F1F3}' },
+  { code: 'IT', name: 'Italy', flag: '\u{1F1EE}\u{1F1F9}' },
+  { code: 'JP', name: 'Japan', flag: '\u{1F1EF}\u{1F1F5}' },
+  { code: 'KR', name: 'South Korea', flag: '\u{1F1F0}\u{1F1F7}' },
+  { code: 'MX', name: 'Mexico', flag: '\u{1F1F2}\u{1F1FD}' },
+  { code: 'MY', name: 'Malaysia', flag: '\u{1F1F2}\u{1F1FE}' },
+  { code: 'NL', name: 'Netherlands', flag: '\u{1F1F3}\u{1F1F1}' },
+  { code: 'NZ', name: 'New Zealand', flag: '\u{1F1F3}\u{1F1FF}' },
+  { code: 'PE', name: 'Peru', flag: '\u{1F1F5}\u{1F1EA}' },
+  { code: 'PH', name: 'Philippines', flag: '\u{1F1F5}\u{1F1ED}' },
+  { code: 'PL', name: 'Poland', flag: '\u{1F1F5}\u{1F1F1}' },
+  { code: 'PT', name: 'Portugal', flag: '\u{1F1F5}\u{1F1F9}' },
+  { code: 'SG', name: 'Singapore', flag: '\u{1F1F8}\u{1F1EC}' },
+  { code: 'TH', name: 'Thailand', flag: '\u{1F1F9}\u{1F1ED}' },
+  { code: 'TW', name: 'Taiwan', flag: '\u{1F1F9}\u{1F1FC}' },
+  { code: 'US', name: 'United States', flag: '\u{1F1FA}\u{1F1F8}' },
+  { code: 'VN', name: 'Vietnam', flag: '\u{1F1FB}\u{1F1F3}' },
+];
+
+const COUNTRY_MAP = {};
+COUNTRIES.forEach(c => { if (c.code) COUNTRY_MAP[c.code] = c; });
+
+export function getCountryFlag(code) {
+  if (!code) return '';
+  return COUNTRY_MAP[code]?.flag || '';
+}
+
 const skillColors = {
   Beginner: 'bg-green-500/20 text-green-400 border-green-500/30',
   Intermediate: 'bg-piu-bronze/20 text-piu-bronze border-piu-bronze/30',
@@ -42,13 +87,13 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [form, setForm] = useState({
-    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '',
+    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '',
   });
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
 
   const resetForm = () => {
-    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '' });
+    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '' });
     setEditingPlayer(null);
   };
 
@@ -78,6 +123,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
         description: form.description,
         avatar: form.avatar,
         gender: form.gender,
+        nationality: form.nationality,
       };
 
       if (editingPlayer) {
@@ -109,6 +155,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
       description: player.description || '',
       avatar: player.avatar || '',
       gender: player.gender || '',
+      nationality: player.nationality || '',
     });
     setEditingPlayer(player);
     setShowForm(true);
@@ -209,7 +256,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
               <select
@@ -246,6 +293,18 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nationality</label>
+              <select
+                className="input-field"
+                value={form.nationality}
+                onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))}
+              >
+                {COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.flag ? `${c.flag} ` : ''}{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
@@ -262,6 +321,9 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
           {/* Skill preview */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-gray-500">Preview:</span>
+            {form.nationality && (
+              <span className="text-base">{getCountryFlag(form.nationality)}</span>
+            )}
             <span className={`badge border ${getSkillColor(form.skill_title)}`}>
               {form.skill_title} lvl. {form.skill_level}
             </span>
@@ -286,6 +348,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
       <div className="grid gap-3">
         {players.map((player, idx) => {
           const genderSymbol = player.gender ? GENDER_SYMBOLS[player.gender] || '' : '';
+          const flag = getCountryFlag(player.nationality);
 
           return (
             <div key={player.id} className="card flex items-center gap-3 sm:gap-4 group">
@@ -303,6 +366,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
+                  {flag && <span className="text-base shrink-0">{flag}</span>}
                   <span className="font-display font-bold">{player.name}</span>
                   {genderSymbol && (
                     <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>

@@ -49,6 +49,8 @@ export default function MatchView() {
   const [vetoTurn, setVetoTurn] = useState(null);
   const [scores, setScores] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [shuffling, setShuffling] = useState(false);
+  const [shuffleRevealed, setShuffleRevealed] = useState(false);
 
   const loadMatch = useCallback(async () => {
     try {
@@ -70,9 +72,20 @@ export default function MatchView() {
       // Init scores
       if (data.status === 'READY' || data.status === 'COMPLETED') {
         const drawn = data.drawn_songs || [];
-        const vetodIds = (data.vetoed_songs || []).map(v => v.song_id);
-        const playable = isGauntlet ? drawn : drawn.filter(s => !vetodIds.includes(s.id));
         const existingPlayed = data.played_songs || [];
+        // For round robin READY state: use selected songs from played_songs if available
+        let playable;
+        if (isGauntlet) {
+          playable = drawn;
+        } else if (data.status === 'READY' && existingPlayed.length > 0 && existingPlayed[0].song) {
+          // Server selected 2 songs - use those
+          playable = existingPlayed.map(ps => ps.song || ps);
+        } else if (data.status === 'COMPLETED') {
+          playable = existingPlayed.map(ps => ps.song || ps);
+        } else {
+          const vetodIds = (data.vetoed_songs || []).map(v => v.song_id);
+          playable = drawn.filter(s => !vetodIds.includes(s.id));
+        }
 
         const s = {};
         playable.forEach((song, i) => {
@@ -111,8 +124,19 @@ export default function MatchView() {
     if (!vetoTurn) return;
     const playerId = vetoTurn === 'player1' ? match.player1_id : match.player2_id;
     try {
-      await vetoSong(id, { song_id: songId, player_id: playerId });
-      await loadMatch();
+      const result = await vetoSong(id, { song_id: songId, player_id: playerId });
+      if (result.status === 'READY') {
+        // Both vetoes done - trigger shuffle animation before loading final state
+        setShuffling(true);
+        setShuffleRevealed(false);
+        setTimeout(() => {
+          setShuffling(false);
+          setShuffleRevealed(true);
+          loadMatch();
+        }, 2000);
+      } else {
+        await loadMatch();
+      }
     } catch (err) {
       alert(err.message);
     }
@@ -127,39 +151,55 @@ export default function MatchView() {
     }));
   };
 
-  // Calculate song winners and match state from scores (Round Robin - Best of 3)
+  // Calculate song winners and match state from scores (Round Robin - 2 songs)
   const getSongResults = () => {
-    if (!match) return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null };
+    if (!match) return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null, p1Total: 0, p2Total: 0 };
 
-    const drawn = match.drawn_songs || [];
-    const vetodIds = (match.vetoed_songs || []).map(v => v.song_id);
-    const playable = drawn.filter(s => !vetodIds.includes(s.id));
+    const played = match.played_songs || [];
+    const songsToScore = played.length > 0 ? played.map(ps => ps.song || ps) : (() => {
+      const drawn = match.drawn_songs || [];
+      const vetodIds = (match.vetoed_songs || []).map(v => v.song_id);
+      return drawn.filter(s => !vetodIds.includes(s.id));
+    })();
 
-    let p1Wins = 0, p2Wins = 0;
+    let p1Wins = 0, p2Wins = 0, p1Total = 0, p2Total = 0;
+    let allHaveScores = true;
     const results = [];
 
-    for (const song of playable) {
+    for (const song of songsToScore) {
       const s = scores[song.id] || {};
       const p1Score = parseInt(s.p1) || 0;
       const p2Score = parseInt(s.p2) || 0;
       const hasScores = s.p1 !== '' && s.p2 !== '';
 
+      if (!hasScores) allHaveScores = false;
+
       let songWinnerId = null;
       if (hasScores) {
+        p1Total += p1Score;
+        p2Total += p2Score;
         if (p1Score > p2Score) { songWinnerId = match.player1_id; p1Wins++; }
         else if (p2Score > p1Score) { songWinnerId = match.player2_id; p2Wins++; }
       }
 
       results.push({ song, p1Score, p2Score, songWinnerId, hasScores });
-
-      // Check if match is already decided (best of 3)
-      if (p1Wins >= 2 || p2Wins >= 2) break;
     }
 
-    const matchOver = p1Wins >= 2 || p2Wins >= 2;
-    const winnerId = p1Wins >= 2 ? match.player1_id : p2Wins >= 2 ? match.player2_id : null;
+    // With 2 songs: if 2-0, clear winner. If 1-1 (split), combined total breaks tie.
+    let matchOver = false;
+    let winnerId = null;
+    if (allHaveScores && results.length === 2) {
+      if (p1Wins === 2) { matchOver = true; winnerId = match.player1_id; }
+      else if (p2Wins === 2) { matchOver = true; winnerId = match.player2_id; }
+      else if (p1Wins === 1 && p2Wins === 1) {
+        // Split - combined total decides
+        if (p1Total > p2Total) { matchOver = true; winnerId = match.player1_id; }
+        else if (p2Total > p1Total) { matchOver = true; winnerId = match.player2_id; }
+        // If totals are also equal, match is not over (needs resolution)
+      }
+    }
 
-    return { results, p1Wins, p2Wins, matchOver, winnerId };
+    return { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total, allHaveScores };
   };
 
   // Calculate gauntlet results (combined total score)
@@ -232,10 +272,10 @@ export default function MatchView() {
         setSubmitting(false);
       }
     } else {
-      const { results, p1Wins, p2Wins, matchOver, winnerId } = getSongResults();
+      const { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total } = getSongResults();
 
       if (!matchOver) {
-        return alert('Match is not decided yet. A player must win 2 songs.');
+        return alert('Match is not decided yet.');
       }
 
       const playedSongs = results.filter(r => r.hasScores).map(r => ({
@@ -254,7 +294,7 @@ export default function MatchView() {
         await submitResult(id, {
           winner_id: winnerId,
           played_songs: playedSongs,
-          scores: { player1_wins: p1Wins, player2_wins: p2Wins },
+          scores: { player1_wins: p1Wins, player2_wins: p2Wins, p1_total: p1Total, p2_total: p2Total },
         });
         await loadMatch();
       } catch (err) {
@@ -273,7 +313,15 @@ export default function MatchView() {
   const drawn = match.drawn_songs || [];
   const vetoed = match.vetoed_songs || [];
   const vetoedIds = vetoed.map(v => v.song_id);
-  const playable = isGauntlet ? drawn : drawn.filter(s => !vetoedIds.includes(s.id));
+  const existingPlayed = match.played_songs || [];
+  let playable;
+  if (isGauntlet) {
+    playable = drawn;
+  } else if ((status === 'READY' || status === 'COMPLETED') && existingPlayed.length > 0) {
+    playable = existingPlayed.map(ps => ps.song || ps);
+  } else {
+    playable = drawn.filter(s => !vetoedIds.includes(s.id));
+  }
   const statusInfo = (isGauntlet ? GAUNTLET_STATUS_FLOW : STATUS_FLOW)[status] || {};
   const songResults = isGauntlet ? null : getSongResults();
   const gauntletResults = isGauntlet ? getGauntletResults() : null;
@@ -379,12 +427,39 @@ export default function MatchView() {
         </div>
       )}
 
+      {/* Shuffle Animation Overlay */}
+      {shuffling && (
+        <div className="mb-4 sm:mb-6">
+          <h3 className="font-display font-bold text-lg mb-3 text-piu-accent text-center animate-pulse">
+            Shuffling songs...
+          </h3>
+          <div className="flex justify-center gap-3">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="w-20 h-28 sm:w-28 sm:h-40 rounded-xl bg-gradient-to-b from-piu-accent/30 to-purple-900/30 border-2 border-piu-accent/50"
+                style={{
+                  animation: `shuffleCard 0.4s ease-in-out ${i * 0.13}s infinite alternate`,
+                }}
+              />
+            ))}
+          </div>
+          <style>{`
+            @keyframes shuffleCard {
+              0% { transform: translateX(-20px) rotate(-8deg) scale(0.95); }
+              50% { transform: translateX(0) rotate(0deg) scale(1.05); }
+              100% { transform: translateX(20px) rotate(8deg) scale(0.95); }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Card Draw Display - Round Robin (with veto) */}
-      {!isGauntlet && drawn.length > 0 && status !== 'PENDING' && (
+      {!isGauntlet && !shuffling && drawn.length > 0 && status !== 'PENDING' && (
         <div className="mb-4 sm:mb-6">
           <h3 className="font-display font-bold text-lg mb-3">
             {status === 'DRAWING' || status === 'VETOING' ? 'Veto Phase' :
-             status === 'READY' ? 'Set List (Best of 3)' : 'Songs Played'}
+             status === 'READY' ? 'Songs to Play' : 'Songs Played'}
           </h3>
 
           {/* Veto instruction */}
@@ -400,29 +475,47 @@ export default function MatchView() {
             </div>
           )}
 
-          {/* Song Cards Grid */}
-          <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
-            {drawn.map((song, idx) => {
-              const isVetoed = vetoedIds.includes(song.id);
-              const vetoInfo = vetoed.find(v => v.song_id === song.id);
-              const canVeto = (status === 'DRAWING' || status === 'VETOING') && !isVetoed && vetoTurn;
+          {/* Song Cards Grid - Veto phase: show all 5 */}
+          {(status === 'DRAWING' || status === 'VETOING') && (
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
+              {drawn.map((song, idx) => {
+                const isVetoed = vetoedIds.includes(song.id);
+                const vetoInfo = vetoed.find(v => v.song_id === song.id);
+                const canVeto = !isVetoed && vetoTurn;
 
-              return (
+                return (
+                  <SongCard
+                    key={song.id}
+                    song={song}
+                    index={idx}
+                    isVetoed={isVetoed}
+                    vetoInfo={vetoInfo}
+                    player1={player1}
+                    player2={player2}
+                    canVeto={canVeto}
+                    onVeto={() => handleVeto(song.id)}
+                    showAnimation={showCards || status !== 'DRAWING'}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {/* READY / COMPLETED: show only the 2 selected songs */}
+          {(status === 'READY' || status === 'COMPLETED') && (
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              {playable.map((song, idx) => (
                 <SongCard
                   key={song.id}
                   song={song}
                   index={idx}
-                  isVetoed={isVetoed}
-                  vetoInfo={vetoInfo}
-                  player1={player1}
-                  player2={player2}
-                  canVeto={canVeto}
-                  onVeto={() => handleVeto(song.id)}
-                  showAnimation={showCards || status !== 'DRAWING'}
+                  isVetoed={false}
+                  canVeto={false}
+                  showAnimation={shuffleRevealed || !shuffling}
                 />
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -458,17 +551,10 @@ export default function MatchView() {
           </div>
 
           <p className="text-sm text-gray-500">
-            Enter scores (0 - 1,000,000). Higher score wins each song. Match ends when a player wins 2 songs.
+            Enter scores (0 - 1,000,000). Higher score wins each song. If songs are split 1-1, combined total wins.
           </p>
 
           {playable.map((song, idx) => {
-            const result = songResults.results[idx];
-            if (!result && songResults.matchOver) return null;
-            const prevResults = songResults.results.slice(0, idx);
-            const prevP1 = prevResults.filter(r => r.songWinnerId === match.player1_id).length;
-            const prevP2 = prevResults.filter(r => r.songWinnerId === match.player2_id).length;
-            if (prevP1 >= 2 || prevP2 >= 2) return null;
-
             const songScore = scores[song.id] || {};
             const p1Val = parseInt(songScore.p1) || 0;
             const p2Val = parseInt(songScore.p2) || 0;
@@ -530,16 +616,23 @@ export default function MatchView() {
             );
           })}
 
-          {songResults.matchOver && (
-            <div className="card border-piu-green/30 bg-piu-green/5 text-center py-4">
-              <p className="font-display font-bold text-piu-green text-xl">
-                {songResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!
-              </p>
-              <p className="text-sm text-gray-400">
-                {songResults.p1Wins} - {songResults.p2Wins}
-                {(songResults.p1Wins === 2 && songResults.p2Wins === 0) || (songResults.p2Wins === 2 && songResults.p1Wins === 0)
-                  ? ' (3rd song not needed)' : ''}
-              </p>
+          {songResults.allHaveScores && (
+            <div className={`card text-center py-4 ${songResults.matchOver ? 'border-piu-green/30 bg-piu-green/5' : 'border-yellow-500/30 bg-yellow-500/5'}`}>
+              {songResults.matchOver ? (
+                <>
+                  <p className="font-display font-bold text-piu-green text-xl">
+                    {songResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    Songs: {songResults.p1Wins} - {songResults.p2Wins}
+                    {songResults.p1Wins === 1 && songResults.p2Wins === 1 && (
+                      <span> | Total: {Number(songResults.p1Total).toLocaleString()} vs {Number(songResults.p2Total).toLocaleString()}</span>
+                    )}
+                  </p>
+                </>
+              ) : (
+                <p className="text-yellow-400 font-display">Tied - combined totals are equal. Scores cannot be identical.</p>
+              )}
             </div>
           )}
 

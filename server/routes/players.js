@@ -23,16 +23,16 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const db = getDb();
   const id = uuidv4();
-  const { tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender } = req.body;
+  const { tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender, nationality } = req.body;
 
   const count = db.prepare(
     'SELECT COUNT(*) as count FROM players WHERE tournament_id = ?'
   ).get(tournament_id).count;
 
   db.prepare(`
-    INSERT INTO players (id, tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender, seed_rank)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, tournament_id, name, skill_title || '', skill_level || 1, pumbility || 0, description || '', avatar || '', gender || '', count + 1);
+    INSERT INTO players (id, tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender, nationality, seed_rank)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, tournament_id, name, skill_title || '', skill_level || 1, pumbility || 0, description || '', avatar || '', gender || '', nationality || '', count + 1);
 
   const player = db.prepare('SELECT * FROM players WHERE id = ?').get(id);
   db.close();
@@ -41,7 +41,7 @@ router.post('/', (req, res) => {
 
 router.put('/:id', (req, res) => {
   const db = getDb();
-  const { name, skill_title, skill_level, pumbility, description, avatar, gender, wins, losses, points, buchholz, seed_rank, is_active } = req.body;
+  const { name, skill_title, skill_level, pumbility, description, avatar, gender, nationality, wins, losses, points, buchholz, seed_rank, is_active } = req.body;
 
   db.prepare(`
     UPDATE players SET
@@ -52,6 +52,7 @@ router.put('/:id', (req, res) => {
       description = COALESCE(?, description),
       avatar = COALESCE(?, avatar),
       gender = COALESCE(?, gender),
+      nationality = COALESCE(?, nationality),
       wins = COALESCE(?, wins),
       losses = COALESCE(?, losses),
       points = COALESCE(?, points),
@@ -59,7 +60,7 @@ router.put('/:id', (req, res) => {
       seed_rank = COALESCE(?, seed_rank),
       is_active = COALESCE(?, is_active)
     WHERE id = ?
-  `).run(name, skill_title, skill_level, pumbility, description, avatar, gender, wins, losses, points, buchholz, seed_rank, is_active, req.params.id);
+  `).run(name, skill_title, skill_level, pumbility, description, avatar, gender, nationality, wins, losses, points, buchholz, seed_rank, is_active, req.params.id);
 
   const player = db.prepare('SELECT * FROM players WHERE id = ?').get(req.params.id);
   db.close();

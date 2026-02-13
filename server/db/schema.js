@@ -96,6 +96,9 @@ function initializeDb() {
   if (!columns.includes('gender')) {
     db.exec("ALTER TABLE players ADD COLUMN gender TEXT DEFAULT ''");
   }
+  if (!columns.includes('nationality')) {
+    db.exec("ALTER TABLE players ADD COLUMN nationality TEXT DEFAULT ''");
+  }
 
   // Migrations for matches table
   const matchColumns = db.prepare("PRAGMA table_info(matches)").all().map(c => c.name);

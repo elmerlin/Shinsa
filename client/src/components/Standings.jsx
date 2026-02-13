@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getCountryFlag } from './PlayerRegistration';
 
 const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
@@ -32,7 +33,24 @@ export default function Standings({ players, matches, showFinal }) {
     return matches.filter(m =>
       m.status === 'COMPLETED' &&
       (m.player1_id === playerId || m.player2_id === playerId)
-    );
+    ).sort((a, b) => {
+      if (a.match_type !== b.match_type) return a.match_type === 'round_robin' ? -1 : 1;
+      if (a.match_type === 'gauntlet') return a.gauntlet_order - b.gauntlet_order;
+      if (a.round_number !== b.round_number) return a.round_number - b.round_number;
+      return 0;
+    });
+  };
+
+  const gauntletMatches = matches
+    .filter(m => m.match_type === 'gauntlet')
+    .sort((a, b) => a.gauntlet_order - b.gauntlet_order);
+  const totalGauntletMatches = gauntletMatches.length;
+
+  const getGauntletLabel = (m) => {
+    if (m.gauntlet_order === totalGauntletMatches) return 'Final';
+    const totalPlayers = totalGauntletMatches + 1;
+    const position = totalPlayers - m.gauntlet_order;
+    return `#${position} spot`;
   };
 
   const getMedalColor = (rank) => {
@@ -49,9 +67,10 @@ export default function Standings({ players, matches, showFinal }) {
 
   return (
     <div>
-      <h2 className="section-title mb-4">
-        {showFinal ? 'FINAL RESULTS' : 'STANDINGS'}
+      <h2 className="section-title mb-1">
+        {showFinal ? 'ROUND ROBIN RESULTS' : 'ROUND ROBIN STANDINGS'}
       </h2>
+      <p className="text-sm text-gray-500 mb-4">Rankings based on Round Robin performance</p>
 
       <div className="card overflow-hidden p-0">
         <div className="grid grid-cols-10 gap-2 px-3 sm:px-4 py-2 bg-piu-dark text-xs text-gray-400 font-display uppercase tracking-wider">
@@ -69,6 +88,7 @@ export default function Standings({ players, matches, showFinal }) {
           const isExpanded = expandedId === player.id;
           const genderSymbol = player.gender ? GENDER_SYMBOLS[player.gender] || '' : '';
           const skillColor = getSkillColor(player.skill_title);
+          const flag = getCountryFlag(player.nationality);
 
           return (
             <div key={player.id}>
@@ -82,6 +102,7 @@ export default function Standings({ players, matches, showFinal }) {
                   {rank}
                 </div>
                 <div className="col-span-4 flex items-center gap-2 min-w-0">
+                  {flag && <span className="text-sm shrink-0">{flag}</span>}
                   <span className="font-display font-bold truncate">{player.name}</span>
                   {genderSymbol && (
                     <span className={`text-xs shrink-0 ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
@@ -106,7 +127,6 @@ export default function Standings({ players, matches, showFinal }) {
                 </div>
               </div>
 
-              {/* Expanded match history */}
               {isExpanded && (
                 <div className="px-3 sm:px-4 py-4 bg-piu-dark/40 border-t border-piu-border/30 border-l-2 border-l-piu-accent animate-fade-in">
                   <p className="text-xs text-piu-accent mb-3 font-display uppercase tracking-wider font-bold">
@@ -120,26 +140,38 @@ export default function Standings({ players, matches, showFinal }) {
                         const opponentId = m.player1_id === player.id ? m.player2_id : m.player1_id;
                         const opponent = playerMap[opponentId];
                         const isWin = m.winner_id === player.id;
-                        const scores = m.scores || {};
+                        const mScores = m.scores || {};
                         const playedSongs = m.played_songs || [];
                         const isP1 = m.player1_id === player.id;
+                        const isGauntlet = m.match_type === 'gauntlet';
+                        const opponentFlag = opponent ? getCountryFlag(opponent.nationality) : '';
 
                         return (
                           <div key={m.id} className={`rounded-lg p-3 ${isWin ? 'bg-piu-green/5 border border-piu-green/20' : 'bg-red-500/5 border border-red-500/20'}`}>
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
                               <div className="flex items-center gap-2">
                                 <span className={`font-display font-bold text-sm px-2 py-0.5 rounded ${isWin ? 'bg-piu-green/20 text-piu-green' : 'bg-red-500/20 text-red-400'}`}>
                                   {isWin ? 'WIN' : 'LOSS'}
                                 </span>
-                                <span className="text-gray-300 font-display">
-                                  vs {opponent?.name || 'Unknown'}
+                                <span className="text-gray-300 font-display flex items-center gap-1">
+                                  vs {opponentFlag && <span className="text-sm">{opponentFlag}</span>}{opponent?.name || 'Unknown'}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 text-sm">
-                                <span className="font-display font-bold">
-                                  {isP1 ? scores.player1_wins : scores.player2_wins}-{isP1 ? scores.player2_wins : scores.player1_wins}
-                                </span>
-                                <span className="text-gray-600">R{m.round_number} Lv.{m.difficulty_min}-{m.difficulty_max}</span>
+                                {!isGauntlet && (
+                                  <span className="font-display font-bold">
+                                    {isP1 ? mScores.player1_wins : mScores.player2_wins}-{isP1 ? mScores.player2_wins : mScores.player1_wins}
+                                  </span>
+                                )}
+                                {isGauntlet ? (
+                                  <span className="badge bg-piu-accent/20 text-piu-accent text-[10px]">
+                                    Gauntlet {getGauntletLabel(m)}
+                                  </span>
+                                ) : (
+                                  <span className="badge bg-gray-700/50 text-gray-400 text-[10px]">
+                                    Round {m.round_number} Lv.{m.difficulty_min}-{m.difficulty_max}
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -151,7 +183,9 @@ export default function Standings({ players, matches, showFinal }) {
                                   const songTitle = s.title || s.song?.title;
                                   const myScore = isP1 ? s.p1_score : s.p2_score;
                                   const theirScore = isP1 ? s.p2_score : s.p1_score;
-                                  const iSongWin = s.song_winner_id === player.id;
+                                  const iSongWin = isGauntlet
+                                    ? (myScore > theirScore)
+                                    : (s.song_winner_id === player.id);
 
                                   return (
                                     <div key={si} className="flex items-center gap-2 text-sm">
@@ -171,6 +205,11 @@ export default function Standings({ players, matches, showFinal }) {
                                     </div>
                                   );
                                 })}
+                                {isGauntlet && (
+                                  <div className="text-xs text-gray-500 mt-1 text-right font-mono">
+                                    Combined: {formatScore(isP1 ? mScores.p1_total : mScores.p2_total)} vs {formatScore(isP1 ? mScores.p2_total : mScores.p1_total)}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
