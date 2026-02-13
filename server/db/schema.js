@@ -23,6 +23,7 @@ function initializeDb() {
       current_round INT DEFAULT 0,
       total_rounds INT DEFAULT 3,
       config TEXT DEFAULT '{}',
+      avatar TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -87,6 +88,11 @@ function initializeDb() {
   `);
 
   // Migrations for existing databases
+  const tournamentColumns = db.prepare("PRAGMA table_info(tournaments)").all().map(c => c.name);
+  if (!tournamentColumns.includes('avatar')) {
+    db.exec("ALTER TABLE tournaments ADD COLUMN avatar TEXT DEFAULT ''");
+  }
+
   const columns = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);
   if (!columns.includes('description')) {
     db.exec("ALTER TABLE players ADD COLUMN description TEXT DEFAULT ''");

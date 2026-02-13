@@ -22,7 +22,7 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const db = getDb();
   const id = uuidv4();
-  const { name, location, date, total_rounds, config } = req.body;
+  const { name, location, date, total_rounds, config, avatar } = req.body;
 
   const defaultConfig = {
     round_levels: [
@@ -36,10 +36,10 @@ router.post('/', (req, res) => {
   };
 
   db.prepare(`
-    INSERT INTO tournaments (id, name, location, date, total_rounds, config)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO tournaments (id, name, location, date, total_rounds, config, avatar)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, name, location || '', date || new Date().toISOString().split('T')[0],
-    total_rounds || 3, JSON.stringify(config || defaultConfig));
+    total_rounds || 3, JSON.stringify(config || defaultConfig), avatar || '');
 
   const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
   db.close();
@@ -49,7 +49,7 @@ router.post('/', (req, res) => {
 
 router.put('/:id', (req, res) => {
   const db = getDb();
-  const { name, location, date, phase, current_round, total_rounds, config } = req.body;
+  const { name, location, date, phase, current_round, total_rounds, config, avatar } = req.body;
   const existing = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   if (!existing) { db.close(); return res.status(404).json({ error: 'Not found' }); }
 
@@ -61,10 +61,11 @@ router.put('/:id', (req, res) => {
       phase = COALESCE(?, phase),
       current_round = COALESCE(?, current_round),
       total_rounds = COALESCE(?, total_rounds),
-      config = COALESCE(?, config)
+      config = COALESCE(?, config),
+      avatar = COALESCE(?, avatar)
     WHERE id = ?
   `).run(name, location, date, phase, current_round, total_rounds,
-    config ? JSON.stringify(config) : null, req.params.id);
+    config ? JSON.stringify(config) : null, avatar !== undefined ? avatar : null, req.params.id);
 
   const updated = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   db.close();

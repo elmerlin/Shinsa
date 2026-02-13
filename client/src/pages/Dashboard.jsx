@@ -29,16 +29,16 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-4xl font-display font-bold tracking-wider">
-            TOURNAMENTS
-          </h1>
-          <p className="text-gray-400 mt-1">Pump Dojo - PIU Round Robin Tournament</p>
+      <div className="mb-8">
+        <h1 className="text-4xl font-display font-bold tracking-wider">
+          TOURNAMENTS
+        </h1>
+        <div className="flex flex-wrap gap-2 mt-2">
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Round Robin</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Gauntlets</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Random Song Draws</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Vetoes</span>
         </div>
-        <Link to="/tournament/new" className="btn-primary text-lg">
-          + New Tournament
-        </Link>
       </div>
 
       {loading ? (
@@ -53,45 +53,58 @@ export default function Dashboard() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {tournaments.map(t => (
-            <Link
-              key={t.id}
-              to={`/tournament/${t.id}`}
-              className="card-hover flex items-center justify-between group"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
-                  {t.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="font-display text-lg font-bold group-hover:text-piu-accent transition-colors">
-                    {t.name}
-                  </h3>
-                  <div className="flex gap-3 text-sm text-gray-400">
-                    {t.location && <span>{t.location}</span>}
-                    {t.date && <span>{t.date}</span>}
+        <>
+          <div className="grid gap-4">
+            {tournaments.map(t => (
+              <Link
+                key={t.id}
+                to={`/tournament/${t.id}`}
+                className="card-hover flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-4">
+                  {t.avatar ? (
+                    <img
+                      src={t.avatar}
+                      alt={t.name}
+                      className="w-12 h-12 rounded-lg object-cover shadow-md"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
+                      {t.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-display text-lg font-bold group-hover:text-piu-accent transition-colors">
+                      {t.name}
+                    </h3>
+                    <div className="flex gap-3 text-sm text-gray-400">
+                      {t.location && <span>{t.location}</span>}
+                      {t.date && <span>{t.date}</span>}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`badge ${
-                  t.phase === 'SETUP' ? 'badge-pending' :
-                  t.phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
-                }`}>
-                  {PHASE_LABELS[t.phase] || t.phase}
-                </span>
-                <button
-                  onClick={(e) => handleDelete(e, t.id)}
-                  className="text-gray-600 hover:text-red-500 transition-colors p-1"
-                  title="Delete tournament"
-                >
-                  &#10005;
-                </button>
-              </div>
-            </Link>
-          ))}
-        </div>
+                <div className="flex items-center gap-3">
+                  <span className={`badge ${
+                    t.phase === 'SETUP' ? 'badge-pending' :
+                    t.phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
+                  }`}>
+                    {PHASE_LABELS[t.phase] || t.phase}
+                  </span>
+                  <button
+                    onClick={(e) => handleDelete(e, t.id)}
+                    className="text-gray-600 hover:text-red-500 transition-colors p-1"
+                    title="Delete tournament"
+                  >
+                    &#10005;
+                  </button>
+                </div>
+              </Link>
+            ))}
+          </div>
+          <Link to="/tournament/new" className="btn-primary w-full mt-6 text-center text-lg block">
+            + New Tournament
+          </Link>
+        </>
       )}
     </div>
   );
