@@ -320,27 +320,9 @@ router.post('/:id/veto', (req, res) => {
 
   let selectedSongs = null;
   if (newStatus === 'READY') {
-    // Both vetoes done - randomly select 2 of the remaining 3 songs, ensuring 1 Single + 1 Double
+    // Both vetoes done - shuffle all 3 remaining songs for best-of-3
     const remaining = drawnSongs.filter(s => !vetoedSongs.find(v => v.song_id === s.id));
-    const singles = remaining.filter(s => s.mode === 'Single');
-    const doubles = remaining.filter(s => s.mode === 'Double');
-
-    // Shuffle helper
-    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-    if (singles.length >= 1 && doubles.length >= 1) {
-      // Pick 1 random Single and 1 random Double
-      const chosenSingle = pick(singles);
-      const chosenDouble = pick(doubles);
-      // Randomize order
-      selectedSongs = Math.random() < 0.5
-        ? [chosenSingle, chosenDouble]
-        : [chosenDouble, chosenSingle];
-    } else {
-      // Fallback: shuffle remaining and pick first 2
-      const shuffled = [...remaining].sort(() => Math.random() - 0.5);
-      selectedSongs = shuffled.slice(0, 2);
-    }
+    selectedSongs = [...remaining].sort(() => Math.random() - 0.5);
   }
 
   const updateFields = selectedSongs

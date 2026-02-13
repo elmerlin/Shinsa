@@ -100,8 +100,8 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Avatar must be under 2MB');
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Avatar must be under 5MB');
       return;
     }
     const reader = new FileReader();
@@ -210,7 +210,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
             />
             <div className="flex-1">
               <p className="text-sm text-gray-400">Player Avatar</p>
-              <p className="text-xs text-gray-600">Tap to upload (max 2MB)</p>
+              <p className="text-xs text-gray-600">Tap to upload (max 5MB)</p>
               {form.avatar && (
                 <button type="button" onClick={() => setForm(f => ({ ...f, avatar: '' }))} className="text-xs text-red-400 hover:text-red-300 mt-1">
                   Remove

@@ -78,7 +78,7 @@ export default function MatchView() {
         if (isGauntlet) {
           playable = drawn;
         } else if (data.status === 'READY' && existingPlayed.length > 0 && existingPlayed[0].song) {
-          // Server selected 2 songs - use those
+          // Server shuffled remaining songs - use those
           playable = existingPlayed.map(ps => ps.song || ps);
         } else if (data.status === 'COMPLETED') {
           playable = existingPlayed.map(ps => ps.song || ps);
@@ -151,9 +151,9 @@ export default function MatchView() {
     }));
   };
 
-  // Calculate song winners and match state from scores (Round Robin - 2 songs)
+  // Calculate song winners and match state from scores (Round Robin - Best of 3)
   const getSongResults = () => {
-    if (!match) return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null, p1Total: 0, p2Total: 0 };
+    if (!match) return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null, p1Total: 0, p2Total: 0, songsNeeded: 3 };
 
     const played = match.played_songs || [];
     const songsToScore = played.length > 0 ? played.map(ps => ps.song || ps) : (() => {
@@ -163,16 +163,21 @@ export default function MatchView() {
     })();
 
     let p1Wins = 0, p2Wins = 0, p1Total = 0, p2Total = 0;
-    let allHaveScores = true;
     const results = [];
 
-    for (const song of songsToScore) {
+    // Best of 3: process songs in order, stop once someone has 2 wins
+    for (let i = 0; i < songsToScore.length; i++) {
+      const song = songsToScore[i];
       const s = scores[song.id] || {};
       const p1Score = parseInt(s.p1) || 0;
       const p2Score = parseInt(s.p2) || 0;
       const hasScores = s.p1 !== '' && s.p2 !== '';
 
-      if (!hasScores) allHaveScores = false;
+      // If match is already decided (someone has 2 wins), mark remaining songs as skipped
+      if (p1Wins >= 2 || p2Wins >= 2) {
+        results.push({ song, p1Score: 0, p2Score: 0, songWinnerId: null, hasScores: false, skipped: true });
+        continue;
+      }
 
       let songWinnerId = null;
       if (hasScores) {
@@ -182,24 +187,17 @@ export default function MatchView() {
         else if (p2Score > p1Score) { songWinnerId = match.player2_id; p2Wins++; }
       }
 
-      results.push({ song, p1Score, p2Score, songWinnerId, hasScores });
+      results.push({ song, p1Score, p2Score, songWinnerId, hasScores, skipped: false });
     }
 
-    // With 2 songs: if 2-0, clear winner. If 1-1 (split), combined total breaks tie.
-    let matchOver = false;
-    let winnerId = null;
-    if (allHaveScores && results.length === 2) {
-      if (p1Wins === 2) { matchOver = true; winnerId = match.player1_id; }
-      else if (p2Wins === 2) { matchOver = true; winnerId = match.player2_id; }
-      else if (p1Wins === 1 && p2Wins === 1) {
-        // Split - combined total decides
-        if (p1Total > p2Total) { matchOver = true; winnerId = match.player1_id; }
-        else if (p2Total > p1Total) { matchOver = true; winnerId = match.player2_id; }
-        // If totals are also equal, match is not over (needs resolution)
-      }
-    }
+    // Best of 3: first to 2 wins
+    const matchOver = p1Wins >= 2 || p2Wins >= 2;
+    const winnerId = matchOver ? (p1Wins >= 2 ? match.player1_id : match.player2_id) : null;
+    // How many songs have scores entered (non-skipped)
+    const scoredCount = results.filter(r => r.hasScores && !r.skipped).length;
+    const allScoredDone = scoredCount > 0 && results.filter(r => !r.skipped).every(r => r.hasScores);
 
-    return { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total, allHaveScores };
+    return { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total, allScoredDone, songsNeeded: matchOver ? scoredCount : 3 };
   };
 
   // Calculate gauntlet results (combined total score)
@@ -278,7 +276,7 @@ export default function MatchView() {
         return alert('Match is not decided yet.');
       }
 
-      const playedSongs = results.filter(r => r.hasScores).map(r => ({
+      const playedSongs = results.filter(r => r.hasScores && !r.skipped).map(r => ({
         song_id: r.song.id,
         song: r.song,
         p1_score: r.p1Score,
@@ -421,7 +419,7 @@ export default function MatchView() {
           <p className="text-sm text-gray-500 mt-2">
             {isGauntlet
               ? `1 Single (Lv.${match.difficulty_min}) + 1 Double (Lv.${match.difficulty_max})`
-              : '5 random charts (min 2 Single + 2 Double)'
+              : '5 drawn, 2 vetoed, best of 3 remaining'
             }
           </p>
         </div>
@@ -501,9 +499,9 @@ export default function MatchView() {
             </div>
           )}
 
-          {/* READY / COMPLETED: show only the 2 selected songs */}
+          {/* READY / COMPLETED: show the 3 remaining songs */}
           {(status === 'READY' || status === 'COMPLETED') && (
-            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
               {playable.map((song, idx) => (
                 <SongCard
                   key={song.id}
@@ -551,16 +549,36 @@ export default function MatchView() {
           </div>
 
           <p className="text-sm text-gray-500">
-            Enter scores (0 - 1,000,000). Higher score wins each song. If songs are split 1-1, combined total wins.
+            Best of 3: first to win 2 songs wins the match. Enter scores (0 - 1,000,000).
           </p>
 
           {playable.map((song, idx) => {
+            const songResult = songResults.results[idx];
+            const isSkipped = songResult?.skipped;
             const songScore = scores[song.id] || {};
             const p1Val = parseInt(songScore.p1) || 0;
             const p2Val = parseInt(songScore.p2) || 0;
             const hasScores = songScore.p1 !== '' && songScore.p2 !== '';
-            const p1Wins = hasScores && p1Val > p2Val;
-            const p2Wins = hasScores && p2Val > p1Val;
+            const p1SongWin = hasScores && p1Val > p2Val;
+            const p2SongWin = hasScores && p2Val > p1Val;
+
+            if (isSkipped) {
+              return (
+                <div key={song.id} className="card opacity-40">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="font-display font-bold text-gray-600 w-6">#{idx + 1}</div>
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center font-display font-bold text-xs sm:text-sm
+                      ${song.mode === 'Double' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                      {song.mode[0]}{song.level}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-display font-bold text-sm sm:text-base truncate block">{song.title}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 font-display">NOT NEEDED</span>
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div key={song.id} className={`card ${hasScores ? (p1Val === p2Val ? 'border-yellow-500/30' : 'border-piu-green/20') : ''}`}>
@@ -581,13 +599,13 @@ export default function MatchView() {
 
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 items-center">
                   <div>
-                    <label className={`text-xs block mb-1 ${p1Wins ? 'text-piu-green font-bold' : 'text-gray-500'}`}>
-                      {player1?.name} {p1Wins ? '- WIN' : ''}
+                    <label className={`text-xs block mb-1 ${p1SongWin ? 'text-piu-green font-bold' : 'text-gray-500'}`}>
+                      {player1?.name} {p1SongWin ? '- WIN' : ''}
                     </label>
                     <input
                       type="text"
                       inputMode="numeric"
-                      className={`input-field text-center font-mono text-sm ${p1Wins ? 'border-piu-green/50' : ''}`}
+                      className={`input-field text-center font-mono text-sm ${p1SongWin ? 'border-piu-green/50' : ''}`}
                       placeholder="Score"
                       value={songScore.p1 !== undefined ? formatScore(songScore.p1) : ''}
                       onChange={e => handleScoreChange(song.id, 'p1', e.target.value)}
@@ -599,13 +617,13 @@ export default function MatchView() {
                   </div>
 
                   <div>
-                    <label className={`text-xs block mb-1 text-right ${p2Wins ? 'text-piu-green font-bold' : 'text-gray-500'}`}>
-                      {player2?.name} {p2Wins ? '- WIN' : ''}
+                    <label className={`text-xs block mb-1 text-right ${p2SongWin ? 'text-piu-green font-bold' : 'text-gray-500'}`}>
+                      {player2?.name} {p2SongWin ? '- WIN' : ''}
                     </label>
                     <input
                       type="text"
                       inputMode="numeric"
-                      className={`input-field text-center font-mono text-sm ${p2Wins ? 'border-piu-green/50' : ''}`}
+                      className={`input-field text-center font-mono text-sm ${p2SongWin ? 'border-piu-green/50' : ''}`}
                       placeholder="Score"
                       value={songScore.p2 !== undefined ? formatScore(songScore.p2) : ''}
                       onChange={e => handleScoreChange(song.id, 'p2', e.target.value)}
@@ -616,23 +634,14 @@ export default function MatchView() {
             );
           })}
 
-          {songResults.allHaveScores && (
-            <div className={`card text-center py-4 ${songResults.matchOver ? 'border-piu-green/30 bg-piu-green/5' : 'border-yellow-500/30 bg-yellow-500/5'}`}>
-              {songResults.matchOver ? (
-                <>
-                  <p className="font-display font-bold text-piu-green text-xl">
-                    {songResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!
-                  </p>
-                  <p className="text-sm text-gray-400">
-                    Songs: {songResults.p1Wins} - {songResults.p2Wins}
-                    {songResults.p1Wins === 1 && songResults.p2Wins === 1 && (
-                      <span> | Total: {Number(songResults.p1Total).toLocaleString()} vs {Number(songResults.p2Total).toLocaleString()}</span>
-                    )}
-                  </p>
-                </>
-              ) : (
-                <p className="text-yellow-400 font-display">Tied - combined totals are equal. Scores cannot be identical.</p>
-              )}
+          {songResults.matchOver && (
+            <div className="card text-center py-4 border-piu-green/30 bg-piu-green/5">
+              <p className="font-display font-bold text-piu-green text-xl">
+                {songResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!
+              </p>
+              <p className="text-sm text-gray-400">
+                Songs: {songResults.p1Wins} - {songResults.p2Wins}
+              </p>
             </div>
           )}
 
