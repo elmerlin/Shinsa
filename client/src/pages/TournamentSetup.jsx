@@ -29,6 +29,10 @@ export default function TournamentSetup() {
   };
 
   const handleRoundsChange = (val) => {
+    if (val === '') {
+      setForm(f => ({ ...f, total_rounds: '' }));
+      return;
+    }
     const n = parseInt(val) || 1;
     setForm(f => ({ ...f, total_rounds: n }));
     const newLevels = [];
@@ -136,7 +140,7 @@ export default function TournamentSetup() {
               <input
                 type="text"
                 className="input-field"
-                placeholder='e.g. "Round 1 Arcade"'
+                placeholder="Pump Dojo"
                 value={form.location}
                 onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
               />
