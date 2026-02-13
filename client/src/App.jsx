@@ -59,7 +59,7 @@ export default function App() {
         <span className="font-display tracking-wider text-piu-gold">PUMP DOJO</span>
         {' '}
         <span className="font-display tracking-wider">SHINSA</span>
-        {' '}- PIU Tournament System
+        {' '}- Made by Elmer with ❤
       </footer>
     </div>
   );
