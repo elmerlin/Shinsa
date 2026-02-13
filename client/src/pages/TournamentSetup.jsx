@@ -15,11 +15,14 @@ export default function TournamentSetup() {
     { round: 2, min: 20, max: 21 },
     { round: 3, min: 22, max: 23 },
   ]);
+  const [gauntletEnabled, setGauntletEnabled] = useState(false);
+  const [gauntletStartLevel, setGauntletStartLevel] = useState(19);
+  const [gauntletFinalLevel, setGauntletFinalLevel] = useState(24);
   const [saving, setSaving] = useState(false);
 
   const updateLevel = (idx, field, val) => {
     const updated = [...levels];
-    updated[idx] = { ...updated[idx], [field]: parseInt(val) || 0 };
+    updated[idx] = { ...updated[idx], [field]: val === '' ? '' : parseInt(val) || 0 };
     setLevels(updated);
   };
 
@@ -38,13 +41,23 @@ export default function TournamentSetup() {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
+      const sanitizedLevels = levels.map(l => ({
+        ...l,
+        min: parseInt(l.min) || 1,
+        max: parseInt(l.max) || 1,
+      }));
       const tournament = await createTournament({
         ...form,
         config: {
-          round_levels: levels,
+          round_levels: sanitizedLevels,
           cards_per_draw: 5,
           vetoes_per_player: 1,
           best_of: 3,
+          gauntlet_enabled: gauntletEnabled,
+          ...(gauntletEnabled && {
+            gauntlet_start_single_level: parseInt(gauntletStartLevel) || 19,
+            gauntlet_final_single_level: parseInt(gauntletFinalLevel) || 24,
+          }),
         },
       });
       navigate(`/tournament/${tournament.id}`);
@@ -131,6 +144,7 @@ export default function TournamentSetup() {
                   max="28"
                   value={lvl.min}
                   onChange={e => updateLevel(idx, 'min', e.target.value)}
+                  onFocus={e => e.target.select()}
                 />
                 <span className="text-gray-600">-</span>
                 <label className="text-xs text-gray-500">Max</label>
@@ -141,10 +155,69 @@ export default function TournamentSetup() {
                   max="28"
                   value={lvl.max}
                   onChange={e => updateLevel(idx, 'max', e.target.value)}
+                  onFocus={e => e.target.select()}
                 />
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="card space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-display font-bold text-lg text-piu-accent">Gauntlet</h2>
+              <p className="text-sm text-gray-500">King of the Hill elimination after Round Robin. Bottom-ranked players fight upward.</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={gauntletEnabled}
+                onChange={e => setGauntletEnabled(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-piu-dark rounded-full peer peer-checked:bg-piu-accent transition-colors
+                after:content-[''] after:absolute after:top-[2px] after:left-[2px]
+                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all
+                peer-checked:after:translate-x-full" />
+            </label>
+          </div>
+
+          {gauntletEnabled && (
+            <div className="space-y-4 pt-2 border-t border-piu-border/50">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm text-gray-400 mb-1">Starting Single Level</label>
+                  <input
+                    type="number"
+                    className="input-field w-full"
+                    min="1"
+                    max="28"
+                    value={gauntletStartLevel}
+                    onChange={e => setGauntletStartLevel(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
+                    onFocus={e => e.target.select()}
+                  />
+                  <p className="text-xs text-gray-600 mt-1">Double will be {(parseInt(gauntletStartLevel) || 0) + 1}</p>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm text-gray-400 mb-1">Final Match Single Level</label>
+                  <input
+                    type="number"
+                    className="input-field w-full"
+                    min="1"
+                    max="28"
+                    value={gauntletFinalLevel}
+                    onChange={e => setGauntletFinalLevel(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
+                    onFocus={e => e.target.select()}
+                  />
+                  <p className="text-xs text-gray-600 mt-1">Double will be {(parseInt(gauntletFinalLevel) || 0) + 1}</p>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 space-y-1">
+                <p>Difficulty increments by 1 each match, capping at S23/D24 until the final.</p>
+                <p>Each match: 1 Single + 1 Double drawn randomly. Combined score wins.</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="card p-3 bg-piu-dark/50 border-piu-accent/20">
@@ -155,6 +228,14 @@ export default function TournamentSetup() {
             <li>Best of 3 songs (match ends early if 2-0)</li>
             <li>Score per song: 0 - 1,000,000</li>
             <li>Single charts = Red, Double charts = Green</li>
+            {gauntletEnabled && (
+              <>
+                <li className="text-piu-accent font-bold mt-2">Gauntlet Rules:</li>
+                <li>2 songs per match (1 Single + 1 Double)</li>
+                <li>Combined total score from both songs determines winner</li>
+                <li>No vetoes in gauntlet matches</li>
+              </>
+            )}
           </ul>
         </div>
 

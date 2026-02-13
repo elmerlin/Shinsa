@@ -99,12 +99,154 @@ router.post('/tournament/:tournamentId/round-robin', (req, res) => {
   res.status(201).json(matches.map(parseMatchJSON));
 });
 
+// POST generate gauntlet matches from round robin standings
+router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
+  const db = getDb();
+  const tournamentId = req.params.tournamentId;
+  const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(tournamentId);
+  if (!tournament) { db.close(); return res.status(404).json({ error: 'Tournament not found' }); }
+
+  const config = JSON.parse(tournament.config || '{}');
+  if (!config.gauntlet_enabled) {
+    db.close();
+    return res.status(400).json({ error: 'Gauntlet is not enabled for this tournament' });
+  }
+
+  // Check if gauntlet matches already exist
+  const existing = db.prepare(
+    "SELECT COUNT(*) as cnt FROM matches WHERE tournament_id = ? AND match_type = 'gauntlet'"
+  ).get(tournamentId);
+  if (existing.cnt > 0) {
+    db.close();
+    return res.status(400).json({ error: 'Gauntlet has already been generated' });
+  }
+
+  // Get round robin standings: sort by wins desc, then buchholz desc, then pumbility desc
+  const players = db.prepare(
+    'SELECT * FROM players WHERE tournament_id = ? AND is_active = 1 ORDER BY wins DESC, buchholz DESC, pumbility DESC'
+  ).all(tournamentId);
+
+  if (players.length < 2) {
+    db.close();
+    return res.status(400).json({ error: 'Need at least 2 players for gauntlet' });
+  }
+
+  const startSingle = config.gauntlet_start_single_level || 19;
+  const finalSingle = config.gauntlet_final_single_level || 24;
+  const totalMatches = players.length - 1;
+
+  // Rankings: index 0 = 1st place, index N-1 = last place
+  // Gauntlet starts from the bottom: last vs second-to-last
+  // Match 1: players[N-1] vs players[N-2]
+  // Match 2: winner vs players[N-3]
+  // ...
+  // Final: winner vs players[0]
+
+  const insertMatch = db.prepare(`
+    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, match_type, gauntlet_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'gauntlet', ?)
+  `);
+
+  const createGauntlet = db.transaction(() => {
+    for (let i = 0; i < totalMatches; i++) {
+      const matchOrder = i + 1;
+      let singleLevel, doubleLevel;
+
+      if (matchOrder === totalMatches) {
+        // Final match uses specified final levels
+        singleLevel = finalSingle;
+        doubleLevel = finalSingle + 1;
+      } else {
+        // Increment from start, cap at S23/D24
+        singleLevel = Math.min(startSingle + i, 23);
+        doubleLevel = singleLevel + 1;
+      }
+
+      // Challenger from standings (going from bottom up)
+      // Match 1: challenger = second-to-last (index N-2), opponent = last (index N-1)
+      // Match 2: challenger = third-from-last (index N-3), opponent = TBD (winner of match 1)
+      // ...
+      // Final: challenger = 1st place (index 0)
+      const challengerIdx = players.length - 1 - i - 1; // ranked player for this match
+      const challengerId = players[challengerIdx]?.id || null;
+
+      let opponentId = null;
+      if (i === 0) {
+        // First match: opponent is the last-place player
+        opponentId = players[players.length - 1].id;
+      }
+      // For subsequent matches, player2 (opponent) will be filled in when the previous match completes
+
+      insertMatch.run(
+        uuidv4(), tournamentId, 0,
+        challengerId, opponentId,
+        singleLevel, doubleLevel,
+        i === 0 ? 'PENDING' : 'WAITING',
+        matchOrder
+      );
+    }
+
+    db.prepare('UPDATE tournaments SET phase = ? WHERE id = ?')
+      .run('GAUNTLET', tournamentId);
+  });
+
+  createGauntlet();
+
+  const matches = db.prepare(
+    "SELECT * FROM matches WHERE tournament_id = ? AND match_type = 'gauntlet' ORDER BY gauntlet_order ASC"
+  ).all(tournamentId);
+  db.close();
+
+  res.status(201).json(matches.map(parseMatchJSON));
+});
+
 // POST draw cards for a match (5 cards: at least 2 Single + 2 Double)
 router.post('/:id/draw', (req, res) => {
   const db = getDb();
   const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
   if (!match) { db.close(); return res.status(404).json({ error: 'Match not found' }); }
 
+  const shuffle = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  const isGauntlet = match.match_type === 'gauntlet';
+
+  if (isGauntlet) {
+    // Gauntlet: draw exactly 1 Single at difficulty_min, 1 Double at difficulty_max
+    const singleLevel = match.difficulty_min;
+    const doubleLevel = match.difficulty_max;
+
+    const singles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ?').all('Single', singleLevel);
+    const doubles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ?').all('Double', doubleLevel);
+
+    if (singles.length < 1) {
+      db.close();
+      return res.status(400).json({ error: `No Single charts at level ${singleLevel}` });
+    }
+    if (doubles.length < 1) {
+      db.close();
+      return res.status(400).json({ error: `No Double charts at level ${doubleLevel}` });
+    }
+
+    const singlePick = shuffle(singles)[0];
+    const doublePick = shuffle(doubles)[0];
+    const finalDraw = [singlePick, doublePick];
+
+    // Gauntlet skips veto phase, go straight to READY
+    db.prepare('UPDATE matches SET drawn_songs = ?, status = ? WHERE id = ?')
+      .run(JSON.stringify(finalDraw), 'READY', req.params.id);
+    db.close();
+
+    return res.json({ drawn_songs: finalDraw });
+  }
+
+  // Standard round robin draw
   const allSongs = db.prepare(
     'SELECT * FROM songs WHERE level >= ? AND level <= ?'
   ).all(match.difficulty_min, match.difficulty_max);
@@ -120,15 +262,6 @@ router.post('/:id/draw', (req, res) => {
     db.close();
     return res.status(400).json({ error: `Not enough Double charts (found ${doubles.length}, need 2)` });
   }
-
-  const shuffle = (arr) => {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  };
 
   const shuffledSingles = shuffle(singles);
   const shuffledDoubles = shuffle(doubles);
@@ -201,12 +334,14 @@ router.post('/:id/result', (req, res) => {
 
   const { winner_id, played_songs, scores } = req.body;
 
+  const isGauntlet = match.match_type === 'gauntlet';
+
   const submitResult = db.transaction(() => {
     db.prepare(
       'UPDATE matches SET winner_id = ?, played_songs = ?, scores = ?, status = ? WHERE id = ?'
     ).run(winner_id, JSON.stringify(played_songs), JSON.stringify(scores), 'COMPLETED', req.params.id);
 
-    if (match.player1_id && match.player2_id) {
+    if (!isGauntlet && match.player1_id && match.player2_id) {
       if (winner_id === match.player1_id) {
         db.prepare('UPDATE players SET wins = wins + 1, points = points + 1 WHERE id = ?').run(match.player1_id);
         db.prepare('UPDATE players SET losses = losses + 1 WHERE id = ?').run(match.player2_id);
@@ -215,10 +350,29 @@ router.post('/:id/result', (req, res) => {
         db.prepare('UPDATE players SET losses = losses + 1 WHERE id = ?').run(match.player1_id);
       }
     }
+
+    // Gauntlet: advance winner to next match
+    if (isGauntlet && winner_id) {
+      const nextMatch = db.prepare(
+        "SELECT * FROM matches WHERE tournament_id = ? AND match_type = 'gauntlet' AND gauntlet_order = ?"
+      ).get(match.tournament_id, match.gauntlet_order + 1);
+
+      if (nextMatch) {
+        // Winner becomes player2 (the defender coming from previous match)
+        db.prepare('UPDATE matches SET player2_id = ?, status = ? WHERE id = ?')
+          .run(winner_id, 'PENDING', nextMatch.id);
+      } else {
+        // No next match - gauntlet is complete, tournament is done
+        db.prepare("UPDATE tournaments SET phase = 'COMPLETED' WHERE id = ?")
+          .run(match.tournament_id);
+      }
+    }
   });
 
   submitResult();
-  updateBuchholz(db, match.tournament_id);
+  if (!isGauntlet) {
+    updateBuchholz(db, match.tournament_id);
+  }
 
   const updated = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
   db.close();

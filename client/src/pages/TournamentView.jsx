@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { getTournament, getPlayers, getMatches, generateRoundRobin } from '../utils/api';
+import { getTournament, getPlayers, getMatches, generateRoundRobin, generateGauntlet } from '../utils/api';
 import PlayerRegistration from '../components/PlayerRegistration';
 import SwissRound from '../components/SwissRound';
 import Standings from '../components/Standings';
+import Gauntlet from '../components/Gauntlet';
 
 const PHASE_TABS = {
   SETUP: ['players'],
   ROUND_ROBIN: ['rounds', 'standings', 'players'],
-  COMPLETED: ['standings', 'players'],
+  GAUNTLET: ['gauntlet', 'standings', 'players'],
+  COMPLETED: ['standings', 'gauntlet', 'players'],
 };
 
 export default function TournamentView() {
@@ -67,11 +69,28 @@ export default function TournamentView() {
     }
   };
 
+  const handleStartGauntlet = async () => {
+    try {
+      await generateGauntlet(id);
+      await loadData();
+      setActiveTab('gauntlet');
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
   if (loading) return <div className="text-center py-20 text-gray-500">Loading...</div>;
   if (!tournament) return <div className="text-center py-20 text-red-400">Tournament not found</div>;
 
   const config = tournament.config || {};
-  const tabs = PHASE_TABS[tournament.phase] || ['players'];
+  const hasGauntlet = config.gauntlet_enabled;
+  const gauntletMatches = matches.filter(m => m.match_type === 'gauntlet');
+  const hasGauntletMatches = gauntletMatches.length > 0;
+  let tabs = PHASE_TABS[tournament.phase] || ['players'];
+  // Only show gauntlet tab in COMPLETED phase if gauntlet was enabled and matches exist
+  if (tournament.phase === 'COMPLETED' && !hasGauntletMatches) {
+    tabs = tabs.filter(t => t !== 'gauntlet');
+  }
   const currentRound = tournament.current_round;
   const totalRounds = tournament.total_rounds || 3;
   const allRoundsDone = currentRound >= totalRounds;
@@ -95,7 +114,8 @@ export default function TournamentView() {
             tournament.phase === 'SETUP' ? 'badge-pending' :
             tournament.phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
           }`}>
-            {tournament.phase === 'ROUND_ROBIN' ? 'Round Robin' : tournament.phase}
+            {tournament.phase === 'ROUND_ROBIN' ? 'Round Robin' :
+             tournament.phase === 'GAUNTLET' ? 'Gauntlet' : tournament.phase}
           </span>
         </div>
         <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 flex-wrap">
@@ -132,7 +152,19 @@ export default function TournamentView() {
         </div>
       )}
 
-      {tournament.phase === 'ROUND_ROBIN' && allRoundsDone && allCurrentDone && (
+      {tournament.phase === 'ROUND_ROBIN' && allRoundsDone && allCurrentDone && config.gauntlet_enabled && (
+        <div className="card mb-6 flex items-center justify-between border-piu-accent/30">
+          <div>
+            <p className="font-display font-bold text-piu-accent">Round Robin Complete!</p>
+            <p className="text-sm text-gray-400">All {totalRounds} rounds finished. Ready to start the Gauntlet.</p>
+          </div>
+          <button onClick={handleStartGauntlet} className="btn-primary">
+            Start Gauntlet
+          </button>
+        </div>
+      )}
+
+      {tournament.phase === 'ROUND_ROBIN' && allRoundsDone && allCurrentDone && !config.gauntlet_enabled && (
         <div className="card mb-6 flex items-center justify-between border-piu-gold/30">
           <div>
             <p className="font-display font-bold text-piu-gold">Tournament Complete!</p>
@@ -206,6 +238,14 @@ export default function TournamentView() {
             tournamentId={id}
           />
         </div>
+      )}
+
+      {activeTab === 'gauntlet' && (
+        <Gauntlet
+          matches={matches}
+          players={players}
+          onUpdate={loadData}
+        />
       )}
 
       {activeTab === 'standings' && (

@@ -97,6 +97,15 @@ function initializeDb() {
     db.exec("ALTER TABLE players ADD COLUMN gender TEXT DEFAULT ''");
   }
 
+  // Migrations for matches table
+  const matchColumns = db.prepare("PRAGMA table_info(matches)").all().map(c => c.name);
+  if (!matchColumns.includes('match_type')) {
+    db.exec("ALTER TABLE matches ADD COLUMN match_type TEXT DEFAULT 'round_robin'");
+  }
+  if (!matchColumns.includes('gauntlet_order')) {
+    db.exec("ALTER TABLE matches ADD COLUMN gauntlet_order INT DEFAULT 0");
+  }
+
   db.close();
 }
 

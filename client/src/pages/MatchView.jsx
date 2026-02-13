@@ -11,6 +11,12 @@ const STATUS_FLOW = {
   COMPLETED: { label: 'Match Complete', action: null },
 };
 
+const GAUNTLET_STATUS_FLOW = {
+  PENDING: { label: 'Ready to Draw', action: 'Draw Cards' },
+  READY: { label: 'Songs Drawn - Play!', action: null },
+  COMPLETED: { label: 'Match Complete', action: null },
+};
+
 const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
 const SKILL_COLORS = {
@@ -49,19 +55,23 @@ export default function MatchView() {
       const data = await getMatch(id);
       setMatch(data);
 
-      // Determine veto turn: lower seed (player2) vetos first
-      const vetoed = data.vetoed_songs || [];
-      if (data.status === 'DRAWING' || data.status === 'VETOING') {
-        if (vetoed.length === 0) setVetoTurn('player2'); // Lower seed first
-        else if (vetoed.length === 1) setVetoTurn('player1');
-        else setVetoTurn(null);
+      const isGauntlet = data.match_type === 'gauntlet';
+
+      // Determine veto turn: lower seed (player2) vetos first (round robin only)
+      if (!isGauntlet) {
+        const vetoed = data.vetoed_songs || [];
+        if (data.status === 'DRAWING' || data.status === 'VETOING') {
+          if (vetoed.length === 0) setVetoTurn('player2');
+          else if (vetoed.length === 1) setVetoTurn('player1');
+          else setVetoTurn(null);
+        }
       }
 
       // Init scores
       if (data.status === 'READY' || data.status === 'COMPLETED') {
         const drawn = data.drawn_songs || [];
         const vetodIds = (data.vetoed_songs || []).map(v => v.song_id);
-        const playable = drawn.filter(s => !vetodIds.includes(s.id));
+        const playable = isGauntlet ? drawn : drawn.filter(s => !vetodIds.includes(s.id));
         const existingPlayed = data.played_songs || [];
 
         const s = {};
@@ -117,7 +127,7 @@ export default function MatchView() {
     }));
   };
 
-  // Calculate song winners and match state from scores
+  // Calculate song winners and match state from scores (Round Robin - Best of 3)
   const getSongResults = () => {
     if (!match) return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null };
 
@@ -152,36 +162,106 @@ export default function MatchView() {
     return { results, p1Wins, p2Wins, matchOver, winnerId };
   };
 
-  const handleSubmitResult = async () => {
-    const { results, p1Wins, p2Wins, matchOver, winnerId } = getSongResults();
+  // Calculate gauntlet results (combined total score)
+  const getGauntletResults = () => {
+    if (!match) return { results: [], p1Total: 0, p2Total: 0, matchOver: false, winnerId: null };
 
-    if (!matchOver) {
-      return alert('Match is not decided yet. A player must win 2 songs.');
+    const drawn = match.drawn_songs || [];
+    let p1Total = 0, p2Total = 0;
+    let allHaveScores = true;
+    const results = [];
+
+    for (const song of drawn) {
+      const s = scores[song.id] || {};
+      const p1Score = parseInt(s.p1) || 0;
+      const p2Score = parseInt(s.p2) || 0;
+      const hasScores = s.p1 !== '' && s.p2 !== '';
+
+      if (!hasScores) allHaveScores = false;
+      if (hasScores) {
+        p1Total += p1Score;
+        p2Total += p2Score;
+      }
+
+      results.push({ song, p1Score, p2Score, hasScores });
     }
 
-    const playedSongs = results.filter(r => r.hasScores).map(r => ({
-      song_id: r.song.id,
-      song: r.song,
-      p1_score: r.p1Score,
-      p2_score: r.p2Score,
-      song_winner_id: r.songWinnerId,
-      title: r.song.title,
-      mode: r.song.mode,
-      level: r.song.level,
-    }));
+    const matchOver = allHaveScores && drawn.length === 2 && p1Total !== p2Total;
+    const winnerId = matchOver ? (p1Total > p2Total ? match.player1_id : match.player2_id) : null;
 
-    setSubmitting(true);
-    try {
-      await submitResult(id, {
-        winner_id: winnerId,
-        played_songs: playedSongs,
-        scores: { player1_wins: p1Wins, player2_wins: p2Wins },
-      });
-      await loadMatch();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setSubmitting(false);
+    return { results, p1Total, p2Total, matchOver, winnerId, allHaveScores };
+  };
+
+  const handleSubmitResult = async () => {
+    const isGauntlet = match.match_type === 'gauntlet';
+
+    if (isGauntlet) {
+      const { results, p1Total, p2Total, matchOver, winnerId, allHaveScores } = getGauntletResults();
+
+      if (!allHaveScores) {
+        return alert('Enter scores for both songs.');
+      }
+      if (p1Total === p2Total) {
+        return alert('Combined scores are tied. There must be a winner.');
+      }
+      if (!matchOver) {
+        return alert('Match is not decided yet.');
+      }
+
+      const playedSongs = results.filter(r => r.hasScores).map(r => ({
+        song_id: r.song.id,
+        song: r.song,
+        p1_score: r.p1Score,
+        p2_score: r.p2Score,
+        title: r.song.title,
+        mode: r.song.mode,
+        level: r.song.level,
+      }));
+
+      setSubmitting(true);
+      try {
+        await submitResult(id, {
+          winner_id: winnerId,
+          played_songs: playedSongs,
+          scores: { p1_total: p1Total, p2_total: p2Total },
+        });
+        await loadMatch();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      const { results, p1Wins, p2Wins, matchOver, winnerId } = getSongResults();
+
+      if (!matchOver) {
+        return alert('Match is not decided yet. A player must win 2 songs.');
+      }
+
+      const playedSongs = results.filter(r => r.hasScores).map(r => ({
+        song_id: r.song.id,
+        song: r.song,
+        p1_score: r.p1Score,
+        p2_score: r.p2Score,
+        song_winner_id: r.songWinnerId,
+        title: r.song.title,
+        mode: r.song.mode,
+        level: r.song.level,
+      }));
+
+      setSubmitting(true);
+      try {
+        await submitResult(id, {
+          winner_id: winnerId,
+          played_songs: playedSongs,
+          scores: { player1_wins: p1Wins, player2_wins: p2Wins },
+        });
+        await loadMatch();
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -189,12 +269,14 @@ export default function MatchView() {
   if (!match) return <div className="text-center py-20 text-red-400">Match not found</div>;
 
   const { player1, player2, status } = match;
+  const isGauntlet = match.match_type === 'gauntlet';
   const drawn = match.drawn_songs || [];
   const vetoed = match.vetoed_songs || [];
   const vetoedIds = vetoed.map(v => v.song_id);
-  const playable = drawn.filter(s => !vetoedIds.includes(s.id));
-  const statusInfo = STATUS_FLOW[status] || {};
-  const songResults = getSongResults();
+  const playable = isGauntlet ? drawn : drawn.filter(s => !vetoedIds.includes(s.id));
+  const statusInfo = (isGauntlet ? GAUNTLET_STATUS_FLOW : STATUS_FLOW)[status] || {};
+  const songResults = isGauntlet ? null : getSongResults();
+  const gauntletResults = isGauntlet ? getGauntletResults() : null;
 
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
@@ -208,14 +290,22 @@ export default function MatchView() {
       {/* Match Header */}
       <div className="card mb-4 sm:mb-6">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <span className={`badge ${
-            status === 'COMPLETED' ? 'badge-completed' :
-            status === 'PENDING' ? 'badge-pending' : 'badge-active'
-          }`}>
-            {statusInfo.label}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`badge ${
+              status === 'COMPLETED' ? 'badge-completed' :
+              status === 'PENDING' ? 'badge-pending' : 'badge-active'
+            }`}>
+              {statusInfo.label}
+            </span>
+            {isGauntlet && (
+              <span className="badge bg-piu-accent/20 text-piu-accent text-[10px]">GAUNTLET</span>
+            )}
+          </div>
           <div className="text-sm text-gray-500">
-            Round {match.round_number} | Lv.{match.difficulty_min}{match.difficulty_max !== match.difficulty_min ? `-${match.difficulty_max}` : ''}
+            {isGauntlet
+              ? `Match #${match.gauntlet_order} | S${match.difficulty_min} / D${match.difficulty_max}`
+              : `Round ${match.round_number} | Lv.${match.difficulty_min}${match.difficulty_max !== match.difficulty_min ? `-${match.difficulty_max}` : ''}`
+            }
           </div>
         </div>
 
@@ -223,22 +313,38 @@ export default function MatchView() {
         <div className="flex items-center justify-between">
           <PlayerHeader
             player={player1}
-            label={`Seed #${player1?.seed_rank || '?'}`}
+            label={isGauntlet ? 'Challenger' : `Seed #${player1?.seed_rank || '?'}`}
             isWinner={match.winner_id === match.player1_id}
-            sublabel="Higher Seed"
+            sublabel={isGauntlet ? '' : 'Higher Seed'}
           />
 
           <div className="text-center px-3 sm:px-6">
             {status === 'COMPLETED' ? (
-              <div className="font-display font-bold text-2xl sm:text-3xl">
-                <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-600'}>
-                  {match.scores?.player1_wins || 0}
-                </span>
-                <span className="text-gray-700 mx-1 sm:mx-2">-</span>
-                <span className={match.winner_id === match.player2_id ? 'text-piu-green' : 'text-gray-600'}>
-                  {match.scores?.player2_wins || 0}
-                </span>
-              </div>
+              isGauntlet ? (
+                <div className="flex flex-col items-center">
+                  <div className="font-display font-bold text-lg sm:text-xl">
+                    <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-600'}>
+                      {match.scores?.p1_total != null ? Number(match.scores.p1_total).toLocaleString() : '0'}
+                    </span>
+                  </div>
+                  <span className="text-gray-700 text-xs">vs</span>
+                  <div className="font-display font-bold text-lg sm:text-xl">
+                    <span className={match.winner_id === match.player2_id ? 'text-piu-green' : 'text-gray-600'}>
+                      {match.scores?.p2_total != null ? Number(match.scores.p2_total).toLocaleString() : '0'}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="font-display font-bold text-2xl sm:text-3xl">
+                  <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-600'}>
+                    {match.scores?.player1_wins || 0}
+                  </span>
+                  <span className="text-gray-700 mx-1 sm:mx-2">-</span>
+                  <span className={match.winner_id === match.player2_id ? 'text-piu-green' : 'text-gray-600'}>
+                    {match.scores?.player2_wins || 0}
+                  </span>
+                </div>
+              )
             ) : (
               <div className="font-display font-bold text-xl sm:text-2xl text-gray-600">VS</div>
             )}
@@ -246,9 +352,9 @@ export default function MatchView() {
 
           <PlayerHeader
             player={player2}
-            label={`Seed #${player2?.seed_rank || '?'}`}
+            label={isGauntlet ? (match.gauntlet_order === 1 ? 'Bottom Rank' : 'Defender') : `Seed #${player2?.seed_rank || '?'}`}
             isWinner={match.winner_id === match.player2_id}
-            sublabel="Lower Seed"
+            sublabel={isGauntlet ? '' : 'Lower Seed'}
             align="right"
           />
         </div>
@@ -264,12 +370,17 @@ export default function MatchView() {
           >
             {drawing ? 'Drawing...' : 'DRAW CARDS'}
           </button>
-          <p className="text-sm text-gray-500 mt-2">5 random charts (min 2 Single + 2 Double)</p>
+          <p className="text-sm text-gray-500 mt-2">
+            {isGauntlet
+              ? `1 Single (Lv.${match.difficulty_min}) + 1 Double (Lv.${match.difficulty_max})`
+              : '5 random charts (min 2 Single + 2 Double)'
+            }
+          </p>
         </div>
       )}
 
-      {/* Card Draw Display */}
-      {drawn.length > 0 && status !== 'PENDING' && (
+      {/* Card Draw Display - Round Robin (with veto) */}
+      {!isGauntlet && drawn.length > 0 && status !== 'PENDING' && (
         <div className="mb-4 sm:mb-6">
           <h3 className="font-display font-bold text-lg mb-3">
             {status === 'DRAWING' || status === 'VETOING' ? 'Veto Phase' :
@@ -289,7 +400,7 @@ export default function MatchView() {
             </div>
           )}
 
-          {/* Song Cards Grid - optimized for mobile */}
+          {/* Song Cards Grid */}
           <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
             {drawn.map((song, idx) => {
               const isVetoed = vetoedIds.includes(song.id);
@@ -315,8 +426,27 @@ export default function MatchView() {
         </div>
       )}
 
-      {/* Scoring Section - Best of 3 */}
-      {status === 'READY' && (
+      {/* Card Draw Display - Gauntlet (no veto) */}
+      {isGauntlet && drawn.length > 0 && status !== 'PENDING' && status !== 'COMPLETED' && (
+        <div className="mb-4 sm:mb-6">
+          <h3 className="font-display font-bold text-lg mb-3">Songs to Play</h3>
+          <div className="grid grid-cols-2 gap-2 sm:gap-4">
+            {drawn.map((song, idx) => (
+              <SongCard
+                key={song.id}
+                song={song}
+                index={idx}
+                isVetoed={false}
+                canVeto={false}
+                showAnimation={showCards || status !== 'READY'}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Scoring Section - Round Robin (Best of 3) */}
+      {!isGauntlet && status === 'READY' && (
         <div className="space-y-3 sm:space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-display font-bold text-lg">Score Entry</h3>
@@ -423,8 +553,126 @@ export default function MatchView() {
         </div>
       )}
 
-      {/* Completed result */}
-      {status === 'COMPLETED' && match.played_songs.length > 0 && (
+      {/* Scoring Section - Gauntlet (Combined Score) */}
+      {isGauntlet && status === 'READY' && (
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-display font-bold text-lg">Score Entry</h3>
+            {gauntletResults.matchOver && (
+              <span className="badge badge-completed font-display">
+                {gauntletResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!
+              </span>
+            )}
+          </div>
+
+          <p className="text-sm text-gray-500">
+            Enter scores (0 - 1,000,000) for each song. Highest combined total wins.
+          </p>
+
+          {playable.map((song, idx) => {
+            const songScore = scores[song.id] || {};
+
+            return (
+              <div key={song.id} className="card">
+                <div className="flex items-center gap-2 sm:gap-3 mb-3">
+                  <div className="font-display font-bold text-gray-600 w-6">#{idx + 1}</div>
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center font-display font-bold text-xs sm:text-sm
+                    ${song.mode === 'Double' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                    {song.mode[0]}{song.level}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-display font-bold text-sm sm:text-base truncate block">{song.title}</span>
+                    <span className="text-xs text-gray-500">{song.artist}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 items-center">
+                  <div>
+                    <label className="text-xs block mb-1 text-gray-500">
+                      {player1?.name}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="input-field text-center font-mono text-sm"
+                      placeholder="Score"
+                      value={songScore.p1 !== undefined ? formatScore(songScore.p1) : ''}
+                      onChange={e => handleScoreChange(song.id, 'p1', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex flex-col items-center">
+                    <span className="text-gray-600 font-display text-xs">VS</span>
+                  </div>
+
+                  <div>
+                    <label className="text-xs block mb-1 text-right text-gray-500">
+                      {player2?.name}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="input-field text-center font-mono text-sm"
+                      placeholder="Score"
+                      value={songScore.p2 !== undefined ? formatScore(songScore.p2) : ''}
+                      onChange={e => handleScoreChange(song.id, 'p2', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Combined Total Display */}
+          {gauntletResults.allHaveScores && (
+            <div className={`card text-center py-4 ${
+              gauntletResults.matchOver
+                ? 'border-piu-green/30 bg-piu-green/5'
+                : 'border-yellow-500/30 bg-yellow-500/5'
+            }`}>
+              <p className="text-xs text-gray-400 font-display uppercase tracking-wider mb-2">Combined Total</p>
+              <div className="flex items-center justify-center gap-4 sm:gap-8">
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 mb-1">{player1?.name}</p>
+                  <p className={`font-display font-bold text-xl sm:text-2xl ${
+                    gauntletResults.winnerId === match.player1_id ? 'text-piu-green' : 'text-gray-400'
+                  }`}>
+                    {Number(gauntletResults.p1Total).toLocaleString()}
+                  </p>
+                </div>
+                <span className="text-gray-600 font-display">vs</span>
+                <div className="text-center">
+                  <p className="text-xs text-gray-500 mb-1">{player2?.name}</p>
+                  <p className={`font-display font-bold text-xl sm:text-2xl ${
+                    gauntletResults.winnerId === match.player2_id ? 'text-piu-green' : 'text-gray-400'
+                  }`}>
+                    {Number(gauntletResults.p2Total).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              {gauntletResults.matchOver && (
+                <p className="font-display font-bold text-piu-green text-lg mt-2">
+                  {gauntletResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!
+                </p>
+              )}
+              {!gauntletResults.matchOver && gauntletResults.p1Total === gauntletResults.p2Total && (
+                <p className="text-yellow-400 text-sm mt-2 font-display">Tied - scores cannot be equal</p>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={handleSubmitResult}
+            className="btn-primary w-full text-lg py-3 font-display"
+            disabled={submitting || !gauntletResults.matchOver}
+          >
+            {submitting ? 'Submitting...' : gauntletResults.matchOver ? 'Submit Results' : 'Enter scores to determine winner'}
+          </button>
+        </div>
+      )}
+
+      {/* Completed result - Round Robin */}
+      {!isGauntlet && status === 'COMPLETED' && match.played_songs.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-display font-bold text-lg">Songs Played</h3>
           {match.played_songs.map((ps, idx) => {
@@ -453,6 +701,53 @@ export default function MatchView() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Completed result - Gauntlet */}
+      {isGauntlet && status === 'COMPLETED' && match.played_songs.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-display font-bold text-lg">Songs Played</h3>
+          {match.played_songs.map((ps, idx) => {
+            const songMode = ps.mode || ps.song?.mode || 'Single';
+            const songLevel = ps.level || ps.song?.level;
+            return (
+              <div key={idx} className="card flex items-center gap-3 sm:gap-4">
+                <div className="font-display font-bold text-gray-600 w-6">#{idx + 1}</div>
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center font-display font-bold text-xs
+                  ${songMode === 'Double' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                  {songMode[0]}{songLevel}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-display font-bold text-sm sm:text-base truncate block">{ps.title || ps.song?.title}</span>
+                  <span className="text-xs text-gray-500">{ps.song?.artist}</span>
+                </div>
+                <div className="flex gap-2 sm:gap-4 text-sm font-mono">
+                  <span className={match.winner_id === match.player1_id ? 'text-piu-green font-bold' : 'text-gray-500'}>
+                    {formatScore(ps.p1_score)}
+                  </span>
+                  <span className="text-gray-700">-</span>
+                  <span className={match.winner_id === match.player2_id ? 'text-piu-green font-bold' : 'text-gray-500'}>
+                    {formatScore(ps.p2_score)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Combined Total */}
+          <div className="card text-center py-3 border-piu-green/20">
+            <p className="text-xs text-gray-400 font-display uppercase tracking-wider mb-1">Combined Total</p>
+            <div className="flex items-center justify-center gap-4">
+              <span className={`font-mono font-bold ${match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-500'}`}>
+                {match.scores?.p1_total != null ? Number(match.scores.p1_total).toLocaleString() : '0'}
+              </span>
+              <span className="text-gray-600">-</span>
+              <span className={`font-mono font-bold ${match.winner_id === match.player2_id ? 'text-piu-green' : 'text-gray-500'}`}>
+                {match.scores?.p2_total != null ? Number(match.scores.p2_total).toLocaleString() : '0'}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>

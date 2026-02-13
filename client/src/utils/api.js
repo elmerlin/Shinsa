@@ -33,6 +33,7 @@ export const getMatches = (tournamentId, round) => {
 };
 export const getMatch = (id) => request(`/matches/${id}`);
 export const generateRoundRobin = (tournamentId) => request(`/matches/tournament/${tournamentId}/round-robin`, { method: 'POST' });
+export const generateGauntlet = (tournamentId) => request(`/matches/tournament/${tournamentId}/gauntlet`, { method: 'POST' });
 export const drawCards = (matchId) => request(`/matches/${matchId}/draw`, { method: 'POST' });
 export const vetoSong = (matchId, data) => request(`/matches/${matchId}/veto`, { method: 'POST', body: JSON.stringify(data) });
 export const submitResult = (matchId, data) => request(`/matches/${matchId}/result`, { method: 'POST', body: JSON.stringify(data) });
