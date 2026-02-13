@@ -24,6 +24,7 @@ function initializeDb() {
       total_rounds INT DEFAULT 3,
       config TEXT DEFAULT '{}',
       avatar TEXT DEFAULT '',
+      archived INT DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -80,6 +81,14 @@ function initializeDb() {
       FOREIGN KEY (player2_id) REFERENCES players(id)
     );
 
+    CREATE TABLE IF NOT EXISTS notices (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      pinned INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_players_tournament ON players(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_round ON matches(tournament_id, round_number);
@@ -91,6 +100,9 @@ function initializeDb() {
   const tournamentColumns = db.prepare("PRAGMA table_info(tournaments)").all().map(c => c.name);
   if (!tournamentColumns.includes('avatar')) {
     db.exec("ALTER TABLE tournaments ADD COLUMN avatar TEXT DEFAULT ''");
+  }
+  if (!tournamentColumns.includes('archived')) {
+    db.exec("ALTER TABLE tournaments ADD COLUMN archived INT DEFAULT 0");
   }
 
   const columns = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);

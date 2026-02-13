@@ -7,6 +7,7 @@ const tournamentRoutes = require('./routes/tournaments');
 const playerRoutes = require('./routes/players');
 const matchRoutes = require('./routes/matches');
 const songRoutes = require('./routes/songs');
+const noticeRoutes = require('./routes/notices');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,6 +24,7 @@ app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/songs', songRoutes);
+app.use('/api/notices', noticeRoutes);
 
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');

@@ -3,9 +3,41 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 
+// GET all tournaments (excludes archived by default, ?include_archived=1 to include)
 router.get('/', (req, res) => {
   const db = getDb();
-  const tournaments = db.prepare('SELECT * FROM tournaments ORDER BY created_at DESC').all();
+  const includeArchived = req.query.include_archived === '1';
+  const tournaments = includeArchived
+    ? db.prepare('SELECT * FROM tournaments ORDER BY created_at DESC').all()
+    : db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC').all();
+  db.close();
+  res.json(tournaments);
+});
+
+// GET search tournaments (searches name, location, and player names)
+router.get('/search', (req, res) => {
+  const db = getDb();
+  const q = req.query.q || '';
+  if (!q.trim()) {
+    db.close();
+    return res.json([]);
+  }
+  const pattern = `%${q}%`;
+  const tournaments = db.prepare(`
+    SELECT DISTINCT t.* FROM tournaments t
+    LEFT JOIN players p ON p.tournament_id = t.id
+    WHERE t.archived = 0
+      AND (t.name LIKE ? OR t.location LIKE ? OR p.name LIKE ?)
+    ORDER BY t.created_at DESC
+  `).all(pattern, pattern, pattern);
+  db.close();
+  res.json(tournaments);
+});
+
+// GET archived tournaments
+router.get('/archived', (req, res) => {
+  const db = getDb();
+  const tournaments = db.prepare('SELECT * FROM tournaments WHERE archived = 1 ORDER BY created_at DESC').all();
   db.close();
   res.json(tournaments);
 });
@@ -70,6 +102,21 @@ router.put('/:id', (req, res) => {
   const updated = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   db.close();
   updated.config = JSON.parse(updated.config);
+  res.json(updated);
+});
+
+// PUT archive/unarchive a tournament
+router.put('/:id/archive', (req, res) => {
+  const db = getDb();
+  const { archived } = req.body;
+  const existing = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
+  if (!existing) { db.close(); return res.status(404).json({ error: 'Not found' }); }
+
+  db.prepare('UPDATE tournaments SET archived = ? WHERE id = ?')
+    .run(archived ? 1 : 0, req.params.id);
+
+  const updated = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
+  db.close();
   res.json(updated);
 });
 

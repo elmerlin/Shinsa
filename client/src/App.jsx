@@ -4,10 +4,12 @@ import Dashboard from './pages/Dashboard';
 import TournamentSetup from './pages/TournamentSetup';
 import TournamentView from './pages/TournamentView';
 import MatchView from './pages/MatchView';
+import AdminPanel from './pages/AdminPanel';
 
 export default function App() {
   const location = useLocation();
   const isHome = location.pathname === '/';
+  const isAdmin = location.pathname === '/admin';
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -32,11 +34,18 @@ export default function App() {
               <span className="text-gray-600 text-[10px] sm:text-xs block -mt-1 font-display">PIU Tournament System</span>
             </div>
           </Link>
-          {!isHome && (
-            <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
-              All Tournaments
-            </Link>
-          )}
+          <div className="flex items-center gap-3">
+            {isHome && (
+              <Link to="/admin" className="text-sm text-gray-500 hover:text-piu-accent transition-colors font-display">
+                Admin
+              </Link>
+            )}
+            {!isHome && !isAdmin && (
+              <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
+                All Tournaments
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
@@ -47,6 +56,7 @@ export default function App() {
           <Route path="/tournament/new" element={<TournamentSetup />} />
           <Route path="/tournament/:id/*" element={<TournamentView />} />
           <Route path="/match/:id" element={<MatchView />} />
+          <Route path="/admin" element={<AdminPanel />} />
         </Routes>
       </main>
 

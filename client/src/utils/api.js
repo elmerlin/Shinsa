@@ -18,6 +18,9 @@ export const getTournament = (id) => request(`/tournaments/${id}`);
 export const createTournament = (data) => request('/tournaments', { method: 'POST', body: JSON.stringify(data) });
 export const updateTournament = (id, data) => request(`/tournaments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteTournament = (id) => request(`/tournaments/${id}`, { method: 'DELETE' });
+export const searchTournaments = (q) => request(`/tournaments/search?q=${encodeURIComponent(q)}`);
+export const getArchivedTournaments = () => request('/tournaments/archived');
+export const archiveTournament = (id, archived) => request(`/tournaments/${id}/archive`, { method: 'PUT', body: JSON.stringify({ archived }) });
 
 // Players
 export const getPlayers = (tournamentId) => request(`/players/tournament/${tournamentId}`);
@@ -37,6 +40,12 @@ export const generateGauntlet = (tournamentId) => request(`/matches/tournament/$
 export const drawCards = (matchId) => request(`/matches/${matchId}/draw`, { method: 'POST' });
 export const vetoSong = (matchId, data) => request(`/matches/${matchId}/veto`, { method: 'POST', body: JSON.stringify(data) });
 export const submitResult = (matchId, data) => request(`/matches/${matchId}/result`, { method: 'POST', body: JSON.stringify(data) });
+
+// Notices
+export const getNotices = () => request('/notices');
+export const createNotice = (data) => request('/notices', { method: 'POST', body: JSON.stringify(data) });
+export const updateNotice = (id, data) => request(`/notices/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteNotice = (id) => request(`/notices/${id}`, { method: 'DELETE' });
 
 // Songs
 export const getSongs = (params = {}) => {
