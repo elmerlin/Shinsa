@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import confetti from 'canvas-confetti';
 import { getCountryFlag } from './PlayerRegistration';
 
 const MEDAL_CONFIG = {
@@ -56,6 +57,24 @@ export default function FinalStandings({ players, matches, config }) {
   }
 
   const champion = podium.find(p => p.rank === 1)?.player;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { x: 0.2, y: 0.6 },
+        colors: ['#ffd700', '#ff3366', '#33ff66', '#4488ff'],
+      });
+      confetti({
+        particleCount: 80,
+        spread: 70,
+        origin: { x: 0.8, y: 0.6 },
+        colors: ['#ffd700', '#ff3366', '#33ff66', '#4488ff'],
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div>

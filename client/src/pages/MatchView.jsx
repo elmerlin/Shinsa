@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getMatch, drawCards, vetoSong, submitResult } from '../utils/api';
 import SongCard from '../components/SongCard';
+import { useChopSound, useShuffleSound } from '../hooks/useSound';
 
 const STATUS_FLOW = {
   PENDING: { label: 'Ready to Draw', action: 'Draw Cards' },
@@ -50,6 +51,8 @@ export default function MatchView() {
   const [scores, setScores] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [shuffling, setShuffling] = useState(false);
+  const { play: playChop } = useChopSound(0.7);
+  const { play: playShuffle, stop: stopShuffle } = useShuffleSound(0.4);
   const [shuffleRevealed, setShuffleRevealed] = useState(false);
 
   const loadMatch = useCallback(async () => {
@@ -106,6 +109,11 @@ export default function MatchView() {
 
   useEffect(() => { loadMatch(); }, [loadMatch]);
 
+  useEffect(() => {
+    if (shuffling) playShuffle();
+    else stopShuffle();
+  }, [shuffling, playShuffle, stopShuffle]);
+
   const handleDraw = async () => {
     setDrawing(true);
     try {
@@ -122,6 +130,7 @@ export default function MatchView() {
 
   const handleVeto = async (songId) => {
     if (!vetoTurn) return;
+    playChop();
     const playerId = vetoTurn === 'player1' ? match.player1_id : match.player2_id;
     try {
       const result = await vetoSong(id, { song_id: songId, player_id: playerId });
