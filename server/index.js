@@ -26,13 +26,22 @@ app.use('/api/matches', matchRoutes);
 app.use('/api/songs', songRoutes);
 app.use('/api/notices', noticeRoutes);
 
+// Return 404 for unmatched API routes (prevents hanging requests)
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientBuild));
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(clientBuild, 'index.html'));
-  }
+  res.sendFile(path.join(clientBuild, 'index.html'));
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => {

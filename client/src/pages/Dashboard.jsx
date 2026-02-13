@@ -18,10 +18,13 @@ export default function Dashboard() {
   const [selectedNotice, setSelectedNotice] = useState(null);
 
   useEffect(() => {
-    Promise.all([getTournaments(), getNotices()])
-      .then(([t, n]) => { setTournaments(t); setNotices(n); })
+    getTournaments()
+      .then(t => setTournaments(t))
       .catch(console.error)
       .finally(() => setLoading(false));
+    getNotices()
+      .then(n => setNotices(n))
+      .catch(console.error);
   }, []);
 
   const handleSearch = useCallback(async (q) => {

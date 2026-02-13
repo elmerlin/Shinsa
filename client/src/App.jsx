@@ -9,7 +9,6 @@ import AdminPanel from './pages/AdminPanel';
 export default function App() {
   const location = useLocation();
   const isHome = location.pathname === '/';
-  const isAdmin = location.pathname === '/admin';
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -35,12 +34,7 @@ export default function App() {
             </div>
           </Link>
           <div className="flex items-center gap-3">
-            {isHome && (
-              <Link to="/admin" className="text-sm text-gray-500 hover:text-piu-accent transition-colors font-display">
-                Admin
-              </Link>
-            )}
-            {!isHome && !isAdmin && (
+            {!isHome && (
               <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
                 All Tournaments
               </Link>
