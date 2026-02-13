@@ -33,7 +33,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
           <div className="text-sm text-gray-400">
             {completedCount}/{totalCount} matches
           </div>
-          <div className="w-32 h-2 bg-piu-dark rounded-full mt-1 overflow-hidden">
+          <div className="w-24 sm:w-32 h-2 bg-piu-dark rounded-full mt-1 overflow-hidden">
             <div
               className="h-full bg-piu-green rounded-full transition-all duration-500"
               style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
@@ -42,7 +42,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
         </div>
       </div>
 
-      <div className="grid gap-3">
+      <div className="grid gap-2 sm:gap-3">
         {matches.map(match => {
           const p1 = playerMap[match.player1_id];
           const p2 = playerMap[match.player2_id];
@@ -53,25 +53,25 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
             <div
               key={match.id}
               onClick={() => navigate(`/match/${match.id}`)}
-              className={`card flex items-center gap-4 cursor-pointer hover:border-piu-accent/50 hover:shadow-lg hover:shadow-piu-accent/10
+              className={`card flex items-center gap-2 sm:gap-4 cursor-pointer hover:border-piu-accent/50 hover:shadow-lg hover:shadow-piu-accent/10 p-3 sm:p-4
                 ${isComplete ? 'border-piu-green/20' : ''}
                 ${match.status === 'DRAWING' || match.status === 'VETOING' || match.status === 'READY' ? 'border-piu-accent/30 animate-pulse-glow' : ''}
               `}
             >
               {/* Player 1 (higher seed) */}
-              <div className={`flex-1 text-right ${match.winner_id === match.player1_id ? 'text-piu-green' : ''}`}>
-                <div className="font-display font-bold">
+              <div className={`flex-1 text-right min-w-0 ${match.winner_id === match.player1_id ? 'text-piu-green' : ''}`}>
+                <div className="font-display font-bold text-sm sm:text-base truncate">
                   {p1?.name || 'TBD'}
                 </div>
-                <div className="text-xs text-gray-500">
-                  Seed {p1?.seed_rank || '?'} | {p1?.pumbility || 0}
+                <div className="text-[10px] sm:text-xs text-gray-500">
+                  #{p1?.seed_rank || '?'}
                 </div>
               </div>
 
               {/* Score / Status */}
-              <div className="flex flex-col items-center min-w-[80px]">
+              <div className="flex flex-col items-center min-w-[60px] sm:min-w-[80px]">
                 {isComplete ? (
-                  <div className="flex items-center gap-2 font-display font-bold text-lg">
+                  <div className="flex items-center gap-1 sm:gap-2 font-display font-bold text-base sm:text-lg">
                     <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-500'}>
                       {scores.player1_wins || 0}
                     </span>
@@ -81,7 +81,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
                     </span>
                   </div>
                 ) : (
-                  <span className={`badge ${
+                  <span className={`badge text-[10px] sm:text-xs ${
                     match.status === 'PENDING' ? 'badge-pending' :
                     match.status === 'DRAWING' || match.status === 'VETOING' ? 'badge-active' :
                     match.status === 'READY' ? 'bg-piu-blue/20 text-piu-blue' : 'badge-pending'
@@ -92,17 +92,17 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
               </div>
 
               {/* Player 2 (lower seed) */}
-              <div className={`flex-1 ${match.winner_id === match.player2_id ? 'text-piu-green' : ''}`}>
-                <div className="font-display font-bold">
+              <div className={`flex-1 min-w-0 ${match.winner_id === match.player2_id ? 'text-piu-green' : ''}`}>
+                <div className="font-display font-bold text-sm sm:text-base truncate">
                   {p2?.name || 'TBD'}
                 </div>
-                <div className="text-xs text-gray-500">
-                  Seed {p2?.seed_rank || '?'} | {p2?.pumbility || 0}
+                <div className="text-[10px] sm:text-xs text-gray-500">
+                  #{p2?.seed_rank || '?'}
                 </div>
               </div>
 
               {!isComplete && (
-                <div className="text-gray-600 text-lg">&#8250;</div>
+                <div className="text-gray-600 text-lg shrink-0">&#8250;</div>
               )}
             </div>
           );

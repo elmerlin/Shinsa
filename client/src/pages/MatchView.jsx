@@ -11,9 +11,26 @@ const STATUS_FLOW = {
   COMPLETED: { label: 'Match Complete', action: null },
 };
 
+const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
+
+const SKILL_COLORS = {
+  Beginner: 'text-green-400',
+  Intermediate: 'text-piu-bronze',
+  Advanced: 'text-piu-silver',
+  Expert: 'text-piu-gold',
+};
+
 const formatScore = (score) => {
   if (!score && score !== 0) return '';
   return Number(score).toLocaleString();
+};
+
+const getSkillColorFromTitle = (title) => {
+  if (!title) return 'text-gray-500';
+  for (const [key, val] of Object.entries(SKILL_COLORS)) {
+    if (title.startsWith(key)) return val;
+  }
+  return 'text-gray-500';
 };
 
 export default function MatchView() {
@@ -32,11 +49,11 @@ export default function MatchView() {
       const data = await getMatch(id);
       setMatch(data);
 
-      // Determine veto turn: higher seed (player1) vetos first
+      // Determine veto turn: lower seed (player2) vetos first
       const vetoed = data.vetoed_songs || [];
       if (data.status === 'DRAWING' || data.status === 'VETOING') {
-        if (vetoed.length === 0) setVetoTurn('player1'); // Higher seed first
-        else if (vetoed.length === 1) setVetoTurn('player2');
+        if (vetoed.length === 0) setVetoTurn('player2'); // Lower seed first
+        else if (vetoed.length === 1) setVetoTurn('player1');
         else setVetoTurn(null);
       }
 
@@ -180,7 +197,7 @@ export default function MatchView() {
   const songResults = getSongResults();
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
       <button
         onClick={() => navigate(-1)}
         className="text-gray-500 hover:text-white transition-colors text-sm mb-4"
@@ -189,8 +206,8 @@ export default function MatchView() {
       </button>
 
       {/* Match Header */}
-      <div className="card mb-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="card mb-4 sm:mb-6">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
           <span className={`badge ${
             status === 'COMPLETED' ? 'badge-completed' :
             status === 'PENDING' ? 'badge-pending' : 'badge-active'
@@ -211,19 +228,19 @@ export default function MatchView() {
             sublabel="Higher Seed"
           />
 
-          <div className="text-center px-6">
+          <div className="text-center px-3 sm:px-6">
             {status === 'COMPLETED' ? (
-              <div className="font-display font-bold text-3xl">
+              <div className="font-display font-bold text-2xl sm:text-3xl">
                 <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-600'}>
                   {match.scores?.player1_wins || 0}
                 </span>
-                <span className="text-gray-700 mx-2">-</span>
+                <span className="text-gray-700 mx-1 sm:mx-2">-</span>
                 <span className={match.winner_id === match.player2_id ? 'text-piu-green' : 'text-gray-600'}>
                   {match.scores?.player2_wins || 0}
                 </span>
               </div>
             ) : (
-              <div className="font-display font-bold text-2xl text-gray-600">VS</div>
+              <div className="font-display font-bold text-xl sm:text-2xl text-gray-600">VS</div>
             )}
           </div>
 
@@ -239,10 +256,10 @@ export default function MatchView() {
 
       {/* Draw Button */}
       {status === 'PENDING' && (
-        <div className="text-center py-8">
+        <div className="text-center py-6 sm:py-8">
           <button
             onClick={handleDraw}
-            className="btn-primary text-xl px-12 py-4 font-display tracking-wider"
+            className="btn-primary text-lg sm:text-xl px-8 sm:px-12 py-3 sm:py-4 font-display tracking-wider"
             disabled={drawing}
           >
             {drawing ? 'Drawing...' : 'DRAW CARDS'}
@@ -253,7 +270,7 @@ export default function MatchView() {
 
       {/* Card Draw Display */}
       {drawn.length > 0 && status !== 'PENDING' && (
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <h3 className="font-display font-bold text-lg mb-3">
             {status === 'DRAWING' || status === 'VETOING' ? 'Veto Phase' :
              status === 'READY' ? 'Set List (Best of 3)' : 'Songs Played'}
@@ -261,19 +278,19 @@ export default function MatchView() {
 
           {/* Veto instruction */}
           {(status === 'DRAWING' || status === 'VETOING') && vetoTurn && (
-            <div className="card mb-4 border-piu-accent/50 bg-piu-accent/5 text-center py-3">
+            <div className="card mb-3 sm:mb-4 border-piu-accent/50 bg-piu-accent/5 text-center py-2 sm:py-3">
               <p className="font-display font-bold text-piu-accent">
                 {vetoTurn === 'player1' ? player1?.name : player2?.name}'s turn to ban
               </p>
               <p className="text-sm text-gray-400">
-                {vetoTurn === 'player1' ? '(Higher seed bans first)' : '(Lower seed bans second)'}
-                {' - '}Click a song card to ban it
+                {vetoTurn === 'player2' ? '(Lower seed bans first)' : '(Higher seed bans second)'}
+                {' - '}Tap a song card to ban it
               </p>
             </div>
           )}
 
-          {/* Song Cards Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {/* Song Cards Grid - optimized for mobile */}
+          <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
             {drawn.map((song, idx) => {
               const isVetoed = vetoedIds.includes(song.id);
               const vetoInfo = vetoed.find(v => v.song_id === song.id);
@@ -300,7 +317,7 @@ export default function MatchView() {
 
       {/* Scoring Section - Best of 3 */}
       {status === 'READY' && (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-display font-bold text-lg">Score Entry</h3>
             {songResults.matchOver && (
@@ -316,9 +333,7 @@ export default function MatchView() {
 
           {playable.map((song, idx) => {
             const result = songResults.results[idx];
-            // Only show songs up to the match-deciding one
             if (!result && songResults.matchOver) return null;
-            // If match is already won in previous songs, don't show this one
             const prevResults = songResults.results.slice(0, idx);
             const prevP1 = prevResults.filter(r => r.songWinnerId === match.player1_id).length;
             const prevP2 = prevResults.filter(r => r.songWinnerId === match.player2_id).length;
@@ -333,22 +348,22 @@ export default function MatchView() {
 
             return (
               <div key={song.id} className={`card ${hasScores ? (p1Val === p2Val ? 'border-yellow-500/30' : 'border-piu-green/20') : ''}`}>
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-2 sm:gap-3 mb-3">
                   <div className="font-display font-bold text-gray-600 w-6">#{idx + 1}</div>
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-display font-bold text-sm
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center font-display font-bold text-xs sm:text-sm
                     ${song.mode === 'Double' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
                     {song.mode[0]}{song.level}
                   </div>
-                  <div className="flex-1">
-                    <span className="font-display font-bold">{song.title}</span>
-                    <span className="text-xs text-gray-500 ml-2">{song.artist}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-display font-bold text-sm sm:text-base truncate block">{song.title}</span>
+                    <span className="text-xs text-gray-500">{song.artist}</span>
                   </div>
                   {hasScores && p1Val === p2Val && songScore.p1 !== '' && (
                     <span className="text-xs text-yellow-400 font-display">TIE</span>
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 items-center">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 items-center">
                   <div>
                     <label className={`text-xs block mb-1 ${p1Wins ? 'text-piu-green font-bold' : 'text-gray-500'}`}>
                       {player1?.name} {p1Wins ? '- WIN' : ''}
@@ -356,8 +371,8 @@ export default function MatchView() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      className={`input-field text-center font-mono ${p1Wins ? 'border-piu-green/50' : ''}`}
-                      placeholder="0 - 1,000,000"
+                      className={`input-field text-center font-mono text-sm ${p1Wins ? 'border-piu-green/50' : ''}`}
+                      placeholder="Score"
                       value={songScore.p1 !== undefined ? formatScore(songScore.p1) : ''}
                       onChange={e => handleScoreChange(song.id, 'p1', e.target.value)}
                     />
@@ -374,8 +389,8 @@ export default function MatchView() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      className={`input-field text-center font-mono ${p2Wins ? 'border-piu-green/50' : ''}`}
-                      placeholder="0 - 1,000,000"
+                      className={`input-field text-center font-mono text-sm ${p2Wins ? 'border-piu-green/50' : ''}`}
+                      placeholder="Score"
                       value={songScore.p2 !== undefined ? formatScore(songScore.p2) : ''}
                       onChange={e => handleScoreChange(song.id, 'p2', e.target.value)}
                     />
@@ -416,17 +431,17 @@ export default function MatchView() {
             const songMode = ps.mode || ps.song?.mode || 'Single';
             const songLevel = ps.level || ps.song?.level;
             return (
-              <div key={idx} className="card flex items-center gap-4">
+              <div key={idx} className="card flex items-center gap-3 sm:gap-4">
                 <div className="font-display font-bold text-gray-600 w-6">#{idx + 1}</div>
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-display font-bold text-xs
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center font-display font-bold text-xs
                   ${songMode === 'Double' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
                   {songMode[0]}{songLevel}
                 </div>
-                <div className="flex-1">
-                  <span className="font-display font-bold">{ps.title || ps.song?.title}</span>
-                  <span className="text-xs text-gray-500 ml-2">{ps.song?.artist}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-display font-bold text-sm sm:text-base truncate block">{ps.title || ps.song?.title}</span>
+                  <span className="text-xs text-gray-500">{ps.song?.artist}</span>
                 </div>
-                <div className="flex gap-4 text-sm font-mono">
+                <div className="flex gap-2 sm:gap-4 text-sm font-mono">
                   <span className={ps.song_winner_id === match.player1_id ? 'text-piu-green font-bold' : 'text-gray-500'}>
                     {formatScore(ps.p1_score)}
                   </span>
@@ -447,15 +462,40 @@ export default function MatchView() {
 function PlayerHeader({ player, label, isWinner, sublabel, align = 'left' }) {
   if (!player) return <div className="flex-1" />;
 
+  const genderSymbol = player.gender ? GENDER_SYMBOLS[player.gender] || '' : '';
+  const skillColor = getSkillColorFromTitle(player.skill_title);
+  const getInitials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
   return (
     <div className={`flex-1 ${align === 'right' ? 'text-right' : ''}`}>
       <p className="text-xs text-gray-500 font-display uppercase">{label}</p>
-      <p className={`font-display font-bold text-xl ${isWinner ? 'text-piu-green' : ''}`}>
-        {player.name}
-        {isWinner && <span className="ml-2 text-sm">&#9733;</span>}
-      </p>
+      <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}>
+        {align === 'left' && player.avatar && (
+          <img src={player.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+        )}
+        {align === 'left' && !player.avatar && (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+            {getInitials(player.name)}
+          </div>
+        )}
+        <p className={`font-display font-bold text-lg sm:text-xl ${isWinner ? 'text-piu-green' : ''}`}>
+          {player.name}
+          {isWinner && <span className="ml-1 text-sm">&#9733;</span>}
+        </p>
+        {align === 'right' && player.avatar && (
+          <img src={player.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+        )}
+        {align === 'right' && !player.avatar && (
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+            {getInitials(player.name)}
+          </div>
+        )}
+      </div>
       {player.skill_title && (
-        <p className="text-xs text-gray-500">{player.skill_title}</p>
+        <p className={`text-xs ${skillColor}`}>
+          {player.skill_title}
+          {genderSymbol && <span className="ml-1">{genderSymbol}</span>}
+        </p>
       )}
       {sublabel && (
         <p className="text-[10px] text-gray-600">{sublabel}</p>

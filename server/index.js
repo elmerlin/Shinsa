@@ -16,7 +16,7 @@ initializeDb();
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // API Routes
 app.use('/api/tournaments', tournamentRoutes);
@@ -34,5 +34,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Shinsa server running on port ${PORT}`);
+  console.log(`Pump Dojo Shinsa server running on port ${PORT}`);
 });

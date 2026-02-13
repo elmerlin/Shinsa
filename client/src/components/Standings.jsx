@@ -1,11 +1,27 @@
 import React, { useState } from 'react';
 
+const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
+
+const SKILL_COLORS = {
+  Beginner: 'text-green-400',
+  Intermediate: 'text-piu-bronze',
+  Advanced: 'text-piu-silver',
+  Expert: 'text-piu-gold',
+};
+
+const getSkillColor = (title) => {
+  if (!title) return 'text-gray-500';
+  for (const [key, val] of Object.entries(SKILL_COLORS)) {
+    if (title.startsWith(key)) return val;
+  }
+  return 'text-gray-500';
+};
+
 export default function Standings({ players, matches, showFinal }) {
   const [expandedId, setExpandedId] = useState(null);
 
   const sorted = [...players].sort((a, b) => {
     if (b.wins !== a.wins) return b.wins - a.wins;
-    if (b.buchholz !== a.buchholz) return b.buchholz - a.buchholz;
     return b.pumbility - a.pumbility;
   });
 
@@ -38,36 +54,42 @@ export default function Standings({ players, matches, showFinal }) {
       </h2>
 
       <div className="card overflow-hidden p-0">
-        <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-piu-dark text-xs text-gray-400 font-display uppercase tracking-wider">
+        <div className="grid grid-cols-10 gap-2 px-3 sm:px-4 py-2 bg-piu-dark text-xs text-gray-400 font-display uppercase tracking-wider">
           <div className="col-span-1">#</div>
           <div className="col-span-4">Player</div>
           <div className="col-span-1 text-center">W</div>
           <div className="col-span-1 text-center">L</div>
           <div className="col-span-1 text-center">Pts</div>
           <div className="col-span-2 text-center">Pumbility</div>
-          <div className="col-span-2 text-center">Buchholz</div>
         </div>
 
         {sorted.map((player, idx) => {
           const rank = idx + 1;
           const playerMatches = getPlayerMatches(player.id);
           const isExpanded = expandedId === player.id;
+          const genderSymbol = player.gender ? GENDER_SYMBOLS[player.gender] || '' : '';
+          const skillColor = getSkillColor(player.skill_title);
 
           return (
             <div key={player.id}>
               <div
                 onClick={() => setExpandedId(isExpanded ? null : player.id)}
-                className={`grid grid-cols-12 gap-2 px-4 py-3 items-center cursor-pointer transition-colors
+                className={`grid grid-cols-10 gap-2 px-3 sm:px-4 py-3 items-center cursor-pointer transition-colors
                   ${isExpanded ? 'bg-piu-accent/10 border-l-2 border-l-piu-accent' : 'hover:bg-piu-dark/50 border-l-2 border-l-transparent'}
                   ${idx > 0 ? 'border-t border-piu-border/50' : ''}`}
               >
                 <div className={`col-span-1 font-display font-bold text-lg ${getMedalColor(rank)}`}>
                   {rank}
                 </div>
-                <div className="col-span-4 flex items-center gap-2">
-                  <span className="font-display font-bold">{player.name}</span>
+                <div className="col-span-4 flex items-center gap-2 min-w-0">
+                  <span className="font-display font-bold truncate">{player.name}</span>
+                  {genderSymbol && (
+                    <span className={`text-xs shrink-0 ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                      {genderSymbol}
+                    </span>
+                  )}
                   {player.skill_title && (
-                    <span className="text-xs text-gray-500 hidden sm:inline">{player.skill_title}</span>
+                    <span className={`text-xs hidden sm:inline shrink-0 ${skillColor}`}>{player.skill_title}</span>
                   )}
                 </div>
                 <div className="col-span-1 text-center text-piu-green font-mono font-bold">
@@ -79,17 +101,14 @@ export default function Standings({ players, matches, showFinal }) {
                 <div className="col-span-1 text-center text-piu-gold font-mono font-bold">
                   {player.points || player.wins}
                 </div>
-                <div className="col-span-2 text-center text-piu-gold font-mono">
+                <div className="col-span-2 text-center text-piu-gold font-mono text-sm">
                   {player.pumbility ? player.pumbility.toLocaleString() : '-'}
-                </div>
-                <div className="col-span-2 text-center text-gray-400 font-mono text-sm">
-                  {(player.buchholz || 0).toFixed(1)}
                 </div>
               </div>
 
               {/* Expanded match history */}
               {isExpanded && (
-                <div className="px-4 py-4 bg-piu-dark/40 border-t border-piu-border/30 border-l-2 border-l-piu-accent animate-fade-in">
+                <div className="px-3 sm:px-4 py-4 bg-piu-dark/40 border-t border-piu-border/30 border-l-2 border-l-piu-accent animate-fade-in">
                   <p className="text-xs text-piu-accent mb-3 font-display uppercase tracking-wider font-bold">
                     Match History ({playerMatches.length} matches)
                   </p>

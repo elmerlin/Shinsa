@@ -33,6 +33,9 @@ function initializeDb() {
       skill_title TEXT DEFAULT '',
       skill_level INT DEFAULT 1,
       pumbility INT DEFAULT 0,
+      description TEXT DEFAULT '',
+      avatar TEXT DEFAULT '',
+      gender TEXT DEFAULT '',
       wins INT DEFAULT 0,
       losses INT DEFAULT 0,
       points INT DEFAULT 0,
@@ -81,6 +84,18 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_songs_level ON songs(level);
     CREATE INDEX IF NOT EXISTS idx_songs_mode ON songs(mode);
   `);
+
+  // Migrations for existing databases
+  const columns = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);
+  if (!columns.includes('description')) {
+    db.exec("ALTER TABLE players ADD COLUMN description TEXT DEFAULT ''");
+  }
+  if (!columns.includes('avatar')) {
+    db.exec("ALTER TABLE players ADD COLUMN avatar TEXT DEFAULT ''");
+  }
+  if (!columns.includes('gender')) {
+    db.exec("ALTER TABLE players ADD COLUMN gender TEXT DEFAULT ''");
+  }
 
   db.close();
 }

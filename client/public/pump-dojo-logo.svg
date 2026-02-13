@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a0a2e"/>
+      <stop offset="100%" style="stop-color:#0a0a1a"/>
+    </linearGradient>
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff3366"/>
+      <stop offset="100%" style="stop-color:#ff6633"/>
+    </linearGradient>
+    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="100%" style="stop-color:#ff9500"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="url(#bg-grad)" stroke="url(#gold-grad)" stroke-width="3"/>
+  <!-- Inner ring -->
+  <circle cx="100" cy="100" r="80" fill="none" stroke="url(#accent-grad)" stroke-width="2" opacity="0.6"/>
+  <!-- Torii gate shape (dojo symbol) -->
+  <g transform="translate(100,90)" fill="url(#accent-grad)">
+    <!-- Top beam -->
+    <rect x="-45" y="-35" width="90" height="8" rx="4"/>
+    <!-- Second beam -->
+    <rect x="-38" y="-22" width="76" height="6" rx="3"/>
+    <!-- Left pillar -->
+    <rect x="-35" y="-22" width="8" height="55" rx="2"/>
+    <!-- Right pillar -->
+    <rect x="27" y="-22" width="8" height="55" rx="2"/>
+    <!-- Left base -->
+    <rect x="-40" y="28" width="18" height="5" rx="2"/>
+    <!-- Right base -->
+    <rect x="22" y="28" width="18" height="5" rx="2"/>
+  </g>
+  <!-- Star/arrow in center (PIU pump pad) -->
+  <g transform="translate(100,85)">
+    <polygon points="0,-12 3.5,-4 12,-4 5.5,2 8,10 0,5.5 -8,10 -5.5,2 -12,-4 -3.5,-4" fill="url(#gold-grad)" opacity="0.9"/>
+  </g>
+  <!-- Text: PD -->
+  <text x="100" y="155" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="22" fill="url(#gold-grad)" letter-spacing="4">PUMP DOJO</text>
+</svg>

@@ -151,7 +151,7 @@ export default function TournamentSetup() {
           <h3 className="font-display font-bold text-sm text-piu-accent mb-2">Match Rules</h3>
           <ul className="text-xs text-gray-400 space-y-1">
             <li>5 cards drawn per match (min 2 Single + 2 Double)</li>
-            <li>1 veto per player (higher seed bans first)</li>
+            <li>1 veto per player (lower seed bans first)</li>
             <li>Best of 3 songs (match ends early if 2-0)</li>
             <li>Score per song: 0 - 1,000,000</li>
             <li>Single charts = Red, Double charts = Green</li>

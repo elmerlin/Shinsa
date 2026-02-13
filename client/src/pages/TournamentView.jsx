@@ -86,11 +86,11 @@ export default function TournamentView() {
   const matchesPerRound = playerCount > 1 ? (playerCount * (playerCount - 1)) / 2 : 0;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-3xl font-display font-bold tracking-wider">{tournament.name}</h1>
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 sm:gap-3 mb-1 flex-wrap">
+          <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wider">{tournament.name}</h1>
           <span className={`badge ${
             tournament.phase === 'SETUP' ? 'badge-pending' :
             tournament.phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
@@ -98,7 +98,7 @@ export default function TournamentView() {
             {tournament.phase === 'ROUND_ROBIN' ? 'Round Robin' : tournament.phase}
           </span>
         </div>
-        <div className="flex gap-4 text-sm text-gray-400">
+        <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 flex-wrap">
           {tournament.location && <span>{tournament.location}</span>}
           {tournament.date && <span>{tournament.date}</span>}
           <span>{players.length} players</span>
@@ -142,12 +142,12 @@ export default function TournamentView() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-piu-border">
+      <div className="flex gap-1 mb-4 sm:mb-6 border-b border-piu-border">
         {tabs.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 font-display font-semibold text-sm uppercase tracking-wider border-b-2 transition-colors ${
+            className={`px-3 sm:px-4 py-2 font-display font-semibold text-xs sm:text-sm uppercase tracking-wider border-b-2 transition-colors ${
               activeTab === tab
                 ? 'border-piu-accent text-piu-accent'
                 : 'border-transparent text-gray-500 hover:text-gray-300'

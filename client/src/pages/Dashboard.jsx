@@ -34,7 +34,7 @@ export default function Dashboard() {
           <h1 className="text-4xl font-display font-bold tracking-wider">
             TOURNAMENTS
           </h1>
-          <p className="text-gray-400 mt-1">Pump It Up Round Robin Tournament Manager</p>
+          <p className="text-gray-400 mt-1">Pump Dojo - PIU Round Robin Tournament</p>
         </div>
         <Link to="/tournament/new" className="btn-primary text-lg">
           + New Tournament
