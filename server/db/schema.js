@@ -54,7 +54,8 @@ function initializeDb() {
       mode TEXT NOT NULL,
       level INT NOT NULL,
       bpm TEXT DEFAULT '',
-      song_key TEXT DEFAULT ''
+      song_key TEXT DEFAULT '',
+      flags TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS matches (
@@ -98,6 +99,12 @@ function initializeDb() {
   }
   if (!columns.includes('nationality')) {
     db.exec("ALTER TABLE players ADD COLUMN nationality TEXT DEFAULT ''");
+  }
+
+  // Migrations for songs table
+  const songColumns = db.prepare("PRAGMA table_info(songs)").all().map(c => c.name);
+  if (!songColumns.includes('flags')) {
+    db.exec("ALTER TABLE songs ADD COLUMN flags TEXT DEFAULT ''");
   }
 
   // Migrations for matches table

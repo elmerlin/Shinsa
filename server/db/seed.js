@@ -2,8 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const { initializeDb, getDb, DB_PATH } = require('./schema');
 
-const JACKET_BASE = 'https://raw.githubusercontent.com/noahm/DDRCardDraw/main/src/assets/jackets/';
-
 function seedDatabase() {
   const jsonPath = path.join(__dirname, '..', '..', 'pump-phoenix.json');
   if (!fs.existsSync(jsonPath)) {
@@ -24,14 +22,16 @@ function seedDatabase() {
   const db = getDb();
 
   const stmt = db.prepare(`
-    INSERT INTO songs (title, artist, jacket_url, mode, level, bpm, song_key)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO songs (title, artist, jacket_url, mode, level, bpm, song_key, flags)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   let chartCount = 0;
   const insertAll = db.transaction(() => {
     for (const song of songs) {
-      const jacketUrl = song.jacket ? JACKET_BASE + song.jacket : '';
+      // Use local jacket path served from client/public/jackets/
+      const jacketUrl = song.jacket ? '/jackets/' + song.jacket : '';
+      const flags = (song.flags || []).join(',');
 
       for (const chart of song.charts) {
         if ((chart.diffClass === 'S' || chart.diffClass === 'D') && chart.style === 'solo') {
@@ -43,7 +43,8 @@ function seedDatabase() {
             mode,
             chart.lvl,
             song.bpm || '',
-            song.saIndex || ''
+            song.saIndex || '',
+            flags
           );
           chartCount++;
         }
