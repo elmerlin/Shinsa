@@ -17,6 +17,115 @@ const DEFAULT_PLAYER = {
   name: '', avatar: '', skill_title: 'Beginner', skill_level: 1, gender: '', nationality: '', description: '',
 };
 
+function PlayerFields({ player, setPlayer, label, prefix, color, isExpanded, onToggle }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className={`font-display font-bold text-sm ${color}`}>{label}</h3>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="text-xs text-gray-500 hover:text-piu-accent transition-colors font-display"
+        >
+          {isExpanded ? 'Collapse' : 'More details'}
+        </button>
+      </div>
+
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">Name *</label>
+        <input
+          type="text"
+          className="input-field"
+          placeholder={label}
+          value={player.name}
+          onChange={e => setPlayer(p => ({ ...p, name: e.target.value }))}
+          required
+        />
+      </div>
+
+      {isExpanded && (
+        <div className="space-y-3 animate-slide-up">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
+              <select
+                className="input-field"
+                value={player.skill_title}
+                onChange={e => setPlayer(p => ({ ...p, skill_title: e.target.value }))}
+              >
+                {SKILL_TITLES.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Skill Level</label>
+              <select
+                className="input-field"
+                value={player.skill_level}
+                onChange={e => setPlayer(p => ({ ...p, skill_level: parseInt(e.target.value) }))}
+              >
+                {SKILL_LEVELS.map(l => (
+                  <option key={l} value={l}>Level {l}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Gender</label>
+              <select
+                className="input-field"
+                value={player.gender}
+                onChange={e => setPlayer(p => ({ ...p, gender: e.target.value }))}
+              >
+                {GENDER_OPTIONS.map(g => (
+                  <option key={g.value} value={g.value}>{g.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nationality</label>
+              <select
+                className="input-field"
+                value={player.nationality}
+                onChange={e => setPlayer(p => ({ ...p, nationality: e.target.value }))}
+              >
+                {COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.flag ? `${c.flag} ` : ''}{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Description</label>
+            <textarea
+              className="input-field resize-none"
+              rows="2"
+              placeholder="Short bio or notes..."
+              value={player.description}
+              onChange={e => setPlayer(p => ({ ...p, description: e.target.value }))}
+            />
+          </div>
+          {/* Preview */}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-500">Preview:</span>
+            {player.nationality && <span className="text-base">{getCountryFlag(player.nationality)}</span>}
+            <span className={`badge border ${getSkillColor(player.skill_title)}`}>
+              {player.skill_title} lvl. {player.skill_level}
+            </span>
+            {player.gender && (
+              <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                {GENDER_SYMBOLS[player.gender]}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DuelSetup() {
   const navigate = useNavigate();
   const now = new Date();
@@ -61,116 +170,6 @@ export default function DuelSetup() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const PlayerFields = ({ player, setPlayer, label, prefix, color }) => {
-    const isExpanded = expandedPlayer === prefix;
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className={`font-display font-bold text-sm ${color}`}>{label}</h3>
-          <button
-            type="button"
-            onClick={() => setExpandedPlayer(isExpanded ? null : prefix)}
-            className="text-xs text-gray-500 hover:text-piu-accent transition-colors font-display"
-          >
-            {isExpanded ? 'Collapse' : 'More details'}
-          </button>
-        </div>
-
-        <div>
-          <label className="block text-sm text-gray-400 mb-1">Name *</label>
-          <input
-            type="text"
-            className="input-field"
-            placeholder={label}
-            value={player.name}
-            onChange={e => setPlayer(p => ({ ...p, name: e.target.value }))}
-            required
-          />
-        </div>
-
-        {isExpanded && (
-          <div className="space-y-3 animate-slide-up">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
-                <select
-                  className="input-field"
-                  value={player.skill_title}
-                  onChange={e => setPlayer(p => ({ ...p, skill_title: e.target.value }))}
-                >
-                  {SKILL_TITLES.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Skill Level</label>
-                <select
-                  className="input-field"
-                  value={player.skill_level}
-                  onChange={e => setPlayer(p => ({ ...p, skill_level: parseInt(e.target.value) }))}
-                >
-                  {SKILL_LEVELS.map(l => (
-                    <option key={l} value={l}>Level {l}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Gender</label>
-                <select
-                  className="input-field"
-                  value={player.gender}
-                  onChange={e => setPlayer(p => ({ ...p, gender: e.target.value }))}
-                >
-                  {GENDER_OPTIONS.map(g => (
-                    <option key={g.value} value={g.value}>{g.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Nationality</label>
-                <select
-                  className="input-field"
-                  value={player.nationality}
-                  onChange={e => setPlayer(p => ({ ...p, nationality: e.target.value }))}
-                >
-                  {COUNTRIES.map(c => (
-                    <option key={c.code} value={c.code}>{c.flag ? `${c.flag} ` : ''}{c.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Description</label>
-              <textarea
-                className="input-field resize-none"
-                rows="2"
-                placeholder="Short bio or notes..."
-                value={player.description}
-                onChange={e => setPlayer(p => ({ ...p, description: e.target.value }))}
-              />
-            </div>
-            {/* Preview */}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">Preview:</span>
-              {player.nationality && <span className="text-base">{getCountryFlag(player.nationality)}</span>}
-              <span className={`badge border ${getSkillColor(player.skill_title)}`}>
-                {player.skill_title} lvl. {player.skill_level}
-              </span>
-              {player.gender && (
-                <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
-                  {GENDER_SYMBOLS[player.gender]}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    );
   };
 
   return (
@@ -318,12 +317,12 @@ export default function DuelSetup() {
 
           {/* Player 1 fields */}
           <div className="pt-3 border-t border-piu-border/50">
-            <PlayerFields player={p1} setPlayer={setP1} label="Player 1" prefix="player1" color="text-red-400" />
+            <PlayerFields player={p1} setPlayer={setP1} label="Player 1" prefix="player1" color="text-red-400" isExpanded={expandedPlayer === 'player1'} onToggle={() => setExpandedPlayer(expandedPlayer === 'player1' ? null : 'player1')} />
           </div>
 
           {/* Player 2 fields */}
           <div className="pt-3 border-t border-piu-border/50">
-            <PlayerFields player={p2} setPlayer={setP2} label="Player 2" prefix="player2" color="text-blue-400" />
+            <PlayerFields player={p2} setPlayer={setP2} label="Player 2" prefix="player2" color="text-blue-400" isExpanded={expandedPlayer === 'player2'} onToggle={() => setExpandedPlayer(expandedPlayer === 'player2' ? null : 'player2')} />
           </div>
         </div>
 
