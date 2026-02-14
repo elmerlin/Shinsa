@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createDuel } from '../utils/api';
+import { createDuel, searchUsers, sendInvitation } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
   SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
@@ -14,8 +14,83 @@ const MODE_OPTIONS = [
 ];
 
 const DEFAULT_PLAYER = {
-  name: '', avatar: '', skill_title: 'Beginner', skill_level: 1, gender: '', nationality: '', description: '',
+  name: '', avatar: '', skill_title: 'Beginner', skill_level: 1, gender: '', nationality: '', description: '', user_id: '',
 };
+
+function UserSearchField({ player, setPlayer, label, color }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  const handleSearch = useCallback(async (q) => {
+    if (q.length < 1) { setResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await searchUsers(q);
+      setResults(res);
+    } catch (e) { setResults([]); }
+    finally { setSearching(false); }
+  }, []);
+
+  const selectUser = (u) => {
+    const titleParts = (u.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
+    setPlayer({
+      name: u.username,
+      avatar: u.avatar || '',
+      skill_title: titleParts ? titleParts[1] : 'Beginner',
+      skill_level: titleParts ? parseInt(titleParts[2]) : 1,
+      gender: u.gender || '',
+      nationality: u.nationality || '',
+      description: u.description || '',
+      user_id: u.id,
+    });
+    setQuery('');
+    setResults([]);
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-xs text-gray-500">Search registered player for {label}</label>
+      <input
+        type="text"
+        className="input-field text-sm"
+        placeholder="Type a username..."
+        value={query}
+        onChange={e => { setQuery(e.target.value); handleSearch(e.target.value); }}
+      />
+      {player.user_id && (
+        <div className="flex items-center gap-2 text-xs text-piu-green bg-piu-green/10 px-3 py-1.5 rounded-lg">
+          <span>Linked: <strong>{player.name}</strong></span>
+          <button type="button" onClick={() => setPlayer({ ...DEFAULT_PLAYER })} className="text-gray-400 hover:text-red-400 ml-auto">&#10005;</button>
+        </div>
+      )}
+      {results.length > 0 && (
+        <div className="bg-piu-dark border border-piu-border rounded-lg overflow-hidden max-h-[200px] overflow-y-auto">
+          {results.map(u => (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => selectUser(u)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-piu-card/50 transition-colors border-b border-piu-border/50 last:border-0 text-left"
+            >
+              {u.avatar ? (
+                <img src={getAvatarUrl(u.avatar)} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[10px] shrink-0">
+                  {u.username[0].toUpperCase()}
+                </div>
+              )}
+              <span className="text-sm font-display font-bold truncate">{u.username}</span>
+              {u.nationality && <span className="text-xs">{getCountryFlag(u.nationality)}</span>}
+              {u.skill_title && <span className={`badge border text-[10px] ${getSkillColor(u.skill_title)}`}>{u.skill_title}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {searching && <p className="text-[10px] text-gray-500">Searching...</p>}
+    </div>
+  );
+}
 
 function PlayerFields({ player, setPlayer, label, prefix, color, isExpanded, onToggle }) {
   return (
@@ -30,6 +105,9 @@ function PlayerFields({ player, setPlayer, label, prefix, color, isExpanded, onT
           {isExpanded ? 'Collapse' : 'More details'}
         </button>
       </div>
+
+      {/* User search */}
+      <UserSearchField player={player} setPlayer={setPlayer} label={label} color={color} />
 
       <div>
         <label className="block text-sm text-gray-400 mb-1">Name *</label>
@@ -138,8 +216,8 @@ export default function DuelSetup() {
   });
   const [p1, setP1] = useState({ ...DEFAULT_PLAYER });
   const [p2, setP2] = useState({ ...DEFAULT_PLAYER });
-  const [activeAvatar, setActiveAvatar] = useState(null); // 'player1' or 'player2'
-  const [expandedPlayer, setExpandedPlayer] = useState(null); // 'player1' or 'player2'
+  const [activeAvatar, setActiveAvatar] = useState(null);
+  const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -163,6 +241,8 @@ export default function DuelSetup() {
         player2_gender: p2.gender,
         player2_nationality: p2.nationality,
         player2_description: p2.description,
+        player1_user_id: p1.user_id || '',
+        player2_user_id: p2.user_id || '',
       });
       navigate(`/duel/${duel.id}`);
     } catch (err) {

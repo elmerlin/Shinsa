@@ -123,13 +123,59 @@ function initializeDb() {
       FOREIGN KEY (duel_id) REFERENCES duels(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      email TEXT DEFAULT '',
+      avatar TEXT DEFAULT '',
+      pumbility INT DEFAULT 0,
+      skill_title TEXT DEFAULT '',
+      skill_level INT DEFAULT 1,
+      gender TEXT DEFAULT '',
+      nationality TEXT DEFAULT '',
+      date_of_birth TEXT DEFAULT '',
+      show_age INT DEFAULT 0,
+      description TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS invitations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      tournament_id TEXT,
+      duel_id TEXT,
+      player_slot TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_players_tournament ON players(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_round ON matches(tournament_id, round_number);
     CREATE INDEX IF NOT EXISTS idx_songs_level ON songs(level);
     CREATE INDEX IF NOT EXISTS idx_songs_mode ON songs(mode);
     CREATE INDEX IF NOT EXISTS idx_duel_songs_duel ON duel_songs(duel_id);
+    CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS idx_invitations_user ON invitations(user_id);
   `);
+
+  // Migrations for players table - add user_id
+  const playerColumns = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);
+  if (!playerColumns.includes('user_id')) {
+    db.exec("ALTER TABLE players ADD COLUMN user_id TEXT DEFAULT ''");
+  }
+
+  // Migrations for duels table - add user_id columns
+  const duelColsCheck = db.prepare("PRAGMA table_info(duels)").all().map(c => c.name);
+  if (!duelColsCheck.includes('player1_user_id')) {
+    db.exec("ALTER TABLE duels ADD COLUMN player1_user_id TEXT DEFAULT ''");
+  }
+  if (!duelColsCheck.includes('player2_user_id')) {
+    db.exec("ALTER TABLE duels ADD COLUMN player2_user_id TEXT DEFAULT ''");
+  }
 
   // Migrations for duels table - add player detail fields
   const duelColumns = db.prepare("PRAGMA table_info(duels)").all().map(c => c.name);

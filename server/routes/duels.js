@@ -31,6 +31,7 @@ router.post('/', (req, res) => {
     player1_name, player2_name, player1_avatar, player2_avatar,
     player1_skill_title, player1_skill_level, player1_gender, player1_nationality, player1_description,
     player2_skill_title, player2_skill_level, player2_gender, player2_nationality, player2_description,
+    player1_user_id, player2_user_id,
   } = req.body;
 
   if (!name || !player1_name || !player2_name) {
@@ -43,12 +44,14 @@ router.post('/', (req, res) => {
     INSERT INTO duels (id, name, location, date, time, mode,
       player1_name, player2_name, player1_avatar, player2_avatar,
       player1_skill_title, player1_skill_level, player1_gender, player1_nationality, player1_description,
-      player2_skill_title, player2_skill_level, player2_gender, player2_nationality, player2_description)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      player2_skill_title, player2_skill_level, player2_gender, player2_nationality, player2_description,
+      player1_user_id, player2_user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, name, location || '', date || '', time || '', mode || 'both',
     player1_name, player2_name, player1_avatar || '', player2_avatar || '',
     player1_skill_title || '', parseInt(player1_skill_level) || 1, player1_gender || '', player1_nationality || '', player1_description || '',
-    player2_skill_title || '', parseInt(player2_skill_level) || 1, player2_gender || '', player2_nationality || '', player2_description || '');
+    player2_skill_title || '', parseInt(player2_skill_level) || 1, player2_gender || '', player2_nationality || '', player2_description || '',
+    player1_user_id || '', player2_user_id || '');
 
   const duel = db.prepare('SELECT * FROM duels WHERE id = ?').get(id);
   db.close();

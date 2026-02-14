@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { createPlayer, updatePlayer, deletePlayer } from '../utils/api';
+import React, { useState, useCallback } from 'react';
+import { createPlayer, updatePlayer, deletePlayer, searchUsers, sendInvitation } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
+import { Link } from 'react-router-dom';
 
 export const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 export const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -254,13 +255,58 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [form, setForm] = useState({
-    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '',
+    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '',
   });
   const [saving, setSaving] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [userResults, setUserResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [inviteSent, setInviteSent] = useState({});
+
+  const handleUserSearch = useCallback(async (q) => {
+    if (q.length < 1) { setUserResults([]); return; }
+    setSearching(true);
+    try {
+      const results = await searchUsers(q);
+      setUserResults(results);
+    } catch (e) {
+      setUserResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const fillFromUser = (user) => {
+    const titleParts = (user.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
+    setForm({
+      name: user.username,
+      skill_title: titleParts ? titleParts[1] : 'Beginner',
+      skill_level: titleParts ? parseInt(titleParts[2]) : 1,
+      pumbility: user.pumbility || '',
+      description: user.description || '',
+      avatar: user.avatar || '',
+      gender: user.gender || '',
+      nationality: user.nationality || '',
+      user_id: user.id,
+    });
+    setUserSearch('');
+    setUserResults([]);
+  };
+
+  const handleInviteUser = async (user) => {
+    try {
+      await sendInvitation({ user_id: user.id, type: 'tournament', tournament_id: tournamentId });
+      setInviteSent(prev => ({ ...prev, [user.id]: true }));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const resetForm = () => {
-    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '' });
+    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '' });
     setEditingPlayer(null);
+    setUserSearch('');
+    setUserResults([]);
   };
 
   const handleSubmit = async (e) => {
@@ -284,6 +330,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
         await createPlayer({
           tournament_id: tournamentId,
           pumbility: parseInt(form.pumbility) || 0,
+          user_id: form.user_id || '',
           ...payload,
         });
       }
@@ -340,6 +387,72 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
           <h3 className="font-display font-bold text-piu-accent">
             {editingPlayer ? `Edit: ${editingPlayer.name}` : 'Add New Player'}
           </h3>
+
+          {/* Search registered users */}
+          {!editingPlayer && (
+            <div className="space-y-2">
+              <label className="block text-sm text-gray-400">Search registered players</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Type a username to search..."
+                value={userSearch}
+                onChange={e => {
+                  setUserSearch(e.target.value);
+                  handleUserSearch(e.target.value);
+                }}
+              />
+              {form.user_id && (
+                <div className="flex items-center gap-2 text-xs text-piu-green bg-piu-green/10 px-3 py-1.5 rounded-lg">
+                  <span>Linked to registered user: <strong>{form.name}</strong></span>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, user_id: '' }))} className="text-gray-400 hover:text-red-400 ml-auto">
+                    &#10005;
+                  </button>
+                </div>
+              )}
+              {userResults.length > 0 && (
+                <div className="bg-piu-dark border border-piu-border rounded-lg overflow-hidden">
+                  {userResults.map(u => (
+                    <div key={u.id} className="flex items-center gap-3 px-3 py-2 hover:bg-piu-card/50 transition-colors border-b border-piu-border/50 last:border-0">
+                      {u.avatar ? (
+                        <img src={getAvatarUrl(u.avatar)} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs shrink-0">
+                          {u.username[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{u.username}</p>
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          {u.nationality && <span>{getCountryFlag(u.nationality)}</span>}
+                          {u.skill_title && <span className={`badge border text-[10px] ${getSkillColor(u.skill_title)}`}>{u.skill_title}</span>}
+                          {u.pumbility > 0 && <span className="text-piu-gold font-mono">{u.pumbility}</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => fillFromUser(u)}
+                          className="px-2 py-1 bg-piu-accent/20 text-piu-accent text-xs font-display font-bold rounded hover:bg-piu-accent/30 transition-colors"
+                        >
+                          Add directly
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInviteUser(u)}
+                          disabled={inviteSent[u.id]}
+                          className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-display font-bold rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                        >
+                          {inviteSent[u.id] ? 'Sent' : 'Invite'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searching && <p className="text-xs text-gray-500">Searching...</p>}
+            </div>
+          )}
 
           {/* Avatar picker */}
           <AvatarPicker
@@ -497,7 +610,13 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   {flag && <span className="text-base shrink-0">{flag}</span>}
-                  <span className="font-display font-bold">{player.name}</span>
+                  {player.user_id ? (
+                    <Link to={`/profile/${player.user_id}`} className="font-display font-bold text-piu-accent hover:underline">
+                      {player.name}
+                    </Link>
+                  ) : (
+                    <span className="font-display font-bold">{player.name}</span>
+                  )}
                   {genderSymbol && (
                     <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
                       {genderSymbol}

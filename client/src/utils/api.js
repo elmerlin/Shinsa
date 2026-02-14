@@ -1,11 +1,16 @@
 const API_BASE = '/api';
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch(`${API_BASE}${url}`, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), ...options.headers },
       ...options,
       signal: controller.signal,
     });
@@ -72,3 +77,16 @@ export const duelDraw = (id, data) => request(`/duels/${id}/draw`, { method: 'PO
 export const duelScore = (id, data) => request(`/duels/${id}/score`, { method: 'POST', body: JSON.stringify(data) });
 export const duelDeleteSong = (id, songEntryId) => request(`/duels/${id}/song/${songEntryId}`, { method: 'DELETE' });
 export const endDuel = (id) => request(`/duels/${id}/end`, { method: 'POST' });
+
+// Auth
+export const register = (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) });
+export const login = (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) });
+export const getMe = () => request('/auth/me');
+export const updateMe = (data) => request('/auth/me', { method: 'PUT', body: JSON.stringify(data) });
+export const changePassword = (data) => request('/auth/password', { method: 'PUT', body: JSON.stringify(data) });
+export const searchUsers = (q) => request(`/auth/search?q=${encodeURIComponent(q)}`);
+export const getUserProfile = (id) => request(`/auth/user/${id}`);
+export const getUserStats = (id) => request(`/auth/user/${id}/stats`);
+export const getInvitations = () => request('/auth/invitations');
+export const respondInvitation = (id, status) => request(`/auth/invitations/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+export const sendInvitation = (data) => request('/auth/invite', { method: 'POST', body: JSON.stringify(data) });

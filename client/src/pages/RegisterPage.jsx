@@ -1,0 +1,258 @@
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { register } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import AvatarPicker from '../components/AvatarPicker';
+import {
+  SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
+  COUNTRIES, getCountryFlag, getSkillColor,
+} from '../components/PlayerRegistration';
+
+export default function RegisterPage() {
+  const navigate = useNavigate();
+  const { loginUser } = useAuth();
+  const [form, setForm] = useState({
+    username: '', password: '', confirmPassword: '', email: '',
+    avatar: '', pumbility: '', skill_title: 'Beginner', skill_level: 1,
+    gender: '', nationality: '', date_of_birth: '', show_age: false, description: '',
+  });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload = {
+        username: form.username,
+        password: form.password,
+        email: form.email,
+        avatar: form.avatar,
+        pumbility: parseInt(form.pumbility) || 0,
+        skill_title: `${form.skill_title} lvl. ${form.skill_level}`,
+        skill_level: parseInt(form.skill_level) || 1,
+        gender: form.gender,
+        nationality: form.nationality,
+        date_of_birth: form.date_of_birth,
+        show_age: form.show_age,
+        description: form.description,
+      };
+      const { user, token } = await register(payload);
+      loginUser(user, token);
+      navigate('/');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-lg mx-auto px-4 py-8">
+      <h1 className="text-3xl font-display font-bold tracking-wider text-center mb-6">REGISTER</h1>
+
+      <form onSubmit={handleSubmit} className="card space-y-4">
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        {/* Avatar */}
+        <AvatarPicker
+          value={form.avatar}
+          onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
+          shape="circle"
+          size="md"
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Pump Alias *</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Your username (2-30 chars)"
+              value={form.username}
+              onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+              required
+              autoFocus
+              minLength={2}
+              maxLength={30}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Email (optional)</label>
+            <input
+              type="email"
+              className="input-field"
+              placeholder="For password recovery"
+              value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Password *</label>
+            <input
+              type="password"
+              className="input-field"
+              placeholder="At least 4 characters"
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              required
+              minLength={4}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Confirm Password *</label>
+            <input
+              type="password"
+              className="input-field"
+              placeholder="Retype password"
+              value={form.confirmPassword}
+              onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Pumbility</label>
+          <input
+            type="number"
+            className="input-field"
+            placeholder="e.g. 2500"
+            value={form.pumbility}
+            onChange={e => setForm(f => ({ ...f, pumbility: e.target.value }))}
+          />
+        </div>
+
+        {/* Toggle for more details */}
+        <button
+          type="button"
+          onClick={() => setShowDetails(!showDetails)}
+          className="text-sm text-piu-accent hover:underline font-display"
+        >
+          {showDetails ? 'Hide details' : 'More details (skill, nationality, etc.)'}
+        </button>
+
+        {showDetails && (
+          <div className="space-y-4 animate-slide-up">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
+                <select
+                  className="input-field"
+                  value={form.skill_title}
+                  onChange={e => setForm(f => ({ ...f, skill_title: e.target.value }))}
+                >
+                  {SKILL_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Skill Level</label>
+                <select
+                  className="input-field"
+                  value={form.skill_level}
+                  onChange={e => setForm(f => ({ ...f, skill_level: parseInt(e.target.value) }))}
+                >
+                  {SKILL_LEVELS.map(l => <option key={l} value={l}>Level {l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Gender</label>
+                <select
+                  className="input-field"
+                  value={form.gender}
+                  onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
+                >
+                  {GENDER_OPTIONS.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Nationality</label>
+                <select
+                  className="input-field"
+                  value={form.nationality}
+                  onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))}
+                >
+                  {COUNTRIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.flag ? `${c.flag} ` : ''}{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Date of Birth</label>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={form.date_of_birth}
+                  onChange={e => setForm(f => ({ ...f, date_of_birth: e.target.value }))}
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.show_age}
+                    onChange={e => setForm(f => ({ ...f, show_age: e.target.checked }))}
+                    className="w-4 h-4 rounded"
+                  />
+                  <span className="text-sm text-gray-400">Show age on profile</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Description</label>
+              <textarea
+                className="input-field resize-none"
+                rows="2"
+                placeholder="Short bio..."
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+
+            {/* Preview */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500">Preview:</span>
+              {form.nationality && <span className="text-base">{getCountryFlag(form.nationality)}</span>}
+              <span className={`badge border ${getSkillColor(form.skill_title)}`}>
+                {form.skill_title} lvl. {form.skill_level}
+              </span>
+              {form.gender && (
+                <span className={`text-sm ${form.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                  {GENDER_SYMBOLS[form.gender]}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <button type="submit" className="btn-primary w-full" disabled={loading}>
+          {loading ? 'Creating account...' : 'Create Account'}
+        </button>
+
+        <p className="text-center text-sm text-gray-500">
+          Already have an account?{' '}
+          <Link to="/login" className="text-piu-accent hover:underline">Login</Link>
+        </p>
+      </form>
+    </div>
+  );
+}

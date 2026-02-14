@@ -1,5 +1,7 @@
 import React from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import { getAvatarUrl } from './components/AvatarPicker';
 import Dashboard from './pages/Dashboard';
 import TournamentSetup from './pages/TournamentSetup';
 import TournamentView from './pages/TournamentView';
@@ -7,9 +9,15 @@ import MatchView from './pages/MatchView';
 import DuelSetup from './pages/DuelSetup';
 import DuelView from './pages/DuelView';
 import AdminPanel from './pages/AdminPanel';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
+import MyAccountPage from './pages/MyAccountPage';
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const isHome = location.pathname === '/';
 
   return (
@@ -41,6 +49,33 @@ export default function App() {
                 Home
               </Link>
             )}
+            {user ? (
+              <div className="flex items-center gap-2">
+                <Link
+                  to="/account"
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  {user.avatar ? (
+                    <img src={getAvatarUrl(user.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+                      {user.username[0].toUpperCase()}
+                    </div>
+                  )}
+                  <span className="text-sm font-display text-gray-300 hidden sm:inline">{user.username}</span>
+                </Link>
+                <button
+                  onClick={() => { logout(); navigate('/'); }}
+                  className="text-xs text-gray-500 hover:text-red-400 transition-colors font-display"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <Link to="/login" className="text-sm text-piu-accent hover:text-piu-accent/80 transition-colors font-display font-bold">
+                Login
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -55,6 +90,10 @@ export default function App() {
           <Route path="/duel/new" element={<DuelSetup />} />
           <Route path="/duel/:id" element={<DuelView />} />
           <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/profile/:id" element={<ProfilePage />} />
+          <Route path="/account" element={<MyAccountPage />} />
         </Routes>
       </main>
 

@@ -9,6 +9,7 @@ const matchRoutes = require('./routes/matches');
 const songRoutes = require('./routes/songs');
 const noticeRoutes = require('./routes/notices');
 const duelRoutes = require('./routes/duels');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -37,6 +38,7 @@ app.use('/api/matches', matchRoutes);
 app.use('/api/songs', songRoutes);
 app.use('/api/notices', noticeRoutes);
 app.use('/api/duels', duelRoutes);
+app.use('/api/auth', authRoutes);
 
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
