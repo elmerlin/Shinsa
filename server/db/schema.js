@@ -3,16 +3,16 @@ const path = require('path');
 
 const DB_PATH = path.join(__dirname, 'shinsa.db');
 
+// Shared singleton connection — reused across all requests
+const db = new Database(DB_PATH);
+db.pragma('journal_mode = WAL');
+db.pragma('foreign_keys = ON');
+
 function getDb() {
-  const db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
   return db;
 }
 
 function initializeDb() {
-  const db = getDb();
-
   db.exec(`
     CREATE TABLE IF NOT EXISTS tournaments (
       id TEXT PRIMARY KEY,
@@ -188,8 +188,9 @@ function initializeDb() {
   if (!matchColumns.includes('gauntlet_order')) {
     db.exec("ALTER TABLE matches ADD COLUMN gauntlet_order INT DEFAULT 0");
   }
-
-  db.close();
 }
+
+// Prevent route handlers from closing the shared connection
+db.close = () => {};
 
 module.exports = { getDb, initializeDb, DB_PATH };
