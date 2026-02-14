@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getTournaments, deleteTournament, searchTournaments, getNotices } from '../utils/api';
+import { getAvatarUrl } from '../components/AvatarPicker';
 
 const PHASE_LABELS = {
   SETUP: 'Setup',
@@ -76,7 +77,7 @@ export default function Dashboard() {
       <div className="flex items-center gap-4">
         {t.avatar ? (
           <img
-            src={t.avatar}
+            src={getAvatarUrl(t.avatar)}
             alt={t.name}
             className="w-12 h-12 rounded-lg object-cover shadow-md"
           />

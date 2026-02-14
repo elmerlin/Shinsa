@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { getAvatarUrl } from '../components/AvatarPicker';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
   getNotices, createNotice, updateNotice, deleteNotice,
@@ -134,7 +135,7 @@ export default function AdminPanel() {
             <div key={t.id} className="card flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
                 {t.avatar ? (
-                  <img src={t.avatar} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <img src={getAvatarUrl(t.avatar)} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                 ) : (
                   <div className="w-10 h-10 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display font-bold shrink-0">
                     {t.name.charAt(0).toUpperCase()}
@@ -172,7 +173,7 @@ export default function AdminPanel() {
             <div key={t.id} className="card flex items-center justify-between opacity-70">
               <div className="flex items-center gap-3 min-w-0">
                 {t.avatar ? (
-                  <img src={t.avatar} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                  <img src={getAvatarUrl(t.avatar)} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
                 ) : (
                   <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center font-display font-bold shrink-0">
                     {t.name.charAt(0).toUpperCase()}

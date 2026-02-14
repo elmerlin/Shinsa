@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getMatch, drawCards, vetoSong, submitResult } from '../utils/api';
 import SongCard from '../components/SongCard';
+import { getAvatarUrl } from '../components/AvatarPicker';
 import { useChopSound, useShuffleSound } from '../hooks/useSound';
 
 const STATUS_FLOW = {
@@ -883,7 +884,7 @@ function PlayerHeader({ player, label, isWinner, sublabel, align = 'left' }) {
       <p className="text-xs text-gray-500 font-display uppercase">{label}</p>
       <div className={`flex items-center gap-2 ${align === 'right' ? 'justify-end' : ''}`}>
         {align === 'left' && player.avatar && (
-          <img src={player.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+          <img src={getAvatarUrl(player.avatar)} alt="" className="w-8 h-8 rounded-full object-cover" />
         )}
         {align === 'left' && !player.avatar && (
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
@@ -895,7 +896,7 @@ function PlayerHeader({ player, label, isWinner, sublabel, align = 'left' }) {
           {isWinner && <span className="ml-1 text-sm">&#9733;</span>}
         </p>
         {align === 'right' && player.avatar && (
-          <img src={player.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+          <img src={getAvatarUrl(player.avatar)} alt="" className="w-8 h-8 rounded-full object-cover" />
         )}
         {align === 'right' && !player.avatar && (
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">

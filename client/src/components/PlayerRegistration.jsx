@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPlayer, updatePlayer, deletePlayer } from '../utils/api';
-import AvatarPicker from './AvatarPicker';
+import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
 
 const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -487,7 +487,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
               </div>
 
               {player.avatar ? (
-                <img src={player.avatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                <img src={getAvatarUrl(player.avatar)} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
               ) : (
                 <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} flex items-center justify-center font-display font-bold text-sm shrink-0`}>
                   {getInitials(player.name)}
