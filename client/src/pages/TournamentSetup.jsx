@@ -1,10 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createTournament } from '../utils/api';
+import AvatarPicker from '../components/AvatarPicker';
 
 export default function TournamentSetup() {
   const navigate = useNavigate();
-  const fileInputRef = useRef(null);
   const [form, setForm] = useState({
     name: '',
     location: '',
@@ -40,20 +40,6 @@ export default function TournamentSetup() {
       newLevels.push(levels[i] || { round: i + 1, min: 18 + i * 2, max: 19 + i * 2 });
     }
     setLevels(newLevels);
-  };
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Avatar must be under 5MB');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setForm(f => ({ ...f, avatar: reader.result }));
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e) => {
@@ -100,39 +86,24 @@ export default function TournamentSetup() {
         <div className="card space-y-4">
           <h2 className="font-display font-bold text-lg text-piu-accent">General Info</h2>
 
-          <div className="flex items-start gap-4">
-            <div
-              className="w-20 h-20 shrink-0 rounded-lg border-2 border-dashed border-piu-border hover:border-piu-accent/50 cursor-pointer overflow-hidden flex items-center justify-center bg-piu-dark/50 transition-colors"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {form.avatar ? (
-                <img src={form.avatar} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <div className="text-center">
-                  <div className="text-2xl text-gray-600">+</div>
-                  <p className="text-[10px] text-gray-600">Avatar</p>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarChange}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm text-gray-400 mb-1">Tournament Name *</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder='e.g. "Shinsa Season 1"'
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                required
-              />
-            </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Tournament Name *</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder='e.g. "Shinsa Season 1"'
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              required
+            />
           </div>
+
+          <AvatarPicker
+            value={form.avatar}
+            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
+            shape="square"
+            size="md"
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <div>

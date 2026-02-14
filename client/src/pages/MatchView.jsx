@@ -62,6 +62,12 @@ export default function MatchView() {
 
       const isGauntlet = data.match_type === 'gauntlet';
 
+      // If cards have already been drawn, make sure they're visible
+      // (handles the case where user navigates away and comes back)
+      if ((data.drawn_songs || []).length > 0 && data.status !== 'PENDING') {
+        setShowCards(true);
+      }
+
       // Determine veto turn: lower seed (player2) vetos first (round robin only)
       if (!isGauntlet) {
         const vetoed = data.vetoed_songs || [];

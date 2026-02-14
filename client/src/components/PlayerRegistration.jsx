@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { createPlayer, updatePlayer, deletePlayer } from '../utils/api';
+import AvatarPicker from './AvatarPicker';
 
 const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -256,25 +257,10 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
     name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '',
   });
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef(null);
 
   const resetForm = () => {
     setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '' });
     setEditingPlayer(null);
-  };
-
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Avatar must be under 5MB');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setForm(f => ({ ...f, avatar: reader.result }));
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e) => {
@@ -355,35 +341,13 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
             {editingPlayer ? `Edit: ${editingPlayer.name}` : 'Add New Player'}
           </h3>
 
-          {/* Avatar upload */}
-          <div className="flex items-center gap-4">
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="w-16 h-16 rounded-full cursor-pointer overflow-hidden border-2 border-dashed border-piu-border hover:border-piu-accent transition-colors flex items-center justify-center bg-piu-dark shrink-0"
-            >
-              {form.avatar ? (
-                <img src={form.avatar} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xs text-gray-500 text-center leading-tight">Upload<br/>Photo</span>
-              )}
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleAvatarChange}
-            />
-            <div className="flex-1">
-              <p className="text-sm text-gray-400">Player Avatar</p>
-              <p className="text-xs text-gray-600">Tap to upload (max 5MB)</p>
-              {form.avatar && (
-                <button type="button" onClick={() => setForm(f => ({ ...f, avatar: '' }))} className="text-xs text-red-400 hover:text-red-300 mt-1">
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
+          {/* Avatar picker */}
+          <AvatarPicker
+            value={form.avatar}
+            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
+            shape="circle"
+            size="md"
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
