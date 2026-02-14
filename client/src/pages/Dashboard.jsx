@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getDashboard, deleteTournament, searchTournaments, deleteDuel } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 
@@ -14,21 +14,18 @@ export default function Dashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [duels, setDuels] = useState([]);
   const [notices, setNotices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState(null);
 
   useEffect(() => {
-    getDashboard()
-      .then(({ tournaments: t, duels: d, notices: n }) => {
-        setTournaments(t);
-        setDuels(d);
-        setNotices(n);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    // Fire all requests independently — page renders immediately,
+    // each section fills in as its data arrives
+    getTournaments().then(setTournaments).catch(() => {});
+    getDuels().then(setDuels).catch(() => {});
+    getNotices().then(setNotices).catch(() => {});
   }, []);
 
   const handleSearch = useCallback(async (q) => {
@@ -255,56 +252,50 @@ export default function Dashboard() {
         )}
       </div>
 
-      {loading ? (
-        <div className="text-center py-20 text-gray-500">Loading...</div>
-      ) : (
-        <>
-          {/* Offline Duels Section */}
-          {duels.length > 0 && searchResults === null && (
-            <div className="mb-8">
-              <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">OFFLINE DUELS</h2>
-              <div className="grid gap-3">
-                {duels.map(d => <DuelCard key={d.id} d={d} />)}
-              </div>
-              <Link to="/duel/new" className="btn-secondary w-full mt-3 text-center block text-sm">
-                + New Duel
-              </Link>
-            </div>
-          )}
-
-          {/* Tournaments Section */}
-          <div>
-            <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">TOURNAMENTS</h2>
-            {displayTournaments.length === 0 ? (
-              searchResults !== null ? (
-                <div className="text-center py-10">
-                  <p className="text-gray-400">No tournaments found</p>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <p className="text-gray-400">No tournaments yet</p>
-                  <p className="text-gray-600 mt-1 text-sm">Create your first tournament to get started</p>
-                </div>
-              )
-            ) : (
-              <div className="grid gap-4">
-                {displayTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
-              </div>
-            )}
+      {/* Offline Duels Section */}
+      {duels.length > 0 && searchResults === null && (
+        <div className="mb-8">
+          <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">OFFLINE DUELS</h2>
+          <div className="grid gap-3">
+            {duels.map(d => <DuelCard key={d.id} d={d} />)}
           </div>
+          <Link to="/duel/new" className="btn-secondary w-full mt-3 text-center block text-sm">
+            + New Duel
+          </Link>
+        </div>
+      )}
 
-          {/* Create buttons */}
-          {searchResults === null && (
-            <div className="grid grid-cols-2 gap-3 mt-6">
-              <Link to="/tournament/new" className="btn-primary text-center text-sm block">
-                + New Tournament
-              </Link>
-              <Link to="/duel/new" className="btn-primary bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-center text-sm block">
-                + New Duel
-              </Link>
+      {/* Tournaments Section */}
+      <div>
+        <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">TOURNAMENTS</h2>
+        {displayTournaments.length === 0 ? (
+          searchResults !== null ? (
+            <div className="text-center py-10">
+              <p className="text-gray-400">No tournaments found</p>
             </div>
-          )}
-        </>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-400">No tournaments yet</p>
+              <p className="text-gray-600 mt-1 text-sm">Create your first tournament to get started</p>
+            </div>
+          )
+        ) : (
+          <div className="grid gap-4">
+            {displayTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
+          </div>
+        )}
+      </div>
+
+      {/* Create buttons */}
+      {searchResults === null && (
+        <div className="grid grid-cols-2 gap-3 mt-6">
+          <Link to="/tournament/new" className="btn-primary text-center text-sm block">
+            + New Tournament
+          </Link>
+          <Link to="/duel/new" className="btn-primary bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-center text-sm block">
+            + New Duel
+          </Link>
+        </div>
       )}
 
       {/* Notice Modal */}

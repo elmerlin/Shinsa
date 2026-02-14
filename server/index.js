@@ -23,9 +23,10 @@ app.use(express.json({ limit: '50mb' }));
 // Combined dashboard endpoint — single request instead of 3
 app.get('/api/dashboard', (req, res) => {
   const db = getDb();
-  const tournaments = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC').all();
-  const duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC').all();
-  const notices = db.prepare('SELECT * FROM notices ORDER BY pinned DESC, created_at DESC').all();
+  let tournaments = [], duels = [], notices = [];
+  try { tournaments = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC').all(); } catch (e) { console.error('Dashboard tournaments:', e.message); }
+  try { duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC').all(); } catch (e) { console.error('Dashboard duels:', e.message); }
+  try { notices = db.prepare('SELECT * FROM notices ORDER BY pinned DESC, created_at DESC').all(); } catch (e) { console.error('Dashboard notices:', e.message); }
   res.json({ tournaments, duels, notices });
 });
 

@@ -17,7 +17,7 @@ export default function AdminPanel() {
   const [tournaments, setTournaments] = useState([]);
   const [archived, setArchived] = useState([]);
   const [notices, setNotices] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Notice form
   const [noticeForm, setNoticeForm] = useState({ title: '', content: '', pinned: false });
@@ -28,22 +28,10 @@ export default function AdminPanel() {
     loadAll();
   }, []);
 
-  const loadAll = async () => {
-    setLoading(true);
-    try {
-      const [t, a, n] = await Promise.all([
-        getTournaments(),
-        getArchivedTournaments(),
-        getNotices(),
-      ]);
-      setTournaments(t);
-      setArchived(a);
-      setNotices(n);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const loadAll = () => {
+    getTournaments().then(setTournaments).catch(() => {});
+    getArchivedTournaments().then(setArchived).catch(() => {});
+    getNotices().then(setNotices).catch(() => {});
   };
 
   const handleArchive = async (id) => {
@@ -97,8 +85,6 @@ export default function AdminPanel() {
     await updateNotice(notice.id, { pinned: !notice.pinned });
     await loadAll();
   };
-
-  if (loading) return <div className="text-center py-20 text-gray-500">Loading...</div>;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
