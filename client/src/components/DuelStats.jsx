@@ -85,7 +85,7 @@ export default function DuelStats({ duel, songs }) {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="card text-center">
           <p className="text-xs text-gray-500 font-display mb-1">{duel.player1_name}</p>
           <div className="grid grid-cols-3 gap-2">
@@ -167,7 +167,7 @@ export default function DuelStats({ duel, songs }) {
       )}
 
       {/* Rank Distribution */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <RankDistribution playerName={duel.player1_name} songs={filteredSongs} scoreKey="player1_score" color="red" />
         <RankDistribution playerName={duel.player2_name} songs={filteredSongs} scoreKey="player2_score" color="blue" />
       </div>
@@ -195,14 +195,14 @@ function RankDistribution({ playerName, songs, scoreKey, color }) {
           const rankInfo = getRank(e.rank === 'SSS+' ? 995000 : e.rank === 'F' ? 0 : 500000);
           // Find exact rank info by label
           const r = [
-            { label: 'SSS+', color: 'text-yellow-300' }, { label: 'SSS', color: 'text-yellow-400' },
-            { label: 'SS+', color: 'text-yellow-500' }, { label: 'SS', color: 'text-amber-400' },
-            { label: 'S+', color: 'text-cyan-300' }, { label: 'S', color: 'text-cyan-400' },
-            { label: 'AAA+', color: 'text-blue-300' }, { label: 'AAA', color: 'text-blue-400' },
-            { label: 'AA+', color: 'text-indigo-300' }, { label: 'AA', color: 'text-indigo-400' },
-            { label: 'A+', color: 'text-green-300' }, { label: 'A', color: 'text-green-400' },
-            { label: 'B', color: 'text-emerald-400' }, { label: 'C', color: 'text-orange-400' },
-            { label: 'D', color: 'text-red-400' }, { label: 'F', color: 'text-gray-500' },
+            { label: 'SSS+', color: 'text-sky-300' }, { label: 'SSS', color: 'text-sky-400' },
+            { label: 'SS+', color: 'text-piu-gold' }, { label: 'SS', color: 'text-yellow-400' },
+            { label: 'S+', color: 'text-amber-400' }, { label: 'S', color: 'text-amber-500' },
+            { label: 'AAA+', color: 'text-piu-silver' }, { label: 'AAA', color: 'text-gray-300' },
+            { label: 'AA+', color: 'text-piu-bronze' }, { label: 'AA', color: 'text-piu-bronze' },
+            { label: 'A+', color: 'text-amber-700' }, { label: 'A', color: 'text-amber-700' },
+            { label: 'B', color: 'text-gray-600' }, { label: 'C', color: 'text-gray-600' },
+            { label: 'D', color: 'text-gray-600' }, { label: 'F', color: 'text-gray-600' },
           ].find(x => x.label === e.rank);
 
           return (

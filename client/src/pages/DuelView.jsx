@@ -7,22 +7,22 @@ import DuelStats from '../components/DuelStats';
 
 // PIU Score Ranks with colors matching the game
 const RANKS = [
-  { min: 995000, label: 'SSS+', color: 'text-yellow-300', bg: 'bg-yellow-400/20 border-yellow-400/40' },
-  { min: 990000, label: 'SSS',  color: 'text-yellow-400', bg: 'bg-yellow-400/15 border-yellow-400/30' },
-  { min: 985000, label: 'SS+',  color: 'text-yellow-500', bg: 'bg-yellow-500/15 border-yellow-500/30' },
-  { min: 980000, label: 'SS',   color: 'text-amber-400',  bg: 'bg-amber-400/15 border-amber-400/30' },
-  { min: 975000, label: 'S+',   color: 'text-cyan-300',   bg: 'bg-cyan-400/15 border-cyan-400/30' },
-  { min: 970000, label: 'S',    color: 'text-cyan-400',   bg: 'bg-cyan-400/15 border-cyan-400/30' },
-  { min: 960000, label: 'AAA+', color: 'text-blue-300',   bg: 'bg-blue-400/15 border-blue-400/30' },
-  { min: 950000, label: 'AAA',  color: 'text-blue-400',   bg: 'bg-blue-400/15 border-blue-400/30' },
-  { min: 925000, label: 'AA+',  color: 'text-indigo-300', bg: 'bg-indigo-400/15 border-indigo-400/30' },
-  { min: 900000, label: 'AA',   color: 'text-indigo-400', bg: 'bg-indigo-400/15 border-indigo-400/30' },
-  { min: 825000, label: 'A+',   color: 'text-green-300',  bg: 'bg-green-400/15 border-green-400/30' },
-  { min: 750000, label: 'A',    color: 'text-green-400',  bg: 'bg-green-400/15 border-green-400/30' },
-  { min: 650000, label: 'B',    color: 'text-emerald-400',bg: 'bg-emerald-400/15 border-emerald-400/30' },
-  { min: 550000, label: 'C',    color: 'text-orange-400', bg: 'bg-orange-400/15 border-orange-400/30' },
-  { min: 450000, label: 'D',    color: 'text-red-400',    bg: 'bg-red-400/15 border-red-400/30' },
-  { min: 0,      label: 'F',    color: 'text-gray-500',   bg: 'bg-gray-500/15 border-gray-500/30' },
+  { min: 995000, label: 'SSS+', color: 'text-sky-300',      bg: 'bg-sky-400/20 border-sky-400/40' },
+  { min: 990000, label: 'SSS',  color: 'text-sky-400',      bg: 'bg-sky-400/15 border-sky-400/30' },
+  { min: 985000, label: 'SS+',  color: 'text-piu-gold',     bg: 'bg-piu-gold/20 border-piu-gold/40' },
+  { min: 980000, label: 'SS',   color: 'text-yellow-400',   bg: 'bg-yellow-400/15 border-yellow-400/30' },
+  { min: 975000, label: 'S+',   color: 'text-amber-400',    bg: 'bg-amber-400/15 border-amber-400/30' },
+  { min: 970000, label: 'S',    color: 'text-amber-500',    bg: 'bg-amber-500/15 border-amber-500/30' },
+  { min: 960000, label: 'AAA+', color: 'text-piu-silver',   bg: 'bg-piu-silver/15 border-piu-silver/30' },
+  { min: 950000, label: 'AAA',  color: 'text-gray-300',     bg: 'bg-gray-300/15 border-gray-300/30' },
+  { min: 925000, label: 'AA+',  color: 'text-piu-bronze',   bg: 'bg-piu-bronze/15 border-piu-bronze/30' },
+  { min: 900000, label: 'AA',   color: 'text-piu-bronze',   bg: 'bg-piu-bronze/15 border-piu-bronze/30' },
+  { min: 825000, label: 'A+',   color: 'text-amber-700',    bg: 'bg-amber-700/15 border-amber-700/30' },
+  { min: 750000, label: 'A',    color: 'text-amber-700',    bg: 'bg-amber-700/15 border-amber-700/30' },
+  { min: 650000, label: 'B',    color: 'text-gray-600',     bg: 'bg-gray-600/15 border-gray-600/30' },
+  { min: 550000, label: 'C',    color: 'text-gray-600',     bg: 'bg-gray-600/15 border-gray-600/30' },
+  { min: 450000, label: 'D',    color: 'text-gray-600',     bg: 'bg-gray-600/15 border-gray-600/30' },
+  { min: 0,      label: 'F',    color: 'text-gray-600',     bg: 'bg-gray-600/15 border-gray-600/30' },
 ];
 
 export function getRank(score) {
@@ -337,9 +337,108 @@ export default function DuelView() {
             </div>
           )}
 
-          {/* Song List / Score Table */}
+          {/* Song List - Mobile Card Layout */}
           {songs.length > 0 && (
-            <div className="card overflow-x-auto">
+            <div className="sm:hidden space-y-3">
+              {songs.map((song, idx) => {
+                const isModeS = song.song_mode === 'Single';
+                const hasScore = !!song.winner;
+                return (
+                  <div key={song.id} className={`card ${!hasScore ? 'border border-piu-accent/20' : ''}`}>
+                    {/* Song info row */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-gray-600 font-mono text-xs">{idx + 1}</span>
+                      {song.song_jacket_url ? (
+                        <img src={song.song_jacket_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                      ) : (
+                        <div className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold shrink-0 ${isModeS ? 'bg-red-900/50' : 'bg-green-900/50'}`}>
+                          {song.song_title[0]}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display font-bold text-sm truncate">{song.song_title}</p>
+                        <span className={`text-xs font-display font-bold ${isModeS ? 'text-red-400' : 'text-green-400'}`}>
+                          {isModeS ? 'S' : 'D'}{song.song_level}
+                        </span>
+                      </div>
+                      {!hasScore && (
+                        <button
+                          onClick={() => handleDeleteSong(song.id)}
+                          className="text-gray-600 hover:text-red-400 text-sm shrink-0 p-1"
+                          title="Remove card"
+                        >
+                          &#10005;
+                        </button>
+                      )}
+                    </div>
+                    {/* Score rows */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-red-400 font-display font-bold shrink-0 w-20 truncate">{duel.player1_name}</span>
+                        {hasScore ? (
+                          <ScoreDisplay score={song.player1_score} isWinner={song.winner === 'player1'} />
+                        ) : (
+                          <input
+                            type="number"
+                            className="input-field flex-1 text-right text-sm"
+                            placeholder="Score"
+                            min="0"
+                            max="1000000"
+                            value={scoreInputs[`${song.id}_p1`] || ''}
+                            onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p1`]: e.target.value }))}
+                            onFocus={e => e.target.select()}
+                          />
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-blue-400 font-display font-bold shrink-0 w-20 truncate">{duel.player2_name}</span>
+                        {hasScore ? (
+                          <ScoreDisplay score={song.player2_score} isWinner={song.winner === 'player2'} />
+                        ) : (
+                          <input
+                            type="number"
+                            className="input-field flex-1 text-right text-sm"
+                            placeholder="Score"
+                            min="0"
+                            max="1000000"
+                            value={scoreInputs[`${song.id}_p2`] || ''}
+                            onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p2`]: e.target.value }))}
+                            onFocus={e => e.target.select()}
+                          />
+                        )}
+                      </div>
+                    </div>
+                    {/* Submit button */}
+                    {!hasScore && (
+                      <button
+                        onClick={() => handleScoreSubmit(song)}
+                        disabled={submittingScore === song.id}
+                        className="btn-primary w-full mt-3 text-sm py-2"
+                      >
+                        {submittingScore === song.id ? 'Submitting...' : 'Submit Scores'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Mobile tally */}
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <span className="font-display font-bold text-xs text-gray-400">
+                    TOTAL ({scoredSongs.length} song{scoredSongs.length !== 1 ? 's' : ''})
+                  </span>
+                  <div className="flex gap-4">
+                    <span className={`font-mono font-bold text-sm ${p1Wins > p2Wins ? 'text-piu-green' : ''}`}>{p1Wins} W</span>
+                    <span className={`font-mono font-bold text-sm ${p2Wins > p1Wins ? 'text-piu-green' : ''}`}>{p2Wins} W</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Song List - Desktop Table */}
+          {songs.length > 0 && (
+            <div className="card hidden sm:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-piu-border text-gray-500 text-xs font-display">
@@ -367,7 +466,7 @@ export default function DuelView() {
                               </div>
                             )}
                             <div className="min-w-0">
-                              <p className="font-display font-bold text-xs truncate max-w-[140px] sm:max-w-none">{song.song_title}</p>
+                              <p className="font-display font-bold text-xs truncate max-w-none">{song.song_title}</p>
                               <div className="flex gap-1 items-center">
                                 <span className={`text-[10px] font-display font-bold ${isModeS ? 'text-red-400' : 'text-green-400'}`}>
                                   {isModeS ? 'S' : 'D'}{song.song_level}
