@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, deleteTournament, searchTournaments, getNotices } from '../utils/api';
+import { getTournaments, deleteTournament, searchTournaments, getNotices, getDuels, deleteDuel } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 
 const PHASE_LABELS = {
@@ -11,6 +11,7 @@ const PHASE_LABELS = {
 
 export default function Dashboard() {
   const [tournaments, setTournaments] = useState([]);
+  const [duels, setDuels] = useState([]);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -19,13 +20,15 @@ export default function Dashboard() {
   const [selectedNotice, setSelectedNotice] = useState(null);
 
   useEffect(() => {
-    getTournaments()
-      .then(t => setTournaments(t))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-    getNotices()
-      .then(n => setNotices(n))
-      .catch(console.error);
+    Promise.all([
+      getTournaments().catch(() => []),
+      getDuels().catch(() => []),
+      getNotices().catch(() => []),
+    ]).then(([t, d, n]) => {
+      setTournaments(t);
+      setDuels(d);
+      setNotices(n);
+    }).finally(() => setLoading(false));
   }, []);
 
   const handleSearch = useCallback(async (q) => {
@@ -64,6 +67,14 @@ export default function Dashboard() {
     await deleteTournament(id);
     setTournaments(t => t.filter(x => x.id !== id));
     if (searchResults) setSearchResults(sr => sr.filter(x => x.id !== id));
+  };
+
+  const handleDeleteDuel = async (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Delete this duel? This cannot be undone.')) return;
+    await deleteDuel(id);
+    setDuels(d => d.filter(x => x.id !== id));
   };
 
   const displayTournaments = searchResults !== null ? searchResults : tournaments;
@@ -114,15 +125,75 @@ export default function Dashboard() {
     </Link>
   );
 
+  const DuelCard = ({ d }) => (
+    <Link
+      key={d.id}
+      to={`/duel/${d.id}`}
+      className="card-hover flex items-center justify-between group"
+    >
+      <div className="flex items-center gap-3">
+        {/* Duel avatar: two player avatars with crossed swords */}
+        <div className="flex items-center shrink-0">
+          <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
+            {d.player1_avatar ? (
+              <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
+                {d.player1_name[0].toUpperCase()}
+              </div>
+            )}
+          </div>
+          <div className="w-5 h-5 bg-piu-card rounded-full flex items-center justify-center z-20 -mx-0.5">
+            <svg width="12" height="12" viewBox="0 0 40 40" fill="none" className="text-piu-accent">
+              <path d="M8 8L32 32M8 8L12 4M8 8L4 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M32 8L8 32M32 8L28 4M32 8L36 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
+            {d.player2_avatar ? (
+              <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
+                {d.player2_name[0].toUpperCase()}
+              </div>
+            )}
+          </div>
+        </div>
+        <div>
+          <h3 className="font-display text-base font-bold group-hover:text-piu-accent transition-colors">
+            {d.name}
+          </h3>
+          <div className="flex gap-2 text-xs text-gray-500">
+            <span>{d.player1_name} vs {d.player2_name}</span>
+            {d.location && <span>- {d.location}</span>}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className={`badge ${d.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
+          {d.status === 'COMPLETED' ? 'Completed' : 'Active'}
+        </span>
+        <button
+          onClick={(e) => handleDeleteDuel(e, d.id)}
+          className="text-gray-600 hover:text-red-500 transition-colors p-1"
+          title="Delete duel"
+        >
+          &#10005;
+        </button>
+      </div>
+    </Link>
+  );
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="mb-6">
         <h1 className="text-4xl font-display font-bold tracking-wider">
-          TOURNAMENTS
+          PUMP DOJO
         </h1>
         <div className="flex flex-wrap gap-2 mt-2">
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Round Robin</span>
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Gauntlets</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Offline Duels</span>
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Random Song Draws</span>
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Vetoes</span>
         </div>
@@ -167,7 +238,7 @@ export default function Dashboard() {
         {searchResults !== null && (
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-500">
-              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for "{searchQuery}"
+              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
             </p>
             <button
               onClick={() => { setSearchQuery(''); setSearchResults(null); }}
@@ -181,30 +252,52 @@ export default function Dashboard() {
 
       {loading ? (
         <div className="text-center py-20 text-gray-500">Loading...</div>
-      ) : displayTournaments.length === 0 ? (
-        searchResults !== null ? (
-          <div className="text-center py-10">
-            <p className="text-gray-400">No tournaments found</p>
-          </div>
-        ) : (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4 opacity-30 font-display">&#23529;&#26619;</div>
-            <p className="text-gray-400 text-lg">No tournaments yet</p>
-            <p className="text-gray-600 mt-2">Create your first tournament to get started</p>
-            <Link to="/tournament/new" className="btn-primary mt-6 inline-block">
-              Create Tournament
-            </Link>
-          </div>
-        )
       ) : (
         <>
-          <div className="grid gap-4">
-            {displayTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
+          {/* Offline Duels Section */}
+          {duels.length > 0 && searchResults === null && (
+            <div className="mb-8">
+              <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">OFFLINE DUELS</h2>
+              <div className="grid gap-3">
+                {duels.map(d => <DuelCard key={d.id} d={d} />)}
+              </div>
+              <Link to="/duel/new" className="btn-secondary w-full mt-3 text-center block text-sm">
+                + New Duel
+              </Link>
+            </div>
+          )}
+
+          {/* Tournaments Section */}
+          <div>
+            <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">TOURNAMENTS</h2>
+            {displayTournaments.length === 0 ? (
+              searchResults !== null ? (
+                <div className="text-center py-10">
+                  <p className="text-gray-400">No tournaments found</p>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-400">No tournaments yet</p>
+                  <p className="text-gray-600 mt-1 text-sm">Create your first tournament to get started</p>
+                </div>
+              )
+            ) : (
+              <div className="grid gap-4">
+                {displayTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
+              </div>
+            )}
           </div>
+
+          {/* Create buttons */}
           {searchResults === null && (
-            <Link to="/tournament/new" className="btn-primary w-full mt-6 text-center text-lg block">
-              + New Tournament
-            </Link>
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <Link to="/tournament/new" className="btn-primary text-center text-sm block">
+                + New Tournament
+              </Link>
+              <Link to="/duel/new" className="btn-primary bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-center text-sm block">
+                + New Duel
+              </Link>
+            </div>
           )}
         </>
       )}

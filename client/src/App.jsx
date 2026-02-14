@@ -4,6 +4,8 @@ import Dashboard from './pages/Dashboard';
 import TournamentSetup from './pages/TournamentSetup';
 import TournamentView from './pages/TournamentView';
 import MatchView from './pages/MatchView';
+import DuelSetup from './pages/DuelSetup';
+import DuelView from './pages/DuelView';
 import AdminPanel from './pages/AdminPanel';
 
 export default function App() {
@@ -36,7 +38,7 @@ export default function App() {
           <div className="flex items-center gap-3">
             {!isHome && (
               <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
-                All Tournaments
+                Home
               </Link>
             )}
           </div>
@@ -50,6 +52,8 @@ export default function App() {
           <Route path="/tournament/new" element={<TournamentSetup />} />
           <Route path="/tournament/:id/*" element={<TournamentView />} />
           <Route path="/match/:id" element={<MatchView />} />
+          <Route path="/duel/new" element={<DuelSetup />} />
+          <Route path="/duel/:id" element={<DuelView />} />
           <Route path="/admin" element={<AdminPanel />} />
         </Routes>
       </main>

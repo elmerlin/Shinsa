@@ -52,3 +52,13 @@ export const getSongs = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs${qs ? `?${qs}` : ''}`);
 };
+
+// Duels
+export const getDuels = () => request('/duels');
+export const getDuel = (id) => request(`/duels/${id}`);
+export const createDuel = (data) => request('/duels', { method: 'POST', body: JSON.stringify(data) });
+export const deleteDuel = (id) => request(`/duels/${id}`, { method: 'DELETE' });
+export const duelDraw = (id, data) => request(`/duels/${id}/draw`, { method: 'POST', body: JSON.stringify(data) });
+export const duelScore = (id, data) => request(`/duels/${id}/score`, { method: 'POST', body: JSON.stringify(data) });
+export const duelDeleteSong = (id, songEntryId) => request(`/duels/${id}/song/${songEntryId}`, { method: 'DELETE' });
+export const endDuel = (id) => request(`/duels/${id}/end`, { method: 'POST' });

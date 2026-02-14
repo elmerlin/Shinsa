@@ -89,11 +89,46 @@ function initializeDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS duels (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      location TEXT DEFAULT '',
+      date TEXT DEFAULT '',
+      time TEXT DEFAULT '',
+      mode TEXT DEFAULT 'both',
+      player1_name TEXT NOT NULL,
+      player2_name TEXT NOT NULL,
+      player1_avatar TEXT DEFAULT '',
+      player2_avatar TEXT DEFAULT '',
+      status TEXT DEFAULT 'ACTIVE',
+      winner TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS duel_songs (
+      id TEXT PRIMARY KEY,
+      duel_id TEXT NOT NULL,
+      song_id INTEGER,
+      song_title TEXT DEFAULT '',
+      song_artist TEXT DEFAULT '',
+      song_mode TEXT DEFAULT '',
+      song_level INT DEFAULT 0,
+      song_jacket_url TEXT DEFAULT '',
+      song_bpm TEXT DEFAULT '',
+      player1_score INT DEFAULT 0,
+      player2_score INT DEFAULT 0,
+      winner TEXT DEFAULT '',
+      played_order INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (duel_id) REFERENCES duels(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_players_tournament ON players(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_round ON matches(tournament_id, round_number);
     CREATE INDEX IF NOT EXISTS idx_songs_level ON songs(level);
     CREATE INDEX IF NOT EXISTS idx_songs_mode ON songs(mode);
+    CREATE INDEX IF NOT EXISTS idx_duel_songs_duel ON duel_songs(duel_id);
   `);
 
   // Migrations for existing databases
