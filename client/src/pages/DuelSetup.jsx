@@ -2,12 +2,20 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createDuel } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
+import {
+  SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
+  COUNTRIES, getCountryFlag, getSkillColor,
+} from '../components/PlayerRegistration';
 
 const MODE_OPTIONS = [
   { value: 'both', label: 'Both', desc: 'Singles & Doubles' },
   { value: 'singles', label: 'Singles', desc: 'Singles only' },
   { value: 'doubles', label: 'Doubles', desc: 'Doubles only' },
 ];
+
+const DEFAULT_PLAYER = {
+  name: '', avatar: '', skill_title: 'Beginner', skill_level: 1, gender: '', nationality: '', description: '',
+};
 
 export default function DuelSetup() {
   const navigate = useNavigate();
@@ -18,26 +26,151 @@ export default function DuelSetup() {
     date: now.toISOString().split('T')[0],
     time: now.toTimeString().slice(0, 5),
     mode: 'both',
-    player1_name: '',
-    player2_name: '',
-    player1_avatar: '',
-    player2_avatar: '',
   });
+  const [p1, setP1] = useState({ ...DEFAULT_PLAYER });
+  const [p2, setP2] = useState({ ...DEFAULT_PLAYER });
   const [activeAvatar, setActiveAvatar] = useState(null); // 'player1' or 'player2'
+  const [expandedPlayer, setExpandedPlayer] = useState(null); // 'player1' or 'player2'
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.player1_name.trim() || !form.player2_name.trim()) return;
+    if (!form.name.trim() || !p1.name.trim() || !p2.name.trim()) return;
     setSaving(true);
     try {
-      const duel = await createDuel(form);
+      const duel = await createDuel({
+        ...form,
+        player1_name: p1.name,
+        player2_name: p2.name,
+        player1_avatar: p1.avatar,
+        player2_avatar: p2.avatar,
+        player1_skill_title: `${p1.skill_title} lvl. ${p1.skill_level}`,
+        player1_skill_level: p1.skill_level,
+        player1_gender: p1.gender,
+        player1_nationality: p1.nationality,
+        player1_description: p1.description,
+        player2_skill_title: `${p2.skill_title} lvl. ${p2.skill_level}`,
+        player2_skill_level: p2.skill_level,
+        player2_gender: p2.gender,
+        player2_nationality: p2.nationality,
+        player2_description: p2.description,
+      });
       navigate(`/duel/${duel.id}`);
     } catch (err) {
       alert(err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const PlayerFields = ({ player, setPlayer, label, prefix, color }) => {
+    const isExpanded = expandedPlayer === prefix;
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className={`font-display font-bold text-sm ${color}`}>{label}</h3>
+          <button
+            type="button"
+            onClick={() => setExpandedPlayer(isExpanded ? null : prefix)}
+            className="text-xs text-gray-500 hover:text-piu-accent transition-colors font-display"
+          >
+            {isExpanded ? 'Collapse' : 'More details'}
+          </button>
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Name *</label>
+          <input
+            type="text"
+            className="input-field"
+            placeholder={label}
+            value={player.name}
+            onChange={e => setPlayer(p => ({ ...p, name: e.target.value }))}
+            required
+          />
+        </div>
+
+        {isExpanded && (
+          <div className="space-y-3 animate-slide-up">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
+                <select
+                  className="input-field"
+                  value={player.skill_title}
+                  onChange={e => setPlayer(p => ({ ...p, skill_title: e.target.value }))}
+                >
+                  {SKILL_TITLES.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Skill Level</label>
+                <select
+                  className="input-field"
+                  value={player.skill_level}
+                  onChange={e => setPlayer(p => ({ ...p, skill_level: parseInt(e.target.value) }))}
+                >
+                  {SKILL_LEVELS.map(l => (
+                    <option key={l} value={l}>Level {l}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Gender</label>
+                <select
+                  className="input-field"
+                  value={player.gender}
+                  onChange={e => setPlayer(p => ({ ...p, gender: e.target.value }))}
+                >
+                  {GENDER_OPTIONS.map(g => (
+                    <option key={g.value} value={g.value}>{g.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Nationality</label>
+                <select
+                  className="input-field"
+                  value={player.nationality}
+                  onChange={e => setPlayer(p => ({ ...p, nationality: e.target.value }))}
+                >
+                  {COUNTRIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.flag ? `${c.flag} ` : ''}{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Description</label>
+              <textarea
+                className="input-field resize-none"
+                rows="2"
+                placeholder="Short bio or notes..."
+                value={player.description}
+                onChange={e => setPlayer(p => ({ ...p, description: e.target.value }))}
+              />
+            </div>
+            {/* Preview */}
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-500">Preview:</span>
+              {player.nationality && <span className="text-base">{getCountryFlag(player.nationality)}</span>}
+              <span className={`badge border ${getSkillColor(player.skill_title)}`}>
+                {player.skill_title} lvl. {player.skill_level}
+              </span>
+              {player.gender && (
+                <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                  {GENDER_SYMBOLS[player.gender]}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -126,15 +259,15 @@ export default function DuelSetup() {
                   activeAvatar === 'player1' ? 'border-piu-accent scale-110' : 'border-piu-border hover:border-piu-accent/50'
                 }`}
               >
-                {form.player1_avatar ? (
-                  <img src={getAvatarUrl(form.player1_avatar)} alt="" className="w-full h-full object-cover" />
+                {p1.avatar ? (
+                  <img src={getAvatarUrl(p1.avatar)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-lg">
-                    {form.player1_name ? form.player1_name[0].toUpperCase() : 'P1'}
+                    {p1.name ? p1.name[0].toUpperCase() : 'P1'}
                   </div>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-1 font-display">{form.player1_name || 'Player 1'}</p>
+              <p className="text-xs text-gray-400 mt-1 font-display">{p1.name || 'Player 1'}</p>
             </div>
 
             {/* Crossed Swords */}
@@ -153,41 +286,15 @@ export default function DuelSetup() {
                   activeAvatar === 'player2' ? 'border-piu-accent scale-110' : 'border-piu-border hover:border-piu-accent/50'
                 }`}
               >
-                {form.player2_avatar ? (
-                  <img src={getAvatarUrl(form.player2_avatar)} alt="" className="w-full h-full object-cover" />
+                {p2.avatar ? (
+                  <img src={getAvatarUrl(p2.avatar)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-lg">
-                    {form.player2_name ? form.player2_name[0].toUpperCase() : 'P2'}
+                    {p2.name ? p2.name[0].toUpperCase() : 'P2'}
                   </div>
                 )}
               </div>
-              <p className="text-xs text-gray-400 mt-1 font-display">{form.player2_name || 'Player 2'}</p>
-            </div>
-          </div>
-
-          {/* Player names */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Player 1 Name *</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Player 1"
-                value={form.player1_name}
-                onChange={e => setForm(f => ({ ...f, player1_name: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Player 2 Name *</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Player 2"
-                value={form.player2_name}
-                onChange={e => setForm(f => ({ ...f, player2_name: e.target.value }))}
-                required
-              />
+              <p className="text-xs text-gray-400 mt-1 font-display">{p2.name || 'Player 2'}</p>
             </div>
           </div>
 
@@ -195,19 +302,29 @@ export default function DuelSetup() {
           {activeAvatar && (
             <div className="pt-2 border-t border-piu-border/50">
               <p className="text-sm text-gray-400 mb-2 font-display">
-                Choose avatar for {activeAvatar === 'player1' ? form.player1_name || 'Player 1' : form.player2_name || 'Player 2'}
+                Choose avatar for {activeAvatar === 'player1' ? p1.name || 'Player 1' : p2.name || 'Player 2'}
               </p>
               <AvatarPicker
-                value={activeAvatar === 'player1' ? form.player1_avatar : form.player2_avatar}
-                onChange={(avatar) => setForm(f => ({
-                  ...f,
-                  [activeAvatar === 'player1' ? 'player1_avatar' : 'player2_avatar']: avatar,
-                }))}
+                value={activeAvatar === 'player1' ? p1.avatar : p2.avatar}
+                onChange={(avatar) => {
+                  if (activeAvatar === 'player1') setP1(p => ({ ...p, avatar }));
+                  else setP2(p => ({ ...p, avatar }));
+                }}
                 shape="circle"
                 size="sm"
               />
             </div>
           )}
+
+          {/* Player 1 fields */}
+          <div className="pt-3 border-t border-piu-border/50">
+            <PlayerFields player={p1} setPlayer={setP1} label="Player 1" prefix="player1" color="text-red-400" />
+          </div>
+
+          {/* Player 2 fields */}
+          <div className="pt-3 border-t border-piu-border/50">
+            <PlayerFields player={p2} setPlayer={setP2} label="Player 2" prefix="player2" color="text-blue-400" />
+          </div>
         </div>
 
         {/* Rules Summary */}

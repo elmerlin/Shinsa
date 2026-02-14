@@ -131,6 +131,26 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_duel_songs_duel ON duel_songs(duel_id);
   `);
 
+  // Migrations for duels table - add player detail fields
+  const duelColumns = db.prepare("PRAGMA table_info(duels)").all().map(c => c.name);
+  const duelMigrations = [
+    ['player1_skill_title', "TEXT DEFAULT ''"],
+    ['player1_skill_level', "INT DEFAULT 1"],
+    ['player1_gender', "TEXT DEFAULT ''"],
+    ['player1_nationality', "TEXT DEFAULT ''"],
+    ['player1_description', "TEXT DEFAULT ''"],
+    ['player2_skill_title', "TEXT DEFAULT ''"],
+    ['player2_skill_level', "INT DEFAULT 1"],
+    ['player2_gender', "TEXT DEFAULT ''"],
+    ['player2_nationality', "TEXT DEFAULT ''"],
+    ['player2_description', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of duelMigrations) {
+    if (!duelColumns.includes(col)) {
+      db.exec(`ALTER TABLE duels ADD COLUMN ${col} ${type}`);
+    }
+  }
+
   // Migrations for existing databases
   const tournamentColumns = db.prepare("PRAGMA table_info(tournaments)").all().map(c => c.name);
   if (!tournamentColumns.includes('avatar')) {

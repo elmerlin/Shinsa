@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getTournaments, deleteTournament, searchTournaments, getNotices, getDuels, deleteDuel } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import { getCountryFlag } from '../components/PlayerRegistration';
 
 const PHASE_LABELS = {
   SETUP: 'Setup',
@@ -164,7 +165,12 @@ export default function Dashboard() {
             {d.name}
           </h3>
           <div className="flex gap-2 text-xs text-gray-500">
-            <span>{d.player1_name} vs {d.player2_name}</span>
+            <span>
+              {d.player1_nationality && <>{getCountryFlag(d.player1_nationality)} </>}
+              {d.player1_name} vs{' '}
+              {d.player2_nationality && <>{getCountryFlag(d.player2_nationality)} </>}
+              {d.player2_name}
+            </span>
             {d.location && <span>- {d.location}</span>}
           </div>
         </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getDuel, duelDraw, duelScore, duelDeleteSong, endDuel, deleteDuel } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import DuelStats from '../components/DuelStats';
 
 // PIU Score Ranks with colors matching the game
@@ -190,7 +191,20 @@ export default function DuelView() {
                 </div>
               )}
             </div>
-            <p className="font-display font-bold text-sm sm:text-base mt-1">{duel.player1_name}</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              {duel.player1_nationality && <span className="text-sm">{getCountryFlag(duel.player1_nationality)}</span>}
+              <p className="font-display font-bold text-sm sm:text-base">{duel.player1_name}</p>
+              {duel.player1_gender && (
+                <span className={`text-xs ${duel.player1_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                  {GENDER_SYMBOLS[duel.player1_gender]}
+                </span>
+              )}
+            </div>
+            {duel.player1_skill_title && (
+              <span className={`badge border text-[10px] ${getSkillColor(duel.player1_skill_title)}`}>
+                {duel.player1_skill_title}
+              </span>
+            )}
             {isCompleted && duel.winner === 'player1' && (
               <span className="text-piu-gold text-xs font-display">&#127942; GOLD</span>
             )}
@@ -229,7 +243,20 @@ export default function DuelView() {
                 </div>
               )}
             </div>
-            <p className="font-display font-bold text-sm sm:text-base mt-1">{duel.player2_name}</p>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              {duel.player2_nationality && <span className="text-sm">{getCountryFlag(duel.player2_nationality)}</span>}
+              <p className="font-display font-bold text-sm sm:text-base">{duel.player2_name}</p>
+              {duel.player2_gender && (
+                <span className={`text-xs ${duel.player2_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                  {GENDER_SYMBOLS[duel.player2_gender]}
+                </span>
+              )}
+            </div>
+            {duel.player2_skill_title && (
+              <span className={`badge border text-[10px] ${getSkillColor(duel.player2_skill_title)}`}>
+                {duel.player2_skill_title}
+              </span>
+            )}
             {isCompleted && duel.winner === 'player2' && (
               <span className="text-piu-gold text-xs font-display">&#127942; GOLD</span>
             )}

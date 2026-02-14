@@ -2,16 +2,16 @@ import React, { useState } from 'react';
 import { createPlayer, updatePlayer, deletePlayer } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
 
-const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
-const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const GENDER_OPTIONS = [
+export const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
+export const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const GENDER_OPTIONS = [
   { value: '', label: 'Not specified' },
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
 ];
-const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
+export const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
-const COUNTRIES = [
+export const COUNTRIES = [
   { code: '', name: 'Not specified', flag: '' },
   { code: 'AF', name: 'Afghanistan', flag: '\u{1F1E6}\u{1F1EB}' },
   { code: 'AL', name: 'Albania', flag: '\u{1F1E6}\u{1F1F1}' },
@@ -222,14 +222,14 @@ export function getCountryFlag(code) {
   return COUNTRY_MAP[code]?.flag || '';
 }
 
-const skillColors = {
+export const skillColors = {
   Beginner: 'bg-green-500/20 text-green-400 border-green-500/30',
   Intermediate: 'bg-piu-bronze/20 text-piu-bronze border-piu-bronze/30',
   Advanced: 'bg-piu-silver/20 text-piu-silver border-piu-silver/30',
   Expert: 'bg-piu-gold/20 text-piu-gold border-piu-gold/30',
 };
 
-const getSkillColor = (title) => {
+export const getSkillColor = (title) => {
   if (!title) return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
   for (const [key, val] of Object.entries(skillColors)) {
     if (title.startsWith(key)) return val;
