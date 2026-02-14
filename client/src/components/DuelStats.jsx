@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
-import { getRank } from '../pages/DuelView';
+import { getRank, SongJacket } from '../pages/DuelView';
 
 const FILTER_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -162,6 +162,51 @@ export default function DuelStats({ duel, songs }) {
                 <Line yAxisId="left" type="monotone" dataKey="p2Avg" name={duel.player2_name} stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
               </ComposedChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Song-by-Song Comparison */}
+      {filteredSongs.length > 0 && (
+        <div className="card">
+          <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Song Results</h3>
+          {/* Header */}
+          <div className="flex items-center text-[10px] text-gray-500 font-display font-bold mb-2 px-1">
+            <div className="flex-1 text-right pr-2">{duel.player1_name}</div>
+            <div className="w-12 text-center shrink-0"></div>
+            <div className="flex-1 pl-2">{duel.player2_name}</div>
+          </div>
+          <div className="space-y-1.5">
+            {filteredSongs.map((song) => {
+              const p1Rank = getRank(song.player1_score);
+              const p2Rank = getRank(song.player2_score);
+              const p1Won = song.winner === 'player1';
+              const p2Won = song.winner === 'player2';
+              return (
+                <div key={song.id} className="flex items-center gap-0 py-1 border-b border-piu-border/20 last:border-0">
+                  {/* Player 1 score - right aligned */}
+                  <div className={`flex-1 flex items-center justify-end gap-1 pr-2 ${p1Won ? 'text-piu-green' : ''}`}>
+                    {p1Won && <span className="text-[10px]">&#9733;</span>}
+                    <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p1Rank.bg} ${p1Rank.color}`}>
+                      {p1Rank.label}
+                    </span>
+                    <span className="font-mono text-xs font-bold">{Number(song.player1_score).toLocaleString()}</span>
+                  </div>
+                  {/* Song jacket center */}
+                  <div className="shrink-0">
+                    <SongJacket song={song} size="sm" />
+                  </div>
+                  {/* Player 2 score - left aligned */}
+                  <div className={`flex-1 flex items-center gap-1 pl-2 ${p2Won ? 'text-piu-green' : ''}`}>
+                    <span className="font-mono text-xs font-bold">{Number(song.player2_score).toLocaleString()}</span>
+                    <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p2Rank.bg} ${p2Rank.color}`}>
+                      {p2Rank.label}
+                    </span>
+                    {p2Won && <span className="text-[10px]">&#9733;</span>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

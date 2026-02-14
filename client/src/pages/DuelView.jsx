@@ -52,6 +52,33 @@ function ScoreDisplay({ score, isWinner }) {
   );
 }
 
+export function SongJacket({ song, size = 'md' }) {
+  const [showName, setShowName] = useState(false);
+  const isModeS = song.song_mode === 'Single';
+  const sizeClass = size === 'sm' ? 'w-9 h-9' : 'w-11 h-11';
+  const badgeSize = size === 'sm' ? 'text-[8px] min-w-[16px] h-[14px]' : 'text-[9px] min-w-[18px] h-[16px]';
+
+  return (
+    <div className="relative shrink-0 cursor-pointer" onClick={() => setShowName(v => !v)}>
+      {song.song_jacket_url ? (
+        <img src={song.song_jacket_url} alt="" className={`${sizeClass} rounded object-cover`} />
+      ) : (
+        <div className={`${sizeClass} rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm`}>
+          {song.song_title[0]}
+        </div>
+      )}
+      <span className={`absolute -bottom-1 -right-1 ${badgeSize} flex items-center justify-center rounded font-display font-bold text-white leading-none ${isModeS ? 'bg-red-600' : 'bg-green-600'}`}>
+        {song.song_level}
+      </span>
+      {showName && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-piu-card border border-piu-border rounded px-2 py-1 text-[10px] font-display whitespace-nowrap z-10 shadow-lg">
+          {song.song_title}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DuelView() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -294,14 +321,14 @@ export default function DuelView() {
         <>
           {/* Card Draw Controls */}
           {!isCompleted && (
-            <div className="card mb-6 space-y-4">
-              <h2 className="font-display font-bold text-piu-accent">Draw a Card</h2>
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Level</label>
+            <div className="card mb-4 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span className="font-display font-bold text-piu-accent text-sm hidden sm:inline">Draw a Card</span>
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Lv.</label>
                   <input
                     type="number"
-                    className="input-field w-20"
+                    className="input-field w-16 text-center text-sm py-1.5"
                     min="1"
                     max="28"
                     value={drawLevel}
@@ -310,119 +337,110 @@ export default function DuelView() {
                   />
                 </div>
                 {duel.mode === 'both' && (
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1">Chart Type</label>
-                    <select
-                      className="input-field"
-                      value={drawMode}
-                      onChange={e => setDrawMode(e.target.value)}
-                    >
-                      <option value="any">Any</option>
-                      <option value="Single">Singles</option>
-                      <option value="Double">Doubles</option>
-                    </select>
-                  </div>
+                  <select
+                    className="input-field text-sm py-1.5"
+                    value={drawMode}
+                    onChange={e => setDrawMode(e.target.value)}
+                  >
+                    <option value="any">Any</option>
+                    <option value="Single">Singles</option>
+                    <option value="Double">Doubles</option>
+                  </select>
                 )}
                 <button
                   onClick={handleDraw}
                   disabled={drawing || !!pendingSong}
-                  className="btn-primary"
+                  className="btn-primary text-sm py-1.5 px-4 flex-1 sm:flex-none"
                 >
                   {drawing ? 'Drawing...' : pendingSong ? 'Enter scores first' : 'Draw Card'}
                 </button>
               </div>
               {pendingSong && (
-                <p className="text-xs text-yellow-400">Submit scores for the current song before drawing another.</p>
+                <p className="text-xs text-yellow-400 mt-2">Submit scores for the current song before drawing another.</p>
               )}
             </div>
           )}
 
           {/* Song List - Mobile Card Layout */}
           {songs.length > 0 && (
-            <div className="sm:hidden space-y-3">
+            <div className="sm:hidden space-y-2">
               {songs.map((song, idx) => {
-                const isModeS = song.song_mode === 'Single';
                 const hasScore = !!song.winner;
-                return (
-                  <div key={song.id} className={`card ${!hasScore ? 'border border-piu-accent/20' : ''}`}>
-                    {/* Song info row */}
+                return hasScore ? (
+                  /* Scored song - compact row with SongJacket */
+                  <div key={song.id} className="card py-2 px-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600 font-mono text-[10px] w-4 text-right shrink-0">{idx + 1}</span>
+                      <SongJacket song={song} size="sm" />
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] text-red-400 font-display font-bold truncate max-w-[60px]">{duel.player1_name}</span>
+                          <ScoreDisplay score={song.player1_score} isWinner={song.winner === 'player1'} />
+                        </div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[10px] text-blue-400 font-display font-bold truncate max-w-[60px]">{duel.player2_name}</span>
+                          <ScoreDisplay score={song.player2_score} isWinner={song.winner === 'player2'} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Pending song - score entry card (keep as-is) */
+                  <div key={song.id} className="card border border-piu-accent/20">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-gray-600 font-mono text-xs">{idx + 1}</span>
-                      {song.song_jacket_url ? (
-                        <img src={song.song_jacket_url} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
-                      ) : (
-                        <div className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold shrink-0 ${isModeS ? 'bg-red-900/50' : 'bg-green-900/50'}`}>
-                          {song.song_title[0]}
-                        </div>
-                      )}
+                      <SongJacket song={song} />
                       <div className="min-w-0 flex-1">
                         <p className="font-display font-bold text-sm truncate">{song.song_title}</p>
-                        <span className={`text-xs font-display font-bold ${isModeS ? 'text-red-400' : 'text-green-400'}`}>
-                          {isModeS ? 'S' : 'D'}{song.song_level}
-                        </span>
                       </div>
-                      {!hasScore && (
-                        <button
-                          onClick={() => handleDeleteSong(song.id)}
-                          className="text-gray-600 hover:text-red-400 text-sm shrink-0 p-1"
-                          title="Remove card"
-                        >
-                          &#10005;
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDeleteSong(song.id)}
+                        className="text-gray-600 hover:text-red-400 text-sm shrink-0 p-1"
+                        title="Remove card"
+                      >
+                        &#10005;
+                      </button>
                     </div>
-                    {/* Score rows */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-red-400 font-display font-bold shrink-0 w-20 truncate">{duel.player1_name}</span>
-                        {hasScore ? (
-                          <ScoreDisplay score={song.player1_score} isWinner={song.winner === 'player1'} />
-                        ) : (
-                          <input
-                            type="number"
-                            className="input-field flex-1 text-right text-sm"
-                            placeholder="Score"
-                            min="0"
-                            max="1000000"
-                            value={scoreInputs[`${song.id}_p1`] || ''}
-                            onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p1`]: e.target.value }))}
-                            onFocus={e => e.target.select()}
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="input-field flex-1 text-right text-sm"
+                          placeholder="Score"
+                          min="0"
+                          max="1000000"
+                          value={scoreInputs[`${song.id}_p1`] || ''}
+                          onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p1`]: e.target.value }))}
+                          onFocus={e => e.target.select()}
+                        />
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-blue-400 font-display font-bold shrink-0 w-20 truncate">{duel.player2_name}</span>
-                        {hasScore ? (
-                          <ScoreDisplay score={song.player2_score} isWinner={song.winner === 'player2'} />
-                        ) : (
-                          <input
-                            type="number"
-                            className="input-field flex-1 text-right text-sm"
-                            placeholder="Score"
-                            min="0"
-                            max="1000000"
-                            value={scoreInputs[`${song.id}_p2`] || ''}
-                            onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p2`]: e.target.value }))}
-                            onFocus={e => e.target.select()}
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="input-field flex-1 text-right text-sm"
+                          placeholder="Score"
+                          min="0"
+                          max="1000000"
+                          value={scoreInputs[`${song.id}_p2`] || ''}
+                          onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p2`]: e.target.value }))}
+                          onFocus={e => e.target.select()}
+                        />
                       </div>
                     </div>
-                    {/* Submit button */}
-                    {!hasScore && (
-                      <button
-                        onClick={() => handleScoreSubmit(song)}
-                        disabled={submittingScore === song.id}
-                        className="btn-primary w-full mt-3 text-sm py-2"
-                      >
-                        {submittingScore === song.id ? 'Submitting...' : 'Submit Scores'}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleScoreSubmit(song)}
+                      disabled={submittingScore === song.id}
+                      className="btn-primary w-full mt-3 text-sm py-2"
+                    >
+                      {submittingScore === song.id ? 'Submitting...' : 'Submit Scores'}
+                    </button>
                   </div>
                 );
               })}
               {/* Mobile tally */}
-              <div className="card">
+              <div className="card py-2 px-3">
                 <div className="flex items-center justify-between">
                   <span className="font-display font-bold text-xs text-gray-400">
                     TOTAL ({scoredSongs.length} song{scoredSongs.length !== 1 ? 's' : ''})
@@ -451,28 +469,14 @@ export default function DuelView() {
                 </thead>
                 <tbody>
                   {songs.map((song, idx) => {
-                    const isModeS = song.song_mode === 'Single';
                     const hasScore = !!song.winner;
                     return (
                       <tr key={song.id} className={`border-b border-piu-border/30 ${!hasScore ? 'bg-piu-accent/5' : ''}`}>
                         <td className="py-2 px-2 text-gray-600 font-mono text-xs">{idx + 1}</td>
                         <td className="py-2 px-2">
                           <div className="flex items-center gap-2">
-                            {song.song_jacket_url ? (
-                              <img src={song.song_jacket_url} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
-                            ) : (
-                              <div className={`w-8 h-8 rounded flex items-center justify-center text-xs font-bold ${isModeS ? 'bg-red-900/50' : 'bg-green-900/50'}`}>
-                                {song.song_title[0]}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="font-display font-bold text-xs truncate max-w-none">{song.song_title}</p>
-                              <div className="flex gap-1 items-center">
-                                <span className={`text-[10px] font-display font-bold ${isModeS ? 'text-red-400' : 'text-green-400'}`}>
-                                  {isModeS ? 'S' : 'D'}{song.song_level}
-                                </span>
-                              </div>
-                            </div>
+                            <SongJacket song={song} size="sm" />
+                            <p className="font-display font-bold text-xs truncate max-w-[200px]">{song.song_title}</p>
                           </div>
                         </td>
                         <td className="py-2 px-2 text-right">
