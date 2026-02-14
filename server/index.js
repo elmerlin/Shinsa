@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initializeDb } = require('./db/schema');
+const { initializeDb, getDb } = require('./db/schema');
 
 const tournamentRoutes = require('./routes/tournaments');
 const playerRoutes = require('./routes/players');
@@ -20,6 +20,15 @@ initializeDb();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// Combined dashboard endpoint — single request instead of 3
+app.get('/api/dashboard', (req, res) => {
+  const db = getDb();
+  const tournaments = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC').all();
+  const duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC').all();
+  const notices = db.prepare('SELECT * FROM notices ORDER BY pinned DESC, created_at DESC').all();
+  res.json({ tournaments, duels, notices });
+});
+
 // API Routes
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/players', playerRoutes);
@@ -29,14 +38,14 @@ app.use('/api/notices', noticeRoutes);
 app.use('/api/duels', duelRoutes);
 
 // Return 404 for unmatched API routes (prevents hanging requests)
-app.all('/api/*', (req, res) => {
+app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientBuild));
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(clientBuild, 'index.html'));
 });
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, deleteTournament, searchTournaments, getNotices, getDuels, deleteDuel } from '../utils/api';
+import { getDashboard, deleteTournament, searchTournaments, deleteDuel } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 
@@ -21,15 +21,14 @@ export default function Dashboard() {
   const [selectedNotice, setSelectedNotice] = useState(null);
 
   useEffect(() => {
-    Promise.all([
-      getTournaments().catch(() => []),
-      getDuels().catch(() => []),
-      getNotices().catch(() => []),
-    ]).then(([t, d, n]) => {
-      setTournaments(t);
-      setDuels(d);
-      setNotices(n);
-    }).finally(() => setLoading(false));
+    getDashboard()
+      .then(({ tournaments: t, duels: d, notices: n }) => {
+        setTournaments(t);
+        setDuels(d);
+        setNotices(n);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const handleSearch = useCallback(async (q) => {

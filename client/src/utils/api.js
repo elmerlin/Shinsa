@@ -12,6 +12,9 @@ async function request(url, options = {}) {
   return res.json();
 }
 
+// Dashboard (combined)
+export const getDashboard = () => request('/dashboard');
+
 // Tournaments
 export const getTournaments = () => request('/tournaments');
 export const getTournament = (id) => request(`/tournaments/${id}`);
