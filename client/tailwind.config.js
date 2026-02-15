@@ -27,6 +27,13 @@ export default {
         'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
         'fade-in': 'fadeIn 0.3s ease-out',
         'float-up': 'floatUp 2s ease-out forwards',
+        'stomp-wiggle': 'stompWiggle 3s ease-in-out infinite',
+        'stomp-heartbeat': 'stompHeartbeat 1.2s ease-in-out infinite',
+        'arrow-nudge-ul': 'arrowNudgeUL 2s ease-in-out infinite',
+        'arrow-nudge-dl': 'arrowNudgeDL 2s ease-in-out infinite',
+        'arrow-nudge-ur': 'arrowNudgeUR 2s ease-in-out infinite',
+        'arrow-nudge-dr': 'arrowNudgeDR 2s ease-in-out infinite',
+        'pump-feedback': 'pumpFeedback 1.5s ease-out forwards',
       },
       keyframes: {
         cardFlip: {
@@ -49,6 +56,40 @@ export default {
           '0%': { transform: 'translateY(0) scale(1)', opacity: '1' },
           '50%': { transform: 'translateY(-120px) scale(1.3)', opacity: '0.8' },
           '100%': { transform: 'translateY(-250px) scale(0.8)', opacity: '0' },
+        },
+        stompWiggle: {
+          '0%, 80%, 100%': { transform: 'rotate(0deg)' },
+          '85%': { transform: 'rotate(-8deg)' },
+          '90%': { transform: 'rotate(8deg)' },
+          '95%': { transform: 'rotate(-5deg)' },
+        },
+        stompHeartbeat: {
+          '0%, 100%': { transform: 'scale(1.1)' },
+          '15%': { transform: 'scale(1.3)' },
+          '30%': { transform: 'scale(1.1)' },
+          '45%': { transform: 'scale(1.25)' },
+          '60%': { transform: 'scale(1.1)' },
+        },
+        arrowNudgeUL: {
+          '0%, 100%': { transform: 'translate(0, 0)' },
+          '50%': { transform: 'translate(-3px, -3px)' },
+        },
+        arrowNudgeDL: {
+          '0%, 100%': { transform: 'translate(0, 0)' },
+          '50%': { transform: 'translate(-3px, 3px)' },
+        },
+        arrowNudgeUR: {
+          '0%, 100%': { transform: 'translate(0, 0)' },
+          '50%': { transform: 'translate(3px, -3px)' },
+        },
+        arrowNudgeDR: {
+          '0%, 100%': { transform: 'translate(0, 0)' },
+          '50%': { transform: 'translate(3px, 3px)' },
+        },
+        pumpFeedback: {
+          '0%': { transform: 'translateY(0)', opacity: '1' },
+          '70%': { opacity: '1' },
+          '100%': { transform: 'translateY(-20px)', opacity: '0' },
         },
       },
     },

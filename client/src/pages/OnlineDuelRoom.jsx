@@ -51,6 +51,7 @@ export default function OnlineDuelRoom() {
   const [selectedBreakdown, setSelectedBreakdown] = useState(null);
   const [tab, setTab] = useState('match');
   const [myPump, setMyPump] = useState(null);
+  const [pumpFeedback, setPumpFeedback] = useState(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState([]);
   const chatEndRef = useRef(null);
@@ -123,6 +124,11 @@ export default function OnlineDuelRoom() {
     try {
       const res = await pumpPlayer(id, player);
       setMyPump(res.pumped || null);
+      if (res.pumped) {
+        const name = player === 'player1' ? duel.player1_name : duel.player2_name;
+        setPumpFeedback({ player, name });
+        setTimeout(() => setPumpFeedback(null), 1500);
+      }
       getOnlineDuel(id).then(setDuel).catch(() => {});
     } catch (err) { alert(err.message); }
   };
@@ -261,8 +267,8 @@ export default function OnlineDuelRoom() {
               {(() => {
                 const p1Pumps = duel.p1Pumps || 0;
                 const p2Pumps = duel.p2Pumps || 0;
-                if (p1Pumps > p2Pumps) return <img src="/piu/arrow-red-ul.svg" alt="Higher pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
-                if (p1Pumps < p2Pumps) return <img src="/piu/arrow-blue-dl.svg" alt="Lower pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
+                if (p1Pumps > p2Pumps) return <img src="/piu/arrow-red-ul.svg" alt="Higher pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 animate-arrow-nudge-ul" />;
+                if (p1Pumps < p2Pumps) return <img src="/piu/arrow-blue-dl.svg" alt="Lower pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 animate-arrow-nudge-dl" />;
                 return null;
               })()}
               <div>
@@ -278,18 +284,6 @@ export default function OnlineDuelRoom() {
                     </div>
                   )}
                 </div>
-                {/* Pump button + count for P1 */}
-                <div className="flex items-center justify-center gap-1 mt-1">
-                  <button
-                    onClick={() => handlePump('player1')}
-                    disabled={!user || myPump === 'player2'}
-                    className={`transition-all active:scale-90 ${myPump === 'player1' ? 'scale-110 drop-shadow-[0_0_6px_rgba(234,179,8,0.5)]' : 'hover:scale-105'} ${!user || myPump === 'player2' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                    title={!user ? 'Log in to pump' : myPump === 'player2' ? 'Already pumping opponent' : myPump === 'player1' ? 'Click to unpump' : `Pump ${duel.player1_name}!`}
-                  >
-                    <img src={myPump === 'player1' ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="Pump" className="w-7 h-7 sm:w-9 sm:h-9" />
-                  </button>
-                  <span className={`text-xs font-mono font-bold ${myPump === 'player1' ? 'text-yellow-400' : 'text-gray-500'}`}>{duel.p1Pumps || 0}</span>
-                </div>
               </div>
             </div>
             <div className="flex items-center justify-center gap-1 mt-1">
@@ -298,6 +292,23 @@ export default function OnlineDuelRoom() {
               {duel.player1_gender && <span className={`text-xs ${duel.player1_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player1_gender]}</span>}
             </div>
             {duel.player1_skill_title && <span className={`badge border text-[10px] ${getSkillColor(duel.player1_skill_title)}`}>{duel.player1_skill_title}</span>}
+            {/* Pump button + count for P1 */}
+            <div className="relative flex items-center justify-center gap-1 mt-1.5">
+              <button
+                onClick={() => handlePump('player1')}
+                disabled={!user || myPump === 'player2'}
+                className={`transition-all active:scale-90 ${myPump === 'player1' ? 'animate-stomp-heartbeat drop-shadow-[0_0_6px_rgba(234,179,8,0.5)]' : 'animate-stomp-wiggle hover:scale-105'} ${!user || myPump === 'player2' ? 'opacity-30 cursor-not-allowed !animate-none' : 'cursor-pointer'}`}
+                title={!user ? 'Log in to pump' : myPump === 'player2' ? 'Already pumping opponent' : myPump === 'player1' ? 'Click to unpump' : `Pump ${duel.player1_name}!`}
+              >
+                <img src={myPump === 'player1' ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="Pump" className="w-7 h-7 sm:w-9 sm:h-9" />
+              </button>
+              <span className={`text-xs font-mono font-bold ${myPump === 'player1' ? 'text-yellow-400' : 'text-gray-500'}`}>{duel.p1Pumps || 0}</span>
+              {pumpFeedback?.player === 'player1' && (
+                <span className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-display font-bold text-yellow-400 animate-pump-feedback">
+                  Pumping {pumpFeedback.name} up!
+                </span>
+              )}
+            </div>
             {duel.status === 'COMPLETED' && duel.winner === 'player1' && <div className="text-piu-gold text-xs font-display">&#127942; GOLD</div>}
             {duel.status === 'COMPLETED' && duel.winner === 'player2' && <div className="text-gray-400 text-xs font-display">&#129352; SILVER</div>}
             {duel.status === 'COMPLETED' && duel.winner === 'draw' && <div className="text-gray-400 text-xs font-display">DRAW</div>}
@@ -340,25 +351,13 @@ export default function OnlineDuelRoom() {
                     <div className="w-full h-full border-2 border-dashed border-piu-border flex items-center justify-center"><span className="text-gray-600 text-2xl">?</span></div>
                   )}
                 </div>
-                {/* Pump button + count for P2 */}
-                <div className="flex items-center justify-center gap-1 mt-1">
-                  <span className={`text-xs font-mono font-bold ${myPump === 'player2' ? 'text-yellow-400' : 'text-gray-500'}`}>{duel.p2Pumps || 0}</span>
-                  <button
-                    onClick={() => handlePump('player2')}
-                    disabled={!user || myPump === 'player1'}
-                    className={`transition-all active:scale-90 ${myPump === 'player2' ? 'scale-110 drop-shadow-[0_0_6px_rgba(234,179,8,0.5)]' : 'hover:scale-105'} ${!user || myPump === 'player1' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
-                    title={!user ? 'Log in to pump' : myPump === 'player1' ? 'Already pumping opponent' : myPump === 'player2' ? 'Click to unpump' : `Pump ${duel.player2_name}!`}
-                  >
-                    <img src={myPump === 'player2' ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="Pump" className="w-7 h-7 sm:w-9 sm:h-9" />
-                  </button>
-                </div>
               </div>
               {/* P2 PIU arrow: red top-right if higher, blue bottom-right if lower */}
               {(() => {
                 const p1Pumps = duel.p1Pumps || 0;
                 const p2Pumps = duel.p2Pumps || 0;
-                if (p2Pumps > p1Pumps) return <img src="/piu/arrow-red-ur.svg" alt="Higher pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
-                if (p2Pumps < p1Pumps) return <img src="/piu/arrow-blue-dr.svg" alt="Lower pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
+                if (p2Pumps > p1Pumps) return <img src="/piu/arrow-red-ur.svg" alt="Higher pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 animate-arrow-nudge-ur" />;
+                if (p2Pumps < p1Pumps) return <img src="/piu/arrow-blue-dr.svg" alt="Lower pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 animate-arrow-nudge-dr" />;
                 return null;
               })()}
             </div>
@@ -370,6 +369,23 @@ export default function OnlineDuelRoom() {
               {duel.player2_gender && <span className={`text-xs ${duel.player2_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player2_gender]}</span>}
             </div>
             {duel.player2_skill_title && <span className={`badge border text-[10px] ${getSkillColor(duel.player2_skill_title)}`}>{duel.player2_skill_title}</span>}
+            {/* Pump button + count for P2 */}
+            <div className="relative flex items-center justify-center gap-1 mt-1.5">
+              <span className={`text-xs font-mono font-bold ${myPump === 'player2' ? 'text-yellow-400' : 'text-gray-500'}`}>{duel.p2Pumps || 0}</span>
+              <button
+                onClick={() => handlePump('player2')}
+                disabled={!user || myPump === 'player1'}
+                className={`transition-all active:scale-90 ${myPump === 'player2' ? 'animate-stomp-heartbeat drop-shadow-[0_0_6px_rgba(234,179,8,0.5)]' : 'animate-stomp-wiggle hover:scale-105'} ${!user || myPump === 'player1' ? 'opacity-30 cursor-not-allowed !animate-none' : 'cursor-pointer'}`}
+                title={!user ? 'Log in to pump' : myPump === 'player1' ? 'Already pumping opponent' : myPump === 'player2' ? 'Click to unpump' : `Pump ${duel.player2_name}!`}
+              >
+                <img src={myPump === 'player2' ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="Pump" className="w-7 h-7 sm:w-9 sm:h-9" />
+              </button>
+              {pumpFeedback?.player === 'player2' && (
+                <span className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-display font-bold text-yellow-400 animate-pump-feedback">
+                  Pumping {pumpFeedback.name} up!
+                </span>
+              )}
+            </div>
             {duel.status === 'COMPLETED' && duel.winner === 'player2' && <div className="text-piu-gold text-xs font-display">&#127942; GOLD</div>}
             {duel.status === 'COMPLETED' && duel.winner === 'player1' && <div className="text-gray-400 text-xs font-display">&#129352; SILVER</div>}
             {duel.status === 'COMPLETED' && duel.winner === 'draw' && <div className="text-gray-400 text-xs font-display">DRAW</div>}
