@@ -65,6 +65,8 @@ export default function ProfilePage() {
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuLoaded, setPiuLoaded] = useState(false);
+  const [piuSubTab, setPiuSubTab] = useState('pumbility');
+  const [selectedPlay, setSelectedPlay] = useState(null);
 
   useEffect(() => {
     getUserProfile(id).then(setProfile).catch(() => {});
@@ -475,194 +477,323 @@ export default function ProfilePage() {
 
       {/* PIUGame Data Tab */}
       {tab === 'piugame' && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {piuSyncing === 'auto' && (
             <div className="text-center text-xs text-piu-accent animate-pulse py-2">
               Syncing latest data from piugame.com...
             </div>
           )}
 
-          {/* Pumbility Section */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display font-bold text-sm text-piu-accent">PUMBILITY</h3>
-              {piuPumbility?.pumbility_value > 0 && (
-                <span className="text-lg font-mono font-bold text-piu-gold">
-                  {piuPumbility.pumbility_value.toLocaleString()}
-                </span>
-              )}
-            </div>
-
-            {piuPumbility?.scores?.length > 0 ? (
-              <div className="space-y-1.5">
-                {piuPumbility.scores.map((s, i) => {
-                  const rank = getRank(s.score);
-                  return (
-                    <div key={i} className="flex items-center gap-2 py-1">
-                      <span className="text-[10px] text-gray-600 font-mono w-5 shrink-0">#{s.rank_order}</span>
-                      {s.background_url && (
-                        <img
-                          src={s.background_url}
-                          alt=""
-                          className="w-8 h-8 rounded object-cover shrink-0"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-display font-bold truncate">{s.song_title}</p>
-                        <p className="text-[10px] text-gray-500">{s.mode} Lv.{s.level}</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className={`text-[10px] font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
-                          {s.grade || rank.label}
-                        </span>
-                        <p className="font-mono text-[10px] font-bold">{s.score.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-center text-gray-500 text-sm py-4">No pumbility data synced yet</p>
-            )}
-
-            {piuPumbility?.last_sync && (
-              <p className="text-[10px] text-gray-600 mt-3">
-                Last synced: {new Date(piuPumbility.last_sync + 'Z').toLocaleString()}
-              </p>
-            )}
+          {/* Sub-tabs */}
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { key: 'pumbility', label: 'Pumbility' },
+              { key: 'best-scores', label: 'Best Scores' },
+              { key: 'recently-played', label: 'Recently Played' },
+            ].map(st => (
+              <button
+                key={st.key}
+                onClick={() => setPiuSubTab(st.key)}
+                className={`px-4 py-2 rounded-lg text-xs font-display font-bold transition-colors ${
+                  piuSubTab === st.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
           </div>
 
-          {/* Best Scores Section */}
-          <div className="card">
-            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">BEST SCORES</h3>
-
-            {/* Mode Toggle + Level Filter */}
-            <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <div className="flex gap-1">
-                {['Single', 'Double'].map(m => (
-                  <button
-                    key={m}
-                    onClick={() => { setPiuScoreMode(m); setPiuScoreLevel(''); }}
-                    className={`px-3 py-1 rounded text-xs font-display font-bold transition-colors ${
-                      piuScoreMode === m ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
+          {/* Pumbility Sub-tab */}
+          {piuSubTab === 'pumbility' && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-bold text-base text-piu-accent">PUMBILITY</h3>
+                {piuPumbility?.pumbility_value > 0 && (
+                  <span className="text-2xl font-mono font-bold text-piu-gold">
+                    {piuPumbility.pumbility_value.toLocaleString()}
+                  </span>
+                )}
               </div>
-              {availableLevels.length > 0 && (
-                <select
-                  className="input-field text-xs py-1 px-2 w-auto"
-                  value={piuScoreLevel}
-                  onChange={e => setPiuScoreLevel(e.target.value)}
-                >
-                  <option value="">All Levels ({piuBestScores?.scores?.filter(s => s.mode === piuScoreMode).length || 0})</option>
-                  {availableLevels.map(l => (
-                    <option key={l} value={l}>
-                      Lv.{l} ({piuBestScores?.scores?.filter(s => s.mode === piuScoreMode && s.level === l).length || 0})
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
 
-            {filteredBestScores.length > 0 ? (
-              <div className="space-y-1">
-                {filteredBestScores.map((s, i) => {
-                  const rank = getRank(s.score);
-                  return (
-                    <div key={i} className="flex items-center gap-2 py-1">
-                      <div className="w-8 h-8 rounded bg-piu-dark flex items-center justify-center shrink-0">
-                        <span className="text-[10px] font-display font-bold text-gray-400">
-                          {s.mode === 'Single' ? 'S' : 'D'}{s.level}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-display font-bold truncate">{s.song_title}</p>
-                        <div className="flex items-center gap-1">
-                          {s.plate && (
-                            <span className="text-[9px] px-1 rounded bg-piu-dark text-gray-400 font-mono">{s.plate}</span>
-                          )}
+              {piuPumbility?.scores?.length > 0 ? (
+                <div className="space-y-2">
+                  {piuPumbility.scores.map((s, i) => {
+                    const rank = getRank(s.score);
+                    return (
+                      <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
+                        <span className="text-xs text-gray-500 font-mono w-6 shrink-0 text-right">#{s.rank_order}</span>
+                        {s.background_url && (
+                          <img src={s.background_url} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
+                          <p className="text-xs text-gray-500">{s.mode} Lv.{s.level}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`text-xs font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
+                            {s.grade || rank.label}
+                          </span>
+                          <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className={`text-[10px] font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
-                          {s.grade || rank.label}
-                        </span>
-                        <p className="font-mono text-[10px] font-bold">{s.score.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 text-sm py-6">No pumbility data synced yet</p>
+              )}
+
+              {piuPumbility?.last_sync && (
+                <p className="text-xs text-gray-600 mt-4">
+                  Last synced: {new Date(piuPumbility.last_sync + 'Z').toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Best Scores Sub-tab */}
+          {piuSubTab === 'best-scores' && (
+            <div className="card">
+              <h3 className="font-display font-bold text-base text-piu-accent mb-4">BEST SCORES</h3>
+
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <div className="flex gap-1">
+                  {['Single', 'Double'].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => { setPiuScoreMode(m); setPiuScoreLevel(''); }}
+                      className={`px-4 py-1.5 rounded text-xs font-display font-bold transition-colors ${
+                        piuScoreMode === m ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                {availableLevels.length > 0 && (
+                  <select
+                    className="input-field text-xs py-1.5 px-2 w-auto"
+                    value={piuScoreLevel}
+                    onChange={e => setPiuScoreLevel(e.target.value)}
+                  >
+                    <option value="">All Levels ({piuBestScores?.scores?.filter(s => s.mode === piuScoreMode).length || 0})</option>
+                    {availableLevels.map(l => (
+                      <option key={l} value={l}>
+                        Lv.{l} ({piuBestScores?.scores?.filter(s => s.mode === piuScoreMode && s.level === l).length || 0})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
-            ) : (
-              <p className="text-center text-gray-500 text-sm py-4">
-                {piuBestScores?.scores?.length > 0
-                  ? `No ${piuScoreMode} scores${piuScoreLevel ? ` at Lv.${piuScoreLevel}` : ''}`
-                  : 'No best scores imported yet'}
-              </p>
-            )}
 
-            {piuBestScores?.last_sync && (
-              <p className="text-[10px] text-gray-600 mt-3">
-                Last synced: {new Date(piuBestScores.last_sync + 'Z').toLocaleString()}
-              </p>
-            )}
-          </div>
-
-          {/* Recently Played Section */}
-          <div className="card">
-            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">RECENTLY PLAYED</h3>
-
-            {piuRecentlyPlayed?.plays?.length > 0 ? (
-              <div className="space-y-1.5">
-                {piuRecentlyPlayed.plays.map((p, i) => {
-                  const rank = getRank(p.score);
-                  return (
-                    <div key={i} className="flex items-center gap-2 py-1">
-                      {p.background_url && (
-                        <img
-                          src={p.background_url}
-                          alt=""
-                          className="w-8 h-8 rounded object-cover shrink-0"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-display font-bold truncate">{p.song_title}</p>
-                        <p className="text-[10px] text-gray-500">{p.mode} Lv.{p.level}</p>
+              {filteredBestScores.length > 0 ? (
+                <div className="space-y-2">
+                  {filteredBestScores.map((s, i) => {
+                    const rank = getRank(s.score);
+                    return (
+                      <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
+                        <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center shrink-0">
+                          <span className="text-xs font-display font-bold text-gray-400">
+                            {s.mode === 'Single' ? 'S' : 'D'}{s.level}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
+                          {s.plate && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{s.plate}</span>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`text-xs font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
+                            {s.grade || rank.label}
+                          </span>
+                          <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
+                        </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        {p.score > 0 ? (
-                          <>
-                            <span className={`text-[10px] font-display font-bold ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
-                              {p.grade || rank.label}
-                            </span>
-                            <p className="font-mono text-[10px] font-bold">{p.score.toLocaleString()}</p>
-                          </>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 text-sm py-6">
+                  {piuBestScores?.scores?.length > 0
+                    ? `No ${piuScoreMode} scores${piuScoreLevel ? ` at Lv.${piuScoreLevel}` : ''}`
+                    : 'No best scores imported yet'}
+                </p>
+              )}
+
+              {piuBestScores?.last_sync && (
+                <p className="text-xs text-gray-600 mt-4">
+                  Last synced: {new Date(piuBestScores.last_sync + 'Z').toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Recently Played Sub-tab */}
+          {piuSubTab === 'recently-played' && (
+            <div className="card">
+              <h3 className="font-display font-bold text-base text-piu-accent mb-4">RECENTLY PLAYED</h3>
+
+              {piuRecentlyPlayed?.plays?.length > 0 ? (
+                <div className="space-y-2">
+                  {piuRecentlyPlayed.plays.map((p, i) => {
+                    const rank = getRank(p.score);
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 py-2 border-b border-piu-border/30 last:border-0 cursor-pointer hover:bg-piu-dark/50 rounded transition-colors"
+                        onClick={() => setSelectedPlay(p)}
+                      >
+                        {p.background_url ? (
+                          <img src={p.background_url} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
                         ) : (
-                          <span className="text-[10px] font-display font-bold text-red-500">STAGE BREAK</span>
+                          <div className="w-11 h-11 rounded bg-piu-dark shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-display font-bold truncate">{p.song_title}</p>
+                          <p className="text-xs text-gray-500">{p.mode} Lv.{p.level}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          {p.score > 0 ? (
+                            <>
+                              <span className={`text-xs font-display font-bold ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
+                                {p.grade || rank.label}
+                              </span>
+                              <p className="font-mono text-xs font-bold">{p.score.toLocaleString()}</p>
+                            </>
+                          ) : (
+                            <span className="text-xs font-display font-bold text-red-500">STAGE BREAK</span>
+                          )}
+                        </div>
+                        {p.date_played && (
+                          <span className="text-[10px] text-gray-500 shrink-0 w-16 text-right">
+                            {p.date_played.split(' ')[0]?.replace(/^\d{4}-/, '')}
+                          </span>
                         )}
                       </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-center text-gray-500 text-sm py-6">No recently played data synced yet</p>
+              )}
+
+              {piuRecentlyPlayed?.last_sync && (
+                <p className="text-xs text-gray-600 mt-4">
+                  Last synced: {new Date(piuRecentlyPlayed.last_sync + 'Z').toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Phoenix Score Card Modal */}
+          {selectedPlay && (() => {
+            const p = selectedPlay;
+            const rank = getRank(p.score);
+            const hasBreakdown = p.perfect > 0 || p.great > 0 || p.good > 0 || p.bad > 0 || p.miss > 0;
+            const totalNotes = (p.perfect || 0) + (p.great || 0) + (p.good || 0) + (p.bad || 0) + (p.miss || 0);
+            const judgments = [
+              { label: 'PERFECT', value: p.perfect || 0, color: 'bg-sky-500', textColor: 'text-sky-400' },
+              { label: 'GREAT', value: p.great || 0, color: 'bg-green-500', textColor: 'text-green-400' },
+              { label: 'GOOD', value: p.good || 0, color: 'bg-yellow-500', textColor: 'text-yellow-400' },
+              { label: 'BAD', value: p.bad || 0, color: 'bg-fuchsia-500', textColor: 'text-fuchsia-400' },
+              { label: 'MISS', value: p.miss || 0, color: 'bg-red-500', textColor: 'text-red-400' },
+            ];
+            return (
+              <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPlay(null)}>
+                <div
+                  className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Background image */}
+                  {p.background_url && (
+                    <div
+                      className="absolute inset-0 bg-cover bg-center opacity-20"
+                      style={{ backgroundImage: `url(${p.background_url})` }}
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-b from-piu-bg/80 via-piu-bg/90 to-piu-bg" />
+
+                  {/* Content */}
+                  <div className="relative p-6">
+                    {/* Close button */}
+                    <button
+                      className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
+                      onClick={() => setSelectedPlay(null)}
+                    >
+                      x
+                    </button>
+
+                    {/* Song info */}
+                    <div className="text-center mb-5">
+                      <p className="font-display font-bold text-lg leading-tight">{p.song_title}</p>
+                      <p className="text-sm text-gray-400 mt-1">{p.mode} Lv.{p.level}</p>
                       {p.date_played && (
-                        <span className="text-[9px] text-gray-600 shrink-0 w-14 text-right">
-                          {p.date_played.split(' ')[0]?.replace(/^\d{4}-/, '')}
-                        </span>
+                        <p className="text-xs text-gray-600 mt-1">{p.date_played}</p>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-center text-gray-500 text-sm py-4">No recently played data synced yet</p>
-            )}
 
-            {piuRecentlyPlayed?.last_sync && (
-              <p className="text-[10px] text-gray-600 mt-3">
-                Last synced: {new Date(piuRecentlyPlayed.last_sync + 'Z').toLocaleString()}
-              </p>
-            )}
-          </div>
+                    {/* Grade + Score */}
+                    <div className="text-center mb-6">
+                      {p.score > 0 ? (
+                        <>
+                          <p className={`text-4xl font-display font-black ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
+                            {p.grade || rank.label}
+                          </p>
+                          <p className="font-mono text-2xl font-bold mt-1">{p.score.toLocaleString()}</p>
+                        </>
+                      ) : (
+                        <p className="text-3xl font-display font-black text-red-500">STAGE BREAK</p>
+                      )}
+                    </div>
+
+                    {/* Judgment Breakdown */}
+                    {hasBreakdown && (
+                      <div className="space-y-2.5 mb-5">
+                        {judgments.map(j => (
+                          <div key={j.label} className="flex items-center gap-3">
+                            <span className={`text-xs font-display font-bold w-16 ${j.textColor}`}>{j.label}</span>
+                            <div className="flex-1 h-3 bg-piu-dark rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${j.color} rounded-full transition-all`}
+                                style={{ width: totalNotes > 0 ? `${(j.value / totalNotes) * 100}%` : '0%' }}
+                              />
+                            </div>
+                            <span className="font-mono text-sm font-bold w-12 text-right">{j.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Max Combo + Kcal */}
+                    {(p.max_combo > 0 || p.kcal > 0) && (
+                      <div className="flex justify-center gap-6 text-center border-t border-piu-border/30 pt-4">
+                        {p.max_combo > 0 && (
+                          <div>
+                            <p className="text-xs text-gray-500 font-display">MAX COMBO</p>
+                            <p className="font-mono font-bold text-lg text-piu-gold">{p.max_combo}</p>
+                          </div>
+                        )}
+                        {p.kcal > 0 && (
+                          <div>
+                            <p className="text-xs text-gray-500 font-display">KCAL</p>
+                            <p className="font-mono font-bold text-lg text-orange-400">{p.kcal.toFixed(1)}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* No breakdown notice */}
+                    {!hasBreakdown && p.score > 0 && (
+                      <p className="text-center text-xs text-gray-600 mt-2">
+                        Judgment breakdown not available
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

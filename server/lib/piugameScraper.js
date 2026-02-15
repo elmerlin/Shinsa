@@ -245,6 +245,12 @@ async function scrapePumbility(client) {
     });
   });
 
+  // Fallback: if we couldn't scrape the total, sum all score values
+  // Pumbility = sum of your top 50 highest rated scores
+  if (pumbilityValue === 0 && scores.length > 0) {
+    pumbilityValue = scores.reduce((sum, s) => sum + s.score, 0);
+  }
+
   return { pumbilityValue, scores };
 }
 
@@ -267,14 +273,14 @@ async function scrapeBestScores(client) {
   let totalPages = 1;
   const lastPageBtn = $first('i.xi.last').parent();
   if (lastPageBtn.length) {
-    const onclick = lastPageBtn.attr('onclick') || '';
+    const onclick = lastPageBtn.attr('onclick') || lastPageBtn.attr('href') || '';
     const pageMatch = onclick.match(/page=(\d+)/);
     if (pageMatch) totalPages = parseInt(pageMatch[1], 10);
   }
-  // Fallback: check board_paging buttons
+  // Fallback: check board_paging buttons and links
   if (totalPages === 1) {
-    $first('.board_paging button').each((_, btn) => {
-      const onclick = $first(btn).attr('onclick') || '';
+    $first('.board_paging button, .board_paging a').each((_, el) => {
+      const onclick = $first(el).attr('onclick') || $first(el).attr('href') || '';
       const pageMatch = onclick.match(/page=(\d+)/);
       if (pageMatch) {
         const p = parseInt(pageMatch[1], 10);
@@ -282,6 +288,8 @@ async function scrapeBestScores(client) {
       }
     });
   }
+  // Fallback: if we still only found 1 page but got scores, use fetch-until-empty
+  const useIncrementalFetch = totalPages === 1 && allScores.length > 0;
 
   // Parse scores from a loaded page
   function parseScoresFromPage($) {
@@ -321,11 +329,14 @@ async function scrapeBestScores(client) {
   allScores.push(...parseScoresFromPage($first));
 
   // Fetch remaining pages
-  for (let page = 2; page <= totalPages; page++) {
+  const maxPage = useIncrementalFetch ? 200 : totalPages;
+  for (let page = 2; page <= maxPage; page++) {
     try {
       const res = await client.get(`${PIU_BASE}/my_page/my_best_score.php?page=${page}`);
       const $ = cheerio.load(res.data);
-      allScores.push(...parseScoresFromPage($));
+      const pageScores = parseScoresFromPage($);
+      if (pageScores.length === 0) break; // No more scores on this page
+      allScores.push(...pageScores);
     } catch (err) {
       console.error(`Failed to fetch best scores page ${page}:`, err.message);
       break;
@@ -377,6 +388,39 @@ async function scrapeRecentlyPlayed(client) {
     // Date
     const datePlayed = $li.find('p.recently_date_tt').text().trim();
 
+    // Try to extract judgment breakdown data
+    let perfect = 0, great = 0, good = 0, bad = 0, miss = 0, maxCombo = 0, kcal = 0;
+    // Check for judgment data in various possible selectors
+    const judgmentContainer = $li.find('div.li_in.etc, div.etc_list, div.data_in');
+    if (judgmentContainer.length) {
+      judgmentContainer.find('div.etc_in, div.data_con').each((_, div) => {
+        const label = ($(div).find('p.tt, i.tt, span.tt').text() || '').trim().toLowerCase();
+        const valText = ($(div).find('p.dd, i.dd, i.tx, span.dd').text() || '').replace(/,/g, '').trim();
+        const val = parseInt(valText, 10) || 0;
+        if (label.includes('perfect')) perfect = val;
+        else if (label.includes('great')) great = val;
+        else if (label.includes('good')) good = val;
+        else if (label.includes('bad')) bad = val;
+        else if (label.includes('miss')) miss = val;
+        else if (label.includes('combo')) maxCombo = val;
+        else if (label.includes('kcal')) kcal = parseFloat(valText) || 0;
+      });
+    }
+    // Alternative: look for multiple i.tx values beyond the score
+    if (perfect === 0 && great === 0) {
+      const allValues = [];
+      $li.find('i.tx').each((idx, el) => {
+        if (idx === 0) return; // skip the first one (score)
+        allValues.push(parseInt($(el).text().replace(/,/g, '').trim(), 10) || 0);
+      });
+      // If we found 5+ values, they're likely: perfect, great, good, bad, miss[, combo, kcal]
+      if (allValues.length >= 5) {
+        [perfect, great, good, bad, miss] = allValues;
+        if (allValues.length >= 6) maxCombo = allValues[5];
+        if (allValues.length >= 7) kcal = allValues[6];
+      }
+    }
+
     plays.push({
       song_title: songTitle,
       mode,
@@ -385,6 +429,13 @@ async function scrapeRecentlyPlayed(client) {
       grade,
       background_url: bgUrl,
       date_played: datePlayed,
+      perfect,
+      great,
+      good,
+      bad,
+      miss,
+      max_combo: maxCombo,
+      kcal,
     });
   });
 

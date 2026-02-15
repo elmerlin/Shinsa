@@ -388,6 +388,23 @@ function initializeDb() {
   if (!matchColumns.includes('gauntlet_order')) {
     db.exec("ALTER TABLE matches ADD COLUMN gauntlet_order INT DEFAULT 0");
   }
+
+  // Migrations for recently played - add breakdown columns
+  const recentCols = db.prepare("PRAGMA table_info(user_recently_played)").all().map(c => c.name);
+  const recentMigrations = [
+    ['perfect', 'INT DEFAULT 0'],
+    ['great', 'INT DEFAULT 0'],
+    ['good', 'INT DEFAULT 0'],
+    ['bad', 'INT DEFAULT 0'],
+    ['miss', 'INT DEFAULT 0'],
+    ['max_combo', 'INT DEFAULT 0'],
+    ['kcal', 'REAL DEFAULT 0'],
+  ];
+  for (const [col, type] of recentMigrations) {
+    if (!recentCols.includes(col)) {
+      db.exec(`ALTER TABLE user_recently_played ADD COLUMN ${col} ${type}`);
+    }
+  }
 }
 
 // Prevent route handlers from closing the shared connection
