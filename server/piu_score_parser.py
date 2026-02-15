@@ -720,6 +720,90 @@ def _extract_stats_with_layout(lines: Sequence[OCRLine], image_h: float = 0.0) -
     return stats
 
 
+def _extract_stats_by_row_crop(
+    engine: OCREngine, image: np.ndarray
+) -> Dict[str, Any]:
+    """
+    Extract stats by cropping individual rows from the PIU Phoenix result screen.
+    The PIU Phoenix layout has stats at fixed Y positions in the lower-left portion.
+    We crop narrow horizontal strips for each stat and OCR each one independently.
+    This works better than full-region OCR because the OCR sees less noise.
+    """
+    h, w = image.shape[:2]
+    stats: Dict[str, Any] = {}
+
+    # PIU Phoenix result screen approximate stat positions (relative to screen)
+    # Each entry: (y_start, y_end, x_label_start, x_value_end)
+    # Stats are in the left-center portion, stacked vertically
+    stat_rows = {
+        "perfect":   (0.455, 0.505, 0.02, 0.56),
+        "great":     (0.505, 0.555, 0.02, 0.56),
+        "good":      (0.555, 0.605, 0.02, 0.56),
+        "bad":       (0.605, 0.655, 0.02, 0.56),
+        "miss":      (0.655, 0.705, 0.02, 0.56),
+        "max_combo": (0.715, 0.775, 0.02, 0.56),
+        "kcal":      (0.785, 0.845, 0.02, 0.56),
+    }
+
+    # Try multiple vertical offset adjustments since screen alignment varies
+    offsets = [0.0, -0.03, 0.03, -0.06, 0.06]
+
+    best_stats: Dict[str, Any] = {}
+    best_count = 0
+
+    for offset in offsets:
+        trial_stats: Dict[str, Any] = {}
+        for key, (y0, y1, x0, x1) in stat_rows.items():
+            y0a = max(0.0, y0 + offset)
+            y1a = min(1.0, y1 + offset)
+            crop, _ = crop_roi(image, (x0, y0a, x1, y1a))
+            if crop.size == 0:
+                continue
+
+            # Upscale small crops
+            ch, cw = crop.shape[:2]
+            if ch < 40:
+                scale = 60.0 / max(ch, 1)
+                crop = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
+            is_decimal = (key == "kcal")
+            value = None
+
+            # Run OCR on multiple preprocessed variants of this tiny strip
+            for variant in preprocess_variants(crop, upscale=False):
+                lines = engine.run(variant)
+                for line in lines:
+                    # Try to extract number from each OCR line
+                    v = _extract_number_from_text(line.text, allow_decimal=is_decimal)
+                    if v is not None and v >= 0:
+                        if value is None or (is_decimal and v > 0) or (not is_decimal and v > 0):
+                            value = v
+                            break
+                    # Also try raw number extraction
+                    raw = normalize_number_token(line.text)
+                    if is_decimal:
+                        pv = parse_float_token(raw)
+                    else:
+                        pv = parse_int_token(raw)
+                    if pv is not None and pv >= 0:
+                        value = float(pv)
+                        break
+                if value is not None:
+                    break
+
+            if value is not None:
+                trial_stats[key] = round(value, 3) if is_decimal else int(round(value))
+
+        count = len(trial_stats)
+        if count > best_count:
+            best_stats = trial_stats
+            best_count = count
+        if best_count >= 7:
+            break
+
+    return best_stats
+
+
 def draw_quad(image: np.ndarray, quad: np.ndarray) -> np.ndarray:
     out = image.copy()
     q = quad.astype(int)
@@ -837,13 +921,46 @@ def parse_image(image_path: Path, engine: OCREngine, debug_dir: Optional[Path] =
             best_stats = layout_stats
             best_stats_count = layout_count
 
+    # Strategy D: Per-stat-row cropping on warped image
+    if best_stats_count < 7:
+        row_stats = _extract_stats_by_row_crop(engine, warped)
+        row_count = _count_found_stats(row_stats)
+        if row_count > best_stats_count:
+            best_stats = row_stats
+            best_stats_count = row_count
+
+    # Strategy E: Per-stat-row cropping on original image
+    if best_stats_count < 5:
+        row_stats = _extract_stats_by_row_crop(engine, image)
+        row_count = _count_found_stats(row_stats)
+        if row_count > best_stats_count:
+            best_stats = row_stats
+            best_stats_count = row_count
+
     # Also try to get score from full image if ROI didn't find it
     if score is None:
         full_lines = run_ocr_multi(engine, warped, upscale=False) if not stats_lines_used else stats_lines_used
         score = extract_score(full_lines)
 
-    # Merge: fill in any None values from best_stats using stats if available
-    final_stats = best_stats
+    # Merge: fill in missing values from other strategies
+    final_stats = dict(best_stats)
+
+    # Try to fill any remaining None gaps with row-based results
+    if best_stats_count < 7:
+        row_stats = _extract_stats_by_row_crop(engine, warped)
+        for key in STAT_ORDER:
+            if final_stats.get(key) is None and row_stats.get(key) is not None:
+                final_stats[key] = row_stats[key]
+
+    breakdown = {
+        "perfect": final_stats.get("perfect"),
+        "great": final_stats.get("great"),
+        "good": final_stats.get("good"),
+        "bad": final_stats.get("bad"),
+        "miss": final_stats.get("miss"),
+        "max_combo": final_stats.get("max_combo"),
+        "kcal": final_stats.get("kcal"),
+    }
 
     result: Dict[str, Any] = {
         "source": str(image_path),
@@ -852,15 +969,9 @@ def parse_image(image_path: Path, engine: OCREngine, debug_dir: Optional[Path] =
         "mode": mode,
         "level": level,
         "score": score,
-        "breakdown": {
-            "perfect": final_stats.get("perfect"),
-            "great": final_stats.get("great"),
-            "good": final_stats.get("good"),
-            "bad": final_stats.get("bad"),
-            "miss": final_stats.get("miss"),
-            "max_combo": final_stats.get("max_combo"),
-            "kcal": final_stats.get("kcal"),
-        },
+        # Include both nested and flat for compatibility
+        "breakdown": breakdown,
+        **{k: v for k, v in breakdown.items()},
     }
 
     if debug_dir is not None:

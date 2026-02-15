@@ -122,7 +122,18 @@ export default function OnlineDuelRoom() {
     setParseResult(null);
     try {
       const result = await parseScorePhoto(file);
-      setParseResult(result);
+      // Flatten: parser returns { score, breakdown: { perfect, ... } }
+      const bd = result.breakdown || {};
+      setParseResult({
+        score: result.score || bd.score || 0,
+        perfect: bd.perfect ?? result.perfect ?? 0,
+        great: bd.great ?? result.great ?? 0,
+        good: bd.good ?? result.good ?? 0,
+        bad: bd.bad ?? result.bad ?? 0,
+        miss: bd.miss ?? result.miss ?? 0,
+        max_combo: bd.max_combo ?? result.max_combo ?? 0,
+        kcal: bd.kcal ?? result.kcal ?? 0,
+      });
     } catch (err) {
       alert('Failed to parse photo: ' + err.message);
     } finally {
@@ -135,16 +146,17 @@ export default function OnlineDuelRoom() {
     if (!parseResult) return;
     try {
       await onlineDuelSubmitScore(id, {
-        score: parseResult.score || 0,
-        perfect: parseResult.perfect || 0,
-        great: parseResult.great || 0,
-        good: parseResult.good || 0,
-        bad: parseResult.bad || 0,
-        miss: parseResult.miss || 0,
-        max_combo: parseResult.max_combo || 0,
-        kcal: parseResult.kcal || 0,
+        score: Number(parseResult.score) || 0,
+        perfect: Number(parseResult.perfect) || 0,
+        great: Number(parseResult.great) || 0,
+        good: Number(parseResult.good) || 0,
+        bad: Number(parseResult.bad) || 0,
+        miss: Number(parseResult.miss) || 0,
+        max_combo: Number(parseResult.max_combo) || 0,
+        kcal: Number(parseResult.kcal) || 0,
       });
       setParseResult(null);
+      setManualEntry(false);
     } catch (err) { alert(err.message); }
   };
 
@@ -324,10 +336,11 @@ export default function OnlineDuelRoom() {
                                     <input
                                       type="number"
                                       className="input-field text-xs font-mono w-full py-1 px-1.5"
-                                      value={parseResult[key] || 0}
+                                      value={parseResult[key] ?? ''}
                                       step={key === 'kcal' ? '0.1' : '1'}
                                       min="0"
-                                      onChange={e => setParseResult(prev => ({ ...prev, [key]: key === 'kcal' ? parseFloat(e.target.value) || 0 : parseInt(e.target.value) || 0 }))}
+                                      onChange={e => setParseResult(prev => ({ ...prev, [key]: e.target.value === '' ? '' : (key === 'kcal' ? parseFloat(e.target.value) : parseInt(e.target.value) || '') }))}
+                                      onBlur={e => { if (e.target.value === '') setParseResult(prev => ({ ...prev, [key]: 0 })); }}
                                     />
                                   </div>
                                 ))}
