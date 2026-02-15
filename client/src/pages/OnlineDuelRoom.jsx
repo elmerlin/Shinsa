@@ -195,46 +195,78 @@ export default function OnlineDuelRoom() {
         </span>
       </div>
 
-      {/* Scoreboard */}
-      <div className="card flex items-center justify-between py-3 px-4 mb-4">
-        <div className="flex items-center gap-3">
-          {duel.player1_avatar ? <img src={getAvatarUrl(duel.player1_avatar)} alt="" className="w-10 h-10 rounded-full object-cover border border-red-500/40" /> :
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-sm">{(duel.player1_name || '?')[0].toUpperCase()}</div>}
-          <div>
-            <div className="flex items-center gap-1">
-              <Link to={`/profile/${duel.creator_user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">{duel.player1_name || 'Waiting...'}</Link>
-              {duel.player1_nationality && <span className="text-xs">{getCountryFlag(duel.player1_nationality)}</span>}
+      {/* Scoreboard — VS layout similar to offline duel */}
+      <div className="card mb-4">
+        <div className="flex items-center justify-center gap-3 sm:gap-6 py-4">
+          <div className="text-center flex-1">
+            <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 mx-auto ${
+              duel.status === 'COMPLETED' && duel.winner === 'player1' ? 'border-piu-gold shadow-lg shadow-piu-gold/30' :
+              duel.status === 'COMPLETED' && duel.winner === 'player2' ? 'border-gray-500' : 'border-red-500/50'
+            }`}>
+              {duel.player1_avatar ? (
+                <img src={getAvatarUrl(duel.player1_avatar)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-lg sm:text-2xl">
+                  {(duel.player1_name || '?')[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              {duel.player1_nationality && <span className="text-sm">{getCountryFlag(duel.player1_nationality)}</span>}
+              <Link to={`/profile/${duel.creator_user_id}`} className="font-display font-bold text-sm sm:text-base hover:text-piu-accent transition-colors">{duel.player1_name || 'Waiting...'}</Link>
               {duel.player1_gender && <span className={`text-xs ${duel.player1_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player1_gender]}</span>}
             </div>
-            {duel.player1_skill_title && <span className={`badge border text-[9px] ${getSkillColor(duel.player1_skill_title)}`}>{duel.player1_skill_title}</span>}
+            {duel.player1_skill_title && <span className={`badge border text-[10px] ${getSkillColor(duel.player1_skill_title)}`}>{duel.player1_skill_title}</span>}
+            {duel.status === 'COMPLETED' && duel.winner === 'player1' && <div className="text-piu-gold text-xs font-display">&#127942; GOLD</div>}
+            {duel.status === 'COMPLETED' && duel.winner === 'player2' && <div className="text-gray-400 text-xs font-display">&#129352; SILVER</div>}
+            {duel.status === 'COMPLETED' && duel.winner === 'draw' && <div className="text-gray-400 text-xs font-display">DRAW</div>}
           </div>
-        </div>
-        <div className="text-center">
-          <div className="font-mono font-bold text-2xl">
-            <span className={stats.p1Wins > stats.p2Wins ? 'text-piu-green' : ''}>{stats.p1Wins}</span>
-            <span className="text-gray-600 mx-2">-</span>
-            <span className={stats.p2Wins > stats.p1Wins ? 'text-piu-green' : ''}>{stats.p2Wins}</span>
-          </div>
-          {duel.status === 'ACTIVE' && (
-            <p className="text-[10px] text-gray-500 font-display">
-              {duel.current_turn === playerSlot ? "Your turn" : duel.current_turn === 'player1' ? `${duel.player1_name}'s turn` : `${duel.player2_name}'s turn`}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="flex items-center justify-end gap-1">
-              {duel.player2_gender && <span className={`text-xs ${duel.player2_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player2_gender]}</span>}
-              {duel.player2_nationality && <span className="text-xs">{getCountryFlag(duel.player2_nationality)}</span>}
-              {duel.player2_name ? (
-                <Link to={`/profile/${duel.opponent_user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">{duel.player2_name}</Link>
-              ) : <span className="text-gray-500 text-sm font-display">Waiting for opponent...</span>}
+
+          <div className="flex flex-col items-center shrink-0">
+            <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-piu-accent">
+              <path d="M8 8L32 32M8 8L12 4M8 8L4 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M32 8L8 32M32 8L28 4M32 8L36 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="20" cy="20" r="3" fill="currentColor" opacity="0.5"/>
+            </svg>
+            <div className="font-mono font-bold text-lg sm:text-2xl mt-1">
+              <span className={stats.p1Wins > stats.p2Wins ? 'text-piu-green' : ''}>{stats.p1Wins}</span>
+              <span className="text-gray-600 mx-1">-</span>
+              <span className={stats.p2Wins > stats.p1Wins ? 'text-piu-green' : ''}>{stats.p2Wins}</span>
             </div>
-            {duel.player2_skill_title && <span className={`badge border text-[9px] ${getSkillColor(duel.player2_skill_title)}`}>{duel.player2_skill_title}</span>}
+            {duel.status === 'ACTIVE' && (
+              <p className="text-[10px] text-gray-500 font-display mt-0.5">
+                {duel.current_turn === playerSlot ? "Your turn" : duel.current_turn === 'player1' ? `${duel.player1_name}'s turn` : `${duel.player2_name}'s turn`}
+              </p>
+            )}
           </div>
-          {duel.player2_avatar ? <img src={getAvatarUrl(duel.player2_avatar)} alt="" className="w-10 h-10 rounded-full object-cover border border-blue-500/40" /> :
-            duel.player2_name ? <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-sm">{duel.player2_name[0].toUpperCase()}</div> :
-            <div className="w-10 h-10 rounded-full border-2 border-dashed border-piu-border flex items-center justify-center"><span className="text-gray-600">?</span></div>}
+
+          <div className="text-center flex-1">
+            <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 mx-auto ${
+              duel.status === 'COMPLETED' && duel.winner === 'player2' ? 'border-piu-gold shadow-lg shadow-piu-gold/30' :
+              duel.status === 'COMPLETED' && duel.winner === 'player1' ? 'border-gray-500' : 'border-blue-500/50'
+            }`}>
+              {duel.player2_avatar ? (
+                <img src={getAvatarUrl(duel.player2_avatar)} alt="" className="w-full h-full object-cover" />
+              ) : duel.player2_name ? (
+                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-lg sm:text-2xl">
+                  {duel.player2_name[0].toUpperCase()}
+                </div>
+              ) : (
+                <div className="w-full h-full border-2 border-dashed border-piu-border flex items-center justify-center"><span className="text-gray-600 text-2xl">?</span></div>
+              )}
+            </div>
+            <div className="flex items-center justify-center gap-1 mt-1">
+              {duel.player2_nationality && <span className="text-sm">{getCountryFlag(duel.player2_nationality)}</span>}
+              {duel.player2_name ? (
+                <Link to={`/profile/${duel.opponent_user_id}`} className="font-display font-bold text-sm sm:text-base hover:text-piu-accent transition-colors">{duel.player2_name}</Link>
+              ) : <span className="text-gray-500 text-sm font-display">Waiting...</span>}
+              {duel.player2_gender && <span className={`text-xs ${duel.player2_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player2_gender]}</span>}
+            </div>
+            {duel.player2_skill_title && <span className={`badge border text-[10px] ${getSkillColor(duel.player2_skill_title)}`}>{duel.player2_skill_title}</span>}
+            {duel.status === 'COMPLETED' && duel.winner === 'player2' && <div className="text-piu-gold text-xs font-display">&#127942; GOLD</div>}
+            {duel.status === 'COMPLETED' && duel.winner === 'player1' && <div className="text-gray-400 text-xs font-display">&#129352; SILVER</div>}
+            {duel.status === 'COMPLETED' && duel.winner === 'draw' && <div className="text-gray-400 text-xs font-display">DRAW</div>}
+          </div>
         </div>
       </div>
 
@@ -451,21 +483,28 @@ export default function OnlineDuelRoom() {
           <div className="card flex flex-col h-[500px] lg:h-auto">
             <h3 className="font-display font-bold text-sm text-piu-accent mb-2 shrink-0">Match Chat</h3>
             <div className="flex-1 overflow-y-auto space-y-1 mb-2 min-h-0">
-              {chat.map(msg => (
-                <div key={msg.id} className={`text-xs ${msg.is_system ? 'text-piu-accent italic' : ''}`}>
-                  {msg.is_system ? (
-                    <span>{msg.message}</span>
-                  ) : (
-                    <>
-                      <span className={`${msg.is_participant ? 'font-bold text-white' : 'text-gray-500'}`}>
-                        {msg.is_participant && <span className="text-piu-accent mr-0.5" title="Duelist">&#9876;</span>}
-                        {msg.username}:
-                      </span>{' '}
-                      <span className={msg.is_participant ? 'text-gray-200' : 'text-gray-500'}>{msg.message}</span>
-                    </>
-                  )}
-                </div>
-              ))}
+              {chat.map(msg => {
+                const isP1 = msg.user_id && msg.user_id === duel.creator_user_id;
+                const isP2 = msg.user_id && msg.user_id === duel.opponent_user_id;
+                const nameColor = isP1 ? 'text-red-400 font-bold' : isP2 ? 'text-blue-400 font-bold' : msg.is_participant ? 'font-bold text-white' : 'text-gray-500';
+                const msgColor = isP1 ? 'text-red-200/80' : isP2 ? 'text-blue-200/80' : msg.is_participant ? 'text-gray-200' : 'text-gray-500';
+                return (
+                  <div key={msg.id} className={`text-xs ${msg.is_system ? 'text-piu-accent italic' : ''}`}>
+                    {msg.is_system ? (
+                      <span>{msg.message}</span>
+                    ) : (
+                      <>
+                        <span className={nameColor}>
+                          {isP1 && <span className="text-red-500 mr-0.5" title="Player 1">&#9876;</span>}
+                          {isP2 && <span className="text-blue-500 mr-0.5" title="Player 2">&#9876;</span>}
+                          {msg.username}:
+                        </span>{' '}
+                        <span className={msgColor}>{msg.message}</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
               <div ref={chatEndRef} />
             </div>
             <form onSubmit={handleSendChat} className="flex gap-2 shrink-0">
