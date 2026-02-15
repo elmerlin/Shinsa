@@ -25,7 +25,7 @@ router.post('/score', upload.single('photo'), (req, res) => {
   fs.writeFileSync(tmpFile, req.file.buffer);
 
   const parserPath = path.join(__dirname, '..', 'piu_score_parser.py');
-  const python = spawn('python3', [parserPath, tmpFile, '--pretty']);
+  const python = spawn('python3', [parserPath, tmpFile, '--pretty'], { timeout: 120000 });
 
   let stdout = '';
   let stderr = '';

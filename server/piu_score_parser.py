@@ -4,7 +4,8 @@ Parse Pump It Up (Phoenix) result-screen photos into structured JSON.
 
 This parser is designed for phone photos where framing and camera angle vary.
 It first tries to detect the screen rectangle, perspective-corrects it, then
-extracts fixed UI regions with OCR.
+extracts fixed UI regions with OCR.  When ROI-based extraction fails it falls
+back to whole-image scanning with multiple preprocessing strategies.
 """
 
 from __future__ import annotations
@@ -33,6 +34,16 @@ ROIS: Dict[str, Tuple[float, float, float, float]] = {
     "stats": (0.16, 0.44, 0.68, 0.82),
 }
 
+# Multiple ROI variants for stats — tried in order until extraction succeeds.
+# Different photos/angles/screen ratios need different regions.
+STATS_ROIS: List[Tuple[float, float, float, float]] = [
+    (0.02, 0.38, 0.75, 0.96),   # Wide, extended down — covers most layouts
+    (0.16, 0.44, 0.68, 0.82),   # Original narrow
+    (0.00, 0.35, 0.60, 1.00),   # Left-focused, full bottom
+    (0.02, 0.30, 0.80, 1.00),   # Very wide
+    (0.10, 0.50, 0.70, 0.95),   # Middle-focused
+]
+
 STAT_LABELS: Dict[str, str] = {
     "perfect": "PERFECT",
     "great": "GREAT",
@@ -42,6 +53,9 @@ STAT_LABELS: Dict[str, str] = {
     "max_combo": "MAX COMBO",
     "kcal": "KCAL",
 }
+
+# Ordered top-to-bottom as they appear on the PIU result screen
+STAT_ORDER = ["perfect", "great", "good", "bad", "miss", "max_combo", "kcal"]
 
 TITLE_STOPWORDS = {
     "SCORE",
@@ -100,8 +114,28 @@ class OCRLine:
         return float(np.mean(self.box[:, 1]))
 
     @property
+    def x_min(self) -> float:
+        return float(np.min(self.box[:, 0]))
+
+    @property
+    def x_max(self) -> float:
+        return float(np.max(self.box[:, 0]))
+
+    @property
+    def y_min(self) -> float:
+        return float(np.min(self.box[:, 1]))
+
+    @property
+    def y_max(self) -> float:
+        return float(np.max(self.box[:, 1]))
+
+    @property
     def h(self) -> float:
         return float(np.max(self.box[:, 1]) - np.min(self.box[:, 1]))
+
+    @property
+    def w(self) -> float:
+        return float(np.max(self.box[:, 0]) - np.min(self.box[:, 0]))
 
 
 class OCREngine:
@@ -240,14 +274,31 @@ def crop_roi(image: np.ndarray, roi: Tuple[float, float, float, float]) -> Tuple
     return image[ya:yb, xa:xb].copy(), (xa, ya, xb, yb)
 
 
-def preprocess_variants(image: np.ndarray) -> List[np.ndarray]:
+def preprocess_variants(image: np.ndarray, upscale: bool = False) -> List[np.ndarray]:
+    """Generate multiple image preprocessing variants for OCR."""
     out: List[np.ndarray] = []
+
+    # Upscale small images for better OCR accuracy
+    if upscale:
+        h, w = image.shape[:2]
+        if max(h, w) < 600:
+            scale = 600.0 / max(h, w)
+            image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
     out.append(image)
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
     out.append(gray)
 
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
     out.append(clahe)
+
+    # Strong CLAHE for washed-out photos
+    clahe_strong = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(4, 4)).apply(gray)
+    out.append(clahe_strong)
 
     blur = cv2.GaussianBlur(clahe, (3, 3), 0)
     _, otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -255,28 +306,41 @@ def preprocess_variants(image: np.ndarray) -> List[np.ndarray]:
     out.append(255 - otsu)
 
     adaptive = cv2.adaptiveThreshold(
-        clahe,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        35,
-        5,
+        clahe, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 35, 5,
     )
     out.append(adaptive)
+
+    # Additional: high-contrast binary with multiple thresholds
+    for thresh in [100, 140, 180]:
+        _, binary = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
+        out.append(binary)
+
+    # Sharpen variant
+    kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+    sharpened = cv2.filter2D(clahe, -1, kernel)
+    out.append(sharpened)
+
+    # Per-channel processing for color images (PIU uses colored text)
+    if len(image.shape) == 3:
+        for i in range(3):
+            channel = image[:, :, i]
+            ch_clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(channel)
+            out.append(ch_clahe)
+
     return out
 
 
-def run_ocr_multi(engine: OCREngine, image: np.ndarray) -> List[OCRLine]:
+def run_ocr_multi(engine: OCREngine, image: np.ndarray, upscale: bool = False) -> List[OCRLine]:
     all_lines: List[OCRLine] = []
     seen: set[Tuple[str, int, int]] = set()
 
-    for variant in preprocess_variants(image):
+    for variant in preprocess_variants(image, upscale=upscale):
         lines = engine.run(variant)
         for line in lines:
             key = (
                 normalize_space(line.text.upper()),
-                int(round(line.cx / 3.0)),
-                int(round(line.cy / 3.0)),
+                int(round(line.cx / 5.0)),
+                int(round(line.cy / 5.0)),
             )
             if key in seen:
                 continue
@@ -382,7 +446,6 @@ def extract_mode_level(lines: Sequence[OCRLine]) -> Tuple[Optional[str], Optiona
             if value is None:
                 continue
             if 1 <= value <= 30:
-                # prefer larger, high-confidence, vertically central candidates
                 quality = line.confidence + (0.15 if value >= 10 else 0.0)
                 level_candidates.append((quality, value))
 
@@ -405,12 +468,12 @@ def extract_score(lines: Sequence[OCRLine]) -> Optional[int]:
     if not candidates:
         return None
 
-    # Prefer largest score; use confidence as tie-breaker.
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     return candidates[0][0]
 
 
-def _find_label_line(lines: Sequence[OCRLine], label: str) -> Optional[OCRLine]:
+def _find_label_line(lines: Sequence[OCRLine], label: str, threshold: int = 60) -> Optional[OCRLine]:
+    """Find the OCR line that best matches a stat label."""
     best: Optional[OCRLine] = None
     best_score = 0.0
     target = label.replace(" ", "")
@@ -418,11 +481,28 @@ def _find_label_line(lines: Sequence[OCRLine], label: str) -> Optional[OCRLine]:
         text = normalize_space(line.text.upper()).replace(" ", "")
         if not text:
             continue
-        score = fuzz.partial_ratio(text, target)
-        if score > best_score and score >= 65:
+        # Try both partial_ratio and ratio for robustness
+        score1 = fuzz.partial_ratio(text, target)
+        score2 = fuzz.ratio(text, target)
+        score = max(score1, score2)
+        if score > best_score and score >= threshold:
             best_score = float(score)
             best = line
     return best
+
+
+def _extract_number_from_text(text: str, allow_decimal: bool = False) -> Optional[float]:
+    """Extract a numeric value from a text string, stripping label parts."""
+    # Remove common label words
+    cleaned = text.upper()
+    for label in ["PERFECT", "GREAT", "GOOD", "BAD", "MISS", "MAX", "COMBO", "KCAL"]:
+        cleaned = cleaned.replace(label, " ")
+    cleaned = cleaned.strip()
+
+    if allow_decimal:
+        return parse_float_token(cleaned)
+    else:
+        return parse_int_token(cleaned) if parse_int_token(cleaned) is not None else None
 
 
 def _nearest_numeric(
@@ -430,62 +510,212 @@ def _nearest_numeric(
     anchor: OCRLine,
     *,
     allow_decimal: bool = False,
+    image_h: float = 0.0,
 ) -> Optional[float]:
+    """Find the nearest numeric value to a label anchor."""
     best: Optional[Tuple[float, float]] = None
 
-    # Same-line parse first.
-    same_value = parse_float_token(anchor.text) if allow_decimal else parse_int_token(anchor.text)
-    if same_value is not None:
-        return float(same_value)
+    # Try extracting number from the anchor's own text (handles "PERFECT 986")
+    value = _extract_number_from_text(anchor.text, allow_decimal=allow_decimal)
+    if value is not None:
+        return float(value)
+
+    # Adaptive vertical tolerance based on image size and text height
+    if image_h > 0:
+        tolerance = max(80.0, image_h * 0.06, anchor.h * 3.0)
+    else:
+        tolerance = max(80.0, anchor.h * 3.0)
 
     for line in lines:
         if line is anchor:
             continue
         dy = abs(line.cy - anchor.cy)
-        if dy > max(22.0, anchor.h * 0.9):
+        if dy > tolerance:
             continue
-        value = parse_float_token(line.text) if allow_decimal else parse_int_token(line.text)
+
+        value = parse_float_token(line.text) if allow_decimal else None
+        if value is None:
+            int_val = parse_int_token(line.text)
+            value = float(int_val) if int_val is not None else None
         if value is None:
             continue
-        dx_bonus = 8.0 if line.cx > anchor.cx else 0.0
-        score = dx_bonus - dy + (line.confidence * 2.0)
+
+        # Prefer values to the RIGHT of the label and on the same Y band
+        dx = line.cx - anchor.cx
+        right_bonus = 15.0 if dx > 0 else 0.0
+        closeness = max(0, tolerance - dy)
+        score = right_bonus + closeness + (line.confidence * 3.0)
         if best is None or score > best[0]:
             best = (score, float(value))
+
     if best is None:
         return None
     return best[1]
 
 
-def extract_stats(lines: Sequence[OCRLine]) -> Dict[str, Any]:
+def _extract_inline_stat(text: str, label: str, allow_decimal: bool = False) -> Optional[float]:
+    """Try to extract stat value from a single line like 'PERFECT 986' or '986 PERFECT'."""
+    upper = normalize_space(text.upper())
+    target = label.replace(" ", r"\s*")
+
+    # Pattern: LABEL followed by number
+    m = re.search(target + r"[^0-9]{0,12}([0-9OQDISBZ|l]{1,6}(?:[.,][0-9OQDISBZ|l]{1,3})?)", upper)
+    if m:
+        return parse_float_token(m.group(1)) if allow_decimal else (parse_int_token(m.group(1)) and float(parse_int_token(m.group(1))))
+
+    # Pattern: number followed by LABEL
+    m = re.search(r"([0-9OQDISBZ|l]{1,6}(?:[.,][0-9OQDISBZ|l]{1,3})?)[^0-9]{0,12}" + target, upper)
+    if m:
+        return parse_float_token(m.group(1)) if allow_decimal else (parse_int_token(m.group(1)) and float(parse_int_token(m.group(1))))
+
+    return None
+
+
+def extract_stats(lines: Sequence[OCRLine], image_h: float = 0.0) -> Dict[str, Any]:
+    """Extract stat breakdown from OCR lines."""
     stats: Dict[str, Any] = {}
     blob = "\n".join(normalize_space(line.text.upper()) for line in lines)
+    full_blob = " ".join(normalize_space(line.text.upper()) for line in lines)
 
     for key, label in STAT_LABELS.items():
-        line = _find_label_line(lines, label)
-        if line is not None:
-            value = _nearest_numeric(lines, line, allow_decimal=(key == "kcal"))
-        else:
-            value = None
+        is_decimal = (key == "kcal")
+        value: Optional[float] = None
 
-        # Regex fallback when pairing fails.
+        # Strategy 1: Find label line and nearest numeric value
+        label_line = _find_label_line(lines, label)
+        if label_line is not None:
+            value = _nearest_numeric(lines, label_line, allow_decimal=is_decimal, image_h=image_h)
+
+        # Strategy 2: Check each line for inline label+value (e.g. "PERFECT 986")
         if value is None:
-            if key == "kcal":
-                m = re.search(r"KCAL[^0-9]{0,8}([0-9OQDISBZ|l]{1,3}(?:[.,][0-9OQDISBZ|l]{1,3})?)", blob)
+            for line in lines:
+                v = _extract_inline_stat(line.text, label, allow_decimal=is_decimal)
+                if v is not None:
+                    value = v
+                    break
+
+        # Strategy 3: Regex on the combined blob
+        if value is None:
+            pattern = label.replace(" ", r"\s*")
+            if is_decimal:
+                m = re.search(
+                    pattern + r"[^0-9]{0,12}([0-9OQDISBZ|l]{1,5}(?:[.,][0-9OQDISBZ|l]{1,3})?)",
+                    full_blob,
+                )
                 if m:
                     value = parse_float_token(m.group(1))
             else:
-                m = re.search(label.replace(" ", r"\s*") + r"[^0-9]{0,8}([0-9OQDISBZ|l]{1,5})", blob)
+                m = re.search(
+                    pattern + r"[^0-9]{0,12}([0-9OQDISBZ|l]{1,5})",
+                    full_blob,
+                )
                 if m:
-                    value = parse_int_token(m.group(1))
+                    v = parse_int_token(m.group(1))
+                    if v is not None:
+                        value = float(v)
+
+        # Strategy 4: Reversed regex — number before label
+        if value is None:
+            pattern = label.replace(" ", r"\s*")
+            if is_decimal:
+                m = re.search(
+                    r"([0-9OQDISBZ|l]{1,5}(?:[.,][0-9OQDISBZ|l]{1,3})?)[^0-9]{0,12}" + pattern,
+                    full_blob,
+                )
+                if m:
+                    value = parse_float_token(m.group(1))
+            else:
+                m = re.search(
+                    r"([0-9OQDISBZ|l]{1,5})[^0-9]{0,12}" + pattern,
+                    full_blob,
+                )
+                if m:
+                    v = parse_int_token(m.group(1))
+                    if v is not None:
+                        value = float(v)
 
         if value is None:
             stats[key] = None
             continue
 
-        if key == "kcal":
+        if is_decimal:
             stats[key] = round(float(value), 3)
         else:
             stats[key] = int(round(float(value)))
+
+    return stats
+
+
+def _extract_stats_with_layout(lines: Sequence[OCRLine], image_h: float = 0.0) -> Dict[str, Any]:
+    """
+    Alternative stats extraction using spatial layout analysis.
+    PIU result screens have labels on the left and numbers on the right,
+    arranged vertically in order: PERFECT, GREAT, GOOD, BAD, MISS, MAX COMBO, KCAL.
+    """
+    # Group lines into label lines and number lines based on content
+    label_lines: List[Tuple[str, OCRLine]] = []  # (stat_key, line)
+    number_lines: List[OCRLine] = []
+
+    for line in lines:
+        upper = normalize_space(line.text.upper()).replace(" ", "")
+        if not upper:
+            continue
+
+        # Check if this line matches any stat label
+        matched_key = None
+        best_match_score = 0
+        for key, label in STAT_LABELS.items():
+            target = label.replace(" ", "")
+            score = max(fuzz.ratio(upper, target), fuzz.partial_ratio(upper, target))
+            if score > best_match_score and score >= 55:
+                best_match_score = score
+                matched_key = key
+
+        if matched_key:
+            label_lines.append((matched_key, line))
+        else:
+            # Check if it's a number
+            cleaned = re.sub(r"[^0-9.,]", "", normalize_number_token(upper))
+            if cleaned and any(c.isdigit() for c in cleaned):
+                number_lines.append(line)
+
+    stats: Dict[str, Any] = {}
+    for key, label_line in label_lines:
+        is_decimal = (key == "kcal")
+
+        # First try inline extraction
+        value = _extract_number_from_text(label_line.text, allow_decimal=is_decimal)
+
+        if value is None:
+            # Find the closest number line that is roughly on the same Y and to the right
+            best_num: Optional[Tuple[float, float]] = None
+            tolerance = max(80.0, image_h * 0.06, label_line.h * 3.0) if image_h > 0 else max(80.0, label_line.h * 3.0)
+
+            for num_line in number_lines:
+                dy = abs(num_line.cy - label_line.cy)
+                if dy > tolerance:
+                    continue
+
+                raw = normalize_number_token(num_line.text)
+                if is_decimal:
+                    v = parse_float_token(raw)
+                else:
+                    v = parse_int_token(raw)
+                if v is None:
+                    continue
+
+                dx = num_line.cx - label_line.cx
+                right_bonus = 20.0 if dx > 0 else 0.0
+                closeness = max(0, tolerance - dy)
+                score = right_bonus + closeness + (num_line.confidence * 3.0)
+                if best_num is None or score > best_num[0]:
+                    best_num = (score, float(v))
+
+            if best_num is not None:
+                value = best_num[1]
+
+        if value is not None:
+            stats[key] = round(value, 3) if is_decimal else int(round(value))
 
     return stats
 
@@ -507,6 +737,11 @@ def draw_rois(image: np.ndarray) -> np.ndarray:
     return out
 
 
+def _count_found_stats(stats: Dict[str, Any]) -> int:
+    """Count how many stats have non-None values."""
+    return sum(1 for v in stats.values() if v is not None)
+
+
 def parse_image(image_path: Path, engine: OCREngine, debug_dir: Optional[Path] = None) -> Dict[str, Any]:
     image = cv2.imread(str(image_path))
     if image is None:
@@ -521,10 +756,13 @@ def parse_image(image_path: Path, engine: OCREngine, debug_dir: Optional[Path] =
         screen_detected = True
 
     warped = warp_screen(image, quad)
+    warped_h = float(warped.shape[0])
 
+    # Extract title, mode/level, and score from fixed ROIs
     roi_images: Dict[str, np.ndarray] = {}
     roi_lines: Dict[str, List[OCRLine]] = {}
-    for name, roi in ROIS.items():
+    for name in ["title", "mode_level", "score"]:
+        roi = ROIS[name]
         crop, _ = crop_roi(warped, roi)
         roi_images[name] = crop
         roi_lines[name] = run_ocr_multi(engine, crop)
@@ -532,7 +770,80 @@ def parse_image(image_path: Path, engine: OCREngine, debug_dir: Optional[Path] =
     song_title = extract_title(roi_lines["title"])
     mode, level = extract_mode_level(roi_lines["mode_level"])
     score = extract_score(roi_lines["score"])
-    stats = extract_stats(roi_lines["stats"])
+
+    # --- Stats extraction with multiple strategies ---
+    best_stats: Dict[str, Any] = {}
+    best_stats_count = 0
+    stats_lines_used: List[OCRLine] = []
+
+    # Strategy A: Try multiple ROI positions
+    for roi in STATS_ROIS:
+        crop, _ = crop_roi(warped, roi)
+        crop_h = float(crop.shape[0])
+        lines = run_ocr_multi(engine, crop, upscale=True)
+
+        # Standard extraction
+        stats = extract_stats(lines, image_h=crop_h)
+        count = _count_found_stats(stats)
+        if count > best_stats_count:
+            best_stats = stats
+            best_stats_count = count
+            stats_lines_used = lines
+
+        # Layout-based extraction
+        layout_stats = _extract_stats_with_layout(lines, image_h=crop_h)
+        layout_count = _count_found_stats(layout_stats)
+        if layout_count > best_stats_count:
+            best_stats = layout_stats
+            best_stats_count = layout_count
+            stats_lines_used = lines
+
+        # If we got all 7 stats, stop
+        if best_stats_count >= 7:
+            break
+
+    # Strategy B: Full warped image scan if ROI extraction is incomplete
+    if best_stats_count < 5:
+        full_lines = run_ocr_multi(engine, warped, upscale=False)
+
+        stats = extract_stats(full_lines, image_h=warped_h)
+        count = _count_found_stats(stats)
+        if count > best_stats_count:
+            best_stats = stats
+            best_stats_count = count
+            stats_lines_used = full_lines
+
+        layout_stats = _extract_stats_with_layout(full_lines, image_h=warped_h)
+        layout_count = _count_found_stats(layout_stats)
+        if layout_count > best_stats_count:
+            best_stats = layout_stats
+            best_stats_count = layout_count
+            stats_lines_used = full_lines
+
+    # Strategy C: Full original image scan (before warping) as last resort
+    if best_stats_count < 5:
+        orig_lines = run_ocr_multi(engine, image, upscale=False)
+        orig_h = float(image.shape[0])
+
+        stats = extract_stats(orig_lines, image_h=orig_h)
+        count = _count_found_stats(stats)
+        if count > best_stats_count:
+            best_stats = stats
+            best_stats_count = count
+
+        layout_stats = _extract_stats_with_layout(orig_lines, image_h=orig_h)
+        layout_count = _count_found_stats(layout_stats)
+        if layout_count > best_stats_count:
+            best_stats = layout_stats
+            best_stats_count = layout_count
+
+    # Also try to get score from full image if ROI didn't find it
+    if score is None:
+        full_lines = run_ocr_multi(engine, warped, upscale=False) if not stats_lines_used else stats_lines_used
+        score = extract_score(full_lines)
+
+    # Merge: fill in any None values from best_stats using stats if available
+    final_stats = best_stats
 
     result: Dict[str, Any] = {
         "source": str(image_path),
@@ -542,13 +853,13 @@ def parse_image(image_path: Path, engine: OCREngine, debug_dir: Optional[Path] =
         "level": level,
         "score": score,
         "breakdown": {
-            "perfect": stats.get("perfect"),
-            "great": stats.get("great"),
-            "good": stats.get("good"),
-            "bad": stats.get("bad"),
-            "miss": stats.get("miss"),
-            "max_combo": stats.get("max_combo"),
-            "kcal": stats.get("kcal"),
+            "perfect": final_stats.get("perfect"),
+            "great": final_stats.get("great"),
+            "good": final_stats.get("good"),
+            "bad": final_stats.get("bad"),
+            "miss": final_stats.get("miss"),
+            "max_combo": final_stats.get("max_combo"),
+            "kcal": final_stats.get("kcal"),
         },
     }
 
@@ -561,11 +872,16 @@ def parse_image(image_path: Path, engine: OCREngine, debug_dir: Optional[Path] =
         for name, roi_image in roi_images.items():
             cv2.imwrite(str(debug_dir / f"{stem}_roi_{name}.jpg"), roi_image)
 
-        ocr_dump = {
-            name: [{"text": line.text, "confidence": line.confidence} for line in lines]
-            for name, lines in roi_lines.items()
-        }
-        (debug_dir / f"{stem}_ocr.json").write_text(json.dumps(ocr_dump, indent=2), encoding="utf-8")
+        # Save all stats ROI crops for debugging
+        for i, roi in enumerate(STATS_ROIS):
+            crop, _ = crop_roi(warped, roi)
+            cv2.imwrite(str(debug_dir / f"{stem}_roi_stats_{i}.jpg"), crop)
+
+        all_ocr_lines = {}
+        for name, lines_list in roi_lines.items():
+            all_ocr_lines[name] = [{"text": line.text, "confidence": line.confidence} for line in lines_list]
+        all_ocr_lines["stats_used"] = [{"text": line.text, "confidence": line.confidence} for line in stats_lines_used]
+        (debug_dir / f"{stem}_ocr.json").write_text(json.dumps(all_ocr_lines, indent=2), encoding="utf-8")
 
     return result
 
