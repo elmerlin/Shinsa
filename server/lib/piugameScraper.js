@@ -388,8 +388,12 @@ async function scrapeRecentlyPlayed(client) {
     // Date
     const datePlayed = $li.find('p.recently_date_tt').text().trim();
 
-    // Try to extract judgment breakdown data
-    let perfect = 0, great = 0, good = 0, bad = 0, miss = 0, maxCombo = 0, kcal = 0;
+    // Plate (e.g. MARVELOUS GAME, PERFECT GAME, etc.)
+    const plateImg = $li.find('.etc_con .st1 img, div.plate img').first().attr('src') || '';
+    const plate = parsePlateFromUrl(plateImg);
+
+    // Try to extract judgment breakdown data (PERFECT, GREAT, GOOD, BAD, MISS)
+    let perfect = 0, great = 0, good = 0, bad = 0, miss = 0;
     // Check for judgment data in various possible selectors
     const judgmentContainer = $li.find('div.li_in.etc, div.etc_list, div.data_in');
     if (judgmentContainer.length) {
@@ -402,8 +406,6 @@ async function scrapeRecentlyPlayed(client) {
         else if (label.includes('good')) good = val;
         else if (label.includes('bad')) bad = val;
         else if (label.includes('miss')) miss = val;
-        else if (label.includes('combo')) maxCombo = val;
-        else if (label.includes('kcal')) kcal = parseFloat(valText) || 0;
       });
     }
     // Alternative: look for multiple i.tx values beyond the score
@@ -413,11 +415,8 @@ async function scrapeRecentlyPlayed(client) {
         if (idx === 0) return; // skip the first one (score)
         allValues.push(parseInt($(el).text().replace(/,/g, '').trim(), 10) || 0);
       });
-      // If we found 5+ values, they're likely: perfect, great, good, bad, miss[, combo, kcal]
       if (allValues.length >= 5) {
         [perfect, great, good, bad, miss] = allValues;
-        if (allValues.length >= 6) maxCombo = allValues[5];
-        if (allValues.length >= 7) kcal = allValues[6];
       }
     }
 
@@ -427,6 +426,7 @@ async function scrapeRecentlyPlayed(client) {
       level,
       score,
       grade,
+      plate,
       background_url: bgUrl,
       date_played: datePlayed,
       perfect,
@@ -434,8 +434,8 @@ async function scrapeRecentlyPlayed(client) {
       good,
       bad,
       miss,
-      max_combo: maxCombo,
-      kcal,
+      max_combo: 0,
+      kcal: 0,
     });
   });
 

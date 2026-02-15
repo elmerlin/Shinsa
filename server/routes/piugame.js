@@ -223,8 +223,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     const db = getDb();
 
     const insertRecent = db.prepare(`
-      INSERT INTO user_recently_played (user_id, song_title, mode, level, score, grade, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO user_recently_played (user_id, song_title, mode, level, score, grade, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // Also update best scores if this play is better
@@ -243,7 +243,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       db.prepare('DELETE FROM user_recently_played WHERE user_id = ?').run(req.user.id);
       for (const p of plays) {
         insertRecent.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade, p.background_url, p.date_played,
-          p.perfect || 0, p.great || 0, p.good || 0, p.bad || 0, p.miss || 0, p.max_combo || 0, p.kcal || 0);
+          p.perfect || 0, p.great || 0, p.good || 0, p.bad || 0, p.miss || 0, p.max_combo || 0, p.kcal || 0, p.plate || '');
 
         // Only update best scores if this was a real play (not stage break)
         if (p.score > 0) {

@@ -399,6 +399,7 @@ function initializeDb() {
     ['miss', 'INT DEFAULT 0'],
     ['max_combo', 'INT DEFAULT 0'],
     ['kcal', 'REAL DEFAULT 0'],
+    ['plate', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of recentMigrations) {
     if (!recentCols.includes(col)) {

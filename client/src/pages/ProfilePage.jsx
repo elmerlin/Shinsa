@@ -691,13 +691,16 @@ export default function ProfilePage() {
             const p = selectedPlay;
             const rank = getRank(p.score);
             const hasBreakdown = p.perfect > 0 || p.great > 0 || p.good > 0 || p.bad > 0 || p.miss > 0;
-            const totalNotes = (p.perfect || 0) + (p.great || 0) + (p.good || 0) + (p.bad || 0) + (p.miss || 0);
+            const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
+            const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
+            const plateName = PLATE_NAMES[p.plate] || p.plate || '';
+            const plateColor = PLATE_COLORS[p.plate] || 'text-gray-400';
             const judgments = [
-              { label: 'PERFECT', value: p.perfect || 0, color: 'bg-sky-500', textColor: 'text-sky-400' },
-              { label: 'GREAT', value: p.great || 0, color: 'bg-green-500', textColor: 'text-green-400' },
-              { label: 'GOOD', value: p.good || 0, color: 'bg-yellow-500', textColor: 'text-yellow-400' },
-              { label: 'BAD', value: p.bad || 0, color: 'bg-fuchsia-500', textColor: 'text-fuchsia-400' },
-              { label: 'MISS', value: p.miss || 0, color: 'bg-red-500', textColor: 'text-red-400' },
+              { label: 'PERFECT', value: p.perfect || 0, textColor: 'text-sky-400' },
+              { label: 'GREAT', value: p.great || 0, textColor: 'text-green-400' },
+              { label: 'GOOD', value: p.good || 0, textColor: 'text-yellow-400' },
+              { label: 'BAD', value: p.bad || 0, textColor: 'text-fuchsia-400' },
+              { label: 'MISS', value: p.miss || 0, textColor: 'text-gray-400' },
             ];
             return (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPlay(null)}>
@@ -708,14 +711,14 @@ export default function ProfilePage() {
                   {/* Background image */}
                   {p.background_url && (
                     <div
-                      className="absolute inset-0 bg-cover bg-center opacity-20"
+                      className="absolute inset-0 bg-cover bg-center opacity-15"
                       style={{ backgroundImage: `url(${p.background_url})` }}
                     />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-b from-piu-bg/80 via-piu-bg/90 to-piu-bg" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
 
                   {/* Content */}
-                  <div className="relative p-6">
+                  <div className="relative p-5">
                     {/* Close button */}
                     <button
                       className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
@@ -724,70 +727,60 @@ export default function ProfilePage() {
                       x
                     </button>
 
-                    {/* Song info */}
-                    <div className="text-center mb-5">
-                      <p className="font-display font-bold text-lg leading-tight">{p.song_title}</p>
-                      <p className="text-sm text-gray-400 mt-1">{p.mode} Lv.{p.level}</p>
-                      {p.date_played && (
-                        <p className="text-xs text-gray-600 mt-1">{p.date_played}</p>
-                      )}
-                    </div>
+                    {/* Song title */}
+                    <p className="font-display font-bold text-lg leading-tight pr-6">{p.song_title}</p>
 
-                    {/* Grade + Score */}
-                    <div className="text-center mb-6">
-                      {p.score > 0 ? (
-                        <>
-                          <p className={`text-4xl font-display font-black ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
+                    {/* Mode badge + Grade + Plate */}
+                    <div className="flex items-center gap-3 mt-4">
+                      <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
+                        p.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : 'border-green-500/50 bg-green-500/10'
+                      }`}>
+                        <span className={`font-display font-bold text-[10px] uppercase ${p.mode === 'Single' ? 'text-red-400' : 'text-green-400'}`}>{p.mode}</span>
+                        <span className={`font-display font-bold text-base ${p.mode === 'Single' ? 'text-red-300' : 'text-green-300'}`}>{p.level}</span>
+                      </div>
+                      <div className="text-center flex-1">
+                        {p.score > 0 ? (
+                          <p className={`text-3xl font-display font-black ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
                             {p.grade || rank.label}
                           </p>
-                          <p className="font-mono text-2xl font-bold mt-1">{p.score.toLocaleString()}</p>
-                        </>
-                      ) : (
-                        <p className="text-3xl font-display font-black text-red-500">STAGE BREAK</p>
-                      )}
+                        ) : (
+                          <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Judgment Breakdown */}
+                    {/* Plate text */}
+                    {plateName && (
+                      <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+                    )}
+
+                    {/* Score */}
+                    {p.score > 0 && (
+                      <p className="text-center font-mono text-2xl font-bold mt-2">{p.score.toLocaleString()}</p>
+                    )}
+
+                    {/* Judgment Breakdown — column layout matching PIU Phoenix */}
                     {hasBreakdown && (
-                      <div className="space-y-2.5 mb-5">
+                      <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
                         {judgments.map(j => (
-                          <div key={j.label} className="flex items-center gap-3">
-                            <span className={`text-xs font-display font-bold w-16 ${j.textColor}`}>{j.label}</span>
-                            <div className="flex-1 h-3 bg-piu-dark rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${j.color} rounded-full transition-all`}
-                                style={{ width: totalNotes > 0 ? `${(j.value / totalNotes) * 100}%` : '0%' }}
-                              />
-                            </div>
-                            <span className="font-mono text-sm font-bold w-12 text-right">{j.value}</span>
+                          <div key={j.label}>
+                            <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
+                            <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
                           </div>
                         ))}
                       </div>
                     )}
 
-                    {/* Max Combo + Kcal */}
-                    {(p.max_combo > 0 || p.kcal > 0) && (
-                      <div className="flex justify-center gap-6 text-center border-t border-piu-border/30 pt-4">
-                        {p.max_combo > 0 && (
-                          <div>
-                            <p className="text-xs text-gray-500 font-display">MAX COMBO</p>
-                            <p className="font-mono font-bold text-lg text-piu-gold">{p.max_combo}</p>
-                          </div>
-                        )}
-                        {p.kcal > 0 && (
-                          <div>
-                            <p className="text-xs text-gray-500 font-display">KCAL</p>
-                            <p className="font-mono font-bold text-lg text-orange-400">{p.kcal.toFixed(1)}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
                     {/* No breakdown notice */}
                     {!hasBreakdown && p.score > 0 && (
-                      <p className="text-center text-xs text-gray-600 mt-2">
+                      <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
                         Judgment breakdown not available
                       </p>
+                    )}
+
+                    {/* Date */}
+                    {p.date_played && (
+                      <p className="text-xs text-gray-500 text-right mt-3">{p.date_played}</p>
                     )}
                   </div>
                 </div>
