@@ -297,6 +297,15 @@ function initializeDb() {
     db.exec("ALTER TABLE songs ADD COLUMN flags TEXT DEFAULT ''");
   }
 
+  // Migrations for online_duel_songs - add decline columns
+  const onlineDuelSongCols = db.prepare("PRAGMA table_info(online_duel_songs)").all().map(c => c.name);
+  if (!onlineDuelSongCols.includes('player1_declined')) {
+    db.exec("ALTER TABLE online_duel_songs ADD COLUMN player1_declined INT DEFAULT 0");
+  }
+  if (!onlineDuelSongCols.includes('player2_declined')) {
+    db.exec("ALTER TABLE online_duel_songs ADD COLUMN player2_declined INT DEFAULT 0");
+  }
+
   // Migrations for matches table
   const matchColumns = db.prepare("PRAGMA table_info(matches)").all().map(c => c.name);
   if (!matchColumns.includes('match_type')) {

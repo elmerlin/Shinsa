@@ -3,11 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getOnlineDuel, getOnlineDuelChat, sendChatMessage, joinOnlineDuel,
-  onlineDuelDraw, onlineDuelAccept, onlineDuelSubmitScore,
+  onlineDuelDraw, onlineDuelAccept, onlineDuelDecline, onlineDuelSubmitScore,
   onlineDuelEndRequest, onlineDuelCancelEnd, parseScorePhoto,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getCountryFlag, getSkillColor } from '../components/PlayerRegistration';
+import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 
 function getRank(score) {
   if (score >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
@@ -39,6 +39,7 @@ export default function OnlineDuelRoom() {
   const [drawMode, setDrawMode] = useState('any');
   const [uploading, setUploading] = useState(false);
   const [parseResult, setParseResult] = useState(null);
+  const [manualEntry, setManualEntry] = useState(false);
   const [selectedBreakdown, setSelectedBreakdown] = useState(null);
   const [tab, setTab] = useState('match');
   const chatEndRef = useRef(null);
@@ -104,6 +105,12 @@ export default function OnlineDuelRoom() {
   const handleAccept = async (songId) => {
     try {
       await onlineDuelAccept(id, songId);
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleDecline = async (songId) => {
+    try {
+      await onlineDuelDecline(id, songId);
     } catch (err) { alert(err.message); }
   };
 
@@ -181,8 +188,12 @@ export default function OnlineDuelRoom() {
           {duel.player1_avatar ? <img src={getAvatarUrl(duel.player1_avatar)} alt="" className="w-10 h-10 rounded-full object-cover border border-red-500/40" /> :
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-sm">{(duel.player1_name || '?')[0].toUpperCase()}</div>}
           <div>
-            <Link to={`/profile/${duel.creator_user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">{duel.player1_name || 'Waiting...'}</Link>
-            {duel.player1_nationality && <span className="ml-1 text-xs">{getCountryFlag(duel.player1_nationality)}</span>}
+            <div className="flex items-center gap-1">
+              <Link to={`/profile/${duel.creator_user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">{duel.player1_name || 'Waiting...'}</Link>
+              {duel.player1_nationality && <span className="text-xs">{getCountryFlag(duel.player1_nationality)}</span>}
+              {duel.player1_gender && <span className={`text-xs ${duel.player1_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player1_gender]}</span>}
+            </div>
+            {duel.player1_skill_title && <span className={`badge border text-[9px] ${getSkillColor(duel.player1_skill_title)}`}>{duel.player1_skill_title}</span>}
           </div>
         </div>
         <div className="text-center">
@@ -199,10 +210,14 @@ export default function OnlineDuelRoom() {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            {duel.player2_name ? (
-              <Link to={`/profile/${duel.opponent_user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">{duel.player2_name}</Link>
-            ) : <span className="text-gray-500 text-sm font-display">Waiting for opponent...</span>}
-            {duel.player2_nationality && <span className="mr-1 text-xs">{getCountryFlag(duel.player2_nationality)}</span>}
+            <div className="flex items-center justify-end gap-1">
+              {duel.player2_gender && <span className={`text-xs ${duel.player2_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player2_gender]}</span>}
+              {duel.player2_nationality && <span className="text-xs">{getCountryFlag(duel.player2_nationality)}</span>}
+              {duel.player2_name ? (
+                <Link to={`/profile/${duel.opponent_user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">{duel.player2_name}</Link>
+              ) : <span className="text-gray-500 text-sm font-display">Waiting for opponent...</span>}
+            </div>
+            {duel.player2_skill_title && <span className={`badge border text-[9px] ${getSkillColor(duel.player2_skill_title)}`}>{duel.player2_skill_title}</span>}
           </div>
           {duel.player2_avatar ? <img src={getAvatarUrl(duel.player2_avatar)} alt="" className="w-10 h-10 rounded-full object-cover border border-blue-500/40" /> :
             duel.player2_name ? <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-sm">{duel.player2_name[0].toUpperCase()}</div> :
@@ -247,39 +262,81 @@ export default function OnlineDuelRoom() {
                         </p>
                       </div>
                       <div className="flex gap-1">
-                        <span className={`w-3 h-3 rounded-full ${currentSong.player1_accepted ? 'bg-piu-green' : 'bg-gray-600'}`} title={`${duel.player1_name} ${currentSong.player1_accepted ? 'accepted' : 'pending'}`} />
-                        <span className={`w-3 h-3 rounded-full ${currentSong.player2_accepted ? 'bg-piu-green' : 'bg-gray-600'}`} title={`${duel.player2_name} ${currentSong.player2_accepted ? 'accepted' : 'pending'}`} />
+                        <span className={`w-3 h-3 rounded-full ${currentSong.player1_accepted ? 'bg-piu-green' : currentSong.player1_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player1_name} ${currentSong.player1_accepted ? 'accepted' : currentSong.player1_declined ? 'declined' : 'pending'}`} />
+                        <span className={`w-3 h-3 rounded-full ${currentSong.player2_accepted ? 'bg-piu-green' : currentSong.player2_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player2_name} ${currentSong.player2_accepted ? 'accepted' : currentSong.player2_declined ? 'declined' : 'pending'}`} />
                       </div>
                     </div>
 
-                    {/* Accept button */}
-                    {currentSong.status === 'drawn' && isParticipant && (
-                      !(playerSlot === 'player1' ? currentSong.player1_accepted : currentSong.player2_accepted) && (
-                        <button onClick={() => handleAccept(currentSong.id)} className="btn-primary w-full text-sm">Accept Song</button>
-                      )
-                    )}
+                    {/* Accept / Decline buttons */}
+                    {currentSong.status === 'drawn' && isParticipant && (() => {
+                      const myAccepted = playerSlot === 'player1' ? currentSong.player1_accepted : currentSong.player2_accepted;
+                      const myDeclined = playerSlot === 'player1' ? currentSong.player1_declined : currentSong.player2_declined;
+                      if (myAccepted) return <p className="text-xs text-piu-green font-display">You accepted. Waiting for opponent...</p>;
+                      if (myDeclined) return <p className="text-xs text-red-400 font-display">You declined. Waiting for opponent...</p>;
+                      return (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleAccept(currentSong.id)} className="btn-primary flex-1 text-sm">Accept Song</button>
+                          <button onClick={() => handleDecline(currentSong.id)} className="flex-1 text-sm px-4 py-2 bg-red-500/20 text-red-400 rounded-lg font-display font-bold hover:bg-red-500/30 transition-colors">Decline Song</button>
+                        </div>
+                      );
+                    })()}
 
                     {/* Score submission */}
                     {currentSong.status === 'playing' && isParticipant && (
                       !(playerSlot === 'player1' ? currentSong.player1_submitted : currentSong.player2_submitted) ? (
                         <div className="space-y-2 pt-2 border-t border-piu-border/50">
-                          <p className="text-sm text-gray-400 font-display">Upload your result photo</p>
-                          <input ref={fileInputRef} type="file" accept="image/*" className="input-field text-sm" onChange={handlePhotoUpload} />
-                          {uploading && <p className="text-xs text-piu-accent animate-pulse">Parsing score from photo...</p>}
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm text-gray-400 font-display">{manualEntry ? 'Enter your score manually' : 'Upload your result photo'}</p>
+                            <button
+                              type="button"
+                              onClick={() => { setManualEntry(!manualEntry); if (!manualEntry && !parseResult) setParseResult({ score: 0, perfect: 0, great: 0, good: 0, bad: 0, miss: 0, max_combo: 0, kcal: 0 }); }}
+                              className="text-[10px] text-piu-accent hover:underline font-display"
+                            >
+                              {manualEntry ? 'Upload photo instead' : 'Enter manually'}
+                            </button>
+                          </div>
+                          {!manualEntry && (
+                            <>
+                              <input ref={fileInputRef} type="file" accept="image/*" className="input-field text-sm" onChange={handlePhotoUpload} />
+                              {uploading && <p className="text-xs text-piu-accent animate-pulse">Parsing score from photo...</p>}
+                            </>
+                          )}
                           {parseResult && (
                             <div className="bg-piu-dark/50 rounded-lg p-3 space-y-2">
-                              <p className="text-sm font-display font-bold">Parsed Result:</p>
-                              <div className="grid grid-cols-4 gap-2 text-xs">
-                                <div><span className="text-gray-500">Score:</span> <span className="font-mono font-bold">{(parseResult.score || 0).toLocaleString()}</span></div>
-                                <div><span className="text-gray-500">Rank:</span> <span className={`font-display font-bold ${getRank(parseResult.score || 0).color}`}>{getRank(parseResult.score || 0).label}</span></div>
-                                <div><span className="text-gray-500">Perfect:</span> <span className="font-mono">{parseResult.perfect || 0}</span></div>
-                                <div><span className="text-gray-500">Great:</span> <span className="font-mono">{parseResult.great || 0}</span></div>
-                                <div><span className="text-gray-500">Good:</span> <span className="font-mono">{parseResult.good || 0}</span></div>
-                                <div><span className="text-gray-500">Bad:</span> <span className="font-mono">{parseResult.bad || 0}</span></div>
-                                <div><span className="text-gray-500">Miss:</span> <span className="font-mono">{parseResult.miss || 0}</span></div>
-                                <div><span className="text-gray-500">Max Combo:</span> <span className="font-mono">{parseResult.max_combo || 0}</span></div>
-                                <div><span className="text-gray-500">KCAL:</span> <span className="font-mono">{parseResult.kcal || 0}</span></div>
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-display font-bold">{manualEntry ? 'Score Entry:' : 'Parsed Result:'}</p>
+                                {!manualEntry && <span className="text-[10px] text-gray-500">Click values to edit</span>}
                               </div>
+                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-xs">
+                                {[
+                                  { key: 'score', label: 'Score' },
+                                  { key: 'perfect', label: 'Perfect' },
+                                  { key: 'great', label: 'Great' },
+                                  { key: 'good', label: 'Good' },
+                                  { key: 'bad', label: 'Bad' },
+                                  { key: 'miss', label: 'Miss' },
+                                  { key: 'max_combo', label: 'Max Combo' },
+                                  { key: 'kcal', label: 'KCAL' },
+                                ].map(({ key, label }) => (
+                                  <div key={key}>
+                                    <label className="text-gray-500 block text-[10px]">{label}</label>
+                                    <input
+                                      type="number"
+                                      className="input-field text-xs font-mono w-full py-1 px-1.5"
+                                      value={parseResult[key] || 0}
+                                      step={key === 'kcal' ? '0.1' : '1'}
+                                      min="0"
+                                      onChange={e => setParseResult(prev => ({ ...prev, [key]: key === 'kcal' ? parseFloat(e.target.value) || 0 : parseInt(e.target.value) || 0 }))}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              {parseResult.score > 0 && (
+                                <p className="text-xs text-center">
+                                  <span className="text-gray-500">Rank: </span>
+                                  <span className={`font-display font-bold ${getRank(parseResult.score).color}`}>{getRank(parseResult.score).label}</span>
+                                </p>
+                              )}
                               <button onClick={handleSubmitScore} className="btn-primary w-full text-sm mt-2">Confirm & Submit Score</button>
                             </div>
                           )}

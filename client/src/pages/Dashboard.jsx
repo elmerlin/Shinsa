@@ -281,11 +281,11 @@ export default function Dashboard() {
                 <div className="flex items-center gap-3">
                   <div className="flex items-center shrink-0">
                     <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
-                      {d.creator_avatar ? (
-                        <img src={getAvatarUrl(d.creator_avatar)} alt="" className="w-full h-full object-cover" />
+                      {d.player1_avatar ? (
+                        <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
-                          {(d.creator_username || '?')[0].toUpperCase()}
+                          {(d.player1_name || '?')[0].toUpperCase()}
                         </div>
                       )}
                     </div>
@@ -293,11 +293,11 @@ export default function Dashboard() {
                       <span className="text-piu-accent text-xs">&#9876;</span>
                     </div>
                     <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
-                      {d.opponent_avatar ? (
-                        <img src={getAvatarUrl(d.opponent_avatar)} alt="" className="w-full h-full object-cover" />
-                      ) : d.opponent_username ? (
+                      {d.player2_avatar ? (
+                        <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
+                      ) : d.player2_name ? (
                         <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
-                          {d.opponent_username[0].toUpperCase()}
+                          {d.player2_name[0].toUpperCase()}
                         </div>
                       ) : (
                         <div className="w-full h-full bg-gray-700 flex items-center justify-center font-display font-bold text-xs text-gray-400">
@@ -311,7 +311,7 @@ export default function Dashboard() {
                       {d.name}
                     </h3>
                     <div className="flex gap-2 text-xs text-gray-500">
-                      <span>{d.creator_username} vs {d.opponent_username || 'Waiting...'}</span>
+                      <span>{d.player1_name} vs {d.player2_name || 'Waiting...'}</span>
                       {d.location && <span>- {d.location}</span>}
                     </div>
                   </div>

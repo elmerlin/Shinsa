@@ -214,8 +214,10 @@ router.post('/:id/accept', requireAuth, (req, res) => {
   const song = db.prepare("SELECT * FROM online_duel_songs WHERE id = ? AND duel_id = ? AND status = 'drawn'").get(song_id, duel.id);
   if (!song) return res.status(400).json({ error: 'No pending song to accept' });
 
-  const col = playerSlot === 'player1' ? 'player1_accepted' : 'player2_accepted';
-  db.prepare(`UPDATE online_duel_songs SET ${col} = 1 WHERE id = ?`).run(song.id);
+  const acceptCol = playerSlot === 'player1' ? 'player1_accepted' : 'player2_accepted';
+  const declineCol = playerSlot === 'player1' ? 'player1_declined' : 'player2_declined';
+  // Clear any previous decline when accepting
+  db.prepare(`UPDATE online_duel_songs SET ${acceptCol} = 1, ${declineCol} = 0 WHERE id = ?`).run(song.id);
 
   const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
   addSystemMessage(db, duel.id, `${user.username} accepted the song`);
@@ -225,6 +227,66 @@ router.post('/:id/accept', requireAuth, (req, res) => {
   if (updated.player1_accepted && updated.player2_accepted) {
     db.prepare("UPDATE online_duel_songs SET status = 'playing' WHERE id = ?").run(song.id);
     addSystemMessage(db, duel.id, `Both players accepted! Players are Pumping it Up right now..`);
+  }
+
+  // Check if other player declined while this player accepted → other player forfeits
+  const otherDeclineCol = playerSlot === 'player1' ? 'player2_declined' : 'player1_declined';
+  if (updated[otherDeclineCol]) {
+    // The other player declined while this one accepted → forfeiter loses
+    const winner = playerSlot; // the accepter wins
+    db.prepare("UPDATE online_duel_songs SET status = 'completed', winner = ? WHERE id = ?").run(winner, song.id);
+
+    const nextTurn = duel.current_turn === 'player1' ? 'player2' : 'player1';
+    db.prepare('UPDATE online_duels SET current_turn = ? WHERE id = ?').run(nextTurn, duel.id);
+
+    const otherName = playerSlot === 'player1' ? duel.opponent_user_id : duel.creator_user_id;
+    const otherUser = db.prepare('SELECT username FROM users WHERE id = ?').get(otherName);
+    addSystemMessage(db, duel.id, `${otherUser.username} declined the song and forfeits this round! ${user.username} wins!`);
+  }
+
+  res.json({ success: true });
+});
+
+// POST /api/online-duels/:id/decline - decline drawn song
+router.post('/:id/decline', requireAuth, (req, res) => {
+  const db = getDb();
+  const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
+  if (!duel) return res.status(404).json({ error: 'Duel not found' });
+
+  const playerSlot = getPlayerSlot(duel, req.user.id);
+  if (!playerSlot) return res.status(403).json({ error: 'Not a participant' });
+
+  const { song_id } = req.body;
+  const song = db.prepare("SELECT * FROM online_duel_songs WHERE id = ? AND duel_id = ? AND status = 'drawn'").get(song_id, duel.id);
+  if (!song) return res.status(400).json({ error: 'No pending song to decline' });
+
+  const declineCol = playerSlot === 'player1' ? 'player1_declined' : 'player2_declined';
+  db.prepare(`UPDATE online_duel_songs SET ${declineCol} = 1 WHERE id = ?`).run(song.id);
+
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+
+  const updated = db.prepare('SELECT * FROM online_duel_songs WHERE id = ?').get(song.id);
+  const otherAcceptCol = playerSlot === 'player1' ? 'player2_accepted' : 'player1_accepted';
+  const otherDeclineCol = playerSlot === 'player1' ? 'player2_declined' : 'player1_declined';
+
+  if (updated[otherDeclineCol]) {
+    // Both declined → redraw (delete the song, keep same turn)
+    db.prepare('DELETE FROM online_duel_songs WHERE id = ?').run(song.id);
+    addSystemMessage(db, duel.id, `Both players declined ${song.song_title}. Redraw!`);
+  } else if (updated[otherAcceptCol]) {
+    // Other accepted, this player declined → this player forfeits
+    const winner = playerSlot === 'player1' ? 'player2' : 'player1';
+    db.prepare("UPDATE online_duel_songs SET status = 'completed', winner = ? WHERE id = ?").run(winner, song.id);
+
+    const nextTurn = duel.current_turn === 'player1' ? 'player2' : 'player1';
+    db.prepare('UPDATE online_duels SET current_turn = ? WHERE id = ?').run(nextTurn, duel.id);
+
+    const winnerUserId = winner === 'player1' ? duel.creator_user_id : duel.opponent_user_id;
+    const winnerUser = db.prepare('SELECT username FROM users WHERE id = ?').get(winnerUserId);
+    addSystemMessage(db, duel.id, `${user.username} declined the song and forfeits this round! ${winnerUser.username} wins!`);
+  } else {
+    // Other hasn't responded yet
+    addSystemMessage(db, duel.id, `${user.username} declined the song. Waiting for other player...`);
   }
 
   res.json({ success: true });
