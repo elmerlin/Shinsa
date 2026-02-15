@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'shinsa.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'shinsa.db');
 
 // Shared singleton connection — reused across all requests
 const db = new Database(DB_PATH);
