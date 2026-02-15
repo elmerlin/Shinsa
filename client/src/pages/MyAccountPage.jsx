@@ -122,10 +122,10 @@ export default function MyAccountPage() {
               <div key={inv.id} className="card flex items-center justify-between gap-3">
                 <div>
                   <p className="font-display font-bold text-sm">
-                    {inv.type === 'tournament' ? inv.tournament_name : inv.duel_name}
+                    {inv.type === 'tournament' ? inv.tournament_name : (inv.type === 'online_duel' ? inv.online_duel_name : inv.duel_name)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {inv.type === 'tournament' ? 'Tournament' : 'Duel'} invitation
+                    {inv.type === 'tournament' ? 'Tournament' : inv.type === 'online_duel' ? 'Online Duel' : 'Duel'} invitation
                     {inv.tournament_date || inv.duel_date ? ` - ${inv.tournament_date || inv.duel_date}` : ''}
                   </p>
                 </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 
@@ -13,6 +13,7 @@ const PHASE_LABELS = {
 export default function Dashboard() {
   const [tournaments, setTournaments] = useState([]);
   const [duels, setDuels] = useState([]);
+  const [onlineDuels, setOnlineDuels] = useState([]);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,6 +26,7 @@ export default function Dashboard() {
     // each section fills in as its data arrives
     getTournaments().then(setTournaments).catch(() => {});
     getDuels().then(setDuels).catch(() => {});
+    getOnlineDuels().then(setOnlineDuels).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
   }, []);
 
@@ -72,6 +74,18 @@ export default function Dashboard() {
     if (!confirm('Delete this duel? This cannot be undone.')) return;
     await deleteDuel(id);
     setDuels(d => d.filter(x => x.id !== id));
+  };
+
+  const handleDeleteOnlineDuel = async (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Delete this online duel? This cannot be undone.')) return;
+    try {
+      await deleteOnlineDuel(id);
+      setOnlineDuels(d => d.filter(x => x.id !== id));
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   const displayTournaments = searchResults !== null ? searchResults : tournaments;
@@ -196,6 +210,7 @@ export default function Dashboard() {
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Round Robin</span>
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Gauntlets</span>
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Offline Duels</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Online Duels</span>
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Random Song Draws</span>
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Vetoes</span>
         </div>
@@ -252,6 +267,76 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* Online Duels Section */}
+      {onlineDuels.length > 0 && searchResults === null && (
+        <div className="mb-8">
+          <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">ONLINE DUELS</h2>
+          <div className="grid gap-3">
+            {onlineDuels.map(d => (
+              <Link
+                key={d.id}
+                to={`/online-duel/${d.id}`}
+                className="card-hover flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center shrink-0">
+                    <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
+                      {d.creator_avatar ? (
+                        <img src={getAvatarUrl(d.creator_avatar)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
+                          {(d.creator_username || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-5 h-5 bg-piu-card rounded-full flex items-center justify-center z-20 -mx-0.5">
+                      <span className="text-piu-accent text-xs">&#9876;</span>
+                    </div>
+                    <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
+                      {d.opponent_avatar ? (
+                        <img src={getAvatarUrl(d.opponent_avatar)} alt="" className="w-full h-full object-cover" />
+                      ) : d.opponent_username ? (
+                        <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
+                          {d.opponent_username[0].toUpperCase()}
+                        </div>
+                      ) : (
+                        <div className="w-full h-full bg-gray-700 flex items-center justify-center font-display font-bold text-xs text-gray-400">
+                          ?
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold group-hover:text-piu-accent transition-colors">
+                      {d.name}
+                    </h3>
+                    <div className="flex gap-2 text-xs text-gray-500">
+                      <span>{d.creator_username} vs {d.opponent_username || 'Waiting...'}</span>
+                      {d.location && <span>- {d.location}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`badge ${
+                    d.status === 'COMPLETED' ? 'badge-completed' :
+                    d.status === 'WAITING' ? 'badge-pending' : 'badge-active'
+                  }`}>
+                    {d.status === 'COMPLETED' ? 'Completed' : d.status === 'WAITING' ? 'Waiting' : 'Active'}
+                  </span>
+                  <button
+                    onClick={(e) => handleDeleteOnlineDuel(e, d.id)}
+                    className="text-gray-600 hover:text-red-500 transition-colors p-1"
+                    title="Delete online duel"
+                  >
+                    &#10005;
+                  </button>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Offline Duels Section */}
       {duels.length > 0 && searchResults === null && (
         <div className="mb-8">
@@ -288,12 +373,15 @@ export default function Dashboard() {
 
       {/* Create buttons */}
       {searchResults === null && (
-        <div className="grid grid-cols-2 gap-3 mt-6">
+        <div className="grid grid-cols-3 gap-3 mt-6">
           <Link to="/tournament/new" className="btn-primary text-center text-sm block">
-            + New Tournament
+            + Tournament
           </Link>
           <Link to="/duel/new" className="btn-primary bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-center text-sm block">
-            + New Duel
+            + Offline Duel
+          </Link>
+          <Link to="/online-duel/new" className="btn-primary bg-gradient-to-r from-piu-accent to-piu-gold hover:from-piu-accent/80 hover:to-piu-gold/80 text-center text-sm block">
+            + Online Duel
           </Link>
         </div>
       )}

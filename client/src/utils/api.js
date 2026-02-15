@@ -90,3 +90,34 @@ export const getUserStats = (id) => request(`/auth/user/${id}/stats`);
 export const getInvitations = () => request('/auth/invitations');
 export const respondInvitation = (id, status) => request(`/auth/invitations/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
 export const sendInvitation = (data) => request('/auth/invite', { method: 'POST', body: JSON.stringify(data) });
+
+// Online Duels
+export const getOnlineDuels = () => request('/online-duels');
+export const getOnlineDuel = (id) => request(`/online-duels/${id}`);
+export const createOnlineDuel = (data) => request('/online-duels', { method: 'POST', body: JSON.stringify(data) });
+export const joinOnlineDuel = (id) => request(`/online-duels/${id}/join`, { method: 'POST' });
+export const deleteOnlineDuel = (id) => request(`/online-duels/${id}`, { method: 'DELETE' });
+export const getOnlineDuelChat = (id, after) => request(`/online-duels/${id}/chat${after ? `?after=${encodeURIComponent(after)}` : ''}`);
+export const sendChatMessage = (id, data) => request(`/online-duels/${id}/chat`, { method: 'POST', body: JSON.stringify(data) });
+export const onlineDuelDraw = (id, data) => request(`/online-duels/${id}/draw`, { method: 'POST', body: JSON.stringify(data) });
+export const onlineDuelAccept = (id, songId) => request(`/online-duels/${id}/accept`, { method: 'POST', body: JSON.stringify({ song_id: songId }) });
+export const onlineDuelSubmitScore = (id, data) => request(`/online-duels/${id}/submit-score`, { method: 'POST', body: JSON.stringify(data) });
+export const onlineDuelEndRequest = (id) => request(`/online-duels/${id}/end-request`, { method: 'POST' });
+export const onlineDuelCancelEnd = (id) => request(`/online-duels/${id}/cancel-end`, { method: 'POST' });
+
+// Parser
+export async function parseScorePhoto(file) {
+  const formData = new FormData();
+  formData.append('photo', file);
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/parser/score`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Parse failed');
+  }
+  return res.json();
+}

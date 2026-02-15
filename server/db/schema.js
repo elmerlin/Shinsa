@@ -152,6 +152,75 @@ function initializeDb() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS online_duels (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      location TEXT DEFAULT '',
+      date TEXT DEFAULT '',
+      time TEXT DEFAULT '',
+      mode TEXT DEFAULT 'both',
+      creator_user_id TEXT NOT NULL,
+      opponent_user_id TEXT DEFAULT '',
+      status TEXT DEFAULT 'WAITING',
+      current_turn TEXT DEFAULT 'player1',
+      player1_end_requested INT DEFAULT 0,
+      player2_end_requested INT DEFAULT 0,
+      winner TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (creator_user_id) REFERENCES users(id),
+      FOREIGN KEY (opponent_user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS online_duel_songs (
+      id TEXT PRIMARY KEY,
+      duel_id TEXT NOT NULL,
+      song_id INTEGER,
+      song_title TEXT DEFAULT '',
+      song_artist TEXT DEFAULT '',
+      song_mode TEXT DEFAULT '',
+      song_level INT DEFAULT 0,
+      song_jacket_url TEXT DEFAULT '',
+      song_bpm TEXT DEFAULT '',
+      chosen_by TEXT DEFAULT '',
+      player1_accepted INT DEFAULT 0,
+      player2_accepted INT DEFAULT 0,
+      player1_score INT DEFAULT 0,
+      player2_score INT DEFAULT 0,
+      player1_perfect INT DEFAULT 0,
+      player1_great INT DEFAULT 0,
+      player1_good INT DEFAULT 0,
+      player1_bad INT DEFAULT 0,
+      player1_miss INT DEFAULT 0,
+      player1_max_combo INT DEFAULT 0,
+      player1_kcal REAL DEFAULT 0,
+      player2_perfect INT DEFAULT 0,
+      player2_great INT DEFAULT 0,
+      player2_good INT DEFAULT 0,
+      player2_bad INT DEFAULT 0,
+      player2_miss INT DEFAULT 0,
+      player2_max_combo INT DEFAULT 0,
+      player2_kcal REAL DEFAULT 0,
+      player1_submitted INT DEFAULT 0,
+      player2_submitted INT DEFAULT 0,
+      winner TEXT DEFAULT '',
+      status TEXT DEFAULT 'drawn',
+      played_order INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (duel_id) REFERENCES online_duels(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS duel_chat (
+      id TEXT PRIMARY KEY,
+      duel_id TEXT NOT NULL,
+      user_id TEXT DEFAULT '',
+      username TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_system INT DEFAULT 0,
+      is_participant INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (duel_id) REFERENCES online_duels(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_players_tournament ON players(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_round ON matches(tournament_id, round_number);
@@ -160,6 +229,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_duel_songs_duel ON duel_songs(duel_id);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_invitations_user ON invitations(user_id);
+    CREATE INDEX IF NOT EXISTS idx_online_duel_songs ON online_duel_songs(duel_id);
+    CREATE INDEX IF NOT EXISTS idx_duel_chat ON duel_chat(duel_id);
   `);
 
   // Migrations for players table - add user_id

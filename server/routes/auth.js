@@ -214,7 +214,23 @@ router.get('/user/:id/stats', (req, res) => {
     duelStats.push({ duel: d, songs });
   }
 
-  res.json({ tournamentPlayers: matchResults, duelStats });
+  // Online duel participation
+  const onlineDuels = db.prepare(`
+    SELECT od.*, u1.username as creator_username, u2.username as opponent_username
+    FROM online_duels od
+    LEFT JOIN users u1 ON od.creator_user_id = u1.id
+    LEFT JOIN users u2 ON od.opponent_user_id = u2.id
+    WHERE od.creator_user_id = ? OR od.opponent_user_id = ?
+    ORDER BY od.created_at DESC
+  `).all(userId, userId);
+
+  const onlineDuelStats = [];
+  for (const od of onlineDuels) {
+    const songs = db.prepare('SELECT * FROM online_duel_songs WHERE duel_id = ? ORDER BY created_at ASC').all(od.id);
+    onlineDuelStats.push({ duel: od, songs });
+  }
+
+  res.json({ tournamentPlayers: matchResults, duelStats, onlineDuelStats });
 });
 
 // GET /api/auth/invitations - get user's pending invitations
@@ -223,10 +239,12 @@ router.get('/invitations', requireAuth, (req, res) => {
   const invitations = db.prepare(`
     SELECT i.*,
       t.name as tournament_name, t.avatar as tournament_avatar, t.date as tournament_date,
-      d.name as duel_name, d.date as duel_date
+      d.name as duel_name, d.date as duel_date,
+      od.name as online_duel_name
     FROM invitations i
     LEFT JOIN tournaments t ON i.tournament_id = t.id
     LEFT JOIN duels d ON i.duel_id = d.id
+    LEFT JOIN online_duels od ON i.type = 'online_duel' AND i.duel_id = od.id
     WHERE i.user_id = ? AND i.status = 'pending'
     ORDER BY i.created_at DESC
   `).all(req.user.id);

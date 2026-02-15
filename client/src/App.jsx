@@ -13,6 +13,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import MyAccountPage from './pages/MyAccountPage';
+import OnlineDuelSetup from './pages/OnlineDuelSetup';
+import OnlineDuelRoom from './pages/OnlineDuelRoom';
 
 export default function App() {
   const location = useLocation();
@@ -94,6 +96,8 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/account" element={<MyAccountPage />} />
+          <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
+          <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
         </Routes>
       </main>
 
