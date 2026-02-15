@@ -615,9 +615,19 @@ export default function OnlineDuelRoom() {
               {chat.map(msg => {
                 const isP1 = msg.user_id && msg.user_id === duel.creator_user_id;
                 const isP2 = msg.user_id && msg.user_id === duel.opponent_user_id;
-                const nameColor = isP1 ? 'text-red-400 font-bold' : isP2 ? 'text-blue-400 font-bold' : msg.is_participant ? 'font-bold text-white' : 'text-gray-500';
-                const msgColor = isP1 ? 'text-red-200/80' : isP2 ? 'text-blue-200/80' : msg.is_participant ? 'text-gray-200' : 'text-gray-500';
+                const nameColor = isP1 ? 'text-amber-400 font-bold' : isP2 ? 'text-blue-400 font-bold' : msg.is_participant ? 'font-bold text-white' : 'text-gray-500';
+                const msgColor = isP1 ? 'text-amber-200/80' : isP2 ? 'text-blue-200/80' : msg.is_participant ? 'text-gray-200' : 'text-gray-500';
                 const isEmojiOnly = /^[\p{Emoji}\s]{1,5}$/u.test(msg.message) && !msg.is_system;
+                const chatAvatar = isP1 ? duel.player1_avatar : isP2 ? duel.player2_avatar : null;
+                const chatAvatarFallback = isP1 ? (duel.player1_name || '?')[0].toUpperCase() : isP2 ? (duel.player2_name || '?')[0].toUpperCase() : null;
+                const chatAvatarBg = isP1 ? 'bg-amber-600' : 'bg-blue-600';
+                const avatarEl = (isP1 || isP2) ? (
+                  chatAvatar ? (
+                    <img src={getAvatarUrl(chatAvatar)} alt="" className="w-4 h-4 rounded-full object-cover shrink-0 inline-block align-text-bottom" />
+                  ) : (
+                    <span className={`w-4 h-4 rounded-full ${chatAvatarBg} inline-flex items-center justify-center text-[8px] font-bold text-white shrink-0 align-text-bottom`}>{chatAvatarFallback}</span>
+                  )
+                ) : null;
                 return (
                   <div key={msg.id} className={`text-xs ${msg.is_system ? 'text-piu-accent italic' : ''}`}>
                     {msg.is_system ? (
@@ -625,8 +635,8 @@ export default function OnlineDuelRoom() {
                     ) : isEmojiOnly ? (
                       <div className="flex items-center gap-1">
                         <span className={nameColor}>
-                          {isP1 && <span className="text-red-500 mr-0.5" title="Player 1">&#9876;</span>}
-                          {isP2 && <span className="text-blue-500 mr-0.5" title="Player 2">&#9876;</span>}
+                          {avatarEl}
+                          {(isP1 || isP2) && ' '}
                           {msg.username}
                         </span>
                         <span className="text-xl leading-none">{msg.message}</span>
@@ -634,8 +644,8 @@ export default function OnlineDuelRoom() {
                     ) : (
                       <>
                         <span className={nameColor}>
-                          {isP1 && <span className="text-red-500 mr-0.5" title="Player 1">&#9876;</span>}
-                          {isP2 && <span className="text-blue-500 mr-0.5" title="Player 2">&#9876;</span>}
+                          {avatarEl}
+                          {(isP1 || isP2) && ' '}
                           {msg.username}:
                         </span>{' '}
                         <span className={msgColor}>{msg.message}</span>
