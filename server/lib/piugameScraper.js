@@ -265,7 +265,7 @@ function delay(ms) {
  * Scrape best scores page with pagination
  * Returns array of score objects
  */
-async function scrapeBestScores(client) {
+async function scrapeBestScores(client, onProgress) {
   const allScores = [];
 
   // First, fetch page 1 to determine total pages
@@ -356,6 +356,9 @@ async function scrapeBestScores(client) {
 
   console.log(`Best scores: page 1 returned ${allScores.length} scores, totalPages=${totalPages}, incremental=${useIncrementalFetch}, maxPage=${maxPage}`);
 
+  // Report initial progress
+  if (onProgress) onProgress(1, maxPage);
+
   // Fetch remaining pages with small delay between requests
   for (let page = 2; page <= maxPage; page++) {
     try {
@@ -365,6 +368,8 @@ async function scrapeBestScores(client) {
       const pageScores = parseScoresFromPage($);
       if (pageScores.length === 0) break; // No more scores on this page
       allScores.push(...pageScores);
+      // Report progress
+      if (onProgress) onProgress(page, maxPage);
       if (page % 10 === 0) {
         console.log(`Best scores: fetched page ${page}/${maxPage}, total so far: ${allScores.length}`);
       }

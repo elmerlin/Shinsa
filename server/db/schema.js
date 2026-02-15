@@ -301,10 +301,22 @@ function initializeDb() {
       pumbility_value INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS user_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT DEFAULT '',
+      read INT DEFAULT 0,
+      link TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_pumbility_scores_user ON user_pumbility_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON user_notifications(user_id);
   `);
 
   // Migrations for players table - add user_id
@@ -404,6 +416,19 @@ function initializeDb() {
   for (const [col, type] of recentMigrations) {
     if (!recentCols.includes(col)) {
       db.exec(`ALTER TABLE user_recently_played ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  // Migrations for piugame sync - add progress tracking
+  const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);
+  const syncMigrations = [
+    ['sync_in_progress', "TEXT DEFAULT ''"],
+    ['sync_progress', 'INT DEFAULT 0'],
+    ['sync_total', 'INT DEFAULT 0'],
+  ];
+  for (const [col, type] of syncMigrations) {
+    if (!syncCols.includes(col)) {
+      db.exec(`ALTER TABLE user_piugame_sync ADD COLUMN ${col} ${type}`);
     }
   }
 }

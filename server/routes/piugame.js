@@ -162,17 +162,20 @@ router.post('/sync/pumbility', requireAuth, async (req, res) => {
   }
 });
 
-// ─── Sync: Best Scores ─────────────────────────────────
+// ─── Sync: Best Scores (background) ─────────────────────
 
-// POST /api/piugame/sync/best-scores — full import (rate-limited to once per day)
+// POST /api/piugame/sync/best-scores — starts background import, returns immediately
 router.post('/sync/best-scores', requireAuth, async (req, res) => {
-  // Extend timeout for this long-running scraping operation
-  req.setTimeout(300000);
-  res.setTimeout(300000);
   const db = getDb();
+  const userId = req.user.id;
 
-  // Check rate limit (once per day) unless this is first import
-  const sync = db.prepare('SELECT * FROM user_piugame_sync WHERE user_id = ?').get(req.user.id);
+  // Check if already in progress
+  const sync = db.prepare('SELECT * FROM user_piugame_sync WHERE user_id = ?').get(userId);
+  if (sync && sync.sync_in_progress === 'best-scores') {
+    return res.json({ started: true, already_running: true, progress: sync.sync_progress, total: sync.sync_total });
+  }
+
+  // Check rate limit (once per day) unless first import
   if (sync && sync.best_scores_imported && sync.last_best_scores_sync) {
     const lastSync = new Date(sync.last_best_scores_sync + 'Z');
     const hoursSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
@@ -184,36 +187,74 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
     }
   }
 
-  try {
-    const client = await loginWithStoredCredentials(req.user.id);
-    const scores = await scrapeBestScores(client);
+  // Mark as in progress and respond immediately
+  db.prepare(`
+    UPDATE user_piugame_sync SET sync_in_progress = 'best-scores', sync_progress = 0, sync_total = 0 WHERE user_id = ?
+  `).run(userId);
 
-    const insertOrUpdate = db.prepare(`
-      INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
-        score = MAX(excluded.score, user_best_scores.score),
-        grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
-        plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END
-    `);
+  res.json({ started: true });
 
-    const txn = db.transaction(() => {
-      // On full import, clear and re-insert to reflect piugame's state
-      db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(req.user.id);
-      for (const s of scores) {
-        insertOrUpdate.run(req.user.id, s.song_title, s.mode, s.level, s.score, s.grade, s.plate);
-      }
+  // Run in background
+  (async () => {
+    try {
+      const client = await loginWithStoredCredentials(userId);
+      const scores = await scrapeBestScores(client, (progress, total) => {
+        // Update progress in DB so client can poll
+        db.prepare('UPDATE user_piugame_sync SET sync_progress = ?, sync_total = ? WHERE user_id = ?')
+          .run(progress, total, userId);
+      });
+
+      const insertOrUpdate = db.prepare(`
+        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
+          score = MAX(excluded.score, user_best_scores.score),
+          grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
+          plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END
+      `);
+
+      const txn = db.transaction(() => {
+        db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(userId);
+        for (const s of scores) {
+          insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate);
+        }
+        db.prepare(`
+          UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
+          sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
+        `).run(userId);
+      });
+      txn();
+
+      // Create notification
       db.prepare(`
-        UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1 WHERE user_id = ?
-      `).run(req.user.id);
-    });
-    txn();
+        INSERT INTO user_notifications (user_id, type, title, message, link)
+        VALUES (?, 'sync_complete', 'Best Scores Synced', ?, ?)
+      `).run(userId, `${scores.length} scores imported successfully!`, `/profile/${userId}`);
 
-    res.json({ success: true, scores_count: scores.length });
-  } catch (err) {
-    console.error('Best scores sync error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+      console.log(`Background best scores sync complete for ${userId}: ${scores.length} scores`);
+    } catch (err) {
+      console.error('Background best scores sync error:', err.message);
+      db.prepare(`
+        UPDATE user_piugame_sync SET sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
+      `).run(userId);
+      db.prepare(`
+        INSERT INTO user_notifications (user_id, type, title, message)
+        VALUES (?, 'sync_error', 'Best Scores Sync Failed', ?)
+      `).run(userId, err.message);
+    }
+  })();
+});
+
+// GET /api/piugame/sync/progress — poll sync progress
+router.get('/sync/progress', requireAuth, (req, res) => {
+  const db = getDb();
+  const sync = db.prepare('SELECT sync_in_progress, sync_progress, sync_total FROM user_piugame_sync WHERE user_id = ?')
+    .get(req.user.id);
+  res.json({
+    in_progress: sync?.sync_in_progress || '',
+    progress: sync?.sync_progress || 0,
+    total: sync?.sync_total || 0,
+  });
 });
 
 // ─── Sync: Recently Played ─────────────────────────────
@@ -330,7 +371,7 @@ router.get('/sync-status/:userId', (req, res) => {
   const hasCreds = !!db.prepare('SELECT 1 FROM user_piugame_credentials WHERE user_id = ?').get(req.params.userId);
   res.json({
     linked: hasCreds,
-    ...(sync || { best_scores_imported: 0, pumbility_value: 0, last_best_scores_sync: null, last_pumbility_sync: null, last_recently_played_sync: null }),
+    ...(sync || { best_scores_imported: 0, pumbility_value: 0, last_best_scores_sync: null, last_pumbility_sync: null, last_recently_played_sync: null, sync_in_progress: '', sync_progress: 0, sync_total: 0 }),
   });
 });
 

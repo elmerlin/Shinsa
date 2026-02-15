@@ -139,6 +139,13 @@ export const getPiugamePumbility = (userId) => request(`/piugame/pumbility/${use
 export const getPiugameBestScores = (userId, mode) => request(`/piugame/best-scores/${userId}${mode ? `?mode=${mode}` : ''}`);
 export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-played/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
+export const getSyncProgress = () => request('/piugame/sync/progress');
+
+// Notifications
+export const getNotifications = () => request('/auth/notifications');
+export const markNotificationRead = (id) => request(`/auth/notifications/${id}/read`, { method: 'PUT' });
+export const markAllNotificationsRead = () => request('/auth/notifications/read-all', { method: 'PUT' });
+export const deleteNotification = (id) => request(`/auth/notifications/${id}`, { method: 'DELETE' });
 
 // Parser
 export async function parseScorePhoto(file) {
