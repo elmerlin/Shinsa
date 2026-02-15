@@ -566,8 +566,8 @@ export default function OnlineDuelRoom() {
             )}
           </div>
 
-          {/* Chat (1/3) */}
-          <div className="card flex flex-col h-[500px] lg:h-auto relative overflow-hidden">
+          {/* Chat (1/3) — sticky on desktop */}
+          <div className="card flex flex-col h-[400px] lg:h-[calc(100vh-8rem)] lg:sticky lg:top-4 lg:self-start relative overflow-hidden">
             {/* Floating reactions overlay */}
             {floatingReactions.map(r => (
               <div
