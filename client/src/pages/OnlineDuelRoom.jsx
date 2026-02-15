@@ -97,8 +97,9 @@ export default function OnlineDuelRoom() {
   };
 
   const handleDraw = async () => {
+    if (!drawLevel || parseInt(drawLevel) < 1) return alert('Please enter a level');
     try {
-      await onlineDuelDraw(id, { level: drawLevel, draw_mode: drawMode === 'any' ? undefined : drawMode });
+      await onlineDuelDraw(id, { level: parseInt(drawLevel), draw_mode: drawMode === 'any' ? undefined : drawMode });
     } catch (err) { alert(err.message); }
   };
 
@@ -354,7 +355,7 @@ export default function OnlineDuelRoom() {
                       <div className="flex gap-3 items-end">
                         <div className="flex-1">
                           <label className="block text-xs text-gray-500 mb-1">Level</label>
-                          <input type="number" className="input-field" min="1" max="28" value={drawLevel} onChange={e => setDrawLevel(parseInt(e.target.value) || 1)} />
+                          <input type="number" className="input-field" min="1" max="28" value={drawLevel} onChange={e => setDrawLevel(e.target.value === '' ? '' : (parseInt(e.target.value) || ''))} onBlur={e => { if (!e.target.value || parseInt(e.target.value) < 1) setDrawLevel(1); }} />
                         </div>
                         <div className="flex-1">
                           <label className="block text-xs text-gray-500 mb-1">Mode</label>
