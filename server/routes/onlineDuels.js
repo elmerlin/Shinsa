@@ -39,7 +39,9 @@ router.get('/:id', (req, res) => {
   if (!duel) return res.status(404).json({ error: 'Online duel not found' });
 
   const songs = db.prepare('SELECT * FROM online_duel_songs WHERE duel_id = ? ORDER BY played_order ASC').all(duel.id);
-  res.json({ ...duel, songs });
+  const p1Pumps = db.prepare("SELECT COUNT(*) as count FROM duel_pumps WHERE duel_id = ? AND player = 'player1'").get(duel.id).count;
+  const p2Pumps = db.prepare("SELECT COUNT(*) as count FROM duel_pumps WHERE duel_id = ? AND player = 'player2'").get(duel.id).count;
+  res.json({ ...duel, songs, p1Pumps, p2Pumps });
 });
 
 // GET /api/online-duels/:id/chat - get chat messages (for polling)
@@ -420,10 +422,44 @@ router.delete('/:id', requireAuth, (req, res) => {
   if (!duel) return res.status(404).json({ error: 'Duel not found' });
   if (duel.creator_user_id !== req.user.id) return res.status(403).json({ error: 'Only the creator can delete' });
 
+  db.prepare('DELETE FROM duel_pumps WHERE duel_id = ?').run(req.params.id);
   db.prepare('DELETE FROM duel_chat WHERE duel_id = ?').run(req.params.id);
   db.prepare('DELETE FROM online_duel_songs WHERE duel_id = ?').run(req.params.id);
   db.prepare('DELETE FROM online_duels WHERE id = ?').run(req.params.id);
   res.json({ success: true });
+});
+
+// POST /api/online-duels/:id/pump - pump (vouch for) a player
+router.post('/:id/pump', requireAuth, (req, res) => {
+  const db = getDb();
+  const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
+  if (!duel) return res.status(404).json({ error: 'Duel not found' });
+
+  const { player } = req.body;
+  if (player !== 'player1' && player !== 'player2') return res.status(400).json({ error: 'Invalid player' });
+
+  // Check if user already pumped
+  const existing = db.prepare('SELECT player FROM duel_pumps WHERE duel_id = ? AND user_id = ?').get(duel.id, req.user.id);
+  if (existing) {
+    if (existing.player === player) {
+      // Un-pump (toggle off)
+      db.prepare('DELETE FROM duel_pumps WHERE duel_id = ? AND user_id = ?').run(duel.id, req.user.id);
+      return res.json({ success: true, action: 'unpumped' });
+    }
+    // Already pumped the other player
+    return res.status(400).json({ error: 'You already pumped the other player' });
+  }
+
+  db.prepare('INSERT INTO duel_pumps (duel_id, user_id, player) VALUES (?, ?, ?)').run(duel.id, req.user.id, player);
+  res.status(201).json({ success: true, action: 'pumped' });
+});
+
+// GET /api/online-duels/:id/my-pump - get current user's pump choice
+router.get('/:id/my-pump', optionalAuth, (req, res) => {
+  if (!req.user) return res.json({ player: null });
+  const db = getDb();
+  const pump = db.prepare('SELECT player FROM duel_pumps WHERE duel_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  res.json({ player: pump ? pump.player : null });
 });
 
 // Helpers

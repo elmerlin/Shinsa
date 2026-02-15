@@ -6,6 +6,7 @@ import {
   getOnlineDuel, getOnlineDuelChat, sendChatMessage, joinOnlineDuel,
   onlineDuelDraw, onlineDuelAccept, onlineDuelDecline, onlineDuelSubmitScore,
   onlineDuelEndRequest, onlineDuelCancelEnd,
+  pumpPlayer, getMyPump,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -49,8 +50,12 @@ export default function OnlineDuelRoom() {
   const [scoreEntry, setScoreEntry] = useState(null);
   const [selectedBreakdown, setSelectedBreakdown] = useState(null);
   const [tab, setTab] = useState('match');
+  const [myPump, setMyPump] = useState(null);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [floatingReactions, setFloatingReactions] = useState([]);
   const chatEndRef = useRef(null);
   const lastChatTime = useRef('');
+  const reactionIdRef = useRef(0);
 
   // Determine current user's role
   const playerSlot = duel && user ? (
@@ -86,6 +91,41 @@ export default function OnlineDuelRoom() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chat]);
+
+  // Fetch user's pump choice
+  useEffect(() => {
+    if (user) {
+      getMyPump(id).then(r => setMyPump(r.player)).catch(() => {});
+    }
+  }, [id, user]);
+
+  const handlePump = async (player) => {
+    if (!user) return;
+    try {
+      const res = await pumpPlayer(id, player);
+      setMyPump(res.pumped || null);
+      getOnlineDuel(id).then(setDuel).catch(() => {});
+    } catch (err) { alert(err.message); }
+  };
+
+  const QUICK_EMOJIS = ['🔥', '💪', '👏', '😤', '🎯', '💀', '😂', '❤️', '⚡', '🏆', '👀', '🫡'];
+  const QUICK_REACTIONS = ['🔥', '💪', '👏', '💀', '😂', '❤️'];
+
+  const addFloatingReaction = (emoji) => {
+    const rid = reactionIdRef.current++;
+    const x = 20 + Math.random() * 60;
+    setFloatingReactions(prev => [...prev, { id: rid, emoji, x }]);
+    setTimeout(() => {
+      setFloatingReactions(prev => prev.filter(r => r.id !== rid));
+    }, 2000);
+  };
+
+  const handleQuickReaction = async (emoji) => {
+    addFloatingReaction(emoji);
+    try {
+      await sendChatMessage(id, { message: emoji, guest_name: guestName || undefined });
+    } catch (err) { /* ignore */ }
+  };
 
   const handleSendChat = async (e) => {
     e.preventDefault();
@@ -192,21 +232,59 @@ export default function OnlineDuelRoom() {
         </span>
       </div>
 
-      {/* Scoreboard — VS layout similar to offline duel */}
+      {/* Scoreboard — VS layout with Pump system */}
       <div className="card mb-4">
         <div className="flex items-center justify-center gap-3 sm:gap-6 py-4">
+          {/* Player 1 side */}
           <div className="text-center flex-1">
-            <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 mx-auto ${
-              duel.status === 'COMPLETED' && duel.winner === 'player1' ? 'border-piu-gold shadow-lg shadow-piu-gold/30' :
-              duel.status === 'COMPLETED' && duel.winner === 'player2' ? 'border-gray-500' : 'border-red-500/50'
-            }`}>
-              {duel.player1_avatar ? (
-                <img src={getAvatarUrl(duel.player1_avatar)} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-lg sm:text-2xl">
-                  {(duel.player1_name || '?')[0].toUpperCase()}
+            <div className="flex items-center justify-center gap-1 sm:gap-2">
+              {/* P1 PIU arrows (top-left, bottom-left pointing) */}
+              {(() => {
+                const p1Higher = (duel.p1Pumps || 0) > (duel.p2Pumps || 0);
+                const p1Lower = (duel.p1Pumps || 0) < (duel.p2Pumps || 0);
+                const arrowColor = p1Higher ? '#ef4444' : p1Lower ? '#3b82f6' : '#555';
+                return (duel.p1Pumps > 0 || duel.p2Pumps > 0) ? (
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    {/* Top-left arrow */}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
+                      <path d="M4 4h10l-3 3 7 7-3 3-7-7-3 3z"/>
+                    </svg>
+                    {/* Bottom-left arrow */}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
+                      <path d="M4 20h10l-3-3 7-7-3-3-7 7-3-3z"/>
+                    </svg>
+                  </div>
+                ) : null;
+              })()}
+              <div>
+                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 mx-auto ${
+                  duel.status === 'COMPLETED' && duel.winner === 'player1' ? 'border-piu-gold shadow-lg shadow-piu-gold/30' :
+                  duel.status === 'COMPLETED' && duel.winner === 'player2' ? 'border-gray-500' : 'border-red-500/50'
+                }`}>
+                  {duel.player1_avatar ? (
+                    <img src={getAvatarUrl(duel.player1_avatar)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-lg sm:text-2xl">
+                      {(duel.player1_name || '?')[0].toUpperCase()}
+                    </div>
+                  )}
                 </div>
-              )}
+                {/* Pump button + count for P1 */}
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <button
+                    onClick={() => handlePump('player1')}
+                    disabled={!user || myPump === 'player2'}
+                    className={`transition-all ${myPump === 'player1' ? 'scale-110' : 'hover:scale-105'} ${!user || myPump === 'player2' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                    title={!user ? 'Log in to pump' : myPump === 'player2' ? 'Already pumping opponent' : myPump === 'player1' ? 'Click to unpump' : `Pump ${duel.player1_name}!`}
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" className="sm:w-7 sm:h-7">
+                      <path d="M12 2L8 6H4v4l-4 4 4 4v4h4l4 4 4-4h4v-4l4-4-4-4V6h-4l-4-4z" fill={myPump === 'player1' ? '#eab308' : '#555'} stroke={myPump === 'player1' ? '#fbbf24' : '#666'} strokeWidth="0.5"/>
+                      <circle cx="12" cy="12" r="4" fill={myPump === 'player1' ? '#fbbf24' : '#777'}/>
+                    </svg>
+                  </button>
+                  <span className={`text-xs font-mono font-bold ${myPump === 'player1' ? 'text-yellow-400' : 'text-gray-500'}`}>{duel.p1Pumps || 0}</span>
+                </div>
+              </div>
             </div>
             <div className="flex items-center justify-center gap-1 mt-1">
               {duel.player1_nationality && <span className="text-sm">{getCountryFlag(duel.player1_nationality)}</span>}
@@ -219,6 +297,7 @@ export default function OnlineDuelRoom() {
             {duel.status === 'COMPLETED' && duel.winner === 'draw' && <div className="text-gray-400 text-xs font-display">DRAW</div>}
           </div>
 
+          {/* Center VS */}
           <div className="flex flex-col items-center shrink-0">
             <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-piu-accent">
               <path d="M8 8L32 32M8 8L12 4M8 8L4 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -237,20 +316,58 @@ export default function OnlineDuelRoom() {
             )}
           </div>
 
+          {/* Player 2 side */}
           <div className="text-center flex-1">
-            <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 mx-auto ${
-              duel.status === 'COMPLETED' && duel.winner === 'player2' ? 'border-piu-gold shadow-lg shadow-piu-gold/30' :
-              duel.status === 'COMPLETED' && duel.winner === 'player1' ? 'border-gray-500' : 'border-blue-500/50'
-            }`}>
-              {duel.player2_avatar ? (
-                <img src={getAvatarUrl(duel.player2_avatar)} alt="" className="w-full h-full object-cover" />
-              ) : duel.player2_name ? (
-                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-lg sm:text-2xl">
-                  {duel.player2_name[0].toUpperCase()}
+            <div className="flex items-center justify-center gap-1 sm:gap-2">
+              <div>
+                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 mx-auto ${
+                  duel.status === 'COMPLETED' && duel.winner === 'player2' ? 'border-piu-gold shadow-lg shadow-piu-gold/30' :
+                  duel.status === 'COMPLETED' && duel.winner === 'player1' ? 'border-gray-500' : 'border-blue-500/50'
+                }`}>
+                  {duel.player2_avatar ? (
+                    <img src={getAvatarUrl(duel.player2_avatar)} alt="" className="w-full h-full object-cover" />
+                  ) : duel.player2_name ? (
+                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-lg sm:text-2xl">
+                      {duel.player2_name[0].toUpperCase()}
+                    </div>
+                  ) : (
+                    <div className="w-full h-full border-2 border-dashed border-piu-border flex items-center justify-center"><span className="text-gray-600 text-2xl">?</span></div>
+                  )}
                 </div>
-              ) : (
-                <div className="w-full h-full border-2 border-dashed border-piu-border flex items-center justify-center"><span className="text-gray-600 text-2xl">?</span></div>
-              )}
+                {/* Pump button + count for P2 */}
+                <div className="flex items-center justify-center gap-1 mt-1">
+                  <span className={`text-xs font-mono font-bold ${myPump === 'player2' ? 'text-yellow-400' : 'text-gray-500'}`}>{duel.p2Pumps || 0}</span>
+                  <button
+                    onClick={() => handlePump('player2')}
+                    disabled={!user || myPump === 'player1'}
+                    className={`transition-all ${myPump === 'player2' ? 'scale-110' : 'hover:scale-105'} ${!user || myPump === 'player1' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                    title={!user ? 'Log in to pump' : myPump === 'player1' ? 'Already pumping opponent' : myPump === 'player2' ? 'Click to unpump' : `Pump ${duel.player2_name}!`}
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" className="sm:w-7 sm:h-7">
+                      <path d="M12 2L8 6H4v4l-4 4 4 4v4h4l4 4 4-4h4v-4l4-4-4-4V6h-4l-4-4z" fill={myPump === 'player2' ? '#eab308' : '#555'} stroke={myPump === 'player2' ? '#fbbf24' : '#666'} strokeWidth="0.5"/>
+                      <circle cx="12" cy="12" r="4" fill={myPump === 'player2' ? '#fbbf24' : '#777'}/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              {/* P2 PIU arrows (top-right, bottom-right pointing) */}
+              {(() => {
+                const p2Higher = (duel.p2Pumps || 0) > (duel.p1Pumps || 0);
+                const p2Lower = (duel.p2Pumps || 0) < (duel.p1Pumps || 0);
+                const arrowColor = p2Higher ? '#ef4444' : p2Lower ? '#3b82f6' : '#555';
+                return (duel.p1Pumps > 0 || duel.p2Pumps > 0) ? (
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    {/* Top-right arrow */}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
+                      <path d="M20 4H10l3 3-7 7 3 3 7-7 3 3z"/>
+                    </svg>
+                    {/* Bottom-right arrow */}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
+                      <path d="M20 20H10l3-3-7-7 3-3 7 7 3-3z"/>
+                    </svg>
+                  </div>
+                ) : null;
+              })()}
             </div>
             <div className="flex items-center justify-center gap-1 mt-1">
               {duel.player2_nationality && <span className="text-sm">{getCountryFlag(duel.player2_nationality)}</span>}
@@ -457,18 +574,54 @@ export default function OnlineDuelRoom() {
           </div>
 
           {/* Chat (1/3) */}
-          <div className="card flex flex-col h-[500px] lg:h-auto">
+          <div className="card flex flex-col h-[500px] lg:h-auto relative overflow-hidden">
+            {/* Floating reactions overlay */}
+            {floatingReactions.map(r => (
+              <div
+                key={r.id}
+                className="absolute pointer-events-none z-10 animate-float-up"
+                style={{ left: `${r.x}%`, bottom: '60px', fontSize: '24px' }}
+              >
+                {r.emoji}
+              </div>
+            ))}
+
             <h3 className="font-display font-bold text-sm text-piu-accent mb-2 shrink-0">Match Chat</h3>
+
+            {/* Quick reaction bar — live stream style */}
+            <div className="flex gap-1 mb-2 shrink-0 flex-wrap">
+              {QUICK_REACTIONS.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => handleQuickReaction(emoji)}
+                  className="w-8 h-8 rounded-lg bg-piu-dark/50 hover:bg-piu-dark hover:scale-110 active:scale-95 transition-all flex items-center justify-center text-sm border border-piu-border/20"
+                  title={`Send ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
             <div className="flex-1 overflow-y-auto space-y-1 mb-2 min-h-0">
               {chat.map(msg => {
                 const isP1 = msg.user_id && msg.user_id === duel.creator_user_id;
                 const isP2 = msg.user_id && msg.user_id === duel.opponent_user_id;
                 const nameColor = isP1 ? 'text-red-400 font-bold' : isP2 ? 'text-blue-400 font-bold' : msg.is_participant ? 'font-bold text-white' : 'text-gray-500';
                 const msgColor = isP1 ? 'text-red-200/80' : isP2 ? 'text-blue-200/80' : msg.is_participant ? 'text-gray-200' : 'text-gray-500';
+                const isEmojiOnly = /^[\p{Emoji}\s]{1,5}$/u.test(msg.message) && !msg.is_system;
                 return (
                   <div key={msg.id} className={`text-xs ${msg.is_system ? 'text-piu-accent italic' : ''}`}>
                     {msg.is_system ? (
                       <span>{msg.message}</span>
+                    ) : isEmojiOnly ? (
+                      <div className="flex items-center gap-1">
+                        <span className={nameColor}>
+                          {isP1 && <span className="text-red-500 mr-0.5" title="Player 1">&#9876;</span>}
+                          {isP2 && <span className="text-blue-500 mr-0.5" title="Player 2">&#9876;</span>}
+                          {msg.username}
+                        </span>
+                        <span className="text-xl leading-none">{msg.message}</span>
+                      </div>
                     ) : (
                       <>
                         <span className={nameColor}>
@@ -484,12 +637,38 @@ export default function OnlineDuelRoom() {
               })}
               <div ref={chatEndRef} />
             </div>
-            <form onSubmit={handleSendChat} className="flex gap-2 shrink-0">
+
+            {/* Emoji picker popover */}
+            {showEmoji && (
+              <div className="bg-piu-card border border-piu-border rounded-lg p-2 mb-1 shrink-0">
+                <div className="flex flex-wrap gap-1">
+                  {QUICK_EMOJIS.map(emoji => (
+                    <button
+                      key={emoji}
+                      onClick={() => { setChatInput(prev => prev + emoji); setShowEmoji(false); }}
+                      className="w-8 h-8 hover:bg-piu-dark rounded transition-colors flex items-center justify-center text-lg"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSendChat} className="flex gap-1.5 shrink-0 items-center">
               {!user && (
                 <input type="text" className="input-field text-xs w-16" placeholder="Name" value={guestName} onChange={e => setGuestName(e.target.value)} />
               )}
+              <button
+                type="button"
+                onClick={() => setShowEmoji(!showEmoji)}
+                className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${showEmoji ? 'bg-piu-accent text-white' : 'bg-piu-dark/50 text-gray-400 hover:text-white hover:bg-piu-dark'}`}
+                title="Emojis"
+              >
+                &#128578;
+              </button>
               <input type="text" className="input-field text-xs flex-1" placeholder="Type a message..." value={chatInput} onChange={e => setChatInput(e.target.value)} maxLength={500} />
-              <button type="submit" className="btn-primary text-xs px-3 py-1">Send</button>
+              <button type="submit" className="btn-primary text-xs px-3 py-1 shrink-0">Send</button>
             </form>
           </div>
         </div>

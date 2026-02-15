@@ -221,6 +221,16 @@ function initializeDb() {
       FOREIGN KEY (duel_id) REFERENCES online_duels(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS duel_pumps (
+      duel_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      player TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (duel_id, user_id),
+      FOREIGN KEY (duel_id) REFERENCES online_duels(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_players_tournament ON players(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_tournament ON matches(tournament_id);
     CREATE INDEX IF NOT EXISTS idx_matches_round ON matches(tournament_id, round_number);
@@ -231,6 +241,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_invitations_user ON invitations(user_id);
     CREATE INDEX IF NOT EXISTS idx_online_duel_songs ON online_duel_songs(duel_id);
     CREATE INDEX IF NOT EXISTS idx_duel_chat ON duel_chat(duel_id);
+    CREATE INDEX IF NOT EXISTS idx_duel_pumps ON duel_pumps(duel_id);
+    CREATE INDEX IF NOT EXISTS idx_duel_pumps_user ON duel_pumps(duel_id, user_id);
   `);
 
   // Migrations for players table - add user_id

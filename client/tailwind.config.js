@@ -26,6 +26,7 @@ export default {
         'slide-up': 'slideUp 0.4s ease-out',
         'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
         'fade-in': 'fadeIn 0.3s ease-out',
+        'float-up': 'floatUp 2s ease-out forwards',
       },
       keyframes: {
         cardFlip: {
@@ -43,6 +44,11 @@ export default {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        floatUp: {
+          '0%': { transform: 'translateY(0) scale(1)', opacity: '1' },
+          '50%': { transform: 'translateY(-120px) scale(1.3)', opacity: '0.8' },
+          '100%': { transform: 'translateY(-250px) scale(0.8)', opacity: '0' },
         },
       },
     },
