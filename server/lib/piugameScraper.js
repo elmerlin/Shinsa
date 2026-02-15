@@ -1,6 +1,11 @@
 const axios = require('axios');
+const https = require('https');
 const { CookieJar } = require('tough-cookie');
 const cheerio = require('cheerio');
+
+// am-pass.net serves an incomplete certificate chain (missing intermediate CA certs).
+// Browsers fetch missing intermediates automatically, but Node.js does not.
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const AM_PASS_BASE = 'https://am-pass.net';
 const PIU_BASE = 'https://www.piugame.com';
@@ -63,6 +68,7 @@ function createClient() {
         timeout: 30000,
         maxRedirects: 0,
         validateStatus: () => true,
+        httpsAgent,
       });
 
       // Capture cookies from this hop
