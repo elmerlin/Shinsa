@@ -426,11 +426,13 @@ def extract_score(lines: Sequence[OCRLine]) -> Optional[int]:
             value = parse_int_token(token)
             if value is None:
                 continue
-            if 100000 <= value <= 99999999:
+            # PIU Phoenix scores range from 0 to 1,000,000
+            if 100000 <= value <= 1000000:
                 candidates.append((value, line.confidence))
     if not candidates:
         return None
-    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    # Prefer highest confidence, then largest value
+    candidates.sort(key=lambda item: (item[1], item[0]), reverse=True)
     return candidates[0][0]
 
 
@@ -496,12 +498,65 @@ def _is_pure_number(text: str) -> bool:
     return len(digits) > 0 and len(digits) >= len(non_digits)
 
 
+def _stat_range_bonus(key: str, value: float, is_decimal: bool) -> float:
+    """Bonus for values in the expected range for each stat type.
+
+    PIU Phoenix shows judgment counts with leading zeros (e.g. ``004``).
+    For great/good/bad/miss the values are typically small (0-100).
+    Adding a range bonus helps the spatial matching prefer the correct
+    small-count value over a nearby number like BPM.
+    """
+    if is_decimal:
+        return 0.0
+    v = int(value)
+    if key in ("great", "good", "bad", "miss"):
+        if v <= 50:
+            return 20.0
+        if v <= 500:
+            return 8.0
+    elif key == "perfect":
+        if 50 <= v <= 5000:
+            return 10.0
+    elif key == "max_combo":
+        if 10 <= v <= 5000:
+            return 5.0
+    return 0.0
+
+
 def _line_is_score_number(line: OCRLine) -> bool:
     """Check if this OCR line looks like a large score number (not a stat count)."""
     val = parse_int_token(line.text)
     if val is not None and val >= 100000:
         return True
     return False
+
+
+def _detect_bpm_values(lines: Sequence[OCRLine]) -> set:
+    """Detect numbers that appear to be BPM values (near a 'BPM' label)."""
+    bpm_values: set = set()
+    bpm_lines: List[OCRLine] = []
+
+    for line in lines:
+        upper = normalize_space(line.text.upper())
+        if "BPM" in upper or fuzz.partial_ratio(upper.replace(" ", ""), "BPM") >= 85:
+            bpm_lines.append(line)
+            # Try to extract inline BPM number
+            cleaned = re.sub(r"[A-Z]", "", upper).strip()
+            val = parse_int_token(cleaned)
+            if val is not None and 30 <= val <= 400:
+                bpm_values.add(val)
+
+    # Also check for numbers spatially near BPM labels
+    for bpm_line in bpm_lines:
+        for line in lines:
+            if id(line) == id(bpm_line):
+                continue
+            if abs(line.cy - bpm_line.cy) < bpm_line.h * 3.0 and _is_pure_number(line.text):
+                val = parse_int_token(line.text)
+                if val is not None and 30 <= val <= 400:
+                    bpm_values.add(val)
+
+    return bpm_values
 
 
 def extract_stats_dynamic(lines: Sequence[OCRLine], image_h: float) -> Dict[str, Any]:
@@ -513,6 +568,9 @@ def extract_stats_dynamic(lines: Sequence[OCRLine], image_h: float) -> Dict[str,
     2. For each found label, find its associated number by spatial proximity
     3. Prefer numbers to the RIGHT of or BELOW the label on the same row
     """
+    # Detect BPM values to exclude from stat matching
+    bpm_values = _detect_bpm_values(lines)
+
     # Step 1: Find all label matches and all number-containing lines
     label_matches: Dict[str, List[Tuple[float, OCRLine]]] = {k: [] for k in STAT_ORDER}
     number_lines: List[OCRLine] = []
@@ -597,11 +655,17 @@ def extract_stats_dynamic(lines: Sequence[OCRLine], image_h: float) -> Dict[str,
                 if not is_decimal and v >= 100000:
                     continue
 
-                # Score: prefer values to the right, close vertically
+                # Skip values that match detected BPM numbers
+                if not is_decimal and int(v) in bpm_values:
+                    continue
+
+                # Score: prefer values to the right, close vertically,
+                # and in the expected range for this stat type
                 dx = num_line.cx - label_line.cx
                 right_bonus = 25.0 if dx > 0 else 0.0
                 y_closeness = max(0, row_tolerance - dy)
-                proximity_score = right_bonus + y_closeness + (num_line.confidence * 5.0)
+                range_bonus = _stat_range_bonus(key, float(v), is_decimal)
+                proximity_score = right_bonus + y_closeness + (num_line.confidence * 5.0) + range_bonus
 
                 if best_candidate is None or proximity_score > best_candidate[0]:
                     best_candidate = (proximity_score, float(v), num_id)
@@ -758,7 +822,8 @@ def extract_stats_by_vertical_order(lines: Sequence[OCRLine], image_h: float) ->
             dx = num_line.cx - label_line.cx
             right_bonus = 25.0 if dx > 0 else 0.0
             y_closeness = max(0, row_tolerance - dy)
-            score = right_bonus + y_closeness + (num_line.confidence * 5.0)
+            range_bonus = _stat_range_bonus(key, float(v), is_decimal)
+            score = right_bonus + y_closeness + (num_line.confidence * 5.0) + range_bonus
 
             if best is None or score > best[0]:
                 best = (score, float(v), num_id)
