@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getUserProfile, getUserStats } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  getUserProfile, getUserStats,
+  getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
+  syncPumbility, syncRecentlyPlayed,
+} from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 
@@ -33,16 +38,67 @@ function getRank(score) {
   return { label: 'F', color: 'text-gray-600' };
 }
 
+function getGradeColor(grade) {
+  const g = (grade || '').replace('+', '_p').toUpperCase();
+  if (g.includes('SSS')) return 'text-sky-300';
+  if (g.includes('SS')) return 'text-piu-gold';
+  if (g.includes('S')) return 'text-amber-400';
+  if (g.includes('AAA')) return 'text-piu-silver';
+  if (g.includes('AA')) return 'text-piu-bronze';
+  if (g.includes('A')) return 'text-amber-700';
+  return 'text-gray-500';
+}
+
 export default function ProfilePage() {
   const { id } = useParams();
+  const { user: authUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
   const [tab, setTab] = useState('overview');
 
+  // PIUGame state
+  const [piuStatus, setPiuStatus] = useState(null);
+  const [piuPumbility, setPiuPumbility] = useState(null);
+  const [piuBestScores, setPiuBestScores] = useState(null);
+  const [piuRecentlyPlayed, setPiuRecentlyPlayed] = useState(null);
+  const [piuScoreMode, setPiuScoreMode] = useState('Single');
+  const [piuScoreLevel, setPiuScoreLevel] = useState('');
+  const [piuSyncing, setPiuSyncing] = useState('');
+  const [piuLoaded, setPiuLoaded] = useState(false);
+
   useEffect(() => {
     getUserProfile(id).then(setProfile).catch(() => {});
     getUserStats(id).then(setStats).catch(() => {});
+    getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
   }, [id]);
+
+  // Load PIUGame data when switching to the piugame tab
+  useEffect(() => {
+    if (tab === 'piugame' && !piuLoaded) {
+      setPiuLoaded(true);
+      getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
+      getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
+      getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
+    }
+  }, [tab, id, piuLoaded]);
+
+  // Auto-refresh pumbility + recently played when visiting someone's profile (if they have data)
+  const isOwner = authUser && authUser.id === id;
+  useEffect(() => {
+    if (tab === 'piugame' && isOwner && piuStatus?.linked) {
+      // Auto-sync pumbility and recently played for the profile owner
+      setPiuSyncing('auto');
+      Promise.all([
+        syncPumbility().catch(() => null),
+        syncRecentlyPlayed().catch(() => null),
+      ]).then(() => {
+        // Refresh the displayed data
+        getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
+        getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
+        getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
+      }).finally(() => setPiuSyncing(''));
+    }
+  }, [tab, isOwner, piuStatus?.linked]);
 
   // Aggregate all song scores across duels and tournaments
   const songScores = useMemo(() => {
@@ -142,6 +198,24 @@ export default function ProfilePage() {
     return { tournamentCount, duelCount, totalWins, totalLosses, duelWins, duelLosses, totalSongs, avgScore, bestScore, byLevel };
   }, [stats, songScores, id]);
 
+  // Filtered best scores for PIUGame tab
+  const filteredBestScores = useMemo(() => {
+    if (!piuBestScores?.scores) return [];
+    let filtered = piuBestScores.scores.filter(s => s.mode === piuScoreMode);
+    if (piuScoreLevel) {
+      filtered = filtered.filter(s => s.level === parseInt(piuScoreLevel));
+    }
+    return filtered;
+  }, [piuBestScores, piuScoreMode, piuScoreLevel]);
+
+  // Available levels for filtering
+  const availableLevels = useMemo(() => {
+    if (!piuBestScores?.scores) return [];
+    const levels = new Set();
+    piuBestScores.scores.filter(s => s.mode === piuScoreMode).forEach(s => levels.add(s.level));
+    return [...levels].sort((a, b) => a - b);
+  }, [piuBestScores, piuScoreMode]);
+
   if (!profile) {
     return <div className="text-center py-20 text-gray-500">Loading profile...</div>;
   }
@@ -149,6 +223,10 @@ export default function ProfilePage() {
   const age = profile.show_age && profile.date_of_birth ? getAge(profile.date_of_birth) : null;
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality);
+  const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
+
+  const tabs = ['overview', 'tournaments', 'duels', 'songs'];
+  if (hasPiuData) tabs.push('piugame');
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -216,8 +294,8 @@ export default function ProfilePage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-4">
-        {['overview', 'tournaments', 'duels', 'songs'].map(t => (
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {tabs.map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -225,7 +303,7 @@ export default function ProfilePage() {
               tab === t ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
           >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {t === 'piugame' ? 'PIUGame Data' : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
@@ -392,6 +470,199 @@ export default function ProfilePage() {
               );
             })
           )}
+        </div>
+      )}
+
+      {/* PIUGame Data Tab */}
+      {tab === 'piugame' && (
+        <div className="space-y-6">
+          {piuSyncing === 'auto' && (
+            <div className="text-center text-xs text-piu-accent animate-pulse py-2">
+              Syncing latest data from piugame.com...
+            </div>
+          )}
+
+          {/* Pumbility Section */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display font-bold text-sm text-piu-accent">PUMBILITY</h3>
+              {piuPumbility?.pumbility_value > 0 && (
+                <span className="text-lg font-mono font-bold text-piu-gold">
+                  {piuPumbility.pumbility_value.toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            {piuPumbility?.scores?.length > 0 ? (
+              <div className="space-y-1.5">
+                {piuPumbility.scores.map((s, i) => {
+                  const rank = getRank(s.score);
+                  return (
+                    <div key={i} className="flex items-center gap-2 py-1">
+                      <span className="text-[10px] text-gray-600 font-mono w-5 shrink-0">#{s.rank_order}</span>
+                      {s.background_url && (
+                        <img
+                          src={s.background_url}
+                          alt=""
+                          className="w-8 h-8 rounded object-cover shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-display font-bold truncate">{s.song_title}</p>
+                        <p className="text-[10px] text-gray-500">{s.mode} Lv.{s.level}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`text-[10px] font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
+                          {s.grade || rank.label}
+                        </span>
+                        <p className="font-mono text-[10px] font-bold">{s.score.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 text-sm py-4">No pumbility data synced yet</p>
+            )}
+
+            {piuPumbility?.last_sync && (
+              <p className="text-[10px] text-gray-600 mt-3">
+                Last synced: {new Date(piuPumbility.last_sync + 'Z').toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          {/* Best Scores Section */}
+          <div className="card">
+            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">BEST SCORES</h3>
+
+            {/* Mode Toggle + Level Filter */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <div className="flex gap-1">
+                {['Single', 'Double'].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => { setPiuScoreMode(m); setPiuScoreLevel(''); }}
+                    className={`px-3 py-1 rounded text-xs font-display font-bold transition-colors ${
+                      piuScoreMode === m ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {availableLevels.length > 0 && (
+                <select
+                  className="input-field text-xs py-1 px-2 w-auto"
+                  value={piuScoreLevel}
+                  onChange={e => setPiuScoreLevel(e.target.value)}
+                >
+                  <option value="">All Levels ({piuBestScores?.scores?.filter(s => s.mode === piuScoreMode).length || 0})</option>
+                  {availableLevels.map(l => (
+                    <option key={l} value={l}>
+                      Lv.{l} ({piuBestScores?.scores?.filter(s => s.mode === piuScoreMode && s.level === l).length || 0})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {filteredBestScores.length > 0 ? (
+              <div className="space-y-1">
+                {filteredBestScores.map((s, i) => {
+                  const rank = getRank(s.score);
+                  return (
+                    <div key={i} className="flex items-center gap-2 py-1">
+                      <div className="w-8 h-8 rounded bg-piu-dark flex items-center justify-center shrink-0">
+                        <span className="text-[10px] font-display font-bold text-gray-400">
+                          {s.mode === 'Single' ? 'S' : 'D'}{s.level}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-display font-bold truncate">{s.song_title}</p>
+                        <div className="flex items-center gap-1">
+                          {s.plate && (
+                            <span className="text-[9px] px-1 rounded bg-piu-dark text-gray-400 font-mono">{s.plate}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`text-[10px] font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
+                          {s.grade || rank.label}
+                        </span>
+                        <p className="font-mono text-[10px] font-bold">{s.score.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 text-sm py-4">
+                {piuBestScores?.scores?.length > 0
+                  ? `No ${piuScoreMode} scores${piuScoreLevel ? ` at Lv.${piuScoreLevel}` : ''}`
+                  : 'No best scores imported yet'}
+              </p>
+            )}
+
+            {piuBestScores?.last_sync && (
+              <p className="text-[10px] text-gray-600 mt-3">
+                Last synced: {new Date(piuBestScores.last_sync + 'Z').toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          {/* Recently Played Section */}
+          <div className="card">
+            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">RECENTLY PLAYED</h3>
+
+            {piuRecentlyPlayed?.plays?.length > 0 ? (
+              <div className="space-y-1.5">
+                {piuRecentlyPlayed.plays.map((p, i) => {
+                  const rank = getRank(p.score);
+                  return (
+                    <div key={i} className="flex items-center gap-2 py-1">
+                      {p.background_url && (
+                        <img
+                          src={p.background_url}
+                          alt=""
+                          className="w-8 h-8 rounded object-cover shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-display font-bold truncate">{p.song_title}</p>
+                        <p className="text-[10px] text-gray-500">{p.mode} Lv.{p.level}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {p.score > 0 ? (
+                          <>
+                            <span className={`text-[10px] font-display font-bold ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
+                              {p.grade || rank.label}
+                            </span>
+                            <p className="font-mono text-[10px] font-bold">{p.score.toLocaleString()}</p>
+                          </>
+                        ) : (
+                          <span className="text-[10px] font-display font-bold text-red-500">STAGE BREAK</span>
+                        )}
+                      </div>
+                      {p.date_played && (
+                        <span className="text-[9px] text-gray-600 shrink-0 w-14 text-right">
+                          {p.date_played.split(' ')[0]?.replace(/^\d{4}-/, '')}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 text-sm py-4">No recently played data synced yet</p>
+            )}
+
+            {piuRecentlyPlayed?.last_sync && (
+              <p className="text-[10px] text-gray-600 mt-3">
+                Last synced: {new Date(piuRecentlyPlayed.last_sync + 'Z').toLocaleString()}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

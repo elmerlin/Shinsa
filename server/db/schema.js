@@ -243,6 +243,68 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_duel_chat ON duel_chat(duel_id);
     CREATE INDEX IF NOT EXISTS idx_duel_pumps ON duel_pumps(duel_id);
     CREATE INDEX IF NOT EXISTS idx_duel_pumps_user ON duel_pumps(duel_id, user_id);
+
+    -- PIUGame integration tables
+    CREATE TABLE IF NOT EXISTS user_piugame_credentials (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      encrypted_username TEXT NOT NULL,
+      encrypted_password TEXT NOT NULL,
+      iv TEXT NOT NULL,
+      auth_tag TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_pumbility_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      grade TEXT DEFAULT '',
+      background_url TEXT DEFAULT '',
+      date_played TEXT DEFAULT '',
+      rank_order INTEGER DEFAULT 0,
+      UNIQUE(user_id, song_title, mode, level)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_best_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      grade TEXT DEFAULT '',
+      plate TEXT DEFAULT '',
+      UNIQUE(user_id, song_title, mode, level)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_recently_played (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      grade TEXT DEFAULT '',
+      background_url TEXT DEFAULT '',
+      date_played TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS user_piugame_sync (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      last_best_scores_sync TEXT DEFAULT '',
+      last_pumbility_sync TEXT DEFAULT '',
+      last_recently_played_sync TEXT DEFAULT '',
+      best_scores_imported INTEGER DEFAULT 0,
+      pumbility_value INTEGER DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pumbility_scores_user ON user_pumbility_scores(user_id);
+    CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
+    CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
+    CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
   `);
 
   // Migrations for players table - add user_id

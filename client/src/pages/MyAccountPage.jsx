@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { updateMe, changePassword, getInvitations, respondInvitation } from '../utils/api';
+import {
+  updateMe, changePassword, getInvitations, respondInvitation,
+  getPiugameCredentialStatus, savePiugameCredentials, deletePiugameCredentials,
+  syncPumbility, syncBestScores, syncRecentlyPlayed,
+} from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
   SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
@@ -25,6 +29,12 @@ export default function MyAccountPage() {
   // Password form
   const [passForm, setPassForm] = useState({ current_password: '', new_password: '', confirm: '' });
 
+  // PIUGame link state
+  const [piuLinked, setPiuLinked] = useState(false);
+  const [piuForm, setPiuForm] = useState({ piugame_username: '', piugame_password: '' });
+  const [piuSyncing, setPiuSyncing] = useState('');
+  const [piuMessage, setPiuMessage] = useState('');
+
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     const titleParts = (user.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
@@ -41,6 +51,7 @@ export default function MyAccountPage() {
       description: user.description || '',
     });
     getInvitations().then(setInvitations).catch(() => {});
+    getPiugameCredentialStatus().then(r => setPiuLinked(r.linked)).catch(() => {});
   }, [user]);
 
   if (!user) return null;
@@ -102,6 +113,61 @@ export default function MyAccountPage() {
     }
   };
 
+  // PIUGame handlers
+  const handleLinkPiugame = async (e) => {
+    e.preventDefault();
+    setPiuSyncing('linking');
+    setPiuMessage('');
+    try {
+      await savePiugameCredentials(piuForm);
+      setPiuLinked(true);
+      setPiuForm({ piugame_username: '', piugame_password: '' });
+      setPiuMessage('PIUGame account linked!');
+    } catch (err) {
+      setPiuMessage(err.message);
+    } finally {
+      setPiuSyncing('');
+    }
+  };
+
+  const handleUnlinkPiugame = async () => {
+    if (!confirm('Unlink your PIUGame account? All imported scores will be deleted.')) return;
+    setPiuSyncing('unlinking');
+    setPiuMessage('');
+    try {
+      await deletePiugameCredentials();
+      setPiuLinked(false);
+      setPiuMessage('PIUGame account unlinked!');
+    } catch (err) {
+      setPiuMessage(err.message);
+    } finally {
+      setPiuSyncing('');
+    }
+  };
+
+  const handleSync = async (type) => {
+    setPiuSyncing(type);
+    setPiuMessage('');
+    try {
+      let result;
+      if (type === 'pumbility') {
+        result = await syncPumbility();
+        await refreshUser();
+        setPiuMessage(`Pumbility synced! Value: ${result.pumbility_value?.toLocaleString() || 0}, ${result.scores_count} top scores imported!`);
+      } else if (type === 'best-scores') {
+        result = await syncBestScores();
+        setPiuMessage(`Best scores imported! ${result.scores_count} scores synced!`);
+      } else if (type === 'recently-played') {
+        result = await syncRecentlyPlayed();
+        setPiuMessage(`Recently played synced! ${result.plays_count} plays, ${result.scores_updated} best scores updated!`);
+      }
+    } catch (err) {
+      setPiuMessage(err.message);
+    } finally {
+      setPiuSyncing('');
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -150,16 +216,20 @@ export default function MyAccountPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6">
-        {['profile', 'password'].map(t => (
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {[
+          { key: 'profile', label: 'Edit Profile' },
+          { key: 'password', label: 'Change Password' },
+          { key: 'piugame', label: 'PIUGame Link' },
+        ].map(t => (
           <button
-            key={t}
-            onClick={() => { setTab(t); setMessage(''); }}
+            key={t.key}
+            onClick={() => { setTab(t.key); setMessage(''); setPiuMessage(''); }}
             className={`px-4 py-2 rounded-lg text-sm font-display font-bold transition-colors ${
-              tab === t ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+              tab === t.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
           >
-            {t === 'profile' ? 'Edit Profile' : 'Change Password'}
+            {t.label}
           </button>
         ))}
       </div>
@@ -289,7 +359,7 @@ export default function MyAccountPage() {
             {saving ? 'Saving...' : 'Save Profile'}
           </button>
         </form>
-      ) : (
+      ) : tab === 'password' ? (
         <form onSubmit={handleChangePassword} className="card space-y-4">
           <div>
             <label className="block text-sm text-gray-400 mb-1">Current Password</label>
@@ -327,6 +397,169 @@ export default function MyAccountPage() {
             {saving ? 'Changing...' : 'Change Password'}
           </button>
         </form>
+      ) : (
+        /* PIUGame Link Tab */
+        <div className="space-y-4">
+          <div className="card space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${piuLinked ? 'bg-piu-green' : 'bg-gray-600'}`} />
+              <h3 className="font-display font-bold text-sm">
+                {piuLinked ? 'PIUGame Account Linked' : 'Link Your PIUGame Account'}
+              </h3>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Connect your piugame.com account to import your pumbility rating, best scores,
+              and recently played songs. Your credentials are stored encrypted on the server.
+            </p>
+
+            {piuMessage && (
+              <div className={`px-4 py-2 rounded-lg text-sm ${
+                piuMessage.includes('!') ? 'bg-piu-green/10 text-piu-green border border-piu-green/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'
+              }`}>
+                {piuMessage}
+              </div>
+            )}
+
+            {!piuLinked ? (
+              <form onSubmit={handleLinkPiugame} className="space-y-3">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">PIUGame Username</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Your am-pass / piugame.com username"
+                    value={piuForm.piugame_username}
+                    onChange={e => setPiuForm(f => ({ ...f, piugame_username: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">PIUGame Password</label>
+                  <input
+                    type="password"
+                    className="input-field"
+                    placeholder="Your am-pass / piugame.com password"
+                    value={piuForm.piugame_password}
+                    onChange={e => setPiuForm(f => ({ ...f, piugame_password: e.target.value }))}
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn-primary w-full"
+                  disabled={!!piuSyncing}
+                >
+                  {piuSyncing === 'linking' ? 'Linking...' : 'Link Account'}
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-3">
+                {/* Update credentials */}
+                <details className="group">
+                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300 transition-colors">
+                    Update credentials
+                  </summary>
+                  <form onSubmit={handleLinkPiugame} className="mt-3 space-y-3">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">PIUGame Username</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Your am-pass / piugame.com username"
+                        value={piuForm.piugame_username}
+                        onChange={e => setPiuForm(f => ({ ...f, piugame_username: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">PIUGame Password</label>
+                      <input
+                        type="password"
+                        className="input-field"
+                        placeholder="Your am-pass / piugame.com password"
+                        value={piuForm.piugame_password}
+                        onChange={e => setPiuForm(f => ({ ...f, piugame_password: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn-primary w-full text-sm" disabled={!!piuSyncing}>
+                      {piuSyncing === 'linking' ? 'Updating...' : 'Update Credentials'}
+                    </button>
+                  </form>
+                </details>
+
+                <button
+                  onClick={handleUnlinkPiugame}
+                  className="w-full px-4 py-2 bg-red-500/10 text-red-400 text-sm font-display font-bold rounded-lg border border-red-500/30 hover:bg-red-500/20 transition-colors"
+                  disabled={!!piuSyncing}
+                >
+                  {piuSyncing === 'unlinking' ? 'Unlinking...' : 'Unlink PIUGame Account'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Sync Actions */}
+          {piuLinked && (
+            <div className="card space-y-3">
+              <h3 className="font-display font-bold text-sm text-piu-accent">DATA SYNC</h3>
+              <p className="text-xs text-gray-400">
+                Import and update your data from piugame.com. Best scores can only be fully refreshed once per day.
+              </p>
+
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  onClick={() => handleSync('pumbility')}
+                  disabled={!!piuSyncing}
+                  className="flex items-center justify-between px-4 py-3 bg-piu-dark rounded-lg border border-piu-border/30 hover:border-piu-accent/50 transition-colors disabled:opacity-50"
+                >
+                  <div className="text-left">
+                    <p className="text-sm font-display font-bold">Sync Pumbility</p>
+                    <p className="text-[10px] text-gray-500">Updates your pumbility rating and top 50 scores</p>
+                  </div>
+                  {piuSyncing === 'pumbility' ? (
+                    <span className="text-xs text-piu-accent animate-pulse">Syncing...</span>
+                  ) : (
+                    <span className="text-xs text-gray-500">&rarr;</span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => handleSync('best-scores')}
+                  disabled={!!piuSyncing}
+                  className="flex items-center justify-between px-4 py-3 bg-piu-dark rounded-lg border border-piu-border/30 hover:border-piu-accent/50 transition-colors disabled:opacity-50"
+                >
+                  <div className="text-left">
+                    <p className="text-sm font-display font-bold">Import All Best Scores</p>
+                    <p className="text-[10px] text-gray-500">Full import from piugame.com (once per day)</p>
+                  </div>
+                  {piuSyncing === 'best-scores' ? (
+                    <span className="text-xs text-piu-accent animate-pulse">Importing...</span>
+                  ) : (
+                    <span className="text-xs text-gray-500">&rarr;</span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => handleSync('recently-played')}
+                  disabled={!!piuSyncing}
+                  className="flex items-center justify-between px-4 py-3 bg-piu-dark rounded-lg border border-piu-border/30 hover:border-piu-accent/50 transition-colors disabled:opacity-50"
+                >
+                  <div className="text-left">
+                    <p className="text-sm font-display font-bold">Sync Recently Played</p>
+                    <p className="text-[10px] text-gray-500">Fetches recent plays and updates best scores if better</p>
+                  </div>
+                  {piuSyncing === 'recently-played' ? (
+                    <span className="text-xs text-piu-accent animate-pulse">Syncing...</span>
+                  ) : (
+                    <span className="text-xs text-gray-500">&rarr;</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

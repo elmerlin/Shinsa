@@ -24,6 +24,26 @@ async function request(url, options = {}) {
   }
 }
 
+// Longer timeout for scraping operations (120s)
+async function longRequest(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+  try {
+    const res = await fetch(`${API_BASE}${url}`, {
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), ...options.headers },
+      ...options,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Request failed');
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Dashboard (combined)
 export const getDashboard = () => request('/dashboard');
 
@@ -107,6 +127,18 @@ export const onlineDuelEndRequest = (id) => request(`/online-duels/${id}/end-req
 export const onlineDuelCancelEnd = (id) => request(`/online-duels/${id}/cancel-end`, { method: 'POST' });
 export const pumpPlayer = (id, player) => request(`/online-duels/${id}/pump`, { method: 'POST', body: JSON.stringify({ player }) });
 export const getMyPump = (id) => request(`/online-duels/${id}/my-pump`);
+
+// PIUGame Integration
+export const getPiugameCredentialStatus = () => request('/piugame/credentials/status');
+export const savePiugameCredentials = (data) => request('/piugame/credentials', { method: 'POST', body: JSON.stringify(data) });
+export const deletePiugameCredentials = () => request('/piugame/credentials', { method: 'DELETE' });
+export const syncPumbility = () => longRequest('/piugame/sync/pumbility', { method: 'POST' });
+export const syncBestScores = () => longRequest('/piugame/sync/best-scores', { method: 'POST' });
+export const syncRecentlyPlayed = () => longRequest('/piugame/sync/recently-played', { method: 'POST' });
+export const getPiugamePumbility = (userId) => request(`/piugame/pumbility/${userId}`);
+export const getPiugameBestScores = (userId, mode) => request(`/piugame/best-scores/${userId}${mode ? `?mode=${mode}` : ''}`);
+export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-played/${userId}`);
+export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
 
 // Parser
 export async function parseScorePhoto(file) {

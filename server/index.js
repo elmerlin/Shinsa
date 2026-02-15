@@ -12,6 +12,7 @@ const duelRoutes = require('./routes/duels');
 const authRoutes = require('./routes/auth');
 const onlineDuelRoutes = require('./routes/onlineDuels');
 const parserRoutes = require('./routes/parser');
+const piugameRoutes = require('./routes/piugame');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +44,7 @@ app.use('/api/duels', duelRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/online-duels', onlineDuelRoutes);
 app.use('/api/parser', parserRoutes);
+app.use('/api/piugame', piugameRoutes);
 
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
