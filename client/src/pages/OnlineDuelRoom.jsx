@@ -56,6 +56,8 @@ export default function OnlineDuelRoom() {
   const chatEndRef = useRef(null);
   const lastChatTime = useRef('');
   const reactionIdRef = useRef(0);
+  const songCardRef = useRef(null);
+  const drawAreaRef = useRef(null);
 
   // Determine current user's role
   const playerSlot = duel && user ? (
@@ -87,10 +89,27 @@ export default function OnlineDuelRoom() {
     return () => clearInterval(interval);
   }, [id]);
 
-  // Auto-scroll chat
+  // Auto-scroll chat only within the chat container (not the page)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = chatEndRef.current?.parentElement;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [chat]);
+
+  // Current song (non-completed)
+  const currentSong = duel?.songs?.find(s => s.status !== 'completed');
+
+  // Scroll to song card when a new song is drawn
+  const prevSongRef = useRef(null);
+  useEffect(() => {
+    if (currentSong && currentSong.status === 'drawn' && prevSongRef.current !== currentSong.id) {
+      prevSongRef.current = currentSong.id;
+      setTimeout(() => {
+        songCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [currentSong]);
 
   // Fetch user's pump choice
   useEffect(() => {
@@ -152,12 +171,14 @@ export default function OnlineDuelRoom() {
   const handleAccept = async (songId) => {
     try {
       await onlineDuelAccept(id, songId);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 300);
     } catch (err) { alert(err.message); }
   };
 
   const handleDecline = async (songId) => {
     try {
       await onlineDuelDecline(id, songId);
+      setTimeout(() => drawAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
     } catch (err) { alert(err.message); }
   };
 
@@ -215,8 +236,6 @@ export default function OnlineDuelRoom() {
       }));
   }, [stats.completed]);
 
-  const currentSong = duel?.songs?.find(s => s.status !== 'completed');
-
   if (!duel) return <div className="text-center py-20 text-gray-500">Loading match room...</div>;
 
   return (
@@ -238,23 +257,13 @@ export default function OnlineDuelRoom() {
           {/* Player 1 side */}
           <div className="text-center flex-1">
             <div className="flex items-center justify-center gap-1 sm:gap-2">
-              {/* P1 PIU arrows (top-left, bottom-left pointing) */}
+              {/* P1 PIU arrow: red top-left if higher, blue bottom-left if lower */}
               {(() => {
-                const p1Higher = (duel.p1Pumps || 0) > (duel.p2Pumps || 0);
-                const p1Lower = (duel.p1Pumps || 0) < (duel.p2Pumps || 0);
-                const arrowColor = p1Higher ? '#ef4444' : p1Lower ? '#3b82f6' : '#555';
-                return (duel.p1Pumps > 0 || duel.p2Pumps > 0) ? (
-                  <div className="flex flex-col gap-0.5 shrink-0">
-                    {/* Top-left arrow */}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
-                      <path d="M4 4h10l-3 3 7 7-3 3-7-7-3 3z"/>
-                    </svg>
-                    {/* Bottom-left arrow */}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
-                      <path d="M4 20h10l-3-3 7-7-3-3-7 7-3-3z"/>
-                    </svg>
-                  </div>
-                ) : null;
+                const p1Pumps = duel.p1Pumps || 0;
+                const p2Pumps = duel.p2Pumps || 0;
+                if (p1Pumps > p2Pumps) return <img src="/piu/arrow-red-ul.svg" alt="Higher pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
+                if (p1Pumps < p2Pumps) return <img src="/piu/arrow-blue-dl.svg" alt="Lower pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
+                return null;
               })()}
               <div>
                 <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 mx-auto ${
@@ -274,13 +283,10 @@ export default function OnlineDuelRoom() {
                   <button
                     onClick={() => handlePump('player1')}
                     disabled={!user || myPump === 'player2'}
-                    className={`transition-all ${myPump === 'player1' ? 'scale-110' : 'hover:scale-105'} ${!user || myPump === 'player2' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                    className={`transition-all active:scale-90 ${myPump === 'player1' ? 'scale-110 drop-shadow-[0_0_6px_rgba(234,179,8,0.5)]' : 'hover:scale-105'} ${!user || myPump === 'player2' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
                     title={!user ? 'Log in to pump' : myPump === 'player2' ? 'Already pumping opponent' : myPump === 'player1' ? 'Click to unpump' : `Pump ${duel.player1_name}!`}
                   >
-                    <svg width="22" height="22" viewBox="0 0 24 24" className="sm:w-7 sm:h-7">
-                      <path d="M12 2L8 6H4v4l-4 4 4 4v4h4l4 4 4-4h4v-4l4-4-4-4V6h-4l-4-4z" fill={myPump === 'player1' ? '#eab308' : '#555'} stroke={myPump === 'player1' ? '#fbbf24' : '#666'} strokeWidth="0.5"/>
-                      <circle cx="12" cy="12" r="4" fill={myPump === 'player1' ? '#fbbf24' : '#777'}/>
-                    </svg>
+                    <img src={myPump === 'player1' ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="Pump" className="w-7 h-7 sm:w-9 sm:h-9" />
                   </button>
                   <span className={`text-xs font-mono font-bold ${myPump === 'player1' ? 'text-yellow-400' : 'text-gray-500'}`}>{duel.p1Pumps || 0}</span>
                 </div>
@@ -340,33 +346,20 @@ export default function OnlineDuelRoom() {
                   <button
                     onClick={() => handlePump('player2')}
                     disabled={!user || myPump === 'player1'}
-                    className={`transition-all ${myPump === 'player2' ? 'scale-110' : 'hover:scale-105'} ${!user || myPump === 'player1' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                    className={`transition-all active:scale-90 ${myPump === 'player2' ? 'scale-110 drop-shadow-[0_0_6px_rgba(234,179,8,0.5)]' : 'hover:scale-105'} ${!user || myPump === 'player1' ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
                     title={!user ? 'Log in to pump' : myPump === 'player1' ? 'Already pumping opponent' : myPump === 'player2' ? 'Click to unpump' : `Pump ${duel.player2_name}!`}
                   >
-                    <svg width="22" height="22" viewBox="0 0 24 24" className="sm:w-7 sm:h-7">
-                      <path d="M12 2L8 6H4v4l-4 4 4 4v4h4l4 4 4-4h4v-4l4-4-4-4V6h-4l-4-4z" fill={myPump === 'player2' ? '#eab308' : '#555'} stroke={myPump === 'player2' ? '#fbbf24' : '#666'} strokeWidth="0.5"/>
-                      <circle cx="12" cy="12" r="4" fill={myPump === 'player2' ? '#fbbf24' : '#777'}/>
-                    </svg>
+                    <img src={myPump === 'player2' ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="Pump" className="w-7 h-7 sm:w-9 sm:h-9" />
                   </button>
                 </div>
               </div>
-              {/* P2 PIU arrows (top-right, bottom-right pointing) */}
+              {/* P2 PIU arrow: red top-right if higher, blue bottom-right if lower */}
               {(() => {
-                const p2Higher = (duel.p2Pumps || 0) > (duel.p1Pumps || 0);
-                const p2Lower = (duel.p2Pumps || 0) < (duel.p1Pumps || 0);
-                const arrowColor = p2Higher ? '#ef4444' : p2Lower ? '#3b82f6' : '#555';
-                return (duel.p1Pumps > 0 || duel.p2Pumps > 0) ? (
-                  <div className="flex flex-col gap-0.5 shrink-0">
-                    {/* Top-right arrow */}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
-                      <path d="M20 4H10l3 3-7 7 3 3 7-7 3 3z"/>
-                    </svg>
-                    {/* Bottom-right arrow */}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill={arrowColor} className="sm:w-5 sm:h-5">
-                      <path d="M20 20H10l3-3-7-7 3-3 7 7 3-3z"/>
-                    </svg>
-                  </div>
-                ) : null;
+                const p1Pumps = duel.p1Pumps || 0;
+                const p2Pumps = duel.p2Pumps || 0;
+                if (p2Pumps > p1Pumps) return <img src="/piu/arrow-red-ur.svg" alt="Higher pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
+                if (p2Pumps < p1Pumps) return <img src="/piu/arrow-blue-dr.svg" alt="Lower pumps" className="w-6 h-6 sm:w-8 sm:h-8 shrink-0" />;
+                return null;
               })()}
             </div>
             <div className="flex items-center justify-center gap-1 mt-1">
@@ -409,7 +402,7 @@ export default function OnlineDuelRoom() {
             {duel.status === 'ACTIVE' && (
               <>
                 {currentSong ? (
-                  <div className="card space-y-3">
+                  <div ref={songCardRef} className="card space-y-3">
                     <div className="flex items-center gap-3">
                       {currentSong.song_jacket_url && <img src={currentSong.song_jacket_url} alt="" className="w-16 h-16 rounded-lg object-cover shadow-lg" />}
                       <div className="flex-1">
@@ -489,7 +482,7 @@ export default function OnlineDuelRoom() {
                 ) : (
                   /* Draw controls */
                   duel.current_turn === playerSlot ? (
-                    <div className="card space-y-3">
+                    <div ref={drawAreaRef} className="card space-y-3">
                       <h3 className="font-display font-bold text-sm text-piu-accent">Your Turn - Draw a Song</h3>
                       <div className="flex gap-3 items-end">
                         <div className="flex-1">
@@ -508,7 +501,7 @@ export default function OnlineDuelRoom() {
                       </div>
                     </div>
                   ) : (
-                    <div className="card text-center py-4">
+                    <div ref={drawAreaRef} className="card text-center py-4">
                       <p className="text-gray-400 font-display text-sm">
                         Waiting for {duel.current_turn === 'player1' ? duel.player1_name : duel.player2_name} to draw a song...
                       </p>

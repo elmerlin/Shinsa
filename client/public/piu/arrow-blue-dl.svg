@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#93c5fd"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+  </defs>
+  <!-- PIU-style arrow pointing down-left, rotated 225 degrees from up -->
+  <g transform="rotate(225, 32, 32)">
+    <polygon points="32,4 52,24 46,24 46,56 18,56 18,24 12,24" fill="url(#bg)" stroke="#1e3a8a" stroke-width="2" stroke-linejoin="round"/>
+    <polygon points="32,12 46,24 42,24 42,50 22,50 22,24 18,24" fill="#60a5fa" opacity="0.4"/>
+    <polygon points="32,10 44,22 32,18 20,22" fill="#93c5fd" opacity="0.6"/>
+  </g>
+</svg>

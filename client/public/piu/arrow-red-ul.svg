@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="rg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fca5a5"/>
+      <stop offset="50%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#991b1b"/>
+    </linearGradient>
+  </defs>
+  <!-- PIU-style arrow pointing upper-left, rotated 315 degrees from up -->
+  <g transform="rotate(-45, 32, 32)">
+    <!-- Arrow body (pentagon pointing up) -->
+    <polygon points="32,4 52,24 46,24 46,56 18,56 18,24 12,24" fill="url(#rg)" stroke="#7f1d1d" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Inner highlight -->
+    <polygon points="32,12 46,24 42,24 42,50 22,50 22,24 18,24" fill="#f87171" opacity="0.4"/>
+    <!-- Top chevron accent -->
+    <polygon points="32,10 44,22 32,18 20,22" fill="#fca5a5" opacity="0.6"/>
+  </g>
+</svg>
