@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getOnlineDuel, getOnlineDuelChat, sendChatMessage, joinOnlineDuel,
   onlineDuelDraw, onlineDuelAccept, onlineDuelDecline, onlineDuelSubmitScore,
-  onlineDuelEndRequest, onlineDuelCancelEnd, parseScorePhoto,
+  onlineDuelEndRequest, onlineDuelCancelEnd,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -45,13 +46,10 @@ export default function OnlineDuelRoom() {
   const [guestName, setGuestName] = useState('');
   const [drawLevel, setDrawLevel] = useState(15);
   const [drawMode, setDrawMode] = useState('any');
-  const [uploading, setUploading] = useState(false);
-  const [parseResult, setParseResult] = useState(null);
-  const [manualEntry, setManualEntry] = useState(false);
+  const [scoreEntry, setScoreEntry] = useState(null);
   const [selectedBreakdown, setSelectedBreakdown] = useState(null);
   const [tab, setTab] = useState('match');
   const chatEndRef = useRef(null);
-  const fileInputRef = useRef(null);
   const lastChatTime = useRef('');
 
   // Determine current user's role
@@ -123,48 +121,15 @@ export default function OnlineDuelRoom() {
     } catch (err) { alert(err.message); }
   };
 
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setParseResult(null);
-    try {
-      const result = await parseScorePhoto(file);
-      // Flatten: parser returns { score, breakdown: { perfect, ... } }
-      const bd = result.breakdown || {};
-      setParseResult({
-        score: result.score || bd.score || 0,
-        perfect: bd.perfect ?? result.perfect ?? 0,
-        great: bd.great ?? result.great ?? 0,
-        good: bd.good ?? result.good ?? 0,
-        bad: bd.bad ?? result.bad ?? 0,
-        miss: bd.miss ?? result.miss ?? 0,
-        max_combo: bd.max_combo ?? result.max_combo ?? 0,
-        kcal: bd.kcal ?? result.kcal ?? 0,
-      });
-    } catch (err) {
-      alert('Failed to parse photo: ' + err.message);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
   const handleSubmitScore = async () => {
-    if (!parseResult) return;
+    if (!scoreEntry) return;
     try {
       await onlineDuelSubmitScore(id, {
-        score: Number(parseResult.score) || 0,
-        perfect: Number(parseResult.perfect) || 0,
-        great: Number(parseResult.great) || 0,
-        good: Number(parseResult.good) || 0,
-        bad: Number(parseResult.bad) || 0,
-        miss: Number(parseResult.miss) || 0,
-        max_combo: Number(parseResult.max_combo) || 0,
-        kcal: Number(parseResult.kcal) || 0,
+        score: Number(scoreEntry.score) || 0,
+        perfect: 0, great: 0, good: 0, bad: 0, miss: 0,
+        max_combo: 0, kcal: 0,
       });
-      setParseResult(null);
-      setManualEntry(false);
+      setScoreEntry(null);
     } catch (err) { alert(err.message); }
   };
 
@@ -179,8 +144,6 @@ export default function OnlineDuelRoom() {
     const completed = duel.songs.filter(s => s.status === 'completed');
     const p1Wins = completed.filter(s => s.winner === 'player1').length;
     const p2Wins = completed.filter(s => s.winner === 'player2').length;
-    const p1TotalKcal = completed.reduce((s, c) => s + (c.player1_kcal || 0), 0);
-    const p2TotalKcal = completed.reduce((s, c) => s + (c.player2_kcal || 0), 0);
     const draws = completed.filter(s => s.winner === 'draw').length;
     const p1TotalScore = completed.reduce((s, c) => s + c.player1_score, 0);
     const p2TotalScore = completed.reduce((s, c) => s + c.player2_score, 0);
@@ -188,10 +151,29 @@ export default function OnlineDuelRoom() {
     const p2Avg = completed.length > 0 ? Math.round(p2TotalScore / completed.length) : 0;
     const p1Best = completed.length > 0 ? Math.max(...completed.map(s => s.player1_score)) : 0;
     const p2Best = completed.length > 0 ? Math.max(...completed.map(s => s.player2_score)) : 0;
-    const p1TotalSteps = completed.reduce((s, c) => s + c.player1_perfect + c.player1_great + c.player1_good + c.player1_bad, 0);
-    const p2TotalSteps = completed.reduce((s, c) => s + c.player2_perfect + c.player2_great + c.player2_good + c.player2_bad, 0);
-    return { p1Wins, p2Wins, draws, completed, p1TotalKcal, p2TotalKcal, p1TotalSteps, p2TotalSteps, p1Avg, p2Avg, p1Best, p2Best };
+    return { p1Wins, p2Wins, draws, completed, p1Avg, p2Avg, p1Best, p2Best };
   }, [duel]);
+
+  // Chart data: group by level
+  const chartData = useMemo(() => {
+    if (!stats.completed.length) return [];
+    const levelMap = {};
+    stats.completed.forEach(s => {
+      const lvl = s.song_level;
+      if (!levelMap[lvl]) levelMap[lvl] = { level: lvl, p1Scores: [], p2Scores: [], count: 0 };
+      levelMap[lvl].p1Scores.push(s.player1_score);
+      levelMap[lvl].p2Scores.push(s.player2_score);
+      levelMap[lvl].count++;
+    });
+    return Object.values(levelMap)
+      .sort((a, b) => a.level - b.level)
+      .map(d => ({
+        level: `Lv.${d.level}`,
+        songsPlayed: d.count,
+        p1Avg: Math.round(d.p1Scores.reduce((a, b) => a + b, 0) / d.p1Scores.length),
+        p2Avg: Math.round(d.p2Scores.reduce((a, b) => a + b, 0) / d.p2Scores.length),
+      }));
+  }, [stats.completed]);
 
   const currentSong = duel?.songs?.find(s => s.status !== 'completed');
 
@@ -341,64 +323,44 @@ export default function OnlineDuelRoom() {
                       );
                     })()}
 
-                    {/* Score submission */}
+                    {/* Score submission — manual entry only */}
                     {currentSong.status === 'playing' && isParticipant && (
                       !(playerSlot === 'player1' ? currentSong.player1_submitted : currentSong.player2_submitted) ? (
                         <div className="space-y-2 pt-2 border-t border-piu-border/50">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm text-gray-400 font-display">{manualEntry ? 'Enter your score manually' : 'Upload your result photo'}</p>
+                          <p className="text-sm text-gray-400 font-display">Enter your score</p>
+                          {!scoreEntry ? (
                             <button
-                              type="button"
-                              onClick={() => { setManualEntry(!manualEntry); if (!manualEntry && !parseResult) setParseResult({ score: 0, perfect: 0, great: 0, good: 0, bad: 0, miss: 0, max_combo: 0, kcal: 0 }); }}
-                              className="text-[10px] text-piu-accent hover:underline font-display"
+                              onClick={() => setScoreEntry({ score: '' })}
+                              className="btn-primary w-full text-sm"
                             >
-                              {manualEntry ? 'Upload photo instead' : 'Enter manually'}
+                              Submit Score
                             </button>
-                          </div>
-                          {!manualEntry && (
-                            <>
-                              <input ref={fileInputRef} type="file" accept="image/*" className="input-field text-sm" onChange={handlePhotoUpload} />
-                              {uploading && <p className="text-xs text-piu-accent animate-pulse">Parsing score from photo...</p>}
-                            </>
-                          )}
-                          {parseResult && (
+                          ) : (
                             <div className="bg-piu-dark/50 rounded-lg p-3 space-y-2">
-                              <div className="flex items-center justify-between">
-                                <p className="text-sm font-display font-bold">{manualEntry ? 'Score Entry:' : 'Parsed Result:'}</p>
-                                {!manualEntry && <span className="text-[10px] text-gray-500">Click values to edit</span>}
+                              <div>
+                                <label className="text-gray-500 block text-[10px] mb-1">Score (0 - 1,000,000)</label>
+                                <input
+                                  type="number"
+                                  className="input-field text-sm font-mono w-full py-2 px-2"
+                                  value={scoreEntry.score}
+                                  min="0"
+                                  max="1000000"
+                                  placeholder="e.g. 990973"
+                                  autoFocus
+                                  onChange={e => setScoreEntry({ score: e.target.value === '' ? '' : (parseInt(e.target.value) || '') })}
+                                  onBlur={e => { if (e.target.value === '') setScoreEntry({ score: 0 }); }}
+                                />
                               </div>
-                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-xs">
-                                {[
-                                  { key: 'score', label: 'Score' },
-                                  { key: 'perfect', label: 'Perfect' },
-                                  { key: 'great', label: 'Great' },
-                                  { key: 'good', label: 'Good' },
-                                  { key: 'bad', label: 'Bad' },
-                                  { key: 'miss', label: 'Miss' },
-                                  { key: 'max_combo', label: 'Max Combo' },
-                                  { key: 'kcal', label: 'KCAL' },
-                                ].map(({ key, label }) => (
-                                  <div key={key}>
-                                    <label className="text-gray-500 block text-[10px]">{label}</label>
-                                    <input
-                                      type="number"
-                                      className="input-field text-xs font-mono w-full py-1 px-1.5"
-                                      value={parseResult[key] ?? ''}
-                                      step={key === 'kcal' ? '0.1' : '1'}
-                                      min="0"
-                                      onChange={e => setParseResult(prev => ({ ...prev, [key]: e.target.value === '' ? '' : (key === 'kcal' ? parseFloat(e.target.value) : parseInt(e.target.value) || '') }))}
-                                      onBlur={e => { if (e.target.value === '') setParseResult(prev => ({ ...prev, [key]: 0 })); }}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                              {parseResult.score > 0 && (
+                              {scoreEntry.score > 0 && (
                                 <p className="text-xs text-center">
                                   <span className="text-gray-500">Rank: </span>
-                                  <span className={`font-display font-bold ${getRank(parseResult.score).color}`}>{getRank(parseResult.score).label}</span>
+                                  <span className={`font-display font-bold ${getRank(scoreEntry.score).color}`}>{getRank(scoreEntry.score).label}</span>
                                 </p>
                               )}
-                              <button onClick={handleSubmitScore} className="btn-primary w-full text-sm mt-2">Confirm & Submit Score</button>
+                              <div className="flex gap-2">
+                                <button onClick={handleSubmitScore} className="btn-primary flex-1 text-sm">Confirm</button>
+                                <button onClick={() => setScoreEntry(null)} className="flex-1 text-sm px-4 py-2 bg-piu-card text-gray-400 rounded-lg font-display font-bold hover:text-white transition-colors">Cancel</button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -579,25 +541,49 @@ export default function OnlineDuelRoom() {
                 </div>
               </div>
 
-              {/* Extra stats row */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="card text-center py-3">
-                  <p className="font-mono font-bold text-lg text-piu-accent">{stats.p1TotalKcal?.toFixed(1)}</p>
-                  <p className="text-[10px] text-gray-500 font-display">{duel.player1_name} KCAL</p>
+              {/* Chart — Average Score by Level */}
+              {chartData.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-4">Average Score by Level</h3>
+                  <div className="h-[300px] sm:h-[350px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="level" tick={{ fontSize: 11, fill: '#888' }} />
+                        <YAxis
+                          yAxisId="left"
+                          domain={[
+                            (dataMin) => Math.max(0, Math.floor((Math.min(...chartData.map(d => Math.min(d.p1Avg, d.p2Avg))) - 50000) / 50000) * 50000),
+                            1000000
+                          ]}
+                          tickFormatter={(v) => v >= 1000000 ? '1M' : `${(v / 1000).toFixed(0)}k`}
+                          tick={{ fontSize: 10, fill: '#888' }}
+                          label={{ value: 'Avg Score', angle: -90, position: 'insideLeft', offset: 15, style: { fontSize: 10, fill: '#666' } }}
+                        />
+                        <YAxis
+                          yAxisId="right"
+                          orientation="right"
+                          allowDecimals={false}
+                          tick={{ fontSize: 10, fill: '#888' }}
+                          label={{ value: 'Songs', angle: 90, position: 'insideRight', offset: 15, style: { fontSize: 10, fill: '#666' } }}
+                        />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#1a1a2e', border: '1px solid #333', borderRadius: '8px', fontSize: '12px' }}
+                          labelStyle={{ color: '#aaa', fontWeight: 'bold' }}
+                          formatter={(value, name) => {
+                            if (name === 'Songs Played') return [value, name];
+                            return [Number(value).toLocaleString(), name];
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Bar yAxisId="right" dataKey="songsPlayed" name="Songs Played" fill="#333" opacity={0.6} barSize={30} />
+                        <Line yAxisId="left" type="monotone" dataKey="p1Avg" name={duel.player1_name} stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="p2Avg" name={duel.player2_name} stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="card text-center py-3">
-                  <p className="font-mono font-bold text-lg text-piu-accent">{stats.p2TotalKcal?.toFixed(1)}</p>
-                  <p className="text-[10px] text-gray-500 font-display">{duel.player2_name} KCAL</p>
-                </div>
-                <div className="card text-center py-3">
-                  <p className="font-mono font-bold text-lg">{stats.p1TotalSteps?.toLocaleString()}</p>
-                  <p className="text-[10px] text-gray-500 font-display">{duel.player1_name} Steps</p>
-                </div>
-                <div className="card text-center py-3">
-                  <p className="font-mono font-bold text-lg">{stats.p2TotalSteps?.toLocaleString()}</p>
-                  <p className="text-[10px] text-gray-500 font-display">{duel.player2_name} Steps</p>
-                </div>
-              </div>
+              )}
 
               {/* Song-by-Song Comparison */}
               <div className="card">
@@ -636,30 +622,6 @@ export default function OnlineDuelRoom() {
                 </div>
               </div>
 
-              {/* Detailed Results — Phoenix-style score cards */}
-              <div>
-                <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Detailed Results</h3>
-                <div className="space-y-4">
-                  {stats.completed.map(song => (
-                    <div key={song.id}>
-                      {/* Song header */}
-                      <div className="flex items-center gap-2 mb-2">
-                        {song.song_jacket_url && <img src={song.song_jacket_url} alt="" className="w-10 h-10 rounded object-cover" />}
-                        <div>
-                          <p className="font-display font-bold text-sm">{song.song_title}</p>
-                          <p className="text-[10px] text-gray-500">{song.song_artist} | {song.song_mode} Lv.{song.song_level}</p>
-                        </div>
-                      </div>
-                      {/* Two Phoenix-style score cards side by side */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <PhoenixScoreCard name={duel.player1_name} song={song} prefix="player1" won={song.winner === 'player1'} />
-                        <PhoenixScoreCard name={duel.player2_name} song={song} prefix="player2" won={song.winner === 'player2'} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {/* Rank Distribution */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <RankDistribution playerName={duel.player1_name} songs={stats.completed} scoreKey="player1_score" color="red" />
@@ -670,77 +632,45 @@ export default function OnlineDuelRoom() {
         </div>
       )}
 
-      {/* Score Breakdown Modal — both players Phoenix-style */}
-      {selectedBreakdown && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedBreakdown(null)}>
-          <div className="card max-w-lg w-full" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-3">
-              <div className="flex items-center gap-2">
-                {selectedBreakdown.song_jacket_url && <img src={selectedBreakdown.song_jacket_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
-                <div>
-                  <h3 className="font-display font-bold">{selectedBreakdown.song_title}</h3>
-                  <p className="text-xs text-gray-500">{selectedBreakdown.song_artist} | {selectedBreakdown.song_mode} Lv.{selectedBreakdown.song_level}</p>
+      {/* Score Modal — both players side by side */}
+      {selectedBreakdown && (() => {
+        const p1Rank = getRank(selectedBreakdown.player1_score);
+        const p2Rank = getRank(selectedBreakdown.player2_score);
+        const p1Won = selectedBreakdown.winner === 'player1';
+        const p2Won = selectedBreakdown.winner === 'player2';
+        return (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedBreakdown(null)}>
+            <div className="card max-w-md w-full" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-center gap-2">
+                  {selectedBreakdown.song_jacket_url && <img src={selectedBreakdown.song_jacket_url} alt="" className="w-12 h-12 rounded-lg object-cover" />}
+                  <div>
+                    <h3 className="font-display font-bold">{selectedBreakdown.song_title}</h3>
+                    <p className="text-xs text-gray-500">{selectedBreakdown.song_artist} | {selectedBreakdown.song_mode} Lv.{selectedBreakdown.song_level}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedBreakdown(null)} className="text-gray-500 hover:text-white text-xl">&#10005;</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className={`rounded-lg border p-3 text-center ${p1Won ? 'border-piu-green/40 bg-piu-green/5' : 'border-piu-border/30 bg-piu-dark/30'}`}>
+                  <p className={`text-[10px] font-display font-bold mb-2 ${p1Won ? 'text-piu-green' : 'text-gray-400'}`}>
+                    {p1Won && <span className="mr-0.5">&#9733;</span>}{duel.player1_name}
+                  </p>
+                  <span className={`text-sm font-display font-bold px-2 py-0.5 rounded border ${p1Rank.bg} ${p1Rank.color}`}>{p1Rank.label}</span>
+                  <p className={`font-mono font-bold text-lg mt-1 ${p1Won ? 'text-piu-green' : 'text-white'}`}>{selectedBreakdown.player1_score.toLocaleString()}</p>
+                </div>
+                <div className={`rounded-lg border p-3 text-center ${p2Won ? 'border-piu-green/40 bg-piu-green/5' : 'border-piu-border/30 bg-piu-dark/30'}`}>
+                  <p className={`text-[10px] font-display font-bold mb-2 ${p2Won ? 'text-piu-green' : 'text-gray-400'}`}>
+                    {p2Won && <span className="mr-0.5">&#9733;</span>}{duel.player2_name}
+                  </p>
+                  <span className={`text-sm font-display font-bold px-2 py-0.5 rounded border ${p2Rank.bg} ${p2Rank.color}`}>{p2Rank.label}</span>
+                  <p className={`font-mono font-bold text-lg mt-1 ${p2Won ? 'text-piu-green' : 'text-white'}`}>{selectedBreakdown.player2_score.toLocaleString()}</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedBreakdown(null)} className="text-gray-500 hover:text-white text-xl">&#10005;</button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <PhoenixScoreCard name={duel.player1_name} song={selectedBreakdown} prefix="player1" won={selectedBreakdown.winner === 'player1'} />
-              <PhoenixScoreCard name={duel.player2_name} song={selectedBreakdown} prefix="player2" won={selectedBreakdown.winner === 'player2'} />
             </div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PhoenixScoreCard({ name, song, prefix, won }) {
-  const score = song[`${prefix}_score`];
-  const rank = getRank(score);
-  const judgments = [
-    { label: 'Perfect', value: song[`${prefix}_perfect`], color: 'text-sky-300' },
-    { label: 'Great', value: song[`${prefix}_great`], color: 'text-green-400' },
-    { label: 'Good', value: song[`${prefix}_good`], color: 'text-yellow-400' },
-    { label: 'Bad', value: song[`${prefix}_bad`], color: 'text-orange-400' },
-    { label: 'Miss', value: song[`${prefix}_miss`], color: 'text-red-400' },
-  ];
-  return (
-    <div className={`rounded-lg border p-3 ${won ? 'border-piu-green/40 bg-piu-green/5' : 'border-piu-border/30 bg-piu-dark/30'}`}>
-      {/* Player name */}
-      <p className={`text-[10px] font-display font-bold text-center mb-2 ${won ? 'text-piu-green' : 'text-gray-400'}`}>
-        {won && <span className="mr-0.5">&#9733;</span>}{name}
-      </p>
-      {/* Rank badge */}
-      <div className="text-center mb-1">
-        <span className={`text-sm font-display font-bold px-2 py-0.5 rounded border ${rank.bg} ${rank.color}`}>
-          {rank.label}
-        </span>
-      </div>
-      {/* Score */}
-      <p className={`font-mono font-bold text-center text-lg ${won ? 'text-piu-green' : 'text-white'}`}>
-        {score.toLocaleString()}
-      </p>
-      {/* Judgment breakdown */}
-      <div className="mt-2 space-y-0.5">
-        {judgments.map(j => (
-          <div key={j.label} className="flex items-center justify-between text-[10px]">
-            <span className="text-gray-500">{j.label}</span>
-            <span className={`font-mono font-bold ${j.color}`}>{j.value}</span>
-          </div>
-        ))}
-      </div>
-      {/* Max Combo & KCAL */}
-      <div className="mt-1.5 pt-1.5 border-t border-piu-border/20 space-y-0.5">
-        <div className="flex items-center justify-between text-[10px]">
-          <span className="text-gray-500">Max Combo</span>
-          <span className="font-mono font-bold text-white">{song[`${prefix}_max_combo`]}</span>
-        </div>
-        <div className="flex items-center justify-between text-[10px]">
-          <span className="text-gray-500">KCAL</span>
-          <span className="font-mono font-bold text-piu-accent">{(song[`${prefix}_kcal`] || 0).toFixed(1)}</span>
-        </div>
-      </div>
+        );
+      })()}
     </div>
   );
 }
