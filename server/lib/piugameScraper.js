@@ -379,6 +379,141 @@ async function scrapeBestScores(client) {
 }
 
 /**
+ * Extract judgment breakdown (PERFECT, GREAT, GOOD, BAD, MISS) from a
+ * recently played list item using multiple selector strategies.
+ * PIUGame.com shows these as a 5-column grid within each card.
+ */
+function extractJudgmentBreakdown($, $li) {
+  let perfect = 0, great = 0, good = 0, bad = 0, miss = 0;
+  let found = false;
+
+  // Strategy 1: Look for labeled containers (div.etc_in, div.data_con, etc.)
+  // that contain a label (PERFECT/GREAT/...) and a numeric value
+  const labelContainers = [
+    'div.li_in.etc', 'div.etc_list', 'div.data_in',
+    'div.etc_wrap', 'div.li_in.st', 'div.score_detail',
+    'div.judge', 'div.detail'
+  ].join(', ');
+
+  const container = $li.find(labelContainers);
+  if (container.length) {
+    const subItems = container.find('div.etc_in, div.data_con, div.judge_con, li, span.col, div.col');
+    if (subItems.length >= 5) {
+      subItems.each((_, div) => {
+        const allText = $(div).text().toLowerCase().replace(/,/g, '').trim();
+        // Try finding labeled value pairs
+        const labelEl = $(div).find('p.tt, i.tt, span.tt, p.label, span.label, .tit, .t1').first();
+        const valEl = $(div).find('p.dd, i.dd, i.tx, span.dd, span.num, .con, .t2, .v1').first();
+        const label = (labelEl.text() || '').trim().toLowerCase();
+        const val = parseInt((valEl.text() || '').replace(/,/g, '').trim(), 10) || 0;
+
+        if (label.includes('perfect')) { perfect = val; found = true; }
+        else if (label.includes('great')) { great = val; found = true; }
+        else if (label.includes('good')) { good = val; found = true; }
+        else if (label.includes('bad')) { bad = val; found = true; }
+        else if (label.includes('miss')) { miss = val; found = true; }
+      });
+    }
+  }
+
+  // Strategy 2: Search for text nodes containing judgment keywords anywhere
+  // in the list item, then grab the adjacent/sibling numeric value
+  if (!found) {
+    const JUDGMENT_KEYWORDS = ['perfect', 'great', 'good', 'bad', 'miss'];
+    const allEls = $li.find('*');
+    const matchedLabels = {};
+
+    allEls.each((_, el) => {
+      const directText = $(el).contents().filter(function() {
+        return this.type === 'text';
+      }).text().trim().toLowerCase();
+
+      for (const kw of JUDGMENT_KEYWORDS) {
+        if (directText === kw && !matchedLabels[kw]) {
+          // Found a label — get the numeric value from the next sibling or child
+          const parent = $(el).parent();
+          const nextEl = $(el).next();
+          let val = 0;
+
+          // Check next sibling
+          if (nextEl.length) {
+            val = parseInt(nextEl.text().replace(/,/g, '').trim(), 10) || 0;
+          }
+          // Check parent's other children for numeric value
+          if (!val) {
+            parent.children().each((_, child) => {
+              if (child !== el) {
+                const childVal = parseInt($(child).text().replace(/,/g, '').trim(), 10);
+                if (!isNaN(childVal) && childVal >= 0) val = childVal;
+              }
+            });
+          }
+
+          matchedLabels[kw] = val;
+          found = true;
+        }
+      }
+    });
+
+    if (found) {
+      perfect = matchedLabels.perfect || 0;
+      great = matchedLabels.great || 0;
+      good = matchedLabels.good || 0;
+      bad = matchedLabels.bad || 0;
+      miss = matchedLabels.miss || 0;
+    }
+  }
+
+  // Strategy 3: Positional approach — find all numeric i.tx or span.num
+  // beyond the main score. The breakdowns typically appear as 5 consecutive
+  // numbers in a fixed order: PERFECT, GREAT, GOOD, BAD, MISS
+  if (!found) {
+    const allValues = [];
+    // Gather all text elements that contain just a number
+    $li.find('i.tx, span.num, i.num, span.tx, p.num').each((_, el) => {
+      const text = $(el).text().replace(/,/g, '').trim();
+      const num = parseInt(text, 10);
+      if (!isNaN(num)) allValues.push({ el, num, text });
+    });
+
+    // The first number is typically the score; the next 5 are breakdowns
+    if (allValues.length >= 6) {
+      // Skip the first one (score) and take the next 5
+      [perfect, great, good, bad, miss] = allValues.slice(1, 6).map(v => v.num);
+      found = true;
+    } else if (allValues.length === 5) {
+      // All 5 might be breakdowns if score was parsed separately
+      [perfect, great, good, bad, miss] = allValues.map(v => v.num);
+      found = true;
+    }
+  }
+
+  // Strategy 4: Broadest approach — look for any div/span blocks containing
+  // exactly 5 child elements with numeric content
+  if (!found) {
+    $li.find('div, ul').each((_, container) => {
+      if (found) return;
+      const children = $(container).children();
+      if (children.length === 5) {
+        const nums = [];
+        children.each((_, child) => {
+          // Find any numeric text in the child
+          const numText = $(child).find('i, span, p').last().text().replace(/,/g, '').trim();
+          const n = parseInt(numText, 10);
+          if (!isNaN(n)) nums.push(n);
+        });
+        if (nums.length === 5) {
+          [perfect, great, good, bad, miss] = nums;
+          found = true;
+        }
+      }
+    });
+  }
+
+  return { perfect, great, good, bad, miss, found };
+}
+
+/**
  * Scrape recently played page
  * Returns array of recent play objects
  */
@@ -386,6 +521,21 @@ async function scrapeRecentlyPlayed(client) {
   const res = await client.get(`${PIU_BASE}/my_page/recently_played.php`);
   const $ = cheerio.load(res.data);
   const plays = [];
+
+  // Log first item HTML structure for debugging
+  const firstLi = $('ul.recently_playeList > li').first();
+  if (firstLi.length) {
+    const structure = [];
+    firstLi.find('*').each((_, el) => {
+      const tag = $(el).prop('tagName') || '';
+      const cls = $(el).attr('class') || '';
+      const text = $(el).contents().filter(function() { return this.type === 'text'; }).text().trim();
+      if (cls || (text && text.length < 30)) {
+        structure.push(`<${tag.toLowerCase()} class="${cls}">${text}</${tag.toLowerCase()}>`);
+      }
+    });
+    console.log('Recently played: first item structure:', structure.join('\n'));
+  }
 
   // Note: class is "recently_playeList" (typo in actual site)
   $('ul.recently_playeList > li').each((_, li) => {
@@ -424,10 +574,11 @@ async function scrapeRecentlyPlayed(client) {
     const plateImg = $li.find('.etc_con .st1 img, div.plate img').first().attr('src') || '';
     const plate = parsePlateFromUrl(plateImg);
 
-    // Note: piugame.com's recently played list page does NOT include judgment
-    // breakdowns (PERFECT/GREAT/GOOD/BAD/MISS). Those are only shown on the
-    // arcade machine's result screen. Confirmed by reference implementation
-    // (kr3st1k/pumptracker).
+    // Judgment breakdown (PERFECT, GREAT, GOOD, BAD, MISS)
+    const breakdown = extractJudgmentBreakdown($, $li);
+    if (plays.length === 0) {
+      console.log(`Recently played: first item breakdown result:`, breakdown);
+    }
 
     plays.push({
       song_title: songTitle,
@@ -438,16 +589,17 @@ async function scrapeRecentlyPlayed(client) {
       plate,
       background_url: bgUrl,
       date_played: datePlayed,
-      perfect: 0,
-      great: 0,
-      good: 0,
-      bad: 0,
-      miss: 0,
+      perfect: breakdown.perfect,
+      great: breakdown.great,
+      good: breakdown.good,
+      bad: breakdown.bad,
+      miss: breakdown.miss,
       max_combo: 0,
       kcal: 0,
     });
   });
 
+  console.log(`Recently played: scraped ${plays.length} plays, breakdowns found: ${plays.filter(p => p.perfect > 0 || p.great > 0 || p.good > 0 || p.bad > 0 || p.miss > 0).length}`);
   return plays;
 }
 

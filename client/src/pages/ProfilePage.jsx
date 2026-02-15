@@ -823,7 +823,7 @@ export default function ProfilePage() {
                     {/* No breakdown notice */}
                     {!hasBreakdown && p.score > 0 && (
                       <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
-                        Judgment breakdown not available on piugame.com
+                        Judgment breakdown not available — try re-syncing
                       </p>
                     )}
 
