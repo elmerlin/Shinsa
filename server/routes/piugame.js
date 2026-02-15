@@ -166,6 +166,9 @@ router.post('/sync/pumbility', requireAuth, async (req, res) => {
 
 // POST /api/piugame/sync/best-scores — full import (rate-limited to once per day)
 router.post('/sync/best-scores', requireAuth, async (req, res) => {
+  // Extend timeout for this long-running scraping operation
+  req.setTimeout(300000);
+  res.setTimeout(300000);
   const db = getDb();
 
   // Check rate limit (once per day) unless this is first import

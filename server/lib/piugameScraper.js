@@ -255,6 +255,13 @@ async function scrapePumbility(client) {
 }
 
 /**
+ * Small delay helper to avoid hammering piugame.com
+ */
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Scrape best scores page with pagination
  * Returns array of score objects
  */
@@ -269,32 +276,10 @@ async function scrapeBestScores(client) {
   // Check for empty state
   if ($first('div.no_con').length > 0) return [];
 
-  // Get total pages from pagination
-  let totalPages = 1;
-  const lastPageBtn = $first('i.xi.last').parent();
-  if (lastPageBtn.length) {
-    const onclick = lastPageBtn.attr('onclick') || lastPageBtn.attr('href') || '';
-    const pageMatch = onclick.match(/page=(\d+)/);
-    if (pageMatch) totalPages = parseInt(pageMatch[1], 10);
-  }
-  // Fallback: check board_paging buttons and links
-  if (totalPages === 1) {
-    $first('.board_paging button, .board_paging a').each((_, el) => {
-      const onclick = $first(el).attr('onclick') || $first(el).attr('href') || '';
-      const pageMatch = onclick.match(/page=(\d+)/);
-      if (pageMatch) {
-        const p = parseInt(pageMatch[1], 10);
-        if (p > totalPages) totalPages = p;
-      }
-    });
-  }
-  // Fallback: if we still only found 1 page but got scores, use fetch-until-empty
-  const useIncrementalFetch = totalPages === 1 && allScores.length > 0;
-
   // Parse scores from a loaded page
   function parseScoresFromPage($) {
     const scores = [];
-    $('ul.my_best_scoreList > li').each((_, li) => {
+    $('ul.my_best_scoreList > li, ul.my_best_scoreList.flex.wrap > li').each((_, li) => {
       const $li = $(li);
       if ($li.find('div.in').length === 0) return;
 
@@ -302,12 +287,13 @@ async function scrapeBestScores(client) {
       if (!songTitle) return;
 
       // Mode from background image of stepball container
-      const stepBallStyle = $li.find('div.stepBall_in').attr('style') || '';
+      const stepBallBg = $li.find('div.stepBall_in, div.stepBall_in.flex.vc.col.hc.wrap.bgfix.cont').first();
+      const stepBallStyle = stepBallBg.attr('style') || '';
       const modeMatch = stepBallStyle.match(/\/l_img\/stepball\/full\/([a-zA-Z])_bg\.png/);
       const mode = modeMatch ? (MODE_MAP[modeMatch[1].toLowerCase()] || 'Single') : 'Single';
 
       // Level
-      const level = parseLevelFromImages($, $li.find('div.numw'));
+      const level = parseLevelFromImages($, $li.find('div.numw, div.numw.flex.vc.hc'));
 
       // Score
       const score = parseScore($li.find('ul.list span.num').text());
@@ -328,21 +314,67 @@ async function scrapeBestScores(client) {
   // Parse first page
   allScores.push(...parseScoresFromPage($first));
 
-  // Fetch remaining pages
-  const maxPage = useIncrementalFetch ? 200 : totalPages;
+  // Determine total pages using multiple strategies
+  let totalPages = 1;
+
+  // Strategy 1: Get total count from header and calculate pages (15 per page)
+  const totalCountEl = $first('div.left.total_wrap > i.tt.t2, div.total_wrap i.tt.t2, div.total_wrap i.tt');
+  if (totalCountEl.length) {
+    const totalCount = parseInt(totalCountEl.first().text().replace(/,/g, '').trim(), 10) || 0;
+    if (totalCount > 0) {
+      totalPages = Math.ceil(totalCount / 15);
+    }
+  }
+
+  // Strategy 2: Check "last" page button
+  if (totalPages <= 1) {
+    const lastPageBtn = $first('i.xi.last').parent();
+    if (lastPageBtn.length) {
+      const onclick = lastPageBtn.attr('onclick') || lastPageBtn.attr('href') || '';
+      const pageMatch = onclick.match(/page=(\d+)/);
+      if (pageMatch) totalPages = parseInt(pageMatch[1], 10);
+    }
+  }
+
+  // Strategy 3: Check all pagination buttons/links for highest page number
+  if (totalPages <= 1) {
+    $first('.board_paging button, .board_paging a, .paging button, .paging a').each((_, el) => {
+      const onclick = $first(el).attr('onclick') || $first(el).attr('href') || '';
+      const pageMatch = onclick.match(/page=(\d+)/);
+      if (pageMatch) {
+        const p = parseInt(pageMatch[1], 10);
+        if (p > totalPages) totalPages = p;
+      }
+    });
+  }
+
+  // Strategy 4: If we got scores on page 1 but couldn't detect pagination, use incremental fetching
+  const useIncrementalFetch = totalPages <= 1 && allScores.length > 0;
+
+  // Cap to avoid runaway fetching
+  const maxPage = useIncrementalFetch ? 200 : Math.min(totalPages, 200);
+
+  console.log(`Best scores: page 1 returned ${allScores.length} scores, totalPages=${totalPages}, incremental=${useIncrementalFetch}, maxPage=${maxPage}`);
+
+  // Fetch remaining pages with small delay between requests
   for (let page = 2; page <= maxPage; page++) {
     try {
+      await delay(300); // Be polite to piugame.com
       const res = await client.get(`${PIU_BASE}/my_page/my_best_score.php?page=${page}`);
       const $ = cheerio.load(res.data);
       const pageScores = parseScoresFromPage($);
       if (pageScores.length === 0) break; // No more scores on this page
       allScores.push(...pageScores);
+      if (page % 10 === 0) {
+        console.log(`Best scores: fetched page ${page}/${maxPage}, total so far: ${allScores.length}`);
+      }
     } catch (err) {
       console.error(`Failed to fetch best scores page ${page}:`, err.message);
       break;
     }
   }
 
+  console.log(`Best scores: completed with ${allScores.length} total scores`);
   return allScores;
 }
 
@@ -392,33 +424,10 @@ async function scrapeRecentlyPlayed(client) {
     const plateImg = $li.find('.etc_con .st1 img, div.plate img').first().attr('src') || '';
     const plate = parsePlateFromUrl(plateImg);
 
-    // Try to extract judgment breakdown data (PERFECT, GREAT, GOOD, BAD, MISS)
-    let perfect = 0, great = 0, good = 0, bad = 0, miss = 0;
-    // Check for judgment data in various possible selectors
-    const judgmentContainer = $li.find('div.li_in.etc, div.etc_list, div.data_in');
-    if (judgmentContainer.length) {
-      judgmentContainer.find('div.etc_in, div.data_con').each((_, div) => {
-        const label = ($(div).find('p.tt, i.tt, span.tt').text() || '').trim().toLowerCase();
-        const valText = ($(div).find('p.dd, i.dd, i.tx, span.dd').text() || '').replace(/,/g, '').trim();
-        const val = parseInt(valText, 10) || 0;
-        if (label.includes('perfect')) perfect = val;
-        else if (label.includes('great')) great = val;
-        else if (label.includes('good')) good = val;
-        else if (label.includes('bad')) bad = val;
-        else if (label.includes('miss')) miss = val;
-      });
-    }
-    // Alternative: look for multiple i.tx values beyond the score
-    if (perfect === 0 && great === 0) {
-      const allValues = [];
-      $li.find('i.tx').each((idx, el) => {
-        if (idx === 0) return; // skip the first one (score)
-        allValues.push(parseInt($(el).text().replace(/,/g, '').trim(), 10) || 0);
-      });
-      if (allValues.length >= 5) {
-        [perfect, great, good, bad, miss] = allValues;
-      }
-    }
+    // Note: piugame.com's recently played list page does NOT include judgment
+    // breakdowns (PERFECT/GREAT/GOOD/BAD/MISS). Those are only shown on the
+    // arcade machine's result screen. Confirmed by reference implementation
+    // (kr3st1k/pumptracker).
 
     plays.push({
       song_title: songTitle,
@@ -429,11 +438,11 @@ async function scrapeRecentlyPlayed(client) {
       plate,
       background_url: bgUrl,
       date_played: datePlayed,
-      perfect,
-      great,
-      good,
-      bad,
-      miss,
+      perfect: 0,
+      great: 0,
+      good: 0,
+      bad: 0,
+      miss: 0,
       max_combo: 0,
       kcal: 0,
     });

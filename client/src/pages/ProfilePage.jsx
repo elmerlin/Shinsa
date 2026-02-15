@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getUserProfile, getUserStats,
+  getUserProfile, getUserStats, getSongs,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed,
 } from '../utils/api';
@@ -49,6 +49,33 @@ function getGradeColor(grade) {
   return 'text-gray-500';
 }
 
+// Reusable song jacket with level badge overlay for PIU data
+function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' }) {
+  const sizeClass = size === 'sm' ? 'w-9 h-9' : 'w-11 h-11';
+  const badgeSize = size === 'sm' ? 'text-[8px] min-w-[16px] h-[14px]' : 'text-[9px] min-w-[18px] h-[16px]';
+  const isSingle = mode === 'Single';
+
+  // Try to match from DB: exact match first, then loose title match
+  const exactKey = `${(title || '').toLowerCase()}|${mode}|${level}`;
+  const titleKey = (title || '').toLowerCase();
+  const jacketUrl = jacketLookup[exactKey] || jacketLookup[titleKey] || bgUrl || '';
+
+  return (
+    <div className="relative shrink-0">
+      {jacketUrl ? (
+        <img src={jacketUrl} alt="" className={`${sizeClass} rounded object-cover`} />
+      ) : (
+        <div className={`${sizeClass} rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500`}>
+          {(title || '?')[0]}
+        </div>
+      )}
+      <span className={`absolute -bottom-1 -right-1 ${badgeSize} flex items-center justify-center rounded font-display font-bold text-white leading-none ${isSingle ? 'bg-red-600' : 'bg-green-600'}`}>
+        {level}
+      </span>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { id } = useParams();
   const { user: authUser } = useAuth();
@@ -67,6 +94,7 @@ export default function ProfilePage() {
   const [piuLoaded, setPiuLoaded] = useState(false);
   const [piuSubTab, setPiuSubTab] = useState('pumbility');
   const [selectedPlay, setSelectedPlay] = useState(null);
+  const [jacketLookup, setJacketLookup] = useState({});
 
   useEffect(() => {
     getUserProfile(id).then(setProfile).catch(() => {});
@@ -81,6 +109,17 @@ export default function ProfilePage() {
       getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
       getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
       getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
+      // Load song database for jacket matching
+      getSongs().then(songs => {
+        const lookup = {};
+        for (const s of songs) {
+          const key = `${s.title.toLowerCase()}|${s.mode}|${s.level}`;
+          if (!lookup[key] && s.jacket_url) lookup[key] = s.jacket_url;
+          const titleKey = s.title.toLowerCase();
+          if (!lookup[titleKey] && s.jacket_url) lookup[titleKey] = s.jacket_url;
+        }
+        setJacketLookup(lookup);
+      }).catch(() => {});
     }
   }, [tab, id, piuLoaded]);
 
@@ -522,12 +561,15 @@ export default function ProfilePage() {
                     return (
                       <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                         <span className="text-xs text-gray-500 font-mono w-6 shrink-0 text-right">#{s.rank_order}</span>
-                        {s.background_url && (
-                          <img src={s.background_url} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
-                        )}
+                        <PiuSongJacket
+                          title={s.song_title}
+                          mode={s.mode}
+                          level={s.level}
+                          bgUrl={s.background_url}
+                          jacketLookup={jacketLookup}
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
-                          <p className="text-xs text-gray-500">{s.mode} Lv.{s.level}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <span className={`text-xs font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
@@ -592,11 +634,13 @@ export default function ProfilePage() {
                     const rank = getRank(s.score);
                     return (
                       <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
-                        <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center shrink-0">
-                          <span className="text-xs font-display font-bold text-gray-400">
-                            {s.mode === 'Single' ? 'S' : 'D'}{s.level}
-                          </span>
-                        </div>
+                        <PiuSongJacket
+                          title={s.song_title}
+                          mode={s.mode}
+                          level={s.level}
+                          bgUrl=""
+                          jacketLookup={jacketLookup}
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
                           {s.plate && (
@@ -644,14 +688,15 @@ export default function ProfilePage() {
                         className="flex items-center gap-3 py-2 border-b border-piu-border/30 last:border-0 cursor-pointer hover:bg-piu-dark/50 rounded transition-colors"
                         onClick={() => setSelectedPlay(p)}
                       >
-                        {p.background_url ? (
-                          <img src={p.background_url} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
-                        ) : (
-                          <div className="w-11 h-11 rounded bg-piu-dark shrink-0" />
-                        )}
+                        <PiuSongJacket
+                          title={p.song_title}
+                          mode={p.mode}
+                          level={p.level}
+                          bgUrl={p.background_url}
+                          jacketLookup={jacketLookup}
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-display font-bold truncate">{p.song_title}</p>
-                          <p className="text-xs text-gray-500">{p.mode} Lv.{p.level}</p>
                         </div>
                         <div className="text-right shrink-0">
                           {p.score > 0 ? (
@@ -702,6 +747,10 @@ export default function ProfilePage() {
               { label: 'BAD', value: p.bad || 0, textColor: 'text-fuchsia-400' },
               { label: 'MISS', value: p.miss || 0, textColor: 'text-gray-400' },
             ];
+            // Try jacket from DB for the modal background
+            const modalExactKey = `${(p.song_title || '').toLowerCase()}|${p.mode}|${p.level}`;
+            const modalTitleKey = (p.song_title || '').toLowerCase();
+            const modalBg = p.background_url || jacketLookup[modalExactKey] || jacketLookup[modalTitleKey] || '';
             return (
               <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPlay(null)}>
                 <div
@@ -709,10 +758,10 @@ export default function ProfilePage() {
                   onClick={e => e.stopPropagation()}
                 >
                   {/* Background image */}
-                  {p.background_url && (
+                  {modalBg && (
                     <div
                       className="absolute inset-0 bg-cover bg-center opacity-15"
-                      style={{ backgroundImage: `url(${p.background_url})` }}
+                      style={{ backgroundImage: `url(${modalBg})` }}
                     />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
@@ -774,7 +823,7 @@ export default function ProfilePage() {
                     {/* No breakdown notice */}
                     {!hasBreakdown && p.score > 0 && (
                       <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
-                        Judgment breakdown not available
+                        Judgment breakdown not available on piugame.com
                       </p>
                     )}
 

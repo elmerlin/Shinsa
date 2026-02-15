@@ -24,10 +24,10 @@ async function request(url, options = {}) {
   }
 }
 
-// Longer timeout for scraping operations (120s)
+// Longer timeout for scraping operations (5 min for multi-page best scores)
 async function longRequest(url, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
+  const timeout = setTimeout(() => controller.abort(), 300000);
   try {
     const res = await fetch(`${API_BASE}${url}`, {
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), ...options.headers },
