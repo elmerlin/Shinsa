@@ -10,6 +10,7 @@ import {
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
+import { SongJacket } from './DuelView';
 
 const RANKS = [
   { min: 995000, label: 'SSS+', color: 'text-sky-300',      bg: 'bg-sky-400/20 border-sky-400/40' },
@@ -50,6 +51,7 @@ export default function OnlineDuelRoom() {
   const [scoreEntry, setScoreEntry] = useState(null);
   const [selectedBreakdown, setSelectedBreakdown] = useState(null);
   const [tab, setTab] = useState('match');
+  const [statsFilter, setStatsFilter] = useState('all');
   const [myPump, setMyPump] = useState(null);
   const [pumpFeedback, setPumpFeedback] = useState(null);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -241,6 +243,46 @@ export default function OnlineDuelRoom() {
         p2Avg: Math.round(d.p2Scores.reduce((a, b) => a + b, 0) / d.p2Scores.length),
       }));
   }, [stats.completed]);
+
+  // Filtered data for Statistics tab (respects mode filter)
+  const filteredCompleted = useMemo(() => {
+    if (statsFilter === 'all') return stats.completed;
+    return stats.completed.filter(s => s.song_mode === statsFilter);
+  }, [stats.completed, statsFilter]);
+
+  const filteredStats = useMemo(() => {
+    const songs = filteredCompleted;
+    const p1Wins = songs.filter(s => s.winner === 'player1').length;
+    const p2Wins = songs.filter(s => s.winner === 'player2').length;
+    const draws = songs.filter(s => s.winner === 'draw').length;
+    const p1TotalScore = songs.reduce((s, c) => s + c.player1_score, 0);
+    const p2TotalScore = songs.reduce((s, c) => s + c.player2_score, 0);
+    const p1Avg = songs.length > 0 ? Math.round(p1TotalScore / songs.length) : 0;
+    const p2Avg = songs.length > 0 ? Math.round(p2TotalScore / songs.length) : 0;
+    const p1Best = songs.length > 0 ? Math.max(...songs.map(s => s.player1_score)) : 0;
+    const p2Best = songs.length > 0 ? Math.max(...songs.map(s => s.player2_score)) : 0;
+    return { p1Wins, p2Wins, draws, p1Avg, p2Avg, p1Best, p2Best };
+  }, [filteredCompleted]);
+
+  const filteredChartData = useMemo(() => {
+    if (!filteredCompleted.length) return [];
+    const levelMap = {};
+    filteredCompleted.forEach(s => {
+      const lvl = s.song_level;
+      if (!levelMap[lvl]) levelMap[lvl] = { level: lvl, p1Scores: [], p2Scores: [], count: 0 };
+      levelMap[lvl].p1Scores.push(s.player1_score);
+      levelMap[lvl].p2Scores.push(s.player2_score);
+      levelMap[lvl].count++;
+    });
+    return Object.values(levelMap)
+      .sort((a, b) => a.level - b.level)
+      .map(d => ({
+        level: `Lv.${d.level}`,
+        songsPlayed: d.count,
+        p1Avg: Math.round(d.p1Scores.reduce((a, b) => a + b, 0) / d.p1Scores.length),
+        p2Avg: Math.round(d.p2Scores.reduce((a, b) => a + b, 0) / d.p2Scores.length),
+      }));
+  }, [filteredCompleted]);
 
   if (!duel) return <div className="text-center py-20 text-gray-500">Loading match room...</div>;
 
@@ -562,14 +604,16 @@ export default function OnlineDuelRoom() {
                     const p1Rank = getRank(song.player1_score);
                     const p2Rank = getRank(song.player2_score);
                     return (
-                      <button key={song.id} onClick={() => setSelectedBreakdown(song)} className="flex items-center gap-2 py-1.5 border-b border-piu-border/20 last:border-0 w-full hover:bg-piu-dark/30 rounded transition-colors">
-                        <div className={`flex-1 flex items-center justify-end gap-1 ${song.winner === 'player1' ? 'text-piu-green' : ''}`}>
+                      <button key={song.id} onClick={() => setSelectedBreakdown(song)} className="flex items-center gap-0 py-1 border-b border-piu-border/20 last:border-0 w-full hover:bg-piu-dark/30 rounded transition-colors">
+                        <div className={`flex-1 flex items-center justify-end gap-1 pr-2 ${song.winner === 'player1' ? 'text-piu-green' : ''}`}>
                           {song.winner === 'player1' && <span className="text-[10px]">&#9733;</span>}
                           <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p1Rank.bg} ${p1Rank.color}`}>{p1Rank.label}</span>
                           <span className="font-mono text-xs font-bold">{song.player1_score.toLocaleString()}</span>
                         </div>
-                        {song.song_jacket_url && <img src={song.song_jacket_url} alt="" className="w-8 h-8 rounded object-cover shrink-0" />}
-                        <div className={`flex-1 flex items-center gap-1 ${song.winner === 'player2' ? 'text-piu-green' : ''}`}>
+                        <div className="shrink-0">
+                          <SongJacket song={song} size="sm" />
+                        </div>
+                        <div className={`flex-1 flex items-center gap-1 pl-2 ${song.winner === 'player2' ? 'text-piu-green' : ''}`}>
                           <span className="font-mono text-xs font-bold">{song.player2_score.toLocaleString()}</span>
                           <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p2Rank.bg} ${p2Rank.color}`}>{p2Rank.label}</span>
                           {song.winner === 'player2' && <span className="text-[10px]">&#9733;</span>}
@@ -701,21 +745,43 @@ export default function OnlineDuelRoom() {
             </div>
           ) : (
             <>
+              {/* Mode Filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 font-display">Filter:</span>
+                {[
+                  { value: 'all', label: 'All' },
+                  { value: 'Single', label: 'Singles' },
+                  { value: 'Double', label: 'Doubles' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setStatsFilter(opt.value)}
+                    className={`px-3 py-1 rounded-lg text-xs font-display font-bold transition-colors ${
+                      statsFilter === opt.value
+                        ? 'bg-piu-accent text-white'
+                        : 'bg-piu-card text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Summary Stats */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="card text-center">
                   <p className="text-xs text-gray-500 font-display mb-1">{duel.player1_name}</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <p className="font-mono font-bold text-lg text-piu-green">{stats.p1Wins}</p>
+                      <p className="font-mono font-bold text-lg text-piu-green">{filteredStats.p1Wins}</p>
                       <p className="text-[10px] text-gray-600">Wins</p>
                     </div>
                     <div>
-                      <p className="font-mono font-bold text-sm">{stats.p1Avg.toLocaleString()}</p>
+                      <p className="font-mono font-bold text-sm">{filteredStats.p1Avg.toLocaleString()}</p>
                       <p className="text-[10px] text-gray-600">Avg Score</p>
                     </div>
                     <div>
-                      <p className="font-mono font-bold text-sm">{stats.p1Best.toLocaleString()}</p>
+                      <p className="font-mono font-bold text-sm">{filteredStats.p1Best.toLocaleString()}</p>
                       <p className="text-[10px] text-gray-600">Best</p>
                     </div>
                   </div>
@@ -724,15 +790,15 @@ export default function OnlineDuelRoom() {
                   <p className="text-xs text-gray-500 font-display mb-1">{duel.player2_name}</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <p className="font-mono font-bold text-lg text-piu-green">{stats.p2Wins}</p>
+                      <p className="font-mono font-bold text-lg text-piu-green">{filteredStats.p2Wins}</p>
                       <p className="text-[10px] text-gray-600">Wins</p>
                     </div>
                     <div>
-                      <p className="font-mono font-bold text-sm">{stats.p2Avg.toLocaleString()}</p>
+                      <p className="font-mono font-bold text-sm">{filteredStats.p2Avg.toLocaleString()}</p>
                       <p className="text-[10px] text-gray-600">Avg Score</p>
                     </div>
                     <div>
-                      <p className="font-mono font-bold text-sm">{stats.p2Best.toLocaleString()}</p>
+                      <p className="font-mono font-bold text-sm">{filteredStats.p2Best.toLocaleString()}</p>
                       <p className="text-[10px] text-gray-600">Best</p>
                     </div>
                   </div>
@@ -740,18 +806,18 @@ export default function OnlineDuelRoom() {
               </div>
 
               {/* Chart — Average Score by Level */}
-              {chartData.length > 0 && (
+              {filteredChartData.length > 0 && (
                 <div className="card">
                   <h3 className="font-display font-bold text-sm text-piu-accent mb-4">Average Score by Level</h3>
                   <div className="h-[300px] sm:h-[350px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                      <ComposedChart data={filteredChartData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                         <XAxis dataKey="level" tick={{ fontSize: 11, fill: '#888' }} />
                         <YAxis
                           yAxisId="left"
                           domain={[
-                            (dataMin) => Math.max(0, Math.floor((Math.min(...chartData.map(d => Math.min(d.p1Avg, d.p2Avg))) - 50000) / 50000) * 50000),
+                            (dataMin) => Math.max(0, Math.floor((Math.min(...filteredChartData.map(d => Math.min(d.p1Avg, d.p2Avg))) - 50000) / 50000) * 50000),
                             1000000
                           ]}
                           tickFormatter={(v) => v >= 1000000 ? '1M' : `${(v / 1000).toFixed(0)}k`}
@@ -784,46 +850,46 @@ export default function OnlineDuelRoom() {
               )}
 
               {/* Song-by-Song Comparison */}
-              <div className="card">
-                <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Song Results</h3>
-                <div className="flex items-center text-[10px] text-gray-500 font-display font-bold mb-2 px-1">
-                  <div className="flex-1 text-right pr-2">{duel.player1_name}</div>
-                  <div className="w-10 text-center shrink-0"></div>
-                  <div className="flex-1 pl-2">{duel.player2_name}</div>
+              {filteredCompleted.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Song Results</h3>
+                  <div className="flex items-center text-[10px] text-gray-500 font-display font-bold mb-2 px-1">
+                    <div className="flex-1 text-right pr-2">{duel.player1_name}</div>
+                    <div className="w-12 text-center shrink-0"></div>
+                    <div className="flex-1 pl-2">{duel.player2_name}</div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {filteredCompleted.map(song => {
+                      const p1Rank = getRank(song.player1_score);
+                      const p2Rank = getRank(song.player2_score);
+                      const p1Won = song.winner === 'player1';
+                      const p2Won = song.winner === 'player2';
+                      return (
+                        <div key={song.id} className="flex items-center gap-0 py-1 border-b border-piu-border/20 last:border-0">
+                          <div className={`flex-1 flex items-center justify-end gap-1 pr-2 ${p1Won ? 'text-piu-green' : ''}`}>
+                            {p1Won && <span className="text-[10px]">&#9733;</span>}
+                            <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p1Rank.bg} ${p1Rank.color}`}>{p1Rank.label}</span>
+                            <span className="font-mono text-xs font-bold">{song.player1_score.toLocaleString()}</span>
+                          </div>
+                          <div className="shrink-0">
+                            <SongJacket song={song} size="sm" />
+                          </div>
+                          <div className={`flex-1 flex items-center gap-1 pl-2 ${p2Won ? 'text-piu-green' : ''}`}>
+                            <span className="font-mono text-xs font-bold">{song.player2_score.toLocaleString()}</span>
+                            <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p2Rank.bg} ${p2Rank.color}`}>{p2Rank.label}</span>
+                            {p2Won && <span className="text-[10px]">&#9733;</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  {stats.completed.map(song => {
-                    const p1Rank = getRank(song.player1_score);
-                    const p2Rank = getRank(song.player2_score);
-                    return (
-                      <div key={song.id} className="flex items-center gap-0 py-1 border-b border-piu-border/20 last:border-0">
-                        <div className={`flex-1 flex items-center justify-end gap-1 pr-2 ${song.winner === 'player1' ? 'text-piu-green' : ''}`}>
-                          {song.winner === 'player1' && <span className="text-[10px]">&#9733;</span>}
-                          <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p1Rank.bg} ${p1Rank.color}`}>{p1Rank.label}</span>
-                          <span className="font-mono text-xs font-bold">{song.player1_score.toLocaleString()}</span>
-                        </div>
-                        <div className="shrink-0">
-                          {song.song_jacket_url ? (
-                            <img src={song.song_jacket_url} alt="" className="w-8 h-8 rounded object-cover" />
-                          ) : (
-                            <div className="w-8 h-8 rounded bg-piu-dark flex items-center justify-center text-[8px] text-gray-600 font-display">Lv.{song.song_level}</div>
-                          )}
-                        </div>
-                        <div className={`flex-1 flex items-center gap-1 pl-2 ${song.winner === 'player2' ? 'text-piu-green' : ''}`}>
-                          <span className="font-mono text-xs font-bold">{song.player2_score.toLocaleString()}</span>
-                          <span className={`text-[10px] font-display font-bold px-1 py-0.5 rounded border ${p2Rank.bg} ${p2Rank.color}`}>{p2Rank.label}</span>
-                          {song.winner === 'player2' && <span className="text-[10px]">&#9733;</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              )}
 
               {/* Rank Distribution */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <RankDistribution playerName={duel.player1_name} songs={stats.completed} scoreKey="player1_score" color="red" />
-                <RankDistribution playerName={duel.player2_name} songs={stats.completed} scoreKey="player2_score" color="blue" />
+                <RankDistribution playerName={duel.player1_name} songs={filteredCompleted} scoreKey="player1_score" color="red" />
+                <RankDistribution playerName={duel.player2_name} songs={filteredCompleted} scoreKey="player2_score" color="blue" />
               </div>
             </>
           )}
