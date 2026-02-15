@@ -28,43 +28,75 @@ const PLATE_MAP = {
 const MODE_MAP = { s: 'Single', d: 'Double', c: 'Co-op', u: 'UCS' };
 
 /**
- * Create an HTTP client with cookie jar support for cross-domain auth
+ * Create an HTTP client with cookie jar support for cross-domain auth.
+ * Handles redirects manually so cookies are captured at every hop
+ * (axios interceptors only fire for the final response, not intermediate redirects).
  */
 function createClient() {
   const jar = new CookieJar();
+  const MAX_REDIRECTS = 20;
 
-  const client = axios.create({
-    timeout: 30000,
-    maxRedirects: 5,
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-  });
+  const defaultHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
 
-  // Manual cookie management for cross-domain (am-pass.net <-> piugame.com)
-  client.interceptors.request.use(async (config) => {
-    try {
-      const cookies = await jar.getCookieString(config.url);
-      if (cookies) {
-        config.headers.Cookie = cookies;
+  async function request(method, url, data, extraHeaders) {
+    let currentUrl = url;
+    let currentMethod = method;
+    let currentData = data;
+    let headers = { ...defaultHeaders, ...extraHeaders };
+
+    for (let i = 0; i < MAX_REDIRECTS; i++) {
+      const reqHeaders = { ...headers };
+      try {
+        const cookies = await jar.getCookieString(currentUrl);
+        if (cookies) reqHeaders.Cookie = cookies;
+      } catch (e) { /* ignore */ }
+
+      const res = await axios({
+        method: currentMethod,
+        url: currentUrl,
+        data: currentData,
+        headers: reqHeaders,
+        timeout: 30000,
+        maxRedirects: 0,
+        validateStatus: () => true,
+      });
+
+      // Capture cookies from this hop
+      const setCookies = res.headers['set-cookie'];
+      if (setCookies) {
+        for (const c of setCookies) {
+          try { await jar.setCookie(c, currentUrl); } catch (e) { /* ignore */ }
+        }
       }
-    } catch (e) { /* ignore */ }
-    return config;
-  });
 
-  client.interceptors.response.use(async (response) => {
-    const setCookies = response.headers['set-cookie'];
-    if (setCookies) {
-      for (const cookie of setCookies) {
-        try {
-          await jar.setCookie(cookie, response.config.url);
-        } catch (e) { /* ignore */ }
+      // Follow redirects manually
+      if ([301, 302, 303, 307, 308].includes(res.status)) {
+        const location = res.headers.location;
+        if (!location) return res;
+        currentUrl = new URL(location, currentUrl).href;
+        // POST becomes GET on 301/302/303
+        if ([301, 302, 303].includes(res.status)) {
+          currentMethod = 'GET';
+          currentData = undefined;
+          delete headers['Content-Type'];
+        }
+        continue;
       }
+
+      return res;
     }
-    return response;
-  });
+
+    throw new Error('Too many redirects');
+  }
+
+  const client = {
+    get: (url, config = {}) => request('GET', url, undefined, config.headers),
+    post: (url, data, config = {}) => request('POST', url, data, config.headers),
+  };
 
   return { client, jar };
 }
@@ -90,7 +122,6 @@ async function login(username, password) {
     params.toString(),
     {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      maxRedirects: 5,
     }
   );
 
