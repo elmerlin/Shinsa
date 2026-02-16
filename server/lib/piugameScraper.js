@@ -306,7 +306,13 @@ async function scrapeBestScores(client, onProgress) {
       const plateImg = $li.find('.etc_con .st1 img').first().attr('src') || '';
       const plate = parsePlateFromUrl(plateImg);
 
-      scores.push({ song_title: songTitle, mode, level, score, grade, plate });
+      // Background image (song jacket)
+      let bgUrl = '';
+      const bgStyle = $li.find('div.in.bgfix, div.re.bgfix, div.bgfix').first().attr('style') || '';
+      const bgMatch = bgStyle.match(/url\(['"]?([^'"]+)['"]?\)/);
+      if (bgMatch) bgUrl = bgMatch[1];
+
+      scores.push({ song_title: songTitle, mode, level, score, grade, plate, background_url: bgUrl });
     });
     return scores;
   }

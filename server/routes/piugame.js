@@ -205,18 +205,47 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       });
 
       const insertOrUpdate = db.prepare(`
-        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, background_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
           score = MAX(excluded.score, user_best_scores.score),
           grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
-          plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END
+          plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END,
+          background_url = CASE WHEN excluded.background_url != '' THEN excluded.background_url ELSE user_best_scores.background_url END
       `);
+
+      // Capture old scores for upscore tracking before replacing
+      const oldScores = {};
+      const existingScores = db.prepare('SELECT song_title, mode, level, score, grade FROM user_best_scores WHERE user_id = ?').all(userId);
+      for (const s of existingScores) {
+        oldScores[`${s.song_title}|${s.mode}|${s.level}`] = { score: s.score, grade: s.grade };
+      }
 
       const txn = db.transaction(() => {
         db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(userId);
         for (const s of scores) {
-          insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate);
+          insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate, s.background_url || '');
+        }
+
+        // Track upscores
+        const upscores = [];
+        for (const s of scores) {
+          const key = `${s.song_title}|${s.mode}|${s.level}`;
+          const old = oldScores[key];
+          if (old && s.score > old.score) {
+            upscores.push({
+              song_title: s.song_title, mode: s.mode, level: s.level,
+              old_score: old.score, new_score: s.score,
+              old_grade: old.grade, new_grade: s.grade,
+              background_url: s.background_url || '',
+            });
+          }
+        }
+        if (upscores.length > 0) {
+          db.prepare(`
+            INSERT INTO user_upscores (user_id, upscores_json, created_at)
+            VALUES (?, ?, datetime('now'))
+          `).run(userId, JSON.stringify(upscores));
         }
         db.prepare(`
           UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
@@ -281,6 +310,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     `);
 
     let updatedCount = 0;
+    const upscoresFromRecent = [];
 
     const txn = db.transaction(() => {
       // Clear old recently played and replace
@@ -292,9 +322,17 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
         // Only update best scores if this was a real play (not stage break)
         if (p.score > 0) {
           const existing = db.prepare(
-            'SELECT score FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
+            'SELECT score, grade FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
           ).get(req.user.id, p.song_title, p.mode, p.level);
           if (!existing || p.score > existing.score) {
+            if (existing && p.score > existing.score) {
+              upscoresFromRecent.push({
+                song_title: p.song_title, mode: p.mode, level: p.level,
+                old_score: existing.score, new_score: p.score,
+                old_grade: existing.grade || '', new_grade: p.grade || '',
+                background_url: p.background_url || '',
+              });
+            }
             updateBest.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade);
             updatedCount++;
           }
@@ -303,6 +341,14 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       db.prepare(`
         UPDATE user_piugame_sync SET last_recently_played_sync = datetime('now') WHERE user_id = ?
       `).run(req.user.id);
+
+      // Track upscores from recently played
+      if (upscoresFromRecent.length > 0) {
+        db.prepare(`
+          INSERT INTO user_upscores (user_id, upscores_json, created_at)
+          VALUES (?, ?, datetime('now'))
+        `).run(req.user.id, JSON.stringify(upscoresFromRecent));
+      }
     });
     txn();
 

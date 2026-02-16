@@ -147,6 +147,41 @@ export const markNotificationRead = (id) => request(`/auth/notifications/${id}/r
 export const markAllNotificationsRead = () => request('/auth/notifications/read-all', { method: 'PUT' });
 export const deleteNotification = (id) => request(`/auth/notifications/${id}`, { method: 'DELETE' });
 
+// Social — Follows
+export const followUser = (userId) => request(`/social/follow/${userId}`, { method: 'POST' });
+export const unfollowUser = (userId) => request(`/social/follow/${userId}`, { method: 'DELETE' });
+export const getFollowing = (userId) => request(`/social/following/${userId}`);
+export const getFollowers = (userId) => request(`/social/followers/${userId}`);
+export const getFollowStatus = (userId) => request(`/social/follow-status/${userId}`);
+export const getSocialCounts = (userId) => request(`/social/counts/${userId}`);
+
+// Social — Posts
+export async function createPost(content, imageFiles) {
+  const formData = new FormData();
+  formData.append('content', content);
+  if (imageFiles) {
+    for (const f of imageFiles) {
+      formData.append('images', f);
+    }
+  }
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/social/posts`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to create post');
+  }
+  return res.json();
+}
+export const getUserPosts = (userId, page) => request(`/social/posts/user/${userId}?page=${page || 1}`);
+export const deletePost = (id) => request(`/social/posts/${id}`, { method: 'DELETE' });
+
+// Social — Feed
+export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);
+
 // Parser
 export async function parseScorePhoto(file) {
   const formData = new FormData();

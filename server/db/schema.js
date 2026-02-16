@@ -312,6 +312,35 @@ function initializeDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS user_follows (
+      follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (follower_id, following_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL DEFAULT '',
+      images TEXT DEFAULT '[]',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_upscores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      upscores_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_follows_follower ON user_follows(follower_id);
+    CREATE INDEX IF NOT EXISTS idx_follows_following ON user_follows(following_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_user ON user_posts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_created ON user_posts(created_at);
+    CREATE INDEX IF NOT EXISTS idx_upscores_user ON user_upscores(user_id);
+    CREATE INDEX IF NOT EXISTS idx_upscores_created ON user_upscores(created_at);
+
     CREATE INDEX IF NOT EXISTS idx_pumbility_scores_user ON user_pumbility_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
@@ -417,6 +446,12 @@ function initializeDb() {
     if (!recentCols.includes(col)) {
       db.exec(`ALTER TABLE user_recently_played ADD COLUMN ${col} ${type}`);
     }
+  }
+
+  // Migrations for best scores - add background_url
+  const bestScoreCols = db.prepare("PRAGMA table_info(user_best_scores)").all().map(c => c.name);
+  if (!bestScoreCols.includes('background_url')) {
+    db.exec("ALTER TABLE user_best_scores ADD COLUMN background_url TEXT DEFAULT ''");
   }
 
   // Migrations for piugame sync - add progress tracking

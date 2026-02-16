@@ -16,6 +16,8 @@ import ProfilePage from './pages/ProfilePage';
 import MyAccountPage from './pages/MyAccountPage';
 import OnlineDuelSetup from './pages/OnlineDuelSetup';
 import OnlineDuelRoom from './pages/OnlineDuelRoom';
+import FeedPage from './pages/FeedPage';
+import PostsPage from './pages/PostsPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -159,6 +161,16 @@ function UserMenu() {
             My Profile
           </Link>
           <Link
+            to="/posts"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Posts
+          </Link>
+          <Link
             to="/account"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
@@ -219,6 +231,11 @@ export default function App() {
                 Home
               </Link>
             )}
+            {user && (
+              <Link to="/feed" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
+                Feed
+              </Link>
+            )}
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
                 <NotificationBell />
@@ -249,6 +266,8 @@ export default function App() {
           <Route path="/account" element={<MyAccountPage />} />
           <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
           <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
+          <Route path="/feed" element={<FeedPage />} />
+          <Route path="/posts" element={<PostsPage />} />
         </Routes>
       </main>
 

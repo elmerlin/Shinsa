@@ -5,6 +5,8 @@ import {
   getUserProfile, getUserStats, getSongs,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
+  followUser, unfollowUser, getFollowStatus, getSocialCounts,
+  getUserPosts,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -105,35 +107,96 @@ function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' })
   );
 }
 
-// Distribution bar chart for a single level
-function LevelDistributionBar({ level, distribution, maxCount, onClick, isActive }) {
-  const total = distribution.reduce((s, d) => s + d.count, 0);
-  if (total === 0) return null;
+// Grade distribution bar chart for a single level — grades on x-axis
+function GradeDistributionChart({ scores, rankRanges }) {
+  const [chartMode, setChartMode] = useState('');
+
+  const filtered = chartMode ? scores.filter(s => s.mode === chartMode) : scores;
+  const distribution = rankRanges.map(r => ({ ...r, count: 0 }));
+  for (const s of filtered) {
+    for (let i = 0; i < rankRanges.length; i++) {
+      if (s.score >= rankRanges[i].min) {
+        distribution[i].count++;
+        break;
+      }
+    }
+  }
+  const maxCount = Math.max(1, ...distribution.map(d => d.count));
+  const totalCount = distribution.reduce((s, d) => s + d.count, 0);
 
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 w-full py-1 px-1 rounded transition-colors ${isActive ? 'bg-piu-dark/80' : 'hover:bg-piu-dark/40'}`}
-    >
-      <span className="text-xs font-display font-bold w-8 text-gray-400 text-right shrink-0">Lv.{level}</span>
-      <div className="flex-1 h-5 flex rounded overflow-hidden bg-piu-dark/50">
-        {distribution.map((d, i) => d.count > 0 ? (
-          <div
-            key={i}
-            className={`h-full ${d.bg} relative group`}
-            style={{ width: `${(d.count / maxCount) * 100}%` }}
-            title={`${d.label}: ${d.count}`}
-          >
-            {d.count > 0 && (d.count / maxCount) > 0.08 && (
-              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-black/70">
-                {d.count}
-              </span>
-            )}
-          </div>
-        ) : null)}
+    <div className="card mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] text-gray-500 font-display">GRADE DISTRIBUTION ({totalCount} scores)</span>
+        <div className="flex gap-1">
+          {[
+            { key: '', label: 'All' },
+            { key: 'Single', label: 'S' },
+            { key: 'Double', label: 'D' },
+          ].map(m => (
+            <button
+              key={m.key}
+              onClick={() => setChartMode(m.key)}
+              className={`px-2 py-1 rounded text-[10px] font-display font-bold transition-colors ${
+                chartMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <span className="text-[10px] font-mono text-gray-500 w-8 text-right shrink-0">{total}</span>
-    </button>
+      <div className="flex items-end gap-1" style={{ minHeight: '100px' }}>
+        {distribution.map((d, i) => (
+          <div key={i} className="flex flex-col items-center flex-1 min-w-0">
+            <div
+              className={`w-full rounded-t ${d.bg} transition-all`}
+              style={{ height: `${d.count > 0 ? Math.max((d.count / maxCount) * 90, 4) : 0}px` }}
+              title={`${d.label}: ${d.count}`}
+            />
+            {d.count > 0 && (
+              <span className="text-[8px] font-mono text-gray-400 mt-0.5">{d.count}</span>
+            )}
+            <span className="text-[7px] font-display font-bold text-gray-500 leading-tight mt-0.5 truncate w-full text-center">{d.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Vertical distribution bar chart — levels on x-axis, stacked grade segments
+function VerticalDistributionChart({ levels, maxCount, activeLevel, onLevelClick }) {
+  if (levels.length === 0) return null;
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="flex items-end gap-0.5 min-w-0" style={{ minHeight: '140px' }}>
+        {levels.map(({ level, distribution, total }) => (
+          <button
+            key={level}
+            onClick={() => onLevelClick(level)}
+            className={`flex flex-col items-center flex-1 min-w-[22px] group transition-colors rounded-t ${activeLevel === String(level) ? 'bg-piu-dark/80' : 'hover:bg-piu-dark/40'}`}
+          >
+            {/* Stacked vertical bar */}
+            <div className="w-full flex flex-col-reverse rounded-t overflow-hidden bg-piu-dark/30" style={{ height: `${Math.max((total / maxCount) * 120, 4)}px` }}>
+              {distribution.map((d, i) => d.count > 0 ? (
+                <div
+                  key={i}
+                  className={`w-full ${d.bg} relative`}
+                  style={{ height: `${(d.count / total) * 100}%` }}
+                  title={`${d.label}: ${d.count}`}
+                />
+              ) : null)}
+            </div>
+            {/* Count */}
+            <span className="text-[8px] font-mono text-gray-500 mt-0.5">{total}</span>
+            {/* Level label */}
+            <span className="text-[9px] font-display font-bold text-gray-400 leading-tight">{level}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -174,6 +237,12 @@ export default function ProfilePage() {
   const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
   const [bestScoreSearch, setBestScoreSearch] = useState('');
   const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
+  const [profilePosts, setProfilePosts] = useState([]);
+
+  // Social state
+  const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
+  const [socialCounts, setSocialCounts] = useState({ followers_count: 0, following_count: 0, posts_count: 0 });
+  const [followLoading, setFollowLoading] = useState(false);
 
   const isOwner = authUser && authUser.id === id;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
@@ -182,7 +251,18 @@ export default function ProfilePage() {
     getUserProfile(id).then(setProfile).catch(() => {});
     getUserStats(id).then(setStats).catch(() => {});
     getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
-  }, [id]);
+    getSocialCounts(id).then(setSocialCounts).catch(() => {});
+    if (authUser) {
+      getFollowStatus(id).then(setFollowStatus).catch(() => {});
+    }
+  }, [id, authUser]);
+
+  // Load posts when posts tab is active
+  useEffect(() => {
+    if (tab === 'posts') {
+      getUserPosts(id, 1).then(setProfilePosts).catch(() => {});
+    }
+  }, [tab, id]);
 
   // Load PIUGame data + jacket lookup when any PIU tab is active
   const piuTabs = ['pumbility', 'best-scores', 'recently-played'];
@@ -243,9 +323,32 @@ export default function ProfilePage() {
     return () => clearInterval(interval);
   }, [isOwner, piuStatus?.sync_in_progress]);
 
+  const handleFollow = async () => {
+    if (!authUser || followLoading) return;
+    setFollowLoading(true);
+    try {
+      if (followStatus.following) {
+        await unfollowUser(id);
+        setFollowStatus(s => ({ ...s, following: false, followers_count: s.followers_count - 1 }));
+        setSocialCounts(c => ({ ...c, followers_count: Math.max(0, c.followers_count - 1) }));
+      } else {
+        await followUser(id);
+        setFollowStatus(s => ({ ...s, following: true, followers_count: s.followers_count + 1 }));
+        setSocialCounts(c => ({ ...c, followers_count: c.followers_count + 1 }));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const [syncFeedback, setSyncFeedback] = useState('');
   const handleStartBestScoresSync = async () => {
     try {
       await syncBestScores();
+      setSyncFeedback('Import started successfully. Check progress in Best Scores tab.');
+      setTimeout(() => setSyncFeedback(''), 6000);
       // Refresh status to start polling
       getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
     } catch (err) {
@@ -397,13 +500,13 @@ export default function ProfilePage() {
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality);
 
-  const tabs = ['overview', 'tournaments', 'duels', 'songs'];
+  const tabs = ['overview', 'tournaments', 'duels', 'songs', 'posts'];
   if (hasPiuData) {
     tabs.push('pumbility', 'best-scores', 'recently-played');
   }
 
   const tabLabels = {
-    overview: 'Overview', tournaments: 'Tournaments', duels: 'Duels', songs: 'Songs',
+    overview: 'Overview', tournaments: 'Tournaments', duels: 'Duels', songs: 'Songs', posts: 'Posts',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
   };
 
@@ -447,6 +550,20 @@ export default function ProfilePage() {
           <p className="text-xs text-gray-600 mt-1">
             Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
           </p>
+          {/* Follow button */}
+          {authUser && !isOwner && (
+            <button
+              onClick={handleFollow}
+              disabled={followLoading}
+              className={`mt-2 px-4 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                followStatus.following
+                  ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
+                  : 'bg-piu-accent text-white hover:bg-piu-accent/80'
+              }`}
+            >
+              {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -462,12 +579,12 @@ export default function ProfilePage() {
             <p className="text-[10px] text-gray-500 font-display">Duels</p>
           </div>
           <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-green">{aggregated.totalWins + aggregated.duelWins}W</p>
-            <p className="text-[10px] text-gray-500 font-display">Total Wins</p>
+            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.posts_count}</p>
+            <p className="text-[10px] text-gray-500 font-display">Posts</p>
           </div>
           <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl">{aggregated.avgScore.toLocaleString()}</p>
-            <p className="text-[10px] text-gray-500 font-display">Avg Score</p>
+            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.followers_count}</p>
+            <p className="text-[10px] text-gray-500 font-display">Followers</p>
           </div>
         </div>
       )}
@@ -668,6 +785,36 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* ────── POSTS TAB ────── */}
+      {tab === 'posts' && (
+        <div className="space-y-3">
+          {profilePosts.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No posts yet</p>
+          ) : (
+            profilePosts.map(post => {
+              const images = (() => { try { return JSON.parse(post.images || '[]'); } catch { return []; } })();
+              return (
+                <div key={post.id} className="card">
+                  {post.content && (
+                    <p className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-2 leading-relaxed">{post.content}</p>
+                  )}
+                  {images.length > 0 && (
+                    <div className={`grid gap-2 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                      {images.map((img, i) => (
+                        <img key={i} src={img} alt="" className="w-full rounded-lg object-cover max-h-64" />
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    {new Date(post.created_at + (post.created_at?.endsWith('Z') ? '' : 'Z')).toLocaleString()}
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
       {/* ────── PUMBILITY TAB ────── */}
       {tab === 'pumbility' && (
         <div className="card">
@@ -732,6 +879,12 @@ export default function ProfilePage() {
               )}
             </div>
 
+            {syncFeedback && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-green-600/20 border border-green-500/30 text-green-400 text-xs font-display">
+                {syncFeedback}
+              </div>
+            )}
+
             {/* Mode filter: All, Single, Double, Co-op */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex gap-1">
@@ -769,9 +922,9 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Distribution chart */}
+            {/* Distribution chart — vertical bars with levels on x-axis */}
             {levelDistribution.levels.length > 0 && !piuScoreLevel && (
-              <div className="mb-4 space-y-0.5">
+              <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] text-gray-500 font-display">SCORE DISTRIBUTION BY LEVEL</span>
                   {/* Legend */}
@@ -784,17 +937,21 @@ export default function ProfilePage() {
                     ))}
                   </div>
                 </div>
-                {levelDistribution.levels.map(({ level, distribution, total }) => (
-                  <LevelDistributionBar
-                    key={level}
-                    level={level}
-                    distribution={distribution}
-                    maxCount={levelDistribution.maxCount}
-                    isActive={piuScoreLevel === String(level)}
-                    onClick={() => setPiuScoreLevel(piuScoreLevel === String(level) ? '' : String(level))}
-                  />
-                ))}
+                <VerticalDistributionChart
+                  levels={levelDistribution.levels}
+                  maxCount={levelDistribution.maxCount}
+                  activeLevel={piuScoreLevel}
+                  onLevelClick={(level) => setPiuScoreLevel(piuScoreLevel === String(level) ? '' : String(level))}
+                />
               </div>
+            )}
+
+            {/* Grade distribution chart for selected level */}
+            {piuScoreLevel && piuBestScores?.scores && (
+              <GradeDistributionChart
+                scores={piuBestScores.scores.filter(s => s.level === parseInt(piuScoreLevel))}
+                rankRanges={RANK_RANGES}
+              />
             )}
 
             {/* Search + Sort */}
@@ -835,7 +992,7 @@ export default function ProfilePage() {
                     <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <PiuSongJacket
                         title={s.song_title} mode={s.mode} level={s.level}
-                        bgUrl="" jacketLookup={jacketLookup}
+                        bgUrl={s.background_url || ''} jacketLookup={jacketLookup}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
