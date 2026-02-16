@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <defs>
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a0a2e"/>
+      <stop offset="100%" style="stop-color:#0a0a1a"/>
+    </linearGradient>
+    <linearGradient id="red-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff3366"/>
+      <stop offset="100%" style="stop-color:#ff1744"/>
+    </linearGradient>
+    <linearGradient id="blue-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2979ff"/>
+      <stop offset="100%" style="stop-color:#448aff"/>
+    </linearGradient>
+    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="100%" style="stop-color:#ff9500"/>
+    </linearGradient>
+    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff3366"/>
+      <stop offset="100%" style="stop-color:#ff6633"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="url(#bg-grad)" stroke="url(#gold-grad)" stroke-width="3"/>
+  <!-- Inner ring -->
+  <circle cx="100" cy="100" r="80" fill="none" stroke="url(#accent-grad)" stroke-width="2" opacity="0.5"/>
+
+  <!-- PIU 5-Panel Pad Arrows -->
+  <g transform="translate(100,82)" filter="url(#glow)">
+    <!-- Center pad (gold star/diamond) -->
+    <polygon points="0,-14 4,-4.5 14,-4.5 6.5,2.5 9,12 0,6.5 -9,12 -6.5,2.5 -14,-4.5 -4,-4.5" fill="url(#gold-grad)" opacity="0.95"/>
+
+    <!-- Upper-left arrow (red) -->
+    <g transform="translate(-28,-28) rotate(-45)">
+      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#red-grad)" opacity="0.9"/>
+    </g>
+    <!-- Upper-right arrow (red) -->
+    <g transform="translate(28,-28) rotate(45)">
+      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#red-grad)" opacity="0.9"/>
+    </g>
+    <!-- Lower-left arrow (blue) -->
+    <g transform="translate(-28,28) rotate(-135)">
+      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#blue-grad)" opacity="0.9"/>
+    </g>
+    <!-- Lower-right arrow (blue) -->
+    <g transform="translate(28,28) rotate(135)">
+      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#blue-grad)" opacity="0.9"/>
+    </g>
+  </g>
+
+  <!-- Text: PUMP SHINSA -->
+  <text x="100" y="148" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="15" letter-spacing="2">
+    <tspan fill="url(#gold-grad)">PUMP</tspan>
+    <tspan fill="white"> SHINSA</tspan>
+  </text>
+</svg>

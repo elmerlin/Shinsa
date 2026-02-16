@@ -10,6 +10,7 @@ import {
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
+import { renderFormattedText } from '../utils/formatText';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -500,7 +501,7 @@ export default function ProfilePage() {
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality);
 
-  const tabs = ['overview', 'tournaments', 'duels', 'songs', 'posts'];
+  const tabs = ['overview', 'posts', 'tournaments', 'duels', 'songs'];
   if (hasPiuData) {
     tabs.push('pumbility', 'best-scores', 'recently-played');
   }
@@ -796,7 +797,7 @@ export default function ProfilePage() {
               return (
                 <div key={post.id} className="card">
                   {post.content && (
-                    <p className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-2 leading-relaxed">{post.content}</p>
+                    <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-2 leading-relaxed">{renderFormattedText(post.content)}</div>
                   )}
                   {images.length > 0 && (
                     <div className={`grid gap-2 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>

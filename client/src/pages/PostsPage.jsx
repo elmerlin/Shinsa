@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserPosts, createPost, deletePost } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import { renderFormattedText } from '../utils/formatText';
 
 // Common emoji sets for quick insert
 const EMOJI_GROUPS = [
@@ -377,49 +378,4 @@ export default function PostsPage() {
   );
 }
 
-// Simple markdown-ish rendering for bold, italic, strikethrough
-function renderFormattedText(text) {
-  if (!text) return null;
-  // Split into segments: **bold**, *italic*, ~~strikethrough~~
-  const parts = [];
-  let remaining = text;
-  let key = 0;
-
-  const patterns = [
-    { regex: /\*\*(.+?)\*\*/g, render: (match) => <strong key={key++} className="font-bold">{match}</strong> },
-    { regex: /\*(.+?)\*/g, render: (match) => <em key={key++}>{match}</em> },
-    { regex: /~~(.+?)~~/g, render: (match) => <span key={key++} className="line-through text-gray-500">{match}</span> },
-  ];
-
-  // Simple approach: process sequentially
-  const combined = /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~)/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = combined.exec(text)) !== null) {
-    // Add text before match
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-
-    if (match[2]) {
-      // Bold: **text**
-      parts.push(<strong key={key++} className="font-bold">{match[2]}</strong>);
-    } else if (match[3]) {
-      // Italic: *text*
-      parts.push(<em key={key++}>{match[3]}</em>);
-    } else if (match[4]) {
-      // Strikethrough: ~~text~~
-      parts.push(<span key={key++} className="line-through text-gray-500">{match[4]}</span>);
-    }
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Add remaining text
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts.length > 0 ? parts : text;
-}
+// renderFormattedText is now imported from ../utils/formatText

@@ -19,7 +19,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB upload limit (will be compressed)
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/x-png', 'image/bmp', 'image/tiff'];
     cb(null, allowed.includes(file.mimetype));
   },
 });
@@ -122,6 +122,11 @@ router.post('/posts', requireAuth, upload.array('images', 4), async (req, res) =
   // Process and compress images
   const imageUrls = [];
   if (req.files && req.files.length > 0) {
+    // Ensure upload directory exists at runtime
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+
     for (const file of req.files) {
       try {
         const filename = `${uuidv4()}.webp`;
@@ -145,6 +150,16 @@ router.post('/posts', requireAuth, upload.array('images', 4), async (req, res) =
         imageUrls.push(`/uploads/posts/${filename}`);
       } catch (err) {
         console.error('Image processing error:', err.message);
+        // Fallback: save original file if sharp conversion fails
+        try {
+          const ext = (file.originalname || '').split('.').pop() || 'png';
+          const fallbackName = `${uuidv4()}.${ext}`;
+          const fallbackPath = path.join(UPLOAD_DIR, fallbackName);
+          fs.writeFileSync(fallbackPath, file.buffer);
+          imageUrls.push(`/uploads/posts/${fallbackName}`);
+        } catch (fallbackErr) {
+          console.error('Fallback save error:', fallbackErr.message);
+        }
       }
     }
   }

@@ -204,7 +204,7 @@ export default function Dashboard() {
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="mb-6">
         <h1 className="text-4xl font-display font-bold tracking-wider">
-          PUMP DOJO
+          <span className="text-piu-gold">PUMP</span> SHINSA
         </h1>
         <div className="flex flex-wrap gap-2 mt-2">
           <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Round Robin</span>

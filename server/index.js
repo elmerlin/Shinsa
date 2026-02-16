@@ -70,7 +70,7 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`Pump Dojo Shinsa server running on port ${PORT}`);
+  console.log(`Pump Shinsa server running on port ${PORT}`);
 });
 // Allow long-running sync requests (5 minutes)
 server.timeout = 300000;

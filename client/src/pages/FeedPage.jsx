@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getFeed } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
+import { renderFormattedText } from '../utils/formatText';
 
 function getRank(score) {
   if (score >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
@@ -67,7 +68,7 @@ function PostCard({ item }) {
 
       {item.content && (
         <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
-          {item.content}
+          {renderFormattedText(item.content)}
         </div>
       )}
 
