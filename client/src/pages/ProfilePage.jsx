@@ -538,13 +538,13 @@ export default function ProfilePage() {
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality);
 
-  const tabs = ['overview', 'followers', 'posts', 'tournaments', 'duels', 'songs'];
+  const tabs = ['overview', 'posts', 'tournaments', 'duels', 'songs'];
   if (hasPiuData) {
     tabs.push('pumbility', 'best-scores', 'recently-played');
   }
 
   const tabLabels = {
-    overview: 'Overview', followers: 'Followers', tournaments: 'Tournaments', duels: 'Duels', songs: 'Songs', posts: 'Posts',
+    overview: 'Overview', tournaments: 'Tournaments', duels: 'Duels', songs: 'Songs', posts: 'Posts',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
   };
 
@@ -841,9 +841,10 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ────── FOLLOWERS TAB ────── */}
+      {/* ────── FOLLOWERS VIEW (accessed via Followers box click) ────── */}
       {tab === 'followers' && (
         <div className="space-y-4">
+          <button onClick={() => setTab('overview')} className="text-xs text-gray-500 hover:text-piu-accent font-display">&larr; Back to profile</button>
           {/* Followers */}
           <div className="card">
             <h3 className="font-display font-bold text-sm text-piu-accent mb-3">FOLLOWERS ({followersList.length})</h3>
