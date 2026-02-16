@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getUserProfile, getUserStats, getSongs,
+  getUserProfile, getUserStats, getJacketMap,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
@@ -87,10 +87,10 @@ function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' })
   const isSingle = mode === 'Single';
   const isDouble = mode === 'Double';
 
-  const exactKey = `${(title || '').toLowerCase()}|${mode}|${level}`;
-  const titleKey = (title || '').toLowerCase();
+  const norm = (title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const exactKey = `${norm}|${mode}|${level}`;
   // Prefer local jacket from lookup; only use bgUrl if it's a local path (not piugame)
-  const localJacket = jacketLookup[exactKey] || jacketLookup[titleKey] || '';
+  const localJacket = jacketLookup[exactKey] || jacketLookup[norm] || '';
   const jacketUrl = localJacket || (bgUrl && !bgUrl.includes('piugame') ? bgUrl : '') || '';
 
   const badgeColor = isSingle ? 'bg-red-600' : isDouble ? 'bg-green-600' : 'bg-blue-600';
@@ -301,16 +301,7 @@ export default function ProfilePage() {
       getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
       getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
       getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
-      getSongs().then(songs => {
-        const lookup = {};
-        for (const s of songs) {
-          const key = `${s.title.toLowerCase()}|${s.mode}|${s.level}`;
-          if (!lookup[key] && s.jacket_url) lookup[key] = s.jacket_url;
-          const titleKey = s.title.toLowerCase();
-          if (!lookup[titleKey] && s.jacket_url) lookup[titleKey] = s.jacket_url;
-        }
-        setJacketLookup(lookup);
-      }).catch(() => {});
+      getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
     }
   }, [isPiuTab, id, piuDataLoaded]);
 
@@ -1123,9 +1114,9 @@ export default function ProfilePage() {
           { label: 'BAD', value: p.bad || 0, textColor: 'text-fuchsia-400' },
           { label: 'MISS', value: p.miss || 0, textColor: 'text-gray-400' },
         ];
-        const modalExactKey = `${(p.song_title || '').toLowerCase()}|${p.mode}|${p.level}`;
-        const modalTitleKey = (p.song_title || '').toLowerCase();
-        const modalBg = p.background_url || jacketLookup[modalExactKey] || jacketLookup[modalTitleKey] || '';
+        const modalNorm = (p.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        const modalExactKey = `${modalNorm}|${p.mode}|${p.level}`;
+        const modalBg = jacketLookup[modalExactKey] || jacketLookup[modalNorm] || '';
         return (
           <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPlay(null)}>
             <div

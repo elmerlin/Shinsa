@@ -87,6 +87,7 @@ export const getSongs = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs${qs ? `?${qs}` : ''}`);
 };
+export const getJacketMap = () => request('/songs/jacket-map');
 
 // Duels
 export const getDuels = () => request('/duels');
@@ -190,6 +191,12 @@ export const getPostComments = (postId) => request(`/social/posts/${postId}/comm
 export const addPostComment = (postId, content, parentId) => request(`/social/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deletePostComment = (id) => request(`/social/posts/comments/${id}`, { method: 'DELETE' });
 export const togglePostComments = (postId) => request(`/social/posts/${postId}/comments-toggle`, { method: 'PATCH' });
+
+// Social — Upscore Interactions
+export const pumpUpscore = (id) => request(`/social/upscores/${id}/pump`, { method: 'POST' });
+export const getUpscoreComments = (upscoreId) => request(`/social/upscores/${upscoreId}/comments`);
+export const addUpscoreComment = (upscoreId, content, parentId) => request(`/social/upscores/${upscoreId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deleteUpscoreComment = (id) => request(`/social/upscores/comments/${id}`, { method: 'DELETE' });
 
 // Social — Feed
 export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);

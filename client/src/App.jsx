@@ -3,6 +3,8 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext';
 import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
+import { searchUsers } from './utils/api';
+import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
 import TournamentSetup from './pages/TournamentSetup';
 import TournamentView from './pages/TournamentView';
@@ -98,6 +100,91 @@ function NotificationBell() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserSearch() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const navigate = useNavigate();
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleChange = (val) => {
+    setQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.trim().length < 1) { setResults([]); setOpen(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const users = await searchUsers(val.trim());
+        setResults(users);
+        setOpen(users.length > 0);
+      } catch { setResults([]); }
+    }, 250);
+  };
+
+  const goToUser = (userId) => {
+    setQuery('');
+    setResults([]);
+    setOpen(false);
+    navigate(`/profile/${userId}`);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="relative">
+        <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          value={query}
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Search players..."
+          className="w-28 sm:w-40 bg-piu-dark border border-piu-border rounded-lg text-xs py-1.5 pl-7 pr-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-piu-accent/50 transition-colors"
+        />
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute right-0 top-full mt-1 w-64 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
+          {results.map(u => {
+            const flag = getCountryFlag(u.nationality);
+            return (
+              <button
+                key={u.id}
+                onClick={() => goToUser(u.id)}
+                className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-piu-dark/50 transition-colors text-left"
+              >
+                {u.avatar ? (
+                  <img src={getAvatarUrl(u.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+                    {(u.username || '?')[0].toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-display font-bold truncate">
+                    {flag && <span className="mr-1">{flag}</span>}
+                    {u.username}
+                  </p>
+                  {u.skill_title && <p className="text-[10px] text-gray-500 truncate">{u.skill_title}</p>}
+                </div>
+                {u.pumbility > 0 && (
+                  <span className="text-[10px] font-mono text-piu-accent">{u.pumbility}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -236,6 +323,7 @@ export default function App() {
                 Feed
               </Link>
             )}
+            <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
                 <NotificationBell />

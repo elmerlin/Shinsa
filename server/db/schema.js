@@ -493,6 +493,29 @@ function initializeDb() {
     db.exec("ALTER TABLE user_posts ADD COLUMN updated_at TEXT DEFAULT NULL");
   }
 
+  // Migrations for upscore interactions (pumps + comments)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS upscore_pumps (
+      upscore_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (upscore_id, user_id),
+      FOREIGN KEY (upscore_id) REFERENCES user_upscores(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS upscore_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      upscore_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (upscore_id) REFERENCES user_upscores(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES upscore_comments(id) ON DELETE CASCADE
+    );
+  `);
+
   // Migrations for piugame sync - add progress tracking
   const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);
   const syncMigrations = [

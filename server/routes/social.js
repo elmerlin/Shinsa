@@ -8,6 +8,14 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 
+// Helper: create notification (don't notify yourself)
+function createNotification(db, userId, type, title, message, link) {
+  if (!userId) return;
+  db.prepare(
+    'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
+  ).run(userId, type, title, message || '', link || '');
+}
+
 // Ensure upload directory exists
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'posts');
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -253,7 +261,7 @@ router.delete('/posts/:id', requireAuth, (req, res) => {
 router.post('/posts/:id/pump', requireAuth, (req, res) => {
   const db = getDb();
   const postId = parseInt(req.params.id);
-  const post = db.prepare('SELECT id FROM user_posts WHERE id = ?').get(postId);
+  const post = db.prepare('SELECT id, user_id FROM user_posts WHERE id = ?').get(postId);
   if (!post) return res.status(404).json({ error: 'Post not found' });
 
   const existing = db.prepare(
@@ -268,6 +276,13 @@ router.post('/posts/:id/pump', requireAuth, (req, res) => {
 
   db.prepare('INSERT INTO post_pumps (post_id, user_id) VALUES (?, ?)').run(postId, req.user.id);
   const count = db.prepare('SELECT COUNT(*) as count FROM post_pumps WHERE post_id = ?').get(postId).count;
+
+  // Notify post owner
+  if (post.user_id !== req.user.id) {
+    const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    createNotification(db, post.user_id, 'post_pump', 'New Pump', `${me.username} pumped your post`, `/profile/${post.user_id}?tab=posts`);
+  }
+
   res.json({ pumped: true, pump_count: count });
 });
 
@@ -344,6 +359,20 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
   `).get(result.lastInsertRowid);
 
   comment.replies = [];
+
+  // Notifications
+  const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+  if (parent_id) {
+    // Reply: notify parent comment author
+    const parentComment = db.prepare('SELECT user_id FROM post_comments WHERE id = ?').get(parent_id);
+    if (parentComment && parentComment.user_id !== req.user.id) {
+      createNotification(db, parentComment.user_id, 'post_reply', 'New Reply', `${me.username} replied to your comment`, `/profile/${post.user_id}?tab=posts`);
+    }
+  }
+  if (post.user_id !== req.user.id) {
+    createNotification(db, post.user_id, 'post_comment', 'New Comment', `${me.username} commented on your post`, `/profile/${post.user_id}?tab=posts`);
+  }
+
   res.status(201).json(comment);
 });
 
@@ -409,10 +438,12 @@ router.get('/feed', requireAuth, (req, res) => {
     ).get(post.id, req.user.id);
   }
 
-  // Get upscores from followed users
+  // Get upscores from followed users with pump/comment counts
   const upscores = db.prepare(`
     SELECT us.id, us.user_id, us.upscores_json, us.created_at,
            u.username, u.avatar, u.nationality,
+           (SELECT COUNT(*) FROM upscore_pumps WHERE upscore_id = us.id) as pump_count,
+           (SELECT COUNT(*) FROM upscore_comments WHERE upscore_id = us.id) as comment_count,
            'upscore' as type
     FROM user_upscores us
     JOIN users u ON us.user_id = u.id
@@ -422,12 +453,135 @@ router.get('/feed', requireAuth, (req, res) => {
     LIMIT ? OFFSET ?
   `).all(req.user.id, req.user.id, limit, offset);
 
+  // Attach user's pump status for upscores
+  for (const us of upscores) {
+    us.user_pumped = !!db.prepare(
+      'SELECT 1 FROM upscore_pumps WHERE upscore_id = ? AND user_id = ?'
+    ).get(us.id, req.user.id);
+  }
+
   // Merge and sort by created_at
   const feed = [...posts, ...upscores]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, limit);
 
   res.json(feed);
+});
+
+// ─── Upscore Pumps ──────────────────────────────────────
+
+// POST /api/social/upscores/:id/pump — toggle pump on an upscore
+router.post('/upscores/:id/pump', requireAuth, (req, res) => {
+  const db = getDb();
+  const upscoreId = parseInt(req.params.id);
+  const upscore = db.prepare('SELECT id, user_id FROM user_upscores WHERE id = ?').get(upscoreId);
+  if (!upscore) return res.status(404).json({ error: 'Upscore not found' });
+
+  const existing = db.prepare(
+    'SELECT 1 FROM upscore_pumps WHERE upscore_id = ? AND user_id = ?'
+  ).get(upscoreId, req.user.id);
+
+  if (existing) {
+    db.prepare('DELETE FROM upscore_pumps WHERE upscore_id = ? AND user_id = ?').run(upscoreId, req.user.id);
+    const count = db.prepare('SELECT COUNT(*) as count FROM upscore_pumps WHERE upscore_id = ?').get(upscoreId).count;
+    return res.json({ pumped: false, pump_count: count });
+  }
+
+  db.prepare('INSERT INTO upscore_pumps (upscore_id, user_id) VALUES (?, ?)').run(upscoreId, req.user.id);
+  const count = db.prepare('SELECT COUNT(*) as count FROM upscore_pumps WHERE upscore_id = ?').get(upscoreId).count;
+
+  // Notify upscore owner
+  if (upscore.user_id !== req.user.id) {
+    const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    createNotification(db, upscore.user_id, 'upscore_pump', 'New Pump', `${me.username} pumped your upscore!`, `/feed`);
+  }
+
+  res.json({ pumped: true, pump_count: count });
+});
+
+// ─── Upscore Comments ──────────────────────────────────
+
+// GET /api/social/upscores/:id/comments
+router.get('/upscores/:id/comments', (req, res) => {
+  const db = getDb();
+  const upscoreId = parseInt(req.params.id);
+  const comments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
+    FROM upscore_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.upscore_id = ? AND c.parent_id IS NULL
+    ORDER BY c.created_at ASC
+  `).all(upscoreId);
+
+  for (const comment of comments) {
+    comment.replies = db.prepare(`
+      SELECT c.*, u.username, u.avatar
+      FROM upscore_comments c JOIN users u ON c.user_id = u.id
+      WHERE c.parent_id = ?
+      ORDER BY c.created_at ASC
+    `).all(comment.id);
+  }
+
+  res.json(comments);
+});
+
+// POST /api/social/upscores/:id/comments
+router.post('/upscores/:id/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const upscoreId = parseInt(req.params.id);
+  const { content, parent_id } = req.body;
+  if (!content || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+
+  const upscore = db.prepare('SELECT id, user_id FROM user_upscores WHERE id = ?').get(upscoreId);
+  if (!upscore) return res.status(404).json({ error: 'Upscore not found' });
+
+  if (parent_id) {
+    const parent = db.prepare('SELECT id FROM upscore_comments WHERE id = ? AND upscore_id = ?').get(parent_id, upscoreId);
+    if (!parent) return res.status(404).json({ error: 'Parent comment not found' });
+  }
+
+  const result = db.prepare(
+    'INSERT INTO upscore_comments (upscore_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
+  ).run(upscoreId, req.user.id, parent_id || null, content.trim());
+
+  const comment = db.prepare(`
+    SELECT c.*, u.username, u.avatar
+    FROM upscore_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.id = ?
+  `).get(result.lastInsertRowid);
+  comment.replies = [];
+
+  // Notify upscore owner
+  const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+  if (parent_id) {
+    // Reply notification to parent comment author
+    const parentComment = db.prepare('SELECT user_id FROM upscore_comments WHERE id = ?').get(parent_id);
+    if (parentComment && parentComment.user_id !== req.user.id) {
+      createNotification(db, parentComment.user_id, 'upscore_reply', 'New Reply', `${me.username} replied to your comment`, `/feed`);
+    }
+  }
+  if (upscore.user_id !== req.user.id) {
+    createNotification(db, upscore.user_id, 'upscore_comment', 'New Comment', `${me.username} commented on your upscore`, `/feed`);
+  }
+
+  res.status(201).json(comment);
+});
+
+// DELETE /api/social/upscores/comments/:id
+router.delete('/upscores/comments/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const commentId = parseInt(req.params.id);
+  const comment = db.prepare(`
+    SELECT c.*, us.user_id as upscore_author_id
+    FROM upscore_comments c
+    JOIN user_upscores us ON c.upscore_id = us.id
+    WHERE c.id = ?
+  `).get(commentId);
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+  if (comment.user_id !== req.user.id && comment.upscore_author_id !== req.user.id) {
+    return res.status(403).json({ error: 'Not authorized' });
+  }
+  db.prepare('DELETE FROM upscore_comments WHERE id = ? OR parent_id = ?').run(commentId, commentId);
+  res.json({ success: true });
 });
 
 module.exports = router;
