@@ -206,6 +206,28 @@ router.get('/posts/user/:userId', optionalAuth, (req, res) => {
   res.json(posts);
 });
 
+// PUT /api/social/posts/:id — edit own post (text/youtube only, images unchanged)
+router.put('/posts/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const post = db.prepare('SELECT * FROM user_posts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+
+  const { content, youtube_url } = req.body;
+  db.prepare(
+    'UPDATE user_posts SET content = ?, youtube_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).run(content || '', youtube_url || post.youtube_url || '', req.params.id);
+
+  const updated = db.prepare(`
+    SELECT p.*, u.username, u.avatar,
+           (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
+           (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count
+    FROM user_posts p JOIN users u ON p.user_id = u.id
+    WHERE p.id = ?
+  `).get(req.params.id);
+
+  res.json(updated);
+});
+
 // DELETE /api/social/posts/:id — delete own post
 router.delete('/posts/:id', requireAuth, (req, res) => {
   const db = getDb();

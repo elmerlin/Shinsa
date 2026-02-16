@@ -1,27 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFeed } from '../utils/api';
+import { getFeed, getSongs } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard from '../components/PostCard';
 
 function getRank(score) {
-  if (score >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
-  if (score >= 990000) return { label: 'SSS', color: 'text-sky-400' };
-  if (score >= 980000) return { label: 'SS+', color: 'text-piu-gold' };
-  if (score >= 960000) return { label: 'SS', color: 'text-yellow-400' };
-  if (score >= 940000) return { label: 'S+', color: 'text-amber-400' };
-  if (score >= 920000) return { label: 'S', color: 'text-amber-500' };
-  if (score >= 900000) return { label: 'AAA+', color: 'text-piu-silver' };
-  if (score >= 850000) return { label: 'AAA', color: 'text-gray-300' };
-  if (score >= 800000) return { label: 'AA+', color: 'text-piu-bronze' };
-  if (score >= 750000) return { label: 'AA', color: 'text-piu-bronze' };
-  if (score >= 700000) return { label: 'A+', color: 'text-amber-700' };
-  if (score >= 650000) return { label: 'A', color: 'text-amber-700' };
-  if (score >= 550000) return { label: 'B', color: 'text-gray-500' };
-  if (score >= 450000) return { label: 'C', color: 'text-gray-500' };
-  if (score >= 350000) return { label: 'D', color: 'text-gray-600' };
+  const s = parseInt(score) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
   return { label: 'F', color: 'text-gray-600' };
 }
 
@@ -39,7 +40,7 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString();
 }
 
-function UpscoreCard({ item }) {
+function UpscoreCard({ item, jacketLookup }) {
   const upscores = (() => {
     try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; }
   })();
@@ -79,10 +80,14 @@ function UpscoreCard({ item }) {
           const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400';
           const improvement = u.new_score - u.old_score;
 
+          const exactKey = `${(u.song_title || '').toLowerCase()}|${u.mode}|${u.level}`;
+          const titleKey = (u.song_title || '').toLowerCase();
+          const jacketUrl = jacketLookup[exactKey] || jacketLookup[titleKey] || '';
+
           return (
             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-              {u.background_url ? (
-                <img src={u.background_url} alt="" className="w-9 h-9 rounded object-cover shrink-0" />
+              {jacketUrl ? (
+                <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover shrink-0" />
               ) : (
                 <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500 shrink-0">
                   {(u.song_title || '?')[0]}
@@ -120,6 +125,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [jacketLookup, setJacketLookup] = useState({});
 
   useEffect(() => {
     if (!user) {
@@ -131,6 +137,18 @@ export default function FeedPage() {
       setFeed(data);
       setHasMore(data.length >= 20);
     }).catch(() => {}).finally(() => setLoading(false));
+
+    // Build jacket lookup from local song database
+    getSongs().then(songs => {
+      const lookup = {};
+      for (const s of songs) {
+        const key = `${s.title.toLowerCase()}|${s.mode}|${s.level}`;
+        if (!lookup[key] && s.jacket_url) lookup[key] = s.jacket_url;
+        const titleKey = s.title.toLowerCase();
+        if (!lookup[titleKey] && s.jacket_url) lookup[titleKey] = s.jacket_url;
+      }
+      setJacketLookup(lookup);
+    }).catch(() => {});
   }, [user]);
 
   const loadMore = async () => {
@@ -171,7 +189,7 @@ export default function FeedPage() {
             if (item.type === 'post') {
               return <PostCard key={`post-${item.id}`} post={item} showAuthor={true} />;
             } else if (item.type === 'upscore') {
-              return <UpscoreCard key={`upscore-${item.id}`} item={item} />;
+              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} />;
             }
             return null;
           })}

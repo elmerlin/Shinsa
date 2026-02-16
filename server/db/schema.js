@@ -489,6 +489,9 @@ function initializeDb() {
   if (!postCols.includes('comments_disabled')) {
     db.exec("ALTER TABLE user_posts ADD COLUMN comments_disabled INTEGER DEFAULT 0");
   }
+  if (!postCols.includes('updated_at')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN updated_at TEXT DEFAULT NULL");
+  }
 
   // Migrations for piugame sync - add progress tracking
   const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);

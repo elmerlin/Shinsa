@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from './PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
-import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments } from '../utils/api';
+import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost } from '../utils/api';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -406,15 +406,51 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 }
 
 // Full Post Card used in Feed and Profile
-export default function PostCard({ post, showAuthor = true, onDelete, isOwner = false }) {
+export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false }) {
   const { user } = useAuth();
   const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content || '');
+  const [editYoutubeUrl, setEditYoutubeUrl] = useState(post.youtube_url || '');
+  const [saving, setSaving] = useState(false);
+  const [currentContent, setCurrentContent] = useState(post.content || '');
+  const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
+  const [wasEdited, setWasEdited] = useState(!!post.updated_at);
 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }
   })();
 
   const flag = showAuthor ? getCountryFlag(post.nationality) : null;
+  const canEdit = user && user.id === post.user_id;
+
+  const handleEdit = () => {
+    setEditContent(currentContent);
+    setEditYoutubeUrl(currentYoutubeUrl);
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await editPost(post.id, { content: editContent, youtube_url: editYoutubeUrl });
+      setCurrentContent(updated.content || '');
+      setCurrentYoutubeUrl(updated.youtube_url || '');
+      setWasEdited(true);
+      setEditing(false);
+      if (onUpdate) onUpdate(updated);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditContent(currentContent);
+    setEditYoutubeUrl(currentYoutubeUrl);
+    setEditing(false);
+  };
 
   return (
     <div className="card">
@@ -439,29 +475,82 @@ export default function PostCard({ post, showAuthor = true, onDelete, isOwner = 
                 {post.username}
               </Link>
             )}
-            <p className="text-[10px] text-gray-500">{timeAgo(post.created_at)}</p>
+            <p className="text-[10px] text-gray-500">
+              {timeAgo(post.created_at)}
+              {wasEdited && <span className="ml-1 text-gray-600">(edited)</span>}
+            </p>
           </div>
         </div>
-        {onDelete && isOwner && (
-          <button
-            onClick={() => onDelete(post.id)}
-            className="text-gray-600 hover:text-red-400 text-xs transition-colors"
-            title="Delete post"
-          >
-            &#10005;
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && !editing && (
+            <button
+              onClick={handleEdit}
+              className="text-gray-600 hover:text-piu-accent text-xs transition-colors"
+              title="Edit post"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          )}
+          {onDelete && isOwner && (
+            <button
+              onClick={() => onDelete(post.id)}
+              className="text-gray-600 hover:text-red-400 text-xs transition-colors"
+              title="Delete post"
+            >
+              &#10005;
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
-      {post.content && (
-        <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
-          {renderFormattedText(post.content)}
+      {editing ? (
+        <div className="mb-3">
+          <textarea
+            value={editContent}
+            onChange={e => setEditContent(e.target.value)}
+            className="input-field w-full resize-none min-h-[80px] text-sm mb-2"
+            rows={3}
+          />
+          {(currentYoutubeUrl || editYoutubeUrl) && (
+            <input
+              type="text"
+              className="input-field text-xs py-1.5 w-full mb-2"
+              placeholder="YouTube URL"
+              value={editYoutubeUrl}
+              onChange={e => setEditYoutubeUrl(e.target.value)}
+            />
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="btn-primary px-3 py-1 text-xs"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={handleCancel}
+              className="px-3 py-1 text-xs text-gray-400 hover:text-white bg-piu-dark rounded transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
+      ) : (
+        <>
+          {currentContent && (
+            <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
+              {renderFormattedText(currentContent)}
+            </div>
+          )}
+        </>
       )}
 
       {/* YouTube */}
-      {post.youtube_url && <YouTubeEmbed url={post.youtube_url} />}
+      {!editing && currentYoutubeUrl && <YouTubeEmbed url={currentYoutubeUrl} />}
 
       {/* Images */}
       <ImageGrid images={images} onImageClick={setLightboxIndex} />

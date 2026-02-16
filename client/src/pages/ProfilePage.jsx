@@ -23,21 +23,22 @@ function getAge(dateStr) {
 }
 
 function getRank(score) {
-  if (score >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
-  if (score >= 990000) return { label: 'SSS', color: 'text-sky-400' };
-  if (score >= 980000) return { label: 'SS+', color: 'text-piu-gold' };
-  if (score >= 960000) return { label: 'SS', color: 'text-yellow-400' };
-  if (score >= 940000) return { label: 'S+', color: 'text-amber-400' };
-  if (score >= 920000) return { label: 'S', color: 'text-amber-500' };
-  if (score >= 900000) return { label: 'AAA+', color: 'text-piu-silver' };
-  if (score >= 850000) return { label: 'AAA', color: 'text-gray-300' };
-  if (score >= 800000) return { label: 'AA+', color: 'text-piu-bronze' };
-  if (score >= 750000) return { label: 'AA', color: 'text-piu-bronze' };
-  if (score >= 700000) return { label: 'A+', color: 'text-amber-700' };
-  if (score >= 650000) return { label: 'A', color: 'text-amber-700' };
-  if (score >= 550000) return { label: 'B', color: 'text-gray-500' };
-  if (score >= 450000) return { label: 'C', color: 'text-gray-500' };
-  if (score >= 350000) return { label: 'D', color: 'text-gray-600' };
+  const s = parseInt(score) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
   return { label: 'F', color: 'text-gray-600' };
 }
 
@@ -56,19 +57,19 @@ function getGradeColor(grade) {
 const RANK_RANGES = [
   { label: 'SSS+', min: 995000, bg: 'bg-sky-300' },
   { label: 'SSS',  min: 990000, bg: 'bg-sky-400' },
-  { label: 'SS+',  min: 980000, bg: 'bg-yellow-300' },
-  { label: 'SS',   min: 960000, bg: 'bg-yellow-400' },
-  { label: 'S+',   min: 940000, bg: 'bg-amber-400' },
-  { label: 'S',    min: 920000, bg: 'bg-amber-500' },
-  { label: 'AAA+', min: 900000, bg: 'bg-slate-300' },
-  { label: 'AAA',  min: 850000, bg: 'bg-slate-400' },
-  { label: 'AA+',  min: 800000, bg: 'bg-violet-400' },
-  { label: 'AA',   min: 750000, bg: 'bg-violet-500' },
-  { label: 'A+',   min: 700000, bg: 'bg-emerald-400' },
-  { label: 'A',    min: 650000, bg: 'bg-emerald-500' },
-  { label: 'B',    min: 550000, bg: 'bg-gray-400' },
-  { label: 'C',    min: 450000, bg: 'bg-gray-500' },
-  { label: 'D',    min: 350000, bg: 'bg-gray-600' },
+  { label: 'SS+',  min: 985000, bg: 'bg-yellow-300' },
+  { label: 'SS',   min: 980000, bg: 'bg-yellow-400' },
+  { label: 'S+',   min: 975000, bg: 'bg-amber-400' },
+  { label: 'S',    min: 970000, bg: 'bg-amber-500' },
+  { label: 'AAA+', min: 960000, bg: 'bg-slate-300' },
+  { label: 'AAA',  min: 950000, bg: 'bg-slate-400' },
+  { label: 'AA+',  min: 925000, bg: 'bg-violet-400' },
+  { label: 'AA',   min: 900000, bg: 'bg-violet-500' },
+  { label: 'A+',   min: 825000, bg: 'bg-emerald-400' },
+  { label: 'A',    min: 750000, bg: 'bg-emerald-500' },
+  { label: 'B',    min: 650000, bg: 'bg-gray-400' },
+  { label: 'C',    min: 550000, bg: 'bg-gray-500' },
+  { label: 'D',    min: 450000, bg: 'bg-gray-600' },
   { label: 'F',    min: 0,      bg: 'bg-gray-700' },
 ];
 
@@ -88,7 +89,9 @@ function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' })
 
   const exactKey = `${(title || '').toLowerCase()}|${mode}|${level}`;
   const titleKey = (title || '').toLowerCase();
-  const jacketUrl = jacketLookup[exactKey] || jacketLookup[titleKey] || bgUrl || '';
+  // Prefer local jacket from lookup; only use bgUrl if it's a local path (not piugame)
+  const localJacket = jacketLookup[exactKey] || jacketLookup[titleKey] || '';
+  const jacketUrl = localJacket || (bgUrl && !bgUrl.includes('piugame') ? bgUrl : '') || '';
 
   const badgeColor = isSingle ? 'bg-red-600' : isDouble ? 'bg-green-600' : 'bg-blue-600';
 
@@ -109,46 +112,69 @@ function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' })
 }
 
 // Grade distribution bar chart for a single level — grades on x-axis
-function GradeDistributionChart({ scores, rankRanges }) {
+// showModeFilter: only show when top-level tab is "All"
+function GradeDistributionChart({ scores, rankRanges, showModeFilter = false }) {
   const [chartMode, setChartMode] = useState('');
 
   const filtered = chartMode ? scores.filter(s => s.mode === chartMode) : scores;
-  const distribution = rankRanges.map(r => ({ ...r, count: 0 }));
+
+  // Build distribution, grouping B and below into one bucket
+  const groupedRanges = [
+    ...rankRanges.filter(r => ['SSS+','SSS','SS+','SS','S+','S','AAA+','AAA','AA+','AA','A+','A'].includes(r.label)),
+    { label: 'B-', min: 0, bg: 'bg-gray-400' },
+  ];
+  const distribution = groupedRanges.map(r => ({ ...r, count: 0 }));
   for (const s of filtered) {
+    let placed = false;
     for (let i = 0; i < rankRanges.length; i++) {
       if (s.score >= rankRanges[i].min) {
-        distribution[i].count++;
+        // Is this rank in the non-grouped set (A and above)?
+        const grpIdx = distribution.findIndex(d => d.label === rankRanges[i].label);
+        if (grpIdx !== -1) {
+          distribution[grpIdx].count++;
+        } else {
+          // B, C, D, F — goes into the grouped "B-" bucket
+          distribution[distribution.length - 1].count++;
+        }
+        placed = true;
         break;
       }
     }
+    if (!placed) distribution[distribution.length - 1].count++;
   }
-  const maxCount = Math.max(1, ...distribution.map(d => d.count));
-  const totalCount = distribution.reduce((s, d) => s + d.count, 0);
+
+  // Invert: lowest grade on left, SSS+ on right
+  const displayDistribution = [...distribution].reverse();
+
+  const maxCount = Math.max(1, ...displayDistribution.map(d => d.count));
+  const totalCount = displayDistribution.reduce((s, d) => s + d.count, 0);
 
   return (
     <div className="card mb-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] text-gray-500 font-display">GRADE DISTRIBUTION ({totalCount} scores)</span>
-        <div className="flex gap-1">
-          {[
-            { key: '', label: 'All' },
-            { key: 'Single', label: 'S' },
-            { key: 'Double', label: 'D' },
-          ].map(m => (
-            <button
-              key={m.key}
-              onClick={() => setChartMode(m.key)}
-              className={`px-2 py-1 rounded text-[10px] font-display font-bold transition-colors ${
-                chartMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        {showModeFilter && (
+          <div className="flex gap-1">
+            {[
+              { key: '', label: 'All' },
+              { key: 'Single', label: 'Singles' },
+              { key: 'Double', label: 'Doubles' },
+            ].map(m => (
+              <button
+                key={m.key}
+                onClick={() => setChartMode(m.key)}
+                className={`px-2 py-1 rounded text-[10px] font-display font-bold transition-colors ${
+                  chartMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex items-end gap-1" style={{ minHeight: '100px' }}>
-        {distribution.map((d, i) => (
+        {displayDistribution.map((d, i) => (
           <div key={i} className="flex flex-col items-center flex-1 min-w-0">
             <div
               className={`w-full rounded-t ${d.bg} transition-all`}
@@ -572,20 +598,20 @@ export default function ProfilePage() {
       {aggregated && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{aggregated.tournamentCount}</p>
-            <p className="text-[10px] text-gray-500 font-display">Tournaments</p>
-          </div>
-          <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{aggregated.duelCount}</p>
-            <p className="text-[10px] text-gray-500 font-display">Duels</p>
+            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.followers_count}</p>
+            <p className="text-[10px] text-gray-500 font-display">Followers</p>
           </div>
           <div className="card text-center py-3">
             <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.posts_count}</p>
             <p className="text-[10px] text-gray-500 font-display">Posts</p>
           </div>
           <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.followers_count}</p>
-            <p className="text-[10px] text-gray-500 font-display">Followers</p>
+            <p className="font-mono font-bold text-xl text-piu-accent">{aggregated.duelCount}</p>
+            <p className="text-[10px] text-gray-500 font-display">Duels</p>
+          </div>
+          <div className="card text-center py-3">
+            <p className="font-mono font-bold text-xl text-piu-accent">{aggregated.tournamentCount}</p>
+            <p className="text-[10px] text-gray-500 font-display">Tournaments</p>
           </div>
         </div>
       )}
@@ -939,6 +965,7 @@ export default function ProfilePage() {
               <GradeDistributionChart
                 scores={piuBestScores.scores.filter(s => s.level === parseInt(piuScoreLevel))}
                 rankRanges={RANK_RANGES}
+                showModeFilter={piuScoreMode === ''}
               />
             )}
 

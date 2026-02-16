@@ -179,6 +179,7 @@ export async function createPost(content, imageFiles, youtubeUrl, commentsDisabl
   return res.json();
 }
 export const getUserPosts = (userId, page) => request(`/social/posts/user/${userId}?page=${page || 1}`);
+export const editPost = (id, data) => request(`/social/posts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deletePost = (id) => request(`/social/posts/${id}`, { method: 'DELETE' });
 
 // Social — Post Pumps
