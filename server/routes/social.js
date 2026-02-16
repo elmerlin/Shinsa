@@ -107,13 +107,49 @@ router.get('/follow-status/:userId', optionalAuth, (req, res) => {
   res.json({ following: isFollowing, followers_count: followersCount, following_count: followingCount });
 });
 
-// GET /api/social/counts/:userId — follower/following/post counts (public)
+// GET /api/social/counts/:userId — follower/following/post counts + pumps + trend (public)
 router.get('/counts/:userId', (req, res) => {
   const db = getDb();
-  const followersCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?').get(req.params.userId).count;
-  const followingCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?').get(req.params.userId).count;
-  const postsCount = db.prepare('SELECT COUNT(*) as count FROM user_posts WHERE user_id = ?').get(req.params.userId).count;
-  res.json({ followers_count: followersCount, following_count: followingCount, posts_count: postsCount });
+  const userId = req.params.userId;
+  const followersCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?').get(userId).count;
+  const followingCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?').get(userId).count;
+  const postsCount = db.prepare('SELECT COUNT(*) as count FROM user_posts WHERE user_id = ?').get(userId).count;
+
+  // Total pumps received across all content types
+  const postPumps = db.prepare('SELECT COUNT(*) as c FROM post_pumps pp JOIN user_posts up ON pp.post_id = up.id WHERE up.user_id = ?').get(userId).c;
+  const upscorePumps = db.prepare('SELECT COUNT(*) as c FROM upscore_pumps usp JOIN user_upscores us ON usp.upscore_id = us.id WHERE us.user_id = ?').get(userId).c;
+  const clearPumps = db.prepare('SELECT COUNT(*) as c FROM new_clear_pumps ncp JOIN user_new_clears nc ON ncp.clear_id = nc.id WHERE nc.user_id = ?').get(userId).c;
+  let commentPumps = 0;
+  try {
+    commentPumps = db.prepare(`
+      SELECT COUNT(*) as c FROM comment_pumps cp WHERE
+        (cp.comment_type = 'post' AND cp.comment_id IN (SELECT id FROM post_comments WHERE user_id = ?)) OR
+        (cp.comment_type = 'upscore' AND cp.comment_id IN (SELECT id FROM upscore_comments WHERE user_id = ?)) OR
+        (cp.comment_type = 'clear' AND cp.comment_id IN (SELECT id FROM new_clear_comments WHERE user_id = ?))
+    `).get(userId, userId, userId).c;
+  } catch {}
+  const totalPumps = postPumps + upscorePumps + clearPumps + commentPumps;
+
+  // Follower trend: snapshot today, compare to yesterday
+  const today = new Date().toISOString().split('T')[0];
+  try {
+    db.prepare('INSERT OR REPLACE INTO follower_daily_snapshots (user_id, snapshot_date, follower_count) VALUES (?, ?, ?)').run(userId, today, followersCount);
+  } catch {}
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const yesterdaySnap = db.prepare('SELECT follower_count FROM follower_daily_snapshots WHERE user_id = ? AND snapshot_date = ?').get(userId, yesterday);
+  const yesterdayFollowers = yesterdaySnap ? yesterdaySnap.follower_count : followersCount;
+
+  // Last post time
+  const lastPost = db.prepare('SELECT created_at FROM user_posts WHERE user_id = ? ORDER BY created_at DESC LIMIT 1').get(userId);
+
+  res.json({
+    followers_count: followersCount,
+    following_count: followingCount,
+    posts_count: postsCount,
+    total_pumps: totalPumps,
+    yesterday_followers: yesterdayFollowers,
+    last_post_at: lastPost ? lastPost.created_at : null,
+  });
 });
 
 // ─── Posts ────────────────────────────────────────────
@@ -302,27 +338,37 @@ router.get('/posts/:id/pump-status', optionalAuth, (req, res) => {
 // ─── Post Comments ──────────────────────────────────
 
 // GET /api/social/posts/:id/comments — get comments for a post
-router.get('/posts/:id/comments', (req, res) => {
+router.get('/posts/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const postId = parseInt(req.params.id);
 
   const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar,
+           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'post' AND comment_id = c.id) as pump_count
     FROM post_comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.post_id = ? AND c.parent_id IS NULL
     ORDER BY c.created_at ASC
   `).all(postId);
 
-  // Attach replies to each comment
+  // Attach replies and pump status
   for (const comment of comments) {
+    if (req.user) {
+      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('post', comment.id, req.user.id);
+    }
     comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar
+      SELECT c.*, u.username, u.avatar,
+             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'post' AND comment_id = c.id) as pump_count
       FROM post_comments c
       JOIN users u ON c.user_id = u.id
       WHERE c.parent_id = ?
       ORDER BY c.created_at ASC
     `).all(comment.id);
+    if (req.user) {
+      for (const reply of comment.replies) {
+        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('post', reply.id, req.user.id);
+      }
+    }
   }
 
   res.json(comments);
@@ -598,23 +644,33 @@ router.post('/upscores/:id/pump', requireAuth, (req, res) => {
 // ─── Upscore Comments ──────────────────────────────────
 
 // GET /api/social/upscores/:id/comments
-router.get('/upscores/:id/comments', (req, res) => {
+router.get('/upscores/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const upscoreId = parseInt(req.params.id);
   const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar,
+           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'upscore' AND comment_id = c.id) as pump_count
     FROM upscore_comments c JOIN users u ON c.user_id = u.id
     WHERE c.upscore_id = ? AND c.parent_id IS NULL
     ORDER BY c.created_at ASC
   `).all(upscoreId);
 
   for (const comment of comments) {
+    if (req.user) {
+      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('upscore', comment.id, req.user.id);
+    }
     comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar
+      SELECT c.*, u.username, u.avatar,
+             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'upscore' AND comment_id = c.id) as pump_count
       FROM upscore_comments c JOIN users u ON c.user_id = u.id
       WHERE c.parent_id = ?
       ORDER BY c.created_at ASC
     `).all(comment.id);
+    if (req.user) {
+      for (const reply of comment.replies) {
+        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('upscore', reply.id, req.user.id);
+      }
+    }
   }
 
   res.json(comments);
@@ -713,23 +769,33 @@ router.post('/clears/:id/pump', requireAuth, (req, res) => {
 // ─── New Clear Comments ──────────────────────────────────
 
 // GET /api/social/clears/:id/comments
-router.get('/clears/:id/comments', (req, res) => {
+router.get('/clears/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const clearId = parseInt(req.params.id);
   const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar,
+           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'clear' AND comment_id = c.id) as pump_count
     FROM new_clear_comments c JOIN users u ON c.user_id = u.id
     WHERE c.clear_id = ? AND c.parent_id IS NULL
     ORDER BY c.created_at ASC
   `).all(clearId);
 
   for (const comment of comments) {
+    if (req.user) {
+      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('clear', comment.id, req.user.id);
+    }
     comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar
+      SELECT c.*, u.username, u.avatar,
+             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'clear' AND comment_id = c.id) as pump_count
       FROM new_clear_comments c JOIN users u ON c.user_id = u.id
       WHERE c.parent_id = ?
       ORDER BY c.created_at ASC
     `).all(comment.id);
+    if (req.user) {
+      for (const reply of comment.replies) {
+        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('clear', reply.id, req.user.id);
+      }
+    }
   }
 
   res.json(comments);
@@ -791,6 +857,48 @@ router.delete('/clears/comments/:id', requireAuth, (req, res) => {
   }
   db.prepare('DELETE FROM new_clear_comments WHERE id = ? OR parent_id = ?').run(commentId, commentId);
   res.json({ success: true });
+});
+
+// ─── Comment Pumps ──────────────────────────────────────
+
+// POST /api/social/comments/:type/:commentId/pump — toggle pump on a comment
+router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
+  const db = getDb();
+  const { type, commentId } = req.params;
+  const cid = parseInt(commentId);
+  if (!['post', 'upscore', 'clear'].includes(type)) return res.status(400).json({ error: 'Invalid comment type' });
+
+  // Verify comment exists and get author
+  let comment;
+  if (type === 'post') {
+    comment = db.prepare('SELECT id, user_id FROM post_comments WHERE id = ?').get(cid);
+  } else if (type === 'upscore') {
+    comment = db.prepare('SELECT id, user_id FROM upscore_comments WHERE id = ?').get(cid);
+  } else {
+    comment = db.prepare('SELECT id, user_id FROM new_clear_comments WHERE id = ?').get(cid);
+  }
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+  const existing = db.prepare(
+    'SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?'
+  ).get(type, cid, req.user.id);
+
+  if (existing) {
+    db.prepare('DELETE FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').run(type, cid, req.user.id);
+    const count = db.prepare('SELECT COUNT(*) as count FROM comment_pumps WHERE comment_type = ? AND comment_id = ?').get(type, cid).count;
+    return res.json({ pumped: false, pump_count: count });
+  }
+
+  db.prepare('INSERT INTO comment_pumps (comment_type, comment_id, user_id) VALUES (?, ?, ?)').run(type, cid, req.user.id);
+  const count = db.prepare('SELECT COUNT(*) as count FROM comment_pumps WHERE comment_type = ? AND comment_id = ?').get(type, cid).count;
+
+  // Notify comment author
+  if (comment.user_id !== req.user.id) {
+    const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, '');
+  }
+
+  res.json({ pumped: true, pump_count: count });
 });
 
 // ─── Recent Activity (public) ──────────────────────────

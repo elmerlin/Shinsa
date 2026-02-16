@@ -10,7 +10,7 @@ import {
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
-import PostCard from '../components/PostCard';
+import PostCard, { timeAgo } from '../components/PostCard';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -607,14 +607,32 @@ export default function ProfilePage() {
 
       {/* Stats Summary */}
       {aggregated && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.followers_count}</p>
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
+          <button
+            onClick={() => { setTab('followers'); setFollowersLoaded(false); }}
+            className="card text-center py-3 hover:border-piu-accent/40 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center justify-center gap-1">
+              <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.followers_count}</p>
+              {socialCounts.followers_count > (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
+                <span className="text-green-400 text-xs">&#9650;</span>
+              )}
+              {socialCounts.followers_count < (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
+                <span className="text-red-400 text-xs">&#9660;</span>
+              )}
+            </div>
             <p className="text-[10px] text-gray-500 font-display">Followers</p>
-          </div>
+          </button>
           <div className="card text-center py-3">
             <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.posts_count}</p>
             <p className="text-[10px] text-gray-500 font-display">Posts</p>
+            {socialCounts.last_post_at && (
+              <p className="text-[9px] text-gray-600 font-display mt-0.5">Last {timeAgo(socialCounts.last_post_at)}</p>
+            )}
+          </div>
+          <div className="card text-center py-3">
+            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.total_pumps || 0}</p>
+            <p className="text-[10px] text-gray-500 font-display">Pumps</p>
           </div>
           <div className="card text-center py-3">
             <p className="font-mono font-bold text-xl text-piu-accent">{aggregated.duelCount}</p>

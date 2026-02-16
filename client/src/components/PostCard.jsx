@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from './PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
-import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost } from '../utils/api';
+import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment } from '../utils/api';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -186,6 +186,36 @@ function PumpButton({ postId, initialCount, initialPumped }) {
   );
 }
 
+// Small inline pump button for comments
+function CommentPumpButton({ commentId, type, initialCount, initialPumped }) {
+  const { user } = useAuth();
+  const [pumped, setPumped] = useState(!!initialPumped);
+  const [count, setCount] = useState(initialCount || 0);
+
+  const toggle = async () => {
+    if (!user) return;
+    try {
+      const res = await pumpComment(type, commentId);
+      setPumped(res.pumped);
+      setCount(res.pump_count);
+    } catch {}
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={!user}
+      className={`flex items-center gap-0.5 transition-colors ${
+        pumped ? 'text-piu-gold' : 'text-gray-600 hover:text-piu-gold'
+      } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+      title={pumped ? 'Un-pump' : 'Pump'}
+    >
+      <img src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="" className="w-3 h-3" />
+      {count > 0 && <span className="text-[9px] font-display font-bold">{count}</span>}
+    </button>
+  );
+}
+
 // Comment Section
 function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, isOwner }) {
   const { user } = useAuth();
@@ -320,6 +350,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 px-1">
                         <span className="text-[10px] text-gray-600">{timeAgo(c.created_at)}</span>
+                        <CommentPumpButton commentId={c.id} type="post" initialCount={c.pump_count || 0} initialPumped={c.user_pumped} />
                         {user && !disabled && (
                           <button onClick={() => startReply(c.id, c.username)} className="text-[10px] text-gray-500 hover:text-piu-accent">
                             Reply
@@ -357,6 +388,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                             </div>
                             <div className="flex items-center gap-3 mt-0.5 px-1">
                               <span className="text-[9px] text-gray-600">{timeAgo(r.created_at)}</span>
+                              <CommentPumpButton commentId={r.id} type="post" initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
                               {user && (r.user_id === user.id || user.id === postAuthorId) && (
                                 <button onClick={() => handleDelete(r.id, true, c.id)} className="text-[9px] text-gray-600 hover:text-red-400">
                                   Delete

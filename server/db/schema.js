@@ -555,6 +555,25 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_new_clear_comments ON new_clear_comments(clear_id);
   `);
 
+  // Comment pumps table (pumps on any comment or reply)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comment_pumps (
+      comment_type TEXT NOT NULL,
+      comment_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (comment_type, comment_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_comment_pumps_comment ON comment_pumps(comment_type, comment_id);
+
+    CREATE TABLE IF NOT EXISTS follower_daily_snapshots (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      snapshot_date TEXT NOT NULL,
+      follower_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, snapshot_date)
+    );
+  `);
+
   // Migrations for piugame sync - add progress tracking
   const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);
   const syncMigrations = [

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFeed, getJacketMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment } from '../utils/api';
+import { getFeed, getJacketMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard from '../components/PostCard';
@@ -39,6 +39,35 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function FeedCommentPumpButton({ commentId, type, initialCount, initialPumped }) {
+  const { user } = useAuth();
+  const [pumped, setPumped] = useState(!!initialPumped);
+  const [count, setCount] = useState(initialCount || 0);
+
+  const toggle = async () => {
+    if (!user) return;
+    try {
+      const res = await pumpComment(type, commentId);
+      setPumped(res.pumped);
+      setCount(res.pump_count);
+    } catch {}
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={!user}
+      className={`flex items-center gap-0.5 transition-colors ${
+        pumped ? 'text-piu-gold' : 'text-gray-600 hover:text-piu-gold'
+      } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+      title={pumped ? 'Un-pump' : 'Pump'}
+    >
+      <img src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="" className="w-3 h-3" />
+      {count > 0 && <span className="text-[9px] font-display font-bold">{count}</span>}
+    </button>
+  );
 }
 
 function UpscorePumpButton({ upscoreId, initialCount, initialPumped }) {
@@ -166,6 +195,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
                   <div className="flex items-center gap-2 mt-0.5">
+                    <FeedCommentPumpButton commentId={c.id} type="upscore" initialCount={c.pump_count || 0} initialPumped={c.user_pumped} />
                     {user && <button onClick={() => { setReplyTo(c.id); setReplyText(''); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
                     {user && user.id === c.user_id && <button onClick={() => handleDelete(c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
                   </div>
@@ -187,7 +217,10 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
-                    {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <FeedCommentPumpButton commentId={r.id} type="upscore" initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                      {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -435,6 +468,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
                   <div className="flex items-center gap-2 mt-0.5">
+                    <FeedCommentPumpButton commentId={c.id} type="clear" initialCount={c.pump_count || 0} initialPumped={c.user_pumped} />
                     {user && <button onClick={() => { setReplyTo(c.id); setReplyText(''); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
                     {user && user.id === c.user_id && <button onClick={() => handleDelete(c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
                   </div>
@@ -455,7 +489,10 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
-                    {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <FeedCommentPumpButton commentId={r.id} type="clear" initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                      {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
+                    </div>
                   </div>
                 </div>
               ))}

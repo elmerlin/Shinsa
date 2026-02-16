@@ -8,6 +8,7 @@ import PostCard from '../components/PostCard';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
+  pumpComment,
 } from '../utils/api';
 import { renderFormattedText } from '../utils/formatText';
 
@@ -76,8 +77,36 @@ function ItemPumpButton({ itemId, initialCount, initialPumped, pumpFn }) {
   );
 }
 
+// Small inline pump button for comments
+function SingleCommentPumpButton({ commentId, type, initialCount, initialPumped }) {
+  const { user } = useAuth();
+  const [pumped, setPumped] = useState(!!initialPumped);
+  const [count, setCount] = useState(initialCount || 0);
+
+  const toggle = async () => {
+    if (!user) return;
+    try {
+      const res = await pumpComment(type, commentId);
+      setPumped(res.pumped);
+      setCount(res.pump_count);
+    } catch {}
+  };
+
+  return (
+    <button onClick={toggle} disabled={!user}
+      className={`flex items-center gap-0.5 transition-colors ${
+        pumped ? 'text-piu-gold' : 'text-gray-600 hover:text-piu-gold'
+      } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+      title={pumped ? 'Un-pump' : 'Pump'}
+    >
+      <img src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="" className="w-3 h-3" />
+      {count > 0 && <span className="text-[9px] font-display font-bold">{count}</span>}
+    </button>
+  );
+}
+
 // Reusable comment section for upscores/clears on single view
-function ItemCommentSection({ itemId, commentCount: initialCount, getCommentsFn, addCommentFn, deleteCommentFn }) {
+function ItemCommentSection({ itemId, commentCount: initialCount, commentType, getCommentsFn, addCommentFn, deleteCommentFn }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(true);
   const [comments, setComments] = useState([]);
@@ -150,6 +179,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, getCommentsFn,
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
                   <div className="flex items-center gap-2 mt-0.5">
+                    <SingleCommentPumpButton commentId={c.id} type={commentType} initialCount={c.pump_count || 0} initialPumped={c.user_pumped} />
                     {user && <button onClick={() => { setReplyTo(c.id); setReplyText(''); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
                     {user && user.id === c.user_id && <button onClick={() => handleDelete(c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
                   </div>
@@ -170,7 +200,10 @@ function ItemCommentSection({ itemId, commentCount: initialCount, getCommentsFn,
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
-                    {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <SingleCommentPumpButton commentId={r.id} type={commentType} initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                      {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -295,7 +328,7 @@ export function SingleUpscorePage() {
         </div>
         <div className="flex items-center gap-2 border-t border-piu-border/20 pt-2 mt-1">
           <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpUpscore} />
-          <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0}
+          <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="upscore"
             getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment} />
         </div>
       </div>
@@ -374,7 +407,7 @@ export function SingleClearPage() {
         </div>
         <div className="flex items-center gap-2 border-t border-piu-border/20 pt-2 mt-1">
           <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpNewClear} />
-          <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0}
+          <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="clear"
             getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment} />
         </div>
       </div>

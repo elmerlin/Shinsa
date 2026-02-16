@@ -208,6 +208,9 @@ export const getNewClearComments = (clearId) => request(`/social/clears/${clearI
 export const addNewClearComment = (clearId, content, parentId) => request(`/social/clears/${clearId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteNewClearComment = (id) => request(`/social/clears/comments/${id}`, { method: 'DELETE' });
 
+// Social — Comment Pumps
+export const pumpComment = (type, commentId) => request(`/social/comments/${type}/${commentId}/pump`, { method: 'POST' });
+
 // Social — Individual Item Views
 export const getPost = (id) => request(`/social/posts/${id}`);
 export const getUpscore = (id) => request(`/social/upscores/${id}`);
