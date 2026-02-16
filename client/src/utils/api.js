@@ -152,6 +152,10 @@ export const deleteNotification = (id) => request(`/auth/notifications/${id}`, {
 export const followUser = (userId) => request(`/social/follow/${userId}`, { method: 'POST' });
 export const unfollowUser = (userId) => request(`/social/follow/${userId}`, { method: 'DELETE' });
 export const getFollowing = (userId) => request(`/social/following/${userId}`);
+export const getFollowingIds = async (userId) => {
+  const list = await request(`/social/following/${userId}`);
+  return list.map(u => u.id);
+};
 export const getFollowers = (userId) => request(`/social/followers/${userId}`);
 export const getFollowStatus = (userId) => request(`/social/follow-status/${userId}`);
 export const getSocialCounts = (userId) => request(`/social/counts/${userId}`);
@@ -198,8 +202,20 @@ export const getUpscoreComments = (upscoreId) => request(`/social/upscores/${ups
 export const addUpscoreComment = (upscoreId, content, parentId) => request(`/social/upscores/${upscoreId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteUpscoreComment = (id) => request(`/social/upscores/comments/${id}`, { method: 'DELETE' });
 
+// Social — New Clear Interactions
+export const pumpNewClear = (id) => request(`/social/clears/${id}/pump`, { method: 'POST' });
+export const getNewClearComments = (clearId) => request(`/social/clears/${clearId}/comments`);
+export const addNewClearComment = (clearId, content, parentId) => request(`/social/clears/${clearId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deleteNewClearComment = (id) => request(`/social/clears/comments/${id}`, { method: 'DELETE' });
+
+// Social — Individual Item Views
+export const getPost = (id) => request(`/social/posts/${id}`);
+export const getUpscore = (id) => request(`/social/upscores/${id}`);
+export const getNewClear = (id) => request(`/social/clears/${id}`);
+
 // Social — Feed
 export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);
+export const getRecentActivity = () => request('/social/recent-activity');
 
 // Parser
 export async function parseScorePhoto(file) {

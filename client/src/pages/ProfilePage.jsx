@@ -6,7 +6,7 @@ import {
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
-  getUserPosts,
+  getUserPosts, getFollowers, getFollowing,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -270,6 +270,11 @@ export default function ProfilePage() {
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
   const [socialCounts, setSocialCounts] = useState({ followers_count: 0, following_count: 0, posts_count: 0 });
   const [followLoading, setFollowLoading] = useState(false);
+  const [followersList, setFollowersList] = useState([]);
+  const [followingList, setFollowingList] = useState([]);
+  const [followersLoaded, setFollowersLoaded] = useState(false);
+  const [myFollowingIds, setMyFollowingIds] = useState(new Set());
+  const [followBackLoading, setFollowBackLoading] = useState({});
 
   const isOwner = authUser && authUser.id === id;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
@@ -279,6 +284,7 @@ export default function ProfilePage() {
     getUserStats(id).then(setStats).catch(() => {});
     getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
     getSocialCounts(id).then(setSocialCounts).catch(() => {});
+    setFollowersLoaded(false);
     if (authUser) {
       getFollowStatus(id).then(setFollowStatus).catch(() => {});
     }
@@ -290,6 +296,20 @@ export default function ProfilePage() {
       getUserPosts(id, 1).then(setProfilePosts).catch(() => {});
     }
   }, [tab, id]);
+
+  // Load followers/following when followers tab is active
+  useEffect(() => {
+    if (tab === 'followers' && !followersLoaded) {
+      setFollowersLoaded(true);
+      getFollowers(id).then(setFollowersList).catch(() => {});
+      getFollowing(id).then(setFollowingList).catch(() => {});
+      if (authUser) {
+        getFollowing(authUser.id).then(list => {
+          setMyFollowingIds(new Set(list.map(u => u.id)));
+        }).catch(() => {});
+      }
+    }
+  }, [tab, id, followersLoaded, authUser]);
 
   // Load PIUGame data + jacket lookup when any PIU tab is active
   const piuTabs = ['pumbility', 'best-scores', 'recently-played'];
@@ -518,13 +538,13 @@ export default function ProfilePage() {
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality);
 
-  const tabs = ['overview', 'posts', 'tournaments', 'duels', 'songs'];
+  const tabs = ['overview', 'followers', 'posts', 'tournaments', 'duels', 'songs'];
   if (hasPiuData) {
     tabs.push('pumbility', 'best-scores', 'recently-played');
   }
 
   const tabLabels = {
-    overview: 'Overview', tournaments: 'Tournaments', duels: 'Duels', songs: 'Songs', posts: 'Posts',
+    overview: 'Overview', followers: 'Followers', tournaments: 'Tournaments', duels: 'Duels', songs: 'Songs', posts: 'Posts',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
   };
 
@@ -800,6 +820,106 @@ export default function ProfilePage() {
               );
             })
           )}
+        </div>
+      )}
+
+      {/* ────── FOLLOWERS TAB ────── */}
+      {tab === 'followers' && (
+        <div className="space-y-4">
+          {/* Followers */}
+          <div className="card">
+            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">FOLLOWERS ({followersList.length})</h3>
+            {followersList.length === 0 ? (
+              <p className="text-gray-500 text-xs py-4 text-center">No followers yet</p>
+            ) : (
+              <div className="divide-y divide-piu-border/20">
+                {followersList.map(f => {
+                  const fFlag = getCountryFlag(f.nationality);
+                  const isFollowingBack = myFollowingIds.has(f.id);
+                  const isSelf = authUser && authUser.id === f.id;
+                  return (
+                    <div key={f.id} className="flex items-center gap-3 py-2.5">
+                      <Link to={`/profile/${f.id}`} className="shrink-0">
+                        {f.avatar ? (
+                          <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
+                            {(f.username || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                      </Link>
+                      <div className="flex-1 min-w-0">
+                        <Link to={`/profile/${f.id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                          {fFlag && <span className="mr-1">{fFlag}</span>}
+                          {f.username}
+                        </Link>
+                        {f.skill_title && <p className="text-[10px] text-gray-500 truncate">{f.skill_title}</p>}
+                      </div>
+                      {f.pumbility > 0 && (
+                        <span className="text-[10px] font-mono text-piu-accent shrink-0">{f.pumbility}</span>
+                      )}
+                      {authUser && !isSelf && !isFollowingBack && (
+                        <button
+                          onClick={async () => {
+                            setFollowBackLoading(prev => ({ ...prev, [f.id]: true }));
+                            try {
+                              await followUser(f.id);
+                              setMyFollowingIds(prev => new Set([...prev, f.id]));
+                            } catch {}
+                            setFollowBackLoading(prev => ({ ...prev, [f.id]: false }));
+                          }}
+                          disabled={followBackLoading[f.id]}
+                          className="btn-primary text-[10px] px-3 py-1 shrink-0"
+                        >
+                          {followBackLoading[f.id] ? '...' : 'Follow'}
+                        </button>
+                      )}
+                      {authUser && !isSelf && isFollowingBack && (
+                        <span className="text-[10px] text-gray-500 font-display shrink-0">Following</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Following */}
+          <div className="card">
+            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">FOLLOWING ({followingList.length})</h3>
+            {followingList.length === 0 ? (
+              <p className="text-gray-500 text-xs py-4 text-center">Not following anyone yet</p>
+            ) : (
+              <div className="divide-y divide-piu-border/20">
+                {followingList.map(f => {
+                  const fFlag = getCountryFlag(f.nationality);
+                  return (
+                    <div key={f.id} className="flex items-center gap-3 py-2.5">
+                      <Link to={`/profile/${f.id}`} className="shrink-0">
+                        {f.avatar ? (
+                          <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
+                            {(f.username || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                      </Link>
+                      <div className="flex-1 min-w-0">
+                        <Link to={`/profile/${f.id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                          {fFlag && <span className="mr-1">{fFlag}</span>}
+                          {f.username}
+                        </Link>
+                        {f.skill_title && <p className="text-[10px] text-gray-500 truncate">{f.skill_title}</p>}
+                      </div>
+                      {f.pumbility > 0 && (
+                        <span className="text-[10px] font-mono text-piu-accent shrink-0">{f.pumbility}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

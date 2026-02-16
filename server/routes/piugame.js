@@ -227,8 +227,9 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
           insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate, s.background_url || '');
         }
 
-        // Track upscores
+        // Track upscores and new clears
         const upscores = [];
+        const newClears = [];
         for (const s of scores) {
           const key = `${s.song_title}|${s.mode}|${s.level}`;
           const old = oldScores[key];
@@ -239,6 +240,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
               old_grade: old.grade, new_grade: s.grade,
               background_url: s.background_url || '',
             });
+          } else if (!old && s.score > 0) {
+            newClears.push(s);
           }
         }
         if (upscores.length > 0) {
@@ -246,6 +249,14 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
             INSERT INTO user_upscores (user_id, upscores_json, created_at)
             VALUES (?, ?, datetime('now'))
           `).run(userId, JSON.stringify(upscores));
+        }
+        // Save new clears
+        const insertClear = db.prepare(`
+          INSERT INTO user_new_clears (user_id, song_title, mode, level, score, grade, plate, background_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const s of newClears) {
+          insertClear.run(userId, s.song_title, s.mode, s.level, s.score, s.grade || '', s.plate || '', s.background_url || '');
         }
         db.prepare(`
           UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
@@ -332,6 +343,12 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 old_grade: existing.grade || '', new_grade: p.grade || '',
                 background_url: p.background_url || '',
               });
+            } else if (!existing) {
+              // New clear - first time playing this song
+              db.prepare(`
+                INSERT INTO user_new_clears (user_id, song_title, mode, level, score, grade, plate, background_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade || '', p.plate || '', p.background_url || '');
             }
             updateBest.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade);
             updatedCount++;

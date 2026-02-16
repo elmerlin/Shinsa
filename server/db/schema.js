@@ -516,6 +516,45 @@ function initializeDb() {
     );
   `);
 
+  // New clears tables (first-time song clears)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_new_clears (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      grade TEXT DEFAULT '',
+      plate TEXT DEFAULT '',
+      background_url TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS new_clear_pumps (
+      clear_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (clear_id, user_id),
+      FOREIGN KEY (clear_id) REFERENCES user_new_clears(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS new_clear_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      clear_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (clear_id) REFERENCES user_new_clears(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES new_clear_comments(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_new_clears_user ON user_new_clears(user_id);
+    CREATE INDEX IF NOT EXISTS idx_new_clears_created ON user_new_clears(created_at);
+    CREATE INDEX IF NOT EXISTS idx_new_clear_pumps ON new_clear_pumps(clear_id);
+    CREATE INDEX IF NOT EXISTS idx_new_clear_comments ON new_clear_comments(clear_id);
+  `);
+
   // Migrations for piugame sync - add progress tracking
   const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);
   const syncMigrations = [

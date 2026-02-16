@@ -20,6 +20,7 @@ import OnlineDuelSetup from './pages/OnlineDuelSetup';
 import OnlineDuelRoom from './pages/OnlineDuelRoom';
 import FeedPage from './pages/FeedPage';
 import PostsPage from './pages/PostsPage';
+import { SinglePostPage, SingleUpscorePage, SingleClearPage } from './pages/SingleItemPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -356,6 +357,9 @@ export default function App() {
           <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
           <Route path="/feed" element={<FeedPage />} />
           <Route path="/posts" element={<PostsPage />} />
+          <Route path="/post/:id" element={<SinglePostPage />} />
+          <Route path="/upscore/:id" element={<SingleUpscorePage />} />
+          <Route path="/clear/:id" element={<SingleClearPage />} />
         </Routes>
       </main>
 
