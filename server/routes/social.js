@@ -110,13 +110,13 @@ router.get('/counts/:userId', (req, res) => {
 
 // ─── Posts ────────────────────────────────────────────
 
-// POST /api/social/posts — create a post
-router.post('/posts', requireAuth, upload.array('images', 4), async (req, res) => {
+// POST /api/social/posts — create a post (up to 9 images)
+router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) => {
   const db = getDb();
-  const { content } = req.body;
+  const { content, youtube_url, comments_disabled } = req.body;
 
-  if (!content && (!req.files || req.files.length === 0)) {
-    return res.status(400).json({ error: 'Post must have content or images' });
+  if (!content && (!req.files || req.files.length === 0) && !youtube_url) {
+    return res.status(400).json({ error: 'Post must have content, images, or a video' });
   }
 
   // Process and compress images
@@ -165,8 +165,8 @@ router.post('/posts', requireAuth, upload.array('images', 4), async (req, res) =
   }
 
   const result = db.prepare(
-    'INSERT INTO user_posts (user_id, content, images) VALUES (?, ?, ?)'
-  ).run(req.user.id, content || '', JSON.stringify(imageUrls));
+    'INSERT INTO user_posts (user_id, content, images, youtube_url, comments_disabled) VALUES (?, ?, ?, ?, ?)'
+  ).run(req.user.id, content || '', JSON.stringify(imageUrls), youtube_url || '', comments_disabled === 'true' || comments_disabled === '1' ? 1 : 0);
 
   const post = db.prepare(`
     SELECT p.*, u.username, u.avatar
@@ -174,23 +174,34 @@ router.post('/posts', requireAuth, upload.array('images', 4), async (req, res) =
     WHERE p.id = ?
   `).get(result.lastInsertRowid);
 
-  res.status(201).json(post);
+  res.status(201).json({ ...post, pump_count: 0, comment_count: 0 });
 });
 
-// GET /api/social/posts/user/:userId — get a user's posts
-router.get('/posts/user/:userId', (req, res) => {
+// GET /api/social/posts/user/:userId — get a user's posts with pump/comment counts
+router.get('/posts/user/:userId', optionalAuth, (req, res) => {
   const db = getDb();
   const page = parseInt(req.query.page) || 1;
   const limit = 20;
   const offset = (page - 1) * limit;
 
   const posts = db.prepare(`
-    SELECT p.*, u.username, u.avatar
+    SELECT p.*, u.username, u.avatar,
+           (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
+           (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count
     FROM user_posts p JOIN users u ON p.user_id = u.id
     WHERE p.user_id = ?
     ORDER BY p.created_at DESC
     LIMIT ? OFFSET ?
   `).all(req.params.userId, limit, offset);
+
+  // Attach user's pump status if authenticated
+  if (req.user) {
+    for (const post of posts) {
+      post.user_pumped = !!db.prepare(
+        'SELECT 1 FROM post_pumps WHERE post_id = ? AND user_id = ?'
+      ).get(post.id, req.user.id);
+    }
+  }
 
   res.json(posts);
 });
@@ -214,6 +225,137 @@ router.delete('/posts/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Post Pumps (Likes) ─────────────────────────────
+
+// POST /api/social/posts/:id/pump — toggle pump on a post
+router.post('/posts/:id/pump', requireAuth, (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+  const post = db.prepare('SELECT id FROM user_posts WHERE id = ?').get(postId);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+
+  const existing = db.prepare(
+    'SELECT 1 FROM post_pumps WHERE post_id = ? AND user_id = ?'
+  ).get(postId, req.user.id);
+
+  if (existing) {
+    db.prepare('DELETE FROM post_pumps WHERE post_id = ? AND user_id = ?').run(postId, req.user.id);
+    const count = db.prepare('SELECT COUNT(*) as count FROM post_pumps WHERE post_id = ?').get(postId).count;
+    return res.json({ pumped: false, pump_count: count });
+  }
+
+  db.prepare('INSERT INTO post_pumps (post_id, user_id) VALUES (?, ?)').run(postId, req.user.id);
+  const count = db.prepare('SELECT COUNT(*) as count FROM post_pumps WHERE post_id = ?').get(postId).count;
+  res.json({ pumped: true, pump_count: count });
+});
+
+// GET /api/social/posts/:id/pump-status — check if user pumped
+router.get('/posts/:id/pump-status', optionalAuth, (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+  if (!req.user) return res.json({ pumped: false, pump_count: 0 });
+
+  const pumped = !!db.prepare(
+    'SELECT 1 FROM post_pumps WHERE post_id = ? AND user_id = ?'
+  ).get(postId, req.user.id);
+  const count = db.prepare('SELECT COUNT(*) as count FROM post_pumps WHERE post_id = ?').get(postId).count;
+  res.json({ pumped, pump_count: count });
+});
+
+// ─── Post Comments ──────────────────────────────────
+
+// GET /api/social/posts/:id/comments — get comments for a post
+router.get('/posts/:id/comments', (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+
+  const comments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
+    FROM post_comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.post_id = ? AND c.parent_id IS NULL
+    ORDER BY c.created_at ASC
+  `).all(postId);
+
+  // Attach replies to each comment
+  for (const comment of comments) {
+    comment.replies = db.prepare(`
+      SELECT c.*, u.username, u.avatar
+      FROM post_comments c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.parent_id = ?
+      ORDER BY c.created_at ASC
+    `).all(comment.id);
+  }
+
+  res.json(comments);
+});
+
+// POST /api/social/posts/:id/comments — add a comment
+router.post('/posts/:id/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+  const { content, parent_id } = req.body;
+
+  if (!content || !content.trim()) {
+    return res.status(400).json({ error: 'Comment cannot be empty' });
+  }
+
+  const post = db.prepare('SELECT id, comments_disabled, user_id FROM user_posts WHERE id = ?').get(postId);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (post.comments_disabled) return res.status(403).json({ error: 'Comments are disabled on this post' });
+
+  // If replying, ensure parent exists and belongs to the same post
+  if (parent_id) {
+    const parent = db.prepare('SELECT id FROM post_comments WHERE id = ? AND post_id = ?').get(parent_id, postId);
+    if (!parent) return res.status(404).json({ error: 'Parent comment not found' });
+  }
+
+  const result = db.prepare(
+    'INSERT INTO post_comments (post_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
+  ).run(postId, req.user.id, parent_id || null, content.trim());
+
+  const comment = db.prepare(`
+    SELECT c.*, u.username, u.avatar
+    FROM post_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.id = ?
+  `).get(result.lastInsertRowid);
+
+  comment.replies = [];
+  res.status(201).json(comment);
+});
+
+// DELETE /api/social/posts/comments/:id — delete a comment (author or post author)
+router.delete('/posts/comments/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const commentId = parseInt(req.params.id);
+
+  const comment = db.prepare('SELECT c.*, p.user_id as post_author_id FROM post_comments c JOIN user_posts p ON c.post_id = p.id WHERE c.id = ?').get(commentId);
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+  // Only comment author or post author can delete
+  if (comment.user_id !== req.user.id && comment.post_author_id !== req.user.id) {
+    return res.status(403).json({ error: 'Not authorized to delete this comment' });
+  }
+
+  db.prepare('DELETE FROM post_comments WHERE id = ? OR parent_id = ?').run(commentId, commentId);
+  res.json({ success: true });
+});
+
+// PATCH /api/social/posts/:id/comments-toggle — toggle comments on/off (post author only)
+router.patch('/posts/:id/comments-toggle', requireAuth, (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+
+  const post = db.prepare('SELECT id, user_id, comments_disabled FROM user_posts WHERE id = ?').get(postId);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (post.user_id !== req.user.id) return res.status(403).json({ error: 'Not authorized' });
+
+  const newVal = post.comments_disabled ? 0 : 1;
+  db.prepare('UPDATE user_posts SET comments_disabled = ? WHERE id = ?').run(newVal, postId);
+  res.json({ comments_disabled: !!newVal });
+});
+
 // ─── Feed ─────────────────────────────────────────────
 
 // GET /api/social/feed — get feed from followed users (posts + upscores)
@@ -223,10 +365,12 @@ router.get('/feed', requireAuth, (req, res) => {
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  // Get posts from followed users
+  // Get posts from followed users with pump/comment counts
   const posts = db.prepare(`
-    SELECT p.id, p.user_id, p.content, p.images, p.created_at,
+    SELECT p.id, p.user_id, p.content, p.images, p.youtube_url, p.comments_disabled, p.created_at,
            u.username, u.avatar, u.nationality,
+           (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
+           (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count,
            'post' as type
     FROM user_posts p
     JOIN users u ON p.user_id = u.id
@@ -235,6 +379,13 @@ router.get('/feed', requireAuth, (req, res) => {
     ORDER BY p.created_at DESC
     LIMIT ? OFFSET ?
   `).all(req.user.id, req.user.id, limit, offset);
+
+  // Attach user's pump status
+  for (const post of posts) {
+    post.user_pumped = !!db.prepare(
+      'SELECT 1 FROM post_pumps WHERE post_id = ? AND user_id = ?'
+    ).get(post.id, req.user.id);
+  }
 
   // Get upscores from followed users
   const upscores = db.prepare(`

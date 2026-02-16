@@ -324,7 +324,30 @@ function initializeDb() {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       content TEXT NOT NULL DEFAULT '',
       images TEXT DEFAULT '[]',
+      youtube_url TEXT DEFAULT '',
+      comments_disabled INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS post_pumps (
+      post_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (post_id, user_id),
+      FOREIGN KEY (post_id) REFERENCES user_posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS post_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (post_id) REFERENCES user_posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES post_comments(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS user_upscores (
@@ -338,6 +361,10 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_follows_following ON user_follows(following_id);
     CREATE INDEX IF NOT EXISTS idx_posts_user ON user_posts(user_id);
     CREATE INDEX IF NOT EXISTS idx_posts_created ON user_posts(created_at);
+    CREATE INDEX IF NOT EXISTS idx_post_pumps ON post_pumps(post_id);
+    CREATE INDEX IF NOT EXISTS idx_post_pumps_user ON post_pumps(post_id, user_id);
+    CREATE INDEX IF NOT EXISTS idx_post_comments ON post_comments(post_id);
+    CREATE INDEX IF NOT EXISTS idx_post_comments_parent ON post_comments(parent_id);
     CREATE INDEX IF NOT EXISTS idx_upscores_user ON user_upscores(user_id);
     CREATE INDEX IF NOT EXISTS idx_upscores_created ON user_upscores(created_at);
 
@@ -452,6 +479,15 @@ function initializeDb() {
   const bestScoreCols = db.prepare("PRAGMA table_info(user_best_scores)").all().map(c => c.name);
   if (!bestScoreCols.includes('background_url')) {
     db.exec("ALTER TABLE user_best_scores ADD COLUMN background_url TEXT DEFAULT ''");
+  }
+
+  // Migrations for user_posts - add youtube_url and comments_disabled
+  const postCols = db.prepare("PRAGMA table_info(user_posts)").all().map(c => c.name);
+  if (!postCols.includes('youtube_url')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN youtube_url TEXT DEFAULT ''");
+  }
+  if (!postCols.includes('comments_disabled')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN comments_disabled INTEGER DEFAULT 0");
   }
 
   // Migrations for piugame sync - add progress tracking

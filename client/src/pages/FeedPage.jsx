@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getFeed } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
-import { renderFormattedText } from '../utils/formatText';
+import PostCard from '../components/PostCard';
 
 function getRank(score) {
   if (score >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
@@ -37,50 +37,6 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
-}
-
-function PostCard({ item }) {
-  const images = (() => {
-    try { return JSON.parse(item.images || '[]'); } catch { return []; }
-  })();
-  const flag = getCountryFlag(item.nationality);
-
-  return (
-    <div className="card">
-      <div className="flex items-center gap-3 mb-3">
-        <Link to={`/profile/${item.user_id}`}>
-          {item.avatar ? (
-            <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
-              {(item.username || '?')[0].toUpperCase()}
-            </div>
-          )}
-        </Link>
-        <div className="flex-1 min-w-0">
-          <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
-            {flag && <span className="mr-1">{flag}</span>}
-            {item.username}
-          </Link>
-          <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
-        </div>
-      </div>
-
-      {item.content && (
-        <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
-          {renderFormattedText(item.content)}
-        </div>
-      )}
-
-      {images.length > 0 && (
-        <div className={`grid gap-2 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {images.map((img, i) => (
-            <img key={i} src={img} alt="" className="w-full rounded-lg object-cover max-h-64" />
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function UpscoreCard({ item }) {
@@ -213,7 +169,7 @@ export default function FeedPage() {
         <div className="space-y-4">
           {feed.map((item, i) => {
             if (item.type === 'post') {
-              return <PostCard key={`post-${item.id}`} item={item} />;
+              return <PostCard key={`post-${item.id}`} post={item} showAuthor={true} />;
             } else if (item.type === 'upscore') {
               return <UpscoreCard key={`upscore-${item.id}`} item={item} />;
             }

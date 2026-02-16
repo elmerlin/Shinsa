@@ -156,9 +156,11 @@ export const getFollowStatus = (userId) => request(`/social/follow-status/${user
 export const getSocialCounts = (userId) => request(`/social/counts/${userId}`);
 
 // Social — Posts
-export async function createPost(content, imageFiles) {
+export async function createPost(content, imageFiles, youtubeUrl, commentsDisabled) {
   const formData = new FormData();
   formData.append('content', content);
+  if (youtubeUrl) formData.append('youtube_url', youtubeUrl);
+  if (commentsDisabled) formData.append('comments_disabled', 'true');
   if (imageFiles) {
     for (const f of imageFiles) {
       formData.append('images', f);
@@ -178,6 +180,15 @@ export async function createPost(content, imageFiles) {
 }
 export const getUserPosts = (userId, page) => request(`/social/posts/user/${userId}?page=${page || 1}`);
 export const deletePost = (id) => request(`/social/posts/${id}`, { method: 'DELETE' });
+
+// Social — Post Pumps
+export const pumpPost = (id) => request(`/social/posts/${id}/pump`, { method: 'POST' });
+
+// Social — Post Comments
+export const getPostComments = (postId) => request(`/social/posts/${postId}/comments`);
+export const addPostComment = (postId, content, parentId) => request(`/social/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deletePostComment = (id) => request(`/social/posts/comments/${id}`, { method: 'DELETE' });
+export const togglePostComments = (postId) => request(`/social/posts/${postId}/comments-toggle`, { method: 'PATCH' });
 
 // Social — Feed
 export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);

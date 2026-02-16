@@ -10,7 +10,7 @@ import {
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
-import { renderFormattedText } from '../utils/formatText';
+import PostCard from '../components/PostCard';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -792,26 +792,13 @@ export default function ProfilePage() {
           {profilePosts.length === 0 ? (
             <p className="text-center text-gray-500 py-8">No posts yet</p>
           ) : (
-            profilePosts.map(post => {
-              const images = (() => { try { return JSON.parse(post.images || '[]'); } catch { return []; } })();
-              return (
-                <div key={post.id} className="card">
-                  {post.content && (
-                    <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-2 leading-relaxed">{renderFormattedText(post.content)}</div>
-                  )}
-                  {images.length > 0 && (
-                    <div className={`grid gap-2 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                      {images.map((img, i) => (
-                        <img key={i} src={img} alt="" className="w-full rounded-lg object-cover max-h-64" />
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-[10px] text-gray-500 mt-2">
-                    {new Date(post.created_at + (post.created_at?.endsWith('Z') ? '' : 'Z')).toLocaleString()}
-                  </p>
-                </div>
-              );
-            })
+            profilePosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={{ ...post, username: profile.username, avatar: profile.avatar, nationality: profile.nationality }}
+                showAuthor={false}
+              />
+            ))
           )}
         </div>
       )}

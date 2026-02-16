@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserPosts, createPost, deletePost } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { renderFormattedText } from '../utils/formatText';
+import PostCard from '../components/PostCard';
 
 // Common emoji sets for quick insert
 const EMOJI_GROUPS = [
@@ -13,25 +13,14 @@ const EMOJI_GROUPS = [
   { label: 'Hearts', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💖'] },
 ];
 
-function timeAgo(dateStr) {
-  const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
-  const now = new Date();
-  const seconds = Math.floor((now - date) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
-}
-
 function PostComposer({ onPost }) {
   const { user } = useAuth();
   const [content, setContent] = useState('');
   const [images, setImages] = useState([]);
   const [previews, setPreviews] = useState([]);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [showYoutubeInput, setShowYoutubeInput] = useState(false);
+  const [commentsDisabled, setCommentsDisabled] = useState(false);
   const [posting, setPosting] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
   const textRef = useRef(null);
@@ -48,8 +37,8 @@ function PostComposer({ onPost }) {
   }, []);
 
   const handleImageSelect = (e) => {
-    const files = Array.from(e.target.files).slice(0, 4 - images.length);
-    const newImages = [...images, ...files].slice(0, 4);
+    const files = Array.from(e.target.files).slice(0, 9 - images.length);
+    const newImages = [...images, ...files].slice(0, 9);
     setImages(newImages);
 
     // Generate previews
@@ -101,14 +90,17 @@ function PostComposer({ onPost }) {
   };
 
   const handleSubmit = async () => {
-    if (!content.trim() && images.length === 0) return;
+    if (!content.trim() && images.length === 0 && !youtubeUrl.trim()) return;
     setPosting(true);
     try {
-      const post = await createPost(content, images);
+      const post = await createPost(content, images, youtubeUrl.trim() || undefined, commentsDisabled || undefined);
       setContent('');
       setImages([]);
       previews.forEach(p => URL.revokeObjectURL(p));
       setPreviews([]);
+      setYoutubeUrl('');
+      setShowYoutubeInput(false);
+      setCommentsDisabled(false);
       onPost(post);
     } catch (err) {
       alert(err.message);
@@ -137,12 +129,26 @@ function PostComposer({ onPost }) {
         />
       </div>
 
-      {/* Image previews */}
+      {/* YouTube URL input */}
+      {showYoutubeInput && (
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="text"
+            className="input-field text-xs py-1.5 flex-1"
+            placeholder="Paste YouTube URL (e.g. youtube.com/watch?v=...)"
+            value={youtubeUrl}
+            onChange={e => setYoutubeUrl(e.target.value)}
+          />
+          <button onClick={() => { setShowYoutubeInput(false); setYoutubeUrl(''); }} className="text-gray-500 hover:text-red-400 text-xs">&#10005;</button>
+        </div>
+      )}
+
+      {/* Image previews — WeChat grid style */}
       {previews.length > 0 && (
-        <div className="flex gap-2 mb-3 flex-wrap">
+        <div className={`grid gap-1.5 mb-3 ${previews.length === 1 ? 'grid-cols-1 max-w-[120px]' : previews.length <= 4 ? 'grid-cols-2 max-w-[200px]' : 'grid-cols-3 max-w-[280px]'}`}>
           {previews.map((src, i) => (
             <div key={i} className="relative">
-              <img src={src} alt="" className="w-20 h-20 rounded-lg object-cover" />
+              <img src={src} alt="" className="w-full aspect-square rounded-lg object-cover" />
               <button
                 onClick={() => removeImage(i)}
                 className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center"
@@ -219,8 +225,8 @@ function PostComposer({ onPost }) {
           <button
             onClick={() => fileRef.current?.click()}
             className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm"
-            title="Attach images (max 4)"
-            disabled={images.length >= 4}
+            title="Attach images (max 9)"
+            disabled={images.length >= 9}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -234,11 +240,38 @@ function PostComposer({ onPost }) {
             className="hidden"
             onChange={handleImageSelect}
           />
+
+          {/* YouTube link */}
+          <button
+            onClick={() => setShowYoutubeInput(!showYoutubeInput)}
+            className={`p-1.5 rounded hover:bg-piu-dark/50 transition-colors text-sm ${showYoutubeInput || youtubeUrl ? 'text-red-400' : 'text-gray-400 hover:text-white'}`}
+            title="Attach YouTube video"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z"/>
+            </svg>
+          </button>
+
+          <div className="w-px h-5 bg-piu-border/30 mx-1" />
+
+          {/* Disable comments toggle */}
+          <button
+            onClick={() => setCommentsDisabled(!commentsDisabled)}
+            className={`p-1.5 rounded hover:bg-piu-dark/50 transition-colors text-xs font-display ${commentsDisabled ? 'text-red-400' : 'text-gray-400 hover:text-white'}`}
+            title={commentsDisabled ? 'Comments disabled' : 'Disable comments'}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d={commentsDisabled
+                ? "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                : "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              } />
+            </svg>
+          </button>
         </div>
 
         <button
           onClick={handleSubmit}
-          disabled={posting || (!content.trim() && images.length === 0)}
+          disabled={posting || (!content.trim() && images.length === 0 && !youtubeUrl.trim())}
           className="btn-primary px-4 py-1.5 text-xs disabled:opacity-50"
         >
           {posting ? 'Posting...' : 'Post'}
@@ -317,52 +350,15 @@ export default function PostsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {posts.map(post => {
-            const images = (() => {
-              try { return JSON.parse(post.images || '[]'); } catch { return []; }
-            })();
-
-            return (
-              <div key={post.id} className="card">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    {post.avatar ? (
-                      <img src={getAvatarUrl(post.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
-                        {(post.username || '?')[0].toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-display font-bold text-sm">{post.username}</p>
-                      <p className="text-[10px] text-gray-500">{timeAgo(post.created_at)}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDelete(post.id)}
-                    className="text-gray-600 hover:text-red-400 text-xs transition-colors"
-                    title="Delete post"
-                  >
-                    &#10005;
-                  </button>
-                </div>
-
-                {post.content && (
-                  <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
-                    {renderFormattedText(post.content)}
-                  </div>
-                )}
-
-                {images.length > 0 && (
-                  <div className={`grid gap-2 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                    {images.map((img, i) => (
-                      <img key={i} src={img} alt="" className="w-full rounded-lg object-cover max-h-64" />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {posts.map(post => (
+            <PostCard
+              key={post.id}
+              post={post}
+              showAuthor={true}
+              onDelete={handleDelete}
+              isOwner={true}
+            />
+          ))}
 
           {hasMore && (
             <button
@@ -377,5 +373,3 @@ export default function PostsPage() {
     </div>
   );
 }
-
-// renderFormattedText is now imported from ../utils/formatText
