@@ -212,7 +212,7 @@ function UserMenu() {
       <div className="flex items-center gap-2">
         <Link
           to={`/profile/${user.id}`}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity"
         >
           {user.avatar ? (
             <img src={getAvatarUrl(user.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border" />
@@ -327,7 +327,7 @@ export default function App() {
             <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
-                <NotificationBell />
+                <div className="hidden sm:block"><NotificationBell /></div>
                 <UserMenu />
               </div>
             ) : (
@@ -377,58 +377,126 @@ export default function App() {
   );
 }
 
+function MobileNotificationsPage({ onClose }) {
+  const { notifications, unreadCount, markRead, markAllRead, dismiss, invitationCount } = useNotifications();
+  const navigate = useNavigate();
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-piu-dark flex flex-col sm:hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border bg-piu-card/90 backdrop-blur-md">
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="font-display font-bold text-sm tracking-wider">NOTIFICATIONS</span>
+        {unreadCount > 0 ? (
+          <button onClick={markAllRead} className="text-[11px] text-piu-accent hover:underline font-display">Mark all read</button>
+        ) : <span className="w-16" />}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {invitationCount > 0 && (
+          <Link
+            to="/account"
+            onClick={onClose}
+            className="flex items-center gap-3 px-4 py-3 bg-piu-accent/10 hover:bg-piu-accent/20 transition-colors border-b border-piu-border/30"
+          >
+            <span className="text-piu-accent text-lg">&#9993;</span>
+            <span className="text-sm font-display font-bold text-piu-accent">
+              {invitationCount} pending invitation{invitationCount > 1 ? 's' : ''}
+            </span>
+          </Link>
+        )}
+
+        {notifications.length === 0 && invitationCount === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <p className="text-sm font-display">No notifications yet</p>
+          </div>
+        )}
+
+        {notifications.map(n => (
+          <div
+            key={n.id}
+            className={`flex items-start gap-3 px-4 py-3 border-b border-piu-border/20 active:bg-piu-dark/50 transition-colors cursor-pointer ${!n.read ? 'bg-piu-card/40' : ''}`}
+            onClick={() => {
+              if (!n.read) markRead(n.id);
+              if (n.link) { navigate(n.link); onClose(); }
+            }}
+          >
+            <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${!n.read ? 'bg-piu-accent' : 'bg-transparent'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-display font-bold">{n.title}</p>
+              {n.message && <p className="text-xs text-gray-400 mt-0.5">{n.message}</p>}
+              <p className="text-[11px] text-gray-600 mt-1">{new Date(n.created_at + 'Z').toLocaleString()}</p>
+            </div>
+            <button
+              onClick={e => { e.stopPropagation(); dismiss(n.id); }}
+              className="text-gray-600 hover:text-red-400 text-sm shrink-0 p-1"
+            >
+              x
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MobileBottomNav() {
   const location = useLocation();
   const { user } = useAuth();
   const { totalBadge } = useNotifications();
-  const navigate = useNavigate();
   const [showNotifs, setShowNotifs] = useState(false);
-  const { notifications, unreadCount, markRead, markAllRead, dismiss, invitationCount } = useNotifications();
-  const notifRef = useRef(null);
-
-  useEffect(() => {
-    function handleClick(e) { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifs(false); }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
 
   const path = location.pathname;
   const isActive = (p) => path === p || path.startsWith(p + '/');
 
+  // Close notifications page on route change
+  useEffect(() => {
+    setShowNotifs(false);
+  }, [path]);
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-piu-card border-t border-piu-border">
-      <div className="flex items-center justify-around h-14 px-2">
-        {/* Home */}
-        <Link to="/" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${path === '/' ? 'text-piu-accent' : 'text-gray-500'}`}>
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-          </svg>
-          <span className="text-[9px] font-display">Home</span>
-        </Link>
-
-        {/* Feed */}
-        <Link to="/feed" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/feed') ? 'text-piu-accent' : 'text-gray-500'}`}>
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-          </svg>
-          <span className="text-[9px] font-display">Feed</span>
-        </Link>
-
-        {/* Add Post */}
-        <Link to="/posts" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/posts') ? 'text-piu-accent' : 'text-gray-500'}`}>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-piu-gold flex items-center justify-center -mt-3 shadow-lg shadow-piu-accent/30">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+    <>
+      {showNotifs && <MobileNotificationsPage onClose={() => setShowNotifs(false)} />}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-piu-card border-t border-piu-border">
+        <div className="flex items-center justify-around h-14 px-2">
+          {/* Home */}
+          <Link to="/" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${path === '/' ? 'text-piu-accent' : 'text-gray-500'}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
-          </div>
-          <span className="text-[9px] font-display">Post</span>
-        </Link>
+            <span className="text-[9px] font-display">Home</span>
+          </Link>
 
-        {/* Notifications */}
-        <div className="relative flex-1" ref={notifRef}>
+          {/* Feed */}
+          <Link to="/feed" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/feed') ? 'text-piu-accent' : 'text-gray-500'}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+            </svg>
+            <span className="text-[9px] font-display">Feed</span>
+          </Link>
+
+          {/* Add Post */}
+          <Link to="/posts" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/posts') ? 'text-piu-accent' : 'text-gray-500'}`}>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-piu-gold flex items-center justify-center -mt-3 shadow-lg shadow-piu-accent/30">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-[9px] font-display">Post</span>
+          </Link>
+
+          {/* Notifications */}
           <button
-            onClick={() => setShowNotifs(!showNotifs)}
-            className={`flex flex-col items-center justify-center gap-0.5 w-full py-1 ${showNotifs ? 'text-piu-accent' : 'text-gray-500'}`}
+            onClick={() => setShowNotifs(true)}
+            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${showNotifs ? 'text-piu-accent' : 'text-gray-500'}`}
           >
             <div className="relative">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -443,60 +511,19 @@ function MobileBottomNav() {
             <span className="text-[9px] font-display">Alerts</span>
           </button>
 
-          {/* Mobile notification dropdown (opens upward) */}
-          {showNotifs && (
-            <div className="absolute bottom-full mb-2 right-0 left-0 -translate-x-1/4 w-72 max-h-80 overflow-y-auto bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-piu-border/50">
-                <span className="font-display font-bold text-xs text-gray-400">NOTIFICATIONS</span>
-                {unreadCount > 0 && (
-                  <button onClick={markAllRead} className="text-[10px] text-piu-accent hover:underline">Mark all read</button>
-                )}
+          {/* Profile */}
+          <Link to={`/profile/${user.id}`} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive(`/profile/${user.id}`) ? 'text-piu-accent' : 'text-gray-500'}`}>
+            {user.avatar ? (
+              <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`} />
+            ) : (
+              <div className={`w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`}>
+                {user.username[0].toUpperCase()}
               </div>
-              {invitationCount > 0 && (
-                <Link to="/account" onClick={() => setShowNotifs(false)}
-                  className="flex items-center gap-2 px-3 py-2.5 bg-piu-accent/10 hover:bg-piu-accent/20 transition-colors border-b border-piu-border/30"
-                >
-                  <span className="text-piu-accent text-sm">&#9993;</span>
-                  <span className="text-sm font-display font-bold text-piu-accent">
-                    {invitationCount} pending invitation{invitationCount > 1 ? 's' : ''}
-                  </span>
-                </Link>
-              )}
-              {notifications.length === 0 && invitationCount === 0 && (
-                <p className="text-center text-gray-500 text-xs py-6">No notifications</p>
-              )}
-              {notifications.slice(0, 20).map(n => (
-                <div key={n.id}
-                  className={`flex items-start gap-2 px-3 py-2.5 border-b border-piu-border/20 hover:bg-piu-dark/50 transition-colors cursor-pointer ${!n.read ? 'bg-piu-dark/30' : ''}`}
-                  onClick={() => {
-                    if (!n.read) markRead(n.id);
-                    if (n.link) { navigate(n.link); setShowNotifs(false); }
-                  }}
-                >
-                  <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!n.read ? 'bg-piu-accent' : 'bg-transparent'}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-display font-bold truncate">{n.title}</p>
-                    {n.message && <p className="text-[10px] text-gray-500 truncate">{n.message}</p>}
-                  </div>
-                  <button onClick={e => { e.stopPropagation(); dismiss(n.id); }} className="text-gray-600 hover:text-red-400 text-xs shrink-0">x</button>
-                </div>
-              ))}
-            </div>
-          )}
+            )}
+            <span className="text-[9px] font-display">Profile</span>
+          </Link>
         </div>
-
-        {/* Profile */}
-        <Link to={`/profile/${user.id}`} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive(`/profile/${user.id}`) ? 'text-piu-accent' : 'text-gray-500'}`}>
-          {user.avatar ? (
-            <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`} />
-          ) : (
-            <div className={`w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`}>
-              {user.username[0].toUpperCase()}
-            </div>
-          )}
-          <span className="text-[9px] font-display">Profile</span>
-        </Link>
-      </div>
-    </nav>
+      </nav>
+    </>
   );
 }

@@ -47,7 +47,20 @@ router.post('/follow/:userId', requireAuth, (req, res) => {
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   try {
-    db.prepare('INSERT OR IGNORE INTO user_follows (follower_id, following_id) VALUES (?, ?)').run(req.user.id, followingId);
+    const result = db.prepare('INSERT OR IGNORE INTO user_follows (follower_id, following_id) VALUES (?, ?)').run(req.user.id, followingId);
+    // Send notification only if this is a new follow (not a duplicate)
+    if (result.changes > 0) {
+      const follower = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+      db.prepare(
+        'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
+      ).run(
+        followingId,
+        'new_follower',
+        'New Follower',
+        `${follower?.username || 'Someone'} started following you`,
+        `/profile/${req.user.id}`
+      );
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
