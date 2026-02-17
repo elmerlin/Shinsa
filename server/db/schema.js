@@ -68,6 +68,136 @@ function bootstrapSongsFromJsonIfEmpty() {
   }
 }
 
+function backfillLegacyGroupedNewClears() {
+  let clearCols = [];
+  try {
+    clearCols = db.prepare("PRAGMA table_info(user_new_clears)").all().map(c => c.name);
+  } catch {
+    return;
+  }
+  if (!clearCols.includes('clears_json')) return;
+
+  const legacyRows = db.prepare(`
+    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.created_at,
+           CAST(strftime('%s', datetime(nc.created_at)) AS INTEGER) as created_ts,
+           (SELECT COUNT(*) FROM new_clear_pumps p WHERE p.clear_id = nc.id) as pump_count,
+           (SELECT COUNT(*) FROM new_clear_comments c WHERE c.clear_id = nc.id) as comment_count
+    FROM user_new_clears nc
+    WHERE nc.clears_json IS NULL OR TRIM(nc.clears_json) = ''
+    ORDER BY nc.user_id ASC, datetime(nc.created_at) ASC, nc.id ASC
+  `).all();
+  if (legacyRows.length === 0) return;
+
+  const GROUP_WINDOW_SECONDS = 3;
+  const groupUpdates = [];
+  const deleteIds = [];
+
+  const normalize = (row) => ({
+    song_title: row.song_title || '',
+    mode: row.mode || 'Single',
+    level: parseInt(row.level) || 0,
+    score: parseInt(row.score) || 0,
+    grade: row.grade || '',
+    plate: row.plate || '',
+    background_url: row.background_url || '',
+  });
+
+  const finalizeGroup = (rows) => {
+    if (rows.length < 2) return;
+    const payload = rows.map(normalize);
+    const first = payload[0];
+    const survivor = rows[rows.length - 1];
+
+    groupUpdates.push({
+      id: survivor.id,
+      song_title: first.song_title,
+      mode: first.mode,
+      level: first.level,
+      score: first.score,
+      grade: first.grade,
+      plate: first.plate,
+      background_url: first.background_url,
+      clears_json: JSON.stringify(payload),
+    });
+
+    for (let i = 0; i < rows.length - 1; i++) {
+      deleteIds.push(rows[i].id);
+    }
+  };
+
+  let candidate = [];
+  let prev = null;
+  for (const row of legacyRows) {
+    const hasEngagement = (row.pump_count || 0) > 0 || (row.comment_count || 0) > 0;
+    if (hasEngagement) {
+      finalizeGroup(candidate);
+      candidate = [];
+      prev = null;
+      continue;
+    }
+
+    if (candidate.length === 0) {
+      candidate = [row];
+      prev = row;
+      continue;
+    }
+
+    const sameUser = row.user_id === prev.user_id;
+    const gap = (row.created_ts || 0) - (prev.created_ts || 0);
+    const inWindow = sameUser && gap >= 0 && gap <= GROUP_WINDOW_SECONDS;
+
+    if (inWindow) {
+      candidate.push(row);
+    } else {
+      finalizeGroup(candidate);
+      candidate = [row];
+    }
+    prev = row;
+  }
+  finalizeGroup(candidate);
+
+  const applyBackfill = db.transaction(() => {
+    const updateGrouped = db.prepare(`
+      UPDATE user_new_clears
+      SET song_title = ?, mode = ?, level = ?, score = ?, grade = ?, plate = ?, background_url = ?, clears_json = ?
+      WHERE id = ?
+    `);
+    for (const g of groupUpdates) {
+      updateGrouped.run(g.song_title, g.mode, g.level, g.score, g.grade, g.plate, g.background_url, g.clears_json, g.id);
+    }
+
+    if (deleteIds.length > 0) {
+      const placeholders = deleteIds.map(() => '?').join(', ');
+      db.prepare(`DELETE FROM user_new_clears WHERE id IN (${placeholders})`).run(...deleteIds);
+    }
+
+    const remainingLegacyRows = db.prepare(`
+      SELECT id, song_title, mode, level, score, grade, plate, background_url
+      FROM user_new_clears
+      WHERE clears_json IS NULL OR TRIM(clears_json) = ''
+      ORDER BY id ASC
+    `).all();
+
+    const fillSingle = db.prepare('UPDATE user_new_clears SET clears_json = ? WHERE id = ?');
+    for (const row of remainingLegacyRows) {
+      fillSingle.run(JSON.stringify([normalize(row)]), row.id);
+    }
+
+    return {
+      grouped_posts: groupUpdates.length,
+      merged_rows: deleteIds.length,
+      singles_backfilled: remainingLegacyRows.length,
+    };
+  });
+
+  const result = applyBackfill();
+  if (result.grouped_posts > 0 || result.singles_backfilled > 0) {
+    console.log(
+      `Backfilled legacy clear posts: grouped ${result.grouped_posts} posts (merged ${result.merged_rows} rows), normalized ${result.singles_backfilled} single posts`
+    );
+  }
+}
+
 function initializeDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tournaments (
@@ -592,6 +722,7 @@ function initializeDb() {
       grade TEXT DEFAULT '',
       plate TEXT DEFAULT '',
       background_url TEXT DEFAULT '',
+      clears_json TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS new_clear_pumps (
@@ -766,6 +897,13 @@ function initializeDb() {
       }
     }
   }
+
+  // Migrations for grouped new-clear payloads
+  const newClearCols = db.prepare("PRAGMA table_info(user_new_clears)").all().map(c => c.name);
+  if (!newClearCols.includes('clears_json')) {
+    db.exec("ALTER TABLE user_new_clears ADD COLUMN clears_json TEXT DEFAULT ''");
+  }
+  backfillLegacyGroupedNewClears();
 
   // Migrations for piugame sync - add progress tracking
   const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);

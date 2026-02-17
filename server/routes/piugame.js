@@ -114,6 +114,37 @@ async function loginWithStoredCredentials(userId) {
   return login(creds.username, creds.password);
 }
 
+function insertGroupedNewClearPost(db, userId, clears) {
+  if (!Array.isArray(clears) || clears.length === 0) return;
+
+  const normalized = clears.map(c => ({
+    song_title: c.song_title,
+    mode: c.mode,
+    level: c.level,
+    score: c.score || 0,
+    grade: c.grade || '',
+    plate: c.plate || '',
+    background_url: c.background_url || '',
+  }));
+  const first = normalized[0];
+
+  db.prepare(`
+    INSERT INTO user_new_clears (
+      user_id, song_title, mode, level, score, grade, plate, background_url, clears_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `).run(
+    userId,
+    first.song_title,
+    first.mode,
+    first.level,
+    first.score,
+    first.grade,
+    first.plate,
+    first.background_url,
+    JSON.stringify(normalized)
+  );
+}
+
 // ─── Sync: Pumbility ───────────────────────────────────
 
 // POST /api/piugame/sync/pumbility — fetch pumbility from piugame
@@ -250,14 +281,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
             VALUES (?, ?, datetime('now'))
           `).run(userId, JSON.stringify(upscores));
         }
-        // Save new clears
-        const insertClear = db.prepare(`
-          INSERT INTO user_new_clears (user_id, song_title, mode, level, score, grade, plate, background_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const s of newClears) {
-          insertClear.run(userId, s.song_title, s.mode, s.level, s.score, s.grade || '', s.plate || '', s.background_url || '');
-        }
+        insertGroupedNewClearPost(db, userId, newClears);
         db.prepare(`
           UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
           sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
@@ -322,6 +346,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
 
     let updatedCount = 0;
     const upscoresFromRecent = [];
+    const newClearsFromRecent = [];
 
     const txn = db.transaction(() => {
       // Clear old recently played and replace
@@ -345,10 +370,15 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
               });
             } else if (!existing) {
               // New clear - first time playing this song
-              db.prepare(`
-                INSERT INTO user_new_clears (user_id, song_title, mode, level, score, grade, plate, background_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-              `).run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade || '', p.plate || '', p.background_url || '');
+              newClearsFromRecent.push({
+                song_title: p.song_title,
+                mode: p.mode,
+                level: p.level,
+                score: p.score,
+                grade: p.grade || '',
+                plate: p.plate || '',
+                background_url: p.background_url || '',
+              });
             }
             updateBest.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade);
             updatedCount++;
@@ -366,6 +396,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
           VALUES (?, ?, datetime('now'))
         `).run(req.user.id, JSON.stringify(upscoresFromRecent));
       }
+      insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent);
     });
     txn();
 

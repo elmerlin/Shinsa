@@ -41,6 +41,35 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString();
 }
 
+function getClearItems(item) {
+  const fallback = [{
+    song_title: item.song_title || '',
+    mode: item.mode || 'Single',
+    level: parseInt(item.level) || 0,
+    score: parseInt(item.score) || 0,
+    grade: item.grade || '',
+    plate: item.plate || '',
+    background_url: item.background_url || '',
+  }];
+
+  try {
+    const parsed = JSON.parse(item.clears_json || '[]');
+    if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
+
+    return parsed.map(c => ({
+      song_title: c.song_title || fallback[0].song_title,
+      mode: c.mode || fallback[0].mode,
+      level: parseInt(c.level) || fallback[0].level,
+      score: parseInt(c.score) || 0,
+      grade: c.grade || '',
+      plate: c.plate || '',
+      background_url: c.background_url || '',
+    }));
+  } catch {
+    return fallback;
+  }
+}
+
 function FeedCommentPumpButton({ commentId, type, initialCount, initialPumped }) {
   const { user } = useAuth();
   const [pumped, setPumped] = useState(!!initialPumped);
@@ -533,14 +562,9 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
 }
 
 function NewClearCard({ item, jacketLookup }) {
+  const clears = getClearItems(item);
+  const isGrouped = clears.length > 1;
   const flag = getCountryFlag(item.nationality);
-  const rank = getRank(item.score);
-  const isSingle = item.mode === 'Single';
-  const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : item.mode === 'Double' ? 'bg-green-600/20 text-green-400' : 'bg-blue-600/20 text-blue-400';
-
-  const norm = (item.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const exactKey = `${norm}|${item.mode}|${item.level}`;
-  const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
 
   return (
     <div className="card">
@@ -560,35 +584,53 @@ function NewClearCard({ item, jacketLookup }) {
               {flag && <span className="mr-1">{flag}</span>}
               {item.username}
             </Link>
-            <span className="text-sky-400 font-display font-bold text-xs">new clear!</span>
+            <span className="text-sky-400 font-display font-bold text-xs">{isGrouped ? 'new clears!' : 'new clear!'}</span>
           </div>
           <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 py-1.5">
-        {jacketUrl ? (
-          <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
-        ) : (
-          <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 shrink-0">
-            {(item.song_title || '?')[0]}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-display font-bold truncate">{item.song_title}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
-              {isSingle ? 'S' : item.mode === 'Double' ? 'D' : 'C'}{item.level}
-            </span>
-            {item.plate && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{item.plate}</span>
-            )}
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
-          <p className="font-mono text-xs font-bold">{item.score.toLocaleString()}</p>
-        </div>
+      <div className="space-y-2">
+        {clears.map((clear, i) => {
+          const rank = getRank(clear.score);
+          const isSingle = clear.mode === 'Single';
+          const badgeColor = isSingle
+            ? 'bg-red-600/20 text-red-400'
+            : clear.mode === 'Double'
+              ? 'bg-green-600/20 text-green-400'
+              : 'bg-blue-600/20 text-blue-400';
+
+          const norm = (clear.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          const exactKey = `${norm}|${clear.mode}|${clear.level}`;
+          const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
+
+          return (
+            <div key={`${clear.song_title}-${clear.mode}-${clear.level}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
+              {jacketUrl ? (
+                <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
+              ) : (
+                <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 shrink-0">
+                  {(clear.song_title || '?')[0]}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-display font-bold truncate">{clear.song_title}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
+                    {isSingle ? 'S' : clear.mode === 'Double' ? 'D' : 'C'}{clear.level}
+                  </span>
+                  {clear.plate && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>
+                  )}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
+                <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Actions: Pump + Comments + Share */}

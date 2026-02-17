@@ -567,7 +567,7 @@ router.get('/feed', requireAuth, (req, res) => {
 
   // Get new clears from followed users with pump/comment counts
   const clears = db.prepare(`
-    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.created_at,
+    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.clears_json, nc.created_at,
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM new_clear_pumps WHERE clear_id = nc.id) as pump_count,
            (SELECT COUNT(*) FROM new_clear_comments WHERE clear_id = nc.id) as comment_count,
@@ -925,14 +925,25 @@ router.get('/recent-activity', (req, res) => {
 
   // New clear posts
   const clears = db.prepare(`
-    SELECT nc.id, nc.song_title, nc.mode, nc.level, nc.created_at, u.id as user_id, u.username, u.avatar, u.nationality
+    SELECT nc.id, nc.song_title, nc.mode, nc.level, nc.clears_json, nc.created_at, u.id as user_id, u.username, u.avatar, u.nationality
     FROM user_new_clears nc JOIN users u ON nc.user_id = u.id
     ORDER BY nc.created_at DESC LIMIT 10
   `).all();
   for (const c of clears) {
+    let clearItems = [];
+    try {
+      const parsed = JSON.parse(c.clears_json || '[]');
+      if (Array.isArray(parsed)) clearItems = parsed;
+    } catch {}
+    const clearCount = clearItems.length > 0 ? clearItems.length : 1;
+    const firstClear = clearItems[0] || c;
+    const mode = firstClear.mode === 'Single' ? 'S' : firstClear.mode === 'Double' ? 'D' : 'C';
+    const message = clearCount > 1
+      ? `${c.username} cleared ${clearCount} new songs`
+      : `${c.username} cleared ${firstClear.song_title} (${mode}${firstClear.level})`;
     activities.push({
       type: 'new_clear', created_at: c.created_at,
-      message: `${c.username} cleared ${c.song_title} (${c.mode === 'Single' ? 'S' : c.mode === 'Double' ? 'D' : 'C'}${c.level})`,
+      message,
       link: `/clear/${c.id}`,
       avatar: c.avatar, username: c.username, nationality: c.nationality,
     });
