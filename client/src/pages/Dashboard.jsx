@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
@@ -39,6 +40,7 @@ const PHASE_LABELS = {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [duels, setDuels] = useState([]);
   const [onlineDuels, setOnlineDuels] = useState([]);
@@ -104,8 +106,12 @@ export default function Dashboard() {
     e.preventDefault();
     e.stopPropagation();
     if (!confirm('Delete this duel? This cannot be undone.')) return;
-    await deleteDuel(id);
-    setDuels(d => d.filter(x => x.id !== id));
+    try {
+      await deleteDuel(id);
+      setDuels(d => d.filter(x => x.id !== id));
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   const handleDeleteOnlineDuel = async (e, id) => {
@@ -168,69 +174,76 @@ export default function Dashboard() {
     </Link>
   );
 
-  const DuelCard = ({ d }) => (
-    <Link
-      key={d.id}
-      to={`/duel/${d.id}`}
-      className="card-hover flex items-center justify-between group"
-    >
-      <div className="flex items-center gap-3">
-        {/* Duel avatar: two player avatars with crossed swords */}
-        <div className="flex items-center shrink-0">
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
-            {d.player1_avatar ? (
-              <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
-                {d.player1_name[0].toUpperCase()}
-              </div>
-            )}
+  const DuelCard = ({ d }) => {
+    const creatorUserId = d.creator_user_id || d.player1_user_id || '';
+    const canDeleteDuel = !!(user && creatorUserId && creatorUserId === user.id);
+
+    return (
+      <Link
+        key={d.id}
+        to={`/duel/${d.id}`}
+        className="card-hover flex items-center justify-between group"
+      >
+        <div className="flex items-center gap-3">
+          {/* Duel avatar: two player avatars with crossed swords */}
+          <div className="flex items-center shrink-0">
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
+              {d.player1_avatar ? (
+                <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
+                  {d.player1_name[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="w-5 h-5 bg-piu-card rounded-full flex items-center justify-center z-20 -mx-0.5">
+              <svg width="12" height="12" viewBox="0 0 40 40" fill="none" className="text-piu-accent">
+                <path d="M8 8L32 32M8 8L12 4M8 8L4 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M32 8L8 32M32 8L28 4M32 8L36 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
+              {d.player2_avatar ? (
+                <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
+                  {d.player2_name[0].toUpperCase()}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="w-5 h-5 bg-piu-card rounded-full flex items-center justify-center z-20 -mx-0.5">
-            <svg width="12" height="12" viewBox="0 0 40 40" fill="none" className="text-piu-accent">
-              <path d="M8 8L32 32M8 8L12 4M8 8L4 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M32 8L8 32M32 8L28 4M32 8L36 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
-            {d.player2_avatar ? (
-              <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
-                {d.player2_name[0].toUpperCase()}
-              </div>
-            )}
+          <div>
+            <h3 className="font-display text-base font-bold group-hover:text-piu-accent transition-colors">
+              {d.name}
+            </h3>
+            <div className="flex gap-2 text-xs text-gray-500">
+              <span>
+                {d.player1_nationality && <>{getCountryFlag(d.player1_nationality)} </>}
+                {d.player1_name} vs{' '}
+                {d.player2_nationality && <>{getCountryFlag(d.player2_nationality)} </>}
+                {d.player2_name}
+              </span>
+              {d.location && <span>- {d.location}</span>}
+            </div>
           </div>
         </div>
-        <div>
-          <h3 className="font-display text-base font-bold group-hover:text-piu-accent transition-colors">
-            {d.name}
-          </h3>
-          <div className="flex gap-2 text-xs text-gray-500">
-            <span>
-              {d.player1_nationality && <>{getCountryFlag(d.player1_nationality)} </>}
-              {d.player1_name} vs{' '}
-              {d.player2_nationality && <>{getCountryFlag(d.player2_nationality)} </>}
-              {d.player2_name}
-            </span>
-            {d.location && <span>- {d.location}</span>}
-          </div>
+        <div className="flex items-center gap-3">
+          <span className={`badge ${d.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
+            {d.status === 'COMPLETED' ? 'Completed' : 'Active'}
+          </span>
+          {canDeleteDuel && (
+            <button
+              onClick={(e) => handleDeleteDuel(e, d.id)}
+              className="text-gray-600 hover:text-red-500 transition-colors p-1"
+              title="Delete duel"
+            >
+              &#10005;
+            </button>
+          )}
         </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className={`badge ${d.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
-          {d.status === 'COMPLETED' ? 'Completed' : 'Active'}
-        </span>
-        <button
-          onClick={(e) => handleDeleteDuel(e, d.id)}
-          className="text-gray-600 hover:text-red-500 transition-colors p-1"
-          title="Delete duel"
-        >
-          &#10005;
-        </button>
-      </div>
-    </Link>
-  );
+      </Link>
+    );
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">

@@ -286,6 +286,7 @@ function initializeDb() {
       player2_name TEXT NOT NULL,
       player1_avatar TEXT DEFAULT '',
       player2_avatar TEXT DEFAULT '',
+      creator_user_id TEXT DEFAULT '',
       status TEXT DEFAULT 'ACTIVE',
       winner TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
@@ -610,6 +611,15 @@ function initializeDb() {
   if (!duelColsCheck.includes('player2_user_id')) {
     db.exec("ALTER TABLE duels ADD COLUMN player2_user_id TEXT DEFAULT ''");
   }
+  if (!duelColsCheck.includes('creator_user_id')) {
+    db.exec("ALTER TABLE duels ADD COLUMN creator_user_id TEXT DEFAULT ''");
+  }
+  db.exec(`
+    UPDATE duels
+    SET creator_user_id = player1_user_id
+    WHERE COALESCE(creator_user_id, '') = ''
+      AND COALESCE(player1_user_id, '') != ''
+  `);
 
   // Migrations for duels table - add player detail fields
   const duelColumns = db.prepare("PRAGMA table_info(duels)").all().map(c => c.name);

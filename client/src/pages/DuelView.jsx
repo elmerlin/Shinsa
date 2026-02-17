@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getDuel, duelDraw, duelScore, duelDeleteSong, endDuel, deleteDuel } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import DuelStats from '../components/DuelStats';
@@ -82,6 +83,7 @@ export function SongJacket({ song, size = 'md' }) {
 export default function DuelView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [duel, setDuel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [drawLevel, setDrawLevel] = useState(19);
@@ -92,6 +94,8 @@ export default function DuelView() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [tab, setTab] = useState('play'); // 'play' or 'stats'
+  const creatorUserId = duel?.creator_user_id || duel?.player1_user_id || '';
+  const canOperate = !!(user && creatorUserId && creatorUserId === user.id);
 
   const loadDuel = useCallback(async () => {
     try {
@@ -108,6 +112,10 @@ export default function DuelView() {
   useEffect(() => { loadDuel(); }, [loadDuel]);
 
   const handleDraw = async () => {
+    if (!canOperate) {
+      alert('Only the duel creator can operate this duel.');
+      return;
+    }
     setDrawing(true);
     try {
       await duelDraw(id, { level: drawLevel, draw_mode: drawMode });
@@ -120,6 +128,10 @@ export default function DuelView() {
   };
 
   const handleScoreSubmit = async (songEntry) => {
+    if (!canOperate) {
+      alert('Only the duel creator can operate this duel.');
+      return;
+    }
     const p1 = scoreInputs[`${songEntry.id}_p1`];
     const p2 = scoreInputs[`${songEntry.id}_p2`];
     if (p1 === undefined || p1 === '' || p2 === undefined || p2 === '') {
@@ -142,6 +154,10 @@ export default function DuelView() {
   };
 
   const handleDeleteSong = async (songEntryId) => {
+    if (!canOperate) {
+      alert('Only the duel creator can operate this duel.');
+      return;
+    }
     if (!confirm('Remove this drawn card?')) return;
     try {
       await duelDeleteSong(id, songEntryId);
@@ -152,6 +168,10 @@ export default function DuelView() {
   };
 
   const handleEndDuel = async () => {
+    if (!canOperate) {
+      alert('Only the duel creator can operate this duel.');
+      return;
+    }
     try {
       await endDuel(id);
       await loadDuel();
@@ -163,9 +183,17 @@ export default function DuelView() {
   };
 
   const handleDeleteDuel = async () => {
+    if (!canOperate) {
+      alert('Only the duel creator can operate this duel.');
+      return;
+    }
     if (!confirm('Delete this duel? This cannot be undone.')) return;
-    await deleteDuel(id);
-    navigate('/');
+    try {
+      await deleteDuel(id);
+      navigate('/');
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   if (loading) return <div className="text-center py-20 text-gray-500">Loading...</div>;
@@ -317,10 +345,18 @@ export default function DuelView() {
         </button>
       </div>
 
+      {!isCompleted && !canOperate && (
+        <div className="card mb-4 sm:mb-6 border border-yellow-500/30 bg-yellow-500/10">
+          <p className="text-sm text-yellow-300">
+            Read-only mode: only the duel creator can draw cards, submit scores, and end the duel.
+          </p>
+        </div>
+      )}
+
       {tab === 'play' && (
         <>
           {/* Card Draw Controls */}
-          {!isCompleted && (
+          {!isCompleted && canOperate && (
             <div className="card mb-4 sm:mb-6">
               <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                 <span className="font-display font-bold text-piu-accent text-sm hidden sm:inline">Draw a Card</span>
@@ -384,8 +420,7 @@ export default function DuelView() {
                       </div>
                     </div>
                   </div>
-                ) : (
-                  /* Pending song - score entry card (keep as-is) */
+                ) : canOperate ? (
                   <div key={song.id} className="card border border-piu-accent/20">
                     <div className="flex items-center gap-2 mb-3">
                       <span className="text-gray-600 font-mono text-xs">{idx + 1}</span>
@@ -437,6 +472,17 @@ export default function DuelView() {
                       {submittingScore === song.id ? 'Submitting...' : 'Submit Scores'}
                     </button>
                   </div>
+                ) : (
+                  <div key={song.id} className="card border border-piu-border/40">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-gray-600 font-mono text-xs">{idx + 1}</span>
+                      <SongJacket song={song} />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display font-bold text-sm truncate">{song.song_title}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">Waiting for the duel creator to submit scores.</p>
+                  </div>
                 );
               })}
               {/* Mobile tally */}
@@ -482,7 +528,7 @@ export default function DuelView() {
                         <td className="py-2 px-2 text-right">
                           {hasScore ? (
                             <ScoreDisplay score={song.player1_score} isWinner={song.winner === 'player1'} />
-                          ) : (
+                          ) : canOperate ? (
                             <input
                               type="number"
                               className="input-field w-28 text-right text-sm"
@@ -493,12 +539,14 @@ export default function DuelView() {
                               onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p1`]: e.target.value }))}
                               onFocus={e => e.target.select()}
                             />
+                          ) : (
+                            <span className="text-xs text-gray-600">Pending</span>
                           )}
                         </td>
                         <td className="py-2 px-2 text-right">
                           {hasScore ? (
                             <ScoreDisplay score={song.player2_score} isWinner={song.winner === 'player2'} />
-                          ) : (
+                          ) : canOperate ? (
                             <input
                               type="number"
                               className="input-field w-28 text-right text-sm"
@@ -509,10 +557,12 @@ export default function DuelView() {
                               onChange={e => setScoreInputs(s => ({ ...s, [`${song.id}_p2`]: e.target.value }))}
                               onFocus={e => e.target.select()}
                             />
+                          ) : (
+                            <span className="text-xs text-gray-600">Pending</span>
                           )}
                         </td>
                         <td className="py-2 px-1 text-center">
-                          {!hasScore && (
+                          {!hasScore && canOperate && (
                             <div className="flex gap-1">
                               <button
                                 onClick={() => handleScoreSubmit(song)}
@@ -558,12 +608,14 @@ export default function DuelView() {
           {songs.length === 0 && !isCompleted && (
             <div className="text-center py-12 text-gray-500">
               <p className="text-lg font-display">No songs played yet</p>
-              <p className="text-sm mt-1">Draw a card to start the duel!</p>
+              <p className="text-sm mt-1">
+                {canOperate ? 'Draw a card to start the duel!' : 'Waiting for the duel creator to draw the first card.'}
+              </p>
             </div>
           )}
 
           {/* End Duel / Actions */}
-          {!isCompleted && songs.length > 0 && (
+          {!isCompleted && songs.length > 0 && canOperate && (
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowEndConfirm(true)}
@@ -574,7 +626,7 @@ export default function DuelView() {
             </div>
           )}
 
-          {isCompleted && (
+          {isCompleted && canOperate && (
             <div className="flex gap-3 mt-6">
               <button onClick={handleDeleteDuel} className="text-xs text-gray-600 hover:text-red-400 transition-colors">
                 Delete Duel
