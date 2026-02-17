@@ -21,6 +21,10 @@ import OnlineDuelRoom from './pages/OnlineDuelRoom';
 import FeedPage from './pages/FeedPage';
 import PostsPage from './pages/PostsPage';
 import { SinglePostPage, SingleUpscorePage, SingleClearPage } from './pages/SingleItemPage';
+import CommunityPage from './pages/CommunityPage';
+import CommunitySetupPage from './pages/CommunitySetupPage';
+import CommunitySettingsPage from './pages/CommunitySettingsPage';
+import CommunitiesListPage from './pages/CommunitiesListPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -324,6 +328,9 @@ export default function App() {
                 Feed
               </Link>
             )}
+            <Link to="/communities" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+              Communities
+            </Link>
             <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
@@ -360,6 +367,10 @@ export default function App() {
           <Route path="/post/:id" element={<SinglePostPage />} />
           <Route path="/upscore/:id" element={<SingleUpscorePage />} />
           <Route path="/clear/:id" element={<SingleClearPage />} />
+          <Route path="/communities" element={<CommunitiesListPage />} />
+          <Route path="/community/new" element={<CommunitySetupPage />} />
+          <Route path="/c/:communityName" element={<CommunityPage />} />
+          <Route path="/c/:communityName/settings" element={<CommunitySettingsPage />} />
         </Routes>
       </main>
 

@@ -220,6 +220,86 @@ export const getNewClear = (id) => request(`/social/clears/${id}`);
 export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);
 export const getRecentActivity = () => request('/social/recent-activity');
 
+// ─── Communities ─────────────────────────────────────
+
+export async function createCommunity(formData) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/communities`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to create community');
+  }
+  return res.json();
+}
+
+export const getCommunities = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/communities${qs ? `?${qs}` : ''}`);
+};
+export const getFeaturedCommunities = () => request('/communities/featured');
+export const getCommunityByName = (name) => request(`/communities/name/${encodeURIComponent(name)}`);
+
+export async function updateCommunity(id, formData) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/communities/${id}`, {
+    method: 'PUT',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to update community');
+  }
+  return res.json();
+}
+
+export const deleteCommunity = (id) => request(`/communities/${id}`, { method: 'DELETE' });
+export const joinCommunity = (id) => request(`/communities/${id}/join`, { method: 'POST' });
+export const leaveCommunity = (id) => request(`/communities/${id}/leave`, { method: 'DELETE' });
+export const getCommunityMembers = (id, sort) => request(`/communities/${id}/members${sort ? `?sort=${sort}` : ''}`);
+export const updateMemberRole = (communityId, userId, role) => request(`/communities/${communityId}/members/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
+export const removeCommunityMember = (communityId, userId) => request(`/communities/${communityId}/members/${userId}`, { method: 'DELETE' });
+export const getJoinRequests = (id) => request(`/communities/${id}/requests`);
+export const respondJoinRequest = (communityId, requestId, status) => request(`/communities/${communityId}/requests/${requestId}`, { method: 'PUT', body: JSON.stringify({ status }) });
+export const getCommunityTags = (id) => request(`/communities/${id}/tags`);
+export const createCommunityTag = (id, data) => request(`/communities/${id}/tags`, { method: 'POST', body: JSON.stringify(data) });
+export const updateCommunityTag = (id, tagId, data) => request(`/communities/${id}/tags/${tagId}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteCommunityTag = (id, tagId) => request(`/communities/${id}/tags/${tagId}`, { method: 'DELETE' });
+export const assignCommunityTag = (communityId, tagId, userId) => request(`/communities/${communityId}/tags/${tagId}/assign/${userId}`, { method: 'POST' });
+export const removeCommunityTag = (communityId, tagId, userId) => request(`/communities/${communityId}/tags/${tagId}/assign/${userId}`, { method: 'DELETE' });
+export const getUserCommunities = (userId) => request(`/communities/user/${userId}`);
+
+export async function createCommunityPost(communityId, formData) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/communities/${communityId}/posts`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to create post');
+  }
+  return res.json();
+}
+
+export const getCommunityPosts = (communityId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/communities/${communityId}/posts${qs ? `?${qs}` : ''}`);
+};
+export const editCommunityPost = (communityId, postId, data) => request(`/communities/${communityId}/posts/${postId}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}`, { method: 'DELETE' });
+export const pinCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pin`, { method: 'PUT' });
+export const pumpCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pump`, { method: 'POST' });
+export const getCommunityPostComments = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/comments`);
+export const addCommunityPostComment = (communityId, postId, content, parentId) => request(`/communities/${communityId}/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deleteCommunityPostComment = (communityId, postId, commentId) => request(`/communities/${communityId}/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
+export const pumpCommunityComment = (communityId, commentId) => request(`/communities/${communityId}/comments/${commentId}/pump`, { method: 'POST' });
+
 // Parser
 export async function parseScorePhoto(file) {
   const formData = new FormData();

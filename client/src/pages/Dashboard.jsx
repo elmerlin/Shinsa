@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [searching, setSearching] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [featuredCommunities, setFeaturedCommunities] = useState([]);
 
   useEffect(() => {
     // Fire all requests independently — page renders immediately,
@@ -58,6 +59,7 @@ export default function Dashboard() {
     getOnlineDuels().then(setOnlineDuels).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
     getRecentActivity().then(setRecentActivity).catch(() => {});
+    getFeaturedCommunities().then(setFeaturedCommunities).catch(() => {});
   }, []);
 
   const handleSearch = useCallback(async (q) => {
@@ -294,6 +296,46 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Communities Section */}
+      {featuredCommunities.length > 0 && searchResults === null && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent">COMMUNITIES</h2>
+            <Link to="/communities" className="flex items-center gap-1 text-xs font-display text-gray-400 hover:text-piu-accent transition-colors">
+              See all
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {featuredCommunities.map(c => (
+              <Link
+                key={c.id}
+                to={`/c/${c.name}`}
+                className="card-hover flex items-start gap-3 group"
+              >
+                {c.avatar ? (
+                  <img src={c.avatar} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md shrink-0">
+                    {c.display_name[0]?.toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-display font-bold text-sm group-hover:text-piu-accent transition-colors truncate">{c.display_name}</h3>
+                  <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">{c.description || 'A community'}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] text-gray-600">{c.member_count} member{c.member_count !== 1 ? 's' : ''}</span>
+                    <span className="text-[9px] text-gray-600">by {c.owner_username}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Online Duels Section */}
       {onlineDuels.length > 0 && searchResults === null && (
         <div className="mb-8">
@@ -397,7 +439,7 @@ export default function Dashboard() {
 
       {/* Create buttons + Search — below tournaments */}
       {searchResults === null && (
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <Link to="/tournament/new" className="btn-primary text-center text-sm block">
             + Tournament
           </Link>
@@ -406,6 +448,9 @@ export default function Dashboard() {
           </Link>
           <Link to="/online-duel/new" className="btn-primary bg-gradient-to-r from-piu-accent to-piu-gold hover:from-piu-accent/80 hover:to-piu-gold/80 text-center text-sm block">
             + Online Duel
+          </Link>
+          <Link to="/community/new" className="btn-primary bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-center text-sm block">
+            + Community
           </Link>
         </div>
       )}
