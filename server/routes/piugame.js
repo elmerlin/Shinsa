@@ -432,8 +432,21 @@ router.get('/sync-status/:userId', (req, res) => {
   const db = getDb();
   const sync = db.prepare('SELECT * FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
   const hasCreds = !!db.prepare('SELECT 1 FROM user_piugame_credentials WHERE user_id = ?').get(req.params.userId);
+
+  // Highest clears for Singles and Doubles (from best scores where score > 0)
+  let highest_single = null;
+  let highest_double = null;
+  try {
+    const hs = db.prepare("SELECT MAX(level) as max_level FROM user_best_scores WHERE user_id = ? AND mode = 'Single' AND score > 0").get(req.params.userId);
+    highest_single = hs?.max_level || null;
+    const hd = db.prepare("SELECT MAX(level) as max_level FROM user_best_scores WHERE user_id = ? AND mode = 'Double' AND score > 0").get(req.params.userId);
+    highest_double = hd?.max_level || null;
+  } catch {}
+
   res.json({
     linked: hasCreds,
+    highest_single,
+    highest_double,
     ...(sync || { best_scores_imported: 0, pumbility_value: 0, last_best_scores_sync: null, last_pumbility_sync: null, last_recently_played_sync: null, sync_in_progress: '', sync_progress: 0, sync_total: 0 }),
   });
 });

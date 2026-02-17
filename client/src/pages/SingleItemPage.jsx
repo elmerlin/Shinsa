@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getPost, getUpscore, getNewClear, getJacketMap } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
-import PostCard from '../components/PostCard';
+import PostCard, { ShareButton } from '../components/PostCard';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
@@ -151,7 +151,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
   };
 
   return (
-    <div>
+    <>
       <button onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
       >
@@ -161,7 +161,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
         <span>{count > 0 ? count : ''}</span>
       </button>
       {open && (
-        <div className="mt-2 ml-2 border-l border-piu-border/30 pl-3 space-y-2">
+        <div className="w-full order-last mt-2 border-l-2 border-piu-border/30 pl-3 space-y-2">
           {comments.map(c => (
             <div key={c.id}>
               <div className="flex items-start gap-2">
@@ -174,7 +174,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent">{c.username}</Link>
+                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
                     <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
@@ -196,7 +196,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent">{r.username}</Link>
+                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
@@ -225,7 +225,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -326,10 +326,13 @@ export function SingleUpscorePage() {
             );
           })}
         </div>
-        <div className="flex items-center gap-2 border-t border-piu-border/20 pt-2 mt-1">
-          <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpUpscore} />
-          <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="upscore"
-            getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment} />
+        <div className="border-t border-piu-border/20 pt-2 mt-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpUpscore} />
+            <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="upscore"
+              getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment} />
+            <ShareButton path={`/upscore/${item.id}`} />
+          </div>
         </div>
       </div>
     </div>
@@ -405,10 +408,13 @@ export function SingleClearPage() {
             <p className="font-mono text-xs font-bold">{item.score.toLocaleString()}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 border-t border-piu-border/20 pt-2 mt-1">
-          <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpNewClear} />
-          <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="clear"
-            getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment} />
+        <div className="border-t border-piu-border/20 pt-2 mt-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpNewClear} />
+            <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="clear"
+              getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment} />
+            <ShareButton path={`/clear/${item.id}`} />
+          </div>
         </div>
       </div>
     </div>

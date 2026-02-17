@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getFeed, getJacketMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
-import PostCard from '../components/PostCard';
+import PostCard, { ShareButton } from '../components/PostCard';
 import { renderFormattedText } from '../utils/formatText';
 
 function getRank(score) {
@@ -166,7 +166,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
   };
 
   return (
-    <div>
+    <>
       <button
         onClick={toggleOpen}
         className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
@@ -177,7 +177,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
         <span>{count > 0 ? count : ''}</span>
       </button>
       {open && (
-        <div className="mt-2 ml-2 border-l border-piu-border/30 pl-3 space-y-2">
+        <div className="w-full order-last mt-2 border-l-2 border-piu-border/30 pl-3 space-y-2">
           {comments.map(c => (
             <div key={c.id}>
               <div className="flex items-start gap-2">
@@ -190,7 +190,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent">{c.username}</Link>
+                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
                     <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
@@ -213,7 +213,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent">{r.username}</Link>
+                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
@@ -254,7 +254,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -334,10 +334,13 @@ function UpscoreCard({ item, jacketLookup }) {
         })}
       </div>
 
-      {/* Actions: Pump + Comments */}
-      <div className="flex items-center gap-2 border-t border-piu-border/20 pt-2 mt-1">
-        <UpscorePumpButton upscoreId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
-        <UpscoreCommentSection upscoreId={item.id} commentCount={item.comment_count || 0} />
+      {/* Actions: Pump + Comments + Share */}
+      <div className="border-t border-piu-border/20 pt-2 mt-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <UpscorePumpButton upscoreId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
+          <UpscoreCommentSection upscoreId={item.id} commentCount={item.comment_count || 0} />
+          <ShareButton path={`/upscore/${item.id}`} />
+        </div>
       </div>
     </div>
   );
@@ -439,7 +442,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
   };
 
   return (
-    <div>
+    <>
       <button
         onClick={toggleOpen}
         className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
@@ -450,7 +453,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
         <span>{count > 0 ? count : ''}</span>
       </button>
       {open && (
-        <div className="mt-2 ml-2 border-l border-piu-border/30 pl-3 space-y-2">
+        <div className="w-full order-last mt-2 border-l-2 border-piu-border/30 pl-3 space-y-2">
           {comments.map(c => (
             <div key={c.id}>
               <div className="flex items-start gap-2">
@@ -463,7 +466,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent">{c.username}</Link>
+                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
                     <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
@@ -485,7 +488,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent">{r.username}</Link>
+                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
@@ -525,7 +528,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -588,10 +591,13 @@ function NewClearCard({ item, jacketLookup }) {
         </div>
       </div>
 
-      {/* Actions: Pump + Comments */}
-      <div className="flex items-center gap-2 border-t border-piu-border/20 pt-2 mt-1">
-        <NewClearPumpButton clearId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
-        <NewClearCommentSection clearId={item.id} commentCount={item.comment_count || 0} />
+      {/* Actions: Pump + Comments + Share */}
+      <div className="border-t border-piu-border/20 pt-2 mt-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <NewClearPumpButton clearId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
+          <NewClearCommentSection clearId={item.id} commentCount={item.comment_count || 0} />
+          <ShareButton path={`/clear/${item.id}`} />
+        </div>
       </div>
     </div>
   );

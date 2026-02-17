@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
+import { renderFormattedText } from '../utils/formatText';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -282,7 +283,7 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-200 truncate">
                       {a.nationality && <span className="mr-1">{getCountryFlag(a.nationality)}</span>}
-                      {a.message}
+                      {renderFormattedText(a.message)}
                     </p>
                   </div>
                   <span className="text-[10px] text-gray-600 shrink-0">{timeAgo(a.created_at)}</span>

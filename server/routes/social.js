@@ -928,7 +928,7 @@ router.get('/recent-activity', (req, res) => {
   for (const u of newUsers) {
     activities.push({
       type: 'new_user', created_at: u.created_at,
-      message: `${u.username} joined Pump Shinsa`,
+      message: `${u.username} joined Pump **Shinsa**`,
       link: `/profile/${u.id}`,
       avatar: u.avatar, username: u.username, nationality: u.nationality,
     });

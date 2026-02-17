@@ -538,121 +538,125 @@ export default function ProfilePage() {
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality);
 
-  const tabs = ['overview', 'posts', 'tournaments', 'duels', 'songs'];
+  const tabs = ['overview', 'posts', 'competitions', 'songs'];
   if (hasPiuData) {
     tabs.push('pumbility', 'best-scores', 'recently-played');
   }
 
   const tabLabels = {
-    overview: 'Overview', tournaments: 'Tournaments', duels: 'Duels', songs: 'Songs', posts: 'Posts',
+    overview: 'Overview', competitions: 'Competitions', songs: 'Songs', posts: 'Posts',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
   };
 
+  const competitionsCount = aggregated ? aggregated.duelCount + aggregated.tournamentCount : 0;
+  const [competitionsSub, setCompetitionsSub] = useState('tournaments');
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
       {/* Profile Header */}
-      <div className="card flex flex-col sm:flex-row items-center gap-4 sm:gap-6 mb-6">
-        {profile.avatar ? (
-          <img src={getAvatarUrl(profile.avatar)} alt="" className="w-24 h-24 rounded-full object-cover border-2 border-piu-border shadow-lg" />
-        ) : (
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-3xl shadow-lg">
-            {profile.username[0].toUpperCase()}
-          </div>
-        )}
-        <div className="text-center sm:text-left flex-1">
-          <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
-            {flag && <span className="text-xl">{flag}</span>}
-            <h1 className="text-2xl font-display font-bold">{profile.username}</h1>
-            {genderSymbol && (
-              <span className={`text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
-                {genderSymbol}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center justify-center sm:justify-start gap-2 mt-1 flex-wrap">
-            {profile.skill_title && (
-              <span className={`badge border ${getSkillColor(profile.skill_title)}`}>
-                {profile.skill_title}
-              </span>
-            )}
-            {profile.pumbility > 0 && (
-              <span className="text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
-            )}
-            {age !== null && (
-              <span className="text-sm text-gray-500">Age {age}</span>
-            )}
-          </div>
-          {profile.description && (
-            <p className="text-sm text-gray-400 mt-2">{profile.description}</p>
+      <div className="card mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+          {profile.avatar ? (
+            <img src={getAvatarUrl(profile.avatar)} alt="" className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg" />
+          ) : (
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-2xl sm:text-3xl shadow-lg">
+              {profile.username[0].toUpperCase()}
+            </div>
           )}
-          <p className="text-xs text-gray-600 mt-1">
-            Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
-          </p>
-          {/* Follow button */}
-          {authUser && !isOwner && (
-            <button
-              onClick={handleFollow}
-              disabled={followLoading}
-              className={`mt-2 px-4 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-                followStatus.following
-                  ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
-                  : 'bg-piu-accent text-white hover:bg-piu-accent/80'
-              }`}
-            >
-              {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
-            </button>
-          )}
+          <div className="text-center sm:text-left flex-1">
+            <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+              {flag && <span className="text-xl">{flag}</span>}
+              <h1 className="text-2xl font-display font-bold">{profile.username}</h1>
+              {genderSymbol && (
+                <span className={`text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                  {genderSymbol}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center justify-center sm:justify-start gap-2 mt-1 flex-wrap">
+              {profile.skill_title && (
+                <span className={`badge border ${getSkillColor(profile.skill_title)}`}>
+                  {profile.skill_title}
+                </span>
+              )}
+              {profile.pumbility > 0 && (
+                <span className="text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
+              )}
+              {age !== null && (
+                <span className="text-sm text-gray-500">Age {age}</span>
+              )}
+              {(piuStatus?.highest_single || piuStatus?.highest_double) && (
+                <span className="text-xs text-gray-400 font-mono">
+                  {piuStatus.highest_single ? `S${piuStatus.highest_single}` : ''}
+                  {piuStatus.highest_single && piuStatus.highest_double ? ' / ' : ''}
+                  {piuStatus.highest_double ? `D${piuStatus.highest_double}` : ''}
+                </span>
+              )}
+            </div>
+            {profile.description && (
+              <p className="text-sm text-gray-400 mt-2">{profile.description}</p>
+            )}
+            <p className="text-xs text-gray-600 mt-1">
+              Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+            </p>
+            {/* Follow button */}
+            {authUser && !isOwner && (
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`mt-2 px-4 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                  followStatus.following
+                    ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
+                    : 'bg-piu-accent text-white hover:bg-piu-accent/80'
+                }`}
+              >
+                {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Stats integrated into profile card */}
+        <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-6 mt-4 pt-3 border-t border-piu-border/30">
+          <button
+            onClick={() => { setTab('followers'); setFollowersLoaded(false); }}
+            className="text-center hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">
+              {socialCounts.followers_count}
+              {socialCounts.followers_count > (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
+                <span className="text-green-400 text-[10px] ml-0.5">&#9650;</span>
+              )}
+              {socialCounts.followers_count < (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
+                <span className="text-red-400 text-[10px] ml-0.5">&#9660;</span>
+              )}
+            </p>
+            <p className="text-[10px] text-gray-500 font-display">Followers</p>
+          </button>
+          <div className="text-center">
+            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">{socialCounts.posts_count}</p>
+            <p className="text-[10px] text-gray-500 font-display">Posts</p>
+          </div>
+          <div className="text-center">
+            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">{socialCounts.total_pumps || 0}</p>
+            <p className="text-[10px] text-gray-500 font-display">Pumps</p>
+          </div>
+          <div className="text-center">
+            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">{competitionsCount}</p>
+            <p className="text-[10px] text-gray-500 font-display">Competitions</p>
+          </div>
         </div>
       </div>
 
-      {/* Stats Summary */}
-      {aggregated && (
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-6">
-          <button
-            onClick={() => { setTab('followers'); setFollowersLoaded(false); }}
-            className="card text-center py-3 hover:border-piu-accent/40 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center justify-center gap-1">
-              <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.followers_count}</p>
-              {socialCounts.followers_count > (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
-                <span className="text-green-400 text-xs">&#9650;</span>
-              )}
-              {socialCounts.followers_count < (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
-                <span className="text-red-400 text-xs">&#9660;</span>
-              )}
-            </div>
-            <p className="text-[10px] text-gray-500 font-display">Followers</p>
-          </button>
-          <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.posts_count}</p>
-            <p className="text-[10px] text-gray-500 font-display">Posts</p>
-            {socialCounts.last_post_at && (
-              <p className="text-[9px] text-gray-600 font-display mt-0.5">Last {timeAgo(socialCounts.last_post_at)}</p>
-            )}
-          </div>
-          <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{socialCounts.total_pumps || 0}</p>
-            <p className="text-[10px] text-gray-500 font-display">Pumps</p>
-          </div>
-          <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{aggregated.duelCount}</p>
-            <p className="text-[10px] text-gray-500 font-display">Duels</p>
-          </div>
-          <div className="card text-center py-3">
-            <p className="font-mono font-bold text-xl text-piu-accent">{aggregated.tournamentCount}</p>
-            <p className="text-[10px] text-gray-500 font-display">Tournaments</p>
-          </div>
-        </div>
-      )}
-
       {/* Tabs */}
-      <div className="flex gap-1.5 mb-4 flex-wrap">
+      <div className="flex gap-1.5 mb-3 flex-wrap">
         {tabs.map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-              tab === t ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+              (t === 'competitions' ? (tab === 'competitions' || tab === 'tournaments' || tab === 'duels') : tab === t)
+                ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
           >
             {tabLabels[t]}
@@ -738,71 +742,95 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {tab === 'tournaments' && stats && (
-        <div className="space-y-3">
-          {stats.tournamentPlayers.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No tournament participation yet</p>
-          ) : (
-            stats.tournamentPlayers.map(({ tournament, matches }) => (
-              <Link
-                key={tournament.tournament_id || tournament.id}
-                to={`/tournament/${tournament.tournament_id}`}
-                className="card-hover flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-3">
-                  {tournament.tournament_avatar ? (
-                    <img src={getAvatarUrl(tournament.tournament_avatar)} alt="" className="w-10 h-10 rounded-lg object-cover" />
-                  ) : (
-                    <div className="w-10 h-10 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display font-bold">
-                      {(tournament.tournament_name || '?')[0].toUpperCase()}
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
-                      {tournament.tournament_name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {tournament.tournament_date || ''} - {tournament.wins}W {tournament.losses}L
-                    </p>
-                  </div>
-                </div>
-                <span className={`badge ${
-                  tournament.tournament_phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
-                }`}>
-                  {tournament.tournament_phase}
-                </span>
-              </Link>
-            ))
-          )}
-        </div>
-      )}
+      {tab === 'competitions' && stats && (
+        <div>
+          {/* Sub-tabs for Tournaments and Duels */}
+          <div className="flex gap-1 mb-3">
+            <button
+              onClick={() => setCompetitionsSub('tournaments')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'tournaments' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Tournaments ({aggregated?.tournamentCount || 0})
+            </button>
+            <button
+              onClick={() => setCompetitionsSub('duels')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'duels' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Duels ({aggregated?.duelCount || 0})
+            </button>
+          </div>
 
-      {tab === 'duels' && stats && (
-        <div className="space-y-3">
-          {stats.duelStats.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No duel participation yet</p>
-          ) : (
-            stats.duelStats.map(({ duel, songs }) => {
-              const isP1 = duel.player1_user_id === id;
-              const opponentName = isP1 ? duel.player2_name : duel.player1_name;
-              const myWins = songs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
-              const oppWins = songs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
-              return (
-                <Link key={duel.id} to={`/duel/${duel.id}`} className="card-hover flex items-center justify-between group">
-                  <div>
-                    <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
-                      {duel.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      vs {opponentName} - {myWins}W {oppWins}L ({songs.length} songs)
-                    </p>
-                  </div>
-                  <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
-                    {duel.status === 'COMPLETED' ? 'Completed' : 'Active'}
-                  </span>
-                </Link>
-              );
-            })
+          {competitionsSub === 'tournaments' && (
+            <div className="space-y-3">
+              {stats.tournamentPlayers.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No tournament participation yet</p>
+              ) : (
+                stats.tournamentPlayers.map(({ tournament, matches }) => (
+                  <Link
+                    key={tournament.tournament_id || tournament.id}
+                    to={`/tournament/${tournament.tournament_id}`}
+                    className="card-hover flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      {tournament.tournament_avatar ? (
+                        <img src={getAvatarUrl(tournament.tournament_avatar)} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display font-bold">
+                          {(tournament.tournament_name || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
+                          {tournament.tournament_name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {tournament.tournament_date || ''} - {tournament.wins}W {tournament.losses}L
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`badge ${
+                      tournament.tournament_phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
+                    }`}>
+                      {tournament.tournament_phase}
+                    </span>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
+
+          {competitionsSub === 'duels' && (
+            <div className="space-y-3">
+              {stats.duelStats.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No duel participation yet</p>
+              ) : (
+                stats.duelStats.map(({ duel, songs }) => {
+                  const isP1 = duel.player1_user_id === id;
+                  const opponentName = isP1 ? duel.player2_name : duel.player1_name;
+                  const myWins = songs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
+                  const oppWins = songs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
+                  return (
+                    <Link key={duel.id} to={`/duel/${duel.id}`} className="card-hover flex items-center justify-between group">
+                      <div>
+                        <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
+                          {duel.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          vs {opponentName} - {myWins}W {oppWins}L ({songs.length} songs)
+                        </p>
+                      </div>
+                      <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
+                        {duel.status === 'COMPLETED' ? 'Completed' : 'Active'}
+                      </span>
+                    </Link>
+                  );
+                })
+              )}
+            </div>
           )}
         </div>
       )}

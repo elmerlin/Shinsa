@@ -143,6 +143,43 @@ function Lightbox({ images, index, onClose }) {
   );
 }
 
+// Share Button - copies link to clipboard
+function ShareButton({ path }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}${path}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const input = document.createElement('input');
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleShare}
+      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+      title="Copy link"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+      </svg>
+      <span>{copied ? 'Copied!' : ''}</span>
+    </button>
+  );
+}
+
 // Pump Button
 function PumpButton({ postId, initialCount, initialPumped }) {
   const { user } = useAuth();
@@ -299,7 +336,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
   };
 
   return (
-    <div>
+    <>
       <button
         onClick={handleToggle}
         className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
@@ -311,7 +348,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
       </button>
 
       {open && (
-        <div className="mt-3 border-t border-piu-border/30 pt-3">
+        <div className="w-full order-last mt-2 pt-2 border-t border-piu-border/30">
           {isOwner && (
             <button
               onClick={handleToggleComments}
@@ -343,10 +380,10 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                     </Link>
                     <div className="flex-1 min-w-0">
                       <div className="bg-piu-dark/50 rounded-lg px-2.5 py-1.5">
-                        <Link to={`/profile/${c.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors">
+                        <Link to={`/profile/${c.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors leading-none">
                           {c.username}
                         </Link>
-                        <p className="text-xs text-gray-200 break-words">{c.content}</p>
+                        <p className="text-xs text-gray-200 break-words mt-0.5">{c.content}</p>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 px-1">
                         <span className="text-[10px] text-gray-600">{timeAgo(c.created_at)}</span>
@@ -367,7 +404,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 
                   {/* Replies */}
                   {c.replies && c.replies.length > 0 && (
-                    <div className="ml-8 mt-1 space-y-1.5">
+                    <div className="ml-8 mt-1 space-y-1">
                       {c.replies.map(r => (
                         <div key={r.id} className="flex items-start gap-2">
                           <Link to={`/profile/${r.user_id}`}>
@@ -381,10 +418,10 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                           </Link>
                           <div className="flex-1 min-w-0">
                             <div className="bg-piu-dark/30 rounded-lg px-2 py-1">
-                              <Link to={`/profile/${r.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors">
+                              <Link to={`/profile/${r.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors leading-none">
                                 {r.username}
                               </Link>
-                              <p className="text-[11px] text-gray-200 break-words">{r.content}</p>
+                              <p className="text-[11px] text-gray-200 break-words mt-0.5">{r.content}</p>
                             </div>
                             <div className="flex items-center gap-3 mt-0.5 px-1">
                               <span className="text-[9px] text-gray-600">{timeAgo(r.created_at)}</span>
@@ -433,7 +470,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -592,24 +629,27 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
         <Lightbox images={images} index={lightboxIndex} onClose={() => setLightboxIndex(null)} />
       )}
 
-      {/* Actions: Pump + Comments */}
-      <div className="flex items-center gap-2 border-t border-piu-border/20 pt-2 mt-1">
-        <PumpButton
-          postId={post.id}
-          initialCount={post.pump_count || 0}
-          initialPumped={post.user_pumped}
-        />
-        <CommentSection
-          postId={post.id}
-          postAuthorId={post.user_id}
-          commentsDisabled={post.comments_disabled}
-          commentCount={post.comment_count || 0}
-          isOwner={user && user.id === post.user_id}
-        />
+      {/* Actions: Pump + Comments + Share */}
+      <div className="border-t border-piu-border/20 pt-2 mt-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <PumpButton
+            postId={post.id}
+            initialCount={post.pump_count || 0}
+            initialPumped={post.user_pumped}
+          />
+          <CommentSection
+            postId={post.id}
+            postAuthorId={post.user_id}
+            commentsDisabled={post.comments_disabled}
+            commentCount={post.comment_count || 0}
+            isOwner={user && user.id === post.user_id}
+          />
+          <ShareButton path={`/post/${post.id}`} />
+        </div>
       </div>
     </div>
   );
 }
 
 // Export sub-components for reuse
-export { ImageGrid, Lightbox, YouTubeEmbed, PumpButton, CommentSection, timeAgo };
+export { ImageGrid, Lightbox, YouTubeEmbed, PumpButton, CommentSection, ShareButton, timeAgo };
