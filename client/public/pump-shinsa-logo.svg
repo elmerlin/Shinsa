@@ -1,64 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Pump Shinsa Icon</title>
+  <desc id="desc">Angular octagon badge with halftone accents and stylized S mark.</desc>
   <defs>
-    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#1a0a2e"/>
-      <stop offset="100%" style="stop-color:#0a0a1a"/>
+    <linearGradient id="bg" x1="16" y1="16" x2="240" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#141428"/>
+      <stop offset="1" stop-color="#06060f"/>
     </linearGradient>
-    <linearGradient id="red-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ff3366"/>
-      <stop offset="100%" style="stop-color:#ff1744"/>
+    <linearGradient id="ringGold" x1="36" y1="36" x2="220" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd54d"/>
+      <stop offset="1" stop-color="#ffb300"/>
     </linearGradient>
-    <linearGradient id="blue-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#2979ff"/>
-      <stop offset="100%" style="stop-color:#448aff"/>
+    <linearGradient id="blue" x1="0" y1="0" x2="160" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#58b6ff"/>
+      <stop offset="1" stop-color="#2096da"/>
     </linearGradient>
-    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffd700"/>
-      <stop offset="100%" style="stop-color:#ff9500"/>
+    <linearGradient id="red" x1="96" y1="96" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff577f"/>
+      <stop offset="1" stop-color="#ff204f"/>
     </linearGradient>
-    <linearGradient id="accent-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ff3366"/>
-      <stop offset="100%" style="stop-color:#ff6633"/>
-    </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+    <pattern id="dotsBlue" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="4" cy="4" r="2.6" fill="#34a8ff"/>
+    </pattern>
+    <pattern id="dotsRed" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="4" cy="4" r="2.6" fill="#ff2d5e"/>
+    </pattern>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
       <feMerge>
-        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
+    <clipPath id="tileClip">
+      <rect x="16" y="16" width="224" height="224" rx="34"/>
+    </clipPath>
   </defs>
-  <!-- Background circle -->
-  <circle cx="100" cy="100" r="95" fill="url(#bg-grad)" stroke="url(#gold-grad)" stroke-width="3"/>
-  <!-- Inner ring -->
-  <circle cx="100" cy="100" r="80" fill="none" stroke="url(#accent-grad)" stroke-width="2" opacity="0.5"/>
 
-  <!-- PIU 5-Panel Pad Arrows -->
-  <g transform="translate(100,82)" filter="url(#glow)">
-    <!-- Center pad (gold star/diamond) -->
-    <polygon points="0,-14 4,-4.5 14,-4.5 6.5,2.5 9,12 0,6.5 -9,12 -6.5,2.5 -14,-4.5 -4,-4.5" fill="url(#gold-grad)" opacity="0.95"/>
+  <rect x="16" y="16" width="224" height="224" rx="34" fill="url(#bg)" stroke="#2a2a4a" stroke-width="2"/>
 
-    <!-- Upper-left arrow (red) -->
-    <g transform="translate(-28,-28) rotate(-45)">
-      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#red-grad)" opacity="0.9"/>
-    </g>
-    <!-- Upper-right arrow (red) -->
-    <g transform="translate(28,-28) rotate(45)">
-      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#red-grad)" opacity="0.9"/>
-    </g>
-    <!-- Lower-left arrow (blue) -->
-    <g transform="translate(-28,28) rotate(-135)">
-      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#blue-grad)" opacity="0.9"/>
-    </g>
-    <!-- Lower-right arrow (blue) -->
-    <g transform="translate(28,28) rotate(135)">
-      <polygon points="0,-16 10,0 6,0 6,10 -6,10 -6,0 -10,0" fill="url(#blue-grad)" opacity="0.9"/>
-    </g>
+  <g clip-path="url(#tileClip)">
+    <path d="M16 16H160V96H96V160H16Z" fill="url(#dotsBlue)" opacity="0.82"/>
+    <path d="M240 240H96V160H160V96H240Z" fill="url(#dotsRed)" opacity="0.8"/>
+    <rect x="16" y="16" width="224" height="224" fill="url(#bg)" opacity="0.28"/>
   </g>
 
-  <!-- Text: PUMP SHINSA -->
-  <text x="100" y="148" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="15" letter-spacing="2">
-    <tspan fill="url(#gold-grad)">PUMP</tspan>
-    <tspan fill="white"> SHINSA</tspan>
-  </text>
+  <polygon points="128,28 182,28 228,74 228,182 182,228 74,228 28,182 28,74 74,28" fill="none" stroke="#f4f7ff" stroke-width="7"/>
+  <polygon points="128,38 178,38 218,78 218,178 178,218 78,218 38,178 38,78 78,38" fill="none" stroke="url(#ringGold)" stroke-width="10"/>
+  <polygon points="128,60 166,60 196,90 196,166 166,196 90,196 60,166 60,90 90,60" fill="#05050b" stroke="#f4f7ff" stroke-width="5"/>
+  <polygon points="128,66 164,66 190,92 190,164 164,190 92,190 66,164 66,92 92,66" fill="none" stroke="url(#ringGold)" stroke-width="5"/>
+
+  <path d="M72 84H186L160 108H124L176 158V176H70L96 152H132L80 102V84Z" fill="none" stroke="url(#blue)" stroke-width="13" stroke-linejoin="round" opacity="0.85" filter="url(#glow)"/>
+  <path d="M76 82H188L162 106H126L178 156V178H68L94 154H130L78 104V82Z" fill="#f8fbff" stroke="#080910" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M76 82H188L162 106H126L178 156V178H68L94 154H130L78 104V82Z" fill="none" stroke="url(#red)" stroke-width="2.4" stroke-linejoin="round" opacity="0.9"/>
 </svg>

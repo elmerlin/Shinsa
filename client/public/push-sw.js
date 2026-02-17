@@ -9,8 +9,8 @@ self.addEventListener('push', (event) => {
   const title = payload.title || 'New notification';
   const body = payload.body || 'You have a new notification';
   const url = payload.url || '/';
-  const icon = payload.icon || '/pump-shinsa-logo.svg';
-  const badge = payload.badge || '/pump-shinsa-logo.svg';
+  const icon = payload.icon || '/icons/app-icon-192.png';
+  const badge = payload.badge || '/icons/app-icon-96.png';
   const tag = payload.tag || 'notification';
 
   event.waitUntil(

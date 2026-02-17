@@ -301,23 +301,12 @@ export default function App() {
       {/* Header */}
       <header className="border-b border-piu-border bg-piu-card/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
+          <Link to="/" className="group">
             <img
-              src="/pump-shinsa-logo.svg"
+              src="/pump-shinsa-wordmark.svg"
               alt="Pump Shinsa"
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg shadow-lg shadow-piu-accent/20 group-hover:shadow-piu-accent/40 transition-shadow"
+              className="h-9 sm:h-10 w-auto drop-shadow-[0_0_8px_rgba(255,51,102,0.18)] group-hover:drop-shadow-[0_0_14px_rgba(58,170,255,0.3)] transition-all"
             />
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-display font-bold text-lg sm:text-xl tracking-wider text-piu-gold group-hover:text-piu-accent transition-colors">
-                  PUMP
-                </span>
-                <span className="font-display font-bold text-lg sm:text-xl tracking-wider group-hover:text-piu-accent transition-colors">
-                  SHINSA
-                </span>
-              </div>
-              <img src="/pump-it-up-logo.svg" alt="Pump It Up" className="h-3 sm:h-3.5 block -mt-0.5 opacity-70" />
-            </div>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             {!isHome && (

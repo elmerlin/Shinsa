@@ -63,7 +63,7 @@ export function NotificationProvider({ children }) {
     try {
       const n = new Notification(notification.title || 'New notification', {
         body: notification.message || 'You have a new notification',
-        icon: '/pump-shinsa-logo.svg',
+        icon: '/icons/app-icon-192.png',
         tag: `notification-${notification.id}`,
       });
       n.onclick = () => {

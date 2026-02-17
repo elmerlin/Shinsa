@@ -245,6 +245,147 @@ function SyncProgressBar({ progress, total, label }) {
   );
 }
 
+function ActivityIconGlyph({ icon, className = 'w-4 h-4' }) {
+  if (icon === 'post') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+        <path d="M8.5 9.5h7M8.5 12h7M8.5 14.5h4.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (icon === 'comment') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M6 7.5a2.5 2.5 0 0 1 2.5-2.5h7A2.5 2.5 0 0 1 18 7.5v5A2.5 2.5 0 0 1 15.5 15H11l-4.2 3.2c-.4.3-.8 0-.8-.4V15A2.5 2.5 0 0 1 3.5 12.5v-5A2.5 2.5 0 0 1 6 5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'score-up') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <path d="M5 18h14" strokeLinecap="round" />
+        <path d="m7 14 3-3 2.5 2.5L17 9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14.5 9H17v2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'score-clear') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <circle cx="12" cy="12" r="7" />
+        <path d="m9 12 2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'trophy') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M8 5h8v3a4 4 0 0 1-8 0V5Z" />
+        <path d="M10 13h4v2a2 2 0 0 1-4 0v-2Z" />
+        <path d="M9 18h6M6 6h2v1a3 3 0 0 1-3 3H4V8a2 2 0 0 1 2-2Zm12 0h-2v1a3 3 0 0 0 3 3h1V8a2 2 0 0 0-2-2Z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'duel') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <path d="m13.5 3.5-7 9h4L9.5 20l7-9h-4l1-7.5Z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-created') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M9 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM16.5 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+        <path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 19a3.5 3.5 0 0 1 7 0M19 4v4M17 6h4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-joined') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M10 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+        <path d="M3 20a7 7 0 0 1 14 0M18.5 9v6M15.5 12h6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-mod') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="m12 4 6 2.5V12c0 3.8-2.5 6.6-6 8-3.5-1.4-6-4.2-6-8V6.5L12 4Z" />
+        <path d="m9.5 12.5 1.8 1.8 3.4-3.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 8v4l2.5 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function getActivityVisual(item) {
+  const type = item?.type || '';
+  const category = item?.category || '';
+
+  if (type === 'post_created') {
+    return { icon: 'post', tone: 'text-sky-300 border-sky-400/30 bg-sky-500/10' };
+  }
+  if (type.includes('comment') || type.includes('reply')) {
+    return { icon: 'comment', tone: 'text-violet-300 border-violet-400/30 bg-violet-500/10' };
+  }
+  if (type === 'upscore') {
+    return { icon: 'score-up', tone: 'text-amber-300 border-amber-400/30 bg-amber-500/10' };
+  }
+  if (type === 'new_clear') {
+    return { icon: 'score-clear', tone: 'text-emerald-300 border-emerald-400/30 bg-emerald-500/10' };
+  }
+  if (type.includes('tournament')) {
+    return { icon: 'trophy', tone: 'text-pink-300 border-pink-400/30 bg-pink-500/10' };
+  }
+  if (type.includes('duel')) {
+    return { icon: 'duel', tone: 'text-orange-300 border-orange-400/30 bg-orange-500/10' };
+  }
+  if (type === 'community_created') {
+    return { icon: 'community-created', tone: 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10' };
+  }
+  if (type === 'community_joined') {
+    return { icon: 'community-joined', tone: 'text-teal-300 border-teal-400/30 bg-teal-500/10' };
+  }
+  if (type === 'community_moderator') {
+    return { icon: 'community-mod', tone: 'text-lime-300 border-lime-400/30 bg-lime-500/10' };
+  }
+
+  if (category === 'posts') {
+    return { icon: 'post', tone: 'text-sky-300 border-sky-400/30 bg-sky-500/10' };
+  }
+  if (category === 'comments') {
+    return { icon: 'comment', tone: 'text-violet-300 border-violet-400/30 bg-violet-500/10' };
+  }
+  if (category === 'scores') {
+    return { icon: 'score-up', tone: 'text-amber-300 border-amber-400/30 bg-amber-500/10' };
+  }
+  if (category === 'competitions') {
+    return { icon: 'trophy', tone: 'text-pink-300 border-pink-400/30 bg-pink-500/10' };
+  }
+  if (category === 'community') {
+    return { icon: 'community-joined', tone: 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10' };
+  }
+
+  return { icon: 'default', tone: 'text-gray-300 border-gray-400/25 bg-gray-500/10' };
+}
+
+function getActivityCategoryLabel(category) {
+  if (category === 'posts') return 'Post';
+  if (category === 'comments') return 'Comment';
+  if (category === 'scores') return 'Score';
+  if (category === 'competitions') return 'Competition';
+  if (category === 'community') return 'Community';
+  return 'Activity';
+}
+
 export default function ProfilePage() {
   const { id, username } = useParams();
   const navigate = useNavigate();
@@ -765,13 +906,14 @@ export default function ProfilePage() {
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
 
-  const tabs = ['overview', 'activity', 'posts', 'competitions', 'songs'];
+  const tabs = ['overview', 'posts', 'competitions'];
   if (hasPiuData) {
-    tabs.push('pumbility', 'best-scores', 'recently-played');
+    tabs.push(...piuTabs);
   }
+  tabs.push('activity');
 
   const tabLabels = {
-    overview: 'Overview', activity: 'Activity', competitions: 'Competitions', songs: 'Songs', posts: 'Posts',
+    overview: 'Overview', posts: 'Posts', competitions: 'Competitions', activity: 'Activity',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
   };
 
@@ -996,7 +1138,7 @@ export default function ProfilePage() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-              (t === 'competitions' ? (tab === 'competitions' || tab === 'tournaments' || tab === 'duels') : tab === t)
+              tab === t
                 ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
           >
@@ -1108,28 +1250,36 @@ export default function ProfilePage() {
           {filteredActivity.length === 0 ? (
             <p className="text-center text-gray-500 py-8">No activity yet</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3.5">
               {filteredActivity.map(item => {
+                const visual = getActivityVisual(item);
                 const content = (
-                  <div className="card-hover py-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-display font-bold text-gray-200">{item.message}</p>
-                        {item.detail && (
-                          <p className="text-xs text-gray-500 mt-0.5 break-words">{item.detail}</p>
-                        )}
-                        {item.category === 'community' && (
-                          <p className="text-[10px] text-gray-600 mt-1">Community milestone</p>
-                        )}
+                  <div className="card-hover p-3 sm:p-3.5">
+                    <div className="flex items-start gap-3.5">
+                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${visual.tone}`}>
+                        <ActivityIconGlyph icon={visual.icon} />
                       </div>
-                      <span className="text-[10px] text-gray-600 shrink-0">{timeAgo(item.created_at)}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2.5">
+                          <p className="text-sm font-display font-bold text-gray-200 leading-5">{item.message}</p>
+                          <span className="text-[10px] text-gray-600 shrink-0 pt-0.5">{timeAgo(item.created_at)}</span>
+                        </div>
+                        {item.detail && (
+                          <p className="text-xs text-gray-500 mt-1.5 break-words leading-relaxed">{item.detail}</p>
+                        )}
+                        <div className="mt-2.5">
+                          <span className="inline-flex items-center rounded-md border border-piu-border/50 bg-piu-dark/60 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-gray-400">
+                            {getActivityCategoryLabel(item.category)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
 
                 if (item.link) {
                   return (
-                    <Link key={item.id} to={item.link}>
+                    <Link key={item.id} to={item.link} className="block">
                       {content}
                     </Link>
                   );
@@ -1142,10 +1292,10 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {tab === 'competitions' && stats && (
+      {tab === 'competitions' && (
         <div>
-          {/* Sub-tabs for Tournaments and Duels */}
-          <div className="flex gap-1 mb-3">
+          {/* Sub-tabs for Tournaments, Duels, and Songs */}
+          <div className="flex gap-1 mb-3 flex-wrap">
             <button
               onClick={() => setCompetitionsSub('tournaments')}
               className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
@@ -1162,14 +1312,24 @@ export default function ProfilePage() {
             >
               Duels ({aggregated?.duelCount || 0})
             </button>
+            <button
+              onClick={() => setCompetitionsSub('songs')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'songs' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Songs ({songScores.length})
+            </button>
           </div>
 
           {competitionsSub === 'tournaments' && (
             <div className="space-y-3">
-              {stats.tournamentPlayers.length === 0 ? (
+              {!stats ? (
+                <p className="text-center text-gray-500 py-8">Loading competition history...</p>
+              ) : stats.tournamentPlayers.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">No tournament participation yet</p>
               ) : (
-                stats.tournamentPlayers.map(({ tournament, matches }) => (
+                stats.tournamentPlayers.map(({ tournament }) => (
                   <Link
                     key={tournament.tournament_id || tournament.id}
                     to={`/tournament/${tournament.tournament_id}`}
@@ -1205,7 +1365,9 @@ export default function ProfilePage() {
 
           {competitionsSub === 'duels' && (
             <div className="space-y-3">
-              {stats.duelStats.length === 0 ? (
+              {!stats ? (
+                <p className="text-center text-gray-500 py-8">Loading competition history...</p>
+              ) : stats.duelStats.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">No duel participation yet</p>
               ) : (
                 stats.duelStats.map(({ duel, songs }) => {
@@ -1232,39 +1394,39 @@ export default function ProfilePage() {
               )}
             </div>
           )}
-        </div>
-      )}
 
-      {tab === 'songs' && (
-        <div className="space-y-2">
-          {songScores.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No song scores recorded yet</p>
-          ) : (
-            songScores.map((s, i) => {
-              const rank = getRank(s.myScore);
-              return (
-                <div key={i} className="card flex items-center gap-3 py-2">
-                  {s.jacket && (
-                    <img src={s.jacket} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-display font-bold truncate">{s.title}</p>
-                    <p className="text-[10px] text-gray-500">
-                      {s.mode} Lv.{s.level} - {s.source}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
-                    <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
-                  </div>
-                  <div className="w-6 text-center shrink-0">
-                    {s.won && <span className="text-piu-green text-xs">W</span>}
-                    {!s.won && !s.draw && <span className="text-red-400 text-xs">L</span>}
-                    {s.draw && <span className="text-gray-500 text-xs">D</span>}
-                  </div>
-                </div>
-              );
-            })
+          {competitionsSub === 'songs' && (
+            <div className="space-y-2.5">
+              {songScores.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No song scores recorded yet</p>
+              ) : (
+                songScores.map((s, i) => {
+                  const rank = getRank(s.myScore);
+                  return (
+                    <div key={i} className="card flex items-center gap-3 py-2.5">
+                      {s.jacket && (
+                        <img src={s.jacket} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{s.title}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {s.mode} Lv.{s.level} - {s.source}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
+                        <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
+                      </div>
+                      <div className="w-6 text-center shrink-0">
+                        {s.won && <span className="text-piu-green text-xs">W</span>}
+                        {!s.won && !s.draw && <span className="text-red-400 text-xs">L</span>}
+                        {s.draw && <span className="text-gray-500 text-xs">D</span>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
         </div>
       )}
