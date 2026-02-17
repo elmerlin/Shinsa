@@ -106,20 +106,29 @@ function ImageGrid({ images, onImageClick }) {
   );
 }
 
-// Lightbox for fullscreen image viewing
+// Lightbox for fullscreen image viewing with smooth sliding
 function Lightbox({ images, index, onClose }) {
   const [current, setCurrent] = useState(index);
+  const currentRef = useRef(index);
+  const stripRef = useRef(null);
   const touchStartRef = useRef(null);
   const touchHandledRef = useRef(false);
 
-  const goNext = () => setCurrent(c => (c < images.length - 1 ? c + 1 : 0));
-  const goPrev = () => setCurrent(c => (c > 0 ? c - 1 : images.length - 1));
+  const goTo = (idx, animate = true) => {
+    const clamped = Math.max(0, Math.min(idx, images.length - 1));
+    if (stripRef.current) {
+      stripRef.current.style.transition = animate ? 'transform 300ms ease-out' : 'none';
+      stripRef.current.style.transform = `translateX(${-clamped * 100}vw)`;
+    }
+    currentRef.current = clamped;
+    setCurrent(clamped);
+  };
 
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft') goPrev();
-      if (e.key === 'ArrowRight') goNext();
+      if (e.key === 'ArrowLeft') goTo(currentRef.current - 1);
+      if (e.key === 'ArrowRight') goTo(currentRef.current + 1);
     };
     document.addEventListener('keydown', handleKey);
     document.body.style.overflow = 'hidden';
@@ -129,33 +138,56 @@ function Lightbox({ images, index, onClose }) {
     };
   }, [images.length, onClose]);
 
-  // Touch: swipe left/right to navigate, tap left/right half to navigate
+  // Touch: drag to slide, swipe to navigate, tap halves to navigate
   const handleTouchStart = (e) => {
     if (e.target.closest('button')) return;
     touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     touchHandledRef.current = false;
+    if (stripRef.current) stripRef.current.style.transition = 'none';
+  };
+
+  const handleTouchMove = (e) => {
+    if (!touchStartRef.current) return;
+    const dx = e.touches[0].clientX - touchStartRef.current.x;
+    const dy = e.touches[0].clientY - touchStartRef.current.y;
+    if (Math.abs(dx) >= Math.abs(dy) && images.length > 1) {
+      const c = currentRef.current;
+      // Rubber-band resistance at edges
+      const offset = (c === 0 && dx > 0) || (c === images.length - 1 && dx < 0) ? dx * 0.3 : dx;
+      if (stripRef.current) {
+        stripRef.current.style.transform = `translateX(calc(${-c * 100}vw + ${offset}px))`;
+      }
+    }
   };
 
   const handleTouchEnd = (e) => {
     if (!touchStartRef.current || e.target.closest('button')) { touchStartRef.current = null; return; }
-    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
-    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const dx = endX - touchStartRef.current.x;
+    const dy = endY - touchStartRef.current.y;
     touchStartRef.current = null;
 
     if (images.length <= 1) return;
 
-    // Swipe detection (horizontal swipe > 50px, more horizontal than vertical)
+    const c = currentRef.current;
+
+    // Swipe detection (horizontal swipe > 50px)
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
       touchHandledRef.current = true;
-      if (dx < 0) goNext(); else goPrev();
+      goTo(dx < 0 ? c + 1 : c - 1);
       return;
     }
 
     // Tap detection (minimal movement) — tap right half = next, left half = prev
     if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
       touchHandledRef.current = true;
-      if (e.changedTouches[0].clientX > window.innerWidth / 2) goNext(); else goPrev();
+      goTo(endX > window.innerWidth / 2 ? c + 1 : c - 1);
+      return;
     }
+
+    // Neither swipe nor tap — snap back
+    goTo(c);
   };
 
   const handleClick = (e) => {
@@ -166,9 +198,10 @@ function Lightbox({ images, index, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center"
+      className="fixed inset-0 bg-black/95 z-[100] overflow-hidden"
       onClick={handleClick}
       onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       <button className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl z-10" onClick={e => { e.stopPropagation(); onClose(); }}>&#10005;</button>
@@ -177,28 +210,33 @@ function Lightbox({ images, index, onClose }) {
         <>
           <button
             className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-3xl z-10 p-2"
-            onClick={e => { e.stopPropagation(); goPrev(); }}
+            onClick={e => { e.stopPropagation(); goTo(currentRef.current - 1); }}
           >&#8249;</button>
           <button
             className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-3xl z-10 p-2"
-            onClick={e => { e.stopPropagation(); goNext(); }}
+            onClick={e => { e.stopPropagation(); goTo(currentRef.current + 1); }}
           >&#8250;</button>
         </>
       )}
 
-      <img
-        src={images[current]}
-        alt=""
-        className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
-        onClick={e => e.stopPropagation()}
-      />
+      <div
+        ref={stripRef}
+        className="flex items-center h-full will-change-transform"
+        style={{ transform: `translateX(${-index * 100}vw)` }}
+      >
+        {images.map((img, i) => (
+          <div key={i} className="w-screen h-full flex items-center justify-center shrink-0">
+            <img src={img} alt="" className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg" onClick={e => e.stopPropagation()} />
+          </div>
+        ))}
+      </div>
 
       {images.length > 1 && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
           {images.map((_, i) => (
             <button
               key={i}
-              onClick={e => { e.stopPropagation(); setCurrent(i); }}
+              onClick={e => { e.stopPropagation(); goTo(i); }}
               className={`w-2 h-2 rounded-full transition-colors ${i === current ? 'bg-white' : 'bg-white/30'}`}
             />
           ))}
