@@ -76,16 +76,16 @@ router.post('/:id/draw', (req, res) => {
 
   if (!level) { db.close(); return res.status(400).json({ error: 'Level is required' }); }
 
-  let query, params;
+  const lvl = parseInt(level);
+  let songs;
   if (effectiveMode === 'any') {
-    query = 'SELECT * FROM songs WHERE level = ? AND flags LIKE ?';
-    params = [parseInt(level), '%cut:2%'];
+    songs = db.prepare('SELECT * FROM songs WHERE level = ? AND flags LIKE ?').all(lvl, '%cut:2%');
+    if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level = ?').all(lvl);
   } else {
-    query = 'SELECT * FROM songs WHERE level = ? AND mode = ? AND flags LIKE ?';
-    params = [parseInt(level), effectiveMode, '%cut:2%'];
+    songs = db.prepare('SELECT * FROM songs WHERE level = ? AND mode = ? AND flags LIKE ?').all(lvl, effectiveMode, '%cut:2%');
+    if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level = ? AND mode = ?').all(lvl, effectiveMode);
   }
 
-  const songs = db.prepare(query).all(...params);
   if (songs.length === 0) {
     db.close();
     return res.status(400).json({ error: `No ${effectiveMode === 'any' ? '' : effectiveMode + ' '}charts found at level ${level}` });
