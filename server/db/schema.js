@@ -13,6 +13,61 @@ function getDb() {
   return db;
 }
 
+function bootstrapSongsFromJsonIfEmpty() {
+  const songCount = db.prepare('SELECT COUNT(*) as c FROM songs').get();
+  if (songCount.c > 0) return;
+
+  const jsonPath = path.join(__dirname, '..', '..', 'pump-phoenix.json');
+  if (!fs.existsSync(jsonPath)) {
+    console.warn('Song bootstrap skipped: pump-phoenix.json not found');
+    return;
+  }
+
+  try {
+    const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    const songs = Array.isArray(data?.songs) ? data.songs : [];
+    if (songs.length === 0) return;
+
+    const insertSong = db.prepare(`
+      INSERT INTO songs (title, artist, jacket_url, mode, level, bpm, song_key, flags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertAll = db.transaction((songList) => {
+      let inserted = 0;
+      for (const song of songList) {
+        const jacketUrl = song.jacket ? `/jackets/${song.jacket}` : '';
+        const flags = Array.isArray(song.flags) ? song.flags.join(',') : (song.flags || '');
+
+        for (const chart of (song.charts || [])) {
+          if ((chart.diffClass === 'S' || chart.diffClass === 'D') && chart.style === 'solo') {
+            const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
+            insertSong.run(
+              song.name || '',
+              song.artist || '',
+              jacketUrl,
+              mode,
+              chart.lvl,
+              song.bpm || '',
+              song.saIndex || '',
+              flags
+            );
+            inserted++;
+          }
+        }
+      }
+      return inserted;
+    });
+
+    const inserted = insertAll(songs);
+    if (inserted > 0) {
+      console.log(`Bootstrapped ${inserted} charts from pump-phoenix.json`);
+    }
+  } catch (err) {
+    console.error('Failed to bootstrap songs from pump-phoenix.json:', err.message);
+  }
+}
+
 function initializeDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tournaments (
@@ -678,6 +733,8 @@ function initializeDb() {
       PRIMARY KEY (user_id, snapshot_date)
     );
   `);
+
+  bootstrapSongsFromJsonIfEmpty();
 
   // Migration: backfill empty song flags from pump-phoenix.json
   const emptyFlagCount = db.prepare("SELECT COUNT(*) as c FROM songs WHERE flags = '' OR flags IS NULL").get();
