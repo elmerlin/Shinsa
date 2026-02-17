@@ -178,7 +178,7 @@ export default function FinalStandings({ players, matches, config }) {
 function PodiumCard({ entry, isChampion }) {
   const { rank, player } = entry;
   const medal = MEDAL_CONFIG[rank];
-  const flag = player ? getCountryFlag(player.nationality) : '';
+  const flag = player ? getCountryFlag(player.nationality) : null;
 
   return (
     <div className={`card text-center border ${medal.bg} ${isChampion ? 'pt-4 sm:pt-6' : 'mt-4 sm:mt-8'} pb-3 sm:pb-4`}>

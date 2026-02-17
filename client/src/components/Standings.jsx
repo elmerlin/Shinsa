@@ -144,7 +144,7 @@ export default function Standings({ players, matches, showFinal }) {
                         const playedSongs = m.played_songs || [];
                         const isP1 = m.player1_id === player.id;
                         const isGauntlet = m.match_type === 'gauntlet';
-                        const opponentFlag = opponent ? getCountryFlag(opponent.nationality) : '';
+                        const opponentFlag = opponent ? getCountryFlag(opponent.nationality) : null;
 
                         return (
                           <div key={m.id} className={`rounded-lg p-3 ${isWin ? 'bg-piu-green/5 border border-piu-green/20' : 'bg-red-500/5 border border-red-500/20'}`}>

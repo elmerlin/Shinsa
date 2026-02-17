@@ -13,6 +13,7 @@ const authRoutes = require('./routes/auth');
 const onlineDuelRoutes = require('./routes/onlineDuels');
 const parserRoutes = require('./routes/parser');
 const piugameRoutes = require('./routes/piugame');
+const socialRoutes = require('./routes/social');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,11 +46,15 @@ app.use('/api/auth', authRoutes);
 app.use('/api/online-duels', onlineDuelRoutes);
 app.use('/api/parser', parserRoutes);
 app.use('/api/piugame', piugameRoutes);
+app.use('/api/social', socialRoutes);
 
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
+
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
@@ -64,6 +69,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Pump Dojo Shinsa server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  console.log(`Pump Shinsa server running on port ${PORT}`);
 });
+// Allow long-running sync requests (5 minutes)
+server.timeout = 300000;

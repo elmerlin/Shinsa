@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'shinsa.db');
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'shinsa.db');
 
 // Shared singleton connection — reused across all requests
 const db = new Database(DB_PATH);
@@ -294,7 +294,10 @@ function initializeDb() {
       great INTEGER,
       good INTEGER,
       bad INTEGER,
-      miss INTEGER
+      miss INTEGER,
+      max_combo INTEGER DEFAULT 0,
+      kcal REAL DEFAULT 0,
+      plate TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS user_piugame_sync (
@@ -306,10 +309,78 @@ function initializeDb() {
       pumbility_value INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS user_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT DEFAULT '',
+      read INT DEFAULT 0,
+      link TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_follows (
+      follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (follower_id, following_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL DEFAULT '',
+      images TEXT DEFAULT '[]',
+      youtube_url TEXT DEFAULT '',
+      comments_disabled INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS post_pumps (
+      post_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (post_id, user_id),
+      FOREIGN KEY (post_id) REFERENCES user_posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS post_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (post_id) REFERENCES user_posts(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES post_comments(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS user_upscores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      upscores_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_follows_follower ON user_follows(follower_id);
+    CREATE INDEX IF NOT EXISTS idx_follows_following ON user_follows(following_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_user ON user_posts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_posts_created ON user_posts(created_at);
+    CREATE INDEX IF NOT EXISTS idx_post_pumps ON post_pumps(post_id);
+    CREATE INDEX IF NOT EXISTS idx_post_pumps_user ON post_pumps(post_id, user_id);
+    CREATE INDEX IF NOT EXISTS idx_post_comments ON post_comments(post_id);
+    CREATE INDEX IF NOT EXISTS idx_post_comments_parent ON post_comments(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_upscores_user ON user_upscores(user_id);
+    CREATE INDEX IF NOT EXISTS idx_upscores_created ON user_upscores(created_at);
+
     CREATE INDEX IF NOT EXISTS idx_pumbility_scores_user ON user_pumbility_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON user_notifications(user_id);
   `);
 
   // Migrations for players table - add user_id
@@ -394,12 +465,133 @@ function initializeDb() {
     db.exec("ALTER TABLE matches ADD COLUMN gauntlet_order INT DEFAULT 0");
   }
 
-  // Migrations for PIUGame recently played judgments
-  const recentPlayedColumns = db.prepare("PRAGMA table_info(user_recently_played)").all().map(c => c.name);
-  const recentPlayedMigrations = ['perfect', 'great', 'good', 'bad', 'miss'];
-  for (const col of recentPlayedMigrations) {
-    if (!recentPlayedColumns.includes(col)) {
-      db.exec(`ALTER TABLE user_recently_played ADD COLUMN ${col} INTEGER`);
+  // Migrations for recently played - add breakdown columns
+  const recentCols = db.prepare("PRAGMA table_info(user_recently_played)").all().map(c => c.name);
+  const recentMigrations = [
+    ['perfect', 'INT DEFAULT 0'],
+    ['great', 'INT DEFAULT 0'],
+    ['good', 'INT DEFAULT 0'],
+    ['bad', 'INT DEFAULT 0'],
+    ['miss', 'INT DEFAULT 0'],
+    ['max_combo', 'INT DEFAULT 0'],
+    ['kcal', 'REAL DEFAULT 0'],
+    ['plate', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of recentMigrations) {
+    if (!recentCols.includes(col)) {
+      db.exec(`ALTER TABLE user_recently_played ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  // Migrations for best scores - add background_url
+  const bestScoreCols = db.prepare("PRAGMA table_info(user_best_scores)").all().map(c => c.name);
+  if (!bestScoreCols.includes('background_url')) {
+    db.exec("ALTER TABLE user_best_scores ADD COLUMN background_url TEXT DEFAULT ''");
+  }
+
+  // Migrations for user_posts - add youtube_url and comments_disabled
+  const postCols = db.prepare("PRAGMA table_info(user_posts)").all().map(c => c.name);
+  if (!postCols.includes('youtube_url')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN youtube_url TEXT DEFAULT ''");
+  }
+  if (!postCols.includes('comments_disabled')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN comments_disabled INTEGER DEFAULT 0");
+  }
+  if (!postCols.includes('updated_at')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN updated_at TEXT DEFAULT NULL");
+  }
+
+  // Migrations for upscore interactions (pumps + comments)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS upscore_pumps (
+      upscore_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (upscore_id, user_id),
+      FOREIGN KEY (upscore_id) REFERENCES user_upscores(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS upscore_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      upscore_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (upscore_id) REFERENCES user_upscores(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES upscore_comments(id) ON DELETE CASCADE
+    );
+  `);
+
+  // New clears tables (first-time song clears)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_new_clears (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      score INTEGER NOT NULL,
+      grade TEXT DEFAULT '',
+      plate TEXT DEFAULT '',
+      background_url TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS new_clear_pumps (
+      clear_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (clear_id, user_id),
+      FOREIGN KEY (clear_id) REFERENCES user_new_clears(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS new_clear_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      clear_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (clear_id) REFERENCES user_new_clears(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES new_clear_comments(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_new_clears_user ON user_new_clears(user_id);
+    CREATE INDEX IF NOT EXISTS idx_new_clears_created ON user_new_clears(created_at);
+    CREATE INDEX IF NOT EXISTS idx_new_clear_pumps ON new_clear_pumps(clear_id);
+    CREATE INDEX IF NOT EXISTS idx_new_clear_comments ON new_clear_comments(clear_id);
+  `);
+
+  // Comment pumps table (pumps on any comment or reply)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comment_pumps (
+      comment_type TEXT NOT NULL,
+      comment_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (comment_type, comment_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_comment_pumps_comment ON comment_pumps(comment_type, comment_id);
+
+    CREATE TABLE IF NOT EXISTS follower_daily_snapshots (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      snapshot_date TEXT NOT NULL,
+      follower_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, snapshot_date)
+    );
+  `);
+
+  // Migrations for piugame sync - add progress tracking
+  const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);
+  const syncMigrations = [
+    ['sync_in_progress', "TEXT DEFAULT ''"],
+    ['sync_progress', 'INT DEFAULT 0'],
+    ['sync_total', 'INT DEFAULT 0'],
+  ];
+  for (const [col, type] of syncMigrations) {
+    if (!syncCols.includes(col)) {
+      db.exec(`ALTER TABLE user_piugame_sync ADD COLUMN ${col} ${type}`);
     }
   }
 }

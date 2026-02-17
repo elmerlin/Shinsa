@@ -324,6 +324,47 @@ router.post('/invite', (req, res) => {
   res.status(201).json({ id, success: true });
 });
 
+// ─── Notifications ──────────────────────────────────────
+
+// GET /api/auth/notifications — get all notifications + pending invitations count
+router.get('/notifications', requireAuth, (req, res) => {
+  const db = getDb();
+  const notifications = db.prepare(`
+    SELECT * FROM user_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
+  `).all(req.user.id);
+
+  const invitationCount = db.prepare(`
+    SELECT COUNT(*) as count FROM invitations WHERE user_id = ? AND status = 'pending'
+  `).get(req.user.id).count;
+
+  const unreadCount = db.prepare(`
+    SELECT COUNT(*) as count FROM user_notifications WHERE user_id = ? AND read = 0
+  `).get(req.user.id).count;
+
+  res.json({ notifications, invitation_count: invitationCount, unread_count: unreadCount });
+});
+
+// PUT /api/auth/notifications/:id/read — mark as read
+router.put('/notifications/:id/read', requireAuth, (req, res) => {
+  const db = getDb();
+  db.prepare('UPDATE user_notifications SET read = 1 WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  res.json({ success: true });
+});
+
+// PUT /api/auth/notifications/read-all — mark all as read
+router.put('/notifications/read-all', requireAuth, (req, res) => {
+  const db = getDb();
+  db.prepare('UPDATE user_notifications SET read = 1 WHERE user_id = ?').run(req.user.id);
+  res.json({ success: true });
+});
+
+// DELETE /api/auth/notifications/:id — delete a notification
+router.delete('/notifications/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  db.prepare('DELETE FROM user_notifications WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+  res.json({ success: true });
+});
+
 module.exports = router;
 module.exports.requireAuth = requireAuth;
 module.exports.optionalAuth = optionalAuth;

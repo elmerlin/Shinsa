@@ -1,6 +1,11 @@
 const axios = require('axios');
+const https = require('https');
 const { CookieJar } = require('tough-cookie');
 const cheerio = require('cheerio');
+
+// am-pass.net serves an incomplete certificate chain (missing intermediate CA certs).
+// Browsers fetch missing intermediates automatically, but Node.js does not.
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const AM_PASS_BASE = 'https://am-pass.net';
 const PIU_BASE = 'https://www.piugame.com';
@@ -99,12 +104,15 @@ async function requestWithRedirects(rawClient, jar, config) {
 }
 
 /**
- * Create an HTTP client with cookie jar support for cross-domain auth
+ * Create an HTTP client with cookie jar support for cross-domain auth.
+ * Handles redirects manually so cookies are captured at every hop
+ * (axios interceptors only fire for the final response, not intermediate redirects).
  */
 function createClient() {
   const jar = new CookieJar();
   const rawClient = axios.create({
     timeout: 30000,
+    httpsAgent,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -329,14 +337,27 @@ async function scrapePumbility(client) {
     });
   });
 
+  // Fallback: if we couldn't scrape the total, sum all score values
+  // Pumbility = sum of your top 50 highest rated scores
+  if (pumbilityValue === 0 && scores.length > 0) {
+    pumbilityValue = scores.reduce((sum, s) => sum + s.score, 0);
+  }
+
   return { pumbilityValue, scores };
+}
+
+/**
+ * Small delay helper to avoid hammering piugame.com
+ */
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
  * Scrape best scores page with pagination
  * Returns array of score objects
  */
-async function scrapeBestScores(client) {
+async function scrapeBestScores(client, onProgress) {
   const allScores = [];
 
   // First, fetch page 1 to determine total pages
@@ -347,30 +368,10 @@ async function scrapeBestScores(client) {
   // Check for empty state
   if ($first('div.no_con').length > 0) return [];
 
-  // Get total pages from pagination
-  let totalPages = 1;
-  const lastPageBtn = $first('i.xi.last').parent();
-  if (lastPageBtn.length) {
-    const onclick = lastPageBtn.attr('onclick') || '';
-    const pageMatch = onclick.match(/page=(\d+)/);
-    if (pageMatch) totalPages = parseInt(pageMatch[1], 10);
-  }
-  // Fallback: check board_paging buttons
-  if (totalPages === 1) {
-    $first('.board_paging button').each((_, btn) => {
-      const onclick = $first(btn).attr('onclick') || '';
-      const pageMatch = onclick.match(/page=(\d+)/);
-      if (pageMatch) {
-        const p = parseInt(pageMatch[1], 10);
-        if (p > totalPages) totalPages = p;
-      }
-    });
-  }
-
   // Parse scores from a loaded page
   function parseScoresFromPage($) {
     const scores = [];
-    $('ul.my_best_scoreList > li').each((_, li) => {
+    $('ul.my_best_scoreList > li, ul.my_best_scoreList.flex.wrap > li').each((_, li) => {
       const $li = $(li);
       if ($li.find('div.in').length === 0) return;
 
@@ -378,12 +379,13 @@ async function scrapeBestScores(client) {
       if (!songTitle) return;
 
       // Mode from background image of stepball container
-      const stepBallStyle = $li.find('div.stepBall_in').attr('style') || '';
+      const stepBallBg = $li.find('div.stepBall_in, div.stepBall_in.flex.vc.col.hc.wrap.bgfix.cont').first();
+      const stepBallStyle = stepBallBg.attr('style') || '';
       const modeMatch = stepBallStyle.match(/\/l_img\/stepball\/full\/([a-zA-Z])_bg\.png/);
       const mode = modeMatch ? (MODE_MAP[modeMatch[1].toLowerCase()] || 'Single') : 'Single';
 
       // Level
-      const level = parseLevelFromImages($, $li.find('div.numw'));
+      const level = parseLevelFromImages($, $li.find('div.numw, div.numw.flex.vc.hc'));
 
       // Score
       const score = parseScore($li.find('ul.list span.num').text());
@@ -396,7 +398,13 @@ async function scrapeBestScores(client) {
       const plateImg = $li.find('.etc_con .st1 img').first().attr('src') || '';
       const plate = parsePlateFromUrl(plateImg);
 
-      scores.push({ song_title: songTitle, mode, level, score, grade, plate });
+      // Background image (song jacket)
+      let bgUrl = '';
+      const bgStyle = $li.find('div.in.bgfix, div.re.bgfix, div.bgfix').first().attr('style') || '';
+      const bgMatch = bgStyle.match(/url\(['"]?([^'"]+)['"]?\)/);
+      if (bgMatch) bgUrl = bgMatch[1];
+
+      scores.push({ song_title: songTitle, mode, level, score, grade, plate, background_url: bgUrl });
     });
     return scores;
   }
@@ -404,19 +412,335 @@ async function scrapeBestScores(client) {
   // Parse first page
   allScores.push(...parseScoresFromPage($first));
 
-  // Fetch remaining pages
-  for (let page = 2; page <= totalPages; page++) {
+  // Determine total pages using multiple strategies
+  let totalPages = 1;
+
+  // Strategy 1: Get total count from header and calculate pages (15 per page)
+  const totalCountEl = $first('div.left.total_wrap > i.tt.t2, div.total_wrap i.tt.t2, div.total_wrap i.tt');
+  if (totalCountEl.length) {
+    const totalCount = parseInt(totalCountEl.first().text().replace(/,/g, '').trim(), 10) || 0;
+    if (totalCount > 0) {
+      totalPages = Math.ceil(totalCount / 15);
+    }
+  }
+
+  // Strategy 2: Check "last" page button
+  if (totalPages <= 1) {
+    const lastPageBtn = $first('i.xi.last').parent();
+    if (lastPageBtn.length) {
+      const onclick = lastPageBtn.attr('onclick') || lastPageBtn.attr('href') || '';
+      const pageMatch = onclick.match(/page=(\d+)/);
+      if (pageMatch) totalPages = parseInt(pageMatch[1], 10);
+    }
+  }
+
+  // Strategy 3: Check all pagination buttons/links for highest page number
+  if (totalPages <= 1) {
+    $first('.board_paging button, .board_paging a, .paging button, .paging a').each((_, el) => {
+      const onclick = $first(el).attr('onclick') || $first(el).attr('href') || '';
+      const pageMatch = onclick.match(/page=(\d+)/);
+      if (pageMatch) {
+        const p = parseInt(pageMatch[1], 10);
+        if (p > totalPages) totalPages = p;
+      }
+    });
+  }
+
+  // Strategy 4: If we got scores on page 1 but couldn't detect pagination, use incremental fetching
+  const useIncrementalFetch = totalPages <= 1 && allScores.length > 0;
+
+  // Cap to avoid runaway fetching
+  const maxPage = useIncrementalFetch ? 200 : Math.min(totalPages, 200);
+
+  console.log(`Best scores: page 1 returned ${allScores.length} scores, totalPages=${totalPages}, incremental=${useIncrementalFetch}, maxPage=${maxPage}`);
+
+  // Report initial progress
+  if (onProgress) onProgress(1, maxPage);
+
+  // Fetch remaining pages with small delay between requests
+  for (let page = 2; page <= maxPage; page++) {
     try {
+      await delay(300); // Be polite to piugame.com
       const res = await client.get(`${PIU_BASE}/my_page/my_best_score.php?page=${page}`);
       const $ = cheerio.load(res.data);
-      allScores.push(...parseScoresFromPage($));
+      const pageScores = parseScoresFromPage($);
+      if (pageScores.length === 0) break; // No more scores on this page
+      allScores.push(...pageScores);
+      // Report progress
+      if (onProgress) onProgress(page, maxPage);
+      if (page % 10 === 0) {
+        console.log(`Best scores: fetched page ${page}/${maxPage}, total so far: ${allScores.length}`);
+      }
     } catch (err) {
       console.error(`Failed to fetch best scores page ${page}:`, err.message);
       break;
     }
   }
 
+  console.log(`Best scores: completed with ${allScores.length} total scores`);
   return allScores;
+}
+
+/**
+ * Extract judgment breakdown (PERFECT, GREAT, GOOD, BAD, MISS) from a
+ * recently played list item using multiple selector strategies.
+ * PIUGame.com shows these as a 5-column grid within each card.
+ */
+function extractJudgmentBreakdown($, $li) {
+  let perfect = 0, great = 0, good = 0, bad = 0, miss = 0;
+  let found = false;
+
+  // Helper: assign judgment value by keyword
+  function assign(keyword, value) {
+    const kw = keyword.toLowerCase().replace(/[^a-z]/g, '');
+    if (kw.includes('perfect') && !kw.includes('game')) { perfect = value; found = true; }
+    else if (kw.includes('great')) { great = value; found = true; }
+    else if (kw === 'good' || kw.startsWith('good')) { good = value; found = true; }
+    else if (kw === 'bad' || kw.startsWith('bad')) { bad = value; found = true; }
+    else if (kw.includes('miss')) { miss = value; found = true; }
+  }
+
+  // Helper: extract numeric value near an element
+  function extractNearbyValue($el) {
+    let val = -1;
+    // Try next sibling
+    const nextEl = $el.next();
+    if (nextEl.length) {
+      const parsed = parseInt(nextEl.text().replace(/,/g, '').trim(), 10);
+      if (!isNaN(parsed)) val = parsed;
+    }
+    // Try element's own children (for cases like <p>PERFECT <span>1,367</span></p>)
+    if (val < 0) {
+      $el.children().each((_, child) => {
+        if (val >= 0) return;
+        const parsed = parseInt($(child).text().replace(/,/g, '').trim(), 10);
+        if (!isNaN(parsed)) val = parsed;
+      });
+    }
+    // Try parent's other children
+    if (val < 0) {
+      const parent = $el.parent();
+      parent.children().each((_, child) => {
+        if (val >= 0 || child === $el[0]) return;
+        const parsed = parseInt($(child).text().replace(/,/g, '').trim(), 10);
+        if (!isNaN(parsed)) val = parsed;
+      });
+    }
+    return val >= 0 ? val : 0;
+  }
+
+  // Strategy 1: Look for labeled containers with broad selectors
+  // including .etc_con which piugame uses for score details
+  const containerSelectors = [
+    'div.li_in.etc', 'div.etc_list', 'div.data_in',
+    'div.etc_wrap', 'div.li_in.st', 'div.score_detail',
+    'div.judge', 'div.detail', 'div.etc_con', 'div.etc_area',
+    'div.data_wrap', 'div.etc', 'ul.etc_list', 'ul.list',
+    'div.score_etc', 'div.judge_wrap',
+  ].join(', ');
+
+  const subItemSelectors = 'div.etc_in, div.data_con, div.data_il, div.judge_con, li, span.col, div.col';
+  const labelSelectors = 'p.tt, i.tt, span.tt, p.label, span.label, .tit, .t1, p.name, span.name';
+  const valueSelectors = 'p.dd, i.dd, i.tx, span.dd, span.num, .con, .t2, .v1, p.count, span.count, span.tx';
+
+  const container = $li.find(containerSelectors);
+  if (container.length) {
+    const subItems = container.find(subItemSelectors);
+    if (subItems.length >= 5) {
+      subItems.each((_, div) => {
+        const labelEl = $(div).find(labelSelectors).first();
+        const valEl = $(div).find(valueSelectors).first();
+        let label = (labelEl.text() || '').trim().toLowerCase();
+        // Fallback: if no dedicated label element, check for image with keyword in src
+        if (!label) {
+          const img = $(div).find('img').first();
+          const src = (img.attr('src') || '').toLowerCase();
+          if (src.includes('perfect')) label = 'perfect';
+          else if (src.includes('great')) label = 'great';
+          else if (src.includes('good')) label = 'good';
+          else if (src.includes('bad')) label = 'bad';
+          else if (src.includes('miss')) label = 'miss';
+        }
+        // Fallback: use the full text of the sub-item
+        if (!label) {
+          label = $(div).text().toLowerCase().replace(/[\d,]/g, '').trim();
+        }
+        const val = parseInt((valEl.text() || '').replace(/,/g, '').trim(), 10) || 0;
+        assign(label, val);
+      });
+    }
+  }
+
+  // Strategy 2: Search for text nodes containing judgment keywords anywhere
+  // in the list item, using flexible matching (includes instead of exact)
+  if (!found) {
+    const JUDGMENT_KEYWORDS = ['perfect', 'great', 'good', 'bad', 'miss'];
+    const allEls = $li.find('*');
+    const matchedLabels = {};
+
+    allEls.each((_, el) => {
+      const directText = $(el).contents().filter(function() {
+        return this.type === 'text';
+      }).text().replace(/\u00A0/g, ' ').trim().toLowerCase();
+
+      for (const kw of JUDGMENT_KEYWORDS) {
+        // Match exact keyword, or keyword with colon (e.g. "perfect:")
+        // Avoid matching compound words like "perfect game"
+        if (!matchedLabels[kw] && (
+          directText === kw ||
+          directText === kw + ':' ||
+          (directText.startsWith(kw) && directText.length <= kw.length + 2)
+        )) {
+          matchedLabels[kw] = extractNearbyValue($(el));
+          found = true;
+        }
+      }
+    });
+
+    if (found) {
+      perfect = matchedLabels.perfect || 0;
+      great = matchedLabels.great || 0;
+      good = matchedLabels.good || 0;
+      bad = matchedLabels.bad || 0;
+      miss = matchedLabels.miss || 0;
+    }
+  }
+
+  // Strategy 3: Image-based label detection
+  // piugame.com renders grades, plates, and modes as images — judgment labels may be images too
+  if (!found) {
+    const matchedFromImages = {};
+    const KEYWORDS = ['perfect', 'great', 'good', 'bad', 'miss'];
+
+    $li.find('img').each((_, img) => {
+      const src = ($(img).attr('src') || '').toLowerCase();
+      for (const kw of KEYWORDS) {
+        if (src.includes(kw) && !matchedFromImages[kw]) {
+          // Skip plate images (e.g. "perfect_game" in plate paths)
+          if (src.includes('/plate/') || src.includes('game')) continue;
+          matchedFromImages[kw] = extractNearbyValue($(img));
+          found = true;
+        }
+      }
+    });
+
+    if (found) {
+      perfect = matchedFromImages.perfect || 0;
+      great = matchedFromImages.great || 0;
+      good = matchedFromImages.good || 0;
+      bad = matchedFromImages.bad || 0;
+      miss = matchedFromImages.miss || 0;
+    }
+  }
+
+  // Strategy 4: Positional approach — find all numeric text elements
+  // beyond the main score. Breakdowns appear as 5 consecutive numbers
+  // in order: PERFECT, GREAT, GOOD, BAD, MISS
+  if (!found) {
+    const allValues = [];
+    // Broadened selectors to catch more element patterns
+    $li.find('i.tx, span.num, i.num, span.tx, p.num, span.dd, p.dd, i.dd').each((_, el) => {
+      const text = $(el).text().replace(/,/g, '').trim();
+      const num = parseInt(text, 10);
+      if (!isNaN(num)) allValues.push({ el, num, text });
+    });
+
+    // The first number is typically the score; the next 5 are breakdowns
+    if (allValues.length >= 6) {
+      [perfect, great, good, bad, miss] = allValues.slice(1, 6).map(v => v.num);
+      found = true;
+    } else if (allValues.length === 5) {
+      [perfect, great, good, bad, miss] = allValues.map(v => v.num);
+      found = true;
+    }
+  }
+
+  // Strategy 5: Look for any container with 5+ child elements that have numeric content
+  // (relaxed from exactly 5 to handle sections including MAX COMBO, KCAL, etc.)
+  if (!found) {
+    $li.find('div, ul').each((_, container) => {
+      if (found) return;
+      const children = $(container).children();
+      if (children.length >= 5 && children.length <= 10) {
+        const entries = [];
+        children.each((_, child) => {
+          const fullText = $(child).text().toLowerCase().replace(/,/g, '').trim();
+          // Get the deepest numeric text element
+          const numEl = $(child).find('i, span, p').last();
+          const numText = numEl.length ? numEl.text().replace(/,/g, '').trim() : '';
+          const n = parseInt(numText, 10);
+          // Check for image-based labels too
+          const imgSrc = ($(child).find('img').first().attr('src') || '').toLowerCase();
+          entries.push({ text: fullText, imgSrc, num: isNaN(n) ? null : n });
+        });
+
+        // If entries contain judgment keywords (as text or images), use labeled matching
+        const hasKeywords = entries.some(e =>
+          /\bperfect\b/.test(e.text) || /\bgreat\b/.test(e.text) ||
+          /\bgood\b/.test(e.text) || /\bbad\b/.test(e.text) || /\bmiss\b/.test(e.text) ||
+          e.imgSrc.includes('perfect') || e.imgSrc.includes('great') ||
+          e.imgSrc.includes('good') || e.imgSrc.includes('bad') || e.imgSrc.includes('miss')
+        );
+
+        if (hasKeywords) {
+          for (const e of entries) {
+            if (e.num !== null) {
+              const label = e.imgSrc.includes('perfect') || e.imgSrc.includes('great') ||
+                e.imgSrc.includes('good') || e.imgSrc.includes('bad') || e.imgSrc.includes('miss')
+                ? e.imgSrc : e.text;
+              assign(label, e.num);
+            }
+          }
+        } else if (children.length === 5) {
+          // Exactly 5 unlabeled children — assume positional order
+          const nums = entries.filter(e => e.num !== null);
+          if (nums.length === 5) {
+            [perfect, great, good, bad, miss] = nums.map(e => e.num);
+            found = true;
+          }
+        }
+      }
+    });
+  }
+
+  // Strategy 6: Raw HTML regex fallback — search the list item's HTML for
+  // keyword-number patterns. Avoids matching plate names like "PERFECT GAME"
+  if (!found) {
+    const html = $li.html() || '';
+    const htmlLower = html.toLowerCase();
+
+    // Only attempt if the HTML actually contains at least some judgment keywords
+    if (htmlLower.includes('perfect') || htmlLower.includes('great') || htmlLower.includes('miss')) {
+      const results = {};
+      // Match patterns like: >PERFECT</...> ... >1,367<
+      // or: perfect ... 1367 (with limited gap to avoid cross-entry matching)
+      const patterns = [
+        { kw: 'perfect', re: /(?:>|"|')perfect(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'great', re: /(?:>|"|')great(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'good', re: /(?:>|"|')good(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'bad', re: /(?:>|"|')bad(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'miss', re: /(?:>|"|')miss(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+      ];
+
+      for (const { kw, re } of patterns) {
+        const match = re.exec(html);
+        if (match) {
+          results[kw] = parseInt(match[1].replace(/,/g, ''), 10) || 0;
+          found = true;
+        }
+      }
+
+      if (found) {
+        perfect = results.perfect || 0;
+        great = results.great || 0;
+        good = results.good || 0;
+        bad = results.bad || 0;
+        miss = results.miss || 0;
+      }
+    }
+  }
+
+  return { perfect, great, good, bad, miss, found };
 }
 
 /**
@@ -462,19 +786,34 @@ async function scrapeRecentlyPlayed(client) {
     const datePlayed = $li.find('p.recently_date_tt').text().trim();
     const judgments = parseJudgmentsFromRecentlyPlayedItem($, $li);
 
+    // Plate (e.g. MARVELOUS GAME, PERFECT GAME, etc.)
+    const plateImg = $li.find('.etc_con .st1 img, div.plate img').first().attr('src') || '';
+    const plate = parsePlateFromUrl(plateImg);
+
+    // Judgment breakdown (PERFECT, GREAT, GOOD, BAD, MISS)
+    const breakdown = extractJudgmentBreakdown($, $li);
+    const perfect = judgments.perfect ?? breakdown.perfect ?? 0;
+    const great = judgments.great ?? breakdown.great ?? 0;
+    const good = judgments.good ?? breakdown.good ?? 0;
+    const bad = judgments.bad ?? breakdown.bad ?? 0;
+    const miss = judgments.miss ?? breakdown.miss ?? 0;
+
     plays.push({
       song_title: songTitle,
       mode,
       level,
       score,
       grade,
+      plate,
       background_url: bgUrl,
       date_played: datePlayed,
-      perfect: judgments.perfect,
-      great: judgments.great,
-      good: judgments.good,
-      bad: judgments.bad,
-      miss: judgments.miss,
+      perfect,
+      great,
+      good,
+      bad,
+      miss,
+      max_combo: 0,
+      kcal: 0,
     });
   });
 

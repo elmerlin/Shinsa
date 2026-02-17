@@ -1,6 +1,44 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { getDb } = require('../db/schema');
+
+// Cache the jacket map in memory (loaded once from pump-phoenix.json)
+let cachedJacketMap = null;
+
+function loadJacketMap() {
+  if (cachedJacketMap) return cachedJacketMap;
+  const jsonPath = path.join(__dirname, '..', '..', 'pump-phoenix.json');
+  if (!fs.existsSync(jsonPath)) return {};
+  const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+  const map = {};
+  for (const song of data.songs) {
+    if (!song.jacket) continue;
+    const jacketUrl = '/jackets/' + song.jacket;
+    const name = song.name || '';
+    // Normalize: lowercase, collapse whitespace, trim
+    const norm = name.toLowerCase().replace(/\s+/g, ' ').trim();
+    // Store by normalized name
+    if (!map[norm]) map[norm] = jacketUrl;
+    // Also store by name with mode|level for each chart
+    for (const chart of (song.charts || [])) {
+      if (chart.diffClass === 'S' || chart.diffClass === 'D') {
+        const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
+        const key = `${norm}|${mode}|${chart.lvl}`;
+        if (!map[key]) map[key] = jacketUrl;
+      }
+    }
+  }
+  cachedJacketMap = map;
+  return map;
+}
+
+// GET /api/songs/jacket-map — return song name → local jacket URL mapping
+router.get('/jacket-map', (req, res) => {
+  const map = loadJacketMap();
+  res.json(map);
+});
 
 // GET all songs (with optional filters)
 router.get('/', (req, res) => {

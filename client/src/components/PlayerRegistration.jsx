@@ -218,9 +218,20 @@ export const COUNTRIES = [
 const COUNTRY_MAP = {};
 COUNTRIES.forEach(c => { if (c.code) COUNTRY_MAP[c.code] = c; });
 
-export function getCountryFlag(code) {
-  if (!code) return '';
-  return COUNTRY_MAP[code]?.flag || '';
+export function getCountryFlag(code, className) {
+  if (!code) return null;
+  const country = COUNTRY_MAP[code];
+  if (!country) return null;
+  // Emoji flags on mobile (renders natively on iOS/Android), CDN images on desktop (Windows doesn't render flag emojis)
+  const sizeClass = className
+    ? className.replace(/\binline-block\b\s*/g, '').trim()
+    : "h-[1.1em] align-middle";
+  return (
+    <>
+      <span className="sm:hidden">{country.flag}</span>
+      <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={country.name} className={`hidden sm:inline-block ${sizeClass}`} draggable={false} />
+    </>
+  );
 }
 
 export const skillColors = {

@@ -162,14 +162,20 @@ router.post('/sync/pumbility', requireAuth, async (req, res) => {
   }
 });
 
-// ─── Sync: Best Scores ─────────────────────────────────
+// ─── Sync: Best Scores (background) ─────────────────────
 
-// POST /api/piugame/sync/best-scores — full import (rate-limited to once per day)
+// POST /api/piugame/sync/best-scores — starts background import, returns immediately
 router.post('/sync/best-scores', requireAuth, async (req, res) => {
   const db = getDb();
+  const userId = req.user.id;
 
-  // Check rate limit (once per day) unless this is first import
-  const sync = db.prepare('SELECT * FROM user_piugame_sync WHERE user_id = ?').get(req.user.id);
+  // Check if already in progress
+  const sync = db.prepare('SELECT * FROM user_piugame_sync WHERE user_id = ?').get(userId);
+  if (sync && sync.sync_in_progress === 'best-scores') {
+    return res.json({ started: true, already_running: true, progress: sync.sync_progress, total: sync.sync_total });
+  }
+
+  // Check rate limit (once per day) unless first import
   if (sync && sync.best_scores_imported && sync.last_best_scores_sync) {
     const lastSync = new Date(sync.last_best_scores_sync + 'Z');
     const hoursSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
@@ -181,36 +187,114 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
     }
   }
 
-  try {
-    const client = await loginWithStoredCredentials(req.user.id);
-    const scores = await scrapeBestScores(client);
+  // Mark as in progress and respond immediately
+  db.prepare(`
+    UPDATE user_piugame_sync SET sync_in_progress = 'best-scores', sync_progress = 0, sync_total = 0 WHERE user_id = ?
+  `).run(userId);
 
-    const insertOrUpdate = db.prepare(`
-      INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
-        score = MAX(excluded.score, user_best_scores.score),
-        grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
-        plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END
-    `);
+  res.json({ started: true });
 
-    const txn = db.transaction(() => {
-      // On full import, clear and re-insert to reflect piugame's state
-      db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(req.user.id);
-      for (const s of scores) {
-        insertOrUpdate.run(req.user.id, s.song_title, s.mode, s.level, s.score, s.grade, s.plate);
+  // Run in background
+  (async () => {
+    try {
+      const client = await loginWithStoredCredentials(userId);
+      const scores = await scrapeBestScores(client, (progress, total) => {
+        // Update progress in DB so client can poll
+        db.prepare('UPDATE user_piugame_sync SET sync_progress = ?, sync_total = ? WHERE user_id = ?')
+          .run(progress, total, userId);
+      });
+
+      const insertOrUpdate = db.prepare(`
+        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, background_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
+          score = MAX(excluded.score, user_best_scores.score),
+          grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
+          plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END,
+          background_url = CASE WHEN excluded.background_url != '' THEN excluded.background_url ELSE user_best_scores.background_url END
+      `);
+
+      // Capture old scores for upscore tracking before replacing
+      const oldScores = {};
+      const existingScores = db.prepare('SELECT song_title, mode, level, score, grade FROM user_best_scores WHERE user_id = ?').all(userId);
+      for (const s of existingScores) {
+        oldScores[`${s.song_title}|${s.mode}|${s.level}`] = { score: s.score, grade: s.grade };
       }
-      db.prepare(`
-        UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1 WHERE user_id = ?
-      `).run(req.user.id);
-    });
-    txn();
 
-    res.json({ success: true, scores_count: scores.length });
-  } catch (err) {
-    console.error('Best scores sync error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+      const txn = db.transaction(() => {
+        db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(userId);
+        for (const s of scores) {
+          insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate, s.background_url || '');
+        }
+
+        // Track upscores and new clears
+        const upscores = [];
+        const newClears = [];
+        for (const s of scores) {
+          const key = `${s.song_title}|${s.mode}|${s.level}`;
+          const old = oldScores[key];
+          if (old && s.score > old.score) {
+            upscores.push({
+              song_title: s.song_title, mode: s.mode, level: s.level,
+              old_score: old.score, new_score: s.score,
+              old_grade: old.grade, new_grade: s.grade,
+              background_url: s.background_url || '',
+            });
+          } else if (!old && s.score > 0) {
+            newClears.push(s);
+          }
+        }
+        if (upscores.length > 0) {
+          db.prepare(`
+            INSERT INTO user_upscores (user_id, upscores_json, created_at)
+            VALUES (?, ?, datetime('now'))
+          `).run(userId, JSON.stringify(upscores));
+        }
+        // Save new clears
+        const insertClear = db.prepare(`
+          INSERT INTO user_new_clears (user_id, song_title, mode, level, score, grade, plate, background_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const s of newClears) {
+          insertClear.run(userId, s.song_title, s.mode, s.level, s.score, s.grade || '', s.plate || '', s.background_url || '');
+        }
+        db.prepare(`
+          UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
+          sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
+        `).run(userId);
+      });
+      txn();
+
+      // Create notification
+      db.prepare(`
+        INSERT INTO user_notifications (user_id, type, title, message, link)
+        VALUES (?, 'sync_complete', 'Best Scores Synced', ?, ?)
+      `).run(userId, `${scores.length} scores imported successfully!`, `/profile/${userId}`);
+
+      console.log(`Background best scores sync complete for ${userId}: ${scores.length} scores`);
+    } catch (err) {
+      console.error('Background best scores sync error:', err.message);
+      db.prepare(`
+        UPDATE user_piugame_sync SET sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
+      `).run(userId);
+      db.prepare(`
+        INSERT INTO user_notifications (user_id, type, title, message)
+        VALUES (?, 'sync_error', 'Best Scores Sync Failed', ?)
+      `).run(userId, err.message);
+    }
+  })();
+});
+
+// GET /api/piugame/sync/progress — poll sync progress
+router.get('/sync/progress', requireAuth, (req, res) => {
+  const db = getDb();
+  const sync = db.prepare('SELECT sync_in_progress, sync_progress, sync_total FROM user_piugame_sync WHERE user_id = ?')
+    .get(req.user.id);
+  res.json({
+    in_progress: sync?.sync_in_progress || '',
+    progress: sync?.sync_progress || 0,
+    total: sync?.sync_total || 0,
+  });
 });
 
 // ─── Sync: Recently Played ─────────────────────────────
@@ -223,9 +307,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     const db = getDb();
 
     const insertRecent = db.prepare(`
-      INSERT INTO user_recently_played
-      (user_id, song_title, mode, level, score, grade, background_url, date_played, perfect, great, good, bad, miss)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO user_recently_played (user_id, song_title, mode, level, score, grade, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     // Also update best scores if this play is better
@@ -238,22 +321,35 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     `);
 
     let updatedCount = 0;
+    const upscoresFromRecent = [];
 
     const txn = db.transaction(() => {
       // Clear old recently played and replace
       db.prepare('DELETE FROM user_recently_played WHERE user_id = ?').run(req.user.id);
       for (const p of plays) {
-        insertRecent.run(
-          req.user.id, p.song_title, p.mode, p.level, p.score, p.grade,
-          p.background_url, p.date_played, p.perfect, p.great, p.good, p.bad, p.miss
-        );
+        insertRecent.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade, p.background_url, p.date_played,
+          p.perfect || 0, p.great || 0, p.good || 0, p.bad || 0, p.miss || 0, p.max_combo || 0, p.kcal || 0, p.plate || '');
 
         // Only update best scores if this was a real play (not stage break)
         if (p.score > 0) {
           const existing = db.prepare(
-            'SELECT score FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
+            'SELECT score, grade FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
           ).get(req.user.id, p.song_title, p.mode, p.level);
           if (!existing || p.score > existing.score) {
+            if (existing && p.score > existing.score) {
+              upscoresFromRecent.push({
+                song_title: p.song_title, mode: p.mode, level: p.level,
+                old_score: existing.score, new_score: p.score,
+                old_grade: existing.grade || '', new_grade: p.grade || '',
+                background_url: p.background_url || '',
+              });
+            } else if (!existing) {
+              // New clear - first time playing this song
+              db.prepare(`
+                INSERT INTO user_new_clears (user_id, song_title, mode, level, score, grade, plate, background_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade || '', p.plate || '', p.background_url || '');
+            }
             updateBest.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade);
             updatedCount++;
           }
@@ -262,6 +358,14 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       db.prepare(`
         UPDATE user_piugame_sync SET last_recently_played_sync = datetime('now') WHERE user_id = ?
       `).run(req.user.id);
+
+      // Track upscores from recently played
+      if (upscoresFromRecent.length > 0) {
+        db.prepare(`
+          INSERT INTO user_upscores (user_id, upscores_json, created_at)
+          VALUES (?, ?, datetime('now'))
+        `).run(req.user.id, JSON.stringify(upscoresFromRecent));
+      }
     });
     txn();
 
@@ -314,7 +418,7 @@ router.get('/best-scores/:userId', (req, res) => {
 router.get('/recently-played/:userId', (req, res) => {
   const db = getDb();
   const plays = db.prepare(
-    'SELECT * FROM user_recently_played WHERE user_id = ? ORDER BY id DESC'
+    'SELECT * FROM user_recently_played WHERE user_id = ? ORDER BY id ASC'
   ).all(req.params.userId);
   const sync = db.prepare('SELECT last_recently_played_sync FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
   res.json({
@@ -328,9 +432,22 @@ router.get('/sync-status/:userId', (req, res) => {
   const db = getDb();
   const sync = db.prepare('SELECT * FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
   const hasCreds = !!db.prepare('SELECT 1 FROM user_piugame_credentials WHERE user_id = ?').get(req.params.userId);
+
+  // Highest clears for Singles and Doubles (from best scores where score > 0)
+  let highest_single = null;
+  let highest_double = null;
+  try {
+    const hs = db.prepare("SELECT MAX(level) as max_level FROM user_best_scores WHERE user_id = ? AND mode = 'Single' AND score > 0").get(req.params.userId);
+    highest_single = hs?.max_level || null;
+    const hd = db.prepare("SELECT MAX(level) as max_level FROM user_best_scores WHERE user_id = ? AND mode = 'Double' AND score > 0").get(req.params.userId);
+    highest_double = hd?.max_level || null;
+  } catch {}
+
   res.json({
     linked: hasCreds,
-    ...(sync || { best_scores_imported: 0, pumbility_value: 0, last_best_scores_sync: null, last_pumbility_sync: null, last_recently_played_sync: null }),
+    highest_single,
+    highest_double,
+    ...(sync || { best_scores_imported: 0, pumbility_value: 0, last_best_scores_sync: null, last_pumbility_sync: null, last_recently_played_sync: null, sync_in_progress: '', sync_progress: 0, sync_total: 0 }),
   });
 });
 

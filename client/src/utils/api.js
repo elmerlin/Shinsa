@@ -24,10 +24,10 @@ async function request(url, options = {}) {
   }
 }
 
-// Longer timeout for scraping operations (120s)
+// Longer timeout for scraping operations (5 min for multi-page best scores)
 async function longRequest(url, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120000);
+  const timeout = setTimeout(() => controller.abort(), 300000);
   try {
     const res = await fetch(`${API_BASE}${url}`, {
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), ...options.headers },
@@ -87,6 +87,7 @@ export const getSongs = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs${qs ? `?${qs}` : ''}`);
 };
+export const getJacketMap = () => request('/songs/jacket-map');
 
 // Duels
 export const getDuels = () => request('/duels');
@@ -139,6 +140,85 @@ export const getPiugamePumbility = (userId) => request(`/piugame/pumbility/${use
 export const getPiugameBestScores = (userId, mode) => request(`/piugame/best-scores/${userId}${mode ? `?mode=${mode}` : ''}`);
 export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-played/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
+export const getSyncProgress = () => request('/piugame/sync/progress');
+
+// Notifications
+export const getNotifications = () => request('/auth/notifications');
+export const markNotificationRead = (id) => request(`/auth/notifications/${id}/read`, { method: 'PUT' });
+export const markAllNotificationsRead = () => request('/auth/notifications/read-all', { method: 'PUT' });
+export const deleteNotification = (id) => request(`/auth/notifications/${id}`, { method: 'DELETE' });
+
+// Social — Follows
+export const followUser = (userId) => request(`/social/follow/${userId}`, { method: 'POST' });
+export const unfollowUser = (userId) => request(`/social/follow/${userId}`, { method: 'DELETE' });
+export const getFollowing = (userId) => request(`/social/following/${userId}`);
+export const getFollowingIds = async (userId) => {
+  const list = await request(`/social/following/${userId}`);
+  return list.map(u => u.id);
+};
+export const getFollowers = (userId) => request(`/social/followers/${userId}`);
+export const getFollowStatus = (userId) => request(`/social/follow-status/${userId}`);
+export const getSocialCounts = (userId) => request(`/social/counts/${userId}`);
+
+// Social — Posts
+export async function createPost(content, imageFiles, youtubeUrl, commentsDisabled) {
+  const formData = new FormData();
+  formData.append('content', content);
+  if (youtubeUrl) formData.append('youtube_url', youtubeUrl);
+  if (commentsDisabled) formData.append('comments_disabled', 'true');
+  if (imageFiles) {
+    for (const f of imageFiles) {
+      formData.append('images', f);
+    }
+  }
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/social/posts`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to create post');
+  }
+  return res.json();
+}
+export const getUserPosts = (userId, page) => request(`/social/posts/user/${userId}?page=${page || 1}`);
+export const editPost = (id, data) => request(`/social/posts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deletePost = (id) => request(`/social/posts/${id}`, { method: 'DELETE' });
+
+// Social — Post Pumps
+export const pumpPost = (id) => request(`/social/posts/${id}/pump`, { method: 'POST' });
+
+// Social — Post Comments
+export const getPostComments = (postId) => request(`/social/posts/${postId}/comments`);
+export const addPostComment = (postId, content, parentId) => request(`/social/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deletePostComment = (id) => request(`/social/posts/comments/${id}`, { method: 'DELETE' });
+export const togglePostComments = (postId) => request(`/social/posts/${postId}/comments-toggle`, { method: 'PATCH' });
+
+// Social — Upscore Interactions
+export const pumpUpscore = (id) => request(`/social/upscores/${id}/pump`, { method: 'POST' });
+export const getUpscoreComments = (upscoreId) => request(`/social/upscores/${upscoreId}/comments`);
+export const addUpscoreComment = (upscoreId, content, parentId) => request(`/social/upscores/${upscoreId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deleteUpscoreComment = (id) => request(`/social/upscores/comments/${id}`, { method: 'DELETE' });
+
+// Social — New Clear Interactions
+export const pumpNewClear = (id) => request(`/social/clears/${id}/pump`, { method: 'POST' });
+export const getNewClearComments = (clearId) => request(`/social/clears/${clearId}/comments`);
+export const addNewClearComment = (clearId, content, parentId) => request(`/social/clears/${clearId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deleteNewClearComment = (id) => request(`/social/clears/comments/${id}`, { method: 'DELETE' });
+
+// Social — Comment Pumps
+export const pumpComment = (type, commentId) => request(`/social/comments/${type}/${commentId}/pump`, { method: 'POST' });
+
+// Social — Individual Item Views
+export const getPost = (id) => request(`/social/posts/${id}`);
+export const getUpscore = (id) => request(`/social/upscores/${id}`);
+export const getNewClear = (id) => request(`/social/clears/${id}`);
+
+// Social — Feed
+export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);
+export const getRecentActivity = () => request('/social/recent-activity');
 
 // Parser
 export async function parseScorePhoto(file) {

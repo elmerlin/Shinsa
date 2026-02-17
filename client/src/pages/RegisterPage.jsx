@@ -60,12 +60,6 @@ export default function RegisterPage() {
       <h1 className="text-3xl font-display font-bold tracking-wider text-center mb-6">REGISTER</h1>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 text-sm text-red-400">
-            {error}
-          </div>
-        )}
-
         {/* Avatar */}
         <AvatarPicker
           value={form.avatar}
@@ -241,6 +235,12 @@ export default function RegisterPage() {
                 </span>
               )}
             </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 text-sm text-red-400">
+            {error}
           </div>
         )}
 

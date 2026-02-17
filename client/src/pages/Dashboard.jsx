@@ -1,8 +1,36 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
+import { renderFormattedText } from '../utils/formatText';
+
+function timeAgo(dateStr) {
+  const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
+  const now = new Date();
+  const seconds = Math.floor((now - date) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
+
+const ACTIVITY_ICONS = {
+  new_user: { icon: '👤', color: 'text-piu-accent' },
+  upscore: { icon: '📈', color: 'text-piu-green' },
+  new_clear: { icon: '🎯', color: 'text-sky-400' },
+  new_post: { icon: '📝', color: 'text-purple-400' },
+  new_tournament: { icon: '🏆', color: 'text-piu-gold' },
+  new_duel: { icon: '⚔️', color: 'text-red-400' },
+  new_online_duel: { icon: '🌐', color: 'text-blue-400' },
+  tournament_win: { icon: '🥇', color: 'text-piu-gold' },
+  duel_win: { icon: '🏅', color: 'text-amber-400' },
+  online_duel_win: { icon: '🏅', color: 'text-blue-400' },
+};
 
 const PHASE_LABELS = {
   SETUP: 'Setup',
@@ -20,6 +48,7 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
 
   useEffect(() => {
     // Fire all requests independently — page renders immediately,
@@ -28,6 +57,7 @@ export default function Dashboard() {
     getDuels().then(setDuels).catch(() => {});
     getOnlineDuels().then(setOnlineDuels).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
+    getRecentActivity().then(setRecentActivity).catch(() => {});
   }, []);
 
   const handleSearch = useCallback(async (q) => {
@@ -204,15 +234,13 @@ export default function Dashboard() {
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="mb-6">
         <h1 className="text-4xl font-display font-bold tracking-wider">
-          PUMP DOJO
+          <span className="text-piu-gold">PUMP</span> SHINSA
         </h1>
         <div className="flex flex-wrap gap-2 mt-2">
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Round Robin</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Gauntlets</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Offline Duels</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Online Duels</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Random Song Draws</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Vetoes</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Social</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Score Tracking</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Competitive Matching</span>
+          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Communities</span>
         </div>
       </div>
 
@@ -235,37 +263,36 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="mb-6">
-        <div className="relative">
-          <input
-            type="text"
-            className="input-field w-full pl-10"
-            placeholder="Search tournaments, locations, players..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          {searching && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">Searching...</span>
-          )}
-        </div>
-        {searchResults !== null && (
-          <div className="flex items-center justify-between mt-2">
-            <p className="text-xs text-gray-500">
-              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
-            </p>
-            <button
-              onClick={() => { setSearchQuery(''); setSearchResults(null); }}
-              className="text-xs text-piu-accent hover:underline"
-            >
-              Clear search
-            </button>
+      {/* Recent Activity — top of page */}
+      {recentActivity.length > 0 && searchResults === null && (
+        <div className="mb-8">
+          <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">RECENT ACTIVITY</h2>
+          <div className="card divide-y divide-piu-border/20">
+            {recentActivity.slice(0, 15).map((a, i) => {
+              const ai = ACTIVITY_ICONS[a.type] || { icon: '•', color: 'text-gray-400' };
+              return (
+                <Link
+                  key={i}
+                  to={a.link}
+                  className="flex items-center gap-3 py-2.5 px-1 hover:bg-piu-dark/30 transition-colors rounded"
+                >
+                  <span className="text-base shrink-0 w-6 text-center">{ai.icon}</span>
+                  {a.avatar && (
+                    <img src={getAvatarUrl(a.avatar)} alt="" className="w-6 h-6 rounded-full object-cover border border-piu-border shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-200 truncate">
+                      {a.nationality && <span className="mr-1">{getCountryFlag(a.nationality)}</span>}
+                      {renderFormattedText(a.message)}
+                    </p>
+                  </div>
+                  <span className="text-[10px] text-gray-600 shrink-0">{timeAgo(a.created_at)}</span>
+                </Link>
+              );
+            })}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Online Duels Section */}
       {onlineDuels.length > 0 && searchResults === null && (
@@ -344,14 +371,11 @@ export default function Dashboard() {
           <div className="grid gap-3">
             {duels.map(d => <DuelCard key={d.id} d={d} />)}
           </div>
-          <Link to="/duel/new" className="btn-secondary w-full mt-3 text-center block text-sm">
-            + New Duel
-          </Link>
         </div>
       )}
 
       {/* Tournaments Section */}
-      <div>
+      <div className="mb-6">
         <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">TOURNAMENTS</h2>
         {displayTournaments.length === 0 ? (
           searchResults !== null ? (
@@ -371,9 +395,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Create buttons */}
+      {/* Create buttons + Search — below tournaments */}
       {searchResults === null && (
-        <div className="grid grid-cols-3 gap-3 mt-6">
+        <div className="grid grid-cols-3 gap-3 mb-6">
           <Link to="/tournament/new" className="btn-primary text-center text-sm block">
             + Tournament
           </Link>
@@ -385,6 +409,38 @@ export default function Dashboard() {
           </Link>
         </div>
       )}
+
+      {/* Tournament Search */}
+      <div className="mb-6">
+        <div className="relative">
+          <input
+            type="text"
+            className="input-field w-full pl-10"
+            placeholder="Search tournaments, locations, players..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {searching && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">Searching...</span>
+          )}
+        </div>
+        {searchResults !== null && (
+          <div className="flex items-center justify-between mt-2">
+            <p className="text-xs text-gray-500">
+              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
+            </p>
+            <button
+              onClick={() => { setSearchQuery(''); setSearchResults(null); }}
+              className="text-xs text-piu-accent hover:underline"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Notice Modal */}
       {selectedNotice && (

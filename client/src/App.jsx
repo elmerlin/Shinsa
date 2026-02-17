@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
+import { searchUsers } from './utils/api';
+import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
 import TournamentSetup from './pages/TournamentSetup';
 import TournamentView from './pages/TournamentView';
@@ -15,11 +18,276 @@ import ProfilePage from './pages/ProfilePage';
 import MyAccountPage from './pages/MyAccountPage';
 import OnlineDuelSetup from './pages/OnlineDuelSetup';
 import OnlineDuelRoom from './pages/OnlineDuelRoom';
+import FeedPage from './pages/FeedPage';
+import PostsPage from './pages/PostsPage';
+import { SinglePostPage, SingleUpscorePage, SingleClearPage } from './pages/SingleItemPage';
+
+function NotificationBell() {
+  const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative p-1.5 text-gray-400 hover:text-white transition-colors"
+        aria-label="Notifications"
+      >
+        {/* Bell icon */}
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        {totalBadge > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+            {totalBadge > 99 ? '99+' : totalBadge}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 max-h-96 overflow-y-auto bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-piu-border/50">
+            <span className="font-display font-bold text-xs text-gray-400">NOTIFICATIONS</span>
+            {unreadCount > 0 && (
+              <button onClick={markAllRead} className="text-[10px] text-piu-accent hover:underline">Mark all read</button>
+            )}
+          </div>
+
+          {invitationCount > 0 && (
+            <Link
+              to="/account"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-2.5 bg-piu-accent/10 hover:bg-piu-accent/20 transition-colors border-b border-piu-border/30"
+            >
+              <span className="text-piu-accent text-sm">&#9993;</span>
+              <span className="text-sm font-display font-bold text-piu-accent">
+                {invitationCount} pending invitation{invitationCount > 1 ? 's' : ''}
+              </span>
+            </Link>
+          )}
+
+          {notifications.length === 0 && invitationCount === 0 && (
+            <p className="text-center text-gray-500 text-xs py-6">No notifications</p>
+          )}
+
+          {notifications.map(n => (
+            <div
+              key={n.id}
+              className={`flex items-start gap-2 px-3 py-2.5 border-b border-piu-border/20 hover:bg-piu-dark/50 transition-colors cursor-pointer ${!n.read ? 'bg-piu-dark/30' : ''}`}
+              onClick={() => {
+                if (!n.read) markRead(n.id);
+                if (n.link) { navigate(n.link); setOpen(false); }
+              }}
+            >
+              <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${!n.read ? 'bg-piu-accent' : 'bg-transparent'}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-display font-bold truncate">{n.title}</p>
+                {n.message && <p className="text-[10px] text-gray-500 truncate">{n.message}</p>}
+                <p className="text-[10px] text-gray-600 mt-0.5">{new Date(n.created_at + 'Z').toLocaleString()}</p>
+              </div>
+              <button
+                onClick={e => { e.stopPropagation(); dismiss(n.id); }}
+                className="text-gray-600 hover:text-red-400 text-xs shrink-0"
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserSearch() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const navigate = useNavigate();
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleChange = (val) => {
+    setQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (val.trim().length < 1) { setResults([]); setOpen(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const users = await searchUsers(val.trim());
+        setResults(users);
+        setOpen(users.length > 0);
+      } catch { setResults([]); }
+    }, 250);
+  };
+
+  const goToUser = (userId) => {
+    setQuery('');
+    setResults([]);
+    setOpen(false);
+    navigate(`/profile/${userId}`);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="relative">
+        <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          value={query}
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Search players..."
+          className="w-28 sm:w-40 bg-piu-dark border border-piu-border rounded-lg text-xs py-1.5 pl-7 pr-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-piu-accent/50 transition-colors"
+        />
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute right-0 top-full mt-1 w-64 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
+          {results.map(u => {
+            const flag = getCountryFlag(u.nationality);
+            return (
+              <button
+                key={u.id}
+                onClick={() => goToUser(u.id)}
+                className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-piu-dark/50 transition-colors text-left"
+              >
+                {u.avatar ? (
+                  <img src={getAvatarUrl(u.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+                    {(u.username || '?')[0].toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-display font-bold truncate">
+                    {flag && <span className="mr-1">{flag}</span>}
+                    {u.username}
+                  </p>
+                  {u.skill_title && <p className="text-[10px] text-gray-500 truncate">{u.skill_title}</p>}
+                </div>
+                {u.pumbility > 0 && (
+                  <span className="text-[10px] font-mono text-piu-accent">{u.pumbility}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserMenu() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  if (!user) return null;
+
+  return (
+    <div className="relative" ref={ref}>
+      {/* Profile pic/name → navigates to public profile */}
+      <div className="flex items-center gap-2">
+        <Link
+          to={`/profile/${user.id}`}
+          className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
+          {user.avatar ? (
+            <img src={getAvatarUrl(user.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border" />
+          ) : (
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+              {user.username[0].toUpperCase()}
+            </div>
+          )}
+          <span className="text-sm font-display text-gray-300 hidden sm:inline">{user.username}</span>
+        </Link>
+
+        {/* Hamburger menu */}
+        <button
+          onClick={() => setOpen(!open)}
+          className="p-1 text-gray-400 hover:text-white transition-colors"
+          aria-label="Menu"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-48 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 py-1">
+          <Link
+            to={`/profile/${user.id}`}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            My Profile
+          </Link>
+          <Link
+            to="/posts"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Posts
+          </Link>
+          <Link
+            to="/account"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Profile Settings
+          </Link>
+          <div className="border-t border-piu-border/30 my-1" />
+          <button
+            onClick={() => { logout(); navigate('/'); setOpen(false); }}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display text-red-400 hover:bg-piu-dark/50 transition-colors w-full text-left"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const isHome = location.pathname === '/';
 
   return (
@@ -29,49 +297,38 @@ export default function App() {
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 sm:gap-3 group">
             <img
-              src="/pump-dojo-logo.svg"
-              alt="Pump Dojo"
+              src="/pump-shinsa-logo.svg"
+              alt="Pump Shinsa"
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg shadow-lg shadow-piu-accent/20 group-hover:shadow-piu-accent/40 transition-shadow"
             />
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-display font-bold text-lg sm:text-xl tracking-wider text-piu-gold group-hover:text-piu-accent transition-colors">
-                  PUMP DOJO
+                  PUMP
                 </span>
                 <span className="font-display font-bold text-lg sm:text-xl tracking-wider group-hover:text-piu-accent transition-colors">
                   SHINSA
                 </span>
               </div>
-              <span className="text-gray-600 text-[10px] sm:text-xs block -mt-1 font-display">PIU Tournament System</span>
+              <img src="/pump-it-up-logo.svg" alt="Pump It Up" className="h-3 sm:h-3.5 block -mt-0.5 opacity-70" />
             </div>
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {!isHome && (
-              <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
+              <Link to="/" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
                 Home
               </Link>
             )}
+            {user && (
+              <Link to="/feed" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+                Feed
+              </Link>
+            )}
+            <UserSearch />
             {user ? (
-              <div className="flex items-center gap-2">
-                <Link
-                  to="/account"
-                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                >
-                  {user.avatar ? (
-                    <img src={getAvatarUrl(user.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border" />
-                  ) : (
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
-                      {user.username[0].toUpperCase()}
-                    </div>
-                  )}
-                  <span className="text-sm font-display text-gray-300 hidden sm:inline">{user.username}</span>
-                </Link>
-                <button
-                  onClick={() => { logout(); navigate('/'); }}
-                  className="text-xs text-gray-500 hover:text-red-400 transition-colors font-display"
-                >
-                  Logout
-                </button>
+              <div className="flex items-center gap-1 sm:gap-2">
+                <div className="hidden sm:block"><NotificationBell /></div>
+                <UserMenu />
               </div>
             ) : (
               <Link to="/login" className="text-sm text-piu-accent hover:text-piu-accent/80 transition-colors font-display font-bold">
@@ -83,7 +340,7 @@ export default function App() {
       </header>
 
       {/* Main */}
-      <main className="flex-1">
+      <main className={`flex-1 ${user ? 'pb-16 sm:pb-0' : ''}`}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tournament/new" element={<TournamentSetup />} />
@@ -98,16 +355,175 @@ export default function App() {
           <Route path="/account" element={<MyAccountPage />} />
           <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
           <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
+          <Route path="/feed" element={<FeedPage />} />
+          <Route path="/posts" element={<PostsPage />} />
+          <Route path="/post/:id" element={<SinglePostPage />} />
+          <Route path="/upscore/:id" element={<SingleUpscorePage />} />
+          <Route path="/clear/:id" element={<SingleClearPage />} />
         </Routes>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-piu-border py-3 sm:py-4 text-center text-xs text-gray-600">
-        <span className="font-display tracking-wider text-piu-gold">PUMP DOJO</span>
+      {/* Footer — hidden on mobile when logged in (bottom nav takes its place) */}
+      <footer className={`border-t border-piu-border py-3 sm:py-4 text-center text-xs text-gray-600 ${user ? 'hidden sm:block' : ''}`}>
+        <span className="font-display tracking-wider text-piu-gold">PUMP</span>
         {' '}
         <span className="font-display tracking-wider">SHINSA</span>
         {' '}- Made by Elmer with ❤
       </footer>
+
+      {/* Mobile Bottom Navigation — Instagram style */}
+      {user && <MobileBottomNav />}
     </div>
+  );
+}
+
+function MobileNotificationsPage({ onClose }) {
+  const { notifications, unreadCount, markRead, markAllRead, dismiss, invitationCount } = useNotifications();
+  const navigate = useNavigate();
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-piu-dark flex flex-col sm:hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border bg-piu-card/90 backdrop-blur-md">
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="font-display font-bold text-sm tracking-wider">NOTIFICATIONS</span>
+        {unreadCount > 0 ? (
+          <button onClick={markAllRead} className="text-[11px] text-piu-accent hover:underline font-display">Mark all read</button>
+        ) : <span className="w-16" />}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {invitationCount > 0 && (
+          <Link
+            to="/account"
+            onClick={onClose}
+            className="flex items-center gap-3 px-4 py-3 bg-piu-accent/10 hover:bg-piu-accent/20 transition-colors border-b border-piu-border/30"
+          >
+            <span className="text-piu-accent text-lg">&#9993;</span>
+            <span className="text-sm font-display font-bold text-piu-accent">
+              {invitationCount} pending invitation{invitationCount > 1 ? 's' : ''}
+            </span>
+          </Link>
+        )}
+
+        {notifications.length === 0 && invitationCount === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            <p className="text-sm font-display">No notifications yet</p>
+          </div>
+        )}
+
+        {notifications.map(n => (
+          <div
+            key={n.id}
+            className={`flex items-start gap-3 px-4 py-3 border-b border-piu-border/20 active:bg-piu-dark/50 transition-colors cursor-pointer ${!n.read ? 'bg-piu-card/40' : ''}`}
+            onClick={() => {
+              if (!n.read) markRead(n.id);
+              if (n.link) { navigate(n.link); onClose(); }
+            }}
+          >
+            <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${!n.read ? 'bg-piu-accent' : 'bg-transparent'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-display font-bold">{n.title}</p>
+              {n.message && <p className="text-xs text-gray-400 mt-0.5">{n.message}</p>}
+              <p className="text-[11px] text-gray-600 mt-1">{new Date(n.created_at + 'Z').toLocaleString()}</p>
+            </div>
+            <button
+              onClick={e => { e.stopPropagation(); dismiss(n.id); }}
+              className="text-gray-600 hover:text-red-400 text-sm shrink-0 p-1"
+            >
+              x
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileBottomNav() {
+  const location = useLocation();
+  const { user } = useAuth();
+  const { totalBadge } = useNotifications();
+  const [showNotifs, setShowNotifs] = useState(false);
+
+  const path = location.pathname;
+  const isActive = (p) => path === p || path.startsWith(p + '/');
+
+  // Close notifications page on route change
+  useEffect(() => {
+    setShowNotifs(false);
+  }, [path]);
+
+  return (
+    <>
+      {showNotifs && <MobileNotificationsPage onClose={() => setShowNotifs(false)} />}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-piu-card border-t border-piu-border">
+        <div className="flex items-center justify-around h-14 px-2">
+          {/* Home */}
+          <Link to="/" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${path === '/' ? 'text-piu-accent' : 'text-gray-500'}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+            <span className="text-[9px] font-display">Home</span>
+          </Link>
+
+          {/* Feed */}
+          <Link to="/feed" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/feed') ? 'text-piu-accent' : 'text-gray-500'}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+            </svg>
+            <span className="text-[9px] font-display">Feed</span>
+          </Link>
+
+          {/* Add Post */}
+          <Link to="/posts" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/posts') ? 'text-piu-accent' : 'text-gray-500'}`}>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-piu-gold flex items-center justify-center -mt-3 shadow-lg shadow-piu-accent/30">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <span className="text-[9px] font-display">Post</span>
+          </Link>
+
+          {/* Notifications */}
+          <button
+            onClick={() => setShowNotifs(true)}
+            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${showNotifs ? 'text-piu-accent' : 'text-gray-500'}`}
+          >
+            <div className="relative">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {totalBadge > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[8px] font-bold px-0.5">
+                  {totalBadge > 99 ? '99+' : totalBadge}
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] font-display">Alerts</span>
+          </button>
+
+          {/* Profile */}
+          <Link to={`/profile/${user.id}`} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive(`/profile/${user.id}`) ? 'text-piu-accent' : 'text-gray-500'}`}>
+            {user.avatar ? (
+              <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`} />
+            ) : (
+              <div className={`w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`}>
+                {user.username[0].toUpperCase()}
+              </div>
+            )}
+            <span className="text-[9px] font-display">Profile</span>
+          </Link>
+        </div>
+      </nav>
+    </>
   );
 }
