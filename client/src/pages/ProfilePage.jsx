@@ -885,11 +885,14 @@ export default function ProfilePage() {
                             disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
                             className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
                               enabled
-                                ? 'bg-piu-accent/20 border-piu-accent/60 text-piu-accent'
+                                ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
                                 : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
                             }`}
                           >
-                            {enabled ? `✓ ${opt.label}` : opt.label}
+                            <span className="inline-flex items-center gap-1">
+                              {enabled && <span className="text-emerald-400">✓</span>}
+                              <span>{opt.label}</span>
+                            </span>
                           </button>
                         );
                       })}
