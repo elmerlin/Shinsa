@@ -398,37 +398,89 @@ function extractJudgmentBreakdown($, $li) {
   let perfect = 0, great = 0, good = 0, bad = 0, miss = 0;
   let found = false;
 
-  // Strategy 1: Look for labeled containers (div.etc_in, div.data_con, etc.)
-  // that contain a label (PERFECT/GREAT/...) and a numeric value
-  const labelContainers = [
+  // Helper: assign judgment value by keyword
+  function assign(keyword, value) {
+    const kw = keyword.toLowerCase().replace(/[^a-z]/g, '');
+    if (kw.includes('perfect') && !kw.includes('game')) { perfect = value; found = true; }
+    else if (kw.includes('great')) { great = value; found = true; }
+    else if (kw === 'good' || kw.startsWith('good')) { good = value; found = true; }
+    else if (kw === 'bad' || kw.startsWith('bad')) { bad = value; found = true; }
+    else if (kw.includes('miss')) { miss = value; found = true; }
+  }
+
+  // Helper: extract numeric value near an element
+  function extractNearbyValue($el) {
+    let val = -1;
+    // Try next sibling
+    const nextEl = $el.next();
+    if (nextEl.length) {
+      const parsed = parseInt(nextEl.text().replace(/,/g, '').trim(), 10);
+      if (!isNaN(parsed)) val = parsed;
+    }
+    // Try element's own children (for cases like <p>PERFECT <span>1,367</span></p>)
+    if (val < 0) {
+      $el.children().each((_, child) => {
+        if (val >= 0) return;
+        const parsed = parseInt($(child).text().replace(/,/g, '').trim(), 10);
+        if (!isNaN(parsed)) val = parsed;
+      });
+    }
+    // Try parent's other children
+    if (val < 0) {
+      const parent = $el.parent();
+      parent.children().each((_, child) => {
+        if (val >= 0 || child === $el[0]) return;
+        const parsed = parseInt($(child).text().replace(/,/g, '').trim(), 10);
+        if (!isNaN(parsed)) val = parsed;
+      });
+    }
+    return val >= 0 ? val : 0;
+  }
+
+  // Strategy 1: Look for labeled containers with broad selectors
+  // including .etc_con which piugame uses for score details
+  const containerSelectors = [
     'div.li_in.etc', 'div.etc_list', 'div.data_in',
     'div.etc_wrap', 'div.li_in.st', 'div.score_detail',
-    'div.judge', 'div.detail'
+    'div.judge', 'div.detail', 'div.etc_con', 'div.etc_area',
+    'div.data_wrap', 'div.etc', 'ul.etc_list', 'ul.list',
+    'div.score_etc', 'div.judge_wrap',
   ].join(', ');
 
-  const container = $li.find(labelContainers);
+  const subItemSelectors = 'div.etc_in, div.data_con, div.data_il, div.judge_con, li, span.col, div.col';
+  const labelSelectors = 'p.tt, i.tt, span.tt, p.label, span.label, .tit, .t1, p.name, span.name';
+  const valueSelectors = 'p.dd, i.dd, i.tx, span.dd, span.num, .con, .t2, .v1, p.count, span.count, span.tx';
+
+  const container = $li.find(containerSelectors);
   if (container.length) {
-    const subItems = container.find('div.etc_in, div.data_con, div.judge_con, li, span.col, div.col');
+    const subItems = container.find(subItemSelectors);
     if (subItems.length >= 5) {
       subItems.each((_, div) => {
-        const allText = $(div).text().toLowerCase().replace(/,/g, '').trim();
-        // Try finding labeled value pairs
-        const labelEl = $(div).find('p.tt, i.tt, span.tt, p.label, span.label, .tit, .t1').first();
-        const valEl = $(div).find('p.dd, i.dd, i.tx, span.dd, span.num, .con, .t2, .v1').first();
-        const label = (labelEl.text() || '').trim().toLowerCase();
+        const labelEl = $(div).find(labelSelectors).first();
+        const valEl = $(div).find(valueSelectors).first();
+        let label = (labelEl.text() || '').trim().toLowerCase();
+        // Fallback: if no dedicated label element, check for image with keyword in src
+        if (!label) {
+          const img = $(div).find('img').first();
+          const src = (img.attr('src') || '').toLowerCase();
+          if (src.includes('perfect')) label = 'perfect';
+          else if (src.includes('great')) label = 'great';
+          else if (src.includes('good')) label = 'good';
+          else if (src.includes('bad')) label = 'bad';
+          else if (src.includes('miss')) label = 'miss';
+        }
+        // Fallback: use the full text of the sub-item
+        if (!label) {
+          label = $(div).text().toLowerCase().replace(/[\d,]/g, '').trim();
+        }
         const val = parseInt((valEl.text() || '').replace(/,/g, '').trim(), 10) || 0;
-
-        if (label.includes('perfect')) { perfect = val; found = true; }
-        else if (label.includes('great')) { great = val; found = true; }
-        else if (label.includes('good')) { good = val; found = true; }
-        else if (label.includes('bad')) { bad = val; found = true; }
-        else if (label.includes('miss')) { miss = val; found = true; }
+        assign(label, val);
       });
     }
   }
 
   // Strategy 2: Search for text nodes containing judgment keywords anywhere
-  // in the list item, then grab the adjacent/sibling numeric value
+  // in the list item, using flexible matching (includes instead of exact)
   if (!found) {
     const JUDGMENT_KEYWORDS = ['perfect', 'great', 'good', 'bad', 'miss'];
     const allEls = $li.find('*');
@@ -437,30 +489,17 @@ function extractJudgmentBreakdown($, $li) {
     allEls.each((_, el) => {
       const directText = $(el).contents().filter(function() {
         return this.type === 'text';
-      }).text().trim().toLowerCase();
+      }).text().replace(/\u00A0/g, ' ').trim().toLowerCase();
 
       for (const kw of JUDGMENT_KEYWORDS) {
-        if (directText === kw && !matchedLabels[kw]) {
-          // Found a label — get the numeric value from the next sibling or child
-          const parent = $(el).parent();
-          const nextEl = $(el).next();
-          let val = 0;
-
-          // Check next sibling
-          if (nextEl.length) {
-            val = parseInt(nextEl.text().replace(/,/g, '').trim(), 10) || 0;
-          }
-          // Check parent's other children for numeric value
-          if (!val) {
-            parent.children().each((_, child) => {
-              if (child !== el) {
-                const childVal = parseInt($(child).text().replace(/,/g, '').trim(), 10);
-                if (!isNaN(childVal) && childVal >= 0) val = childVal;
-              }
-            });
-          }
-
-          matchedLabels[kw] = val;
+        // Match exact keyword, or keyword with colon (e.g. "perfect:")
+        // Avoid matching compound words like "perfect game"
+        if (!matchedLabels[kw] && (
+          directText === kw ||
+          directText === kw + ':' ||
+          (directText.startsWith(kw) && directText.length <= kw.length + 2)
+        )) {
+          matchedLabels[kw] = extractNearbyValue($(el));
           found = true;
         }
       }
@@ -475,13 +514,40 @@ function extractJudgmentBreakdown($, $li) {
     }
   }
 
-  // Strategy 3: Positional approach — find all numeric i.tx or span.num
-  // beyond the main score. The breakdowns typically appear as 5 consecutive
-  // numbers in a fixed order: PERFECT, GREAT, GOOD, BAD, MISS
+  // Strategy 3: Image-based label detection
+  // piugame.com renders grades, plates, and modes as images — judgment labels may be images too
+  if (!found) {
+    const matchedFromImages = {};
+    const KEYWORDS = ['perfect', 'great', 'good', 'bad', 'miss'];
+
+    $li.find('img').each((_, img) => {
+      const src = ($(img).attr('src') || '').toLowerCase();
+      for (const kw of KEYWORDS) {
+        if (src.includes(kw) && !matchedFromImages[kw]) {
+          // Skip plate images (e.g. "perfect_game" in plate paths)
+          if (src.includes('/plate/') || src.includes('game')) continue;
+          matchedFromImages[kw] = extractNearbyValue($(img));
+          found = true;
+        }
+      }
+    });
+
+    if (found) {
+      perfect = matchedFromImages.perfect || 0;
+      great = matchedFromImages.great || 0;
+      good = matchedFromImages.good || 0;
+      bad = matchedFromImages.bad || 0;
+      miss = matchedFromImages.miss || 0;
+    }
+  }
+
+  // Strategy 4: Positional approach — find all numeric text elements
+  // beyond the main score. Breakdowns appear as 5 consecutive numbers
+  // in order: PERFECT, GREAT, GOOD, BAD, MISS
   if (!found) {
     const allValues = [];
-    // Gather all text elements that contain just a number
-    $li.find('i.tx, span.num, i.num, span.tx, p.num').each((_, el) => {
+    // Broadened selectors to catch more element patterns
+    $li.find('i.tx, span.num, i.num, span.tx, p.num, span.dd, p.dd, i.dd').each((_, el) => {
       const text = $(el).text().replace(/,/g, '').trim();
       const num = parseInt(text, 10);
       if (!isNaN(num)) allValues.push({ el, num, text });
@@ -489,36 +555,97 @@ function extractJudgmentBreakdown($, $li) {
 
     // The first number is typically the score; the next 5 are breakdowns
     if (allValues.length >= 6) {
-      // Skip the first one (score) and take the next 5
       [perfect, great, good, bad, miss] = allValues.slice(1, 6).map(v => v.num);
       found = true;
     } else if (allValues.length === 5) {
-      // All 5 might be breakdowns if score was parsed separately
       [perfect, great, good, bad, miss] = allValues.map(v => v.num);
       found = true;
     }
   }
 
-  // Strategy 4: Broadest approach — look for any div/span blocks containing
-  // exactly 5 child elements with numeric content
+  // Strategy 5: Look for any container with 5+ child elements that have numeric content
+  // (relaxed from exactly 5 to handle sections including MAX COMBO, KCAL, etc.)
   if (!found) {
     $li.find('div, ul').each((_, container) => {
       if (found) return;
       const children = $(container).children();
-      if (children.length === 5) {
-        const nums = [];
+      if (children.length >= 5 && children.length <= 10) {
+        const entries = [];
         children.each((_, child) => {
-          // Find any numeric text in the child
-          const numText = $(child).find('i, span, p').last().text().replace(/,/g, '').trim();
+          const fullText = $(child).text().toLowerCase().replace(/,/g, '').trim();
+          // Get the deepest numeric text element
+          const numEl = $(child).find('i, span, p').last();
+          const numText = numEl.length ? numEl.text().replace(/,/g, '').trim() : '';
           const n = parseInt(numText, 10);
-          if (!isNaN(n)) nums.push(n);
+          // Check for image-based labels too
+          const imgSrc = ($(child).find('img').first().attr('src') || '').toLowerCase();
+          entries.push({ text: fullText, imgSrc, num: isNaN(n) ? null : n });
         });
-        if (nums.length === 5) {
-          [perfect, great, good, bad, miss] = nums;
-          found = true;
+
+        // If entries contain judgment keywords (as text or images), use labeled matching
+        const hasKeywords = entries.some(e =>
+          /\bperfect\b/.test(e.text) || /\bgreat\b/.test(e.text) ||
+          /\bgood\b/.test(e.text) || /\bbad\b/.test(e.text) || /\bmiss\b/.test(e.text) ||
+          e.imgSrc.includes('perfect') || e.imgSrc.includes('great') ||
+          e.imgSrc.includes('good') || e.imgSrc.includes('bad') || e.imgSrc.includes('miss')
+        );
+
+        if (hasKeywords) {
+          for (const e of entries) {
+            if (e.num !== null) {
+              const label = e.imgSrc.includes('perfect') || e.imgSrc.includes('great') ||
+                e.imgSrc.includes('good') || e.imgSrc.includes('bad') || e.imgSrc.includes('miss')
+                ? e.imgSrc : e.text;
+              assign(label, e.num);
+            }
+          }
+        } else if (children.length === 5) {
+          // Exactly 5 unlabeled children — assume positional order
+          const nums = entries.filter(e => e.num !== null);
+          if (nums.length === 5) {
+            [perfect, great, good, bad, miss] = nums.map(e => e.num);
+            found = true;
+          }
         }
       }
     });
+  }
+
+  // Strategy 6: Raw HTML regex fallback — search the list item's HTML for
+  // keyword-number patterns. Avoids matching plate names like "PERFECT GAME"
+  if (!found) {
+    const html = $li.html() || '';
+    const htmlLower = html.toLowerCase();
+
+    // Only attempt if the HTML actually contains at least some judgment keywords
+    if (htmlLower.includes('perfect') || htmlLower.includes('great') || htmlLower.includes('miss')) {
+      const results = {};
+      // Match patterns like: >PERFECT</...> ... >1,367<
+      // or: perfect ... 1367 (with limited gap to avoid cross-entry matching)
+      const patterns = [
+        { kw: 'perfect', re: /(?:>|"|')perfect(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'great', re: /(?:>|"|')great(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'good', re: /(?:>|"|')good(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'bad', re: /(?:>|"|')bad(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+        { kw: 'miss', re: /(?:>|"|')miss(?:<|"|'|[\s:])[^]*?(?:>|"|')(\d[\d,]*)(?:<|"|')/gi },
+      ];
+
+      for (const { kw, re } of patterns) {
+        const match = re.exec(html);
+        if (match) {
+          results[kw] = parseInt(match[1].replace(/,/g, ''), 10) || 0;
+          found = true;
+        }
+      }
+
+      if (found) {
+        perfect = results.perfect || 0;
+        great = results.great || 0;
+        good = results.good || 0;
+        bad = results.bad || 0;
+        miss = results.miss || 0;
+      }
+    }
   }
 
   return { perfect, great, good, bad, miss, found };
@@ -533,19 +660,28 @@ async function scrapeRecentlyPlayed(client) {
   const $ = cheerio.load(res.data);
   const plays = [];
 
-  // Log first item HTML structure for debugging
+  // Save raw HTML for debugging (first item only to avoid large logs)
   const firstLi = $('ul.recently_playeList > li').first();
   if (firstLi.length) {
+    const rawHtml = firstLi.html();
+    console.log('Recently played: first item raw HTML (' + (rawHtml || '').length + ' chars):');
+    console.log(rawHtml);
+
     const structure = [];
     firstLi.find('*').each((_, el) => {
       const tag = $(el).prop('tagName') || '';
       const cls = $(el).attr('class') || '';
       const text = $(el).contents().filter(function() { return this.type === 'text'; }).text().trim();
-      if (cls || (text && text.length < 30)) {
-        structure.push(`<${tag.toLowerCase()} class="${cls}">${text}</${tag.toLowerCase()}>`);
+      const src = $(el).attr('src') || '';
+      const entry = `<${tag.toLowerCase()} class="${cls}"${src ? ' src="' + src + '"' : ''}>${text}</${tag.toLowerCase()}>`;
+      if (cls || src || (text && text.length < 30)) {
+        structure.push(entry);
       }
     });
-    console.log('Recently played: first item structure:', structure.join('\n'));
+    console.log('Recently played: first item structure:\n' + structure.join('\n'));
+  } else {
+    console.log('Recently played: no items found with ul.recently_playeList > li');
+    console.log('Recently played: page HTML length:', (res.data || '').length);
   }
 
   // Note: class is "recently_playeList" (typo in actual site)
