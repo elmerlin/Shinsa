@@ -275,6 +275,7 @@ export default function ProfilePage() {
   const [followersLoaded, setFollowersLoaded] = useState(false);
   const [myFollowingIds, setMyFollowingIds] = useState(new Set());
   const [followBackLoading, setFollowBackLoading] = useState({});
+  const [competitionsSub, setCompetitionsSub] = useState('tournaments');
 
   const isOwner = authUser && authUser.id === id;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
@@ -549,7 +550,6 @@ export default function ProfilePage() {
   };
 
   const competitionsCount = aggregated ? aggregated.duelCount + aggregated.tournamentCount : 0;
-  const [competitionsSub, setCompetitionsSub] = useState('tournaments');
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
