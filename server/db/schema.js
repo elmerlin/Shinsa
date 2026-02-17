@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'shinsa.db');
 
@@ -677,6 +678,37 @@ function initializeDb() {
       PRIMARY KEY (user_id, snapshot_date)
     );
   `);
+
+  // Migration: backfill empty song flags from pump-phoenix.json
+  const emptyFlagCount = db.prepare("SELECT COUNT(*) as c FROM songs WHERE flags = '' OR flags IS NULL").get();
+  if (emptyFlagCount.c > 0) {
+    const jsonPath = path.join(__dirname, '..', '..', 'pump-phoenix.json');
+    if (fs.existsSync(jsonPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+        const updateStmt = db.prepare('UPDATE songs SET flags = ? WHERE title = ? AND mode = ? AND level = ? AND (flags = \'\' OR flags IS NULL)');
+        const backfill = db.transaction(() => {
+          let updated = 0;
+          for (const song of data.songs) {
+            const flags = (song.flags || []).join(',');
+            if (!flags) continue;
+            for (const chart of (song.charts || [])) {
+              if ((chart.diffClass === 'S' || chart.diffClass === 'D') && chart.style === 'solo') {
+                const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
+                const result = updateStmt.run(flags, song.name, mode, chart.lvl);
+                updated += result.changes;
+              }
+            }
+          }
+          return updated;
+        });
+        const count = backfill();
+        if (count > 0) console.log(`Backfilled flags for ${count} songs from pump-phoenix.json`);
+      } catch (err) {
+        console.error('Failed to backfill song flags:', err.message);
+      }
+    }
+  }
 
   // Migrations for piugame sync - add progress tracking
   const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);
