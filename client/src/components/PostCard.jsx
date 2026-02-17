@@ -109,12 +109,17 @@ function ImageGrid({ images, onImageClick }) {
 // Lightbox for fullscreen image viewing
 function Lightbox({ images, index, onClose }) {
   const [current, setCurrent] = useState(index);
+  const touchStartRef = useRef(null);
+  const touchHandledRef = useRef(false);
+
+  const goNext = () => setCurrent(c => (c < images.length - 1 ? c + 1 : 0));
+  const goPrev = () => setCurrent(c => (c > 0 ? c - 1 : images.length - 1));
 
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft') setCurrent(c => (c > 0 ? c - 1 : images.length - 1));
-      if (e.key === 'ArrowRight') setCurrent(c => (c < images.length - 1 ? c + 1 : 0));
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
     };
     document.addEventListener('keydown', handleKey);
     document.body.style.overflow = 'hidden';
@@ -124,19 +129,59 @@ function Lightbox({ images, index, onClose }) {
     };
   }, [images.length, onClose]);
 
+  // Touch: swipe left/right to navigate, tap left/right half to navigate
+  const handleTouchStart = (e) => {
+    if (e.target.closest('button')) return;
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    touchHandledRef.current = false;
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!touchStartRef.current || e.target.closest('button')) { touchStartRef.current = null; return; }
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    if (images.length <= 1) return;
+
+    // Swipe detection (horizontal swipe > 50px, more horizontal than vertical)
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      touchHandledRef.current = true;
+      if (dx < 0) goNext(); else goPrev();
+      return;
+    }
+
+    // Tap detection (minimal movement) — tap right half = next, left half = prev
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      touchHandledRef.current = true;
+      if (e.changedTouches[0].clientX > window.innerWidth / 2) goNext(); else goPrev();
+    }
+  };
+
+  const handleClick = (e) => {
+    // Skip if already handled by touch event
+    if (touchHandledRef.current) { touchHandledRef.current = false; return; }
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center" onClick={onClose}>
-      <button className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl z-10" onClick={onClose}>&#10005;</button>
+    <div
+      className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center"
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <button className="absolute top-4 right-4 text-white/70 hover:text-white text-2xl z-10" onClick={e => { e.stopPropagation(); onClose(); }}>&#10005;</button>
 
       {images.length > 1 && (
         <>
           <button
             className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-3xl z-10 p-2"
-            onClick={e => { e.stopPropagation(); setCurrent(c => (c > 0 ? c - 1 : images.length - 1)); }}
+            onClick={e => { e.stopPropagation(); goPrev(); }}
           >&#8249;</button>
           <button
             className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-3xl z-10 p-2"
-            onClick={e => { e.stopPropagation(); setCurrent(c => (c < images.length - 1 ? c + 1 : 0)); }}
+            onClick={e => { e.stopPropagation(); goNext(); }}
           >&#8250;</button>
         </>
       )}
