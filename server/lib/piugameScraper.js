@@ -4,6 +4,8 @@ const cheerio = require('cheerio');
 
 const AM_PASS_BASE = 'https://am-pass.net';
 const PIU_BASE = 'https://www.piugame.com';
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 12;
 
 // Grade mapping from image filename codes
 const GRADE_MAP = {
@@ -26,16 +28,83 @@ const PLATE_MAP = {
 
 // Mode letter mapping from image URLs
 const MODE_MAP = { s: 'Single', d: 'Double', c: 'Co-op', u: 'UCS' };
+const JUDGMENT_ORDER = ['perfect', 'great', 'good', 'bad', 'miss'];
+
+function normalizeSetCookieHeaders(setCookieHeader) {
+  if (!setCookieHeader) return [];
+  return Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+}
+
+async function persistCookiesFromResponse(jar, responseUrl, headers) {
+  const setCookies = normalizeSetCookieHeaders(headers['set-cookie']);
+  for (const cookie of setCookies) {
+    try {
+      await jar.setCookie(cookie, responseUrl);
+    } catch (e) {
+      // Ignore malformed cookies from upstream
+    }
+  }
+}
+
+/**
+ * Axios does not expose intermediate redirect responses in interceptors.
+ * Handle redirects manually so cookies from 30x hops are preserved.
+ */
+async function requestWithRedirects(rawClient, jar, config) {
+  let method = (config.method || 'GET').toUpperCase();
+  let url = config.url;
+  let data = config.data;
+  let headers = { ...(config.headers || {}) };
+
+  for (let i = 0; i < MAX_REDIRECTS; i++) {
+    const cookie = await jar.getCookieString(url);
+    const reqHeaders = { ...headers };
+    if (cookie) reqHeaders.Cookie = cookie;
+
+    const response = await rawClient.request({
+      ...config,
+      method,
+      url,
+      data,
+      headers: reqHeaders,
+      maxRedirects: 0,
+      validateStatus: () => true,
+    });
+
+    await persistCookiesFromResponse(jar, url, response.headers || {});
+
+    const status = response.status || 0;
+    const location = response.headers?.location;
+    if (location && REDIRECT_STATUS.has(status)) {
+      url = new URL(location, url).toString();
+
+      // Browser-like behavior on redirect after form POST.
+      if (status === 303 || ((status === 301 || status === 302) && method !== 'GET' && method !== 'HEAD')) {
+        method = 'GET';
+        data = undefined;
+        delete headers['Content-Type'];
+        delete headers['content-type'];
+      }
+      continue;
+    }
+
+    if (status >= 400) {
+      throw new Error(`HTTP ${status} when requesting ${url}`);
+    }
+
+    return response;
+  }
+
+  throw new Error(`Too many redirects while requesting ${config.url}`);
+}
 
 /**
  * Create an HTTP client with cookie jar support for cross-domain auth
  */
 function createClient() {
   const jar = new CookieJar();
-
-  const client = axios.create({
+  const rawClient = axios.create({
     timeout: 30000,
-    maxRedirects: 5,
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -43,64 +112,79 @@ function createClient() {
     },
   });
 
-  // Manual cookie management for cross-domain (am-pass.net <-> piugame.com)
-  client.interceptors.request.use(async (config) => {
-    try {
-      const cookies = await jar.getCookieString(config.url);
-      if (cookies) {
-        config.headers.Cookie = cookies;
-      }
-    } catch (e) { /* ignore */ }
-    return config;
-  });
+  const client = {
+    request: (config) => requestWithRedirects(rawClient, jar, config),
+    get: (url, config = {}) => requestWithRedirects(rawClient, jar, { ...config, method: 'GET', url }),
+    post: (url, data, config = {}) => requestWithRedirects(rawClient, jar, { ...config, method: 'POST', url, data }),
+  };
 
-  client.interceptors.response.use(async (response) => {
-    const setCookies = response.headers['set-cookie'];
-    if (setCookies) {
-      for (const cookie of setCookies) {
-        try {
-          await jar.setCookie(cookie, response.config.url);
-        } catch (e) { /* ignore */ }
-      }
-    }
-    return response;
-  });
-
-  return { client, jar };
+  return client;
 }
 
-/**
- * Login to piugame via am-pass.net
- * Returns the authenticated client or throws on failure
- */
-async function login(username, password) {
-  const { client, jar } = createClient();
+function isLoggedInPiugameHtml(html) {
+  const src = String(html || '');
+  return src.includes('/bbs/logout.php') && !src.includes('/login.php?login_url=');
+}
 
-  // Step 1: GET am-pass.net to establish session
+async function loginViaPiugame(client, username, password) {
+  await client.get(`${PIU_BASE}/login.php?login_url=${encodeURIComponent('/my_page/recently_played.php')}`);
+
+  const params = new URLSearchParams();
+  params.append('url', '/my_page/recently_played.php');
+  params.append('mb_id', username);
+  params.append('mb_password', password);
+
+  await client.post(
+    `${PIU_BASE}/bbs/login_check.php`,
+    params.toString(),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+  );
+
+  const verifyRes = await client.get(`${PIU_BASE}/my_page/recently_played.php`);
+  if (!isLoggedInPiugameHtml(verifyRes.data)) {
+    throw new Error('PIUGame login verification failed');
+  }
+}
+
+async function loginViaAmPass(client, username, password) {
   await client.get(AM_PASS_BASE);
 
-  // Step 2: POST login credentials
   const params = new URLSearchParams();
   params.append('url', '/');
   params.append('mb_id', username);
   params.append('mb_password', password);
 
-  const loginRes = await client.post(
+  await client.post(
     `${AM_PASS_BASE}/bbs/login_check.php`,
     params.toString(),
-    {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      maxRedirects: 5,
-    }
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
   );
 
-  // Step 3: Verify login by checking for logout link
-  const verifyRes = await client.get(AM_PASS_BASE);
-  if (verifyRes.data.indexOf('bbs/logout.php') < 0) {
-    throw new Error('Login failed - invalid credentials');
+  const verifyRes = await client.get(`${PIU_BASE}/my_page/recently_played.php`);
+  if (!isLoggedInPiugameHtml(verifyRes.data)) {
+    throw new Error('AM-PASS login verification failed');
+  }
+}
+
+/**
+ * Login to PIUGame (primary: piugame.com form login, fallback: legacy am-pass flow)
+ * Returns the authenticated client or throws on failure
+ */
+async function login(username, password) {
+  const strategies = [loginViaPiugame, loginViaAmPass];
+  let lastErr = null;
+
+  for (const strategy of strategies) {
+    const client = createClient();
+    try {
+      await strategy(client, username, password);
+      return client;
+    } catch (err) {
+      lastErr = err;
+    }
   }
 
-  return client;
+  throw new Error(lastErr?.message || 'Login failed - invalid credentials');
 }
 
 /**
@@ -145,6 +229,43 @@ function parsePlateFromUrl(src) {
  */
 function parseScore(text) {
   return parseInt((text || '').replace(/,/g, '').trim(), 10) || 0;
+}
+
+/**
+ * Parse judgments from the recently-played breakdown table.
+ * Returns null values when the breakdown table is unavailable.
+ */
+function parseJudgmentsFromRecentlyPlayedItem($, $li) {
+  const judgments = {
+    perfect: null,
+    great: null,
+    good: null,
+    bad: null,
+    miss: null,
+  };
+
+  const row = $li.find('table.recently_play tbody tr').first();
+  if (!row.length) return judgments;
+
+  row.find('td').each((idx, td) => {
+    const $td = $(td);
+    let key = ($td.attr('data-th') || '').trim().toLowerCase();
+
+    if (!JUDGMENT_ORDER.includes(key)) {
+      const cls = $td.attr('class') || '';
+      const classMatch = cls.match(/\bfontCol([1-5])\b/i);
+      if (classMatch) {
+        key = JUDGMENT_ORDER[parseInt(classMatch[1], 10) - 1] || '';
+      } else {
+        key = JUDGMENT_ORDER[idx] || '';
+      }
+    }
+
+    if (!key) return;
+    judgments[key] = parseScore($td.find('.tx').first().text() || $td.text());
+  });
+
+  return judgments;
 }
 
 /**
@@ -308,7 +429,7 @@ async function scrapeRecentlyPlayed(client) {
   const plays = [];
 
   // Note: class is "recently_playeList" (typo in actual site)
-  $('ul.recently_playeList > li').each((_, li) => {
+  $('ul.recently_playeList > li, ul.recently_playedList > li').each((_, li) => {
     const $li = $(li);
     if ($li.find('div.wrap_in').length === 0) return;
 
@@ -339,6 +460,7 @@ async function scrapeRecentlyPlayed(client) {
 
     // Date
     const datePlayed = $li.find('p.recently_date_tt').text().trim();
+    const judgments = parseJudgmentsFromRecentlyPlayedItem($, $li);
 
     plays.push({
       song_title: songTitle,
@@ -348,6 +470,11 @@ async function scrapeRecentlyPlayed(client) {
       grade,
       background_url: bgUrl,
       date_played: datePlayed,
+      perfect: judgments.perfect,
+      great: judgments.great,
+      good: judgments.good,
+      bad: judgments.bad,
+      miss: judgments.miss,
     });
   });
 

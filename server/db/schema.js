@@ -289,7 +289,12 @@ function initializeDb() {
       score INTEGER NOT NULL,
       grade TEXT DEFAULT '',
       background_url TEXT DEFAULT '',
-      date_played TEXT DEFAULT ''
+      date_played TEXT DEFAULT '',
+      perfect INTEGER,
+      great INTEGER,
+      good INTEGER,
+      bad INTEGER,
+      miss INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS user_piugame_sync (
@@ -387,6 +392,15 @@ function initializeDb() {
   }
   if (!matchColumns.includes('gauntlet_order')) {
     db.exec("ALTER TABLE matches ADD COLUMN gauntlet_order INT DEFAULT 0");
+  }
+
+  // Migrations for PIUGame recently played judgments
+  const recentPlayedColumns = db.prepare("PRAGMA table_info(user_recently_played)").all().map(c => c.name);
+  const recentPlayedMigrations = ['perfect', 'great', 'good', 'bad', 'miss'];
+  for (const col of recentPlayedMigrations) {
+    if (!recentPlayedColumns.includes(col)) {
+      db.exec(`ALTER TABLE user_recently_played ADD COLUMN ${col} INTEGER`);
+    }
   }
 }
 
