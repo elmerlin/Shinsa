@@ -574,6 +574,102 @@ function initializeDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_comment_pumps_comment ON comment_pumps(comment_type, comment_id);
 
+    -- Communities
+    CREATE TABLE IF NOT EXISTS communities (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      avatar TEXT DEFAULT '',
+      banner TEXT DEFAULT '',
+      owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      is_invite_only INT DEFAULT 0,
+      badge_text TEXT DEFAULT '',
+      badge_color TEXT DEFAULT '#ff3366',
+      badge_text_color TEXT DEFAULT '#ffffff',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS community_members (
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT DEFAULT 'member',
+      joined_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (community_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS community_tags (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      color TEXT DEFAULT '#ff3366',
+      text_color TEXT DEFAULT '#ffffff',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS community_member_tags (
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tag_id TEXT NOT NULL REFERENCES community_tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (community_id, user_id, tag_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS community_posts (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL DEFAULT '',
+      images TEXT DEFAULT '[]',
+      youtube_url TEXT DEFAULT '',
+      is_pinned INT DEFAULT 0,
+      comments_disabled INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS community_post_pumps (
+      post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (post_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS community_post_comments (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      parent_id TEXT DEFAULT NULL REFERENCES community_post_comments(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS community_comment_pumps (
+      comment_id TEXT NOT NULL REFERENCES community_post_comments(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (comment_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS community_join_requests (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_communities_name ON communities(name);
+    CREATE INDEX IF NOT EXISTS idx_communities_owner ON communities(owner_id);
+    CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);
+    CREATE INDEX IF NOT EXISTS idx_community_members_user ON community_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_community_tags_community ON community_tags(community_id);
+    CREATE INDEX IF NOT EXISTS idx_community_member_tags_community ON community_member_tags(community_id);
+    CREATE INDEX IF NOT EXISTS idx_community_posts_community ON community_posts(community_id);
+    CREATE INDEX IF NOT EXISTS idx_community_posts_created ON community_posts(created_at);
+    CREATE INDEX IF NOT EXISTS idx_community_post_pumps ON community_post_pumps(post_id);
+    CREATE INDEX IF NOT EXISTS idx_community_post_comments ON community_post_comments(post_id);
+    CREATE INDEX IF NOT EXISTS idx_community_join_requests ON community_join_requests(community_id, status);
+
     CREATE TABLE IF NOT EXISTS follower_daily_snapshots (
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       snapshot_date TEXT NOT NULL,
