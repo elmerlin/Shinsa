@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../db/schema');
 const { addNotificationClient } = require('../lib/notificationHub');
+const { getPublicVapidKey, isWebPushConfigured } = require('../lib/webPush');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
@@ -673,6 +674,54 @@ router.post('/invite', (req, res) => {
 });
 
 // ─── Notifications ──────────────────────────────────────
+
+// GET /api/auth/push/public-key — expose public VAPID key for browser subscription
+router.get('/push/public-key', (req, res) => {
+  res.json({
+    enabled: isWebPushConfigured(),
+    public_key: getPublicVapidKey() || '',
+  });
+});
+
+// POST /api/auth/push/subscribe — register/update a browser push subscription for current user
+router.post('/push/subscribe', requireAuth, (req, res) => {
+  const db = getDb();
+  const rawSub = req.body?.subscription || req.body || {};
+  const endpoint = String(rawSub.endpoint || '').trim();
+  const p256dh = String(rawSub.keys?.p256dh || '').trim();
+  const auth = String(rawSub.keys?.auth || '').trim();
+  const expirationTime = rawSub.expirationTime == null ? '' : String(rawSub.expirationTime);
+
+  if (!endpoint || !p256dh || !auth) {
+    return res.status(400).json({ error: 'Invalid push subscription payload' });
+  }
+
+  db.prepare(`
+    INSERT INTO user_push_subscriptions (user_id, endpoint, p256dh, auth, expiration_time, user_agent)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+      user_id = excluded.user_id,
+      p256dh = excluded.p256dh,
+      auth = excluded.auth,
+      expiration_time = excluded.expiration_time,
+      user_agent = excluded.user_agent,
+      updated_at = datetime('now')
+  `).run(req.user.id, endpoint, p256dh, auth, expirationTime, req.headers['user-agent'] || '');
+
+  res.json({ success: true });
+});
+
+// DELETE /api/auth/push/subscribe — unregister current user's browser subscription
+router.delete('/push/subscribe', requireAuth, (req, res) => {
+  const db = getDb();
+  const endpoint = String(req.body?.endpoint || '').trim();
+  if (!endpoint) return res.status(400).json({ error: 'endpoint is required' });
+
+  db.prepare('DELETE FROM user_push_subscriptions WHERE user_id = ? AND endpoint = ?')
+    .run(req.user.id, endpoint);
+
+  res.json({ success: true });
+});
 
 // GET /api/auth/notifications/stream — real-time notification stream (SSE)
 router.get('/notifications/stream', (req, res) => {

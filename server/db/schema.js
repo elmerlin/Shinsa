@@ -506,6 +506,18 @@ function initializeDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS user_push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      expiration_time TEXT DEFAULT '',
+      user_agent TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS user_follows (
       follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -567,6 +579,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON user_notifications(user_id);
+    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON user_push_subscriptions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON user_push_subscriptions(endpoint);
   `);
 
   // Migrations for players table - add user_id

@@ -6,6 +6,12 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import App from './App';
 import './index.css';
 
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/push-sw.js').catch(() => {});
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
