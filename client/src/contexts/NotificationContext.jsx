@@ -89,12 +89,15 @@ export function NotificationProvider({ children }) {
       }
       if (permission !== 'granted') return;
 
-      let registration = await navigator.serviceWorker.getRegistration('/push-sw.js');
+      let registration = await navigator.serviceWorker.getRegistration('/');
       if (!registration) {
-        registration = await navigator.serviceWorker.register('/push-sw.js');
+        registration = await navigator.serviceWorker.register('/push-sw.js', { scope: '/' });
       }
       if (!registration.active) {
         registration = await navigator.serviceWorker.ready;
+      }
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
       let subscription = await registration.pushManager.getSubscription();
       if (!subscription) {
