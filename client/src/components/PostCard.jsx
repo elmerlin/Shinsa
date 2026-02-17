@@ -4,7 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from './PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
-import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment } from '../utils/api';
+import { getProfilePath } from '../utils/profile';
+import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment, searchUsers } from '../utils/api';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -18,6 +19,19 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function getActiveMentionQuery(text, cursor) {
+  const value = String(text || '');
+  const pos = Number.isFinite(cursor) ? cursor : value.length;
+  const before = value.slice(0, pos);
+  const match = before.match(/(^|[\s(])@([A-Za-z0-9_]{1,30})$/);
+  if (!match) return null;
+  return {
+    query: match[2],
+    start: pos - match[2].length - 1,
+    end: pos,
+  };
 }
 
 // Extract YouTube video ID from various URL formats
@@ -366,7 +380,44 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
   const [replyTo, setReplyTo] = useState(null);
   const [disabled, setDisabled] = useState(!!commentsDisabled);
   const [count, setCount] = useState(commentCount || 0);
+  const [mentionToken, setMentionToken] = useState(null);
+  const [mentionUsers, setMentionUsers] = useState([]);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionLoading, setMentionLoading] = useState(false);
   const inputRef = useRef(null);
+  const mentionRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!user || disabled || !mentionToken?.query) {
+      setMentionUsers([]);
+      setShowMentions(false);
+      setMentionLoading(false);
+      return;
+    }
+
+    const requestId = ++mentionRequestRef.current;
+    setMentionLoading(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const found = await searchUsers(mentionToken.query);
+        if (requestId !== mentionRequestRef.current) return;
+        const filtered = (found || [])
+          .filter(u => u?.username && u.id !== user.id)
+          .slice(0, 6);
+        setMentionUsers(filtered);
+        setShowMentions(filtered.length > 0);
+      } catch {
+        if (requestId === mentionRequestRef.current) {
+          setMentionUsers([]);
+          setShowMentions(false);
+        }
+      } finally {
+        if (requestId === mentionRequestRef.current) setMentionLoading(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timeout);
+  }, [mentionToken?.query, user, disabled]);
 
   const loadComments = async () => {
     setLoading(true);
@@ -377,6 +428,61 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateMentionState = (value, cursorOverride) => {
+    const cursor = Number.isFinite(cursorOverride)
+      ? cursorOverride
+      : (inputRef.current?.selectionStart ?? String(value || '').length);
+    const token = getActiveMentionQuery(value, cursor);
+    setMentionToken(token);
+    if (!token) {
+      setShowMentions(false);
+      setMentionUsers([]);
+      setMentionLoading(false);
+    }
+  };
+
+  const handleInputChange = (value) => {
+    setNewComment(value);
+    updateMentionState(value);
+  };
+
+  const applyMention = (selectedUsername) => {
+    const current = String(newComment || '');
+    const cursor = inputRef.current?.selectionStart ?? current.length;
+    const token = getActiveMentionQuery(current, cursor) || mentionToken;
+    if (!token) return;
+
+    const next = `${current.slice(0, token.start)}@${selectedUsername} ${current.slice(token.end)}`;
+    const nextCursor = token.start + selectedUsername.length + 2;
+    setNewComment(next);
+    setMentionToken(null);
+    setMentionUsers([]);
+    setShowMentions(false);
+    setMentionLoading(false);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const handleInputKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      if (showMentions && mentionUsers.length > 0) {
+        e.preventDefault();
+        applyMention(mentionUsers[0].username);
+        return;
+      }
+      e.preventDefault();
+      handleSubmit();
+      return;
+    }
+    if (e.key === 'Escape' && showMentions) {
+      e.preventDefault();
+      setShowMentions(false);
     }
   };
 
@@ -399,6 +505,10 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
       setNewComment('');
       setReplyTo(null);
       setCount(c => c + 1);
+      setMentionToken(null);
+      setMentionUsers([]);
+      setShowMentions(false);
+      setMentionLoading(false);
     } catch (err) {
       alert(err.message);
     }
@@ -434,7 +544,9 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 
   const startReply = (commentId, username) => {
     setReplyTo(commentId);
-    setNewComment(`@${username} `);
+    const value = `@${username} `;
+    setNewComment(value);
+    updateMentionState(value, value.length);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
@@ -472,7 +584,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
               {comments.map(c => (
                 <div key={c.id}>
                   <div className="flex items-start gap-2">
-                    <Link to={`/profile/${c.user_id}`}>
+                    <Link to={getProfilePath(c.user_id, c.username)}>
                       {c.avatar ? (
                         <img src={getAvatarUrl(c.avatar)} alt="" className="w-6 h-6 rounded-full object-cover border border-piu-border shrink-0" />
                       ) : (
@@ -483,10 +595,10 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                     </Link>
                     <div className="flex-1 min-w-0">
                       <div className="bg-piu-dark/50 rounded-lg px-2.5 py-1.5">
-                        <Link to={`/profile/${c.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors leading-none">
+                        <Link to={getProfilePath(c.user_id, c.username)} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors leading-none">
                           {c.username}
                         </Link>
-                        <p className="text-xs text-gray-200 break-words mt-0.5">{c.content}</p>
+                        <div className="text-xs text-gray-200 break-words mt-0.5">{renderFormattedText(c.content)}</div>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 px-1">
                         <span className="text-[10px] text-gray-600">{timeAgo(c.created_at)}</span>
@@ -510,7 +622,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                     <div className="ml-8 mt-1 space-y-1">
                       {c.replies.map(r => (
                         <div key={r.id} className="flex items-start gap-2">
-                          <Link to={`/profile/${r.user_id}`}>
+                          <Link to={getProfilePath(r.user_id, r.username)}>
                             {r.avatar ? (
                               <img src={getAvatarUrl(r.avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border shrink-0" />
                             ) : (
@@ -521,10 +633,10 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                           </Link>
                           <div className="flex-1 min-w-0">
                             <div className="bg-piu-dark/30 rounded-lg px-2 py-1">
-                              <Link to={`/profile/${r.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors leading-none">
+                              <Link to={getProfilePath(r.user_id, r.username)} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors leading-none">
                                 {r.username}
                               </Link>
-                              <p className="text-[11px] text-gray-200 break-words mt-0.5">{r.content}</p>
+                              <div className="text-[11px] text-gray-200 break-words mt-0.5">{renderFormattedText(r.content)}</div>
                             </div>
                             <div className="flex items-center gap-3 mt-0.5 px-1">
                               <span className="text-[9px] text-gray-600">{timeAgo(r.created_at)}</span>
@@ -549,19 +661,56 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
           {user && !disabled && (
             <div className="flex items-center gap-2 mt-2">
               {replyTo && (
-                <button onClick={() => { setReplyTo(null); setNewComment(''); }} className="text-[10px] text-gray-500 hover:text-red-400 shrink-0">
+                <button onClick={() => {
+                  setReplyTo(null);
+                  setNewComment('');
+                  setMentionToken(null);
+                  setMentionUsers([]);
+                  setShowMentions(false);
+                  setMentionLoading(false);
+                }} className="text-[10px] text-gray-500 hover:text-red-400 shrink-0">
                   &#10005;
                 </button>
               )}
-              <input
-                ref={inputRef}
-                type="text"
-                className="input-field text-xs py-1.5 flex-1"
-                placeholder={replyTo ? 'Write a reply...' : 'Write a comment...'}
-                value={newComment}
-                onChange={e => setNewComment(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              />
+              <div className="relative flex-1">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="input-field text-xs py-1.5 w-full"
+                  placeholder={replyTo ? 'Write a reply...' : 'Write a comment...'}
+                  value={newComment}
+                  onChange={e => handleInputChange(e.target.value)}
+                  onClick={() => updateMentionState(newComment)}
+                  onKeyDown={handleInputKeyDown}
+                />
+                {(showMentions || mentionLoading) && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-piu-border bg-piu-card shadow-xl max-h-48 overflow-y-auto">
+                    {mentionLoading && mentionUsers.length === 0 ? (
+                      <p className="px-3 py-2 text-[11px] text-gray-500">Searching...</p>
+                    ) : mentionUsers.length === 0 ? (
+                      <p className="px-3 py-2 text-[11px] text-gray-500">No users found</p>
+                    ) : (
+                      mentionUsers.map(u => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => applyMention(u.username)}
+                          className="w-full px-3 py-2 text-left hover:bg-piu-dark/60 transition-colors flex items-center gap-2"
+                        >
+                          {u.avatar ? (
+                            <img src={getAvatarUrl(u.avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[9px]">
+                              {(u.username || '?')[0].toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-xs font-display font-bold">@{u.username}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}
@@ -630,7 +779,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           {showAuthor && (
-            <Link to={`/profile/${post.user_id}`}>
+            <Link to={getProfilePath(post.user_id, post.username)}>
               {post.avatar ? (
                 <img src={getAvatarUrl(post.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
               ) : (
@@ -642,7 +791,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           )}
           <div>
             {showAuthor && (
-              <Link to={`/profile/${post.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(post.user_id, post.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                 {flag && <span className="mr-1">{flag}</span>}
                 {post.username}
               </Link>

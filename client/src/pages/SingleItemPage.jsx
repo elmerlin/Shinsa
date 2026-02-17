@@ -11,6 +11,7 @@ import {
   pumpComment,
 } from '../utils/api';
 import { renderFormattedText } from '../utils/formatText';
+import { getProfilePath } from '../utils/profile';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -194,7 +195,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
           {comments.map(c => (
             <div key={c.id}>
               <div className="flex items-start gap-2">
-                <Link to={`/profile/${c.user_id}`}>
+                <Link to={getProfilePath(c.user_id, c.username)}>
                   {c.avatar ? (
                     <img src={getAvatarUrl(c.avatar)} className="w-6 h-6 rounded-full object-cover" alt="" />
                   ) : (
@@ -203,7 +204,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
+                    <Link to={getProfilePath(c.user_id, c.username)} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
                     <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
@@ -216,7 +217,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
               </div>
               {(c.replies || []).map(r => (
                 <div key={r.id} className="flex items-start gap-2 ml-6 mt-1">
-                  <Link to={`/profile/${r.user_id}`}>
+                  <Link to={getProfilePath(r.user_id, r.username)}>
                     {r.avatar ? (
                       <img src={getAvatarUrl(r.avatar)} className="w-5 h-5 rounded-full object-cover" alt="" />
                     ) : (
@@ -225,7 +226,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
+                      <Link to={getProfilePath(r.user_id, r.username)} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
@@ -300,7 +301,7 @@ export function SingleUpscorePage() {
       <Link to="/feed" className="text-xs text-gray-500 hover:text-piu-accent font-display mb-4 inline-block">&larr; Back to Feed</Link>
       <div className="card">
         <div className="flex items-center gap-3 mb-3">
-          <Link to={`/profile/${item.user_id}`}>
+          <Link to={getProfilePath(item.user_id, item.username)}>
             {item.avatar ? (
               <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
             ) : (
@@ -311,7 +312,7 @@ export function SingleUpscorePage() {
           </Link>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(item.user_id, item.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                 {flag && <span className="mr-1">{flag}</span>}
                 {item.username}
               </Link>
@@ -391,7 +392,7 @@ export function SingleClearPage() {
       <Link to="/feed" className="text-xs text-gray-500 hover:text-piu-accent font-display mb-4 inline-block">&larr; Back to Feed</Link>
       <div className="card">
         <div className="flex items-center gap-3 mb-3">
-          <Link to={`/profile/${item.user_id}`}>
+          <Link to={getProfilePath(item.user_id, item.username)}>
             {item.avatar ? (
               <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
             ) : (
@@ -402,7 +403,7 @@ export function SingleClearPage() {
           </Link>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(item.user_id, item.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                 {flag && <span className="mr-1">{flag}</span>}
                 {item.username}
               </Link>

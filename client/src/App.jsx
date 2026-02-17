@@ -4,6 +4,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
 import { searchUsers } from './utils/api';
+import { getProfilePath } from './utils/profile';
 import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
 import TournamentSetup from './pages/TournamentSetup';
@@ -138,11 +139,11 @@ function UserSearch() {
     }, 250);
   };
 
-  const goToUser = (userId) => {
+  const goToUser = (user) => {
     setQuery('');
     setResults([]);
     setOpen(false);
-    navigate(`/profile/${userId}`);
+    navigate(getProfilePath(user?.id, user?.username));
   };
 
   return (
@@ -167,7 +168,7 @@ function UserSearch() {
             return (
               <button
                 key={u.id}
-                onClick={() => goToUser(u.id)}
+                onClick={() => goToUser(u)}
                 className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-piu-dark/50 transition-colors text-left"
               >
                 {u.avatar ? (
@@ -209,13 +210,14 @@ function UserMenu() {
   }, []);
 
   if (!user) return null;
+  const myProfilePath = getProfilePath(user.id, user.username);
 
   return (
     <div className="relative" ref={ref}>
       {/* Profile pic/name → navigates to public profile */}
       <div className="flex items-center gap-2">
         <Link
-          to={`/profile/${user.id}`}
+          to={myProfilePath}
           className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity"
         >
           {user.avatar ? (
@@ -243,7 +245,7 @@ function UserMenu() {
       {open && (
         <div className="absolute right-0 top-full mt-2 w-48 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 py-1">
           <Link
-            to={`/profile/${user.id}`}
+            to={myProfilePath}
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
           >
@@ -358,6 +360,7 @@ export default function App() {
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/@:username" element={<ProfilePage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/account" element={<MyAccountPage />} />
           <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
@@ -467,6 +470,9 @@ function MobileBottomNav() {
 
   const path = location.pathname;
   const isActive = (p) => path === p || path.startsWith(p + '/');
+  const profilePath = getProfilePath(user?.id, user?.username);
+  const profileLegacyPath = user?.id ? `/profile/${user.id}` : '';
+  const profileActive = profilePath ? (path === profilePath || path === profileLegacyPath) : false;
 
   // Close notifications page on route change
   useEffect(() => {
@@ -523,11 +529,11 @@ function MobileBottomNav() {
           </button>
 
           {/* Profile */}
-          <Link to={`/profile/${user.id}`} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive(`/profile/${user.id}`) ? 'text-piu-accent' : 'text-gray-500'}`}>
+          <Link to={profilePath} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${profileActive ? 'text-piu-accent' : 'text-gray-500'}`}>
             {user.avatar ? (
-              <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`} />
+              <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${profileActive ? 'ring-1 ring-piu-accent' : ''}`} />
             ) : (
-              <div className={`w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] ${isActive(`/profile/${user.id}`) ? 'ring-1 ring-piu-accent' : ''}`}>
+              <div className={`w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] ${profileActive ? 'ring-1 ring-piu-accent' : ''}`}>
                 {user.username[0].toUpperCase()}
               </div>
             )}

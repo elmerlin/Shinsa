@@ -4,6 +4,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
+const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
@@ -11,6 +12,11 @@ function createNotification(db, userId, type, title, message, link) {
   db.prepare(
     'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
   ).run(userId, type, title, message || '', link || '');
+}
+
+function buildProfilePath(username) {
+  const clean = String(username || '').trim().replace(/^@+/, '');
+  return clean ? `/@${encodeURIComponent(clean)}` : '';
 }
 
 // Multer config for image uploads (memory-only, images stored as base64 in DB)
@@ -49,7 +55,7 @@ router.post('/follow/:userId', requireAuth, (req, res) => {
         'new_follower',
         'New Follower',
         `${follower?.username || 'Someone'} started following you`,
-        `/profile/${req.user.id}`
+        buildProfilePath(follower?.username) || `/profile/${req.user.id}`
       );
     }
     res.json({ success: true });
@@ -364,8 +370,9 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
   const db = getDb();
   const postId = parseInt(req.params.id);
   const { content, parent_id } = req.body;
+  const trimmedContent = String(content || '').trim();
 
-  if (!content || !content.trim()) {
+  if (!trimmedContent) {
     return res.status(400).json({ error: 'Comment cannot be empty' });
   }
 
@@ -381,7 +388,7 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
 
   const result = db.prepare(
     'INSERT INTO post_comments (post_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
-  ).run(postId, req.user.id, parent_id || null, content.trim());
+  ).run(postId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
     SELECT c.*, u.username, u.avatar
@@ -403,6 +410,17 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
   if (post.user_id !== req.user.id) {
     createNotification(db, post.user_id, 'post_comment', 'New Comment', `${me.username} commented on your post`, `/post/${postId}`);
   }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'post_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in a post comment`,
+    link: `/post/${postId}`,
+  });
 
   res.status(201).json(comment);
 });
@@ -666,7 +684,8 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
   const db = getDb();
   const upscoreId = parseInt(req.params.id);
   const { content, parent_id } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return res.status(400).json({ error: 'Comment cannot be empty' });
 
   const upscore = db.prepare('SELECT id, user_id FROM user_upscores WHERE id = ?').get(upscoreId);
   if (!upscore) return res.status(404).json({ error: 'Upscore not found' });
@@ -678,7 +697,7 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
 
   const result = db.prepare(
     'INSERT INTO upscore_comments (upscore_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
-  ).run(upscoreId, req.user.id, parent_id || null, content.trim());
+  ).run(upscoreId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
     SELECT c.*, u.username, u.avatar
@@ -699,6 +718,17 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
   if (upscore.user_id !== req.user.id) {
     createNotification(db, upscore.user_id, 'upscore_comment', 'New Comment', `${me.username} commented on your upscore`, `/upscore/${upscoreId}`);
   }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'upscore_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in an upscore comment`,
+    link: `/upscore/${upscoreId}`,
+  });
 
   res.status(201).json(comment);
 });
@@ -791,7 +821,8 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
   const db = getDb();
   const clearId = parseInt(req.params.id);
   const { content, parent_id } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return res.status(400).json({ error: 'Comment cannot be empty' });
 
   const clear = db.prepare('SELECT id, user_id FROM user_new_clears WHERE id = ?').get(clearId);
   if (!clear) return res.status(404).json({ error: 'Clear not found' });
@@ -803,7 +834,7 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
 
   const result = db.prepare(
     'INSERT INTO new_clear_comments (clear_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
-  ).run(clearId, req.user.id, parent_id || null, content.trim());
+  ).run(clearId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
     SELECT c.*, u.username, u.avatar
@@ -822,6 +853,17 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
   if (clear.user_id !== req.user.id) {
     createNotification(db, clear.user_id, 'clear_comment', 'New Comment', `${me.username} commented on your new clear`, `/clear/${clearId}`);
   }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'clear_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in a clear comment`,
+    link: `/clear/${clearId}`,
+  });
 
   res.status(201).json(comment);
 });
@@ -901,7 +943,7 @@ router.get('/recent-activity', (req, res) => {
     activities.push({
       type: 'new_user', created_at: u.created_at,
       message: `${u.username} joined Pump **Shinsa**`,
-      link: `/profile/${u.id}`,
+      link: buildProfilePath(u.username) || `/profile/${u.id}`,
       avatar: u.avatar, username: u.username, nationality: u.nationality,
     });
   }

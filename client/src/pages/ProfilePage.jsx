@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getUserProfile, getUserStats, getJacketMap,
+  getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
@@ -11,6 +11,7 @@ import {
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import PostCard, { timeAgo } from '../components/PostCard';
+import { getProfilePath } from '../utils/profile';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -244,11 +245,16 @@ function SyncProgressBar({ progress, total, label }) {
 }
 
 export default function ProfilePage() {
-  const { id } = useParams();
+  const { id, username } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user: authUser } = useAuth();
   const [profile, setProfile] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [stats, setStats] = useState(null);
   const [tab, setTab] = useState('overview');
+  const [activityItems, setActivityItems] = useState([]);
+  const [activitySubTab, setActivitySubTab] = useState('all');
 
   // PIUGame state
   const [piuStatus, setPiuStatus] = useState(null);
@@ -277,70 +283,123 @@ export default function ProfilePage() {
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
 
-  const isOwner = authUser && authUser.id === id;
+  const profileId = profile?.id || null;
+  const isOwner = authUser && profileId && authUser.id === profileId;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
 
   useEffect(() => {
-    getUserProfile(id).then(setProfile).catch(() => {});
-    getUserStats(id).then(setStats).catch(() => {});
-    getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
-    getSocialCounts(id).then(setSocialCounts).catch(() => {});
+    let cancelled = false;
+
+    setProfile(null);
+    setLoadError('');
+    setStats(null);
+    setPiuStatus(null);
+    setPiuPumbility(null);
+    setPiuBestScores(null);
+    setPiuRecentlyPlayed(null);
+    setPiuDataLoaded(false);
+    setSyncProgress({ in_progress: '', progress: 0, total: 0 });
+    setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
+    setActivityItems([]);
     setFollowersLoaded(false);
-    if (authUser) {
-      getFollowStatus(id).then(setFollowStatus).catch(() => {});
-    }
-  }, [id, authUser]);
+    setTab('overview');
+    setActivitySubTab('all');
+
+    const load = async () => {
+      try {
+        const userProfile = username
+          ? await getUserProfileByUsername(username)
+          : await getUserProfile(id);
+        if (cancelled) return;
+
+        setProfile(userProfile);
+
+        if (!username && userProfile?.username && location.pathname.startsWith('/profile/')) {
+          navigate(getProfilePath(userProfile.id, userProfile.username), { replace: true });
+        }
+
+        const uid = userProfile.id;
+        const [statsData, piuStatusData, socialData, activityData] = await Promise.all([
+          getUserStats(uid).catch(() => null),
+          getPiugameSyncStatus(uid).catch(() => null),
+          getSocialCounts(uid).catch(() => null),
+          getUserActivity(uid).catch(() => []),
+        ]);
+
+        if (cancelled) return;
+        if (statsData) setStats(statsData);
+        if (piuStatusData) setPiuStatus(piuStatusData);
+        if (socialData) setSocialCounts(socialData);
+        if (Array.isArray(activityData)) setActivityItems(activityData);
+
+        if (authUser) {
+          const status = await getFollowStatus(uid).catch(() => null);
+          if (!cancelled && status) setFollowStatus(status);
+        } else {
+          setFollowStatus({ following: false, followers_count: 0, following_count: 0 });
+        }
+      } catch {
+        if (!cancelled) {
+          setProfile(null);
+          setLoadError('Profile not found');
+        }
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [id, username, authUser, navigate, location.pathname]);
 
   // Load posts when posts tab is active
   useEffect(() => {
-    if (tab === 'posts') {
-      getUserPosts(id, 1).then(setProfilePosts).catch(() => {});
+    if (tab === 'posts' && profileId) {
+      getUserPosts(profileId, 1).then(setProfilePosts).catch(() => {});
     }
-  }, [tab, id]);
+  }, [tab, profileId]);
 
   // Load followers/following when followers tab is active
   useEffect(() => {
-    if (tab === 'followers' && !followersLoaded) {
+    if (tab === 'followers' && profileId && !followersLoaded) {
       setFollowersLoaded(true);
-      getFollowers(id).then(setFollowersList).catch(() => {});
-      getFollowing(id).then(setFollowingList).catch(() => {});
+      getFollowers(profileId).then(setFollowersList).catch(() => {});
+      getFollowing(profileId).then(setFollowingList).catch(() => {});
       if (authUser) {
         getFollowing(authUser.id).then(list => {
           setMyFollowingIds(new Set(list.map(u => u.id)));
         }).catch(() => {});
       }
     }
-  }, [tab, id, followersLoaded, authUser]);
+  }, [tab, profileId, followersLoaded, authUser]);
 
   // Load PIUGame data + jacket lookup when any PIU tab is active
   const piuTabs = ['pumbility', 'best-scores', 'recently-played'];
   const isPiuTab = piuTabs.includes(tab);
 
   useEffect(() => {
-    if (isPiuTab && !piuDataLoaded) {
+    if (isPiuTab && profileId && !piuDataLoaded) {
       setPiuDataLoaded(true);
-      getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
-      getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
-      getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
+      getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
+      getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+      getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
     }
-  }, [isPiuTab, id, piuDataLoaded]);
+  }, [isPiuTab, profileId, piuDataLoaded]);
 
   // Auto-sync pumbility + recently played (NOT best scores) for profile owner
   useEffect(() => {
-    if (isPiuTab && isOwner && piuStatus?.linked && piuSyncing !== 'auto') {
+    if (isPiuTab && profileId && isOwner && piuStatus?.linked && piuSyncing !== 'auto') {
       setPiuSyncing('auto');
       Promise.all([
         syncPumbility().catch(() => null),
         syncRecentlyPlayed().catch(() => null),
       ]).then(() => {
-        getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
-        getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
-        getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
-        getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
+        getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
+        getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
+        getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+        getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
       }).finally(() => setPiuSyncing(''));
     }
-  }, [isPiuTab, isOwner, piuStatus?.linked]);
+  }, [isPiuTab, profileId, isOwner, piuStatus?.linked]);
 
   // Poll sync progress when a background sync is running
   useEffect(() => {
@@ -353,25 +412,27 @@ export default function ProfilePage() {
         if (!data.in_progress) {
           clearInterval(interval);
           // Refresh data after sync completes
-          getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
-          getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
+          if (profileId) {
+            getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+            getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
+          }
         }
       }).catch(() => {});
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isOwner, piuStatus?.sync_in_progress]);
+  }, [isOwner, profileId, piuStatus?.sync_in_progress]);
 
   const handleFollow = async () => {
-    if (!authUser || followLoading) return;
+    if (!authUser || followLoading || !profileId) return;
     setFollowLoading(true);
     try {
       if (followStatus.following) {
-        await unfollowUser(id);
+        await unfollowUser(profileId);
         setFollowStatus(s => ({ ...s, following: false, followers_count: s.followers_count - 1 }));
         setSocialCounts(c => ({ ...c, followers_count: Math.max(0, c.followers_count - 1) }));
       } else {
-        await followUser(id);
+        await followUser(profileId);
         setFollowStatus(s => ({ ...s, following: true, followers_count: s.followers_count + 1 }));
         setSocialCounts(c => ({ ...c, followers_count: c.followers_count + 1 }));
       }
@@ -389,7 +450,7 @@ export default function ProfilePage() {
       setSyncFeedback('Import started successfully. Check progress in Best Scores tab.');
       setTimeout(() => setSyncFeedback(''), 6000);
       // Refresh status to start polling
-      getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
+      if (profileId) getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
     } catch (err) {
       alert(err.message);
     }
@@ -401,7 +462,7 @@ export default function ProfilePage() {
     const scores = [];
 
     for (const { duel, songs } of stats.duelStats) {
-      const isP1 = duel.player1_user_id === id;
+      const isP1 = duel.player1_user_id === profileId;
       for (const s of songs) {
         const myScore = isP1 ? s.player1_score : s.player2_score;
         const opponentScore = isP1 ? s.player2_score : s.player1_score;
@@ -438,7 +499,7 @@ export default function ProfilePage() {
     }
 
     return scores.sort((a, b) => b.myScore - a.myScore);
-  }, [stats, id]);
+  }, [stats, profileId]);
 
   // Aggregated stats
   const aggregated = useMemo(() => {
@@ -453,7 +514,7 @@ export default function ProfilePage() {
     let duelWins = 0, duelLosses = 0;
     for (const { duel } of stats.duelStats) {
       if (duel.status !== 'COMPLETED') continue;
-      const isP1 = duel.player1_user_id === id;
+      const isP1 = duel.player1_user_id === profileId;
       if ((isP1 && duel.winner === 'player1') || (!isP1 && duel.winner === 'player2')) duelWins++;
       else if (duel.winner !== 'draw') duelLosses++;
     }
@@ -472,7 +533,7 @@ export default function ProfilePage() {
       .sort((a, b) => a.level - b.level);
 
     return { tournamentCount, duelCount, totalWins, totalLosses, duelWins, duelLosses, totalSongs, avgScore, bestScore, byLevel };
-  }, [stats, songScores, id]);
+  }, [stats, songScores, profileId]);
 
   // Filtered + sorted best scores
   const filteredBestScores = useMemo(() => {
@@ -531,7 +592,20 @@ export default function ProfilePage() {
     return { levels, maxCount };
   }, [piuBestScores, piuScoreMode]);
 
+  const filteredActivity = useMemo(() => {
+    if (!Array.isArray(activityItems)) return [];
+    if (activitySubTab === 'all') return activityItems;
+    if (activitySubTab === 'posts') return activityItems.filter(a => a.category === 'posts');
+    if (activitySubTab === 'comments') return activityItems.filter(a => a.category === 'comments');
+    if (activitySubTab === 'scores') return activityItems.filter(a => a.category === 'scores');
+    if (activitySubTab === 'competitions') return activityItems.filter(a => a.category === 'competitions');
+    return activityItems;
+  }, [activityItems, activitySubTab]);
+
   if (!profile) {
+    if (loadError) {
+      return <div className="text-center py-20 text-gray-500">{loadError}</div>;
+    }
     return <div className="text-center py-20 text-gray-500">Loading profile...</div>;
   }
 
@@ -539,13 +613,13 @@ export default function ProfilePage() {
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
 
-  const tabs = ['overview', 'posts', 'competitions', 'songs'];
+  const tabs = ['overview', 'activity', 'posts', 'competitions', 'songs'];
   if (hasPiuData) {
     tabs.push('pumbility', 'best-scores', 'recently-played');
   }
 
   const tabLabels = {
-    overview: 'Overview', competitions: 'Competitions', songs: 'Songs', posts: 'Posts',
+    overview: 'Overview', activity: 'Activity', competitions: 'Competitions', songs: 'Songs', posts: 'Posts',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
   };
 
@@ -775,6 +849,65 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {tab === 'activity' && (
+        <div className="space-y-3">
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'posts', label: 'Posts' },
+              { key: 'comments', label: 'Comments' },
+              { key: 'scores', label: 'Scores' },
+              { key: 'competitions', label: 'Competitions' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setActivitySubTab(opt.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                  activitySubTab === opt.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {filteredActivity.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No activity yet</p>
+          ) : (
+            <div className="space-y-2">
+              {filteredActivity.map(item => {
+                const content = (
+                  <div className="card-hover py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-display font-bold text-gray-200">{item.message}</p>
+                        {item.detail && (
+                          <p className="text-xs text-gray-500 mt-0.5 break-words">{item.detail}</p>
+                        )}
+                        {item.category === 'community' && (
+                          <p className="text-[10px] text-gray-600 mt-1">Community milestone</p>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-600 shrink-0">{timeAgo(item.created_at)}</span>
+                    </div>
+                  </div>
+                );
+
+                if (item.link) {
+                  return (
+                    <Link key={item.id} to={item.link}>
+                      {content}
+                    </Link>
+                  );
+                }
+
+                return <div key={item.id}>{content}</div>;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === 'competitions' && stats && (
         <div>
           {/* Sub-tabs for Tournaments and Duels */}
@@ -842,7 +975,7 @@ export default function ProfilePage() {
                 <p className="text-center text-gray-500 py-8">No duel participation yet</p>
               ) : (
                 stats.duelStats.map(({ duel, songs }) => {
-                  const isP1 = duel.player1_user_id === id;
+                  const isP1 = duel.player1_user_id === profileId;
                   const opponentName = isP1 ? duel.player2_name : duel.player1_name;
                   const myWins = songs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
                   const oppWins = songs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
@@ -919,7 +1052,7 @@ export default function ProfilePage() {
                   const isSelf = authUser && authUser.id === f.id;
                   return (
                     <div key={f.id} className="flex items-center gap-3 py-2.5">
-                      <Link to={`/profile/${f.id}`} className="shrink-0">
+                      <Link to={getProfilePath(f.id, f.username)} className="shrink-0">
                         {f.avatar ? (
                           <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
                         ) : (
@@ -929,7 +1062,7 @@ export default function ProfilePage() {
                         )}
                       </Link>
                       <div className="flex-1 min-w-0">
-                        <Link to={`/profile/${f.id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                        <Link to={getProfilePath(f.id, f.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
                           {fFlag && <span className="mr-1">{fFlag}</span>}
                           {f.username}
                         </Link>
@@ -975,7 +1108,7 @@ export default function ProfilePage() {
                   const fFlag = getCountryFlag(f.nationality);
                   return (
                     <div key={f.id} className="flex items-center gap-3 py-2.5">
-                      <Link to={`/profile/${f.id}`} className="shrink-0">
+                      <Link to={getProfilePath(f.id, f.username)} className="shrink-0">
                         {f.avatar ? (
                           <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
                         ) : (
@@ -985,7 +1118,7 @@ export default function ProfilePage() {
                         )}
                       </Link>
                       <div className="flex-1 min-w-0">
-                        <Link to={`/profile/${f.id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                        <Link to={getProfilePath(f.id, f.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
                           {fFlag && <span className="mr-1">{fFlag}</span>}
                           {f.username}
                         </Link>

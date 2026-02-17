@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
+import { getProfilePath } from '../utils/profile';
 import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
 import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
-  getCommunityMembers,
+  getCommunityMembers, searchCommunityMentions,
 } from '../utils/api';
 
 function timeAgo(dateStr) {
@@ -25,6 +26,19 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function getActiveMentionQuery(text, cursor) {
+  const value = String(text || '');
+  const pos = Number.isFinite(cursor) ? cursor : value.length;
+  const before = value.slice(0, pos);
+  const match = before.match(/(^|[\s(])@([A-Za-z0-9_]{1,30})$/);
+  if (!match) return null;
+  return {
+    query: match[2],
+    start: pos - match[2].length - 1,
+    end: pos,
+  };
 }
 
 export default function CommunityPage() {
@@ -55,6 +69,10 @@ export default function CommunityPage() {
   const [replyTo, setReplyTo] = useState({});
 
   const loadCommunity = useCallback(async () => {
+    setPosts([]);
+    setMembers([]);
+    setExpandedComments({});
+    setLoading(true);
     try {
       const data = await getCommunityByName(communityName);
       setCommunity(data);
@@ -71,7 +89,10 @@ export default function CommunityPage() {
     try {
       const data = await getCommunityPosts(community.id, { sort: postSort });
       setPosts(data);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setPosts([]);
+    }
     finally { setPostsLoading(false); }
   }, [community, postSort]);
 
@@ -81,7 +102,10 @@ export default function CommunityPage() {
     try {
       const data = await getCommunityMembers(community.id, memberSort);
       setMembers(data);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setMembers([]);
+    }
     finally { setMembersLoading(false); }
   }, [community, memberSort]);
 
@@ -243,7 +267,7 @@ export default function CommunityPage() {
             <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
               <span>{community.member_count} member{community.member_count !== 1 ? 's' : ''}</span>
               <span className="text-gray-600">by</span>
-              <Link to={`/profile/${community.owner_id}`} className="text-piu-accent hover:underline">
+              <Link to={getProfilePath(community.owner_id, community.owner_username)} className="text-piu-accent hover:underline">
                 {community.owner_username}
               </Link>
             </div>
@@ -540,7 +564,7 @@ function CommunityPostCard({
         {/* Author header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2.5">
-            <Link to={`/profile/${post.user_id}`}>
+            <Link to={getProfilePath(post.user_id, post.username)}>
               {post.user_avatar ? (
                 <img src={post.user_avatar.startsWith('data:') ? post.user_avatar : getAvatarUrl(post.user_avatar)} alt="" className="w-9 h-9 rounded-full object-cover" />
               ) : (
@@ -551,7 +575,7 @@ function CommunityPostCard({
             </Link>
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <Link to={`/profile/${post.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                <Link to={getProfilePath(post.user_id, post.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                   {post.username}
                 </Link>
                 <CommunityTagList tags={post.author_tags} />
@@ -670,13 +694,13 @@ function CommunityPostCard({
             {/* Add comment */}
             {isMember && !replyTo && (
               <div className="flex items-center gap-2 mt-2">
-                <input
-                  type="text"
+                <MentionCommentInput
+                  communityId={community.id}
                   value={commentTexts[post.id] || ''}
-                  onChange={(e) => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))}
-                  onKeyDown={(e) => e.key === 'Enter' && onAddComment(post.id, null)}
-                  className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-piu-accent"
+                  onChange={(value) => setCommentTexts(prev => ({ ...prev, [post.id]: value }))}
+                  onSubmit={() => onAddComment(post.id, null)}
                   placeholder="Write a comment..."
+                  inputClassName="w-full bg-piu-dark border border-piu-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-piu-accent"
                 />
                 <button
                   onClick={() => onAddComment(post.id, null)}
@@ -702,7 +726,7 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
   return (
     <div>
       <div className="flex items-start gap-2">
-        <Link to={`/profile/${comment.user_id}`}>
+        <Link to={getProfilePath(comment.user_id, comment.username)}>
           {comment.user_avatar ? (
             <img src={comment.user_avatar.startsWith('data:') ? comment.user_avatar : getAvatarUrl(comment.user_avatar)} alt="" className="w-6 h-6 rounded-full object-cover mt-0.5" />
           ) : (
@@ -714,12 +738,12 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
         <div className="flex-1 min-w-0">
           <div className="bg-piu-dark/50 rounded-lg px-3 py-1.5">
             <div className="flex items-center gap-1.5">
-              <Link to={`/profile/${comment.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(comment.user_id, comment.username)} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors">
                 {comment.username}
               </Link>
               <CommunityTagList tags={comment.author_tags} />
             </div>
-            <p className="text-xs text-gray-300 mt-0.5 break-words">{comment.content}</p>
+            <div className="text-xs text-gray-300 mt-0.5 break-words">{renderFormattedText(comment.content)}</div>
           </div>
           <div className="flex items-center gap-3 mt-0.5 ml-3">
             <span className="text-[9px] text-gray-600">{timeAgo(comment.created_at)}</span>
@@ -748,7 +772,7 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
         <div className="ml-8 mt-1 space-y-1.5">
           {replies.map(reply => (
             <div key={reply.id} className="flex items-start gap-2">
-              <Link to={`/profile/${reply.user_id}`}>
+              <Link to={getProfilePath(reply.user_id, reply.username)}>
                 {reply.user_avatar ? (
                   <img src={reply.user_avatar.startsWith('data:') ? reply.user_avatar : getAvatarUrl(reply.user_avatar)} alt="" className="w-5 h-5 rounded-full object-cover mt-0.5" />
                 ) : (
@@ -760,12 +784,12 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
               <div className="flex-1 min-w-0">
                 <div className="bg-piu-dark/30 rounded-lg px-2.5 py-1">
                   <div className="flex items-center gap-1.5">
-                    <Link to={`/profile/${reply.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors">
+                    <Link to={getProfilePath(reply.user_id, reply.username)} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors">
                       {reply.username}
                     </Link>
                     <CommunityTagList tags={reply.author_tags} />
                   </div>
-                  <p className="text-[11px] text-gray-300 mt-0.5 break-words">{reply.content}</p>
+                  <div className="text-[11px] text-gray-300 mt-0.5 break-words">{renderFormattedText(reply.content)}</div>
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 ml-2.5">
                   <span className="text-[9px] text-gray-600">{timeAgo(reply.created_at)}</span>
@@ -782,17 +806,166 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
       {/* Reply input */}
       {replyTo === comment.id && isMember && (
         <div className="ml-8 mt-1.5 flex items-center gap-2">
-          <input
-            type="text"
+          <MentionCommentInput
+            communityId={community.id}
             value={commentTexts[comment.id] || ''}
-            onChange={(e) => setCommentTexts(prev => ({ ...prev, [comment.id]: e.target.value }))}
-            onKeyDown={(e) => e.key === 'Enter' && onAddComment(postId, comment.id)}
-            className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-3 py-1 text-[11px] text-white focus:outline-none focus:border-piu-accent"
+            onChange={(value) => setCommentTexts(prev => ({ ...prev, [comment.id]: value }))}
+            onSubmit={() => onAddComment(postId, comment.id)}
             placeholder={`Reply to ${comment.username}...`}
             autoFocus
+            inputClassName="w-full bg-piu-dark border border-piu-border rounded-lg px-3 py-1 text-[11px] text-white focus:outline-none focus:border-piu-accent"
           />
           <button onClick={() => onAddComment(postId, comment.id)} className="text-[10px] text-piu-accent font-display font-bold">Send</button>
           <button onClick={() => setReplyTo(null)} className="text-[10px] text-gray-600 hover:text-gray-400">Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MentionCommentInput({
+  communityId,
+  value,
+  onChange,
+  onSubmit,
+  placeholder,
+  autoFocus = false,
+  disabled = false,
+  inputClassName = '',
+}) {
+  const inputRef = useRef(null);
+  const [mentionToken, setMentionToken] = useState(null);
+  const [mentionUsers, setMentionUsers] = useState([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const requestRef = useRef(0);
+
+  useEffect(() => {
+    if (!communityId || disabled || !mentionToken?.query) {
+      setMentionUsers([]);
+      setMentionLoading(false);
+      setShowMentions(false);
+      return;
+    }
+
+    const requestId = ++requestRef.current;
+    setMentionLoading(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const found = await searchCommunityMentions(communityId, mentionToken.query);
+        if (requestId !== requestRef.current) return;
+        const filtered = (found || []).filter(u => u?.username).slice(0, 6);
+        setMentionUsers(filtered);
+        setShowMentions(filtered.length > 0);
+      } catch {
+        if (requestId === requestRef.current) {
+          setMentionUsers([]);
+          setShowMentions(false);
+        }
+      } finally {
+        if (requestId === requestRef.current) setMentionLoading(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timeout);
+  }, [communityId, mentionToken?.query, disabled]);
+
+  const updateMentionState = (nextValue, cursorOverride) => {
+    const cursor = Number.isFinite(cursorOverride)
+      ? cursorOverride
+      : (inputRef.current?.selectionStart ?? String(nextValue || '').length);
+    const token = getActiveMentionQuery(nextValue, cursor);
+    setMentionToken(token);
+    if (!token) {
+      setMentionUsers([]);
+      setMentionLoading(false);
+      setShowMentions(false);
+    }
+  };
+
+  const handleChange = (nextValue) => {
+    onChange(nextValue);
+    updateMentionState(nextValue);
+  };
+
+  const applyMention = (username) => {
+    const current = String(value || '');
+    const cursor = inputRef.current?.selectionStart ?? current.length;
+    const token = getActiveMentionQuery(current, cursor) || mentionToken;
+    if (!token) return;
+
+    const next = `${current.slice(0, token.start)}@${username} ${current.slice(token.end)}`;
+    const nextCursor = token.start + username.length + 2;
+    onChange(next);
+    setMentionToken(null);
+    setMentionUsers([]);
+    setMentionLoading(false);
+    setShowMentions(false);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      if (showMentions && mentionUsers.length > 0) {
+        e.preventDefault();
+        applyMention(mentionUsers[0].username);
+        return;
+      }
+      e.preventDefault();
+      onSubmit?.();
+      return;
+    }
+    if (e.key === 'Escape' && showMentions) {
+      e.preventDefault();
+      setShowMentions(false);
+    }
+  };
+
+  const classes = inputClassName || 'w-full bg-piu-dark border border-piu-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-piu-accent';
+
+  return (
+    <div className="relative flex-1">
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => handleChange(e.target.value)}
+        onClick={() => updateMentionState(value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        disabled={disabled}
+        className={classes}
+      />
+      {(showMentions || mentionLoading) && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-40 rounded-lg border border-piu-border bg-piu-card shadow-xl max-h-48 overflow-y-auto">
+          {mentionLoading && mentionUsers.length === 0 ? (
+            <p className="px-3 py-2 text-[11px] text-gray-500">Searching...</p>
+          ) : mentionUsers.length === 0 ? (
+            <p className="px-3 py-2 text-[11px] text-gray-500">No users found</p>
+          ) : (
+            mentionUsers.map(u => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => applyMention(u.username)}
+                className="w-full px-3 py-2 text-left hover:bg-piu-dark/60 transition-colors flex items-center gap-2"
+              >
+                {u.avatar ? (
+                  <img src={u.avatar.startsWith('data:') ? u.avatar : getAvatarUrl(u.avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[9px]">
+                    {(u.username || '?')[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="text-xs font-display font-bold">@{u.username}</span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -835,7 +1008,7 @@ function MembersTab({ members, loading, memberSort, setMemberSort, community }) 
           {members.map(member => (
             <Link
               key={member.id}
-              to={`/profile/${member.id}`}
+              to={getProfilePath(member.id, member.username)}
               className="flex items-center gap-3 p-3 rounded-lg hover:bg-piu-dark/50 transition-colors"
             >
               {member.avatar ? (

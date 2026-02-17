@@ -107,7 +107,9 @@ export const updateMe = (data) => request('/auth/me', { method: 'PUT', body: JSO
 export const changePassword = (data) => request('/auth/password', { method: 'PUT', body: JSON.stringify(data) });
 export const searchUsers = (q) => request(`/auth/search?q=${encodeURIComponent(q)}`);
 export const getUserProfile = (id) => request(`/auth/user/${id}`);
+export const getUserProfileByUsername = (username) => request(`/auth/user/username/${encodeURIComponent(username)}`);
 export const getUserStats = (id) => request(`/auth/user/${id}/stats`);
+export const getUserActivity = (id) => request(`/auth/user/${id}/activity`);
 export const getInvitations = () => request('/auth/invitations');
 export const respondInvitation = (id, status) => request(`/auth/invitations/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
 export const sendInvitation = (data) => request('/auth/invite', { method: 'POST', body: JSON.stringify(data) });
@@ -261,6 +263,7 @@ export const deleteCommunity = (id) => request(`/communities/${id}`, { method: '
 export const joinCommunity = (id) => request(`/communities/${id}/join`, { method: 'POST' });
 export const leaveCommunity = (id) => request(`/communities/${id}/leave`, { method: 'DELETE' });
 export const getCommunityMembers = (id, sort) => request(`/communities/${id}/members${sort ? `?sort=${sort}` : ''}`);
+export const searchCommunityMentions = (id, q) => request(`/communities/${id}/mentions?q=${encodeURIComponent(q)}`);
 export const updateMemberRole = (communityId, userId, role) => request(`/communities/${communityId}/members/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
 export const removeCommunityMember = (communityId, userId) => request(`/communities/${communityId}/members/${userId}`, { method: 'DELETE' });
 export const getJoinRequests = (id) => request(`/communities/${id}/requests`);

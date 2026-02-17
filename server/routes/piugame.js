@@ -290,10 +290,14 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       txn();
 
       // Create notification
+      const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+      const profileLink = profile?.username
+        ? `/@${encodeURIComponent(profile.username)}`
+        : `/profile/${userId}`;
       db.prepare(`
         INSERT INTO user_notifications (user_id, type, title, message, link)
         VALUES (?, 'sync_complete', 'Best Scores Synced', ?, ?)
-      `).run(userId, `${scores.length} scores imported successfully!`, `/profile/${userId}`);
+      `).run(userId, `${scores.length} scores imported successfully!`, profileLink);
 
       console.log(`Background best scores sync complete for ${userId}: ${scores.length} scores`);
     } catch (err) {

@@ -11,6 +11,7 @@ import {
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import { SongJacket } from './DuelView';
+import { getProfilePath } from '../utils/profile';
 
 const RANKS = [
   { min: 995000, label: 'SSS+', color: 'text-sky-300',      bg: 'bg-sky-400/20 border-sky-400/40' },
@@ -330,7 +331,7 @@ export default function OnlineDuelRoom() {
             </div>
             <div className="flex items-center justify-center gap-1 mt-1">
               {duel.player1_nationality && <span className="text-sm">{getCountryFlag(duel.player1_nationality)}</span>}
-              <Link to={`/profile/${duel.creator_user_id}`} className="font-display font-bold text-sm sm:text-base hover:text-piu-accent transition-colors">{duel.player1_name || 'Waiting...'}</Link>
+              <Link to={getProfilePath(duel.creator_user_id, duel.player1_name)} className="font-display font-bold text-sm sm:text-base hover:text-piu-accent transition-colors">{duel.player1_name || 'Waiting...'}</Link>
               {duel.player1_gender && <span className={`text-xs ${duel.player1_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player1_gender]}</span>}
             </div>
             {duel.player1_skill_title && <span className={`badge border text-[10px] ${getSkillColor(duel.player1_skill_title)}`}>{duel.player1_skill_title}</span>}
@@ -406,7 +407,7 @@ export default function OnlineDuelRoom() {
             <div className="flex items-center justify-center gap-1 mt-1">
               {duel.player2_nationality && <span className="text-sm">{getCountryFlag(duel.player2_nationality)}</span>}
               {duel.player2_name ? (
-                <Link to={`/profile/${duel.opponent_user_id}`} className="font-display font-bold text-sm sm:text-base hover:text-piu-accent transition-colors">{duel.player2_name}</Link>
+                <Link to={getProfilePath(duel.opponent_user_id, duel.player2_name)} className="font-display font-bold text-sm sm:text-base hover:text-piu-accent transition-colors">{duel.player2_name}</Link>
               ) : <span className="text-gray-500 text-sm font-display">Waiting...</span>}
               {duel.player2_gender && <span className={`text-xs ${duel.player2_gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>{GENDER_SYMBOLS[duel.player2_gender]}</span>}
             </div>

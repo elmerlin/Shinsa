@@ -785,6 +785,15 @@ function initializeDb() {
       PRIMARY KEY (community_id, user_id)
     );
 
+    CREATE TABLE IF NOT EXISTS community_role_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      changed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS community_tags (
       id TEXT PRIMARY KEY,
       community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
@@ -849,6 +858,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_communities_owner ON communities(owner_id);
     CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);
     CREATE INDEX IF NOT EXISTS idx_community_members_user ON community_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_community_role_events_user ON community_role_events(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_community_role_events_community ON community_role_events(community_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_community_tags_community ON community_tags(community_id);
     CREATE INDEX IF NOT EXISTS idx_community_member_tags_community ON community_member_tags(community_id);
     CREATE INDEX IF NOT EXISTS idx_community_posts_community ON community_posts(community_id);

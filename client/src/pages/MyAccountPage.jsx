@@ -11,6 +11,7 @@ import {
   SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
   COUNTRIES, getCountryFlag, getSkillColor,
 } from '../components/PlayerRegistration';
+import { getProfilePath } from '../utils/profile';
 
 export default function MyAccountPage() {
   const navigate = useNavigate();
@@ -172,7 +173,7 @@ export default function MyAccountPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-display font-bold tracking-wider">MY ACCOUNT</h1>
-        <Link to={`/profile/${user.id}`} className="text-sm text-piu-accent hover:underline font-display">
+        <Link to={getProfilePath(user.id, user.username)} className="text-sm text-piu-accent hover:underline font-display">
           View public profile
         </Link>
       </div>
