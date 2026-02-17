@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getUserPosts, createPost, deletePost } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import PostCard from '../components/PostCard';
+import ImageEditor from '../components/ImageEditor';
 
 // Common emoji sets for quick insert
 const EMOJI_GROUPS = [
@@ -23,6 +24,7 @@ function PostComposer({ onPost }) {
   const [commentsDisabled, setCommentsDisabled] = useState(false);
   const [posting, setPosting] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null);
   const textRef = useRef(null);
   const fileRef = useRef(null);
   const emojiRef = useRef(null);
@@ -147,8 +149,17 @@ function PostComposer({ onPost }) {
       {previews.length > 0 && (
         <div className={`grid gap-1.5 mb-3 ${previews.length === 1 ? 'grid-cols-1 max-w-[120px]' : previews.length <= 4 ? 'grid-cols-2 max-w-[200px]' : 'grid-cols-3 max-w-[280px]'}`}>
           {previews.map((src, i) => (
-            <div key={i} className="relative">
+            <div key={i} className="relative group">
               <img src={src} alt="" className="w-full aspect-square rounded-lg object-cover" />
+              <button
+                onClick={() => setEditingIndex(i)}
+                className="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center hover:bg-black/80 transition-colors"
+                title="Edit image"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
               <button
                 onClick={() => removeImage(i)}
                 className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center"
@@ -158,6 +169,24 @@ function PostComposer({ onPost }) {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Image Editor Modal */}
+      {editingIndex !== null && images[editingIndex] && (
+        <ImageEditor
+          file={images[editingIndex]}
+          onDone={(editedFile) => {
+            const newImages = [...images];
+            newImages[editingIndex] = editedFile;
+            setImages(newImages);
+            // Regenerate previews
+            const newPreviews = newImages.map(f => URL.createObjectURL(f));
+            previews.forEach(p => URL.revokeObjectURL(p));
+            setPreviews(newPreviews);
+            setEditingIndex(null);
+          }}
+          onCancel={() => setEditingIndex(null)}
+        />
       )}
 
       {/* Toolbar */}

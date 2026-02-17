@@ -172,8 +172,9 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
   if (req.files && req.files.length > 0) {
     for (const file of req.files) {
       try {
-        // Compress to WebP, targeting under 100KB
+        // Auto-rotate based on EXIF orientation, then compress to WebP
         let buffer = await sharp(file.buffer)
+          .rotate() // auto-rotate from EXIF, prevents sideways photos
           .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 60 })
           .toBuffer();
@@ -181,6 +182,7 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
         // Reduce further if still over 100KB
         if (buffer.length > 100 * 1024) {
           buffer = await sharp(file.buffer)
+            .rotate()
             .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
             .webp({ quality: 40 })
             .toBuffer();
