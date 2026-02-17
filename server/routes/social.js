@@ -5,13 +5,12 @@ const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
+const { createUserNotification } = require('../lib/notifications');
 
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
-  if (!userId) return;
-  db.prepare(
-    'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
-  ).run(userId, type, title, message || '', link || '');
+  if (!userId) return null;
+  return createUserNotification(db, userId, type, title, message || '', link || '');
 }
 
 function buildProfilePath(username) {
@@ -48,9 +47,8 @@ router.post('/follow/:userId', requireAuth, (req, res) => {
     // Send notification only if this is a new follow (not a duplicate)
     if (result.changes > 0) {
       const follower = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
-      db.prepare(
-        'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
-      ).run(
+      createNotification(
+        db,
         followingId,
         'new_follower',
         'New Follower',

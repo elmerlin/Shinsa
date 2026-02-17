@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../db/schema');
+const { addNotificationClient } = require('../lib/notificationHub');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
@@ -672,6 +673,39 @@ router.post('/invite', (req, res) => {
 });
 
 // ─── Notifications ──────────────────────────────────────
+
+// GET /api/auth/notifications/stream — real-time notification stream (SSE)
+router.get('/notifications/stream', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (res.flushHeaders) res.flushHeaders();
+
+  const detach = addNotificationClient(decoded.id, res);
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {}
+  }, 25000);
+
+  res.write('event: ready\ndata: {"ok":true}\n\n');
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    detach();
+  });
+});
 
 // GET /api/auth/notifications — get all notifications + pending invitations count
 router.get('/notifications', requireAuth, (req, res) => {

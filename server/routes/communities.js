@@ -6,6 +6,7 @@ const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
+const { createUserNotification } = require('../lib/notifications');
 
 // Multer config for image uploads
 const upload = multer({
@@ -58,10 +59,8 @@ function slugify(str) {
 
 // Helper: create notification
 function createNotification(db, userId, type, title, message, link) {
-  if (!userId) return;
-  db.prepare(
-    'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
-  ).run(userId, type, title, message || '', link || '');
+  if (!userId) return null;
+  return createUserNotification(db, userId, type, title, message || '', link || '');
 }
 
 // Helper: get member role in a community

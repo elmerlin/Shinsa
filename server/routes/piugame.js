@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../db/schema');
 const { login, scrapePumbility, scrapeBestScores, scrapeRecentlyPlayed } = require('../lib/piugameScraper');
+const { createUserNotification } = require('../lib/notifications');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
@@ -294,10 +295,14 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       const profileLink = profile?.username
         ? `/@${encodeURIComponent(profile.username)}`
         : `/profile/${userId}`;
-      db.prepare(`
-        INSERT INTO user_notifications (user_id, type, title, message, link)
-        VALUES (?, 'sync_complete', 'Best Scores Synced', ?, ?)
-      `).run(userId, `${scores.length} scores imported successfully!`, profileLink);
+      createUserNotification(
+        db,
+        userId,
+        'sync_complete',
+        'Best Scores Synced',
+        `${scores.length} scores imported successfully!`,
+        profileLink
+      );
 
       console.log(`Background best scores sync complete for ${userId}: ${scores.length} scores`);
     } catch (err) {
@@ -305,10 +310,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       db.prepare(`
         UPDATE user_piugame_sync SET sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
       `).run(userId);
-      db.prepare(`
-        INSERT INTO user_notifications (user_id, type, title, message)
-        VALUES (?, 'sync_error', 'Best Scores Sync Failed', ?)
-      `).run(userId, err.message);
+      createUserNotification(db, userId, 'sync_error', 'Best Scores Sync Failed', err.message, '');
     }
   })();
 });

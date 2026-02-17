@@ -1,4 +1,5 @@
 const MENTION_REGEX = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{2,30})\b/g;
+const { createUserNotification } = require('./notifications');
 
 function extractMentionUsernames(text = '') {
   if (!text) return [];
@@ -58,14 +59,10 @@ function notifyMentionedUsers(db, options = {}) {
   if (!Array.isArray(mentionedUsers) || mentionedUsers.length === 0) return 0;
 
   const skip = new Set([actorUserId, ...skipUserIds].filter(Boolean));
-  const stmt = db.prepare(
-    'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
-  );
-
   let created = 0;
   for (const user of mentionedUsers) {
     if (!user?.id || skip.has(user.id)) continue;
-    stmt.run(user.id, type, title, message || `${actorUsername} mentioned you`, link || '');
+    createUserNotification(db, user.id, type, title, message || `${actorUsername} mentioned you`, link || '');
     created += 1;
   }
   return created;
