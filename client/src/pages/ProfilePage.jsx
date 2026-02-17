@@ -555,48 +555,38 @@ export default function ProfilePage() {
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
       {/* Profile Header */}
       <div className="card mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+        <div className="flex flex-row items-center gap-3 sm:gap-6">
           {profile.avatar ? (
-            <img src={getAvatarUrl(profile.avatar)} alt="" className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg" />
+            <img src={getAvatarUrl(profile.avatar)} alt="" className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0" />
           ) : (
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-2xl sm:text-3xl shadow-lg">
+            <div className="w-14 h-14 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xl sm:text-3xl shadow-lg shrink-0">
               {profile.username[0].toUpperCase()}
             </div>
           )}
-          <div className="text-center sm:text-left flex-1">
-            <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
-              {flag && <span className="text-xl">{flag}</span>}
-              <h1 className="text-2xl font-display font-bold">{profile.username}</h1>
+          <div className="text-left flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              {flag && <span className="text-lg sm:text-xl">{flag}</span>}
+              <h1 className="text-lg sm:text-2xl font-display font-bold truncate">{profile.username}</h1>
               {genderSymbol && (
-                <span className={`text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                <span className={`text-base sm:text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
                   {genderSymbol}
                 </span>
               )}
             </div>
-            <div className="flex items-center justify-center sm:justify-start gap-2 mt-1 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
               {profile.skill_title && (
                 <span className={`badge border ${getSkillColor(profile.skill_title)}`}>
                   {profile.skill_title}
                 </span>
               )}
-              {profile.pumbility > 0 && (
-                <span className="text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
-              )}
               {age !== null && (
-                <span className="text-sm text-gray-500">Age {age}</span>
-              )}
-              {(piuStatus?.highest_single || piuStatus?.highest_double) && (
-                <span className="text-xs text-gray-400 font-mono">
-                  {piuStatus.highest_single ? `S${piuStatus.highest_single}` : ''}
-                  {piuStatus.highest_single && piuStatus.highest_double ? ' / ' : ''}
-                  {piuStatus.highest_double ? `D${piuStatus.highest_double}` : ''}
-                </span>
+                <span className="text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
             </div>
             {profile.description && (
-              <p className="text-sm text-gray-400 mt-2">{profile.description}</p>
+              <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
             )}
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
               Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
             </p>
             {/* Follow button */}
@@ -604,7 +594,7 @@ export default function ProfilePage() {
               <button
                 onClick={handleFollow}
                 disabled={followLoading}
-                className={`mt-2 px-4 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                className={`mt-1.5 sm:mt-2 px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
                   followStatus.following
                     ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
                     : 'bg-piu-accent text-white hover:bg-piu-accent/80'
@@ -616,13 +606,35 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {/* Pumbility & Best Clears Container */}
+        {(profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double) && (
+          <div className="mt-3 rounded-lg bg-piu-dark/50 border border-piu-border/30 px-3 py-2 flex flex-col gap-1">
+            {profile.pumbility > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-gray-400 font-display">Pumbility</span>
+                <span className="text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
+              </div>
+            )}
+            {(piuStatus?.highest_single || piuStatus?.highest_double) && (
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-gray-400 font-display">Best Clears</span>
+                <span className="text-sm font-mono font-bold">
+                  {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
+                  {piuStatus.highest_single && piuStatus.highest_double && <span className="text-gray-500 mx-1">/</span>}
+                  {piuStatus.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stats integrated into profile card */}
-        <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-6 mt-4 pt-3 border-t border-piu-border/30">
+        <div className="flex items-center justify-around sm:justify-start gap-2 sm:gap-6 mt-3 pt-2.5 sm:pt-3 border-t border-piu-border/30">
           <button
             onClick={() => { setTab('followers'); setFollowersLoaded(false); }}
             className="text-center hover:opacity-80 transition-opacity cursor-pointer"
           >
-            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">
               {socialCounts.followers_count}
               {socialCounts.followers_count > (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
                 <span className="text-green-400 text-[10px] ml-0.5">&#9650;</span>
@@ -634,15 +646,15 @@ export default function ProfilePage() {
             <p className="text-[10px] text-gray-500 font-display">Followers</p>
           </button>
           <div className="text-center">
-            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">{socialCounts.posts_count}</p>
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">{socialCounts.posts_count}</p>
             <p className="text-[10px] text-gray-500 font-display">Posts</p>
           </div>
           <div className="text-center">
-            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">{socialCounts.total_pumps || 0}</p>
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">{socialCounts.total_pumps || 0}</p>
             <p className="text-[10px] text-gray-500 font-display">Pumps</p>
           </div>
           <div className="text-center">
-            <p className="font-mono font-bold text-lg text-piu-accent leading-tight">{competitionsCount}</p>
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">{competitionsCount}</p>
             <p className="text-[10px] text-gray-500 font-display">Competitions</p>
           </div>
         </div>
