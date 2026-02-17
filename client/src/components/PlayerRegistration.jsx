@@ -218,12 +218,12 @@ export const COUNTRIES = [
 const COUNTRY_MAP = {};
 COUNTRIES.forEach(c => { if (c.code) COUNTRY_MAP[c.code] = c; });
 
-export function getCountryFlag(code) {
+export function getCountryFlag(code, className) {
   if (!code) return null;
   const country = COUNTRY_MAP[code];
   if (!country) return null;
   // Use flag images instead of Unicode emojis (Windows doesn't render flag emojis)
-  return <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={country.name} className="inline-block h-[1.1em] align-middle" draggable={false} />;
+  return <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={country.name} className={className || "inline-block h-[1.1em] align-middle"} draggable={false} />;
 }
 
 export const skillColors = {

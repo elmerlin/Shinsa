@@ -537,7 +537,7 @@ export default function ProfilePage() {
 
   const age = profile.show_age && profile.date_of_birth ? getAge(profile.date_of_birth) : null;
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
-  const flag = getCountryFlag(profile.nationality);
+  const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
 
   const tabs = ['overview', 'posts', 'competitions', 'songs'];
   if (hasPiuData) {
@@ -565,7 +565,7 @@ export default function ProfilePage() {
           )}
           <div className="text-left flex-1 min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-              {flag && <span className="text-lg sm:text-xl">{flag}</span>}
+              {flag && <span>{flag}</span>}
               <h1 className="text-lg sm:text-2xl font-display font-bold truncate">{profile.username}</h1>
               {genderSymbol && (
                 <span className={`text-base sm:text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
@@ -581,6 +581,16 @@ export default function ProfilePage() {
               )}
               {age !== null && (
                 <span className="text-xs sm:text-sm text-gray-500">Age {age}</span>
+              )}
+              {/* Mobile compact pumbility / best clears */}
+              {(profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double) && (
+                <span className="sm:hidden inline-flex items-center gap-1 text-[10px] rounded bg-piu-dark/50 border border-piu-border/30 px-1.5 py-0.5 font-mono font-bold">
+                  {profile.pumbility > 0 && <span className="text-piu-gold">{profile.pumbility.toLocaleString()}</span>}
+                  {profile.pumbility > 0 && (piuStatus?.highest_single || piuStatus?.highest_double) && <span className="text-gray-600">|</span>}
+                  {piuStatus?.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
+                  {piuStatus?.highest_single && piuStatus?.highest_double && <span className="text-gray-500">/</span>}
+                  {piuStatus?.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
+                </span>
               )}
             </div>
             {profile.description && (
@@ -606,17 +616,17 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Pumbility & Best Clears Container */}
+        {/* Pumbility & Best Clears Container - desktop only */}
         {(profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double) && (
-          <div className="mt-3 rounded-lg bg-piu-dark/50 border border-piu-border/30 px-3 py-2 flex flex-col gap-1">
+          <div className="hidden sm:flex mt-3 rounded-lg bg-piu-dark/50 border border-piu-border/30 px-3 py-2 flex-col gap-1 w-fit min-w-[200px]">
             {profile.pumbility > 0 && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-[11px] text-gray-400 font-display">Pumbility</span>
                 <span className="text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
               </div>
             )}
             {(piuStatus?.highest_single || piuStatus?.highest_double) && (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-[11px] text-gray-400 font-display">Best Clears</span>
                 <span className="text-sm font-mono font-bold">
                   {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
