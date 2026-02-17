@@ -834,11 +834,16 @@ export default function ProfilePage() {
                     onClick={() => setNotifyMenuOpen(v => !v)}
                     className={`px-3.5 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
                       activityNotifyPrefs.subscribed
-                        ? 'bg-piu-accent/20 border-piu-accent/60 text-piu-accent'
+                        ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
                         : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
                     }`}
                   >
-                    Notify
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>Notify</span>
+                      {activityNotifyPrefs.subscribed && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      )}
+                    </span>
                   </button>
                 </div>
 
