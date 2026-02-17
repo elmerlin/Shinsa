@@ -1,10 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const sharp = require('sharp');
-const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 
@@ -16,13 +13,7 @@ function createNotification(db, userId, type, title, message, link) {
   ).run(userId, type, title, message || '', link || '');
 }
 
-// Ensure upload directory exists
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads', 'posts');
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
-// Multer config for image uploads
+// Multer config for image uploads (memory-only, images stored as base64 in DB)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB upload limit (will be compressed)
@@ -176,46 +167,34 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
     return res.status(400).json({ error: 'Post must have content, images, or a video' });
   }
 
-  // Process and compress images
-  const imageUrls = [];
+  // Process, compress, and encode images as base64 data URLs (stored in DB, no disk files)
+  const imageDataUrls = [];
   if (req.files && req.files.length > 0) {
-    // Ensure upload directory exists at runtime
-    if (!fs.existsSync(UPLOAD_DIR)) {
-      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-    }
-
     for (const file of req.files) {
       try {
-        const filename = `${uuidv4()}.webp`;
-        const filepath = path.join(UPLOAD_DIR, filename);
-
-        // Compress to under 100KB using sharp
-        await sharp(file.buffer)
+        // Compress to WebP, targeting under 100KB
+        let buffer = await sharp(file.buffer)
           .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 60 })
-          .toFile(filepath);
+          .toBuffer();
 
-        // Check size and reduce quality if needed
-        let stat = fs.statSync(filepath);
-        if (stat.size > 100 * 1024) {
-          await sharp(file.buffer)
+        // Reduce further if still over 100KB
+        if (buffer.length > 100 * 1024) {
+          buffer = await sharp(file.buffer)
             .resize(600, 600, { fit: 'inside', withoutEnlargement: true })
             .webp({ quality: 40 })
-            .toFile(filepath);
+            .toBuffer();
         }
 
-        imageUrls.push(`/uploads/posts/${filename}`);
+        imageDataUrls.push(`data:image/webp;base64,${buffer.toString('base64')}`);
       } catch (err) {
         console.error('Image processing error:', err.message);
-        // Fallback: save original file if sharp conversion fails
+        // Fallback: store original as base64 with its original MIME type
         try {
-          const ext = (file.originalname || '').split('.').pop() || 'png';
-          const fallbackName = `${uuidv4()}.${ext}`;
-          const fallbackPath = path.join(UPLOAD_DIR, fallbackName);
-          fs.writeFileSync(fallbackPath, file.buffer);
-          imageUrls.push(`/uploads/posts/${fallbackName}`);
+          const mime = file.mimetype || 'image/png';
+          imageDataUrls.push(`data:${mime};base64,${file.buffer.toString('base64')}`);
         } catch (fallbackErr) {
-          console.error('Fallback save error:', fallbackErr.message);
+          console.error('Fallback encode error:', fallbackErr.message);
         }
       }
     }
@@ -223,7 +202,7 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
 
   const result = db.prepare(
     'INSERT INTO user_posts (user_id, content, images, youtube_url, comments_disabled) VALUES (?, ?, ?, ?, ?)'
-  ).run(req.user.id, content || '', JSON.stringify(imageUrls), youtube_url || '', comments_disabled === 'true' || comments_disabled === '1' ? 1 : 0);
+  ).run(req.user.id, content || '', JSON.stringify(imageDataUrls), youtube_url || '', comments_disabled === 'true' || comments_disabled === '1' ? 1 : 0);
 
   const post = db.prepare(`
     SELECT p.*, u.username, u.avatar
@@ -290,15 +269,6 @@ router.delete('/posts/:id', requireAuth, (req, res) => {
   const db = getDb();
   const post = db.prepare('SELECT * FROM user_posts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!post) return res.status(404).json({ error: 'Post not found' });
-
-  // Delete associated images
-  try {
-    const images = JSON.parse(post.images || '[]');
-    for (const img of images) {
-      const filepath = path.join(__dirname, '..', img);
-      if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
-    }
-  } catch (e) { /* ignore */ }
 
   db.prepare('DELETE FROM user_posts WHERE id = ?').run(req.params.id);
   res.json({ success: true });
