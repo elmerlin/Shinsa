@@ -75,14 +75,15 @@ router.post('/import', (req, res) => {
   const { songs } = req.body;
 
   const stmt = db.prepare(`
-    INSERT INTO songs (title, artist, jacket_url, mode, level, bpm, song_key)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO songs (title, artist, jacket_url, mode, level, bpm, song_key, flags)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const importSongs = db.transaction((songList) => {
     let imported = 0;
     for (const song of songList) {
-      stmt.run(song.title, song.artist || '', song.jacket_url || '', song.mode, song.level, song.bpm || '', song.song_key || '');
+      const flags = Array.isArray(song.flags) ? song.flags.join(',') : (song.flags || '');
+      stmt.run(song.title, song.artist || '', song.jacket_url || '', song.mode, song.level, song.bpm || '', song.song_key || '', flags);
       imported++;
     }
     return imported;
