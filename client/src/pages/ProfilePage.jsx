@@ -7,6 +7,7 @@ import {
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
+  getActivityNotificationPreferences, updateActivityNotificationPreferences,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -287,6 +288,15 @@ export default function ProfilePage() {
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
   const [socialCounts, setSocialCounts] = useState({ followers_count: 0, following_count: 0, posts_count: 0 });
   const [followLoading, setFollowLoading] = useState(false);
+  const [activityNotifyPrefs, setActivityNotifyPrefs] = useState({
+    loading: false,
+    saving: false,
+    subscribed: false,
+    notify_posts: false,
+    notify_upscores: false,
+    notify_new_clears: false,
+  });
+  const [activityNotifyError, setActivityNotifyError] = useState('');
   const [followersList, setFollowersList] = useState([]);
   const [followingList, setFollowingList] = useState([]);
   const [followersLoaded, setFollowersLoaded] = useState(false);
@@ -315,6 +325,15 @@ export default function ProfilePage() {
     setFollowersLoaded(false);
     setTab('overview');
     setActivitySubTab('all');
+    setActivityNotifyPrefs({
+      loading: false,
+      saving: false,
+      subscribed: false,
+      notify_posts: false,
+      notify_upscores: false,
+      notify_new_clears: false,
+    });
+    setActivityNotifyError('');
 
     const load = async () => {
       try {
@@ -390,6 +409,49 @@ export default function ProfilePage() {
     }
   }, [tab, profileId, followersLoaded, authUser]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!authUser || !profileId || isOwner) {
+      setActivityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: false,
+        notify_posts: false,
+        notify_upscores: false,
+        notify_new_clears: false,
+      });
+      return () => { cancelled = true; };
+    }
+
+    setActivityNotifyPrefs(prev => ({ ...prev, loading: true, saving: false }));
+    getActivityNotificationPreferences(profileId)
+      .then((prefs) => {
+        if (cancelled) return;
+        setActivityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: !!prefs?.subscribed,
+          notify_posts: !!prefs?.notify_posts,
+          notify_upscores: !!prefs?.notify_upscores,
+          notify_new_clears: !!prefs?.notify_new_clears,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActivityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: false,
+          notify_posts: false,
+          notify_upscores: false,
+          notify_new_clears: false,
+        });
+      });
+
+    return () => { cancelled = true; };
+  }, [authUser, profileId, isOwner]);
+
   // Load PIUGame data + jacket lookup when any PIU tab is active
   const piuTabs = ['pumbility', 'best-scores', 'recently-played'];
   const isPiuTab = piuTabs.includes(tab);
@@ -460,6 +522,60 @@ export default function ProfilePage() {
     } finally {
       setFollowLoading(false);
     }
+  };
+
+  const updateActivityPrefs = async (nextPrefs) => {
+    if (!authUser || !profileId || isOwner || activityNotifyPrefs.saving) return;
+
+    const previous = activityNotifyPrefs;
+    const optimistic = {
+      loading: false,
+      saving: true,
+      subscribed: !!(nextPrefs.notify_posts || nextPrefs.notify_upscores || nextPrefs.notify_new_clears),
+      notify_posts: !!nextPrefs.notify_posts,
+      notify_upscores: !!nextPrefs.notify_upscores,
+      notify_new_clears: !!nextPrefs.notify_new_clears,
+    };
+
+    setActivityNotifyError('');
+    setActivityNotifyPrefs(optimistic);
+
+    try {
+      const saved = await updateActivityNotificationPreferences(profileId, {
+        notify_posts: optimistic.notify_posts,
+        notify_upscores: optimistic.notify_upscores,
+        notify_new_clears: optimistic.notify_new_clears,
+      });
+      setActivityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: !!saved?.subscribed,
+        notify_posts: !!saved?.notify_posts,
+        notify_upscores: !!saved?.notify_upscores,
+        notify_new_clears: !!saved?.notify_new_clears,
+      });
+    } catch (err) {
+      setActivityNotifyPrefs({ ...previous, saving: false, loading: false });
+      setActivityNotifyError(err?.message || 'Failed to update activity notification settings');
+    }
+  };
+
+  const handleToggleActivityPref = (field) => {
+    if (activityNotifyPrefs.loading || activityNotifyPrefs.saving) return;
+    updateActivityPrefs({
+      notify_posts: field === 'notify_posts' ? !activityNotifyPrefs.notify_posts : activityNotifyPrefs.notify_posts,
+      notify_upscores: field === 'notify_upscores' ? !activityNotifyPrefs.notify_upscores : activityNotifyPrefs.notify_upscores,
+      notify_new_clears: field === 'notify_new_clears' ? !activityNotifyPrefs.notify_new_clears : activityNotifyPrefs.notify_new_clears,
+    });
+  };
+
+  const handleSetAllActivityPrefs = (enabled) => {
+    if (activityNotifyPrefs.loading || activityNotifyPrefs.saving) return;
+    updateActivityPrefs({
+      notify_posts: !!enabled,
+      notify_upscores: !!enabled,
+      notify_new_clears: !!enabled,
+    });
   };
 
   const [syncFeedback, setSyncFeedback] = useState('');
@@ -682,19 +798,79 @@ export default function ProfilePage() {
             <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
               Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
             </p>
-            {/* Follow button */}
+            {/* Follow + activity notification controls */}
             {authUser && !isOwner && (
-              <button
-                onClick={handleFollow}
-                disabled={followLoading}
-                className={`mt-1.5 sm:mt-2 px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-                  followStatus.following
-                    ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
-                    : 'bg-piu-accent text-white hover:bg-piu-accent/80'
-                }`}
-              >
-                {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
-              </button>
+              <div className="mt-1.5 sm:mt-2 space-y-2">
+                <button
+                  onClick={handleFollow}
+                  disabled={followLoading}
+                  className={`px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                    followStatus.following
+                      ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
+                      : 'bg-piu-accent text-white hover:bg-piu-accent/80'
+                  }`}
+                >
+                  {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
+                </button>
+
+                <div className="rounded-lg bg-piu-dark/50 border border-piu-border/40 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                      Notify Me About {profile.username}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleSetAllActivityPrefs(true)}
+                        disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                        className="px-1.5 py-0.5 rounded bg-piu-card text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => handleSetAllActivityPrefs(false)}
+                        disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                        className="px-1.5 py-0.5 rounded bg-piu-card text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                      >
+                        None
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[
+                      { key: 'notify_posts', label: 'New Posts' },
+                      { key: 'notify_upscores', label: 'Upscores' },
+                      { key: 'notify_new_clears', label: 'New Clears' },
+                    ].map(opt => {
+                      const enabled = !!activityNotifyPrefs[opt.key];
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => handleToggleActivityPref(opt.key)}
+                          disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                          className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                            enabled
+                              ? 'bg-piu-accent/20 border-piu-accent/60 text-piu-accent'
+                              : 'bg-piu-card border-piu-border text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {enabled ? `✓ ${opt.label}` : opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[10px] text-gray-500 mt-1.5">
+                    {activityNotifyPrefs.loading && 'Loading activity notification settings...'}
+                    {!activityNotifyPrefs.loading && activityNotifyPrefs.saving && 'Saving activity notification settings...'}
+                    {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && activityNotifyPrefs.subscribed && 'You will get notified for selected activities.'}
+                    {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && !activityNotifyPrefs.subscribed && 'Activity notifications are off.'}
+                  </p>
+                  {activityNotifyError && (
+                    <p className="text-[10px] text-red-400 mt-1">{activityNotifyError}</p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
           {/* Mobile pumbility & best clears - stacked, right-aligned, inline with username */}

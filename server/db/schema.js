@@ -506,6 +506,17 @@ function initializeDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS user_activity_notification_subscriptions (
+      subscriber_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      notify_posts INT DEFAULT 0,
+      notify_upscores INT DEFAULT 0,
+      notify_new_clears INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (subscriber_user_id, target_user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS user_push_subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -579,6 +590,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON user_notifications(user_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_notif_subscriber ON user_activity_notification_subscriptions(subscriber_user_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_notif_target ON user_activity_notification_subscriptions(target_user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON user_push_subscriptions(user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON user_push_subscriptions(endpoint);
   `);

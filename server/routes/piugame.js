@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { getDb } = require('../db/schema');
 const { login, scrapePumbility, scrapeBestScores, scrapeRecentlyPlayed } = require('../lib/piugameScraper');
 const { createUserNotification } = require('../lib/notifications');
+const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
@@ -116,7 +117,7 @@ async function loginWithStoredCredentials(userId) {
 }
 
 function insertGroupedNewClearPost(db, userId, clears) {
-  if (!Array.isArray(clears) || clears.length === 0) return;
+  if (!Array.isArray(clears) || clears.length === 0) return null;
 
   const normalized = clears.map(c => ({
     song_title: c.song_title,
@@ -129,7 +130,7 @@ function insertGroupedNewClearPost(db, userId, clears) {
   }));
   const first = normalized[0];
 
-  db.prepare(`
+  const result = db.prepare(`
     INSERT INTO user_new_clears (
       user_id, song_title, mode, level, score, grade, plate, background_url, clears_json, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -144,6 +145,8 @@ function insertGroupedNewClearPost(db, userId, clears) {
     first.background_url,
     JSON.stringify(normalized)
   );
+
+  return result.lastInsertRowid;
 }
 
 // ─── Sync: Pumbility ───────────────────────────────────
@@ -253,6 +256,11 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         oldScores[`${s.song_title}|${s.mode}|${s.level}`] = { score: s.score, grade: s.grade };
       }
 
+      let upscores = [];
+      let newClears = [];
+      let upscorePostId = null;
+      let newClearPostId = null;
+
       const txn = db.transaction(() => {
         db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(userId);
         for (const s of scores) {
@@ -260,8 +268,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         }
 
         // Track upscores and new clears
-        const upscores = [];
-        const newClears = [];
+        upscores = [];
+        newClears = [];
         for (const s of scores) {
           const key = `${s.song_title}|${s.mode}|${s.level}`;
           const old = oldScores[key];
@@ -277,12 +285,13 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
           }
         }
         if (upscores.length > 0) {
-          db.prepare(`
+          const upscoreInsert = db.prepare(`
             INSERT INTO user_upscores (user_id, upscores_json, created_at)
             VALUES (?, ?, datetime('now'))
           `).run(userId, JSON.stringify(upscores));
+          upscorePostId = upscoreInsert.lastInsertRowid;
         }
-        insertGroupedNewClearPost(db, userId, newClears);
+        newClearPostId = insertGroupedNewClearPost(db, userId, newClears);
         db.prepare(`
           UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
           sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
@@ -292,9 +301,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
 
       // Create notification
       const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-      const profileLink = profile?.username
-        ? `/@${encodeURIComponent(profile.username)}`
-        : `/profile/${userId}`;
+      const actorUsername = profile?.username || 'Someone';
+      const profileLink = buildProfilePath(profile?.username) || `/profile/${userId}`;
       createUserNotification(
         db,
         userId,
@@ -303,6 +311,30 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         `${scores.length} scores imported successfully!`,
         profileLink
       );
+
+      if (upscores.length > 0) {
+        notifyActivitySubscribers(db, {
+          actorUserId: userId,
+          actorUsername,
+          activityType: 'upscores',
+          notificationType: 'followed_user_upscore',
+          title: 'New Upscores',
+          message: `${actorUsername} posted ${upscores.length} new upscore${upscores.length === 1 ? '' : 's'}`,
+          link: upscorePostId ? `/upscore/${upscorePostId}` : profileLink,
+        });
+      }
+
+      if (newClears.length > 0) {
+        notifyActivitySubscribers(db, {
+          actorUserId: userId,
+          actorUsername,
+          activityType: 'new_clears',
+          notificationType: 'followed_user_new_clear',
+          title: 'New Clears',
+          message: `${actorUsername} posted ${newClears.length} new clear${newClears.length === 1 ? '' : 's'}`,
+          link: newClearPostId ? `/clear/${newClearPostId}` : profileLink,
+        });
+      }
 
       console.log(`Background best scores sync complete for ${userId}: ${scores.length} scores`);
     } catch (err) {
@@ -353,6 +385,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     let updatedCount = 0;
     const upscoresFromRecent = [];
     const newClearsFromRecent = [];
+    let upscorePostId = null;
+    let newClearPostId = null;
 
     const txn = db.transaction(() => {
       // Clear old recently played and replace
@@ -397,14 +431,43 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
 
       // Track upscores from recently played
       if (upscoresFromRecent.length > 0) {
-        db.prepare(`
+        const upscoreInsert = db.prepare(`
           INSERT INTO user_upscores (user_id, upscores_json, created_at)
           VALUES (?, ?, datetime('now'))
         `).run(req.user.id, JSON.stringify(upscoresFromRecent));
+        upscorePostId = upscoreInsert.lastInsertRowid;
       }
-      insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent);
+      newClearPostId = insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent);
     });
     txn();
+
+    const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    const actorUsername = profile?.username || 'Someone';
+    const profileLink = buildProfilePath(profile?.username) || `/profile/${req.user.id}`;
+
+    if (upscoresFromRecent.length > 0) {
+      notifyActivitySubscribers(db, {
+        actorUserId: req.user.id,
+        actorUsername,
+        activityType: 'upscores',
+        notificationType: 'followed_user_upscore',
+        title: 'New Upscores',
+        message: `${actorUsername} posted ${upscoresFromRecent.length} new upscore${upscoresFromRecent.length === 1 ? '' : 's'}`,
+        link: upscorePostId ? `/upscore/${upscorePostId}` : profileLink,
+      });
+    }
+
+    if (newClearsFromRecent.length > 0) {
+      notifyActivitySubscribers(db, {
+        actorUserId: req.user.id,
+        actorUsername,
+        activityType: 'new_clears',
+        notificationType: 'followed_user_new_clear',
+        title: 'New Clears',
+        message: `${actorUsername} posted ${newClearsFromRecent.length} new clear${newClearsFromRecent.length === 1 ? '' : 's'}`,
+        link: newClearPostId ? `/clear/${newClearPostId}` : profileLink,
+      });
+    }
 
     res.json({ success: true, plays_count: plays.length, scores_updated: updatedCount });
   } catch (err) {

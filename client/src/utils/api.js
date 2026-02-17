@@ -163,6 +163,8 @@ export const getFollowingIds = async (userId) => {
 };
 export const getFollowers = (userId) => request(`/social/followers/${userId}`);
 export const getFollowStatus = (userId) => request(`/social/follow-status/${userId}`);
+export const getActivityNotificationPreferences = (userId) => request(`/social/activity-notifications/${userId}`);
+export const updateActivityNotificationPreferences = (userId, data) => request(`/social/activity-notifications/${userId}`, { method: 'PUT', body: JSON.stringify(data) });
 export const getSocialCounts = (userId) => request(`/social/counts/${userId}`);
 
 // Social — Posts

@@ -6,6 +6,12 @@ const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const { createUserNotification } = require('../lib/notifications');
+const {
+  getActivitySubscription,
+  setActivitySubscription,
+  notifyActivitySubscribers,
+  buildProfilePath,
+} = require('../lib/activitySubscriptions');
 
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
@@ -13,9 +19,16 @@ function createNotification(db, userId, type, title, message, link) {
   return createUserNotification(db, userId, type, title, message || '', link || '');
 }
 
-function buildProfilePath(username) {
-  const clean = String(username || '').trim().replace(/^@+/, '');
-  return clean ? `/@${encodeURIComponent(clean)}` : '';
+function parseBooleanInput(value) {
+  if (value === true || value === 1 || value === '1' || value === 'true') return true;
+  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
+
+function textSnippet(text, max = 80) {
+  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!compact) return '';
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
 
 // Multer config for image uploads (memory-only, images stored as base64 in DB)
@@ -113,6 +126,67 @@ router.get('/follow-status/:userId', optionalAuth, (req, res) => {
   ).get(req.params.userId).count;
 
   res.json({ following: isFollowing, followers_count: followersCount, following_count: followingCount });
+});
+
+// GET /api/social/activity-notifications/:userId — get current user's activity notif prefs for target user
+router.get('/activity-notifications/:userId', requireAuth, (req, res) => {
+  const db = getDb();
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) return res.status(400).json({ error: 'User ID is required' });
+  if (targetUserId === req.user.id) {
+    return res.json({
+      subscribed: false,
+      notify_posts: false,
+      notify_upscores: false,
+      notify_new_clears: false,
+    });
+  }
+
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetUserId);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  res.json(getActivitySubscription(db, req.user.id, targetUserId));
+});
+
+// PUT /api/social/activity-notifications/:userId — set current user's activity notif prefs for target user
+router.put('/activity-notifications/:userId', requireAuth, (req, res) => {
+  const db = getDb();
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) return res.status(400).json({ error: 'User ID is required' });
+  if (targetUserId === req.user.id) {
+    return res.status(400).json({ error: 'You cannot subscribe to your own activity notifications' });
+  }
+
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetUserId);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  const current = getActivitySubscription(db, req.user.id, targetUserId);
+  const next = {
+    notify_posts: current.notify_posts,
+    notify_upscores: current.notify_upscores,
+    notify_new_clears: current.notify_new_clears,
+  };
+
+  let changedFields = 0;
+  const fields = ['notify_posts', 'notify_upscores', 'notify_new_clears'];
+  for (const field of fields) {
+    if (!(field in (req.body || {}))) continue;
+    const parsed = parseBooleanInput(req.body[field]);
+    if (parsed === null) {
+      return res.status(400).json({ error: `${field} must be a boolean` });
+    }
+    next[field] = parsed;
+    changedFields += 1;
+  }
+
+  if (changedFields === 0) {
+    return res.status(400).json({ error: 'At least one notification field must be provided' });
+  }
+
+  const saved = setActivitySubscription(db, req.user.id, targetUserId, next);
+  res.json(saved);
 });
 
 // GET /api/social/counts/:userId — follower/following/post counts + pumps + trend (public)
@@ -215,6 +289,21 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
     FROM user_posts p JOIN users u ON p.user_id = u.id
     WHERE p.id = ?
   `).get(result.lastInsertRowid);
+
+  const actor = post?.username || req.user.username || 'Someone';
+  const contentSnippet = textSnippet(post?.content || '');
+  const postMessage = contentSnippet
+    ? `${actor} posted: ${contentSnippet}`
+    : `${actor} made a new post`;
+  notifyActivitySubscribers(db, {
+    actorUserId: req.user.id,
+    actorUsername: actor,
+    activityType: 'posts',
+    notificationType: 'followed_user_post',
+    title: 'New Post',
+    message: postMessage,
+    link: `/post/${post.id}`,
+  });
 
   res.status(201).json({ ...post, pump_count: 0, comment_count: 0 });
 });
