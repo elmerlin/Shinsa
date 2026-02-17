@@ -289,9 +289,12 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
 }
 
 function UpscoreCard({ item, jacketLookup }) {
+  const [showAll, setShowAll] = useState(false);
   const upscores = (() => {
     try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; }
   })();
+  const hasMore = upscores.length > 5;
+  const visibleUpscores = showAll ? upscores : upscores.slice(0, 5);
   const flag = getCountryFlag(item.nationality);
 
   if (upscores.length === 0) return null;
@@ -321,7 +324,7 @@ function UpscoreCard({ item, jacketLookup }) {
       </div>
 
       <div className="space-y-2">
-        {upscores.map((u, i) => {
+        {visibleUpscores.map((u, i) => {
           const oldRank = getRank(u.old_score);
           const newRank = getRank(u.new_score);
           const isSingle = u.mode === 'Single';
@@ -363,6 +366,14 @@ function UpscoreCard({ item, jacketLookup }) {
           );
         })}
       </div>
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="mt-2 text-xs font-display font-bold text-piu-accent hover:text-piu-accent/80 transition-colors"
+        >
+          {showAll ? 'Show less' : `Show ${upscores.length - 5} more`}
+        </button>
+      )}
 
       {/* Actions: Pump + Comments + Share */}
       <div className="border-t border-piu-border/20 pt-2 mt-1">
@@ -563,7 +574,10 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
 }
 
 function NewClearCard({ item, jacketLookup }) {
+  const [showAll, setShowAll] = useState(false);
   const clears = getClearItems(item);
+  const hasMore = clears.length > 5;
+  const visibleClears = showAll ? clears : clears.slice(0, 5);
   const isGrouped = clears.length > 1;
   const flag = getCountryFlag(item.nationality);
 
@@ -592,7 +606,7 @@ function NewClearCard({ item, jacketLookup }) {
       </div>
 
       <div className="space-y-2">
-        {clears.map((clear, i) => {
+        {visibleClears.map((clear, i) => {
           const rank = getRank(clear.score);
           const isSingle = clear.mode === 'Single';
           const badgeColor = isSingle
@@ -633,6 +647,14 @@ function NewClearCard({ item, jacketLookup }) {
           );
         })}
       </div>
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="mt-2 text-xs font-display font-bold text-piu-accent hover:text-piu-accent/80 transition-colors"
+        >
+          {showAll ? 'Show less' : `Show ${clears.length - 5} more`}
+        </button>
+      )}
 
       {/* Actions: Pump + Comments + Share */}
       <div className="border-t border-piu-border/20 pt-2 mt-1">
