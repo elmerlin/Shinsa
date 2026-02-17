@@ -52,6 +52,27 @@ function YouTubeEmbed({ url }) {
   );
 }
 
+// Single image cell with error fallback
+function GridImage({ src, className, onClick }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className={`${className} bg-piu-dark flex items-center justify-center rounded-lg`}>
+        <span className="text-gray-500 text-xs font-display">Image unavailable</span>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      className={className}
+      onClick={onClick}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 // WeChat Moments-style Image Grid
 function ImageGrid({ images, onImageClick }) {
   if (!images || images.length === 0) return null;
@@ -74,10 +95,9 @@ function ImageGrid({ images, onImageClick }) {
   return (
     <div className={`grid gap-1.5 mb-3 ${gridClass}`}>
       {images.map((img, i) => (
-        <img
+        <GridImage
           key={i}
           src={img}
-          alt=""
           className={`w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity ${imgHeight}`}
           onClick={() => onImageClick(i)}
         />
