@@ -255,6 +255,17 @@ export default function ProfilePage() {
   const [tab, setTab] = useState('overview');
   const [activityItems, setActivityItems] = useState([]);
   const [activitySubTab, setActivitySubTab] = useState('all');
+  const usernameHandle = (() => {
+    if (!username) return '';
+    try {
+      return decodeURIComponent(String(username));
+    } catch {
+      return String(username);
+    }
+  })();
+  const isUsernameRoute = Boolean(username);
+  const isAtUsernameRoute = isUsernameRoute && usernameHandle.startsWith('@');
+  const normalizedUsername = isAtUsernameRoute ? usernameHandle.slice(1) : '';
 
   // PIUGame state
   const [piuStatus, setPiuStatus] = useState(null);
@@ -307,8 +318,16 @@ export default function ProfilePage() {
 
     const load = async () => {
       try {
+        if (isUsernameRoute && !isAtUsernameRoute) {
+          if (!cancelled) {
+            setProfile(null);
+            setLoadError('Page not found');
+          }
+          return;
+        }
+
         const userProfile = username
-          ? await getUserProfileByUsername(username)
+          ? await getUserProfileByUsername(normalizedUsername)
           : await getUserProfile(id);
         if (cancelled) return;
 
@@ -348,7 +367,7 @@ export default function ProfilePage() {
 
     load();
     return () => { cancelled = true; };
-  }, [id, username, authUser, navigate, location.pathname]);
+  }, [id, username, normalizedUsername, isUsernameRoute, isAtUsernameRoute, authUser, navigate, location.pathname]);
 
   // Load posts when posts tab is active
   useEffect(() => {

@@ -360,7 +360,7 @@ export default function App() {
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/@:username" element={<ProfilePage />} />
+          <Route path="/:username" element={<ProfilePage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/account" element={<MyAccountPage />} />
           <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
