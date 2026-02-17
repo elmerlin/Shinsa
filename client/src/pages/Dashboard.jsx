@@ -53,6 +53,14 @@ export default function Dashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [featuredCommunities, setFeaturedCommunities] = useState([]);
 
+  const matchesSearch = (value, q) => String(value || '').toLowerCase().includes(q);
+  const duelMatchesSearch = (duel, q) => (
+    matchesSearch(duel.name, q)
+    || matchesSearch(duel.location, q)
+    || matchesSearch(duel.player1_name, q)
+    || matchesSearch(duel.player2_name, q)
+  );
+
   useEffect(() => {
     // Fire all requests independently — page renders immediately,
     // each section fills in as its data arrives
@@ -65,21 +73,29 @@ export default function Dashboard() {
   }, []);
 
   const handleSearch = useCallback(async (q) => {
-    setSearchQuery(q);
     if (!q.trim()) {
       setSearchResults(null);
       return;
     }
     setSearching(true);
     try {
-      const results = await searchTournaments(q);
-      setSearchResults(results);
+      const normalized = q.trim().toLowerCase();
+      const [tournamentResults] = await Promise.all([
+        searchTournaments(q),
+      ]);
+      const duelResults = duels.filter(d => duelMatchesSearch(d, normalized));
+      const onlineDuelResults = onlineDuels.filter(d => duelMatchesSearch(d, normalized));
+      setSearchResults({
+        tournaments: tournamentResults,
+        duels: duelResults,
+        onlineDuels: onlineDuelResults,
+      });
     } catch (err) {
       console.error(err);
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [duels, onlineDuels]);
 
   // Debounce search
   useEffect(() => {
@@ -91,7 +107,7 @@ export default function Dashboard() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, handleSearch]);
 
   const handleDelete = async (e, id) => {
     e.preventDefault();
@@ -99,7 +115,12 @@ export default function Dashboard() {
     if (!confirm('Delete this tournament? This cannot be undone.')) return;
     await deleteTournament(id);
     setTournaments(t => t.filter(x => x.id !== id));
-    if (searchResults) setSearchResults(sr => sr.filter(x => x.id !== id));
+    if (searchResults) {
+      setSearchResults(sr => (sr ? {
+        ...sr,
+        tournaments: sr.tournaments.filter(x => x.id !== id),
+      } : sr));
+    }
   };
 
   const handleDeleteDuel = async (e, id) => {
@@ -109,6 +130,12 @@ export default function Dashboard() {
     try {
       await deleteDuel(id);
       setDuels(d => d.filter(x => x.id !== id));
+      if (searchResults) {
+        setSearchResults(sr => (sr ? {
+          ...sr,
+          duels: sr.duels.filter(x => x.id !== id),
+        } : sr));
+      }
     } catch (err) {
       alert(err.message);
     }
@@ -121,12 +148,23 @@ export default function Dashboard() {
     try {
       await deleteOnlineDuel(id);
       setOnlineDuels(d => d.filter(x => x.id !== id));
+      if (searchResults) {
+        setSearchResults(sr => (sr ? {
+          ...sr,
+          onlineDuels: sr.onlineDuels.filter(x => x.id !== id),
+        } : sr));
+      }
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const displayTournaments = searchResults !== null ? searchResults : tournaments;
+  const displayTournaments = searchResults !== null ? searchResults.tournaments : tournaments;
+  const displayDuels = searchResults !== null ? searchResults.duels : duels;
+  const displayOnlineDuels = searchResults !== null ? searchResults.onlineDuels : onlineDuels;
+  const totalSearchResults = searchResults === null
+    ? 0
+    : (searchResults.tournaments.length + searchResults.duels.length + searchResults.onlineDuels.length);
 
   const TournamentCard = ({ t }) => (
     <Link
@@ -350,11 +388,11 @@ export default function Dashboard() {
       )}
 
       {/* Online Duels Section */}
-      {onlineDuels.length > 0 && searchResults === null && (
+      {displayOnlineDuels.length > 0 && (
         <div className="mb-8">
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">ONLINE DUELS</h2>
           <div className="grid gap-3">
-            {onlineDuels.map(d => (
+            {displayOnlineDuels.map(d => (
               <Link
                 key={d.id}
                 to={`/online-duel/${d.id}`}
@@ -420,11 +458,11 @@ export default function Dashboard() {
       )}
 
       {/* Offline Duels Section */}
-      {duels.length > 0 && searchResults === null && (
+      {displayDuels.length > 0 && (
         <div className="mb-8">
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">OFFLINE DUELS</h2>
           <div className="grid gap-3">
-            {duels.map(d => <DuelCard key={d.id} d={d} />)}
+            {displayDuels.map(d => <DuelCard key={d.id} d={d} />)}
           </div>
         </div>
       )}
@@ -434,9 +472,11 @@ export default function Dashboard() {
         <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">TOURNAMENTS</h2>
         {displayTournaments.length === 0 ? (
           searchResults !== null ? (
-            <div className="text-center py-10">
-              <p className="text-gray-400">No tournaments found</p>
-            </div>
+            totalSearchResults === 0 ? (
+              <div className="text-center py-10">
+                <p className="text-gray-400">No tournaments, duels, or duel players found</p>
+              </div>
+            ) : null
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-400">No tournaments yet</p>
@@ -474,7 +514,7 @@ export default function Dashboard() {
           <input
             type="text"
             className="input-field w-full pl-10"
-            placeholder="Search tournaments, locations, players..."
+            placeholder="Search tournaments, duels, locations, players..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -488,7 +528,7 @@ export default function Dashboard() {
         {searchResults !== null && (
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-500">
-              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
+              {totalSearchResults} result{totalSearchResults !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
             </p>
             <button
               onClick={() => { setSearchQuery(''); setSearchResults(null); }}
