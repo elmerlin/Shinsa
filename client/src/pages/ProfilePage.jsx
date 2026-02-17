@@ -555,7 +555,7 @@ export default function ProfilePage() {
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
       {/* Profile Header */}
       <div className="card mb-4 sm:mb-6">
-        <div className="flex flex-row items-center gap-3 sm:gap-6">
+        <div className="flex flex-row items-start sm:items-center gap-3 sm:gap-6">
           {profile.avatar ? (
             <img src={getAvatarUrl(profile.avatar)} alt="" className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0" />
           ) : (
@@ -582,16 +582,6 @@ export default function ProfilePage() {
               {age !== null && (
                 <span className="text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
-              {/* Mobile compact pumbility / best clears */}
-              {(profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double) && (
-                <span className="sm:hidden inline-flex items-center gap-1 text-[10px] rounded bg-piu-dark/50 border border-piu-border/30 px-1.5 py-0.5 font-mono font-bold">
-                  {profile.pumbility > 0 && <span className="text-piu-gold">{profile.pumbility.toLocaleString()}</span>}
-                  {profile.pumbility > 0 && (piuStatus?.highest_single || piuStatus?.highest_double) && <span className="text-gray-600">|</span>}
-                  {piuStatus?.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
-                  {piuStatus?.highest_single && piuStatus?.highest_double && <span className="text-gray-500">/</span>}
-                  {piuStatus?.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
-                </span>
-              )}
             </div>
             {profile.description && (
               <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
@@ -614,6 +604,27 @@ export default function ProfilePage() {
               </button>
             )}
           </div>
+          {/* Mobile pumbility & best clears - stacked, right-aligned, inline with username */}
+          {(profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double) && (
+            <div className="sm:hidden shrink-0 self-start flex flex-col gap-0.5 rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-1.5">
+              {profile.pumbility > 0 && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[9px] text-gray-400 font-display">Pumbility</span>
+                  <span className="text-[11px] text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
+                </div>
+              )}
+              {(piuStatus?.highest_single || piuStatus?.highest_double) && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[9px] text-gray-400 font-display">Best Clears</span>
+                  <span className="text-[11px] font-mono font-bold">
+                    {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
+                    {piuStatus.highest_single && piuStatus.highest_double && <span className="text-gray-500 mx-0.5">/</span>}
+                    {piuStatus.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Pumbility & Best Clears Container - desktop only */}
