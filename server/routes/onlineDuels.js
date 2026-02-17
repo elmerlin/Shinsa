@@ -172,16 +172,16 @@ router.post('/:id/draw', requireAuth, (req, res) => {
   if (duel.mode === 'singles') effectiveMode = 'Single';
   else if (duel.mode === 'doubles') effectiveMode = 'Double';
 
-  let query, params;
+  const lvl = parseInt(level);
+  let songs;
   if (effectiveMode === 'any') {
-    query = 'SELECT * FROM songs WHERE level = ? AND flags LIKE ?';
-    params = [parseInt(level), '%cut:2%'];
+    songs = db.prepare('SELECT * FROM songs WHERE level = ? AND flags LIKE ?').all(lvl, '%cut:2%');
+    if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level = ?').all(lvl);
   } else {
-    query = 'SELECT * FROM songs WHERE level = ? AND mode = ? AND flags LIKE ?';
-    params = [parseInt(level), effectiveMode, '%cut:2%'];
+    songs = db.prepare('SELECT * FROM songs WHERE level = ? AND mode = ? AND flags LIKE ?').all(lvl, effectiveMode, '%cut:2%');
+    if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level = ? AND mode = ?').all(lvl, effectiveMode);
   }
 
-  const songs = db.prepare(query).all(...params);
   if (songs.length === 0) {
     return res.status(400).json({ error: `No charts found at level ${level}` });
   }

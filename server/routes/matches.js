@@ -222,8 +222,10 @@ router.post('/:id/draw', (req, res) => {
     const singleLevel = match.difficulty_min;
     const doubleLevel = match.difficulty_max;
 
-    const singles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ? AND flags LIKE ?').all('Single', singleLevel, '%cut:2%');
-    const doubles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ? AND flags LIKE ?').all('Double', doubleLevel, '%cut:2%');
+    let singles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ? AND flags LIKE ?').all('Single', singleLevel, '%cut:2%');
+    if (singles.length === 0) singles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ?').all('Single', singleLevel);
+    let doubles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ? AND flags LIKE ?').all('Double', doubleLevel, '%cut:2%');
+    if (doubles.length === 0) doubles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ?').all('Double', doubleLevel);
 
     if (singles.length < 1) {
       db.close();
@@ -246,10 +248,15 @@ router.post('/:id/draw', (req, res) => {
     return res.json({ drawn_songs: finalDraw });
   }
 
-  // Standard round robin draw - only use songs with cut:2 flag
-  const allSongs = db.prepare(
+  // Standard round robin draw - prefer songs with cut:2 flag, fall back to all
+  let allSongs = db.prepare(
     'SELECT * FROM songs WHERE level >= ? AND level <= ? AND flags LIKE ?'
   ).all(match.difficulty_min, match.difficulty_max, '%cut:2%');
+  if (allSongs.length === 0) {
+    allSongs = db.prepare(
+      'SELECT * FROM songs WHERE level >= ? AND level <= ?'
+    ).all(match.difficulty_min, match.difficulty_max);
+  }
 
   const singles = allSongs.filter(s => s.mode === 'Single');
   const doubles = allSongs.filter(s => s.mode === 'Double');
