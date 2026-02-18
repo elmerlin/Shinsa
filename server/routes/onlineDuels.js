@@ -119,6 +119,7 @@ router.post('/:id/chat', optionalAuth, (req, res) => {
   const db = getDb();
   const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
   if (!duel) return res.status(404).json({ error: 'Duel not found' });
+  if (duel.status === 'COMPLETED') return res.status(400).json({ error: 'Chat is closed for completed duels' });
 
   const { message, guest_name } = req.body;
   if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });

@@ -69,6 +69,7 @@ export default function OnlineDuelRoom() {
     duel.opponent_user_id === user.id ? 'player2' : null
   ) : null;
   const isParticipant = !!playerSlot;
+  const isChatLocked = duel?.status === 'COMPLETED';
 
   // Poll for duel state
   useEffect(() => {
@@ -149,6 +150,7 @@ export default function OnlineDuelRoom() {
   };
 
   const handleQuickReaction = async (emoji) => {
+    if (isChatLocked) return;
     addFloatingReaction(emoji);
     try {
       await sendChatMessage(id, { message: emoji, guest_name: guestName || undefined });
@@ -157,6 +159,7 @@ export default function OnlineDuelRoom() {
 
   const handleSendChat = async (e) => {
     e.preventDefault();
+    if (isChatLocked) return;
     if (!chatInput.trim()) return;
     try {
       await sendChatMessage(id, { message: chatInput, guest_name: guestName || undefined });
@@ -648,7 +651,12 @@ export default function OnlineDuelRoom() {
                 <button
                   key={emoji}
                   onClick={() => handleQuickReaction(emoji)}
-                  className="w-8 h-8 rounded-lg bg-piu-dark/50 hover:bg-piu-dark hover:scale-110 active:scale-95 transition-all flex items-center justify-center text-sm border border-piu-border/20"
+                  disabled={isChatLocked}
+                  className={`w-8 h-8 rounded-lg transition-all flex items-center justify-center text-sm border border-piu-border/20 ${
+                    isChatLocked
+                      ? 'bg-piu-dark/30 text-gray-600 cursor-not-allowed opacity-50'
+                      : 'bg-piu-dark/50 hover:bg-piu-dark hover:scale-110 active:scale-95'
+                  }`}
                   title={`Send ${emoji}`}
                 >
                   {emoji}
@@ -709,8 +717,11 @@ export default function OnlineDuelRoom() {
                   {QUICK_EMOJIS.map(emoji => (
                     <button
                       key={emoji}
+                      disabled={isChatLocked}
                       onClick={() => { setChatInput(prev => prev + emoji); setShowEmoji(false); }}
-                      className="w-8 h-8 hover:bg-piu-dark rounded transition-colors flex items-center justify-center text-lg"
+                      className={`w-8 h-8 rounded transition-colors flex items-center justify-center text-lg ${
+                        isChatLocked ? 'opacity-50 cursor-not-allowed text-gray-600' : 'hover:bg-piu-dark'
+                      }`}
                     >
                       {emoji}
                     </button>
@@ -721,19 +732,37 @@ export default function OnlineDuelRoom() {
 
             <form onSubmit={handleSendChat} className="flex gap-1.5 shrink-0 items-center">
               {!user && (
-                <input type="text" className="input-field text-xs w-16" placeholder="Name" value={guestName} onChange={e => setGuestName(e.target.value)} />
+                <input type="text" className="input-field text-xs w-16" placeholder="Name" value={guestName} onChange={e => setGuestName(e.target.value)} disabled={isChatLocked} />
               )}
               <button
                 type="button"
+                disabled={isChatLocked}
                 onClick={() => setShowEmoji(!showEmoji)}
-                className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${showEmoji ? 'bg-piu-accent text-white' : 'bg-piu-dark/50 text-gray-400 hover:text-white hover:bg-piu-dark'}`}
+                className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${
+                  isChatLocked
+                    ? 'bg-piu-dark/30 text-gray-600 cursor-not-allowed opacity-50'
+                    : showEmoji
+                      ? 'bg-piu-accent text-white'
+                      : 'bg-piu-dark/50 text-gray-400 hover:text-white hover:bg-piu-dark'
+                }`}
                 title="Emojis"
               >
                 &#128578;
               </button>
-              <input type="text" className="input-field text-xs flex-1" placeholder="Type a message..." value={chatInput} onChange={e => setChatInput(e.target.value)} maxLength={500} />
-              <button type="submit" className="btn-primary text-xs px-3 py-1 shrink-0">Send</button>
+              <input
+                type="text"
+                className="input-field text-xs flex-1"
+                placeholder={isChatLocked ? 'Chat closed - duel completed' : 'Type a message...'}
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                maxLength={500}
+                disabled={isChatLocked}
+              />
+              <button type="submit" disabled={isChatLocked} className="btn-primary text-xs px-3 py-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">Send</button>
             </form>
+            {isChatLocked && (
+              <p className="text-[10px] text-gray-500 mt-1 shrink-0">Chat is closed because this duel is completed.</p>
+            )}
           </div>
         </div>
       ) : (
