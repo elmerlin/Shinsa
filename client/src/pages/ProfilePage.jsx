@@ -270,6 +270,37 @@ function DailyLevelGradeChart({ plays }) {
     })
   );
 
+  const tooltipContent = ({ active, label, payload }) => {
+    if (!active || !Array.isArray(payload)) return null;
+    const rows = payload.filter((item) => (parseInt(item?.value, 10) || 0) !== 0);
+    if (rows.length === 0) return null;
+
+    return (
+      <div className="rounded-lg border border-slate-700 bg-[#0b1220] px-2.5 py-2 shadow-lg">
+        <p className="text-[10px] font-display font-bold text-slate-200 mb-1">{label}</p>
+        <div className="space-y-0.5">
+          {rows.map((item, idx) => {
+            const key = String(item?.dataKey || item?.name || '');
+            const value = Math.abs(parseInt(item?.value, 10) || 0);
+            const text = key === 'stage_break' ? 'Stage Break' : key;
+            return (
+              <div key={`${key}-${idx}`} className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="inline-flex items-center gap-1 text-slate-300">
+                  <span
+                    className="w-2 h-2 rounded-sm"
+                    style={{ backgroundColor: item?.fill || item?.color || '#64748b' }}
+                  />
+                  {text}
+                </span>
+                <span className="font-mono font-bold text-slate-200">{value}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="mt-4">
       <h4 className="text-[10px] font-display font-bold text-gray-500 mb-2 uppercase tracking-wide">
@@ -286,14 +317,7 @@ function DailyLevelGradeChart({ plays }) {
               tick={{ fill: '#9ca3af', fontSize: 10 }}
             />
             <ReferenceLine y={0} stroke="rgba(148,163,184,0.45)" />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#0b1220', border: '1px solid #334155', borderRadius: '8px' }}
-              labelStyle={{ color: '#e2e8f0' }}
-              formatter={(value, name) => [
-                Math.abs(parseInt(value, 10) || 0),
-                name === 'stage_break' ? 'Stage Break' : name,
-              ]}
-            />
+            <Tooltip content={tooltipContent} />
             {GRADE_BARS.map((grade) => (
               <Bar key={grade.key} dataKey={grade.key} stackId="grades" fill={grade.color} />
             ))}
@@ -1250,6 +1274,18 @@ export default function ProfilePage() {
     ? overviewPlayHeatmap.daysByKey[selectedOverviewDateKey] || null
     : null;
 
+  const singleLegendLevels = useMemo(() => {
+    const legend = overviewPlayHeatmap.singleLegend;
+    if (!legend) return [];
+    return Array.from({ length: legend.max - legend.min + 1 }, (_, i) => legend.min + i);
+  }, [overviewPlayHeatmap.singleLegend]);
+
+  const doubleLegendLevels = useMemo(() => {
+    const legend = overviewPlayHeatmap.doubleLegend;
+    if (!legend) return [];
+    return Array.from({ length: legend.max - legend.min + 1 }, (_, i) => legend.min + i);
+  }, [overviewPlayHeatmap.doubleLegend]);
+
   // Filtered + sorted best scores
   const filteredBestScores = useMemo(() => {
     if (!piuBestScores?.scores) return [];
@@ -1616,14 +1652,14 @@ export default function ProfilePage() {
                         </div>
                       </div>
                       <div className="flex items-start gap-1">
-                        <div className="w-8 shrink-0 pt-0.5 text-[9px] text-gray-600 leading-[13px]">
-                          <div className="h-4">S</div>
-                          <div className="h-4">M</div>
-                          <div className="h-4">T</div>
-                          <div className="h-4">W</div>
-                          <div className="h-4">T</div>
-                          <div className="h-4">F</div>
-                          <div className="h-4">S</div>
+                        <div className="w-8 shrink-0 flex flex-col gap-1 text-[9px] text-gray-600">
+                          <div className="h-4 flex items-center">S</div>
+                          <div className="h-4 flex items-center">M</div>
+                          <div className="h-4 flex items-center">T</div>
+                          <div className="h-4 flex items-center">W</div>
+                          <div className="h-4 flex items-center">T</div>
+                          <div className="h-4 flex items-center">F</div>
+                          <div className="h-4 flex items-center">S</div>
                         </div>
                         <div className="flex gap-1">
                           {overviewPlayHeatmap.weeks.map((week, weekIndex) => (
@@ -1655,30 +1691,40 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  <div className="mt-3 space-y-1.5">
+                  <div className="mt-3 space-y-1.5 flex flex-col items-end">
                     {overviewPlayHeatmap.singleLegend && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-display font-bold text-red-300 w-14 shrink-0">Singles</span>
-                        <div
-                          className="h-2.5 flex-1 rounded-full border border-piu-border/40"
-                          style={{ background: `linear-gradient(90deg, ${overviewPlayHeatmap.singleLegend.maxColor} 0%, ${overviewPlayHeatmap.singleLegend.minColor} 100%)` }}
-                          title={`S${overviewPlayHeatmap.singleLegend.max} to S${overviewPlayHeatmap.singleLegend.min}`}
-                        />
+                      <div className="flex items-center justify-end gap-2 w-full">
+                        <span className="text-[10px] font-display font-bold text-red-300 shrink-0">Singles</span>
+                        <div className="flex items-center gap-[2px] justify-end">
+                          {singleLegendLevels.map((level) => (
+                            <span
+                              key={`single-${level}`}
+                              className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                              style={{ backgroundColor: getSingleLevelColor(level) }}
+                              title={`S${level}`}
+                            />
+                          ))}
+                        </div>
                         <span className="text-[10px] text-gray-500 shrink-0">
-                          S{overviewPlayHeatmap.singleLegend.max} - S{overviewPlayHeatmap.singleLegend.min}
+                          S{overviewPlayHeatmap.singleLegend.min} - S{overviewPlayHeatmap.singleLegend.max}
                         </span>
                       </div>
                     )}
                     {overviewPlayHeatmap.doubleLegend && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-display font-bold text-green-300 w-14 shrink-0">Doubles</span>
-                        <div
-                          className="h-2.5 flex-1 rounded-full border border-piu-border/40"
-                          style={{ background: `linear-gradient(90deg, ${overviewPlayHeatmap.doubleLegend.maxColor} 0%, ${overviewPlayHeatmap.doubleLegend.minColor} 100%)` }}
-                          title={`D${overviewPlayHeatmap.doubleLegend.max} to D${overviewPlayHeatmap.doubleLegend.min}`}
-                        />
+                      <div className="flex items-center justify-end gap-2 w-full">
+                        <span className="text-[10px] font-display font-bold text-green-300 shrink-0">Doubles</span>
+                        <div className="flex items-center gap-[2px] justify-end">
+                          {doubleLegendLevels.map((level) => (
+                            <span
+                              key={`double-${level}`}
+                              className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                              style={{ backgroundColor: getDoubleLevelColor(level) }}
+                              title={`D${level}`}
+                            />
+                          ))}
+                        </div>
                         <span className="text-[10px] text-gray-500 shrink-0">
-                          D{overviewPlayHeatmap.doubleLegend.max} - D{overviewPlayHeatmap.doubleLegend.min}
+                          D{overviewPlayHeatmap.doubleLegend.min} - D{overviewPlayHeatmap.doubleLegend.max}
                         </span>
                       </div>
                     )}
@@ -1720,13 +1766,13 @@ export default function ProfilePage() {
                               </div>
                               <div className="text-right shrink-0">
                                 {isBreak ? (
-                                  <span className="text-[10px] font-display font-bold text-red-500">STAGE BREAK</span>
+                                  <span className="text-xs leading-none font-display font-bold text-red-500">STAGE BREAK</span>
                                 ) : (
                                   <>
-                                    <span className={`text-[10px] font-display font-bold ${play.grade ? getGradeColor(play.grade) : rank.color}`}>
+                                    <span className={`text-xs leading-none font-display font-bold ${play.grade ? getGradeColor(play.grade) : rank.color}`}>
                                       {play.grade || rank.label}
                                     </span>
-                                    <p className="text-[10px] font-mono font-bold">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                                    <p className="text-[11px] leading-none font-mono font-bold mt-0.5">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
                                   </>
                                 )}
                               </div>
