@@ -641,11 +641,11 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                       )}
                     </Link>
                     <div className="flex-1 min-w-0">
-                      <div className="bg-piu-dark/50 rounded-lg px-2.5 py-1">
-                        <Link to={getProfilePath(c.user_id, c.username)} className="font-display font-semibold text-xs text-gray-100 hover:text-piu-accent transition-colors leading-tight">
+                      <div className="bg-piu-dark/50 rounded-lg px-2.5 pt-0.5 pb-1.5">
+                        <Link to={getProfilePath(c.user_id, c.username)} className="block font-display font-semibold text-xs text-gray-100 hover:text-piu-accent transition-colors leading-none">
                           {c.username}
                         </Link>
-                        <div className="text-[13px] text-gray-200 break-words leading-snug mt-0.5">{renderFormattedText(c.content)}</div>
+                        <div className="text-[13px] text-gray-200 break-words leading-snug mt-1">{renderFormattedText(c.content)}</div>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 px-1">
                         <span className="text-[10px] text-gray-600">{timeAgo(c.created_at)}</span>
@@ -686,11 +686,11 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                             )}
                           </Link>
                           <div className="flex-1 min-w-0">
-                            <div className="bg-piu-dark/30 rounded-lg px-2 py-1">
-                              <Link to={getProfilePath(r.user_id, r.username)} className="font-display font-semibold text-[11px] text-gray-100 hover:text-piu-accent transition-colors leading-tight">
+                            <div className="bg-piu-dark/30 rounded-lg px-2 pt-0.5 pb-1">
+                              <Link to={getProfilePath(r.user_id, r.username)} className="block font-display font-semibold text-[11px] text-gray-100 hover:text-piu-accent transition-colors leading-none">
                                 {r.username}
                               </Link>
-                              <div className="text-xs text-gray-200 break-words leading-snug mt-0.5">{renderFormattedText(r.content)}</div>
+                              <div className="text-xs text-gray-200 break-words leading-snug mt-1">{renderFormattedText(r.content)}</div>
                             </div>
                             <div className="flex items-center gap-3 mt-0.5 px-1">
                               <span className="text-[9px] text-gray-600">{timeAgo(r.created_at)}</span>
