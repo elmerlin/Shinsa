@@ -1,0 +1,5127 @@
+{
+  "generated_at": "2026-02-18T19:17:51.014Z",
+  "source": {
+    "site": "https://www.piugame.com/leaderboard/top_songs.php",
+    "date": "202602",
+    "mode": "total",
+    "locale_pair": [
+      "en",
+      "kr"
+    ]
+  },
+  "total_songs": 639,
+  "songs": [
+    {
+      "rank": 1,
+      "title_en": "Queencard",
+      "artist_en": "(G)I-DLE",
+      "title_kr": "퀸카",
+      "artist_kr": "(여자)아이들",
+      "canonical_title": "Queencard"
+    },
+    {
+      "rank": 2,
+      "title_en": "After LIKE",
+      "artist_en": "IVE",
+      "title_kr": "애프터 라이크",
+      "artist_kr": "아이브",
+      "canonical_title": "After LIKE"
+    },
+    {
+      "rank": 3,
+      "title_en": "Beethoven Virus",
+      "artist_en": "BanYa",
+      "title_kr": "베토벤 바이러스",
+      "artist_kr": "반야",
+      "canonical_title": "Beethoven Virus"
+    },
+    {
+      "rank": 4,
+      "title_en": "Bubble",
+      "artist_en": "STAYC",
+      "title_kr": "버블",
+      "artist_kr": "스테이씨",
+      "canonical_title": "Bubble"
+    },
+    {
+      "rank": 5,
+      "title_en": "TOMBOY",
+      "artist_en": "(G)I-DLE",
+      "title_kr": "톰보이",
+      "artist_kr": "(여자)아이들",
+      "canonical_title": "TOMBOY"
+    },
+    {
+      "rank": 6,
+      "title_en": "Discord",
+      "artist_en": "QWER",
+      "title_kr": "디스코드",
+      "artist_kr": "QWER",
+      "canonical_title": "Discord"
+    },
+    {
+      "rank": 7,
+      "title_en": "Nxde",
+      "artist_en": "(G)I-DLE",
+      "title_kr": "누드",
+      "artist_kr": "(여자)아이들",
+      "canonical_title": "Nxde"
+    },
+    {
+      "rank": 8,
+      "title_en": "Bad Apple!! feat. Nomico",
+      "artist_en": "Masayoshi Minoshima",
+      "title_kr": "배드 애플!! feat. Nomico",
+      "artist_kr": "Masayoshi Minoshima",
+      "canonical_title": "Bad Apple!! feat. Nomico"
+    },
+    {
+      "rank": 9,
+      "title_en": "Teddy Bear",
+      "artist_en": "STAYC",
+      "title_kr": "테디베어",
+      "artist_kr": "스테이씨",
+      "canonical_title": "Teddy Bear"
+    },
+    {
+      "rank": 10,
+      "title_en": "ELEVEN",
+      "artist_en": "IVE",
+      "title_kr": "일레븐",
+      "artist_kr": "아이브",
+      "canonical_title": "ELEVEN"
+    },
+    {
+      "rank": 11,
+      "title_en": "BOCA",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "보카",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "BOCA"
+    },
+    {
+      "rank": 12,
+      "title_en": "PANDORA",
+      "artist_en": "MAVE:",
+      "title_kr": "판도라",
+      "artist_kr": "메이브",
+      "canonical_title": "PANDORA"
+    },
+    {
+      "rank": 13,
+      "title_en": "Airplane",
+      "artist_en": "TYPHOON",
+      "title_kr": "비행기",
+      "artist_kr": "타이푼",
+      "canonical_title": "Airplane"
+    },
+    {
+      "rank": 14,
+      "title_en": "Alone",
+      "artist_en": "Highlight",
+      "title_kr": "얼론",
+      "artist_kr": "하이라이트",
+      "canonical_title": "Alone"
+    },
+    {
+      "rank": 15,
+      "title_en": "Sugar Conspiracy Theory",
+      "artist_en": "MAX",
+      "title_kr": "설탕음모론",
+      "artist_kr": "맥스",
+      "canonical_title": "Sugar Conspiracy Theory"
+    },
+    {
+      "rank": 16,
+      "title_en": "CRUSH",
+      "artist_en": "ZEROBASEONE",
+      "title_kr": "크러쉬",
+      "artist_kr": "제로베이스원",
+      "canonical_title": "CRUSH"
+    },
+    {
+      "rank": 17,
+      "title_en": "Winter",
+      "artist_en": "BanYa",
+      "title_kr": "윈터",
+      "artist_kr": "반야",
+      "canonical_title": "Winter"
+    },
+    {
+      "rank": 18,
+      "title_en": "Amor Fati",
+      "artist_en": "Yeon Ja Kim",
+      "title_kr": "아모르 파티",
+      "artist_kr": "김연자",
+      "canonical_title": "Amor Fati"
+    },
+    {
+      "rank": 19,
+      "title_en": "Horang Pungryuga",
+      "artist_en": "Sangnoksu feat. HANANA",
+      "title_kr": "호랑풍류가",
+      "artist_kr": "상록수 feat. 하나나",
+      "canonical_title": "Horang Pungryuga"
+    },
+    {
+      "rank": 20,
+      "title_en": "Kitty Cat",
+      "artist_en": "Coconut",
+      "title_kr": "키티 캣",
+      "artist_kr": "Coconut",
+      "canonical_title": "Kitty Cat"
+    },
+    {
+      "rank": 21,
+      "title_en": "Xuxa",
+      "artist_en": "Smiley",
+      "title_kr": "슈샤",
+      "artist_kr": "Smiley",
+      "canonical_title": "Xuxa"
+    },
+    {
+      "rank": 22,
+      "title_en": "Follow me",
+      "artist_en": "SHK",
+      "title_kr": "팔로우 미",
+      "artist_kr": "SHK",
+      "canonical_title": "Follow Me"
+    },
+    {
+      "rank": 23,
+      "title_en": "Sorceress Elise",
+      "artist_en": "YAHPP",
+      "title_kr": "소서리스 엘리제",
+      "artist_kr": "이 얍",
+      "canonical_title": "Sorceress Elise"
+    },
+    {
+      "rank": 24,
+      "title_en": "Canon D",
+      "artist_en": "BanYa",
+      "title_kr": "캐논 디",
+      "artist_kr": "반야",
+      "canonical_title": "Canon D"
+    },
+    {
+      "rank": 25,
+      "title_en": "Uh-Heung",
+      "artist_en": "DKZ",
+      "title_kr": "호랑이가 쫓아온다",
+      "artist_kr": "디케이지",
+      "canonical_title": "Uh-Heung"
+    },
+    {
+      "rank": 26,
+      "title_en": "Super Capriccio",
+      "artist_en": "SHK",
+      "title_kr": "슈퍼 카프리시오",
+      "artist_kr": "SHK",
+      "canonical_title": "Super Capriccio"
+    },
+    {
+      "rank": 27,
+      "title_en": "Switronic",
+      "artist_en": "SHK",
+      "title_kr": "스위트로닉",
+      "artist_kr": "SHK",
+      "canonical_title": "Switronic"
+    },
+    {
+      "rank": 28,
+      "title_en": "Violet Perfume",
+      "artist_en": "SHK",
+      "title_kr": "바이올렛 퍼퓸",
+      "artist_kr": "SHK",
+      "canonical_title": "Violet Perfume"
+    },
+    {
+      "rank": 29,
+      "title_en": "GOOD NIGHT",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "굿 나이트",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "Good Night"
+    },
+    {
+      "rank": 30,
+      "title_en": "WHISPER",
+      "artist_en": "THE BOYZ",
+      "title_kr": "위스퍼",
+      "artist_kr": "더보이즈",
+      "canonical_title": "WHISPER"
+    },
+    {
+      "rank": 31,
+      "title_en": "Csikos Post",
+      "artist_en": "BanYa",
+      "title_kr": "우편마차",
+      "artist_kr": "반야",
+      "canonical_title": "Csikos Post"
+    },
+    {
+      "rank": 32,
+      "title_en": "DO or DIE",
+      "artist_en": "xikers",
+      "title_kr": "두 올 다이",
+      "artist_kr": "싸이커스",
+      "canonical_title": "DO or DIE"
+    },
+    {
+      "rank": 33,
+      "title_en": "STORM",
+      "artist_en": "KOYOTE",
+      "title_kr": "스톰",
+      "artist_kr": "코요태",
+      "canonical_title": "STORM"
+    },
+    {
+      "rank": 34,
+      "title_en": "Pirate",
+      "artist_en": "EVERGLOW",
+      "title_kr": "파이렛",
+      "artist_kr": "에버글로우",
+      "canonical_title": "Pirate"
+    },
+    {
+      "rank": 35,
+      "title_en": "Turkey March",
+      "artist_en": "BanYa",
+      "title_kr": "터키 행진곡",
+      "artist_kr": "반야",
+      "canonical_title": "Turkey March"
+    },
+    {
+      "rank": 36,
+      "title_en": "Chase Me",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "체이스 미",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "Chase Me"
+    },
+    {
+      "rank": 37,
+      "title_en": "Last Rebirth",
+      "artist_en": "SHK",
+      "title_kr": "라스트 리버스",
+      "artist_kr": "SHK",
+      "canonical_title": "Last Rebirth"
+    },
+    {
+      "rank": 38,
+      "title_en": "Jogging",
+      "artist_en": "LUCY",
+      "title_kr": "조깅",
+      "artist_kr": "루시",
+      "canonical_title": "Jogging"
+    },
+    {
+      "rank": 39,
+      "title_en": "Sarabande",
+      "artist_en": "MAX",
+      "title_kr": "사라반드",
+      "artist_kr": "맥스",
+      "canonical_title": "Sarabande"
+    },
+    {
+      "rank": 40,
+      "title_en": "Beautiful Liar",
+      "artist_en": "MONSTA X",
+      "title_kr": "뷰티플라이어",
+      "artist_kr": "몬스타엑스",
+      "canonical_title": "Beautiful Liar"
+    },
+    {
+      "rank": 41,
+      "title_en": "Ladybug",
+      "artist_en": "Coconut",
+      "title_kr": "레이디버그",
+      "artist_kr": "Coconut",
+      "canonical_title": "Ladybug"
+    },
+    {
+      "rank": 42,
+      "title_en": "Super Fantasy",
+      "artist_en": "SHK",
+      "title_kr": "슈퍼 판타지",
+      "artist_kr": "SHK",
+      "canonical_title": "Super Fantasy"
+    },
+    {
+      "rank": 43,
+      "title_en": "Another Truth",
+      "artist_en": "Novasonic",
+      "title_kr": "또다른 진심",
+      "artist_kr": "노바소닉",
+      "canonical_title": "Another Truth"
+    },
+    {
+      "rank": 44,
+      "title_en": "Dr. M",
+      "artist_en": "BanYa",
+      "title_kr": "닥터 엠",
+      "artist_kr": "반야",
+      "canonical_title": "Dr. M"
+    },
+    {
+      "rank": 45,
+      "title_en": "Spray",
+      "artist_en": "WEi",
+      "title_kr": "스프레이",
+      "artist_kr": "위아이",
+      "canonical_title": "Spray"
+    },
+    {
+      "rank": 46,
+      "title_en": "Euphorianic",
+      "artist_en": "SHK",
+      "title_kr": "유포리아닉",
+      "artist_kr": "SHK",
+      "canonical_title": "Euphorianic"
+    },
+    {
+      "rank": 47,
+      "title_en": "Nostalgia",
+      "artist_en": "Woody",
+      "title_kr": "노스텔지어",
+      "artist_kr": "우디",
+      "canonical_title": "Nostalgia"
+    },
+    {
+      "rank": 48,
+      "title_en": "SWEET WONDERLAND",
+      "artist_en": "MAX feat. ankimo",
+      "title_kr": "스위트 원더랜드",
+      "artist_kr": "MAX feat. ankimo",
+      "canonical_title": "SWEET WONDERLAND"
+    },
+    {
+      "rank": 49,
+      "title_en": "Reminiscence",
+      "artist_en": "MAX",
+      "title_kr": "레미니센스",
+      "artist_kr": "맥스",
+      "canonical_title": "Reminiscence"
+    },
+    {
+      "rank": 50,
+      "title_en": "Pop The Track",
+      "artist_en": "J-Mi & Midi-D & Ft. Hanna Stockzell",
+      "title_kr": "팝 더 트랙",
+      "artist_kr": "J-Mi & Midi-D & Ft. Hanna Stockzell",
+      "canonical_title": "Pop The Track"
+    },
+    {
+      "rank": 51,
+      "title_en": "Murdoch vs Otada",
+      "artist_en": "ESPITZ vs WONDERTRAVELER Project",
+      "title_kr": "머독 vs 오타다",
+      "artist_kr": "ESPITZ vs WONDERTRAVELER Project",
+      "canonical_title": "Murdoch vs Otada"
+    },
+    {
+      "rank": 52,
+      "title_en": "DUEL",
+      "artist_en": "Cashew & D_AAN",
+      "title_kr": "결투",
+      "artist_kr": "Cashew & D_AAN",
+      "canonical_title": "DUEL"
+    },
+    {
+      "rank": 53,
+      "title_en": "Heliosphere",
+      "artist_en": "BlackY",
+      "title_kr": "헬리오스피어",
+      "artist_kr": "BlackY",
+      "canonical_title": "Heliosphere"
+    },
+    {
+      "rank": 54,
+      "title_en": "Deca Dance",
+      "artist_en": "Yooh",
+      "title_kr": "데카 댄스",
+      "artist_kr": "Yooh",
+      "canonical_title": "Deca Dance"
+    },
+    {
+      "rank": 55,
+      "title_en": "Doppelganger",
+      "artist_en": "MonstDeath",
+      "title_kr": "도플갱어",
+      "artist_kr": "MonstDeath",
+      "canonical_title": "Doppelganger"
+    },
+    {
+      "rank": 56,
+      "title_en": "Big Daddy",
+      "artist_en": "USAO",
+      "title_kr": "빅 대디",
+      "artist_kr": "USAO",
+      "canonical_title": "Big Daddy"
+    },
+    {
+      "rank": 57,
+      "title_en": "The Apocalypse",
+      "artist_en": "HyuN feat. Elika",
+      "title_kr": "더 아포칼립스",
+      "artist_kr": "HyuN feat. Elika",
+      "canonical_title": "The Apocalypse"
+    },
+    {
+      "rank": 58,
+      "title_en": "Conflict",
+      "artist_en": "Siromaru + Cranky",
+      "title_kr": "컨플릭트",
+      "artist_kr": "Siromaru + Cranky",
+      "canonical_title": "Conflict"
+    },
+    {
+      "rank": 59,
+      "title_en": "Crimson hood",
+      "artist_en": "Springhead",
+      "title_kr": "크림슨 후드",
+      "artist_kr": "Springhead",
+      "canonical_title": "Crimson hood"
+    },
+    {
+      "rank": 60,
+      "title_en": "8 6",
+      "artist_en": "DASU",
+      "title_kr": "8 6",
+      "artist_kr": "DASU",
+      "canonical_title": "86"
+    },
+    {
+      "rank": 61,
+      "title_en": "Alice in Misanthrope",
+      "artist_en": "LeaF",
+      "title_kr": "앨리스 인 미산트로프",
+      "artist_kr": "LeaF",
+      "canonical_title": "Alice in Misanthrope"
+    },
+    {
+      "rank": 62,
+      "title_en": "Becouse of You",
+      "artist_en": "Srav3R & USAO",
+      "title_kr": "비코즈 오브 유",
+      "artist_kr": "Srav3R & USAO",
+      "canonical_title": "Becouse of You"
+    },
+    {
+      "rank": 63,
+      "title_en": "Mopemope",
+      "artist_en": "LeaF",
+      "title_kr": "모페모페",
+      "artist_kr": "LeaF",
+      "canonical_title": "Mopemope"
+    },
+    {
+      "rank": 64,
+      "title_en": "Darkside Of The Mind",
+      "artist_en": "DJ Myosuke",
+      "title_kr": "다크사이드 오브 더 마인드",
+      "artist_kr": "DJ Myosuke",
+      "canonical_title": "Darkside Of The Mind"
+    },
+    {
+      "rank": 65,
+      "title_en": "STAGER",
+      "artist_en": "Ras",
+      "title_kr": "스테이저",
+      "artist_kr": "Ras",
+      "canonical_title": "STAGER"
+    },
+    {
+      "rank": 66,
+      "title_en": "BRAIN POWER",
+      "artist_en": "NOMA",
+      "title_kr": "브레인 파워",
+      "artist_kr": "NOMA",
+      "canonical_title": "BRAIN POWER"
+    },
+    {
+      "rank": 67,
+      "title_en": "Earendel",
+      "artist_en": "Palami feat.neur6sia",
+      "title_kr": "에렌델",
+      "artist_kr": "Palami feat.neur6sia",
+      "canonical_title": "Earendel"
+    },
+    {
+      "rank": 68,
+      "title_en": "Spooky Macaron",
+      "artist_en": "Sobrem",
+      "title_kr": "스푸키 마카롱",
+      "artist_kr": "Sobrem",
+      "canonical_title": "Spooky Macaron"
+    },
+    {
+      "rank": 69,
+      "title_en": "ALiVE",
+      "artist_en": "REDALiCE",
+      "title_kr": "얼라이브",
+      "artist_kr": "REDALiCE",
+      "canonical_title": "ALiVE"
+    },
+    {
+      "rank": 70,
+      "title_en": "Break Through Myself feat. Risa Yuzuki",
+      "artist_en": "DJ Myosuke & Laur",
+      "title_kr": "브레이크 스루 마이셀프 feat. Risa Yuzuki",
+      "artist_kr": "DJ Myosuke & Laur",
+      "canonical_title": "Break Through Myself feat. Risa Yuzuki"
+    },
+    {
+      "rank": 71,
+      "title_en": "Festival of Death Moon",
+      "artist_en": "SHK",
+      "title_kr": "사월의 축제",
+      "artist_kr": "SHK",
+      "canonical_title": "Festival of Death Moon"
+    },
+    {
+      "rank": 72,
+      "title_en": "Dead End",
+      "artist_en": "Cosmograph",
+      "title_kr": "데드 엔드",
+      "artist_kr": "Cosmograph",
+      "canonical_title": "Dead End"
+    },
+    {
+      "rank": 73,
+      "title_en": "Dignity",
+      "artist_en": "Crash",
+      "title_kr": "디그니티",
+      "artist_kr": "크래쉬",
+      "canonical_title": "Dignity"
+    },
+    {
+      "rank": 74,
+      "title_en": "YOU AND I",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "유 앤 아이",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "YOU AND I"
+    },
+    {
+      "rank": 75,
+      "title_en": "Energy Synergy Matrix",
+      "artist_en": "Tanchiky",
+      "title_kr": "에너지 시너지 매트릭스",
+      "artist_kr": "Tanchiky",
+      "canonical_title": "Energy Synergy Matrix"
+    },
+    {
+      "rank": 76,
+      "title_en": "Halloween Party ~Multiverse~",
+      "artist_en": "SHK",
+      "title_kr": "할로윈 파티 ~Multiverse~",
+      "artist_kr": "SHK",
+      "canonical_title": "Halloween Party ~Multiverse~"
+    },
+    {
+      "rank": 77,
+      "title_en": "MURDOCH",
+      "artist_en": "WONDERTRAVELER Project",
+      "title_kr": "머독",
+      "artist_kr": "WONDERTRAVELER Project",
+      "canonical_title": "MURDOCH"
+    },
+    {
+      "rank": 78,
+      "title_en": "Yo! Say!! Fairy!!!",
+      "artist_en": "MYUKKE.",
+      "title_kr": "요! 세이!! 페어리!!!",
+      "artist_kr": "MYUKKE.",
+      "canonical_title": "Yo! Say!! Fairy!!!"
+    },
+    {
+      "rank": 79,
+      "title_en": "GOODTEK",
+      "artist_en": "EBIMAYO",
+      "title_kr": "굿텍",
+      "artist_kr": "EBIMAYO",
+      "canonical_title": "GOODTEK"
+    },
+    {
+      "rank": 80,
+      "title_en": "Pneumonoultramicroscopicsilicovolcanoconiosis ft. Kagamine Len/GUMI",
+      "artist_en": "DASU",
+      "title_kr": "진폐증 ft. Kagamine Len/GUMI",
+      "artist_kr": "DASU",
+      "canonical_title": "Pneumonoultramicroscopicsilicovolcanoconiosis"
+    },
+    {
+      "rank": 81,
+      "title_en": "Curiosity Overdrive",
+      "artist_en": "t+pazolite",
+      "title_kr": "큐리아서티 오버드라이브",
+      "artist_kr": "t+pazolite",
+      "canonical_title": "Curiosity Overdrive"
+    },
+    {
+      "rank": 82,
+      "title_en": "Full Moon",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "풀 문",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "Full Moon"
+    },
+    {
+      "rank": 83,
+      "title_en": "Wedding Crashers",
+      "artist_en": "SHK",
+      "title_kr": "웨딩 크래셔",
+      "artist_kr": "SHK",
+      "canonical_title": "Wedding Crashers"
+    },
+    {
+      "rank": 84,
+      "title_en": "4NT",
+      "artist_en": "PODA",
+      "title_kr": "4NT",
+      "artist_kr": "PODA",
+      "canonical_title": "4NT"
+    },
+    {
+      "rank": 85,
+      "title_en": "MilK",
+      "artist_en": "Morimori Atsushi",
+      "title_kr": "밀크",
+      "artist_kr": "Morimori Atsushi",
+      "canonical_title": "MilK"
+    },
+    {
+      "rank": 86,
+      "title_en": "Odin",
+      "artist_en": "Gram",
+      "title_kr": "오딘",
+      "artist_kr": "Gram",
+      "canonical_title": "Odin"
+    },
+    {
+      "rank": 87,
+      "title_en": "†DOOF†SENC†",
+      "artist_en": "Kobaryo",
+      "title_kr": "†도프†센시†",
+      "artist_kr": "Kobaryo",
+      "canonical_title": "†DOOF†SENC†"
+    },
+    {
+      "rank": 88,
+      "title_en": "Super Akuma Emperor",
+      "artist_en": "REDALiCE",
+      "title_kr": "초악마황제",
+      "artist_kr": "REDALiCE",
+      "canonical_title": "Super Akuma Emperor"
+    },
+    {
+      "rank": 89,
+      "title_en": "Little Munchkin",
+      "artist_en": "Castellia",
+      "title_kr": "리틀 먼치킨",
+      "artist_kr": "Castellia",
+      "canonical_title": "Little Munchkin"
+    },
+    {
+      "rank": 90,
+      "title_en": "Acquire",
+      "artist_en": "ryhki",
+      "title_kr": "어콰이어",
+      "artist_kr": "ryhki",
+      "canonical_title": "Acquire"
+    },
+    {
+      "rank": 91,
+      "title_en": "Stardream -Eurobeat Remix-",
+      "artist_en": "MAX x Cashew x Dave Rodgers",
+      "title_kr": "스타드림 -Eurobeat Remix-",
+      "artist_kr": "MAX x Cashew x Dave Rodgers",
+      "canonical_title": "Stardream -Eurobeat Remix-"
+    },
+    {
+      "rank": 92,
+      "title_en": "1948",
+      "artist_en": "SLAM",
+      "title_kr": "1948",
+      "artist_kr": "SLAM",
+      "canonical_title": "1948"
+    },
+    {
+      "rank": 93,
+      "title_en": "Etude Op 10-4",
+      "artist_en": "MAX",
+      "title_kr": "추격",
+      "artist_kr": "MAX",
+      "canonical_title": "Etude Op 10-4"
+    },
+    {
+      "rank": 94,
+      "title_en": "Human Extinction (PIU Edit.)",
+      "artist_en": "MonstDeath",
+      "title_kr": "휴먼 익스팅션 (PIU Edit.)",
+      "artist_kr": "MonstDeath",
+      "canonical_title": "Human Extinction (PIU Edit.)"
+    },
+    {
+      "rank": 95,
+      "title_en": "iRELLiA",
+      "artist_en": "HyuN",
+      "title_kr": "이렐리아",
+      "artist_kr": "HyuN",
+      "canonical_title": "iRELLiA"
+    },
+    {
+      "rank": 96,
+      "title_en": "ヨロピク ピクヨロ！ Yoropiku Pikuyoro !",
+      "artist_en": "バクステ外神田一丁目 Bakusute Sotokanda Icchome",
+      "title_kr": "요로피쿠 피쿠요로 !",
+      "artist_kr": "바쿠스테 소토칸다 잇쵸메",
+      "canonical_title": "Yoropiku Pikuyoro!"
+    },
+    {
+      "rank": 97,
+      "title_en": "Destr0yer",
+      "artist_en": "sakuzyo",
+      "title_kr": "디스트로0ㅣ어",
+      "artist_kr": "sakuzyo",
+      "canonical_title": "Destr0yer"
+    },
+    {
+      "rank": 98,
+      "title_en": "Extreme Music School 1st period feat. Nanahira",
+      "artist_en": "Massive New Krew & RoughSketch",
+      "title_kr": "익스트림 음악학원 1교시 feat. Nanahira",
+      "artist_kr": "Massive New Krew & RoughSketch",
+      "canonical_title": "Extreme Music School 1st period feat. Nanahira"
+    },
+    {
+      "rank": 99,
+      "title_en": "A Site De La Rue",
+      "artist_en": "STREME REVERIE",
+      "title_kr": "어 사이트 데 라 루",
+      "artist_kr": "STREME REVERIE",
+      "canonical_title": "A Site De La Rue"
+    },
+    {
+      "rank": 100,
+      "title_en": "SONIC BOOM",
+      "artist_en": "USAO",
+      "title_kr": "소닉 붐",
+      "artist_kr": "USAO",
+      "canonical_title": "SONIC BOOM"
+    },
+    {
+      "rank": 101,
+      "title_en": "Imaginarized City",
+      "artist_en": "Reku Mochizuki",
+      "title_kr": "이매저너라이즈드 시티",
+      "artist_kr": "Reku Mochizuki",
+      "canonical_title": "Imaginarized City"
+    },
+    {
+      "rank": 102,
+      "title_en": "Altale",
+      "artist_en": "sakuzyo",
+      "title_kr": "알테일",
+      "artist_kr": "sakuzyo",
+      "canonical_title": "Altale"
+    },
+    {
+      "rank": 103,
+      "title_en": "Solve My Hurt",
+      "artist_en": "Doin",
+      "title_kr": "솔브 마이 허트",
+      "artist_kr": "Doin",
+      "canonical_title": "Solve My Hurt"
+    },
+    {
+      "rank": 104,
+      "title_en": "VECTOR",
+      "artist_en": "Zekk",
+      "title_kr": "벡터",
+      "artist_kr": "Zekk",
+      "canonical_title": "VECTOR"
+    },
+    {
+      "rank": 105,
+      "title_en": "Neo Catharsis",
+      "artist_en": "TAG underground overlay",
+      "title_kr": "네오 카타르시스",
+      "artist_kr": "TAG underground overlay",
+      "canonical_title": "Neo Catharsis"
+    },
+    {
+      "rank": 106,
+      "title_en": "About The Universe",
+      "artist_en": "SOTUI & MIssionary",
+      "title_kr": "어바웃 더 유니버스",
+      "artist_kr": "SOTUI & MIssionary",
+      "canonical_title": "About The Universe"
+    },
+    {
+      "rank": 107,
+      "title_en": "GOODBOUNCE",
+      "artist_en": "EBIMAYO",
+      "title_kr": "굿바운스",
+      "artist_kr": "EBIMAYO",
+      "canonical_title": "GOODBOUNCE"
+    },
+    {
+      "rank": 108,
+      "title_en": "Eternal Universe",
+      "artist_en": "Quree",
+      "title_kr": "이터널 유니버스",
+      "artist_kr": "Quree",
+      "canonical_title": "Eternal Universe"
+    },
+    {
+      "rank": 109,
+      "title_en": "Binary star",
+      "artist_en": "SynthWulf",
+      "title_kr": "바이너리 스타",
+      "artist_kr": "SynthWulf",
+      "canonical_title": "Binary Star"
+    },
+    {
+      "rank": 110,
+      "title_en": "Ultimatum",
+      "artist_en": "Cosmograph",
+      "title_kr": "얼티메이텀",
+      "artist_kr": "코스모그래프",
+      "canonical_title": "Ultimatum"
+    },
+    {
+      "rank": 111,
+      "title_en": "Kokugen Kairou Labyrinth",
+      "artist_en": "A:llha (ANE + 2riA)",
+      "title_kr": "시간의 회랑 라비린스",
+      "artist_kr": "A:llha (ANE + 2riA)",
+      "canonical_title": "Kokugen Kairou Labyrinth"
+    },
+    {
+      "rank": 112,
+      "title_en": "Nade Nade",
+      "artist_en": "Doin",
+      "title_kr": "네이드 네이드",
+      "artist_kr": "Doin",
+      "canonical_title": "Nade Nade"
+    },
+    {
+      "rank": 113,
+      "title_en": "R.I.P",
+      "artist_en": "eicateve",
+      "title_kr": "R.I.P",
+      "artist_kr": "eicateve",
+      "canonical_title": "R.I.P."
+    },
+    {
+      "rank": 114,
+      "title_en": "Versailles",
+      "artist_en": "HyuN & MIIM",
+      "title_kr": "베르사이유",
+      "artist_kr": "HyuN & MIIM",
+      "canonical_title": "Versailles"
+    },
+    {
+      "rank": 115,
+      "title_en": "wither garden",
+      "artist_en": "uma feat. Kanon Tachibana",
+      "title_kr": "위더 가든",
+      "artist_kr": "uma feat. Kanon Tachibana",
+      "canonical_title": "wither garden"
+    },
+    {
+      "rank": 116,
+      "title_en": "Showdown",
+      "artist_en": "litmus*",
+      "title_kr": "쇼다운",
+      "artist_kr": "litmus*",
+      "canonical_title": "Showdown"
+    },
+    {
+      "rank": 117,
+      "title_en": "GLORIA",
+      "artist_en": "Croire",
+      "title_kr": "글로리아",
+      "artist_kr": "Croire",
+      "canonical_title": "GLORIA"
+    },
+    {
+      "rank": 118,
+      "title_en": "BOOOM!!",
+      "artist_en": "RiraN",
+      "title_kr": "붐!!",
+      "artist_kr": "RiraN",
+      "canonical_title": "BOOOM!!"
+    },
+    {
+      "rank": 119,
+      "title_en": "Athena's Shield",
+      "artist_en": "Jehezukiel",
+      "title_kr": "아테나의 방패",
+      "artist_kr": "Jehezukiel",
+      "canonical_title": "Athena's Shield"
+    },
+    {
+      "rank": 120,
+      "title_en": "Sudden Appearance Image",
+      "artist_en": "Blacklolita",
+      "title_kr": "서든 어페어런스 이미지",
+      "artist_kr": "Blacklolita",
+      "canonical_title": "Sudden Appearance Image"
+    },
+    {
+      "rank": 121,
+      "title_en": "hercules",
+      "artist_en": "Abel",
+      "title_kr": "헤라클레스",
+      "artist_kr": "Abel",
+      "canonical_title": "Hercules"
+    },
+    {
+      "rank": 122,
+      "title_en": "That Kitty (PIU Edit.)",
+      "artist_en": "MonstDeath",
+      "title_kr": "댓 키티 (PIU Edit.)",
+      "artist_kr": "MonstDeath",
+      "canonical_title": "That Kitty (PIU Edit.)"
+    },
+    {
+      "rank": 123,
+      "title_en": "KUGUTSU",
+      "artist_en": "onoken",
+      "title_kr": "꼭두각시",
+      "artist_kr": "onoken",
+      "canonical_title": "KUGUTSU"
+    },
+    {
+      "rank": 124,
+      "title_en": "Fly high",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "날아올라",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "Fly High"
+    },
+    {
+      "rank": 125,
+      "title_en": "Ultimate Eyes",
+      "artist_en": "HyuN",
+      "title_kr": "얼티밋 아이즈",
+      "artist_kr": "HyuN",
+      "canonical_title": "Ultimate Eyes"
+    },
+    {
+      "rank": 126,
+      "title_en": "ESP",
+      "artist_en": "nato",
+      "title_kr": "ESP",
+      "artist_kr": "nato",
+      "canonical_title": "ESP"
+    },
+    {
+      "rank": 127,
+      "title_en": "Vanish 2 - Roar of the invisible dragon",
+      "artist_en": "Applesoda",
+      "title_kr": "배니쉬 2 - Roar of the invisible dragon",
+      "artist_kr": "Applesoda",
+      "canonical_title": "Vanish 2"
+    },
+    {
+      "rank": 128,
+      "title_en": "Bluish Rose",
+      "artist_en": "WyvernP",
+      "title_kr": "블루이쉬 로즈",
+      "artist_kr": "WyvernP",
+      "canonical_title": "Bluish Rose"
+    },
+    {
+      "rank": 129,
+      "title_en": "Papasito (feat. KuTiNA)",
+      "artist_en": "Yakikaze & Cashew",
+      "title_kr": "파파시토 (feat. KuTiNA)",
+      "artist_kr": "Yakikaze & Cashew",
+      "canonical_title": "Papasito"
+    },
+    {
+      "rank": 130,
+      "title_en": "F(R)IEND",
+      "artist_en": "D_AAN",
+      "title_kr": "프렌드",
+      "artist_kr": "D_AAN",
+      "canonical_title": "Friend"
+    },
+    {
+      "rank": 131,
+      "title_en": "Demon of Laplace",
+      "artist_en": "Quree",
+      "title_kr": "데몬 오브 라플라스",
+      "artist_kr": "Quree",
+      "canonical_title": "Demon of Laplace"
+    },
+    {
+      "rank": 132,
+      "title_en": "Nakakapagpabagabag",
+      "artist_en": "Dasu feat. Kagamine Len",
+      "title_kr": "꺼림칙한",
+      "artist_kr": "Dasu feat. 카가미네 렌",
+      "canonical_title": "Nakakapagpabagabag"
+    },
+    {
+      "rank": 133,
+      "title_en": "MEGAHEARTZ",
+      "artist_en": "DJ Noriken",
+      "title_kr": "메가하츠",
+      "artist_kr": "DJ Noriken",
+      "canonical_title": "MEGAHEARTZ"
+    },
+    {
+      "rank": 134,
+      "title_en": "Solfeggietto",
+      "artist_en": "Fiverwater",
+      "title_kr": "솔페지에토",
+      "artist_kr": "Fiverwater",
+      "canonical_title": "Solfeggietto"
+    },
+    {
+      "rank": 135,
+      "title_en": "EMOMOMO",
+      "artist_en": "Ras",
+      "title_kr": "에모모모",
+      "artist_kr": "Ras",
+      "canonical_title": "EMOMOMO"
+    },
+    {
+      "rank": 136,
+      "title_en": "Aragami",
+      "artist_en": "xi",
+      "title_kr": "아라가미",
+      "artist_kr": "xi",
+      "canonical_title": "Aragami"
+    },
+    {
+      "rank": 137,
+      "title_en": "Flavor Step!",
+      "artist_en": "EmoCosine",
+      "title_kr": "플레이버 스텝!",
+      "artist_kr": "EmoCosine",
+      "canonical_title": "Flavor Step!"
+    },
+    {
+      "rank": 138,
+      "title_en": "Dement ~After Legend~",
+      "artist_en": "Lunatic Sounds",
+      "title_kr": "디멘트 ~에프터 레전드~",
+      "artist_kr": "루나틱 사운즈",
+      "canonical_title": "Dement"
+    },
+    {
+      "rank": 139,
+      "title_en": "Chimera",
+      "artist_en": "YAHPP",
+      "title_kr": "키메라",
+      "artist_kr": "이 얍",
+      "canonical_title": "Chimera"
+    },
+    {
+      "rank": 140,
+      "title_en": "ESCAPE",
+      "artist_en": "D_AAN",
+      "title_kr": "이스케이프",
+      "artist_kr": "D_AAN",
+      "canonical_title": "Escape"
+    },
+    {
+      "rank": 141,
+      "title_en": "CHAOS AGAIN",
+      "artist_en": "NAOKI underground -Ω-",
+      "title_kr": "카오스 어게인",
+      "artist_kr": "NAOKI underground -Ω-",
+      "canonical_title": "CHAOS AGAIN"
+    },
+    {
+      "rank": 142,
+      "title_en": "Nyan-turne (feat. KuTiNA)",
+      "artist_en": "Cashew & Castellia",
+      "title_kr": "냥-턴 (feat. KuTiNA)",
+      "artist_kr": "Cashew & Castellia",
+      "canonical_title": "Nyan-turne (feat. KuTiNA)"
+    },
+    {
+      "rank": 143,
+      "title_en": "PUPA",
+      "artist_en": "Morimori Atsushi",
+      "title_kr": "푸파",
+      "artist_kr": "Morimori Atsushi",
+      "canonical_title": "PUPA"
+    },
+    {
+      "rank": 144,
+      "title_en": "PRiMA MATERiA",
+      "artist_en": "xi",
+      "title_kr": "프ㄹi마 마테ㄹi아",
+      "artist_kr": "xi",
+      "canonical_title": "PRiMA MATERiA"
+    },
+    {
+      "rank": 145,
+      "title_en": "Gargoyle",
+      "artist_en": "Sanxion7",
+      "title_kr": "가고일",
+      "artist_kr": "Sanxion7",
+      "canonical_title": "Gargoyle"
+    },
+    {
+      "rank": 146,
+      "title_en": "Fracture Temporelle",
+      "artist_en": "Kurokotei",
+      "title_kr": "프렉쳐 텀퍼렐르",
+      "artist_kr": "Kurokotei",
+      "canonical_title": "Fracture Temporelle"
+    },
+    {
+      "rank": 147,
+      "title_en": "INVASION",
+      "artist_en": "D_AAN",
+      "title_kr": "인베이젼",
+      "artist_kr": "D_AAN",
+      "canonical_title": "INVASION"
+    },
+    {
+      "rank": 148,
+      "title_en": "Rush-More",
+      "artist_en": "litmus*",
+      "title_kr": "러쉬-모어",
+      "artist_kr": "litmus*",
+      "canonical_title": "Rush-More"
+    },
+    {
+      "rank": 149,
+      "title_en": "Passacaglia",
+      "artist_en": "SynthWulf",
+      "title_kr": "파사칼리아",
+      "artist_kr": "SynthWulf",
+      "canonical_title": "Passacaglia"
+    },
+    {
+      "rank": 150,
+      "title_en": "Gargoyle - FULL SONG -",
+      "artist_en": "Sanxion7",
+      "title_kr": "가고일 - FULL SONG -",
+      "artist_kr": "Sanxion7",
+      "canonical_title": "Gargoyle"
+    },
+    {
+      "rank": 151,
+      "title_en": "FLVSH OUT",
+      "artist_en": "Getty",
+      "title_kr": "플래시 아웃",
+      "artist_kr": "Getty",
+      "canonical_title": "FLVSH OUT"
+    },
+    {
+      "rank": 152,
+      "title_en": "Cross Time",
+      "artist_en": "Brandy",
+      "title_kr": "크로스 타임",
+      "artist_kr": "브랜디",
+      "canonical_title": "Cross Time"
+    },
+    {
+      "rank": 153,
+      "title_en": "Galaxy Collapse",
+      "artist_en": "Kurokotei",
+      "title_kr": "갤럭시 컬랩스",
+      "artist_kr": "Kurokotei",
+      "canonical_title": "Galaxy Collapse"
+    },
+    {
+      "rank": 154,
+      "title_en": "Phalanx \"RS2018 edit\"",
+      "artist_en": "Cranky",
+      "title_kr": "팔랑크스 \"RS2018 edit\"",
+      "artist_kr": "Cranky",
+      "canonical_title": "Phalanx"
+    },
+    {
+      "rank": 155,
+      "title_en": "TRICKL4SH 220",
+      "artist_en": "Lite Show Magic",
+      "title_kr": "트릭크래쉬 220",
+      "artist_kr": "Lite Show Magic",
+      "canonical_title": "TRICKL4SH 220"
+    },
+    {
+      "rank": 156,
+      "title_en": "Viyella's Nightmare",
+      "artist_en": "Laur",
+      "title_kr": "비옐라의 악몽",
+      "artist_kr": "Laur",
+      "canonical_title": "Viyella's Nightmare"
+    },
+    {
+      "rank": 157,
+      "title_en": "Paved Garden",
+      "artist_en": "Ginkiha",
+      "title_kr": "페이브 가든",
+      "artist_kr": "Ginkiha",
+      "canonical_title": "Paved Garden"
+    },
+    {
+      "rank": 158,
+      "title_en": "Rock the house",
+      "artist_en": "Matduke",
+      "title_kr": "락 더 하우스",
+      "artist_kr": "Matduke",
+      "canonical_title": "Rock the house"
+    },
+    {
+      "rank": 159,
+      "title_en": "Burn Out",
+      "artist_en": "WyvernP",
+      "title_kr": "번 아웃",
+      "artist_kr": "WyvernP",
+      "canonical_title": "Burn Out"
+    },
+    {
+      "rank": 160,
+      "title_en": "Cross Over feat. LyuU",
+      "artist_en": "HyuN",
+      "title_kr": "크로스 오버 feat. LyuU",
+      "artist_kr": "HyuN",
+      "canonical_title": "Cross Over"
+    },
+    {
+      "rank": 161,
+      "title_en": "Lacrimosa",
+      "artist_en": "Fiverwater",
+      "title_kr": "라크리모사",
+      "artist_kr": "Fiverwater",
+      "canonical_title": "Lacrimosa"
+    },
+    {
+      "rank": 162,
+      "title_en": "Barber's Madness",
+      "artist_en": "Klass E",
+      "title_kr": "바버스 매드니스",
+      "artist_kr": "Klass E",
+      "canonical_title": "Barber's Madness"
+    },
+    {
+      "rank": 163,
+      "title_en": "Ghroth",
+      "artist_en": "nato",
+      "title_kr": "그로스",
+      "artist_kr": "nato",
+      "canonical_title": "Ghroth"
+    },
+    {
+      "rank": 164,
+      "title_en": "New Rose",
+      "artist_en": "Hommarju",
+      "title_kr": "뉴 로즈",
+      "artist_kr": "Hommarju",
+      "canonical_title": "New Rose"
+    },
+    {
+      "rank": 165,
+      "title_en": "Underworld ft. Skizzo (PIU Edit.)",
+      "artist_en": "MonstDeath vs Neutral Moon",
+      "title_kr": "언더월드 ft. Skizzo (PIU Edit.)",
+      "artist_kr": "MonstDeath vs Neutral Moon",
+      "canonical_title": "Underworld ft. Skizzo (PIU Edit.)"
+    },
+    {
+      "rank": 166,
+      "title_en": "Moment Day",
+      "artist_en": "MAX",
+      "title_kr": "모멘트 데이",
+      "artist_kr": "맥스",
+      "canonical_title": "Moment Day"
+    },
+    {
+      "rank": 167,
+      "title_en": "* this game does not exist *",
+      "artist_en": "litmus* x Ester",
+      "title_kr": "* 이 게임은 존재하지 않습니다 *",
+      "artist_kr": "litmus* x Ester",
+      "canonical_title": "* this game does not exist *"
+    },
+    {
+      "rank": 168,
+      "title_en": "Stardream (feat. Romelon)",
+      "artist_en": "Cashew",
+      "title_kr": "스타드림 (feat. Romelon)",
+      "artist_kr": "Cashew",
+      "canonical_title": "Stardream"
+    },
+    {
+      "rank": 169,
+      "title_en": "Yeo rae a",
+      "artist_en": "SID-SOUND",
+      "title_kr": "여래아",
+      "artist_kr": "시드사운드",
+      "canonical_title": "Yeo rae a"
+    },
+    {
+      "rank": 170,
+      "title_en": "Imperium",
+      "artist_en": "sakuzyo",
+      "title_kr": "임페리움",
+      "artist_kr": "sakuzyo",
+      "canonical_title": "Imperium"
+    },
+    {
+      "rank": 171,
+      "title_en": "BATTLE NO.1",
+      "artist_en": "TANO*C Sound Team",
+      "title_kr": "배틀 넘버원",
+      "artist_kr": "TANO*C Sound Team",
+      "canonical_title": "BATTLE NO.1"
+    },
+    {
+      "rank": 172,
+      "title_en": "Simon Says, EURODANCE!! (feat. Sara☆M)",
+      "artist_en": "Jehezukiel☆KAZEMURA☆Hideky",
+      "title_kr": "사이먼 세이즈, 유로댄스!! (feat. Sara☆M)",
+      "artist_kr": "Jehezukiel☆KAZEMURA☆Hideky",
+      "canonical_title": "Simon Says, EURODANCE!!"
+    },
+    {
+      "rank": 173,
+      "title_en": "CROSS SOUL",
+      "artist_en": "HyuN feat. Syepias",
+      "title_kr": "크로스 소울",
+      "artist_kr": "HyuN feat. Syepias",
+      "canonical_title": "CROSS SOUL"
+    },
+    {
+      "rank": 174,
+      "title_en": "BSPower Explosion",
+      "artist_en": "Memme",
+      "title_kr": "BS파워 익스플로전",
+      "artist_kr": "맴매",
+      "canonical_title": "BSPower Explosion"
+    },
+    {
+      "rank": 175,
+      "title_en": "Keep On!",
+      "artist_en": "雨漏りＰ/ AmamoriP",
+      "title_kr": "킵 온!",
+      "artist_kr": "아마모리P",
+      "canonical_title": "Keep On!"
+    },
+    {
+      "rank": 176,
+      "title_en": "Witch Doctor",
+      "artist_en": "BanYa",
+      "title_kr": "위치 닥터",
+      "artist_kr": "반야",
+      "canonical_title": "Witch Doctor"
+    },
+    {
+      "rank": 177,
+      "title_en": "Re：End of a Dream",
+      "artist_en": "uma vs. Morimori Atsushi",
+      "title_kr": "Re：엔드 오브 어 드림",
+      "artist_kr": "uma vs. Morimori Atsushi",
+      "canonical_title": "Re：End of a Dream"
+    },
+    {
+      "rank": 178,
+      "title_en": "Glimmer Gleam",
+      "artist_en": "Doin",
+      "title_kr": "글리머 글림",
+      "artist_kr": "Doin",
+      "canonical_title": "Glimmer Gleam"
+    },
+    {
+      "rank": 179,
+      "title_en": "Elise",
+      "artist_en": "DM Ashura",
+      "title_kr": "엘리제",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "Elise"
+    },
+    {
+      "rank": 180,
+      "title_en": "Indestructible",
+      "artist_en": "Matduke",
+      "title_kr": "인디스트럭터블",
+      "artist_kr": "Matduke",
+      "canonical_title": "Indestructible"
+    },
+    {
+      "rank": 181,
+      "title_en": "Chobit Flavor",
+      "artist_en": "aran & t+pazolite",
+      "title_kr": "쵸빗 플레이버",
+      "artist_kr": "aran & t+pazolite",
+      "canonical_title": "Chobit Flavor"
+    },
+    {
+      "rank": 182,
+      "title_en": "Giselle",
+      "artist_en": "Sobrem a.k.a. Widowmaker",
+      "title_kr": "지젤",
+      "artist_kr": "Sobrem a.k.a. Widowmaker",
+      "canonical_title": "Giselle"
+    },
+    {
+      "rank": 183,
+      "title_en": "Jupin",
+      "artist_en": "Sobrem",
+      "title_kr": "쥬핀",
+      "artist_kr": "Sobrem",
+      "canonical_title": "Jupin"
+    },
+    {
+      "rank": 184,
+      "title_en": "Mr. Larpus",
+      "artist_en": "BanYa",
+      "title_kr": "미스터 라푸스",
+      "artist_kr": "반야",
+      "canonical_title": "Mr. Larpus"
+    },
+    {
+      "rank": 185,
+      "title_en": "Mahika",
+      "artist_en": "The Musical Ghost",
+      "title_kr": "마히카",
+      "artist_kr": "The Musical Ghost",
+      "canonical_title": "Mahika"
+    },
+    {
+      "rank": 186,
+      "title_en": "Just Hold On (To All Fighters)",
+      "artist_en": "void",
+      "title_kr": "저스트 홀드 온 (To All Fighters)",
+      "artist_kr": "void",
+      "canonical_title": "Just Hold On (To All Fighters)"
+    },
+    {
+      "rank": 187,
+      "title_en": "Dancing",
+      "artist_en": "Said",
+      "title_kr": "댄싱",
+      "artist_kr": "Said",
+      "canonical_title": "Dancing"
+    },
+    {
+      "rank": 188,
+      "title_en": "Appassionata",
+      "artist_en": "Cashew x D_AAN x Jehezukiel",
+      "title_kr": "열정",
+      "artist_kr": "Cashew x D_AAN x Jehezukiel",
+      "canonical_title": "Appassionata"
+    },
+    {
+      "rank": 189,
+      "title_en": "Loki",
+      "artist_en": "Lotze",
+      "title_kr": "로키",
+      "artist_kr": "로체",
+      "canonical_title": "Loki"
+    },
+    {
+      "rank": 190,
+      "title_en": "Cleaner",
+      "artist_en": "Doin",
+      "title_kr": "클리너",
+      "artist_kr": "도인",
+      "canonical_title": "Cleaner"
+    },
+    {
+      "rank": 191,
+      "title_en": "Achluoias",
+      "artist_en": "D_AAN",
+      "title_kr": "아클루오이아스",
+      "artist_kr": "D_AAN",
+      "canonical_title": "Achluoias"
+    },
+    {
+      "rank": 192,
+      "title_en": "Tropicanic",
+      "artist_en": "SHK",
+      "title_kr": "트로피카닉",
+      "artist_kr": "SHK",
+      "canonical_title": "Tropicanic"
+    },
+    {
+      "rank": 193,
+      "title_en": "Shub Niggurath",
+      "artist_en": "Nato",
+      "title_kr": "슈브 니구라스",
+      "artist_kr": "나토",
+      "canonical_title": "Shub Niggurath"
+    },
+    {
+      "rank": 194,
+      "title_en": "Extreme Music School 2nd period feat. Nanahira",
+      "artist_en": "Massive New Krew & RoughSketch",
+      "title_kr": "익스트림 음악학원 2교시 feat. Nanahira",
+      "artist_kr": "Massive New Krew & RoughSketch",
+      "canonical_title": "Extreme Music School 2nd period feat. Nanahira"
+    },
+    {
+      "rank": 195,
+      "title_en": "8 6 - FULL SONG -",
+      "artist_en": "DASU",
+      "title_kr": "8 6 - FULL SONG -",
+      "artist_kr": "DASU",
+      "canonical_title": "86"
+    },
+    {
+      "rank": 196,
+      "title_en": "Vacuum",
+      "artist_en": "Doin",
+      "title_kr": "진공",
+      "artist_kr": "도인",
+      "canonical_title": "Vacuum"
+    },
+    {
+      "rank": 197,
+      "title_en": "CROSS RAY (feat. 月下Lia)",
+      "artist_en": "HyuN",
+      "title_kr": "크로스 레이 (feat. 月下Lia)",
+      "artist_kr": "HyuN",
+      "canonical_title": "Cross Ray"
+    },
+    {
+      "rank": 198,
+      "title_en": "Imprinting",
+      "artist_en": "Sakuzyo",
+      "title_kr": "임프린팅",
+      "artist_kr": "Sakuzyo",
+      "canonical_title": "Imprinting"
+    },
+    {
+      "rank": 199,
+      "title_en": "Tantanmen",
+      "artist_en": "Memme",
+      "title_kr": "탄탄멘",
+      "artist_kr": "맴매",
+      "canonical_title": "Tantanmen"
+    },
+    {
+      "rank": 200,
+      "title_en": "Soldiers (TANO*C W TEAM RED ANTHEM)",
+      "artist_en": "DJ Noriken",
+      "title_kr": "솔저스 (TANO*C W TEAM RED ANTHEM)",
+      "artist_kr": "DJ Noriken",
+      "canonical_title": "Soldiers (TANO*C W TEAM RED ANTHEM)"
+    },
+    {
+      "rank": 201,
+      "title_en": "Yog-Sothoth",
+      "artist_en": "Nato",
+      "title_kr": "요그 소토스",
+      "artist_kr": "나토",
+      "canonical_title": "Yog-Sothoth"
+    },
+    {
+      "rank": 202,
+      "title_en": "E.O.N",
+      "artist_en": "HiTECH NINJA",
+      "title_kr": "E.O.N",
+      "artist_kr": "HiTECH NINJA",
+      "canonical_title": "E.O.N"
+    },
+    {
+      "rank": 203,
+      "title_en": "Catastrophe",
+      "artist_en": "rareguy & MonstDeath",
+      "title_kr": "카타스트로피",
+      "artist_kr": "rareguy & MonstDeath",
+      "canonical_title": "Catastrophe"
+    },
+    {
+      "rank": 204,
+      "title_en": "Hymn of Golden Glory",
+      "artist_en": "Essbee",
+      "title_kr": "힘 오브 골든 글로리",
+      "artist_kr": "Essbee",
+      "canonical_title": "Hymn of Golden Glory"
+    },
+    {
+      "rank": 205,
+      "title_en": "Telling Fortune Flower",
+      "artist_en": "Koharu feat. Renyata",
+      "title_kr": "텔링 포츈 플라워",
+      "artist_kr": "Koharu feat. Renyata",
+      "canonical_title": "Telling Fortune Flower"
+    },
+    {
+      "rank": 206,
+      "title_en": "Can-can ~Orpheus in The Party Mix~",
+      "artist_en": "Sr. Lan Belmont",
+      "title_kr": "캉-캉 ~Orpheus in The Party Mix~",
+      "artist_kr": "Sr. Lan Belmont",
+      "canonical_title": "Can-can ~Orpheus in The Party Mix~"
+    },
+    {
+      "rank": 207,
+      "title_en": "Like Me",
+      "artist_en": "SHK",
+      "title_kr": "라이크 미",
+      "artist_kr": "SHK",
+      "canonical_title": "Like Me"
+    },
+    {
+      "rank": 208,
+      "title_en": "La Cinquantaine",
+      "artist_en": "Pory",
+      "title_kr": "금혼식",
+      "artist_kr": "포리",
+      "canonical_title": "La Cinquantaine"
+    },
+    {
+      "rank": 209,
+      "title_en": "Further",
+      "artist_en": "Doin",
+      "title_kr": "퍼더",
+      "artist_kr": "도인",
+      "canonical_title": "Further"
+    },
+    {
+      "rank": 210,
+      "title_en": "Pump Me Amadeus",
+      "artist_en": "BanYa",
+      "title_kr": "펌프 미 아마데우스",
+      "artist_kr": "반야",
+      "canonical_title": "Pump me Amadeus"
+    },
+    {
+      "rank": 211,
+      "title_en": "Poppin' Shower",
+      "artist_en": "P*Light",
+      "title_kr": "팝핀 샤워",
+      "artist_kr": "P*Light",
+      "canonical_title": "Poppin' Shower"
+    },
+    {
+      "rank": 212,
+      "title_en": "VANISH",
+      "artist_en": "Applesoda",
+      "title_kr": "배니쉬",
+      "artist_kr": "애플소다",
+      "canonical_title": "VANISH"
+    },
+    {
+      "rank": 213,
+      "title_en": "Le Grand Bleu",
+      "artist_en": "KIEN",
+      "title_kr": "라 그랑 블루",
+      "artist_kr": "KIEN",
+      "canonical_title": "Le Grand Bleu"
+    },
+    {
+      "rank": 214,
+      "title_en": "Rush-Hour",
+      "artist_en": "litmus*",
+      "title_kr": "러쉬-아워",
+      "artist_kr": "litmus*",
+      "canonical_title": "Rush-Hour"
+    },
+    {
+      "rank": 215,
+      "title_en": "Nyarlathotep",
+      "artist_en": "Nato",
+      "title_kr": "니알라토텝",
+      "artist_kr": "나토",
+      "canonical_title": "Nyarlathotep"
+    },
+    {
+      "rank": 216,
+      "title_en": "Scorpion King",
+      "artist_en": "r300k",
+      "title_kr": "스콜피온 킹",
+      "artist_kr": "r300k",
+      "canonical_title": "Scorpion King"
+    },
+    {
+      "rank": 217,
+      "title_en": "Twist of Fate (feat. Ruriling)",
+      "artist_en": "Jehezukiel",
+      "title_kr": "트위스트 오브 페이트 (feat. Ruriling)",
+      "artist_kr": "Jehezukiel",
+      "canonical_title": "Twist of Fate (feat. Ruriling)"
+    },
+    {
+      "rank": 218,
+      "title_en": "Rage of Fire",
+      "artist_en": "MAX",
+      "title_kr": "레이지 오브 파이어",
+      "artist_kr": "맥스",
+      "canonical_title": "Rage of Fire"
+    },
+    {
+      "rank": 219,
+      "title_en": "HEART RABBIT COASTER",
+      "artist_en": "Nato",
+      "title_kr": "하트 래빗 코스터",
+      "artist_kr": "나토",
+      "canonical_title": "Heart Rabbit Coaster"
+    },
+    {
+      "rank": 220,
+      "title_en": "Lucid Dream",
+      "artist_en": "Cosmograph",
+      "title_kr": "루시드 드림",
+      "artist_kr": "Cosmograph",
+      "canonical_title": "Lucid Dream"
+    },
+    {
+      "rank": 221,
+      "title_en": "The Reverie",
+      "artist_en": "uma",
+      "title_kr": "더 레버리",
+      "artist_kr": "uma",
+      "canonical_title": "The Reverie"
+    },
+    {
+      "rank": 222,
+      "title_en": "Halcyon",
+      "artist_en": "xi",
+      "title_kr": "할시온",
+      "artist_kr": "xi",
+      "canonical_title": "Halcyon"
+    },
+    {
+      "rank": 223,
+      "title_en": "Jupin - SHORT CUT -",
+      "artist_en": "Sobrem",
+      "title_kr": "쥬핀 - SHORT CUT -",
+      "artist_kr": "Sobrem",
+      "canonical_title": "Jupin - SHORT CUT -"
+    },
+    {
+      "rank": 224,
+      "title_en": "Le Nozze di Figaro ~Celebrazione Remix~",
+      "artist_en": "Sr. Lan Belmont",
+      "title_kr": "피가로의 결혼 ~Celebrazione Remix~",
+      "artist_kr": "Sr. Lan Belmont",
+      "canonical_title": "Le Nozze di Figaro ~Celebrazione Remix~"
+    },
+    {
+      "rank": 225,
+      "title_en": "Crossing Delta",
+      "artist_en": "t+pazolite+Ginkiha+Hommarju",
+      "title_kr": "크로싱 델타",
+      "artist_kr": "t+pazolite+Ginkiha+Hommarju",
+      "canonical_title": "Crossing Delta"
+    },
+    {
+      "rank": 226,
+      "title_en": "Extravaganza",
+      "artist_en": "BanYa",
+      "title_kr": "엑스트라바간자",
+      "artist_kr": "반야",
+      "canonical_title": "Extravaganza"
+    },
+    {
+      "rank": 227,
+      "title_en": "Headless Chicken",
+      "artist_en": "r300k",
+      "title_kr": "헤드리스 치킨",
+      "artist_kr": "r300k",
+      "canonical_title": "Headless Chicken"
+    },
+    {
+      "rank": 228,
+      "title_en": "1950",
+      "artist_en": "SLAM",
+      "title_kr": "1950",
+      "artist_kr": "슬램",
+      "canonical_title": "1950"
+    },
+    {
+      "rank": 229,
+      "title_en": "Skeptic",
+      "artist_en": "Doin",
+      "title_kr": "스켑틱",
+      "artist_kr": "도인",
+      "canonical_title": "Skeptic"
+    },
+    {
+      "rank": 230,
+      "title_en": "Highway Chaser",
+      "artist_en": "Cosmograph",
+      "title_kr": "하이웨이 체이서",
+      "artist_kr": "Cosmograph",
+      "canonical_title": "Highway Chaser"
+    },
+    {
+      "rank": 231,
+      "title_en": "DESTRUCIMATE",
+      "artist_en": "KURORAK",
+      "title_kr": "파괴",
+      "artist_kr": "KURORAK",
+      "canonical_title": "DESTRUCIMATE"
+    },
+    {
+      "rank": 232,
+      "title_en": "Reality",
+      "artist_en": "SHK",
+      "title_kr": "리얼리티",
+      "artist_kr": "SHK",
+      "canonical_title": "Reality"
+    },
+    {
+      "rank": 233,
+      "title_en": "The Quick Brown Fox Jumps Over The Lazy Dog",
+      "artist_en": "Doin",
+      "title_kr": "다람쥐 헌 쳇바퀴에 타고파",
+      "artist_kr": "도인",
+      "canonical_title": "The Quick Brown Fox Jumps Over The Lazy Dog"
+    },
+    {
+      "rank": 234,
+      "title_en": "Slam",
+      "artist_en": "Novasonic",
+      "title_kr": "슬램",
+      "artist_kr": "노바소닉",
+      "canonical_title": "Slam"
+    },
+    {
+      "rank": 235,
+      "title_en": "Till the end of time",
+      "artist_en": "BanYa",
+      "title_kr": "틸 디 엔드 오브 타임",
+      "artist_kr": "반야",
+      "canonical_title": "Till the end of time"
+    },
+    {
+      "rank": 236,
+      "title_en": "Awakening",
+      "artist_en": "typeMARS",
+      "title_kr": "어웨이크닝",
+      "artist_kr": "typeMARS",
+      "canonical_title": "Awakening"
+    },
+    {
+      "rank": 237,
+      "title_en": "Houseplan",
+      "artist_en": "Houseplan",
+      "title_kr": "하우스플랜",
+      "artist_kr": "하우스플랜",
+      "canonical_title": "Houseplan"
+    },
+    {
+      "rank": 238,
+      "title_en": "Katkoi",
+      "artist_en": "M2U",
+      "title_kr": "캇코이",
+      "artist_kr": "엠투유",
+      "canonical_title": "Katkoi"
+    },
+    {
+      "rank": 239,
+      "title_en": "Club Night",
+      "artist_en": "Matduke",
+      "title_kr": "클럽 나이트",
+      "artist_kr": "Matduke",
+      "canonical_title": "Club Night"
+    },
+    {
+      "rank": 240,
+      "title_en": "Repentance",
+      "artist_en": "Abel",
+      "title_kr": "리펜턴스",
+      "artist_kr": "Abel",
+      "canonical_title": "Repentance"
+    },
+    {
+      "rank": 241,
+      "title_en": "Forgotten Vampire",
+      "artist_en": "WyvernP",
+      "title_kr": "포가튼 뱀파이어",
+      "artist_kr": "WyvernP",
+      "canonical_title": "Forgotten Vampire"
+    },
+    {
+      "rank": 242,
+      "title_en": "Clematis Rapsodia",
+      "artist_en": "Jehezukiel",
+      "title_kr": "클레마티스 랩소디아",
+      "artist_kr": "Jehezukiel",
+      "canonical_title": "Clematis Rapsodia"
+    },
+    {
+      "rank": 243,
+      "title_en": "The Devil",
+      "artist_en": "Banya Production",
+      "title_kr": "마왕",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "The Devil"
+    },
+    {
+      "rank": 244,
+      "title_en": "Hardkore of the North",
+      "artist_en": "Diclonius Kid",
+      "title_kr": "하드코어 오브 더 노스",
+      "artist_kr": "Diclonius Kid",
+      "canonical_title": "Hardkore of the North"
+    },
+    {
+      "rank": 245,
+      "title_en": "Iolite Sky",
+      "artist_en": "Doin",
+      "title_kr": "아이올라이트 스카이",
+      "artist_kr": "도인",
+      "canonical_title": "Iolite Sky"
+    },
+    {
+      "rank": 246,
+      "title_en": "See",
+      "artist_en": "Doin",
+      "title_kr": "시",
+      "artist_kr": "Doin",
+      "canonical_title": "See"
+    },
+    {
+      "rank": 247,
+      "title_en": "Xeroize",
+      "artist_en": "FE",
+      "title_kr": "제로아이즈",
+      "artist_kr": "FE",
+      "canonical_title": "Xeroize"
+    },
+    {
+      "rank": 248,
+      "title_en": "Perpetual",
+      "artist_en": "Qu-ail",
+      "title_kr": "퍼페츄얼",
+      "artist_kr": "Qu-ail",
+      "canonical_title": "Perpetual"
+    },
+    {
+      "rank": 249,
+      "title_en": "Ignis Fatuus(DM Ashura Mix)",
+      "artist_en": "BanYa & DM Ashura",
+      "title_kr": "이그니스 패터스(DM Ashura 믹스)",
+      "artist_kr": "반야 & DM Ashura",
+      "canonical_title": "Ignis Fatuus(DM Ashura Mix)"
+    },
+    {
+      "rank": 250,
+      "title_en": "Moonlight",
+      "artist_en": "BanYa",
+      "title_kr": "월광",
+      "artist_kr": "반야",
+      "canonical_title": "Moonlight"
+    },
+    {
+      "rank": 251,
+      "title_en": "Uranium",
+      "artist_en": "Memme",
+      "title_kr": "우라늄",
+      "artist_kr": "맴매",
+      "canonical_title": "Uranium"
+    },
+    {
+      "rank": 252,
+      "title_en": "Take Out",
+      "artist_en": "SHK",
+      "title_kr": "테이크 아웃",
+      "artist_kr": "SHK",
+      "canonical_title": "Take Out"
+    },
+    {
+      "rank": 253,
+      "title_en": "Windmill",
+      "artist_en": "Yak Won",
+      "title_kr": "윈드밀",
+      "artist_kr": "약 원",
+      "canonical_title": "Windmill"
+    },
+    {
+      "rank": 254,
+      "title_en": "Smile Diary",
+      "artist_en": "you",
+      "title_kr": "스마일 다이어리",
+      "artist_kr": "you",
+      "canonical_title": "Smile Diary"
+    },
+    {
+      "rank": 255,
+      "title_en": "Sudden Romance [PIU Edit]",
+      "artist_en": "void",
+      "title_kr": "서든 로맨스 [PIU Edit]",
+      "artist_kr": "void",
+      "canonical_title": "Sudden Romance [PIU Edit]"
+    },
+    {
+      "rank": 256,
+      "title_en": "Obelisque",
+      "artist_en": "ESTi x M2U",
+      "title_kr": "오벨리스크",
+      "artist_kr": "ESTi x M2U",
+      "canonical_title": "Obelisque"
+    },
+    {
+      "rank": 257,
+      "title_en": "Sugar Plum",
+      "artist_en": "Mr. Weq",
+      "title_kr": "슈가 플럼",
+      "artist_kr": "Mr. Weq",
+      "canonical_title": "Sugar Plum"
+    },
+    {
+      "rank": 258,
+      "title_en": "Avalanche",
+      "artist_en": "Memme",
+      "title_kr": "아발란치",
+      "artist_kr": "맴매",
+      "canonical_title": "Avalanche"
+    },
+    {
+      "rank": 259,
+      "title_en": "Pumptris Quattro",
+      "artist_en": "YAHPP",
+      "title_kr": "펌트리스 꽈뜨로",
+      "artist_kr": "이 얍",
+      "canonical_title": "Pumptris Quattro"
+    },
+    {
+      "rank": 260,
+      "title_en": "Nemesis",
+      "artist_en": "M2U",
+      "title_kr": "네메시스",
+      "artist_kr": "엠투유",
+      "canonical_title": "Nemesis"
+    },
+    {
+      "rank": 261,
+      "title_en": "Tales of Pumpnia",
+      "artist_en": "Applesoda",
+      "title_kr": "테일즈 오브 펌프니아",
+      "artist_kr": "애플소다",
+      "canonical_title": "Tales of Pumpnia"
+    },
+    {
+      "rank": 262,
+      "title_en": "Hellfire",
+      "artist_en": "Memme",
+      "title_kr": "헬파이어",
+      "artist_kr": "맴매",
+      "canonical_title": "Hellfire"
+    },
+    {
+      "rank": 263,
+      "title_en": "Annihilator Method",
+      "artist_en": "DM Ashura",
+      "title_kr": "어나이얼레이터 메소드",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "Annihilator Method"
+    },
+    {
+      "rank": 264,
+      "title_en": "Lohxia",
+      "artist_en": "The Musical Ghost",
+      "title_kr": "록시아",
+      "artist_kr": "The Musical Ghost",
+      "canonical_title": "Lohxia"
+    },
+    {
+      "rank": 265,
+      "title_en": "Baroque Virus",
+      "artist_en": "Zircon",
+      "title_kr": "바로크 바이러스",
+      "artist_kr": "Zircon",
+      "canonical_title": "Baroque Virus"
+    },
+    {
+      "rank": 266,
+      "title_en": "Ugly Dee",
+      "artist_en": "Banya Production",
+      "title_kr": "미운 오리새끼",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Ugly Dee"
+    },
+    {
+      "rank": 267,
+      "title_en": "Asterios -ReEntry-",
+      "artist_en": "ATAS",
+      "title_kr": "아스테리오스 -리엔트리-",
+      "artist_kr": "ATAS",
+      "canonical_title": "Asterios -ReEntry-"
+    },
+    {
+      "rank": 268,
+      "title_en": "Rolling Christmas",
+      "artist_en": "BanYa",
+      "title_kr": "롤링 크리스마스",
+      "artist_kr": "반야",
+      "canonical_title": "Rolling Christmas"
+    },
+    {
+      "rank": 269,
+      "title_en": "Love Is A Danger Zone(Cranky Mix)",
+      "artist_en": "BanYa & Cranky",
+      "title_kr": "러브 이즈 어 데인저 존(Cranky 믹스)",
+      "artist_kr": "반야 & Cranky",
+      "canonical_title": "Love is a Danger Zone"
+    },
+    {
+      "rank": 270,
+      "title_en": "Death Moon",
+      "artist_en": "SHK",
+      "title_kr": "사월",
+      "artist_kr": "SHK",
+      "canonical_title": "Death Moon"
+    },
+    {
+      "rank": 271,
+      "title_en": "Pop Sequence",
+      "artist_en": "Hommarju",
+      "title_kr": "팝 시퀀스",
+      "artist_kr": "Hommarju",
+      "canonical_title": "Pop Sequence"
+    },
+    {
+      "rank": 272,
+      "title_en": "Travel to future",
+      "artist_en": "Neutral Moon",
+      "title_kr": "트래블 투 퓨처",
+      "artist_kr": "뉴트럴 문",
+      "canonical_title": "Travel to Future"
+    },
+    {
+      "rank": 273,
+      "title_en": "Arcana Force",
+      "artist_en": "mzet:-P",
+      "title_kr": "아르카나 포스",
+      "artist_kr": "mzet:-P",
+      "canonical_title": "Arcana Force"
+    },
+    {
+      "rank": 274,
+      "title_en": "Life is PIANO",
+      "artist_en": "Junk",
+      "title_kr": "라이프 이즈 피아노",
+      "artist_kr": "Junk",
+      "canonical_title": "Life is PIANO"
+    },
+    {
+      "rank": 275,
+      "title_en": "Danger & Danger",
+      "artist_en": "Cranky",
+      "title_kr": "데인저 & 데인저",
+      "artist_kr": "Cranky",
+      "canonical_title": "Danger & Danger"
+    },
+    {
+      "rank": 276,
+      "title_en": "V3",
+      "artist_en": "BeautifulDay",
+      "title_kr": "V3",
+      "artist_kr": "뷰티풀데이",
+      "canonical_title": "V3"
+    },
+    {
+      "rank": 277,
+      "title_en": "Allegro Con Fuoco",
+      "artist_en": "DM Ashura",
+      "title_kr": "알레그로 콘 뿌오코",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "Allegro Con Fuoco"
+    },
+    {
+      "rank": 278,
+      "title_en": "Timing",
+      "artist_en": "HIGHTEEN",
+      "title_kr": "타이밍",
+      "artist_kr": "하이틴",
+      "canonical_title": "Timing"
+    },
+    {
+      "rank": 279,
+      "title_en": "Final Audition",
+      "artist_en": "BanYa",
+      "title_kr": "파이널 오디션",
+      "artist_kr": "반야",
+      "canonical_title": "Final Audition"
+    },
+    {
+      "rank": 280,
+      "title_en": "CHICKEN WING",
+      "artist_en": "BanYa",
+      "title_kr": "치킨 윙",
+      "artist_kr": "반야",
+      "canonical_title": "Chicken Wing"
+    },
+    {
+      "rank": 281,
+      "title_en": "Hymn of Golden Glory - SHORT CUT -",
+      "artist_en": "Essbee",
+      "title_kr": "힘 오브 골든 글로리 - SHORT CUT -",
+      "artist_kr": "Essbee",
+      "canonical_title": "Hymn of Golden Glory - SHORT CUT -"
+    },
+    {
+      "rank": 282,
+      "title_en": "Imagination",
+      "artist_en": "SHK",
+      "title_kr": "이미지네이션",
+      "artist_kr": "SHK",
+      "canonical_title": "Imagination"
+    },
+    {
+      "rank": 283,
+      "title_en": "BEDLAM",
+      "artist_en": "SANY-ON",
+      "title_kr": "베들램",
+      "artist_kr": "SANY-ON",
+      "canonical_title": "BEDLAM"
+    },
+    {
+      "rank": 284,
+      "title_en": "U Got Me Rocking",
+      "artist_en": "MAX",
+      "title_kr": "유 갓 미 락킹",
+      "artist_kr": "맥스",
+      "canonical_title": "U Got Me Rocking"
+    },
+    {
+      "rank": 285,
+      "title_en": "INFINITY",
+      "artist_en": "Lunatic Sounds",
+      "title_kr": "인피니티",
+      "artist_kr": "루나틱 사운즈",
+      "canonical_title": "INFINITY"
+    },
+    {
+      "rank": 286,
+      "title_en": "Rising Star",
+      "artist_en": "M2U",
+      "title_kr": "라이징 스타",
+      "artist_kr": "엠투유",
+      "canonical_title": "Rising Star"
+    },
+    {
+      "rank": 287,
+      "title_en": "Bad Apple!! feat. Nomico - FULL SONG -",
+      "artist_en": "Masayoshi Minoshima",
+      "title_kr": "배드 애플!! feat. Nomico - FULL SONG -",
+      "artist_kr": "Masayoshi Minoshima",
+      "canonical_title": "Bad Apple!! feat. Nomico"
+    },
+    {
+      "rank": 288,
+      "title_en": "Solve My Hurt - SHORT CUT -",
+      "artist_en": "Doin",
+      "title_kr": "솔브 마이 허트 - SHORT CUT -",
+      "artist_kr": "Doin",
+      "canonical_title": "Solve My Hurt - SHORT CUT -"
+    },
+    {
+      "rank": 289,
+      "title_en": "CO5M1C R4ILR0AD",
+      "artist_en": "kanone",
+      "title_kr": "코스믹 레일로드",
+      "artist_kr": "kanone",
+      "canonical_title": "CO5M1C R4ILR0AD"
+    },
+    {
+      "rank": 290,
+      "title_en": "Waltz of Doge",
+      "artist_en": "Cashew",
+      "title_kr": "왈츠 오브 도지",
+      "artist_kr": "Cashew",
+      "canonical_title": "Waltz of Doge"
+    },
+    {
+      "rank": 291,
+      "title_en": "Ragnarok",
+      "artist_en": "SynthWulf",
+      "title_kr": "라그나로크",
+      "artist_kr": "SynthWulf",
+      "canonical_title": "Ragnarok"
+    },
+    {
+      "rank": 292,
+      "title_en": "The End of the World ft. Skizzo",
+      "artist_en": "MonstDeath",
+      "title_kr": "디 엔드 오브 더 월드 ft. Skizzo",
+      "artist_kr": "MonstDeath",
+      "canonical_title": "The End of the World ft. Skizzo"
+    },
+    {
+      "rank": 293,
+      "title_en": "Adrenaline Blaster",
+      "artist_en": "QWertism",
+      "title_kr": "아드레날린 블래스터",
+      "artist_kr": "QWertism",
+      "canonical_title": "Adrenaline Blaster"
+    },
+    {
+      "rank": 294,
+      "title_en": "Napalm",
+      "artist_en": "Doin",
+      "title_kr": "네이팜",
+      "artist_kr": "도인",
+      "canonical_title": "Napalm"
+    },
+    {
+      "rank": 295,
+      "title_en": "Destination",
+      "artist_en": "SHK",
+      "title_kr": "데스티네이션",
+      "artist_kr": "SHK",
+      "canonical_title": "Destination"
+    },
+    {
+      "rank": 296,
+      "title_en": "1949",
+      "artist_en": "SLAM",
+      "title_kr": "1949",
+      "artist_kr": "슬램",
+      "canonical_title": "1949"
+    },
+    {
+      "rank": 297,
+      "title_en": "What Happened",
+      "artist_en": "Throwdown",
+      "title_kr": "왓 해픈드",
+      "artist_kr": "Throwdown",
+      "canonical_title": "What Happened"
+    },
+    {
+      "rank": 298,
+      "title_en": "Utopia",
+      "artist_en": "Smiley",
+      "title_kr": "유토피아",
+      "artist_kr": "Smiley",
+      "canonical_title": "Utopia"
+    },
+    {
+      "rank": 299,
+      "title_en": "Slapstick Parfait",
+      "artist_en": "t+pazolite",
+      "title_kr": "슬랩스틱 파르페",
+      "artist_kr": "t+pazolite",
+      "canonical_title": "Slapstick Parfait"
+    },
+    {
+      "rank": 300,
+      "title_en": "Campanella",
+      "artist_en": "Cashew",
+      "title_kr": "캄파넬라",
+      "artist_kr": "Cashew",
+      "canonical_title": "Campanella"
+    },
+    {
+      "rank": 301,
+      "title_en": "Cygnus",
+      "artist_en": "nato",
+      "title_kr": "시그너스",
+      "artist_kr": "나토",
+      "canonical_title": "Cygnus"
+    },
+    {
+      "rank": 302,
+      "title_en": "HELIX",
+      "artist_en": "ESTi",
+      "title_kr": "헬릭스",
+      "artist_kr": "ESTi",
+      "canonical_title": "HELIX"
+    },
+    {
+      "rank": 303,
+      "title_en": "Black Dragon",
+      "artist_en": "Memme",
+      "title_kr": "블랙 드래곤",
+      "artist_kr": "맴매",
+      "canonical_title": "Black Dragon"
+    },
+    {
+      "rank": 304,
+      "title_en": "PRIME",
+      "artist_en": "Tatsh",
+      "title_kr": "프라임",
+      "artist_kr": "Tatsh",
+      "canonical_title": "PRIME"
+    },
+    {
+      "rank": 305,
+      "title_en": "Ice of Death",
+      "artist_en": "Fiverwater",
+      "title_kr": "아이스 오브 데스",
+      "artist_kr": "Fiverwater",
+      "canonical_title": "Ice of Death"
+    },
+    {
+      "rank": 306,
+      "title_en": "Your Mind",
+      "artist_en": "Roy Mikelate",
+      "title_kr": "유어 마인드",
+      "artist_kr": "Roy Mikelate",
+      "canonical_title": "Your Mind"
+    },
+    {
+      "rank": 307,
+      "title_en": "I Want U",
+      "artist_en": "MAX",
+      "title_kr": "아이 원트 유",
+      "artist_kr": "맥스",
+      "canonical_title": "I Want U"
+    },
+    {
+      "rank": 308,
+      "title_en": "POINT ZERO 2",
+      "artist_en": "SYNTHWULF",
+      "title_kr": "포인트 제로 2",
+      "artist_kr": "SYNTHWULF",
+      "canonical_title": "POINT ZERO 2"
+    },
+    {
+      "rank": 309,
+      "title_en": "Redline",
+      "artist_en": "Archefluxx",
+      "title_kr": "레드라인",
+      "artist_kr": "Archefluxx",
+      "canonical_title": "Redline"
+    },
+    {
+      "rank": 310,
+      "title_en": "Necromancy",
+      "artist_en": "Zircon",
+      "title_kr": "네크로맨시",
+      "artist_kr": "Zircon",
+      "canonical_title": "Necromancy"
+    },
+    {
+      "rank": 311,
+      "title_en": "Euphorianic - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "유포리아닉 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Euphorianic"
+    },
+    {
+      "rank": 312,
+      "title_en": "Queen Of The Red",
+      "artist_en": "ETIA.",
+      "title_kr": "퀸 오브 더 레드",
+      "artist_kr": "ETIA.",
+      "canonical_title": "Queen of the Red"
+    },
+    {
+      "rank": 313,
+      "title_en": "The Festival of Ghost2 (Sneak)",
+      "artist_en": "Brandy",
+      "title_kr": "유령의 축제 2 (Sneak)",
+      "artist_kr": "브랜디",
+      "canonical_title": "The Festival of Ghost 2 (Sneak)"
+    },
+    {
+      "rank": 314,
+      "title_en": "Broken Karma (PIU EDIT)",
+      "artist_en": "Quree",
+      "title_kr": "브로큰 카르마 (PIU EDIT)",
+      "artist_kr": "Quree",
+      "canonical_title": "Broken Karma (PIU Edit)"
+    },
+    {
+      "rank": 315,
+      "title_en": "Can-can ~Orpheus in The Party Mix~ - SHORT CUT -",
+      "artist_en": "Sr. Lan Belmont",
+      "title_kr": "캉-캉 ~Orpheus in The Party Mix~ - SHORT CUT -",
+      "artist_kr": "Sr. Lan Belmont",
+      "canonical_title": "Can-can ~Orpheus in The Party Mix~"
+    },
+    {
+      "rank": 316,
+      "title_en": "Feel My Happiness",
+      "artist_en": "3R2",
+      "title_kr": "필 마이 해피니스",
+      "artist_kr": "3R2",
+      "canonical_title": "Feel My Happiness"
+    },
+    {
+      "rank": 317,
+      "title_en": "Love is a Danger Zone",
+      "artist_en": "BanYa",
+      "title_kr": "러브 이즈 어 데인저 존",
+      "artist_kr": "반야",
+      "canonical_title": "Love is a Danger Zone"
+    },
+    {
+      "rank": 318,
+      "title_en": "Magical Vacation",
+      "artist_en": "SID-SOUND",
+      "title_kr": "매지컬 베케이션",
+      "artist_kr": "시드사운드",
+      "canonical_title": "Magical Vacation"
+    },
+    {
+      "rank": 319,
+      "title_en": "MATADOR",
+      "artist_en": "Cranky",
+      "title_kr": "마타도르",
+      "artist_kr": "Cranky",
+      "canonical_title": "MATADOR"
+    },
+    {
+      "rank": 320,
+      "title_en": "Super Stylin'",
+      "artist_en": "Warak",
+      "title_kr": "슈퍼 스타일린",
+      "artist_kr": "와락",
+      "canonical_title": "Super Stylin'"
+    },
+    {
+      "rank": 321,
+      "title_en": "Lepton Strike",
+      "artist_en": "Nato",
+      "title_kr": "립톤 스트라이크",
+      "artist_kr": "나토",
+      "canonical_title": "Lepton Strike"
+    },
+    {
+      "rank": 322,
+      "title_en": "Hypnosis(SynthWulf Mix)",
+      "artist_en": "BanYa & SynthWulf",
+      "title_kr": "힙노시스(SynthWulf 믹스)",
+      "artist_kr": "반야 & SynthWulf",
+      "canonical_title": "Hypnosis(SynthWulf Mix)"
+    },
+    {
+      "rank": 323,
+      "title_en": "Kasou Shinja仮装信者",
+      "artist_en": "MAX",
+      "title_kr": "가장신자",
+      "artist_kr": "맥스",
+      "canonical_title": "Kasou Shinja"
+    },
+    {
+      "rank": 324,
+      "title_en": "Harmagedon",
+      "artist_en": "HyuN vs lixound",
+      "title_kr": "아마겟돈",
+      "artist_kr": "HyuN vs lixound",
+      "canonical_title": "Harmagedon"
+    },
+    {
+      "rank": 325,
+      "title_en": "Wicked Legend",
+      "artist_en": "D_AAN",
+      "title_kr": "위키드 레전드",
+      "artist_kr": "D_AAN",
+      "canonical_title": "Wicked Legend"
+    },
+    {
+      "rank": 326,
+      "title_en": "Gothique Resonance",
+      "artist_en": "P4Koo",
+      "title_kr": "고딕 레조넌스",
+      "artist_kr": "P4Koo",
+      "canonical_title": "Gothique Resonance"
+    },
+    {
+      "rank": 327,
+      "title_en": "Poseidon",
+      "artist_en": "Quree",
+      "title_kr": "포세이돈",
+      "artist_kr": "큐리",
+      "canonical_title": "Poseidon"
+    },
+    {
+      "rank": 328,
+      "title_en": "Fallen Angel",
+      "artist_en": "DM Ashura",
+      "title_kr": "폴른 엔젤",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "Fallen Angel"
+    },
+    {
+      "rank": 329,
+      "title_en": "Cutie Song",
+      "artist_en": "Memme",
+      "title_kr": "일 더하기 일은 귀요미",
+      "artist_kr": "맴매",
+      "canonical_title": "Cutie Song"
+    },
+    {
+      "rank": 330,
+      "title_en": "Dual Racing <RED vs BLUE>",
+      "artist_en": "Nato & r300k",
+      "title_kr": "듀얼 레이싱 <레드 vs 블루>",
+      "artist_kr": "나토 & r300k",
+      "canonical_title": "Dual Racing <RED vs BLUE>"
+    },
+    {
+      "rank": 331,
+      "title_en": "District 1",
+      "artist_en": "MAX",
+      "title_kr": "디스트릭트 1",
+      "artist_kr": "맥스",
+      "canonical_title": "District 1"
+    },
+    {
+      "rank": 332,
+      "title_en": "Phantom -Intermezzo-",
+      "artist_en": "Banya Production",
+      "title_kr": "팬텀 -인터메조-",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Phantom -Intermezzo-"
+    },
+    {
+      "rank": 333,
+      "title_en": "Vook",
+      "artist_en": "BanYa",
+      "title_kr": "부크",
+      "artist_kr": "반야",
+      "canonical_title": "Vook"
+    },
+    {
+      "rank": 334,
+      "title_en": "Black Swan",
+      "artist_en": "zeron",
+      "title_kr": "블랙스완",
+      "artist_kr": "제론",
+      "canonical_title": "Black Swan"
+    },
+    {
+      "rank": 335,
+      "title_en": "Kimchi Fingers",
+      "artist_en": "Garlic Squad",
+      "title_kr": "김치 핑거즈",
+      "artist_kr": "Garlic Squad",
+      "canonical_title": "Kimchi Fingers"
+    },
+    {
+      "rank": 336,
+      "title_en": "Faster Z",
+      "artist_en": "YAHPP",
+      "title_kr": "패스터 Z",
+      "artist_kr": "이 얍",
+      "canonical_title": "Faster Z"
+    },
+    {
+      "rank": 337,
+      "title_en": "God Mode feat. Skizzo",
+      "artist_en": "Nato",
+      "title_kr": "갓 모드 feat. Skizzo",
+      "artist_kr": "나토",
+      "canonical_title": "God Mode feat. skizzo"
+    },
+    {
+      "rank": 338,
+      "title_en": "CARMEN BUS",
+      "artist_en": "StaticSphere & FUGU SUISAN",
+      "title_kr": "까르멘 버스",
+      "artist_kr": "스태틱스피어 & 복어수산",
+      "canonical_title": "Carmen Bus"
+    },
+    {
+      "rank": 339,
+      "title_en": "Butterfly",
+      "artist_en": "MAX & Rorychesell (SID-SOUND)",
+      "title_kr": "버터플라이",
+      "artist_kr": "맥스 & Rorychesell (시드사운드)",
+      "canonical_title": "Butterfly"
+    },
+    {
+      "rank": 340,
+      "title_en": "Allegro furioso",
+      "artist_en": "DM ashura",
+      "title_kr": "알레그로 퓨리오소",
+      "artist_kr": "DM ashura",
+      "canonical_title": "Allegro Furioso"
+    },
+    {
+      "rank": 341,
+      "title_en": "Christmas Memories",
+      "artist_en": "Warak",
+      "title_kr": "크리스마스의 기억",
+      "artist_kr": "와락",
+      "canonical_title": "Christmas Memories"
+    },
+    {
+      "rank": 342,
+      "title_en": "THE REVOLUTION",
+      "artist_en": "MAX & DOOM",
+      "title_kr": "더 레볼루션",
+      "artist_kr": "맥스 앤 둠",
+      "canonical_title": "THE REVOLUTION"
+    },
+    {
+      "rank": 343,
+      "title_en": "Tepris",
+      "artist_en": "Doin",
+      "title_kr": "테프리스",
+      "artist_kr": "도인",
+      "canonical_title": "Tepris"
+    },
+    {
+      "rank": 344,
+      "title_en": "HTTP",
+      "artist_en": "Quree",
+      "title_kr": "HTTP",
+      "artist_kr": "Quree",
+      "canonical_title": "HTTP"
+    },
+    {
+      "rank": 345,
+      "title_en": "After a thousand years",
+      "artist_en": "TOTO",
+      "title_kr": "천년이 지나서",
+      "artist_kr": "TOTO",
+      "canonical_title": "After a thousand years"
+    },
+    {
+      "rank": 346,
+      "title_en": "Desaparecer",
+      "artist_en": "Applesoda vs MAX",
+      "title_kr": "데사파레세르",
+      "artist_kr": "애플소다 vs 맥스",
+      "canonical_title": "Desaparecer"
+    },
+    {
+      "rank": 347,
+      "title_en": "Point Zero One",
+      "artist_en": "SynthWulf",
+      "title_kr": "포인트 제로 원",
+      "artist_kr": "SynthWulf",
+      "canonical_title": "Point Zero One"
+    },
+    {
+      "rank": 348,
+      "title_en": "Bee",
+      "artist_en": "BanYa",
+      "title_kr": "비",
+      "artist_kr": "반야",
+      "canonical_title": "Bee"
+    },
+    {
+      "rank": 349,
+      "title_en": "Unique",
+      "artist_en": "SHK",
+      "title_kr": "유니크",
+      "artist_kr": "SHK",
+      "canonical_title": "Unique"
+    },
+    {
+      "rank": 350,
+      "title_en": "Monolith",
+      "artist_en": "Affinity",
+      "title_kr": "모노리스",
+      "artist_kr": "Affinity",
+      "canonical_title": "Monolith"
+    },
+    {
+      "rank": 351,
+      "title_en": "Mitotsudaira",
+      "artist_en": "ETIA.",
+      "title_kr": "미토츠다이라",
+      "artist_kr": "ETIA.",
+      "canonical_title": "Mitotsudaira"
+    },
+    {
+      "rank": 352,
+      "title_en": "Smells Like A Chocolate",
+      "artist_en": "Vospi",
+      "title_kr": "스멜스 라이크 어 초콜릿",
+      "artist_kr": "Vospi",
+      "canonical_title": "Smells Like A Chocolate"
+    },
+    {
+      "rank": 353,
+      "title_en": "ERRORCODE: 0",
+      "artist_en": "DOIN && SUNNY",
+      "title_kr": "에러코드: 0",
+      "artist_kr": "도인 && SUNNY",
+      "canonical_title": "ERRORCODE: 0"
+    },
+    {
+      "rank": 354,
+      "title_en": "Love is a Danger Zone pt. 2",
+      "artist_en": "BanYa",
+      "title_kr": "러브 이즈 어 데인저 존 pt.2",
+      "artist_kr": "반야",
+      "canonical_title": "Love is a Danger Zone pt. 2"
+    },
+    {
+      "rank": 355,
+      "title_en": "Prime Time",
+      "artist_en": "Cashew",
+      "title_kr": "프라임 타임",
+      "artist_kr": "Cashew",
+      "canonical_title": "Prime Time"
+    },
+    {
+      "rank": 356,
+      "title_en": "Emperor",
+      "artist_en": "BanYa",
+      "title_kr": "엠페러",
+      "artist_kr": "반야",
+      "canonical_title": "Emperor"
+    },
+    {
+      "rank": 357,
+      "title_en": "Force of Ra",
+      "artist_en": "Memme",
+      "title_kr": "포스 오브 라",
+      "artist_kr": "맴매",
+      "canonical_title": "Force of Ra"
+    },
+    {
+      "rank": 358,
+      "title_en": "Red Snow",
+      "artist_en": "Cashew",
+      "title_kr": "레드 스노우",
+      "artist_kr": "Cashew",
+      "canonical_title": "Red Snow"
+    },
+    {
+      "rank": 359,
+      "title_en": "JANUS",
+      "artist_en": "MAX",
+      "title_kr": "야누스",
+      "artist_kr": "맥스",
+      "canonical_title": "JANUS"
+    },
+    {
+      "rank": 360,
+      "title_en": "Baroque Virus - FULL SONG -",
+      "artist_en": "Zircon",
+      "title_kr": "바로크 바이러스 - FULL SONG -",
+      "artist_kr": "Zircon",
+      "canonical_title": "Baroque Virus"
+    },
+    {
+      "rank": 361,
+      "title_en": "Will-O-The-Wisp",
+      "artist_en": "BanYa",
+      "title_kr": "윌 오 더 위스프",
+      "artist_kr": "반야",
+      "canonical_title": "Will-O-The-Wisp"
+    },
+    {
+      "rank": 362,
+      "title_en": "Turkey March -Minimal Tunes-",
+      "artist_en": "Banya Production",
+      "title_kr": "터키 행진곡 -미니멀튠즈-",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Turkey March -Minimal Tunes-"
+    },
+    {
+      "rank": 363,
+      "title_en": "Fires of Destiny",
+      "artist_en": "Jehezukiel",
+      "title_kr": "파이어 오브 데스티니",
+      "artist_kr": "Jehezukiel",
+      "canonical_title": "Fires of Destiny"
+    },
+    {
+      "rank": 364,
+      "title_en": "Start On RED",
+      "artist_en": "nato",
+      "title_kr": "스타트 온 레드",
+      "artist_kr": "나토",
+      "canonical_title": "Start On Red"
+    },
+    {
+      "rank": 365,
+      "title_en": "Dance with me",
+      "artist_en": "BanYa",
+      "title_kr": "댄스 위드 미",
+      "artist_kr": "반야",
+      "canonical_title": "Dance with me"
+    },
+    {
+      "rank": 366,
+      "title_en": "Paradoxx",
+      "artist_en": "SLAM & NATO",
+      "title_kr": "패러독스",
+      "artist_kr": "슬램 & 나토",
+      "canonical_title": "PARADOXX"
+    },
+    {
+      "rank": 367,
+      "title_en": "Cycling!",
+      "artist_en": "Yamajet",
+      "title_kr": "싸이클링!",
+      "artist_kr": "야마젯",
+      "canonical_title": "Cycling!"
+    },
+    {
+      "rank": 368,
+      "title_en": "Donatello",
+      "artist_en": "Triplestar",
+      "title_kr": "도나텔로",
+      "artist_kr": "트리플스타",
+      "canonical_title": "Donatello"
+    },
+    {
+      "rank": 369,
+      "title_en": "Clue",
+      "artist_en": "Transin",
+      "title_kr": "클루",
+      "artist_kr": "Transin",
+      "canonical_title": "Clue"
+    },
+    {
+      "rank": 370,
+      "title_en": "Mental Rider",
+      "artist_en": "SQUAR",
+      "title_kr": "멘탈 라이더",
+      "artist_kr": "SQUAR",
+      "canonical_title": "Mental Rider"
+    },
+    {
+      "rank": 371,
+      "title_en": "Phantom",
+      "artist_en": "BanYa",
+      "title_kr": "팬텀",
+      "artist_kr": "반야",
+      "canonical_title": "Phantom"
+    },
+    {
+      "rank": 372,
+      "title_en": "Tritium",
+      "artist_en": "Memme",
+      "title_kr": "트리튬",
+      "artist_kr": "맴매",
+      "canonical_title": "Tritium"
+    },
+    {
+      "rank": 373,
+      "title_en": "Monkey Fingers",
+      "artist_en": "BanYa",
+      "title_kr": "몽키 핑거즈",
+      "artist_kr": "반야",
+      "canonical_title": "Monkey Fingers"
+    },
+    {
+      "rank": 374,
+      "title_en": "Rave'til the earth's end",
+      "artist_en": "5argon",
+      "title_kr": "레이브 언틸 디 어스 엔드",
+      "artist_kr": "5argon",
+      "canonical_title": "Rave 'til the Earth's End"
+    },
+    {
+      "rank": 375,
+      "title_en": "Cannon X.1",
+      "artist_en": "YAHPP",
+      "title_kr": "캐논 X.1",
+      "artist_kr": "이 얍",
+      "canonical_title": "Cannon X.1"
+    },
+    {
+      "rank": 376,
+      "title_en": "Utsushiyo No Kaze feat. Kana",
+      "artist_en": "void",
+      "title_kr": "우츠시요 노 카제 feat. Kana",
+      "artist_kr": "void",
+      "canonical_title": "Utsushiyo No Kaze feat. Kana"
+    },
+    {
+      "rank": 377,
+      "title_en": "Stardust Overdrive",
+      "artist_en": "typeMARS",
+      "title_kr": "스타더스트 오버드라이브",
+      "artist_kr": "typeMARS",
+      "canonical_title": "Stardust Overdrive"
+    },
+    {
+      "rank": 378,
+      "title_en": "DJ Otada",
+      "artist_en": "Banya Production",
+      "title_kr": "디제이 오타다",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "DJ Otada"
+    },
+    {
+      "rank": 379,
+      "title_en": "All I Want For X-mas",
+      "artist_en": "BanYa",
+      "title_kr": "올 아이 원트 포 크리스마스",
+      "artist_kr": "반야",
+      "canonical_title": "All I Want For X-mas"
+    },
+    {
+      "rank": 380,
+      "title_en": "Star Command",
+      "artist_en": "Zircon",
+      "title_kr": "스타 커맨드",
+      "artist_kr": "Zircon",
+      "canonical_title": "Star Command"
+    },
+    {
+      "rank": 381,
+      "title_en": "Nihilism - Another Ver.-",
+      "artist_en": "Nato",
+      "title_kr": "니힐리즘 - 어나더 버전 -",
+      "artist_kr": "나토",
+      "canonical_title": "Nihilism - Another Ver.-"
+    },
+    {
+      "rank": 382,
+      "title_en": "Transacaglia in G-minor",
+      "artist_en": "ATAS",
+      "title_kr": "트란사칼리아",
+      "artist_kr": "ATAS",
+      "canonical_title": "Transacaglia in G-minor"
+    },
+    {
+      "rank": 383,
+      "title_en": "DUEL - SHORT CUT -",
+      "artist_en": "Cashew & D_AAN",
+      "title_kr": "결투 - SHORT CUT -",
+      "artist_kr": "Cashew & D_AAN",
+      "canonical_title": "DUEL - SHORT CUT -"
+    },
+    {
+      "rank": 384,
+      "title_en": "Robot battle",
+      "artist_en": "CYO Style",
+      "title_kr": "로봇 배틀",
+      "artist_kr": "CYO Style",
+      "canonical_title": "Robot battle"
+    },
+    {
+      "rank": 385,
+      "title_en": "Cosmical Rhythm",
+      "artist_en": "SID-SOUND",
+      "title_kr": "코스미컬 리듬",
+      "artist_kr": "시드사운드",
+      "canonical_title": "Cosmical Rhythm"
+    },
+    {
+      "rank": 386,
+      "title_en": "Teddy Bear - FULL SONG -",
+      "artist_en": "STAYC",
+      "title_kr": "테디베어 - FULL SONG -",
+      "artist_kr": "스테이씨",
+      "canonical_title": "Teddy Bear - FULL SONG -"
+    },
+    {
+      "rank": 387,
+      "title_en": "Kill Them!",
+      "artist_en": "Archefluxx",
+      "title_kr": "킬 뎀!",
+      "artist_kr": "Archefluxx",
+      "canonical_title": "Kill Them!"
+    },
+    {
+      "rank": 388,
+      "title_en": "Mad5cience",
+      "artist_en": "Paul Bazooka",
+      "title_kr": "매드 사이언스",
+      "artist_kr": "폴 바주카",
+      "canonical_title": "Mad5cience"
+    },
+    {
+      "rank": 389,
+      "title_en": "U GOT 2 KNOW",
+      "artist_en": "MAX",
+      "title_kr": "유 갓 투 노우",
+      "artist_kr": "맥스",
+      "canonical_title": "U Got 2 Know"
+    },
+    {
+      "rank": 390,
+      "title_en": "Radetzky Can Can",
+      "artist_en": "BanYa",
+      "title_kr": "라젠스키 캉캉",
+      "artist_kr": "반야",
+      "canonical_title": "Radetzky Can Can"
+    },
+    {
+      "rank": 391,
+      "title_en": "Log In",
+      "artist_en": "SHK",
+      "title_kr": "로그인",
+      "artist_kr": "SHK",
+      "canonical_title": "Log In"
+    },
+    {
+      "rank": 392,
+      "title_en": "Chinese restaurant",
+      "artist_en": "Memme",
+      "title_kr": "차이니즈 레스토랑",
+      "artist_kr": "맴매",
+      "canonical_title": "Chinese restaurant"
+    },
+    {
+      "rank": 393,
+      "title_en": "Jonathan's Dream",
+      "artist_en": "MAX&Seorryang (SID-SOUND)",
+      "title_kr": "조나단의 꿈",
+      "artist_kr": "MAX&Seorryang (시드사운드)",
+      "canonical_title": "Jonathan's Dream"
+    },
+    {
+      "rank": 394,
+      "title_en": "Tribe Attacker",
+      "artist_en": "Hi-G",
+      "title_kr": "트라이브 어택커",
+      "artist_kr": "Hi-G",
+      "canonical_title": "Tribe Attacker"
+    },
+    {
+      "rank": 395,
+      "title_en": "Caprice of Otada",
+      "artist_en": "Banya Production",
+      "title_kr": "카프리스 오브 오타다",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Caprice of Otada"
+    },
+    {
+      "rank": 396,
+      "title_en": "Silver Beat feat. ChisaUezono",
+      "artist_en": "Tatsh",
+      "title_kr": "실버 비트 feat. ChisaUezono",
+      "artist_kr": "Tatsh",
+      "canonical_title": "Silver Beat feat. ChisaUezono"
+    },
+    {
+      "rank": 397,
+      "title_en": "Final Audition Ep. 2-2",
+      "artist_en": "YAHPP",
+      "title_kr": "파이널 오디션 에피소드 2-2",
+      "artist_kr": "이 얍",
+      "canonical_title": "Final Audition Ep. 2-2"
+    },
+    {
+      "rank": 398,
+      "title_en": "Maria",
+      "artist_en": "BanYa",
+      "title_kr": "마리아",
+      "artist_kr": "반야",
+      "canonical_title": "Maria"
+    },
+    {
+      "rank": 399,
+      "title_en": "Dream To Nightmare",
+      "artist_en": "Nightmare",
+      "title_kr": "드림 투 나이트메어",
+      "artist_kr": "Nightmare",
+      "canonical_title": "Dream To Nightmare"
+    },
+    {
+      "rank": 400,
+      "title_en": "Over The Horizon",
+      "artist_en": "Yamajet",
+      "title_kr": "오버 더 호라이즌",
+      "artist_kr": "야마젯",
+      "canonical_title": "Over the Horizon"
+    },
+    {
+      "rank": 401,
+      "title_en": "Removable Disk0",
+      "artist_en": "Doin",
+      "title_kr": "리무버블 디스코",
+      "artist_kr": "도인",
+      "canonical_title": "Removable Disk0"
+    },
+    {
+      "rank": 402,
+      "title_en": "%X (Percent X)",
+      "artist_en": "Pory",
+      "title_kr": "퍼센트 엑스",
+      "artist_kr": "포리",
+      "canonical_title": "Percent X"
+    },
+    {
+      "rank": 403,
+      "title_en": "Hestia",
+      "artist_en": "Gentle Stick",
+      "title_kr": "헤스티아",
+      "artist_kr": "잰틀 스틱",
+      "canonical_title": "Hestia"
+    },
+    {
+      "rank": 404,
+      "title_en": "Blazing",
+      "artist_en": "BanYa",
+      "title_kr": "블레이징",
+      "artist_kr": "반야",
+      "canonical_title": "Blazing"
+    },
+    {
+      "rank": 405,
+      "title_en": "Papa Gonzales",
+      "artist_en": "BanYa",
+      "title_kr": "파파 곤잘레스",
+      "artist_kr": "반야",
+      "canonical_title": "Papa Gonzales"
+    },
+    {
+      "rank": 406,
+      "title_en": "甘い誘惑デインジャラス Amai Yuuwaku Dangerous",
+      "artist_en": "バクステ外神田一丁目 Bakusute Sotokanda Icchome",
+      "title_kr": "아마이 유우와쿠 데인저러스",
+      "artist_kr": "바쿠스테 소토칸다 잇쵸메",
+      "canonical_title": "Amai Yuuwaku Dangerous"
+    },
+    {
+      "rank": 407,
+      "title_en": "Lucid(PIU Edit)",
+      "artist_en": "Yak Won",
+      "title_kr": "루시드(PIU Edit)",
+      "artist_kr": "약 원",
+      "canonical_title": "Lucid(PIU Edit)"
+    },
+    {
+      "rank": 408,
+      "title_en": "Beat of The War",
+      "artist_en": "BanYa",
+      "title_kr": "비트 오브 더 워",
+      "artist_kr": "반야",
+      "canonical_title": "Beat of The War"
+    },
+    {
+      "rank": 409,
+      "title_en": "Higgledy Piggledy",
+      "artist_en": "Banya Production",
+      "title_kr": "히글디 피글디",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Higgledy Piggledy"
+    },
+    {
+      "rank": 410,
+      "title_en": "Idealized Romance",
+      "artist_en": "void",
+      "title_kr": "아이디얼라이즈드 로맨스",
+      "artist_kr": "void",
+      "canonical_title": "Idealized Romance"
+    },
+    {
+      "rank": 411,
+      "title_en": "Hyperion",
+      "artist_en": "M2U",
+      "title_kr": "히페리온",
+      "artist_kr": "엠투유",
+      "canonical_title": "Hyperion"
+    },
+    {
+      "rank": 412,
+      "title_en": "Dolly KiSS",
+      "artist_en": "SID-SOUND",
+      "title_kr": "돌리 키스",
+      "artist_kr": "시드사운드",
+      "canonical_title": "Dolly Kiss"
+    },
+    {
+      "rank": 413,
+      "title_en": "Final Audition Ep. 2-X",
+      "artist_en": "YAHPP",
+      "title_kr": "파이널 오디션 에피소드 2-X",
+      "artist_kr": "이 얍",
+      "canonical_title": "Final Audition Ep. 2-X"
+    },
+    {
+      "rank": 414,
+      "title_en": "VVV",
+      "artist_en": "ZiGZaG",
+      "title_kr": "VVV",
+      "artist_kr": "ZiGZaG",
+      "canonical_title": "VVV"
+    },
+    {
+      "rank": 415,
+      "title_en": "video out c",
+      "artist_en": "Vospi",
+      "title_kr": "비디오 아웃 씨",
+      "artist_kr": "Vospi",
+      "canonical_title": "video out c"
+    },
+    {
+      "rank": 416,
+      "title_en": "Move That Body!",
+      "artist_en": "DM Ashura feat. Skizzo & Hanna",
+      "title_kr": "무브 댓 바디!",
+      "artist_kr": "DM Ashura feat. Skizzo & Hanna",
+      "canonical_title": "Move That Body!"
+    },
+    {
+      "rank": 417,
+      "title_en": "Final Audition Ep. 1",
+      "artist_en": "BanYa",
+      "title_kr": "파이널 오디션 에피소드 1",
+      "artist_kr": "반야",
+      "canonical_title": "Final Audition Ep. 1"
+    },
+    {
+      "rank": 418,
+      "title_en": "Anguished Unmaking",
+      "artist_en": "void",
+      "title_kr": "앵귀시드 언메이킹",
+      "artist_kr": "void",
+      "canonical_title": "Anguished Unmaking"
+    },
+    {
+      "rank": 419,
+      "title_en": "Point Break",
+      "artist_en": "BanYa",
+      "title_kr": "포인트 브레이크",
+      "artist_kr": "반야",
+      "canonical_title": "Point Break"
+    },
+    {
+      "rank": 420,
+      "title_en": "HYPERCUBE",
+      "artist_en": "MAX",
+      "title_kr": "하이퍼큐브",
+      "artist_kr": "맥스",
+      "canonical_title": "Hypercube"
+    },
+    {
+      "rank": 421,
+      "title_en": "Beat of The War 2",
+      "artist_en": "BanYa",
+      "title_kr": "비트 오브 더 워 2",
+      "artist_kr": "반야",
+      "canonical_title": "Beat of The War 2"
+    },
+    {
+      "rank": 422,
+      "title_en": "Solitary",
+      "artist_en": "BanYa",
+      "title_kr": "무혼",
+      "artist_kr": "반야",
+      "canonical_title": "Solitary"
+    },
+    {
+      "rank": 423,
+      "title_en": "FFF",
+      "artist_en": "Doin",
+      "title_kr": "에프 에프 에프",
+      "artist_kr": "도인",
+      "canonical_title": "FFF"
+    },
+    {
+      "rank": 424,
+      "title_en": "Requiem",
+      "artist_en": "MAX",
+      "title_kr": "레퀴엠",
+      "artist_kr": "맥스",
+      "canonical_title": "Requiem"
+    },
+    {
+      "rank": 425,
+      "title_en": "Hyacinth",
+      "artist_en": "Yahpp",
+      "title_kr": "히아신스",
+      "artist_kr": "이 얍",
+      "canonical_title": "Hyacinth"
+    },
+    {
+      "rank": 426,
+      "title_en": "PRiMA MATERiA - SHORT CUT -",
+      "artist_en": "xi",
+      "title_kr": "프ㄹi마 마테ㄹi아 - SHORT CUT -",
+      "artist_kr": "xi",
+      "canonical_title": "PRiMA MATERiA - SHORT CUT -"
+    },
+    {
+      "rank": 427,
+      "title_en": "You Got Me Crazy",
+      "artist_en": "MAX",
+      "title_kr": "유 갓 미 크레이지",
+      "artist_kr": "맥스",
+      "canonical_title": "You Got Me Crazy"
+    },
+    {
+      "rank": 428,
+      "title_en": "Allegro Con Fuoco - FULL SONG -",
+      "artist_en": "DM Ashura",
+      "title_kr": "알레그로 콘 뿌오코 - FULL SONG -",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "Allegro Con Fuoco"
+    },
+    {
+      "rank": 429,
+      "title_en": "Overblow",
+      "artist_en": "MAX",
+      "title_kr": "오버블로우",
+      "artist_kr": "맥스",
+      "canonical_title": "Overblow"
+    },
+    {
+      "rank": 430,
+      "title_en": "Up & Up (Produced by AWAL)",
+      "artist_en": "Skizzo",
+      "title_kr": "업 앤 업 (Produced by AWAL)",
+      "artist_kr": "Skizzo",
+      "canonical_title": "Up & Up (Produced by AWAL)"
+    },
+    {
+      "rank": 431,
+      "title_en": "Murdoch vs Otada - SHORT CUT -",
+      "artist_en": "ESPITZ vs WONDERTRAVELER Project",
+      "title_kr": "머독 vs 오타다 - SHORT CUT -",
+      "artist_kr": "ESPITZ vs WONDERTRAVELER Project",
+      "canonical_title": "Murdoch vs Otada - SHORT CUT -"
+    },
+    {
+      "rank": 432,
+      "title_en": "Night Duty",
+      "artist_en": "A.V.",
+      "title_kr": "야근",
+      "artist_kr": "A.V.",
+      "canonical_title": "Night Duty"
+    },
+    {
+      "rank": 433,
+      "title_en": "Pavane",
+      "artist_en": "V.A.",
+      "title_kr": "파반느",
+      "artist_kr": "V.A.",
+      "canonical_title": "Pavane"
+    },
+    {
+      "rank": 434,
+      "title_en": "Hungarian Dance V",
+      "artist_en": "Banya Production",
+      "title_kr": "헝가리 무곡 V",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Hungarian Dance V"
+    },
+    {
+      "rank": 435,
+      "title_en": "The People didn't know",
+      "artist_en": "Banya Production",
+      "title_kr": "사람들은 몰랐다네",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "The People didn't know"
+    },
+    {
+      "rank": 436,
+      "title_en": "Red Swan",
+      "artist_en": "Yahpp",
+      "title_kr": "레드 스완",
+      "artist_kr": "이 얍",
+      "canonical_title": "Red Swan"
+    },
+    {
+      "rank": 437,
+      "title_en": "Get Up",
+      "artist_en": "BanYa",
+      "title_kr": "겟 업",
+      "artist_kr": "반야",
+      "canonical_title": "Get Up!"
+    },
+    {
+      "rank": 438,
+      "title_en": "Time Attack <BLUE>",
+      "artist_en": "r300k",
+      "title_kr": "타임 어택 <블루>",
+      "artist_kr": "r300k",
+      "canonical_title": "Time Attack <Blue>"
+    },
+    {
+      "rank": 439,
+      "title_en": "Arirang",
+      "artist_en": "Banya Production",
+      "title_kr": "아리랑",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Arirang"
+    },
+    {
+      "rank": 440,
+      "title_en": "Come to Me",
+      "artist_en": "BanYa",
+      "title_kr": "컴 투 미",
+      "artist_kr": "반야",
+      "canonical_title": "Come to Me"
+    },
+    {
+      "rank": 441,
+      "title_en": "You again my love",
+      "artist_en": "CYO Style & Henohenomoheji",
+      "title_kr": "유 어게인 마이 러브",
+      "artist_kr": "CYO Style & Henohenomoheji",
+      "canonical_title": "You again my love"
+    },
+    {
+      "rank": 442,
+      "title_en": "Selfishness",
+      "artist_en": "SID-SOUND",
+      "title_kr": "셀피쉬니스",
+      "artist_kr": "시드사운드",
+      "canonical_title": "Selfishness"
+    },
+    {
+      "rank": 443,
+      "title_en": "Le Grand Rouge",
+      "artist_en": "KIEN",
+      "title_kr": "라 그랑드 루즈",
+      "artist_kr": "키엔",
+      "canonical_title": "Le Grand Rouge"
+    },
+    {
+      "rank": 444,
+      "title_en": "Orbit Stabilizer",
+      "artist_en": "DM Ashura",
+      "title_kr": "오르비트 스테빌라이저",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "Orbit Stabilizer"
+    },
+    {
+      "rank": 445,
+      "title_en": "Final Audition 2",
+      "artist_en": "BanYa",
+      "title_kr": "파이널 오디션 2",
+      "artist_kr": "반야",
+      "canonical_title": "Final Audition 2"
+    },
+    {
+      "rank": 446,
+      "title_en": "Obliteration",
+      "artist_en": "ATAS",
+      "title_kr": "오블리터레이션",
+      "artist_kr": "ATAS",
+      "canonical_title": "Obliteration"
+    },
+    {
+      "rank": 447,
+      "title_en": "Accident",
+      "artist_en": "MAX",
+      "title_kr": "엑시던트",
+      "artist_kr": "맥스",
+      "canonical_title": "Accident"
+    },
+    {
+      "rank": 448,
+      "title_en": "STEP",
+      "artist_en": "SID-SOUND",
+      "title_kr": "스텝",
+      "artist_kr": "시드사운드",
+      "canonical_title": "STEP"
+    },
+    {
+      "rank": 449,
+      "title_en": "Native",
+      "artist_en": "SHK",
+      "title_kr": "네이티브",
+      "artist_kr": "SHK",
+      "canonical_title": "Native"
+    },
+    {
+      "rank": 450,
+      "title_en": "Latino Virus",
+      "artist_en": "Warak",
+      "title_kr": "라티노 바이러스",
+      "artist_kr": "와락",
+      "canonical_title": "Latino Virus"
+    },
+    {
+      "rank": 451,
+      "title_en": "Vacuum Cleaner",
+      "artist_en": "Doin",
+      "title_kr": "진공 청소기",
+      "artist_kr": "도인",
+      "canonical_title": "Vacuum Cleaner"
+    },
+    {
+      "rank": 452,
+      "title_en": "Final Audition Ep. 2-1",
+      "artist_en": "YAHPP",
+      "title_kr": "파이널 오디션 에피소드 2-1",
+      "artist_kr": "이 얍",
+      "canonical_title": "Final Audition Ep. 2-1"
+    },
+    {
+      "rank": 453,
+      "title_en": "Paradoxx - SHORT CUT -",
+      "artist_en": "SLAM & NATO",
+      "title_kr": "패러독스 - SHORT CUT -",
+      "artist_kr": "슬램 & 나토",
+      "canonical_title": "PARADOXX"
+    },
+    {
+      "rank": 454,
+      "title_en": "Witch Doctor #1",
+      "artist_en": "Yahpp",
+      "title_kr": "위치 닥터 #1",
+      "artist_kr": "이 얍",
+      "canonical_title": "Witch Doctor #1"
+    },
+    {
+      "rank": 455,
+      "title_en": "We Got 2 Know",
+      "artist_en": "MAX",
+      "title_kr": "위 갓 투 노우",
+      "artist_kr": "맥스",
+      "canonical_title": "We Got 2 Know"
+    },
+    {
+      "rank": 456,
+      "title_en": "Top City",
+      "artist_en": "BanYa",
+      "title_kr": "탑 시티",
+      "artist_kr": "반야",
+      "canonical_title": "Top City"
+    },
+    {
+      "rank": 457,
+      "title_en": "Break Out",
+      "artist_en": "Lunatic Sounds",
+      "title_kr": "브레이크 아웃",
+      "artist_kr": "루나틱 사운즈",
+      "canonical_title": "Break Out"
+    },
+    {
+      "rank": 458,
+      "title_en": "Leakage Voltage",
+      "artist_en": "Doin",
+      "title_kr": "리키지 볼티지",
+      "artist_kr": "도인",
+      "canonical_title": "Leakage Voltage"
+    },
+    {
+      "rank": 459,
+      "title_en": "D",
+      "artist_en": "MAX",
+      "title_kr": "디",
+      "artist_kr": "맥스",
+      "canonical_title": "D"
+    },
+    {
+      "rank": 460,
+      "title_en": "Final Audition 3",
+      "artist_en": "BanYa",
+      "title_kr": "파이널 오디션 3",
+      "artist_kr": "반야",
+      "canonical_title": "Final Audition 3"
+    },
+    {
+      "rank": 461,
+      "title_en": "Death Moon - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "사월 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Death Moon"
+    },
+    {
+      "rank": 462,
+      "title_en": "Papasito (feat. KuTiNA) - FULL SONG -",
+      "artist_en": "Yakikaze & Cashew",
+      "title_kr": "파파시토 (feat. KuTiNA) - FULL SONG -",
+      "artist_kr": "Yakikaze & Cashew",
+      "canonical_title": "Papasito"
+    },
+    {
+      "rank": 463,
+      "title_en": "X-Tream",
+      "artist_en": "BanYa",
+      "title_kr": "엑스트림",
+      "artist_kr": "반야",
+      "canonical_title": "X Treme"
+    },
+    {
+      "rank": 464,
+      "title_en": "Silhouette Effect",
+      "artist_en": "Nato",
+      "title_kr": "실루엣 이펙트",
+      "artist_kr": "나토",
+      "canonical_title": "Silhouette Effect"
+    },
+    {
+      "rank": 465,
+      "title_en": "Gun Rock",
+      "artist_en": "Banya Production",
+      "title_kr": "건 락",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Gun Rock"
+    },
+    {
+      "rank": 466,
+      "title_en": "Karyawisata",
+      "artist_en": "Vesuvia x REDSHiFT",
+      "title_kr": "까랴위사따",
+      "artist_kr": "Vesuvia x REDSHiFT",
+      "canonical_title": "Karyawisata"
+    },
+    {
+      "rank": 467,
+      "title_en": "Leather",
+      "artist_en": "Doin",
+      "title_kr": "리더",
+      "artist_kr": "도인",
+      "canonical_title": "Leather"
+    },
+    {
+      "rank": 468,
+      "title_en": "DISTRICT V",
+      "artist_en": "Zekk vs MAX",
+      "title_kr": "디스트릭트 V",
+      "artist_kr": "Zekk vs MAX",
+      "canonical_title": "DISTRICT V"
+    },
+    {
+      "rank": 469,
+      "title_en": "Break It Down",
+      "artist_en": "MAZO",
+      "title_kr": "브레이크 잇 다운",
+      "artist_kr": "MAZO",
+      "canonical_title": "Break it Down"
+    },
+    {
+      "rank": 470,
+      "title_en": "Hello William",
+      "artist_en": "Banya Production",
+      "title_kr": "안녕 윌리엄",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Hello William"
+    },
+    {
+      "rank": 471,
+      "title_en": "Heart Attack",
+      "artist_en": "DJ Counterforce",
+      "title_kr": "하트 어택",
+      "artist_kr": "DJ Counterforce",
+      "canonical_title": "Heart Attack"
+    },
+    {
+      "rank": 472,
+      "title_en": "Solitary 2",
+      "artist_en": "BanYa",
+      "title_kr": "무혼 2",
+      "artist_kr": "반야",
+      "canonical_title": "Solitary 2"
+    },
+    {
+      "rank": 473,
+      "title_en": "God Mode 2.0 feat. Skizzo",
+      "artist_en": "Nato",
+      "title_kr": "갓 모드 2.0 feat. Skizzo",
+      "artist_kr": "나토",
+      "canonical_title": "God Mode 2.0"
+    },
+    {
+      "rank": 474,
+      "title_en": "GOOD NIGHT - FULL SONG -",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "굿 나이트 - FULL SONG -",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "GOOD NIGHT"
+    },
+    {
+      "rank": 475,
+      "title_en": "XTREE",
+      "artist_en": "YAHPP",
+      "title_kr": "엑스트리",
+      "artist_kr": "이 얍",
+      "canonical_title": "XTREE"
+    },
+    {
+      "rank": 476,
+      "title_en": "Amphitryon",
+      "artist_en": "Gentle Stick",
+      "title_kr": "암피트리온",
+      "artist_kr": "잰틀 스틱",
+      "canonical_title": "Amphitryon"
+    },
+    {
+      "rank": 477,
+      "title_en": "Meteorize",
+      "artist_en": "Paul Bazooka",
+      "title_kr": "메테오라이즈",
+      "artist_kr": "폴 바주카",
+      "canonical_title": "Meteorize"
+    },
+    {
+      "rank": 478,
+      "title_en": "Stardream -Eurobeat Remix- - SHORT CUT -",
+      "artist_en": "MAX x Cashew x Dave Rodgers",
+      "title_kr": "스타드림 -Eurobeat Remix- - SHORT CUT -",
+      "artist_kr": "MAX x Cashew x Dave Rodgers",
+      "canonical_title": "Stardream -Eurobeat Remix-"
+    },
+    {
+      "rank": 479,
+      "title_en": "She Likes Pizza",
+      "artist_en": "BanYa",
+      "title_kr": "그녀는 피자를 좋아해",
+      "artist_kr": "반야",
+      "canonical_title": "She Likes Pizza"
+    },
+    {
+      "rank": 480,
+      "title_en": "Poseidon - SHORT CUT -",
+      "artist_en": "Quree",
+      "title_kr": "포세이돈 - SHORT CUT -",
+      "artist_kr": "큐리",
+      "canonical_title": "Poseidon"
+    },
+    {
+      "rank": 481,
+      "title_en": "D Gang",
+      "artist_en": "BanYa",
+      "title_kr": "디 갱",
+      "artist_kr": "반야",
+      "canonical_title": "D Gang"
+    },
+    {
+      "rank": 482,
+      "title_en": "Hi Bi",
+      "artist_en": "BanYa",
+      "title_kr": "하이 바이",
+      "artist_kr": "반야",
+      "canonical_title": "Hi Bi"
+    },
+    {
+      "rank": 483,
+      "title_en": "Overblow2",
+      "artist_en": "MAX",
+      "title_kr": "오버블로우2",
+      "artist_kr": "맥스",
+      "canonical_title": "Overblow2"
+    },
+    {
+      "rank": 484,
+      "title_en": "Milky Way Galaxy",
+      "artist_en": "3R2",
+      "title_kr": "밀키 웨이 갤럭시",
+      "artist_kr": "3R2",
+      "canonical_title": "Milky Way Galaxy"
+    },
+    {
+      "rank": 485,
+      "title_en": "Phoenix Opening - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "피닉스 오프닝 - SHORT CUT -",
+      "artist_kr": "MAX",
+      "canonical_title": "Phoenix Opening - SHORT CUT -"
+    },
+    {
+      "rank": 486,
+      "title_en": "My Dreams",
+      "artist_en": "Banya Production",
+      "title_kr": "마이 드림즈",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "My Dreams"
+    },
+    {
+      "rank": 487,
+      "title_en": "Bring Back The Beat",
+      "artist_en": "Lunatic Sounds",
+      "title_kr": "브링 백 더 비트",
+      "artist_kr": "루나틱 사운즈",
+      "canonical_title": "Bring Back The Beat"
+    },
+    {
+      "rank": 488,
+      "title_en": "Macaron Day",
+      "artist_en": "HyuN",
+      "title_kr": "마카롱 데이",
+      "artist_kr": "HyuN",
+      "canonical_title": "Macaron Day"
+    },
+    {
+      "rank": 489,
+      "title_en": "Interference",
+      "artist_en": "Doin",
+      "title_kr": "인터퍼런스",
+      "artist_kr": "도인",
+      "canonical_title": "Interference"
+    },
+    {
+      "rank": 490,
+      "title_en": "Meteo5cience (GADGET mix)",
+      "artist_en": "Paul Bazooka",
+      "title_kr": "메테오 사이언스 (GADGET mix)",
+      "artist_kr": "폴 바주카",
+      "canonical_title": "Meteo5cience"
+    },
+    {
+      "rank": 491,
+      "title_en": "BEMERA",
+      "artist_en": "YAHPP",
+      "title_kr": "비메라",
+      "artist_kr": "이 얍",
+      "canonical_title": "BEMERA"
+    },
+    {
+      "rank": 492,
+      "title_en": "X-Rave",
+      "artist_en": "DM Ashura",
+      "title_kr": "엑스 레이브",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "X-Rave"
+    },
+    {
+      "rank": 493,
+      "title_en": "Naissance",
+      "artist_en": "BanYa",
+      "title_kr": "태동",
+      "artist_kr": "반야",
+      "canonical_title": "Naissance"
+    },
+    {
+      "rank": 494,
+      "title_en": "Blaze Emotion",
+      "artist_en": "YAHPP",
+      "title_kr": "블레이즈 이모션",
+      "artist_kr": "이 얍",
+      "canonical_title": "Blaze Emotion"
+    },
+    {
+      "rank": 495,
+      "title_en": "Canon D - FULL SONG -",
+      "artist_en": "Banya",
+      "title_kr": "캐논 디 - FULL SONG -",
+      "artist_kr": "반야",
+      "canonical_title": "Canon D"
+    },
+    {
+      "rank": 496,
+      "title_en": "Passing Rider",
+      "artist_en": "mzet:-P",
+      "title_kr": "패싱 라이더",
+      "artist_kr": "mzet:-P",
+      "canonical_title": "Passing Rider"
+    },
+    {
+      "rank": 497,
+      "title_en": "Pine Nut",
+      "artist_en": "Doin",
+      "title_kr": "잣",
+      "artist_kr": "도인",
+      "canonical_title": "Pine Nut"
+    },
+    {
+      "rank": 498,
+      "title_en": "Full Moon - FULL SONG -",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "풀 문 - FULL SONG -",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "Full Moon"
+    },
+    {
+      "rank": 499,
+      "title_en": "Neo Catharsis - SHORT CUT -",
+      "artist_en": "TAG underground overlay",
+      "title_kr": "네오 카타르시스 - SHORT CUT -",
+      "artist_kr": "TAG underground overlay",
+      "canonical_title": "Neo Catharsis - SHORT CUT -"
+    },
+    {
+      "rank": 500,
+      "title_en": "Pumping Jumping",
+      "artist_en": "Banya Production",
+      "title_kr": "펌핑 점핑",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Pumping Jumping"
+    },
+    {
+      "rank": 501,
+      "title_en": "Toccata",
+      "artist_en": "Banya Production",
+      "title_kr": "토카타",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Toccata"
+    },
+    {
+      "rank": 502,
+      "title_en": "Shub Sothoth",
+      "artist_en": "Nato & EXC",
+      "title_kr": "슈브 소토스",
+      "artist_kr": "나토 & EXC",
+      "canonical_title": "Shub Sothoth"
+    },
+    {
+      "rank": 503,
+      "title_en": "Fire Noodle Challenge",
+      "artist_en": "Memme",
+      "title_kr": "파이어 누들 챌린지",
+      "artist_kr": "맴매",
+      "canonical_title": "Fire Noodle Challenge"
+    },
+    {
+      "rank": 504,
+      "title_en": "Switronic - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "스위트로닉 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Switronic"
+    },
+    {
+      "rank": 505,
+      "title_en": "Visual Dream II (In Fiction)",
+      "artist_en": "Aragon",
+      "title_kr": "비주얼 드림 2 (인 픽션)",
+      "artist_kr": "아라곤",
+      "canonical_title": "Visual Dream II (In Fiction)"
+    },
+    {
+      "rank": 506,
+      "title_en": "Brown Sky",
+      "artist_en": "Doin",
+      "title_kr": "하늘다람쥐",
+      "artist_kr": "도인",
+      "canonical_title": "Brown Sky"
+    },
+    {
+      "rank": 507,
+      "title_en": "K.O.A : Alice In Wonderworld",
+      "artist_en": "Banya Production",
+      "title_kr": "케이.오.에이 : 엘리스 인 원더월드",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "K.O.A : Alice In Wonderworld"
+    },
+    {
+      "rank": 508,
+      "title_en": "WI-EX-DOC-VA",
+      "artist_en": "YAHPP",
+      "title_kr": "위엑닥바",
+      "artist_kr": "이 얍",
+      "canonical_title": "WI-EX-DOC-VA"
+    },
+    {
+      "rank": 509,
+      "title_en": "Pumptris 8Bit ver.",
+      "artist_en": "YAHPP",
+      "title_kr": "펌트리스 8비트 ver.",
+      "artist_kr": "이 얍",
+      "canonical_title": "Pumptris 8Bit ver."
+    },
+    {
+      "rank": 510,
+      "title_en": "Bullfighter's Song",
+      "artist_en": "Banya Production",
+      "title_kr": "투우사의 노래",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Bullfighter's Song"
+    },
+    {
+      "rank": 511,
+      "title_en": "Lala",
+      "artist_en": "Yassi Pressman",
+      "title_kr": "라라",
+      "artist_kr": "야시 프레스먼",
+      "canonical_title": "Lala"
+    },
+    {
+      "rank": 512,
+      "title_en": "Xenesis",
+      "artist_en": "Banya Production",
+      "title_kr": "제네시스",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Xenesis"
+    },
+    {
+      "rank": 513,
+      "title_en": "Allegro Più Mosso",
+      "artist_en": "DM Ashura",
+      "title_kr": "알레그로 피유 모쏘",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "Allegro Piu Mosso"
+    },
+    {
+      "rank": 514,
+      "title_en": "Hey U",
+      "artist_en": "MAZO",
+      "title_kr": "헤이 유",
+      "artist_kr": "MAZO",
+      "canonical_title": "Hey U"
+    },
+    {
+      "rank": 515,
+      "title_en": "Rock the house - SHORT CUT -",
+      "artist_en": "Matduke",
+      "title_kr": "락 더 하우스 - SHORT CUT -",
+      "artist_kr": "Matduke",
+      "canonical_title": "Rock the house"
+    },
+    {
+      "rank": 516,
+      "title_en": "My way",
+      "artist_en": "BanYa",
+      "title_kr": "마이웨이",
+      "artist_kr": "반야",
+      "canonical_title": "My Way"
+    },
+    {
+      "rank": 517,
+      "title_en": "Ghroth - SHORT CUT -",
+      "artist_en": "nato",
+      "title_kr": "그로스 - SHORT CUT -",
+      "artist_kr": "nato",
+      "canonical_title": "Ghroth - SHORT CUT -"
+    },
+    {
+      "rank": 518,
+      "title_en": "Oh! Rosa",
+      "artist_en": "BanYa",
+      "title_kr": "오! 로사",
+      "artist_kr": "반야",
+      "canonical_title": "Oh! Rosa"
+    },
+    {
+      "rank": 519,
+      "title_en": "HUSH",
+      "artist_en": "Yassi Pressman & Nadine Lustre",
+      "title_kr": "허쉬",
+      "artist_kr": "야시 프레스먼 & 나딘 러스트레",
+      "canonical_title": "HUSH"
+    },
+    {
+      "rank": 520,
+      "title_en": "Love is a Danger Zone 2 - FULL SONG -",
+      "artist_en": "YAHPP",
+      "title_kr": "러브 이즈 어 데인저 존 2 - FULL SONG -",
+      "artist_kr": "이 얍",
+      "canonical_title": "Love is a Danger Zone 2"
+    },
+    {
+      "rank": 521,
+      "title_en": "Set me up",
+      "artist_en": "BanYa",
+      "title_kr": "셋 미 업",
+      "artist_kr": "반야",
+      "canonical_title": "Set me up"
+    },
+    {
+      "rank": 522,
+      "title_en": "Betrayer",
+      "artist_en": "BanYa",
+      "title_kr": "사랑가",
+      "artist_kr": "반야",
+      "canonical_title": "Betrayer"
+    },
+    {
+      "rank": 523,
+      "title_en": "Jump",
+      "artist_en": "BanYa",
+      "title_kr": "점프",
+      "artist_kr": "반야",
+      "canonical_title": "Jump"
+    },
+    {
+      "rank": 524,
+      "title_en": "Elysium",
+      "artist_en": "Warak",
+      "title_kr": "엘리시움",
+      "artist_kr": "와락",
+      "canonical_title": "Elysium"
+    },
+    {
+      "rank": 525,
+      "title_en": "Wedding Crashers - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "웨딩 크래셔 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Wedding Crashers"
+    },
+    {
+      "rank": 526,
+      "title_en": "Winter - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "윈터 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Winter"
+    },
+    {
+      "rank": 527,
+      "title_en": "Miss S' story",
+      "artist_en": "BanYa",
+      "title_kr": "미스 에스 스토리",
+      "artist_kr": "반야",
+      "canonical_title": "Miss S' story"
+    },
+    {
+      "rank": 528,
+      "title_en": "Get Up (and go)",
+      "artist_en": "Banya Production",
+      "title_kr": "겟 업 (앤 고)",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Get Up (and go)"
+    },
+    {
+      "rank": 529,
+      "title_en": "PRIME Opening - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "프라임 오프닝 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "PRIME Opening"
+    },
+    {
+      "rank": 530,
+      "title_en": "Street show down",
+      "artist_en": "BanYa",
+      "title_kr": "스트리트 쇼다운",
+      "artist_kr": "반야",
+      "canonical_title": "Street show down"
+    },
+    {
+      "rank": 531,
+      "title_en": "Love is a Danger Zone 2 Try To B.P.M",
+      "artist_en": "BanYa",
+      "title_kr": "러브 이즈 어 데인저 존 2 Try To B.P.M",
+      "artist_kr": "반야",
+      "canonical_title": "Love is a danger zone (try to B.P.M.)"
+    },
+    {
+      "rank": 532,
+      "title_en": "Beat the ghost",
+      "artist_en": "Banya Production",
+      "title_kr": "비트 더 고스트",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Beat The Ghost"
+    },
+    {
+      "rank": 533,
+      "title_en": "Halloween Party ~Multiverse~ - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "할로윈 파티 ~Multiverse~ - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Halloween Party ~Multiverse~ - SHORT CUT -"
+    },
+    {
+      "rank": 534,
+      "title_en": "Oy Oy Oy",
+      "artist_en": "BanYa",
+      "title_kr": "오이 오이 오이",
+      "artist_kr": "반야",
+      "canonical_title": "Oy Oy Oy"
+    },
+    {
+      "rank": 535,
+      "title_en": "Tek -Club Copenhagen-",
+      "artist_en": "Banya Production",
+      "title_kr": "테크 -클럽 코펜하겐-",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Tek -Club Copenhagen-"
+    },
+    {
+      "rank": 536,
+      "title_en": "Chopsticks Challenge",
+      "artist_en": "YAHPP",
+      "title_kr": "젓가락 변주곡",
+      "artist_kr": "이 얍",
+      "canonical_title": "Chopsticks Challenge"
+    },
+    {
+      "rank": 537,
+      "title_en": "First Love",
+      "artist_en": "BanYa",
+      "title_kr": "첫사랑",
+      "artist_kr": "반야",
+      "canonical_title": "First Love"
+    },
+    {
+      "rank": 538,
+      "title_en": "ASDF",
+      "artist_en": "Doin",
+      "title_kr": "ㅁㄴㅇㄹ",
+      "artist_kr": "도인",
+      "canonical_title": "ASDF"
+    },
+    {
+      "rank": 539,
+      "title_en": "Mission Possible -Blow Back-",
+      "artist_en": "Banya Production",
+      "title_kr": "미션 파서블 -블로우 백-",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Mission Possible -Blow Back-"
+    },
+    {
+      "rank": 540,
+      "title_en": "Get Your Groove On",
+      "artist_en": "BanYa",
+      "title_kr": "겟 유어 그루브 온",
+      "artist_kr": "반야",
+      "canonical_title": "Get Your Groove On"
+    },
+    {
+      "rank": 541,
+      "title_en": "Avalanquiem",
+      "artist_en": "MAX & MEMME",
+      "title_kr": "아발란퀴엠",
+      "artist_kr": "맥스 & 맴매",
+      "canonical_title": "Avalanquiem"
+    },
+    {
+      "rank": 542,
+      "title_en": "Repeatorment Remix",
+      "artist_en": "BanYa",
+      "title_kr": "리피토먼트 리믹스",
+      "artist_kr": "반야",
+      "canonical_title": "Repeatorment Remix"
+    },
+    {
+      "rank": 543,
+      "title_en": "Monkey Fingers 2",
+      "artist_en": "Banya Production",
+      "title_kr": "몽키 핑거즈 2",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Monkey Fingers 2"
+    },
+    {
+      "rank": 544,
+      "title_en": "Guitar Man",
+      "artist_en": "Banya Production",
+      "title_kr": "기타 맨",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Guitar Man"
+    },
+    {
+      "rank": 545,
+      "title_en": "J Bong",
+      "artist_en": "BanYa",
+      "title_kr": "제이 봉",
+      "artist_kr": "반야",
+      "canonical_title": "JBong"
+    },
+    {
+      "rank": 546,
+      "title_en": "Naissance 2",
+      "artist_en": "BanYa",
+      "title_kr": "태동 2",
+      "artist_kr": "반야",
+      "canonical_title": "Naissance 2"
+    },
+    {
+      "rank": 547,
+      "title_en": "Yog-Sothoth - SHORT CUT -",
+      "artist_en": "Nato",
+      "title_kr": "요그 소토스 - SHORT CUT -",
+      "artist_kr": "나토",
+      "canonical_title": "Yog-Sothoth"
+    },
+    {
+      "rank": 548,
+      "title_en": "XX OPENING - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "XX 오프닝 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "XX OPENING"
+    },
+    {
+      "rank": 549,
+      "title_en": "Free Style",
+      "artist_en": "BanYa",
+      "title_kr": "프리 스타일",
+      "artist_kr": "반야",
+      "canonical_title": "Free Style"
+    },
+    {
+      "rank": 550,
+      "title_en": "Do U Know That-Old School",
+      "artist_en": "Banya Production",
+      "title_kr": "두 유 노우 댓-올드 스쿨",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Do U Know That-Old School"
+    },
+    {
+      "rank": 551,
+      "title_en": "B2",
+      "artist_en": "MAX",
+      "title_kr": "B2",
+      "artist_kr": "맥스",
+      "canonical_title": "B2"
+    },
+    {
+      "rank": 552,
+      "title_en": "Solitary 1.5",
+      "artist_en": "YAHPP",
+      "title_kr": "무혼 1.5",
+      "artist_kr": "이 얍",
+      "canonical_title": "Solitary 1.5"
+    },
+    {
+      "rank": 553,
+      "title_en": "Arch of Darkness",
+      "artist_en": "Yahpp",
+      "title_kr": "아크 오브 다크니스",
+      "artist_kr": "이 얍",
+      "canonical_title": "Arch of Darkness"
+    },
+    {
+      "rank": 554,
+      "title_en": "Pumping Up",
+      "artist_en": "BanYa",
+      "title_kr": "펌핑업",
+      "artist_kr": "반야",
+      "canonical_title": "Pumping Up"
+    },
+    {
+      "rank": 555,
+      "title_en": "Bemera - SHORT CUT -",
+      "artist_en": "YAHPP",
+      "title_kr": "비메라 - SHORT CUT -",
+      "artist_kr": "이 얍",
+      "canonical_title": "BEMERA"
+    },
+    {
+      "rank": 556,
+      "title_en": "Dignity - FULL SONG -",
+      "artist_en": "Crash",
+      "title_kr": "디그니티 - FULL SONG -",
+      "artist_kr": "크래쉬",
+      "canonical_title": "Dignity"
+    },
+    {
+      "rank": 557,
+      "title_en": "With My Lover",
+      "artist_en": "BanYa",
+      "title_kr": "님과 함께",
+      "artist_kr": "반야",
+      "canonical_title": "With My Lover"
+    },
+    {
+      "rank": 558,
+      "title_en": "Chase Me - FULL SONG -",
+      "artist_en": "Dreamcatcher",
+      "title_kr": "체이스 미 - FULL SONG -",
+      "artist_kr": "드림캐쳐",
+      "canonical_title": "Chase Me"
+    },
+    {
+      "rank": 559,
+      "title_en": "Everybody Got 2 Know",
+      "artist_en": "MAX",
+      "title_kr": "에브리바디 갓 투 노우",
+      "artist_kr": "맥스",
+      "canonical_title": "Everybody Got 2 Know"
+    },
+    {
+      "rank": 560,
+      "title_en": "Sarabande - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "사라반드 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "Sarabande"
+    },
+    {
+      "rank": 561,
+      "title_en": "Extravaganza - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "엑스트라바간자 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Extravaganza"
+    },
+    {
+      "rank": 562,
+      "title_en": "Nyarlathotep - SHORT CUT -",
+      "artist_en": "Nato",
+      "title_kr": "니알라토텝 - SHORT CUT -",
+      "artist_kr": "나토",
+      "canonical_title": "Nyarlathotep"
+    },
+    {
+      "rank": 563,
+      "title_en": "Money",
+      "artist_en": "Banya Production",
+      "title_kr": "머니",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Money"
+    },
+    {
+      "rank": 564,
+      "title_en": "Ignis Fatuus(DM Ashura Mix) - SHORT CUT -",
+      "artist_en": "BanYa & DM Ashura",
+      "title_kr": "이그니스 패터스(DM Ashura 믹스) - SHORT CUT -",
+      "artist_kr": "반야 & DM Ashura",
+      "canonical_title": "Ignis Fatuus(DM Ashura Mix)"
+    },
+    {
+      "rank": 565,
+      "title_en": "Love is a Danger Zone - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "러브 이즈 어 데인저 존 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Love is a Danger Zone"
+    },
+    {
+      "rank": 566,
+      "title_en": "Destination - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "데스티네이션 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Destination"
+    },
+    {
+      "rank": 567,
+      "title_en": "Witch Doctor - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "위치 닥터 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Witch Doctor"
+    },
+    {
+      "rank": 568,
+      "title_en": "Pumptris 8Bit ver. - SHORT CUT -",
+      "artist_en": "YAHPP",
+      "title_kr": "펌트리스 8비트 ver. - SHORT CUT -",
+      "artist_kr": "이 얍",
+      "canonical_title": "Pumptris 8Bit ver."
+    },
+    {
+      "rank": 569,
+      "title_en": "Hyperion - SHORT CUT -",
+      "artist_en": "M2U",
+      "title_kr": "히페리온 - SHORT CUT -",
+      "artist_kr": "엠투유",
+      "canonical_title": "Hyperion"
+    },
+    {
+      "rank": 570,
+      "title_en": "Silhouette Effect - SHORT CUT -",
+      "artist_en": "Nato",
+      "title_kr": "실루엣 이펙트 - SHORT CUT -",
+      "artist_kr": "나토",
+      "canonical_title": "Silhouette Effect"
+    },
+    {
+      "rank": 571,
+      "title_en": "Vulcan",
+      "artist_en": "Memme",
+      "title_kr": "불카누스",
+      "artist_kr": "맴매",
+      "canonical_title": "Vulcan"
+    },
+    {
+      "rank": 572,
+      "title_en": "Caprice of DJ Otada",
+      "artist_en": "Banya Production",
+      "title_kr": "카프리스 오브 디제이 오타다",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Caprice of DJ Otada"
+    },
+    {
+      "rank": 573,
+      "title_en": "Mission Possible",
+      "artist_en": "BanYa",
+      "title_kr": "미션 파서블",
+      "artist_kr": "반야",
+      "canonical_title": "Mission Possible"
+    },
+    {
+      "rank": 574,
+      "title_en": "2006. LOVE SONG",
+      "artist_en": "Banya Production",
+      "title_kr": "사랑가 2006",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "2006. LOVE SONG"
+    },
+    {
+      "rank": 575,
+      "title_en": "Cleaner - SHORT CUT -",
+      "artist_en": "Doin",
+      "title_kr": "클리너 - SHORT CUT -",
+      "artist_kr": "도인",
+      "canonical_title": "Cleaner"
+    },
+    {
+      "rank": 576,
+      "title_en": "Tream Vook of the war",
+      "artist_en": "BanYa",
+      "title_kr": "트림 북 오브 더 워",
+      "artist_kr": "반야",
+      "canonical_title": "Tream Vook of the war REMIX"
+    },
+    {
+      "rank": 577,
+      "title_en": "An Interesting View",
+      "artist_en": "BanYa",
+      "title_kr": "서울구경",
+      "artist_kr": "반야",
+      "canonical_title": "An Interesting View"
+    },
+    {
+      "rank": 578,
+      "title_en": "I Want U - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "아이 원트 유 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "I Want U"
+    },
+    {
+      "rank": 579,
+      "title_en": "Blaze Emotion (band version)",
+      "artist_en": "Yahpp",
+      "title_kr": "블레이즈 이모션 (Band version)",
+      "artist_kr": "이 얍",
+      "canonical_title": "Blaze emotion (Band version)"
+    },
+    {
+      "rank": 580,
+      "title_en": "Hello",
+      "artist_en": "BanYa",
+      "title_kr": "헬로우",
+      "artist_kr": "반야",
+      "canonical_title": "Hello"
+    },
+    {
+      "rank": 581,
+      "title_en": "Pump Jump",
+      "artist_en": "BanYa",
+      "title_kr": "펌프 점프",
+      "artist_kr": "반야",
+      "canonical_title": "Pump Jump"
+    },
+    {
+      "rank": 582,
+      "title_en": "Love is a Danger Zone pt. 2 - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "러브 이즈 어 데인저 존 pt.2 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Love is a Danger Zone pt. 2"
+    },
+    {
+      "rank": 583,
+      "title_en": "Beethoven Influenza",
+      "artist_en": "Banya & Warak",
+      "title_kr": "베토벤 인플루엔자",
+      "artist_kr": "반야 & 와락",
+      "canonical_title": "Beethoven Influenza"
+    },
+    {
+      "rank": 584,
+      "title_en": "A Nightmare",
+      "artist_en": "BanYa",
+      "title_kr": "악몽",
+      "artist_kr": "반야",
+      "canonical_title": "A nightmare"
+    },
+    {
+      "rank": 585,
+      "title_en": "Banya Classic Remix",
+      "artist_en": "BanYa",
+      "title_kr": "반야 클래식 리믹스",
+      "artist_kr": "반야",
+      "canonical_title": "Banya Classic Remix"
+    },
+    {
+      "rank": 586,
+      "title_en": "Kasou Shinja - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "가장신자 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "Kasou Shinja"
+    },
+    {
+      "rank": 587,
+      "title_en": "Banya-P Guitar Remix",
+      "artist_en": "Banya Production",
+      "title_kr": "반야-P 기타 리믹스",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Banya-P Guitar Remix"
+    },
+    {
+      "rank": 588,
+      "title_en": "Super Fantasy - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "슈퍼 판타지 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Super Fantasy"
+    },
+    {
+      "rank": 589,
+      "title_en": "Shub Niggurath - SHORT CUT -",
+      "artist_en": "Nato",
+      "title_kr": "슈브 니구라스 - SHORT CUT -",
+      "artist_kr": "나토",
+      "canonical_title": "Shub Niggurath"
+    },
+    {
+      "rank": 590,
+      "title_en": "Do It Reggae Style",
+      "artist_en": "Banya Production",
+      "title_kr": "두 잇 레게 스타일",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Do It Reggae Style"
+    },
+    {
+      "rank": 591,
+      "title_en": "Exceed2 Opening - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "익시드2 오프닝 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Exceed2 Opening"
+    },
+    {
+      "rank": 592,
+      "title_en": "CHICKEN WING - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "치킨 윙 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "CHICKEN WING"
+    },
+    {
+      "rank": 593,
+      "title_en": "Stardust Overdrive - SHORT CUT -",
+      "artist_en": "typeMARS",
+      "title_kr": "스타더스트 오버드라이브 - SHORT CUT -",
+      "artist_kr": "typeMARS",
+      "canonical_title": "Stardust Overdrive"
+    },
+    {
+      "rank": 594,
+      "title_en": "Love is a Danger Zone pt.2 [Another]",
+      "artist_en": "BanYa",
+      "title_kr": "러브 이즈 어 데인저 존 pt.2 어나더",
+      "artist_kr": "반야",
+      "canonical_title": "Love is a Danger Zone pt.2 another"
+    },
+    {
+      "rank": 595,
+      "title_en": "Moonlight - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "월광 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Moonlight"
+    },
+    {
+      "rank": 596,
+      "title_en": "EXTRA BanYa Remix",
+      "artist_en": "Banya",
+      "title_kr": "엑스트라 반야 리믹스",
+      "artist_kr": "반야",
+      "canonical_title": "EXTRA BanYa Remix"
+    },
+    {
+      "rank": 597,
+      "title_en": "Banya-P Classic Remix",
+      "artist_en": "Banya Production",
+      "title_kr": "반야-P 클래식 리믹스",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Banya-P Classic Remix"
+    },
+    {
+      "rank": 598,
+      "title_en": "PRIME2 OPENING - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "프라임2 오프닝 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "PRIME2 Opening"
+    },
+    {
+      "rank": 599,
+      "title_en": "Move That Body! - FULL SONG -",
+      "artist_en": "DM Ashura feat. Skizzo & Hanna",
+      "title_kr": "무브 댓 바디! - FULL SONG -",
+      "artist_kr": "DM Ashura feat. Skizzo & Hanna",
+      "canonical_title": "Move That Body!"
+    },
+    {
+      "rank": 600,
+      "title_en": "Trotpris - SHORT CUT -",
+      "artist_en": "Doin",
+      "title_kr": "트롯프리스 - SHORT CUT -",
+      "artist_kr": "도인",
+      "canonical_title": "Trotpris"
+    },
+    {
+      "rank": 601,
+      "title_en": "Jam O Beat",
+      "artist_en": "Banya Production",
+      "title_kr": "잼 오 비트",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Jam O Beat"
+    },
+    {
+      "rank": 602,
+      "title_en": "Final Audition Ep. 2-X - SHORT CUT -",
+      "artist_en": "YAHPP",
+      "title_kr": "파이널 오디션 에피소드 2-X - SHORT CUT -",
+      "artist_kr": "이 얍",
+      "canonical_title": "Final Audition EP. 2-X"
+    },
+    {
+      "rank": 603,
+      "title_en": "Betrayer -act.2-",
+      "artist_en": "msgoon",
+      "title_kr": "사랑가 -2막-",
+      "artist_kr": "엠.에스.군",
+      "canonical_title": "Betrayer -act.2-"
+    },
+    {
+      "rank": 604,
+      "title_en": "B.P Classic Remix",
+      "artist_en": "Banya Production",
+      "title_kr": "반야 프로덕션 클래식 리믹스",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "B.P Classic Remix"
+    },
+    {
+      "rank": 605,
+      "title_en": "Passacaglia - SHORT CUT -",
+      "artist_en": "SynthWulf",
+      "title_kr": "파사칼리아 - SHORT CUT -",
+      "artist_kr": "SynthWulf",
+      "canonical_title": "Passacaglia"
+    },
+    {
+      "rank": 606,
+      "title_en": "N",
+      "artist_en": "BanYa",
+      "title_kr": "엔",
+      "artist_kr": "반야",
+      "canonical_title": "N"
+    },
+    {
+      "rank": 607,
+      "title_en": "Interference - FULL SONG -",
+      "artist_en": "Doin",
+      "title_kr": "인터퍼런스 - FULL SONG -",
+      "artist_kr": "도인",
+      "canonical_title": "Interference"
+    },
+    {
+      "rank": 608,
+      "title_en": "U Got Me Rocking - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "유 갓 미 락킹 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "U Got Me Rocking"
+    },
+    {
+      "rank": 609,
+      "title_en": "Midnight Blue",
+      "artist_en": "BanYa",
+      "title_kr": "미드나잇 블루",
+      "artist_kr": "반야",
+      "canonical_title": "Midnight Blue"
+    },
+    {
+      "rank": 610,
+      "title_en": "Dr.KOA",
+      "artist_en": "Banya Production",
+      "title_kr": "닥터 케이오에이",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Dr. KOA"
+    },
+    {
+      "rank": 611,
+      "title_en": "K.O.A : Alice In Wonderworld - SHORT CUT -",
+      "artist_en": "Banya Production",
+      "title_kr": "케이.오.에이 : 엘리스 인 원더월드 - SHORT CUT -",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "K.O.A : Alice In Wonderworld"
+    },
+    {
+      "rank": 612,
+      "title_en": "NX Opening - SHORT CUT -",
+      "artist_en": "YAHPP",
+      "title_kr": "NX 오프닝 - SHORT CUT -",
+      "artist_kr": "이 얍",
+      "canonical_title": "NX Opening"
+    },
+    {
+      "rank": 613,
+      "title_en": "HUSH - FULL SONG -",
+      "artist_en": "Yassi Pressman & Nadine Lustre",
+      "title_kr": "허쉬 - FULL SONG -",
+      "artist_kr": "야시 프레스먼 & 나딘 러스트레",
+      "canonical_title": "HUSH"
+    },
+    {
+      "rank": 614,
+      "title_en": "msgoon RMX pt.6",
+      "artist_en": "msgoon",
+      "title_kr": "엠.에스.군 리믹스 파트.6",
+      "artist_kr": "엠.에스.군",
+      "canonical_title": "msgoon RMX pt.6"
+    },
+    {
+      "rank": 615,
+      "title_en": "BANYA HIPHOP REMIX",
+      "artist_en": "BanYa",
+      "title_kr": "반야 힙합 리믹스",
+      "artist_kr": "반야",
+      "canonical_title": "BANYA HIPHOP REMIX"
+    },
+    {
+      "rank": 616,
+      "title_en": "Chopsticks Challenge - FULL SONG -",
+      "artist_en": "YAHPP",
+      "title_kr": "젓가락 변주곡 - FULL SONG -",
+      "artist_kr": "이 얍",
+      "canonical_title": "Chopsticks Challenge"
+    },
+    {
+      "rank": 617,
+      "title_en": "Money Fingers",
+      "artist_en": "Banya Production",
+      "title_kr": "머니 핑거즈",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Money Fingers"
+    },
+    {
+      "rank": 618,
+      "title_en": "Turkey Virus",
+      "artist_en": "Banya Production",
+      "title_kr": "터키 바이러스",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Turkey Virus"
+    },
+    {
+      "rank": 619,
+      "title_en": "Ugly duck Toccata",
+      "artist_en": "Banya Production",
+      "title_kr": "미운 오리 토카타",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Ugly duck Toccata"
+    },
+    {
+      "rank": 620,
+      "title_en": "Pop The Track - SHORT CUT -",
+      "artist_en": "J-Mi & Midi-D & Ft. Hanna Stockzell",
+      "title_kr": "팝 더 트랙 - SHORT CUT -",
+      "artist_kr": "J-Mi & Midi-D & Ft. Hanna Stockzell",
+      "canonical_title": "Pop The Track"
+    },
+    {
+      "rank": 621,
+      "title_en": "Infinity RMX",
+      "artist_en": "SynthWulf & MAX",
+      "title_kr": "인피니티 리믹스",
+      "artist_kr": "SynthWulf & 맥스",
+      "canonical_title": "Infinity RMX"
+    },
+    {
+      "rank": 622,
+      "title_en": "The People didn't know \"Pumping up\"",
+      "artist_en": "Banya Production",
+      "title_kr": "사람들은 펌핑업을 몰랐다네",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "The People didn't know"
+    },
+    {
+      "rank": 623,
+      "title_en": "We will meet again",
+      "artist_en": "BanYa",
+      "title_kr": "위 윌 밋 어게인",
+      "artist_kr": "반야",
+      "canonical_title": "We will meet again"
+    },
+    {
+      "rank": 624,
+      "title_en": "PaPa helloizing",
+      "artist_en": "Banya Production",
+      "title_kr": "파파 헬로이징",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "PaPa helloizing"
+    },
+    {
+      "rank": 625,
+      "title_en": "X-Rave - SHORT CUT -",
+      "artist_en": "DM Ashura",
+      "title_kr": "엑스 레이브 - SHORT CUT -",
+      "artist_kr": "DM Ashura",
+      "canonical_title": "X-Rave"
+    },
+    {
+      "rank": 626,
+      "title_en": "Beat of The War 2 - FULL SONG -",
+      "artist_en": "YAHPP",
+      "title_kr": "비트 오브 더 워 2 - FULL SONG -",
+      "artist_kr": "이 얍",
+      "canonical_title": "Beat of The War 2"
+    },
+    {
+      "rank": 627,
+      "title_en": "What Are You Doin?",
+      "artist_en": "Doin & MAX",
+      "title_kr": "와라유도인?",
+      "artist_kr": "도인 & 맥스",
+      "canonical_title": "What Are You Doin?"
+    },
+    {
+      "rank": 628,
+      "title_en": "Selfishness - SHORT CUT -",
+      "artist_en": "SID-SOUND",
+      "title_kr": "셀피쉬니스 - SHORT CUT -",
+      "artist_kr": "시드사운드",
+      "canonical_title": "Selfishness"
+    },
+    {
+      "rank": 629,
+      "title_en": "Take Out - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "테이크 아웃 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Take Out"
+    },
+    {
+      "rank": 630,
+      "title_en": "Set Up Me2 Mix",
+      "artist_en": "Banya Production",
+      "title_kr": "셋업 미투 믹스",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "Set Up Me2 Mix"
+    },
+    {
+      "rank": 631,
+      "title_en": "Overblow - SHORT CUT -",
+      "artist_en": "MAX",
+      "title_kr": "오버블로우 - SHORT CUT -",
+      "artist_kr": "맥스",
+      "canonical_title": "Overblow"
+    },
+    {
+      "rank": 632,
+      "title_en": "Move That Body! - SHORT CUT -",
+      "artist_en": "DM Ashura feat. Skizzo & Hanna",
+      "title_kr": "무브 댓 바디! - SHORT CUT -",
+      "artist_kr": "DM Ashura feat. Skizzo & Hanna",
+      "canonical_title": "Move That Body!"
+    },
+    {
+      "rank": 633,
+      "title_en": "Final Audition 2 - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "파이널 오디션 2 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Final Audition 2"
+    },
+    {
+      "rank": 634,
+      "title_en": "Final Audition 3 - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "파이널 오디션 3 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Final Audition 3"
+    },
+    {
+      "rank": 635,
+      "title_en": "FFF - SHORT CUT -",
+      "artist_en": "Doin",
+      "title_kr": "에프 에프 에프 - SHORT CUT -",
+      "artist_kr": "도인",
+      "canonical_title": "FFF"
+    },
+    {
+      "rank": 636,
+      "title_en": "Solitary 2 - SHORT CUT -",
+      "artist_en": "Banya",
+      "title_kr": "무혼 2 - SHORT CUT -",
+      "artist_kr": "반야",
+      "canonical_title": "Solitary 2"
+    },
+    {
+      "rank": 637,
+      "title_en": "Unique - SHORT CUT -",
+      "artist_en": "SHK",
+      "title_kr": "유니크 - SHORT CUT -",
+      "artist_kr": "SHK",
+      "canonical_title": "Unique"
+    },
+    {
+      "rank": 638,
+      "title_en": "B.P Classic Remix 2",
+      "artist_en": "Banya Production",
+      "title_kr": "반야 프로덕션 클래식 리믹스 2",
+      "artist_kr": "반야 프로덕션",
+      "canonical_title": "B.P Classic Remix 2"
+    },
+    {
+      "rank": 639,
+      "title_en": "Close Your Eye",
+      "artist_en": "BanYa",
+      "title_kr": "눈을 감아",
+      "artist_kr": "반야",
+      "canonical_title": "Close Your Eye"
+    }
+  ]
+}

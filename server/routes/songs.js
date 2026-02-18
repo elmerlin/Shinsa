@@ -6,6 +6,41 @@ const { getDb } = require('../db/schema');
 
 // Cache the jacket map in memory (loaded once from pump-phoenix.json)
 let cachedJacketMap = null;
+let cachedSongAliases = null;
+
+function normalizeSongName(name) {
+  return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function loadSongAliases() {
+  if (cachedSongAliases) return cachedSongAliases;
+
+  const aliasesPath = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
+  if (!fs.existsSync(aliasesPath)) {
+    cachedSongAliases = {};
+    return cachedSongAliases;
+  }
+
+  try {
+    const data = JSON.parse(fs.readFileSync(aliasesPath, 'utf-8'));
+    const rawAliases = (data && typeof data.aliases === 'object' && data.aliases) || {};
+    const normalizedAliases = {};
+
+    for (const [alias, canonical] of Object.entries(rawAliases)) {
+      const aliasNorm = normalizeSongName(alias);
+      const canonicalNorm = normalizeSongName(canonical);
+      if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
+      if (!normalizedAliases[aliasNorm]) normalizedAliases[aliasNorm] = canonicalNorm;
+    }
+
+    cachedSongAliases = normalizedAliases;
+    return cachedSongAliases;
+  } catch (err) {
+    console.warn('Failed to load piugame-song-aliases.json:', err.message);
+    cachedSongAliases = {};
+    return cachedSongAliases;
+  }
+}
 
 function loadJacketMap() {
   if (cachedJacketMap) return cachedJacketMap;
@@ -13,12 +48,13 @@ function loadJacketMap() {
   if (!fs.existsSync(jsonPath)) return {};
   const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
   const map = {};
+  const chartKeysBySong = {};
+
   for (const song of data.songs) {
     if (!song.jacket) continue;
     const jacketUrl = '/jackets/' + song.jacket;
     const name = song.name || '';
-    // Normalize: lowercase, collapse whitespace, trim
-    const norm = name.toLowerCase().replace(/\s+/g, ' ').trim();
+    const norm = normalizeSongName(name);
     // Store by normalized name
     if (!map[norm]) map[norm] = jacketUrl;
     // Also store by name with mode|level for each chart
@@ -27,9 +63,28 @@ function loadJacketMap() {
         const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
         const key = `${norm}|${mode}|${chart.lvl}`;
         if (!map[key]) map[key] = jacketUrl;
+
+        if (!chartKeysBySong[norm]) chartKeysBySong[norm] = [];
+        chartKeysBySong[norm].push({ mode, level: chart.lvl, jacketUrl });
       }
     }
   }
+
+  // Expand map with locale aliases (e.g., Korean PIUGame titles -> canonical English song)
+  const aliases = loadSongAliases();
+  for (const [aliasNorm, canonicalNorm] of Object.entries(aliases)) {
+    const canonicalJacket = map[canonicalNorm];
+    if (!canonicalJacket) continue;
+
+    if (!map[aliasNorm]) map[aliasNorm] = canonicalJacket;
+
+    const chartKeys = chartKeysBySong[canonicalNorm] || [];
+    for (const chart of chartKeys) {
+      const aliasChartKey = `${aliasNorm}|${chart.mode}|${chart.level}`;
+      if (!map[aliasChartKey]) map[aliasChartKey] = chart.jacketUrl;
+    }
+  }
+
   cachedJacketMap = map;
   return map;
 }
