@@ -260,12 +260,27 @@ function Lightbox({ images, index, onClose }) {
   );
 }
 
-// Share Button - copies link to clipboard
+// Share Button
+// - On mobile browsers that support Web Share API: opens native share sheet (WhatsApp, IG, etc.)
+// - Otherwise: falls back to copying the link
 function ShareButton({ path }) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
     const url = `${window.location.origin}${path}`;
+
+    // Native share sheet (mostly mobile; some desktop browsers also support it).
+    if (navigator.share) {
+      try {
+        await navigator.share({ url });
+        return;
+      } catch (err) {
+        // User cancelled or denied; don't force a copy-to-clipboard fallback.
+        if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+        // Otherwise, fall back to clipboard copy below.
+      }
+    }
+
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -287,7 +302,7 @@ function ShareButton({ path }) {
     <button
       onClick={handleShare}
       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
-      title="Copy link"
+      title={navigator.share ? 'Share' : 'Copy link'}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />

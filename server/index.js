@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { initializeDb, getDb } = require('./db/schema');
+const { registerSharePreviewRoutes } = require('./sharePreviews');
 
 const tournamentRoutes = require('./routes/tournaments');
 const playerRoutes = require('./routes/players');
@@ -21,6 +22,9 @@ const PORT = process.env.PORT || 3001;
 
 // Initialize database
 initializeDb();
+
+// Respect proxy headers (needed for correct absolute URLs in social previews).
+app.set('trust proxy', true);
 
 // Middleware
 app.use(cors());
@@ -60,6 +64,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
+registerSharePreviewRoutes(app, { clientBuildDir: clientBuild });
 app.use(express.static(clientBuild));
 app.use((req, res) => {
   res.sendFile(path.join(clientBuild, 'index.html'));
