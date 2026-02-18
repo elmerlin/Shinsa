@@ -1791,60 +1791,6 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {aggregated?.byLevel?.length > 0 && (
-            <div className="card">
-              <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Average Score by Level</h3>
-              <div className="space-y-1.5">
-                {aggregated.byLevel.map(l => {
-                  const rank = getRank(l.avg);
-                  return (
-                    <div key={l.level} className="flex items-center gap-2">
-                      <span className="text-xs font-display font-bold w-10 text-gray-400">Lv.{l.level}</span>
-                      <div className="flex-1 h-4 bg-piu-dark rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-piu-accent to-purple-600 rounded-full"
-                          style={{ width: `${(l.avg / 1000000) * 100}%` }}
-                        />
-                      </div>
-                      <span className={`text-xs font-display font-bold w-8 ${rank.color}`}>{rank.label}</span>
-                      <span className="text-xs font-mono text-gray-500 w-16 text-right">{l.avg.toLocaleString()}</span>
-                      <span className="text-[10px] text-gray-600 w-8 text-right">{l.count}x</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {songScores.length > 0 && (
-            <div className="card">
-              <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Top Scores</h3>
-              <div className="space-y-2">
-                {songScores.slice(0, 10).map((s, i) => {
-                  const rank = getRank(s.myScore);
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-xs text-gray-600 font-mono w-4">#{i + 1}</span>
-                      {s.jacket && (
-                        <img src={s.jacket} alt="" className="w-8 h-8 rounded object-cover" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-display font-bold truncate">{s.title}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {s.mode} Lv.{s.level}
-                          <span className="ml-2 text-gray-600">{s.source}</span>
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
-                        <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -2019,7 +1965,62 @@ export default function ProfilePage() {
           )}
 
           {competitionsSub === 'songs' && (
-            <div className="space-y-2.5">
+            <div className="space-y-4">
+              {aggregated?.byLevel?.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Average Score by Level</h3>
+                  <div className="space-y-1.5">
+                    {aggregated.byLevel.map(l => {
+                      const rank = getRank(l.avg);
+                      return (
+                        <div key={l.level} className="flex items-center gap-2">
+                          <span className="text-xs font-display font-bold w-10 text-gray-400">Lv.{l.level}</span>
+                          <div className="flex-1 h-4 bg-piu-dark rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-piu-accent to-purple-600 rounded-full"
+                              style={{ width: `${(l.avg / 1000000) * 100}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-display font-bold w-8 ${rank.color}`}>{rank.label}</span>
+                          <span className="text-xs font-mono text-gray-500 w-16 text-right">{l.avg.toLocaleString()}</span>
+                          <span className="text-[10px] text-gray-600 w-8 text-right">{l.count}x</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {songScores.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Top Scores</h3>
+                  <div className="space-y-2">
+                    {songScores.slice(0, 10).map((s, i) => {
+                      const rank = getRank(s.myScore);
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="text-xs text-gray-600 font-mono w-4">#{i + 1}</span>
+                          {s.jacket && (
+                            <img src={s.jacket} alt="" className="w-8 h-8 rounded object-cover" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-display font-bold truncate">{s.title}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {s.mode} Lv.{s.level}
+                              <span className="ml-2 text-gray-600">{s.source}</span>
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
+                            <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {songScores.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">No song scores recorded yet</p>
               ) : (
