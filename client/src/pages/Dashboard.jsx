@@ -321,7 +321,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">RECENT ACTIVITY</h2>
           <div className="card divide-y divide-piu-border/20">
-            {recentActivity.slice(0, 15).map((a, i) => {
+            {recentActivity.slice(0, 10).map((a, i) => {
               const ai = ACTIVITY_ICONS[a.type] || { icon: '•', color: 'text-gray-400' };
               return (
                 <Link
