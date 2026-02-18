@@ -1225,10 +1225,11 @@ export default function ProfilePage() {
       });
     });
 
-    const endDate = startOfDay(new Date());
-    const yearStartDate = new Date(endDate.getFullYear(), 0, 1);
+    const today = startOfDay(new Date());
+    const yearStartDate = new Date(today.getFullYear(), 0, 1);
+    const yearEndDate = new Date(today.getFullYear(), 11, 31);
     const gridStartDate = startOfWeek(yearStartDate);
-    const totalGridDays = diffDays(gridStartDate, endDate) + 1;
+    const totalGridDays = diffDays(gridStartDate, yearEndDate) + 1;
     const weeksCount = Math.ceil(totalGridDays / 7);
 
     const weeks = [];
