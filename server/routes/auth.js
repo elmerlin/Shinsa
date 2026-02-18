@@ -7,7 +7,7 @@ const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { addNotificationClient } = require('../lib/notificationHub');
 const { getPublicVapidKey, isWebPushConfigured } = require('../lib/webPush');
-const { isInlineDataAvatar } = require('../lib/avatarProxy');
+const { isInlineDataAvatar, normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
@@ -19,12 +19,21 @@ function textSnippet(text, max = 90) {
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
 
+function normalizeClientUser(user, avatarSize = 96) {
+  if (!user) return null;
+  return {
+    ...user,
+    avatar: normalizeUserAvatarForList(user.avatar, user.id, avatarSize),
+  };
+}
+
 function makePublicUser(user) {
   if (!user) return null;
-  if (!user.show_age) {
-    return { ...user, date_of_birth: '' };
+  const normalized = normalizeClientUser(user, 128);
+  if (!normalized.show_age) {
+    return { ...normalized, date_of_birth: '' };
   }
-  return user;
+  return normalized;
 }
 
 // Middleware to extract user from token (optional auth)
@@ -83,7 +92,7 @@ router.post('/register', (req, res) => {
   const user = db.prepare('SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description, created_at FROM users WHERE id = ?').get(id);
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 
-  res.status(201).json({ user, token });
+  res.status(201).json({ user: normalizeClientUser(user, 96), token });
 });
 
 // POST /api/auth/login
@@ -102,7 +111,7 @@ router.post('/login', (req, res) => {
 
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
   const { password_hash, ...safeUser } = user;
-  res.json({ user: safeUser, token });
+  res.json({ user: normalizeClientUser(safeUser, 96), token });
 });
 
 // GET /api/auth/me
@@ -110,7 +119,7 @@ router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
   const user = db.prepare('SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description, created_at FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
+  res.json(normalizeClientUser(user, 96));
 });
 
 // GET /api/auth/avatar/:id - serve user avatar bytes (resized) for inline base64 avatars
@@ -178,7 +187,7 @@ router.put('/me', requireAuth, (req, res) => {
   `).run(email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age !== undefined ? (show_age ? 1 : 0) : null, description, req.user.id);
 
   const user = db.prepare('SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description, created_at FROM users WHERE id = ?').get(req.user.id);
-  res.json(user);
+  res.json(normalizeClientUser(user, 96));
 });
 
 // PUT /api/auth/password
@@ -222,7 +231,7 @@ router.get('/search', (req, res) => {
     LIMIT 10
   `).all(`%${q}%`, q, `${q}%`);
 
-  res.json(users);
+  res.json(users.map(u => normalizeClientUser(u, 48)));
 });
 
 // GET /api/auth/user/username/:username - get public user profile by username

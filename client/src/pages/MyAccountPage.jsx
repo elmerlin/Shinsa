@@ -26,6 +26,7 @@ export default function MyAccountPage() {
     email: '', avatar: '', pumbility: '', skill_title: 'Beginner', skill_level: 1,
     gender: '', nationality: '', date_of_birth: '', show_age: false, description: '',
   });
+  const [avatarDirty, setAvatarDirty] = useState(false);
 
   // Password form
   const [passForm, setPassForm] = useState({ current_password: '', new_password: '', confirm: '' });
@@ -51,6 +52,7 @@ export default function MyAccountPage() {
       show_age: !!user.show_age,
       description: user.description || '',
     });
+    setAvatarDirty(false);
     getInvitations().then(setInvitations).catch(() => {});
     getPiugameCredentialStatus().then(r => setPiuLinked(r.linked)).catch(() => {});
   }, [user]);
@@ -62,9 +64,8 @@ export default function MyAccountPage() {
     setSaving(true);
     setMessage('');
     try {
-      await updateMe({
+      const payload = {
         email: form.email,
-        avatar: form.avatar,
         pumbility: parseInt(form.pumbility) || 0,
         skill_title: `${form.skill_title} lvl. ${form.skill_level}`,
         skill_level: parseInt(form.skill_level) || 1,
@@ -73,8 +74,11 @@ export default function MyAccountPage() {
         date_of_birth: form.date_of_birth,
         show_age: form.show_age,
         description: form.description,
-      });
+      };
+      if (avatarDirty) payload.avatar = form.avatar;
+      await updateMe(payload);
       await refreshUser();
+      setAvatarDirty(false);
       setMessage('Profile updated!');
     } catch (err) {
       setMessage(err.message);
@@ -247,7 +251,10 @@ export default function MyAccountPage() {
         <form onSubmit={handleSaveProfile} className="card space-y-4">
           <AvatarPicker
             value={form.avatar}
-            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
+            onChange={(avatar) => {
+              setForm(f => ({ ...f, avatar }));
+              setAvatarDirty(true);
+            }}
             shape="circle"
             size="md"
           />
