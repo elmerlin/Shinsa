@@ -195,7 +195,7 @@ function PostComposer({ onPost }) {
           {/* Bold */}
           <button
             onClick={() => applyFormat('**', '**')}
-            className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-xs font-bold"
+            className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm font-bold"
             title="Bold"
           >
             B
@@ -203,7 +203,7 @@ function PostComposer({ onPost }) {
           {/* Italic */}
           <button
             onClick={() => applyFormat('*', '*')}
-            className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-xs italic"
+            className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm italic"
             title="Italic"
           >
             I
@@ -211,7 +211,7 @@ function PostComposer({ onPost }) {
           {/* Strikethrough */}
           <button
             onClick={() => applyFormat('~~', '~~')}
-            className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-xs line-through"
+            className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm line-through"
             title="Strikethrough"
           >
             S
@@ -223,7 +223,7 @@ function PostComposer({ onPost }) {
           <div className="relative" ref={emojiRef}>
             <button
               onClick={() => setShowEmojis(!showEmojis)}
-              className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm"
+              className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-[18px] leading-none"
               title="Emoji"
             >
               &#9786;
@@ -253,11 +253,11 @@ function PostComposer({ onPost }) {
           {/* Image upload */}
           <button
             onClick={() => fileRef.current?.click()}
-            className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm"
+            className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
             title="Attach images (max 9)"
             disabled={images.length >= 9}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </button>
@@ -273,10 +273,10 @@ function PostComposer({ onPost }) {
           {/* YouTube link */}
           <button
             onClick={() => setShowYoutubeInput(!showYoutubeInput)}
-            className={`p-1.5 rounded hover:bg-piu-dark/50 transition-colors text-sm ${showYoutubeInput || youtubeUrl ? 'text-red-400' : 'text-gray-400 hover:text-white'}`}
+            className={`w-8 h-8 flex items-center justify-center rounded hover:bg-piu-dark/50 transition-colors ${showYoutubeInput || youtubeUrl ? 'text-red-400' : 'text-gray-400 hover:text-white'}`}
             title="Attach YouTube video"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z"/>
             </svg>
           </button>
@@ -286,10 +286,10 @@ function PostComposer({ onPost }) {
           {/* Disable comments toggle */}
           <button
             onClick={() => setCommentsDisabled(!commentsDisabled)}
-            className={`p-1.5 rounded hover:bg-piu-dark/50 transition-colors text-xs font-display ${commentsDisabled ? 'text-red-400' : 'text-gray-400 hover:text-white'}`}
+            className={`w-8 h-8 flex items-center justify-center rounded hover:bg-piu-dark/50 transition-colors ${commentsDisabled ? 'text-red-400' : 'text-gray-400 hover:text-white'}`}
             title={commentsDisabled ? 'Comments disabled' : 'Disable comments'}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d={commentsDisabled
                 ? "M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
                 : "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"

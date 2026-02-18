@@ -860,10 +860,10 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           {canEdit && !editing && (
             <button
               onClick={handleEdit}
-              className="text-gray-600 hover:text-piu-accent text-xs transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:text-piu-accent hover:bg-piu-dark/50 transition-colors"
               title="Edit post"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
@@ -871,10 +871,12 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           {onDelete && isOwner && (
             <button
               onClick={() => onDelete(post.id)}
-              className="text-gray-600 hover:text-red-400 text-xs transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-piu-dark/50 transition-colors"
               title="Delete post"
             >
-              &#10005;
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           )}
         </div>
