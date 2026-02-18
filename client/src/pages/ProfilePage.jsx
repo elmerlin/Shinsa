@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import {
+  ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine,
+} from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap,
@@ -74,6 +77,245 @@ const RANK_RANGES = [
   { label: 'D',    min: 450000, bg: 'bg-gray-600' },
   { label: 'F',    min: 0,      bg: 'bg-gray-700' },
 ];
+
+const GRADE_BARS = [
+  { key: 'SSS+', color: '#7dd3fc' },
+  { key: 'SSS', color: '#38bdf8' },
+  { key: 'SS+', color: '#fde047' },
+  { key: 'SS', color: '#facc15' },
+  { key: 'S+', color: '#f59e0b' },
+  { key: 'S', color: '#d97706' },
+  { key: 'AAA+', color: '#cbd5e1' },
+  { key: 'AAA', color: '#94a3b8' },
+  { key: 'AA+', color: '#a78bfa' },
+  { key: 'AA', color: '#8b5cf6' },
+  { key: 'A+', color: '#34d399' },
+  { key: 'A', color: '#10b981' },
+  { key: 'B', color: '#9ca3af' },
+  { key: 'C', color: '#6b7280' },
+  { key: 'D', color: '#4b5563' },
+  { key: 'F', color: '#374151' },
+];
+
+const SINGLE_MAX_LEVEL = 26;
+const DOUBLE_MAX_LEVEL = 28;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function toDayKey(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function startOfWeek(date) {
+  const d = startOfDay(date);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+function parseDayKey(key) {
+  const m = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+}
+
+function diffDays(startDate, endDate) {
+  return Math.round((startOfDay(endDate).getTime() - startOfDay(startDate).getTime()) / DAY_MS);
+}
+
+function parsePlayedAt(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/[./]/g, '-');
+  const ymd = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
+  );
+  if (ymd) {
+    const y = parseInt(ymd[1], 10);
+    const m = parseInt(ymd[2], 10) - 1;
+    const d = parseInt(ymd[3], 10);
+    const hh = parseInt(ymd[4] || '0', 10);
+    const mm = parseInt(ymd[5] || '0', 10);
+    const ss = parseInt(ymd[6] || '0', 10);
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const md = normalized.match(/^(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (md) {
+    const year = new Date().getFullYear();
+    const m = parseInt(md[1], 10) - 1;
+    const d = parseInt(md[2], 10);
+    const hh = parseInt(md[3] || '0', 10);
+    const mm = parseInt(md[4] || '0', 10);
+    return new Date(year, m, d, hh, mm, 0);
+  }
+
+  const direct = new Date(normalized);
+  if (!Number.isNaN(direct.getTime())) return direct;
+
+  return null;
+}
+
+function parsePlayDayKey(value) {
+  const parsed = parsePlayedAt(value);
+  if (parsed) return toDayKey(parsed);
+
+  const fallback = String(value || '').trim().replace(/[./]/g, '-');
+  const m = fallback.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+}
+
+function hexToRgb(hex) {
+  const cleaned = String(hex || '').replace('#', '');
+  if (cleaned.length !== 6) return null;
+  return {
+    r: parseInt(cleaned.slice(0, 2), 16),
+    g: parseInt(cleaned.slice(2, 4), 16),
+    b: parseInt(cleaned.slice(4, 6), 16),
+  };
+}
+
+function toHex(v) {
+  return clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0');
+}
+
+function interpolateHex(fromHex, targetHex, t) {
+  const from = hexToRgb(fromHex);
+  const to = hexToRgb(targetHex);
+  if (!from || !to) return fromHex;
+  const ratio = clamp(t, 0, 1);
+  const r = from.r + (to.r - from.r) * ratio;
+  const g = from.g + (to.g - from.g) * ratio;
+  const b = from.b + (to.b - from.b) * ratio;
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function getSingleLevelColor(level) {
+  const lv = clamp(Number(level) || 0, 1, SINGLE_MAX_LEVEL);
+  const ratio = lv / SINGLE_MAX_LEVEL;
+  return interpolateHex('#fca5a5', '#7f1d1d', ratio);
+}
+
+function getDoubleLevelColor(level) {
+  const lv = clamp(Number(level) || 0, 1, DOUBLE_MAX_LEVEL);
+  const ratio = lv / DOUBLE_MAX_LEVEL;
+  return interpolateHex('#86efac', '#14532d', ratio);
+}
+
+function isStageBreakPlay(play) {
+  return (parseInt(play?.score, 10) || 0) <= 0;
+}
+
+function normalizeGradeLabel(grade, score) {
+  const trimmed = String(grade || '').trim();
+  if (trimmed) return trimmed;
+  return getRank(parseInt(score, 10) || 0).label;
+}
+
+function DailyLevelGradeChart({ plays }) {
+  const chartData = useMemo(() => {
+    const levelMap = {};
+    const rows = Array.isArray(plays) ? plays : [];
+
+    for (const play of rows) {
+      const level = parseInt(play?.level, 10);
+      if (!Number.isFinite(level) || level <= 0) continue;
+      if (!levelMap[level]) {
+        const seed = { levelLabel: `Lv.${level}`, levelValue: level, stage_break: 0 };
+        for (const g of GRADE_BARS) seed[g.key] = 0;
+        levelMap[level] = seed;
+      }
+
+      if (isStageBreakPlay(play)) {
+        levelMap[level].stage_break -= 1;
+        continue;
+      }
+
+      const grade = normalizeGradeLabel(play.grade, play.score);
+      if (levelMap[level][grade] === undefined) {
+        levelMap[level][grade] = 0;
+      }
+      levelMap[level][grade] += 1;
+    }
+
+    return Object.values(levelMap).sort((a, b) => a.levelValue - b.levelValue);
+  }, [plays]);
+
+  if (chartData.length === 0) return null;
+
+  const maxMagnitude = Math.max(
+    1,
+    ...chartData.map((d) => {
+      const positives = GRADE_BARS.reduce((sum, g) => sum + (d[g.key] || 0), 0);
+      return Math.max(positives, Math.abs(d.stage_break || 0));
+    })
+  );
+
+  return (
+    <div className="mt-4">
+      <h4 className="text-[10px] font-display font-bold text-gray-500 mb-2 uppercase tracking-wide">
+        Grade Count by Level (Stage Break below zero)
+      </h4>
+      <div className="h-52 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="2 2" stroke="rgba(148,163,184,0.2)" vertical={false} />
+            <XAxis dataKey="levelLabel" tick={{ fill: '#9ca3af', fontSize: 10 }} />
+            <YAxis
+              domain={[-maxMagnitude, maxMagnitude]}
+              allowDecimals={false}
+              tick={{ fill: '#9ca3af', fontSize: 10 }}
+            />
+            <ReferenceLine y={0} stroke="rgba(148,163,184,0.45)" />
+            <Tooltip
+              contentStyle={{ backgroundColor: '#0b1220', border: '1px solid #334155', borderRadius: '8px' }}
+              labelStyle={{ color: '#e2e8f0' }}
+              formatter={(value, name) => [
+                Math.abs(parseInt(value, 10) || 0),
+                name === 'stage_break' ? 'Stage Break' : name,
+              ]}
+            />
+            {GRADE_BARS.map((grade) => (
+              <Bar key={grade.key} dataKey={grade.key} stackId="grades" fill={grade.color} />
+            ))}
+            <Bar dataKey="stage_break" fill="#dc2626" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {GRADE_BARS.filter((g) => ['SSS+','SSS','SS+','SS','S+','S','AAA','AA','A','B','C','D','F'].includes(g.key)).map((g) => (
+          <span key={g.key} className="inline-flex items-center gap-1 text-[9px] text-gray-400">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: g.color }} />
+            {g.key}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1 text-[9px] text-gray-400">
+          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#dc2626' }} />
+          Stage Break
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function getRankIndex(score) {
   for (let i = 0; i < RANK_RANGES.length; i++) {
@@ -418,6 +660,7 @@ export default function ProfilePage() {
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
+  const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
   const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
@@ -467,6 +710,7 @@ export default function ProfilePage() {
     setActivityItems([]);
     setFollowersLoaded(false);
     setTab('overview');
+    setSelectedOverviewDateKey('');
     setActivitySubTab('all');
     setActivityNotifyPrefs({
       loading: false,
@@ -613,6 +857,7 @@ export default function ProfilePage() {
   // Load PIUGame data + jacket lookup when any PIU tab is active
   const piuTabs = ['pumbility', 'best-scores', 'recently-played'];
   const isPiuTab = piuTabs.includes(tab);
+  const hasJacketLookup = Object.keys(jacketLookup).length > 0;
 
   useEffect(() => {
     if (isPiuTab && profileId && !piuDataLoaded) {
@@ -623,6 +868,16 @@ export default function ProfilePage() {
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
     }
   }, [isPiuTab, profileId, piuDataLoaded]);
+
+  useEffect(() => {
+    if (tab !== 'overview' || !profileId || !hasPiuData) return;
+    if (!piuRecentlyPlayed) {
+      getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
+    }
+    if (!hasJacketLookup) {
+      getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
+    }
+  }, [tab, profileId, hasPiuData, piuRecentlyPlayed, hasJacketLookup]);
 
   // Auto-sync pumbility + recently played (NOT best scores) for profile owner
   useEffect(() => {
@@ -827,6 +1082,173 @@ export default function ProfilePage() {
 
     return { tournamentCount, duelCount, totalWins, totalLosses, duelWins, duelLosses, totalSongs, avgScore, bestScore, byLevel };
   }, [stats, songScores, profileId]);
+
+  const overviewPlayHeatmap = useMemo(() => {
+    const plays = Array.isArray(piuRecentlyPlayed?.plays) ? piuRecentlyPlayed.plays : [];
+    const dayMap = {};
+    let singleMin = Infinity;
+    let singleMax = 0;
+    let doubleMin = Infinity;
+    let doubleMax = 0;
+    let latestDate = null;
+    let earliestDate = null;
+
+    for (let i = 0; i < plays.length; i++) {
+      const play = plays[i];
+      const dayKey = parsePlayDayKey(play?.date_played);
+      const dayDate = parseDayKey(dayKey);
+      if (!dayKey || !dayDate) continue;
+
+      if (!dayMap[dayKey]) {
+        dayMap[dayKey] = {
+          key: dayKey,
+          plays: [],
+          singles: 0,
+          doubles: 0,
+          singleLevelTotal: 0,
+          doubleLevelTotal: 0,
+        };
+      }
+
+      const mode = play?.mode === 'Single' || play?.mode === 'Double' ? play.mode : '';
+      const level = parseInt(play?.level, 10) || 0;
+      const parsedAt = parsePlayedAt(play?.date_played);
+
+      if (mode === 'Single') {
+        dayMap[dayKey].singles += 1;
+        dayMap[dayKey].singleLevelTotal += level;
+      } else if (mode === 'Double') {
+        dayMap[dayKey].doubles += 1;
+        dayMap[dayKey].doubleLevelTotal += level;
+      }
+
+      if ((parseInt(play?.score, 10) || 0) > 0) {
+        if (mode === 'Single' && level > 0) {
+          singleMin = Math.min(singleMin, level);
+          singleMax = Math.max(singleMax, level);
+        } else if (mode === 'Double' && level > 0) {
+          doubleMin = Math.min(doubleMin, level);
+          doubleMax = Math.max(doubleMax, level);
+        }
+      }
+
+      dayMap[dayKey].plays.push({
+        ...play,
+        _parsedAtMs: parsedAt ? parsedAt.getTime() : null,
+        _index: i,
+      });
+
+      if (!latestDate || dayDate.getTime() > latestDate.getTime()) latestDate = dayDate;
+      if (!earliestDate || dayDate.getTime() < earliestDate.getTime()) earliestDate = dayDate;
+    }
+
+    const dayEntries = Object.values(dayMap);
+    dayEntries.forEach((d) => {
+      d.total = d.singles + d.doubles;
+      d.singleAvgLevel = d.singles > 0 ? d.singleLevelTotal / d.singles : 0;
+      d.doubleAvgLevel = d.doubles > 0 ? d.doubleLevelTotal / d.doubles : 0;
+      d.singleRatio = d.total > 0 ? d.singles / d.total : 0;
+      d.doubleRatio = d.total > 0 ? d.doubles / d.total : 0;
+      d.singleColor = d.singles > 0 ? getSingleLevelColor(d.singleAvgLevel) : 'transparent';
+      d.doubleColor = d.doubles > 0 ? getDoubleLevelColor(d.doubleAvgLevel) : 'transparent';
+
+      if (d.singles > 0 && d.doubles > 0) {
+        const singlesPct = clamp(d.singleRatio * 100, 0, 100);
+        d.fill = `linear-gradient(90deg, ${d.singleColor} 0%, ${d.singleColor} ${singlesPct}%, ${d.doubleColor} ${singlesPct}%, ${d.doubleColor} 100%)`;
+      } else if (d.singles > 0) {
+        d.fill = d.singleColor;
+      } else if (d.doubles > 0) {
+        d.fill = d.doubleColor;
+      } else {
+        d.fill = 'transparent';
+      }
+
+      d.plays = d.plays.sort((a, b) => {
+        const aTime = a._parsedAtMs ?? -1;
+        const bTime = b._parsedAtMs ?? -1;
+        if (aTime !== bTime) return bTime - aTime;
+        return b._index - a._index;
+      });
+    });
+
+    const endDate = startOfDay(new Date());
+    const spanDays = clamp(
+      earliestDate ? diffDays(earliestDate, endDate) + 1 : 84,
+      84,
+      371
+    );
+    const gridStartDate = startOfWeek(addDays(endDate, -(spanDays - 1)));
+    const totalGridDays = diffDays(gridStartDate, endDate) + 1;
+    const weeksCount = Math.ceil(totalGridDays / 7);
+
+    const weeks = [];
+    for (let weekIdx = 0; weekIdx < weeksCount; weekIdx++) {
+      const week = [];
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const date = addDays(gridStartDate, weekIdx * 7 + dayIdx);
+        const key = toDayKey(date);
+        const dayData = dayMap[key] || null;
+        week.push({
+          key,
+          date,
+          data: dayData,
+          fill: dayData?.fill || '#111827',
+          label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+        });
+      }
+      weeks.push(week);
+    }
+
+    const monthLabels = weeks.map((week, i) => {
+      const first = week[0]?.date;
+      if (!first) return '';
+      if (i === 0) return first.toLocaleDateString(undefined, { month: 'short' });
+      const prev = weeks[i - 1]?.[0]?.date;
+      if (!prev || prev.getMonth() !== first.getMonth() || prev.getFullYear() !== first.getFullYear()) {
+        return first.toLocaleDateString(undefined, { month: 'short' });
+      }
+      return '';
+    });
+
+    return {
+      weeks,
+      monthLabels,
+      daysByKey: dayMap,
+      latestDayKey: latestDate ? toDayKey(latestDate) : '',
+      activeDays: dayEntries.length,
+      totalPlays: plays.length,
+      singleLegend: singleMax > 0
+        ? {
+          min: singleMin === Infinity ? singleMax : singleMin,
+          max: singleMax,
+          minColor: getSingleLevelColor(singleMin === Infinity ? singleMax : singleMin),
+          maxColor: getSingleLevelColor(singleMax),
+        }
+        : null,
+      doubleLegend: doubleMax > 0
+        ? {
+          min: doubleMin === Infinity ? doubleMax : doubleMin,
+          max: doubleMax,
+          minColor: getDoubleLevelColor(doubleMin === Infinity ? doubleMax : doubleMin),
+          maxColor: getDoubleLevelColor(doubleMax),
+        }
+        : null,
+    };
+  }, [piuRecentlyPlayed]);
+
+  useEffect(() => {
+    if (!overviewPlayHeatmap.latestDayKey) {
+      setSelectedOverviewDateKey('');
+      return;
+    }
+    if (!selectedOverviewDateKey || !overviewPlayHeatmap.daysByKey[selectedOverviewDateKey]) {
+      setSelectedOverviewDateKey(overviewPlayHeatmap.latestDayKey);
+    }
+  }, [overviewPlayHeatmap, selectedOverviewDateKey]);
+
+  const selectedOverviewDay = selectedOverviewDateKey
+    ? overviewPlayHeatmap.daysByKey[selectedOverviewDateKey] || null
+    : null;
 
   // Filtered + sorted best scores
   const filteredBestScores = useMemo(() => {
@@ -1166,9 +1588,164 @@ export default function ProfilePage() {
       )}
 
       {/* Tab Content */}
-      {tab === 'overview' && aggregated && (
+      {tab === 'overview' && (
         <div className="space-y-4">
-          {aggregated.byLevel.length > 0 && (
+          {(overviewPlayHeatmap.weeks.length > 0 || hasPiuData) && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display font-bold text-sm text-piu-accent">Play Activity Heatmap</h3>
+                {overviewPlayHeatmap.activeDays > 0 && (
+                  <span className="text-[10px] text-gray-500">
+                    {overviewPlayHeatmap.activeDays} active day{overviewPlayHeatmap.activeDays === 1 ? '' : 's'} | {overviewPlayHeatmap.totalPlays} plays
+                  </span>
+                )}
+              </div>
+
+              {overviewPlayHeatmap.weeks.length > 0 ? (
+                <>
+                  <div className="overflow-x-auto pb-2">
+                    <div className="inline-block min-w-max">
+                      <div className="flex mb-1">
+                        <div className="w-8 shrink-0" />
+                        <div className="flex gap-1">
+                          {overviewPlayHeatmap.monthLabels.map((label, idx) => (
+                            <div key={`${label}-${idx}`} className="w-4 text-[9px] text-gray-500">
+                              {label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-1">
+                        <div className="w-8 shrink-0 pt-0.5 text-[9px] text-gray-600 leading-[13px]">
+                          <div className="h-4">S</div>
+                          <div className="h-4">M</div>
+                          <div className="h-4">T</div>
+                          <div className="h-4">W</div>
+                          <div className="h-4">T</div>
+                          <div className="h-4">F</div>
+                          <div className="h-4">S</div>
+                        </div>
+                        <div className="flex gap-1">
+                          {overviewPlayHeatmap.weeks.map((week, weekIndex) => (
+                            <div key={weekIndex} className="flex flex-col gap-1">
+                              {week.map((cell, dayIdx) => (
+                                <button
+                                  key={`${cell.key}-${dayIdx}`}
+                                  onClick={() => cell.data && setSelectedOverviewDateKey(cell.key)}
+                                  className={`w-4 h-4 rounded-[3px] border transition-all ${
+                                    cell.data
+                                      ? selectedOverviewDateKey === cell.key
+                                        ? 'border-white/80 ring-1 ring-piu-accent/70'
+                                        : 'border-piu-border/30 hover:border-white/60'
+                                      : 'border-piu-border/20'
+                                  }`}
+                                  style={{ background: cell.data ? cell.fill : '#111827' }}
+                                  title={
+                                    cell.data
+                                      ? `${cell.label} | ${cell.data.total} plays (${Math.round(cell.data.doubleRatio * 100)}% Double / ${Math.round(cell.data.singleRatio * 100)}% Single)`
+                                      : cell.label
+                                  }
+                                  disabled={!cell.data}
+                                />
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5">
+                    {overviewPlayHeatmap.singleLegend && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-display font-bold text-red-300 w-14 shrink-0">Singles</span>
+                        <div
+                          className="h-2.5 flex-1 rounded-full border border-piu-border/40"
+                          style={{ background: `linear-gradient(90deg, ${overviewPlayHeatmap.singleLegend.maxColor} 0%, ${overviewPlayHeatmap.singleLegend.minColor} 100%)` }}
+                          title={`S${overviewPlayHeatmap.singleLegend.max} to S${overviewPlayHeatmap.singleLegend.min}`}
+                        />
+                        <span className="text-[10px] text-gray-500 shrink-0">
+                          S{overviewPlayHeatmap.singleLegend.max} - S{overviewPlayHeatmap.singleLegend.min}
+                        </span>
+                      </div>
+                    )}
+                    {overviewPlayHeatmap.doubleLegend && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-display font-bold text-green-300 w-14 shrink-0">Doubles</span>
+                        <div
+                          className="h-2.5 flex-1 rounded-full border border-piu-border/40"
+                          style={{ background: `linear-gradient(90deg, ${overviewPlayHeatmap.doubleLegend.maxColor} 0%, ${overviewPlayHeatmap.doubleLegend.minColor} 100%)` }}
+                          title={`D${overviewPlayHeatmap.doubleLegend.max} to D${overviewPlayHeatmap.doubleLegend.min}`}
+                        />
+                        <span className="text-[10px] text-gray-500 shrink-0">
+                          D{overviewPlayHeatmap.doubleLegend.max} - D{overviewPlayHeatmap.doubleLegend.min}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedOverviewDay && (
+                    <div className="mt-4 pt-4 border-t border-piu-border/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-display font-bold text-xs text-piu-accent">
+                          {parseDayKey(selectedOverviewDateKey)?.toLocaleDateString(undefined, {
+                            weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
+                          }) || selectedOverviewDateKey}
+                        </h4>
+                        <span className="text-[10px] text-gray-500">{selectedOverviewDay.total} plays</span>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                        {selectedOverviewDay.plays.map((play, idx) => {
+                          const rank = getRank(play.score);
+                          const isBreak = isStageBreakPlay(play);
+                          return (
+                            <div key={`${play.song_title}-${play.mode}-${play.level}-${idx}`} className="flex items-center gap-2 py-1 border-b border-piu-border/20 last:border-0">
+                              <PiuSongJacket
+                                title={play.song_title}
+                                mode={play.mode}
+                                level={play.level}
+                                bgUrl={play.background_url}
+                                jacketLookup={jacketLookup}
+                                size="sm"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-display font-bold truncate">{play.song_title}</p>
+                                <p className="text-[10px] text-gray-500">
+                                  {play.mode === 'Single' ? 'S' : play.mode === 'Double' ? 'D' : 'C'}{play.level}
+                                  {play.date_played && (
+                                    <span className="ml-1.5 text-gray-600">{String(play.date_played).split(' ').slice(1).join(' ') || ''}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                {isBreak ? (
+                                  <span className="text-[10px] font-display font-bold text-red-500">STAGE BREAK</span>
+                                ) : (
+                                  <>
+                                    <span className={`text-[10px] font-display font-bold ${play.grade ? getGradeColor(play.grade) : rank.color}`}>
+                                      {play.grade || rank.label}
+                                    </span>
+                                    <p className="text-[10px] font-mono font-bold">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <DailyLevelGradeChart plays={selectedOverviewDay.plays} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-center text-gray-500 text-sm py-4">No recently played data synced yet</p>
+              )}
+            </div>
+          )}
+
+          {aggregated?.byLevel?.length > 0 && (
             <div className="card">
               <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Average Score by Level</h3>
               <div className="space-y-1.5">
