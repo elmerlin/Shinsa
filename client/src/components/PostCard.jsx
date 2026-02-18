@@ -371,7 +371,7 @@ function CommentPumpButton({ commentId, type, initialCount, initialPumped }) {
 }
 
 // Comment Section
-function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, isOwner }) {
+function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, isOwner, focusCommentId }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [comments, setComments] = useState([]);
@@ -384,8 +384,11 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
   const [mentionUsers, setMentionUsers] = useState([]);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionLoading, setMentionLoading] = useState(false);
+  const [highlightedCommentId, setHighlightedCommentId] = useState(null);
   const inputRef = useRef(null);
   const mentionRequestRef = useRef(0);
+  const commentNodeRefs = useRef(new Map());
+  const focusedTargetRef = useRef('');
 
   useEffect(() => {
     if (!user || disabled || !mentionToken?.query) {
@@ -429,6 +432,43 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (!focusCommentId) return;
+    if (!open) setOpen(true);
+    loadComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCommentId, postId]);
+
+  useEffect(() => {
+    if (!focusCommentId || !open || comments.length === 0) return;
+    const targetId = String(focusCommentId);
+    if (focusedTargetRef.current === targetId) return;
+
+    const exists = comments.some(c =>
+      String(c.id) === targetId || (c.replies || []).some(r => String(r.id) === targetId)
+    );
+    if (!exists) return;
+
+    const node = commentNodeRefs.current.get(targetId);
+    if (!node) return;
+
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    node.focus({ preventScroll: true });
+    setHighlightedCommentId(targetId);
+    focusedTargetRef.current = targetId;
+
+    const timeout = setTimeout(() => {
+      setHighlightedCommentId(prev => (prev === targetId ? null : prev));
+    }, 2200);
+    return () => clearTimeout(timeout);
+  }, [focusCommentId, open, comments]);
+
+  const setCommentNodeRef = (commentId) => (node) => {
+    const key = String(commentId);
+    if (node) commentNodeRefs.current.set(key, node);
+    else commentNodeRefs.current.delete(key);
   };
 
   const updateMentionState = (value, cursorOverride) => {
@@ -582,7 +622,14 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
           ) : (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {comments.map(c => (
-                <div key={c.id}>
+                <div
+                  key={c.id}
+                  ref={setCommentNodeRef(c.id)}
+                  tabIndex={-1}
+                  className={`rounded-lg p-1 -mx-1 outline-none transition-all ${
+                    highlightedCommentId === String(c.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+                  }`}
+                >
                   <div className="flex items-start gap-2">
                     <Link to={getProfilePath(c.user_id, c.username)}>
                       {c.avatar ? (
@@ -621,7 +668,14 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                   {c.replies && c.replies.length > 0 && (
                     <div className="ml-8 mt-1 space-y-1">
                       {c.replies.map(r => (
-                        <div key={r.id} className="flex items-start gap-2">
+                        <div
+                          key={r.id}
+                          ref={setCommentNodeRef(r.id)}
+                          tabIndex={-1}
+                          className={`flex items-start gap-2 rounded-lg p-1 -mx-1 outline-none transition-all ${
+                            highlightedCommentId === String(r.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+                          }`}
+                        >
                           <Link to={getProfilePath(r.user_id, r.username)}>
                             {r.avatar ? (
                               <img src={getAvatarUrl(r.avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border shrink-0" />
@@ -727,7 +781,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 }
 
 // Full Post Card used in Feed and Profile
-export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false }) {
+export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false, focusCommentId = null }) {
   const { user } = useAuth();
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [editing, setEditing] = useState(false);
@@ -895,6 +949,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
             commentsDisabled={post.comments_disabled}
             commentCount={post.comment_count || 0}
             isOwner={user && user.id === post.user_id}
+            focusCommentId={focusCommentId}
           />
           <ShareButton path={`/post/${post.id}`} />
         </div>

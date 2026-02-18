@@ -509,6 +509,7 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
   `).get(result.lastInsertRowid);
 
   comment.replies = [];
+  const commentLink = `/post/${postId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   // Notifications
   const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
@@ -516,11 +517,11 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
     // Reply: notify parent comment author
     const parentComment = db.prepare('SELECT user_id FROM post_comments WHERE id = ?').get(parent_id);
     if (parentComment && parentComment.user_id !== req.user.id) {
-      createNotification(db, parentComment.user_id, 'post_reply', 'New Reply', `${me.username} replied to your comment`, `/post/${postId}`);
+      createNotification(db, parentComment.user_id, 'post_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
     }
   }
   if (post.user_id !== req.user.id) {
-    createNotification(db, post.user_id, 'post_comment', 'New Comment', `${me.username} commented on your post`, `/post/${postId}`);
+    createNotification(db, post.user_id, 'post_comment', 'New Comment', `${me.username} commented on your post`, commentLink);
   }
 
   const mentionedUsers = findMentionedUsers(db, trimmedContent);
@@ -531,7 +532,7 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
     type: 'post_mention',
     title: 'Mentioned in Comment',
     message: `${me?.username || 'Someone'} mentioned you in a post comment`,
-    link: `/post/${postId}`,
+    link: commentLink,
   });
 
   res.status(201).json(comment);
@@ -811,6 +812,7 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
     WHERE c.id = ?
   `).get(result.lastInsertRowid);
   comment.replies = [];
+  const commentLink = `/upscore/${upscoreId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   // Notify upscore owner
   const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
@@ -818,11 +820,11 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
     // Reply notification to parent comment author
     const parentComment = db.prepare('SELECT user_id FROM upscore_comments WHERE id = ?').get(parent_id);
     if (parentComment && parentComment.user_id !== req.user.id) {
-      createNotification(db, parentComment.user_id, 'upscore_reply', 'New Reply', `${me.username} replied to your comment`, `/upscore/${upscoreId}`);
+      createNotification(db, parentComment.user_id, 'upscore_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
     }
   }
   if (upscore.user_id !== req.user.id) {
-    createNotification(db, upscore.user_id, 'upscore_comment', 'New Comment', `${me.username} commented on your upscore`, `/upscore/${upscoreId}`);
+    createNotification(db, upscore.user_id, 'upscore_comment', 'New Comment', `${me.username} commented on your upscore`, commentLink);
   }
 
   const mentionedUsers = findMentionedUsers(db, trimmedContent);
@@ -833,7 +835,7 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
     type: 'upscore_mention',
     title: 'Mentioned in Comment',
     message: `${me?.username || 'Someone'} mentioned you in an upscore comment`,
-    link: `/upscore/${upscoreId}`,
+    link: commentLink,
   });
 
   res.status(201).json(comment);
@@ -948,16 +950,17 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
     WHERE c.id = ?
   `).get(result.lastInsertRowid);
   comment.replies = [];
+  const commentLink = `/clear/${clearId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
   if (parent_id) {
     const parentComment = db.prepare('SELECT user_id FROM new_clear_comments WHERE id = ?').get(parent_id);
     if (parentComment && parentComment.user_id !== req.user.id) {
-      createNotification(db, parentComment.user_id, 'clear_reply', 'New Reply', `${me.username} replied to your comment`, `/clear/${clearId}`);
+      createNotification(db, parentComment.user_id, 'clear_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
     }
   }
   if (clear.user_id !== req.user.id) {
-    createNotification(db, clear.user_id, 'clear_comment', 'New Comment', `${me.username} commented on your new clear`, `/clear/${clearId}`);
+    createNotification(db, clear.user_id, 'clear_comment', 'New Comment', `${me.username} commented on your new clear`, commentLink);
   }
 
   const mentionedUsers = findMentionedUsers(db, trimmedContent);
@@ -968,7 +971,7 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
     type: 'clear_mention',
     title: 'Mentioned in Comment',
     message: `${me?.username || 'Someone'} mentioned you in a clear comment`,
-    link: `/clear/${clearId}`,
+    link: commentLink,
   });
 
   res.status(201).json(comment);
@@ -1004,11 +1007,11 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
   // Verify comment exists and get author
   let comment;
   if (type === 'post') {
-    comment = db.prepare('SELECT id, user_id FROM post_comments WHERE id = ?').get(cid);
+    comment = db.prepare('SELECT id, user_id, post_id as parent_item_id FROM post_comments WHERE id = ?').get(cid);
   } else if (type === 'upscore') {
-    comment = db.prepare('SELECT id, user_id FROM upscore_comments WHERE id = ?').get(cid);
+    comment = db.prepare('SELECT id, user_id, upscore_id as parent_item_id FROM upscore_comments WHERE id = ?').get(cid);
   } else {
-    comment = db.prepare('SELECT id, user_id FROM new_clear_comments WHERE id = ?').get(cid);
+    comment = db.prepare('SELECT id, user_id, clear_id as parent_item_id FROM new_clear_comments WHERE id = ?').get(cid);
   }
   if (!comment) return res.status(404).json({ error: 'Comment not found' });
 
@@ -1028,7 +1031,14 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
   // Notify comment author
   if (comment.user_id !== req.user.id) {
     const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
-    createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, '');
+    const parentItemId = encodeURIComponent(String(comment.parent_item_id));
+    const commentParam = encodeURIComponent(String(cid));
+    const link = type === 'post'
+      ? `/post/${parentItemId}?comment=${commentParam}`
+      : type === 'upscore'
+        ? `/upscore/${parentItemId}?comment=${commentParam}`
+        : `/clear/${parentItemId}?comment=${commentParam}`;
+    createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, link);
   }
 
   res.json({ pumped: true, pump_count: count });

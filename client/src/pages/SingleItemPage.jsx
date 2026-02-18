@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getPost, getUpscore, getNewClear, getJacketMap } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
@@ -136,7 +136,7 @@ function SingleCommentPumpButton({ commentId, type, initialCount, initialPumped 
 }
 
 // Reusable comment section for upscores/clears on single view
-function ItemCommentSection({ itemId, commentCount: initialCount, commentType, getCommentsFn, addCommentFn, deleteCommentFn }) {
+function ItemCommentSection({ itemId, commentCount: initialCount, commentType, getCommentsFn, addCommentFn, deleteCommentFn, focusCommentId }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(true);
   const [comments, setComments] = useState([]);
@@ -144,8 +144,52 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
   const [replyTo, setReplyTo] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [count, setCount] = useState(initialCount || 0);
+  const [highlightedCommentId, setHighlightedCommentId] = useState(null);
+  const commentNodeRefs = useRef(new Map());
+  const focusedTargetRef = useRef('');
 
-  useEffect(() => { getCommentsFn(itemId).then(setComments).catch(() => {}); }, [itemId]);
+  const loadComments = () => {
+    getCommentsFn(itemId).then(setComments).catch(() => {});
+  };
+
+  useEffect(() => { loadComments(); }, [itemId]);
+
+  useEffect(() => {
+    if (!focusCommentId) return;
+    setOpen(true);
+    loadComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCommentId, itemId]);
+
+  useEffect(() => {
+    if (!focusCommentId || !open || comments.length === 0) return;
+    const targetId = String(focusCommentId);
+    if (focusedTargetRef.current === targetId) return;
+
+    const exists = comments.some(c =>
+      String(c.id) === targetId || (c.replies || []).some(r => String(r.id) === targetId)
+    );
+    if (!exists) return;
+
+    const node = commentNodeRefs.current.get(targetId);
+    if (!node) return;
+
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    node.focus({ preventScroll: true });
+    setHighlightedCommentId(targetId);
+    focusedTargetRef.current = targetId;
+
+    const timeout = setTimeout(() => {
+      setHighlightedCommentId(prev => (prev === targetId ? null : prev));
+    }, 2200);
+    return () => clearTimeout(timeout);
+  }, [focusCommentId, open, comments]);
+
+  const setCommentNodeRef = (commentId) => (node) => {
+    const key = String(commentId);
+    if (node) commentNodeRefs.current.set(key, node);
+    else commentNodeRefs.current.delete(key);
+  };
 
   const submit = async () => {
     if (!newComment.trim()) return;
@@ -193,7 +237,14 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
       {open && (
         <div className="w-full order-last mt-2 border-l-2 border-piu-border/30 pl-3 space-y-2">
           {comments.map(c => (
-            <div key={c.id}>
+            <div
+              key={c.id}
+              ref={setCommentNodeRef(c.id)}
+              tabIndex={-1}
+              className={`rounded-lg p-1 -mx-1 outline-none transition-all ${
+                highlightedCommentId === String(c.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+              }`}
+            >
               <div className="flex items-start gap-2">
                 <Link to={getProfilePath(c.user_id, c.username)}>
                   {c.avatar ? (
@@ -216,7 +267,14 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                 </div>
               </div>
               {(c.replies || []).map(r => (
-                <div key={r.id} className="flex items-start gap-2 ml-6 mt-1">
+                <div
+                  key={r.id}
+                  ref={setCommentNodeRef(r.id)}
+                  tabIndex={-1}
+                  className={`flex items-start gap-2 ml-6 mt-1 rounded-lg p-1 -mx-1 outline-none transition-all ${
+                    highlightedCommentId === String(r.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+                  }`}
+                >
                   <Link to={getProfilePath(r.user_id, r.username)}>
                     {r.avatar ? (
                       <img src={getAvatarUrl(r.avatar)} className="w-5 h-5 rounded-full object-cover" alt="" />
@@ -261,8 +319,10 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
 
 export function SinglePostPage() {
   const { id } = useParams();
+  const location = useLocation();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
+  const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
     getPost(id).then(setPost).catch(() => {}).finally(() => setLoading(false));
@@ -274,16 +334,18 @@ export function SinglePostPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <Link to="/feed" className="text-xs text-gray-500 hover:text-piu-accent font-display mb-4 inline-block">&larr; Back to Feed</Link>
-      <PostCard post={post} showAuthor={true} />
+      <PostCard post={post} showAuthor={true} focusCommentId={focusCommentId} />
     </div>
   );
 }
 
 export function SingleUpscorePage() {
   const { id } = useParams();
+  const location = useLocation();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [jacketLookup, setJacketLookup] = useState({});
+  const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
     getUpscore(id).then(setItem).catch(() => {}).finally(() => setLoading(false));
@@ -360,7 +422,8 @@ export function SingleUpscorePage() {
           <div className="flex items-center gap-2 flex-wrap">
             <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpUpscore} />
             <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="upscore"
-              getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment} />
+              getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment}
+              focusCommentId={focusCommentId} />
             <ShareButton path={`/upscore/${item.id}`} />
           </div>
         </div>
@@ -371,9 +434,11 @@ export function SingleUpscorePage() {
 
 export function SingleClearPage() {
   const { id } = useParams();
+  const location = useLocation();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [jacketLookup, setJacketLookup] = useState({});
+  const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
     getNewClear(id).then(setItem).catch(() => {}).finally(() => setLoading(false));
@@ -455,7 +520,8 @@ export function SingleClearPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpNewClear} />
             <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="clear"
-              getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment} />
+              getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment}
+              focusCommentId={focusCommentId} />
             <ShareButton path={`/clear/${item.id}`} />
           </div>
         </div>
