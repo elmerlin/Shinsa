@@ -155,6 +155,21 @@ function parsePlayedAt(value) {
     return new Date(y, m, d, hh, mm, ss);
   }
 
+  const ymdLoose = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdLoose) {
+    const y = parseInt(ymdLoose[1], 10);
+    const m = parseInt(ymdLoose[2], 10) - 1;
+    const d = parseInt(ymdLoose[3], 10);
+    const timeMatch = normalized.match(/(\d{1,2})(?::(\d{2}))(?::(\d{2}))?\s*([APap][Mm])?/);
+    let hh = parseInt(timeMatch?.[1] || '0', 10);
+    const mm = parseInt(timeMatch?.[2] || '0', 10);
+    const ss = parseInt(timeMatch?.[3] || '0', 10);
+    const meridiem = String(timeMatch?.[4] || '').toUpperCase();
+    if (meridiem === 'PM' && hh < 12) hh += 12;
+    if (meridiem === 'AM' && hh === 12) hh = 0;
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
   const md = normalized.match(/^(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?)?$/);
   if (md) {
     const year = new Date().getFullYear();
@@ -1104,15 +1119,34 @@ export default function ProfilePage() {
     return { tournamentCount, duelCount, totalWins, totalLosses, duelWins, duelLosses, totalSongs, avgScore, bestScore, byLevel };
   }, [stats, songScores, profileId]);
 
+  const recentlyPlayedRows = useMemo(() => {
+    const rows = Array.isArray(piuRecentlyPlayed?.plays) ? piuRecentlyPlayed.plays : [];
+    return rows
+      .map((play, idx) => {
+        const parsed = parsePlayedAt(play?.date_played);
+        return {
+          play,
+          idx,
+          ts: parsed ? parsed.getTime() : null,
+        };
+      })
+      .sort((a, b) => {
+        if (a.ts !== null && b.ts !== null && a.ts !== b.ts) return b.ts - a.ts;
+        if (a.ts !== null) return -1;
+        if (b.ts !== null) return 1;
+        return b.idx - a.idx;
+      })
+      .map(({ play }) => play);
+  }, [piuRecentlyPlayed]);
+
   const overviewPlayHeatmap = useMemo(() => {
-    const plays = Array.isArray(piuRecentlyPlayed?.plays) ? piuRecentlyPlayed.plays : [];
+    const plays = recentlyPlayedRows;
     const dayMap = {};
     let singleMin = Infinity;
     let singleMax = 0;
     let doubleMin = Infinity;
     let doubleMax = 0;
     let latestDate = null;
-    let earliestDate = null;
 
     for (let i = 0; i < plays.length; i++) {
       const play = plays[i];
@@ -1160,7 +1194,6 @@ export default function ProfilePage() {
       });
 
       if (!latestDate || dayDate.getTime() > latestDate.getTime()) latestDate = dayDate;
-      if (!earliestDate || dayDate.getTime() < earliestDate.getTime()) earliestDate = dayDate;
     }
 
     const dayEntries = Object.values(dayMap);
@@ -1193,12 +1226,8 @@ export default function ProfilePage() {
     });
 
     const endDate = startOfDay(new Date());
-    const spanDays = clamp(
-      earliestDate ? diffDays(earliestDate, endDate) + 1 : 84,
-      84,
-      371
-    );
-    const gridStartDate = startOfWeek(addDays(endDate, -(spanDays - 1)));
+    const yearStartDate = new Date(endDate.getFullYear(), 0, 1);
+    const gridStartDate = startOfWeek(yearStartDate);
     const totalGridDays = diffDays(gridStartDate, endDate) + 1;
     const weeksCount = Math.ceil(totalGridDays / 7);
 
@@ -1220,16 +1249,23 @@ export default function ProfilePage() {
       weeks.push(week);
     }
 
-    const monthLabels = weeks.map((week, i) => {
-      const first = week[0]?.date;
-      if (!first) return '';
-      if (i === 0) return first.toLocaleDateString(undefined, { month: 'short' });
-      const prev = weeks[i - 1]?.[0]?.date;
-      if (!prev || prev.getMonth() !== first.getMonth() || prev.getFullYear() !== first.getFullYear()) {
-        return first.toLocaleDateString(undefined, { month: 'short' });
+    const monthLabels = [];
+    let lastMonthKey = '';
+    for (const week of weeks) {
+      const firstInYear = week.find((cell) => cell.date.getTime() >= yearStartDate.getTime());
+      if (!firstInYear) {
+        monthLabels.push('');
+        continue;
       }
-      return '';
-    });
+      const first = firstInYear.date;
+      const monthKey = `${first.getFullYear()}-${first.getMonth()}`;
+      if (monthKey !== lastMonthKey) {
+        monthLabels.push(first.toLocaleDateString(undefined, { month: 'short' }));
+        lastMonthKey = monthKey;
+      } else {
+        monthLabels.push('');
+      }
+    }
 
     return {
       weeks,
@@ -1255,7 +1291,7 @@ export default function ProfilePage() {
         }
         : null,
     };
-  }, [piuRecentlyPlayed]);
+  }, [recentlyPlayedRows]);
 
   useEffect(() => {
     if (!overviewPlayHeatmap.latestDayKey) {
@@ -2398,9 +2434,9 @@ export default function ProfilePage() {
         <div className="card">
           <h3 className="font-display font-bold text-base text-piu-accent mb-4">RECENTLY PLAYED</h3>
 
-          {piuRecentlyPlayed?.plays?.length > 0 ? (
+          {recentlyPlayedRows.length > 0 ? (
             <div className="space-y-2">
-              {piuRecentlyPlayed.plays.map((p, i) => {
+              {recentlyPlayedRows.map((p, i) => {
                 const rank = getRank(p.score);
                 return (
                   <div

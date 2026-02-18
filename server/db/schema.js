@@ -710,6 +710,21 @@ function initializeDb() {
     }
   }
 
+  // Keep recently played history across syncs while preventing duplicate rows on re-import.
+  const recentIndexes = db.prepare("PRAGMA index_list(user_recently_played)").all().map(i => i.name);
+  if (!recentIndexes.includes('idx_recently_played_unique_play')) {
+    db.exec(`
+      DELETE FROM user_recently_played
+      WHERE id NOT IN (
+        SELECT MIN(id)
+        FROM user_recently_played
+        GROUP BY user_id, song_title, mode, level, score, grade, date_played
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_unique_play
+        ON user_recently_played(user_id, song_title, mode, level, score, grade, date_played);
+    `);
+  }
+
   // Migrations for best scores - add background_url
   const bestScoreCols = db.prepare("PRAGMA table_info(user_best_scores)").all().map(c => c.name);
   if (!bestScoreCols.includes('background_url')) {
