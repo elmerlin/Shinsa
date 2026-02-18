@@ -35,6 +35,7 @@ export function NotificationProvider({ children }) {
   const [invitationCount, setInvitationCount] = useState(0);
   const streamRef = useRef(null);
   const webPushActiveRef = useRef(false);
+  const permissionPromptAttachedRef = useRef(false);
 
   const parseNotificationDate = (value) => {
     const raw = String(value || '');
@@ -83,11 +84,9 @@ export function NotificationProvider({ children }) {
       const publicKey = String(keyData?.public_key || '');
       if (!keyData?.enabled || !publicKey) return;
 
-      let permission = Notification.permission;
-      if (permission === 'default') {
-        permission = await Notification.requestPermission();
-      }
-      if (permission !== 'granted') return;
+      // Chrome (especially mobile) may ignore permission prompts that are not
+      // initiated by a user gesture. Ask only from the gesture effect below.
+      if (Notification.permission !== 'granted') return;
 
       let registration = await navigator.serviceWorker.getRegistration('/');
       if (!registration) {
@@ -110,8 +109,9 @@ export function NotificationProvider({ children }) {
       const payload = subscription?.toJSON ? subscription.toJSON() : subscription;
       await savePushSubscription(payload);
       webPushActiveRef.current = true;
-    } catch {
+    } catch (err) {
       webPushActiveRef.current = false;
+      console.error('Web push subscription sync failed:', err?.message || err);
     }
   }, [user]);
 
@@ -138,14 +138,38 @@ export function NotificationProvider({ children }) {
     return () => clearInterval(interval);
   }, [user, refresh, loading]);
 
-  // Request notification permission once after login (used by web push + in-tab fallback)
+  // Request notification permission after first user interaction.
+  // This is more reliable on Chrome mobile than auto-prompting on load.
   useEffect(() => {
-    if (loading || !user) return;
+    if (loading || !user) return undefined;
+    if (!supportsWebPush()) return undefined;
     if (typeof Notification === 'undefined') return;
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
-    }
-  }, [user, loading]);
+    if (Notification.permission !== 'default') return undefined;
+
+    if (permissionPromptAttachedRef.current) return undefined;
+    permissionPromptAttachedRef.current = true;
+
+    const handleFirstInteraction = async () => {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          await syncPushSubscription();
+        }
+      } catch {}
+      permissionPromptAttachedRef.current = false;
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+
+    window.addEventListener('pointerdown', handleFirstInteraction, { once: true });
+    window.addEventListener('keydown', handleFirstInteraction, { once: true });
+
+    return () => {
+      permissionPromptAttachedRef.current = false;
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, [user, loading, syncPushSubscription]);
 
   // Subscribe browser for web push after login
   useEffect(() => {
