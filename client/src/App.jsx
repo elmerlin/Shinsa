@@ -459,6 +459,9 @@ function MobileBottomNav() {
   const { user } = useAuth();
   const { totalBadge } = useNotifications();
   const [showNotifs, setShowNotifs] = useState(false);
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const path = location.pathname;
   const isActive = (p) => path === p || path.startsWith(p + '/');
