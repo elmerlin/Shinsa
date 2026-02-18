@@ -31,6 +31,29 @@ function textSnippet(text, max = 80) {
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
 
+const RECENT_ACTIVITY_TTL_MS = 30 * 1000;
+let recentActivityCache = { data: null, expiresAt: 0 };
+
+function readRecentActivityCache() {
+  if (!recentActivityCache.data) return null;
+  if (Date.now() >= recentActivityCache.expiresAt) {
+    recentActivityCache = { data: null, expiresAt: 0 };
+    return null;
+  }
+  return recentActivityCache.data;
+}
+
+function writeRecentActivityCache(data) {
+  recentActivityCache = {
+    data,
+    expiresAt: Date.now() + RECENT_ACTIVITY_TTL_MS,
+  };
+}
+
+function invalidateRecentActivityCache() {
+  recentActivityCache = { data: null, expiresAt: 0 };
+}
+
 // Multer config for image uploads (memory-only, images stored as base64 in DB)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -304,6 +327,7 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
     message: postMessage,
     link: `/post/${post.id}`,
   });
+  invalidateRecentActivityCache();
 
   res.status(201).json({ ...post, pump_count: 0, comment_count: 0 });
 });
@@ -632,21 +656,16 @@ router.get('/feed', requireAuth, (req, res) => {
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
            (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count,
+           CASE WHEN pp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
            'post' as type
     FROM user_posts p
     JOIN users u ON p.user_id = u.id
+    LEFT JOIN post_pumps pp_me ON pp_me.post_id = p.id AND pp_me.user_id = ?
     WHERE p.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
        OR p.user_id = ?
     ORDER BY p.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, limit, offset);
-
-  // Attach user's pump status
-  for (const post of posts) {
-    post.user_pumped = !!db.prepare(
-      'SELECT 1 FROM post_pumps WHERE post_id = ? AND user_id = ?'
-    ).get(post.id, req.user.id);
-  }
+  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
 
   // Get upscores from followed users with pump/comment counts
   const upscores = db.prepare(`
@@ -654,21 +673,16 @@ router.get('/feed', requireAuth, (req, res) => {
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM upscore_pumps WHERE upscore_id = us.id) as pump_count,
            (SELECT COUNT(*) FROM upscore_comments WHERE upscore_id = us.id) as comment_count,
+           CASE WHEN usp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
            'upscore' as type
     FROM user_upscores us
     JOIN users u ON us.user_id = u.id
+    LEFT JOIN upscore_pumps usp_me ON usp_me.upscore_id = us.id AND usp_me.user_id = ?
     WHERE us.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
        OR us.user_id = ?
     ORDER BY us.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, limit, offset);
-
-  // Attach user's pump status for upscores
-  for (const us of upscores) {
-    us.user_pumped = !!db.prepare(
-      'SELECT 1 FROM upscore_pumps WHERE upscore_id = ? AND user_id = ?'
-    ).get(us.id, req.user.id);
-  }
+  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
 
   // Get new clears from followed users with pump/comment counts
   const clears = db.prepare(`
@@ -676,21 +690,16 @@ router.get('/feed', requireAuth, (req, res) => {
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM new_clear_pumps WHERE clear_id = nc.id) as pump_count,
            (SELECT COUNT(*) FROM new_clear_comments WHERE clear_id = nc.id) as comment_count,
+           CASE WHEN ncp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
            'clear' as type
     FROM user_new_clears nc
     JOIN users u ON nc.user_id = u.id
+    LEFT JOIN new_clear_pumps ncp_me ON ncp_me.clear_id = nc.id AND ncp_me.user_id = ?
     WHERE nc.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
        OR nc.user_id = ?
     ORDER BY nc.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, limit, offset);
-
-  // Attach user's pump status for clears
-  for (const c of clears) {
-    c.user_pumped = !!db.prepare(
-      'SELECT 1 FROM new_clear_pumps WHERE clear_id = ? AND user_id = ?'
-    ).get(c.id, req.user.id);
-  }
+  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
 
   // Merge and sort by created_at
   const feed = [...posts, ...upscores, ...clears]
@@ -1019,6 +1028,10 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
 
 // GET /api/social/recent-activity — aggregated activity feed for dashboard
 router.get('/recent-activity', (req, res) => {
+  res.set('Cache-Control', `public, max-age=${Math.floor(RECENT_ACTIVITY_TTL_MS / 1000)}`);
+  const cached = readRecentActivityCache();
+  if (cached) return res.json(cached);
+
   const db = getDb();
   const activities = [];
 
@@ -1177,7 +1190,9 @@ router.get('/recent-activity', (req, res) => {
 
   // Sort all by created_at and return latest 30
   activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  res.json(activities.slice(0, 30));
+  const latestActivities = activities.slice(0, 30);
+  writeRecentActivityCache(latestActivities);
+  res.json(latestActivities);
 });
 
 module.exports = router;

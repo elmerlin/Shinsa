@@ -425,7 +425,11 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_songs_mode ON songs(mode);
     CREATE INDEX IF NOT EXISTS idx_duel_songs_duel ON duel_songs(duel_id);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
     CREATE INDEX IF NOT EXISTS idx_invitations_user ON invitations(user_id);
+    CREATE INDEX IF NOT EXISTS idx_tournaments_created_at ON tournaments(created_at);
+    CREATE INDEX IF NOT EXISTS idx_duels_created_at ON duels(created_at);
+    CREATE INDEX IF NOT EXISTS idx_online_duels_created_at ON online_duels(created_at);
     CREATE INDEX IF NOT EXISTS idx_online_duel_songs ON online_duel_songs(duel_id);
     CREATE INDEX IF NOT EXISTS idx_duel_chat ON duel_chat(duel_id);
     CREATE INDEX IF NOT EXISTS idx_duel_pumps ON duel_pumps(duel_id);
@@ -745,6 +749,8 @@ function initializeDb() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (parent_id) REFERENCES upscore_comments(id) ON DELETE CASCADE
     );
+    CREATE INDEX IF NOT EXISTS idx_upscore_comments_upscore ON upscore_comments(upscore_id);
+    CREATE INDEX IF NOT EXISTS idx_upscore_comments_parent ON upscore_comments(parent_id);
   `);
 
   // New clears tables (first-time song clears)
