@@ -102,7 +102,8 @@ export function NotificationProvider({ children }) {
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          appServerKey: urlBase64ToUint8Array(publicKey),
+          // Spec-compliant option name (Chrome/Android requires it for VAPID).
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
         });
       }
 
