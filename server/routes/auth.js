@@ -732,6 +732,11 @@ router.post('/invite', (req, res) => {
 
 // GET /api/auth/push/public-key — expose public VAPID key for browser subscription
 router.get('/push/public-key', (req, res) => {
+  // Prevent 304 responses; client expects a JSON body on every call.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
   res.json({
     enabled: isWebPushConfigured(),
     public_key: getPublicVapidKey() || '',

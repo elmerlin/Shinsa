@@ -149,7 +149,10 @@ export const getNotifications = () => request('/auth/notifications');
 export const markNotificationRead = (id) => request(`/auth/notifications/${id}/read`, { method: 'PUT' });
 export const markAllNotificationsRead = () => request('/auth/notifications/read-all', { method: 'PUT' });
 export const deleteNotification = (id) => request(`/auth/notifications/${id}`, { method: 'DELETE' });
-export const getPushPublicKey = () => request('/auth/push/public-key');
+export const getPushPublicKey = () => request(`/auth/push/public-key?_=${Date.now()}`, {
+  cache: 'no-store',
+  headers: { 'Cache-Control': 'no-cache' },
+});
 export const savePushSubscription = (subscription) => request('/auth/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription }) });
 export const removePushSubscription = (endpoint) => request('/auth/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
 
