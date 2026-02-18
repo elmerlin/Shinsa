@@ -341,7 +341,7 @@ export default function App() {
       </header>
 
       {/* Main */}
-      <main className={`flex-1 ${user ? 'pb-16 sm:pb-0' : ''}`}>
+      <main className={`flex-1 ${user ? 'mobile-nav-offset' : ''}`}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tournament/new" element={<TournamentSetup />} />
@@ -477,7 +477,7 @@ function MobileBottomNav() {
   return (
     <>
       {showNotifs && <MobileNotificationsPage onClose={() => setShowNotifs(false)} />}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-piu-card border-t border-piu-border">
+      <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-piu-card border-t border-piu-border">
         <div className="flex items-center justify-around h-14 px-2">
           {/* Home */}
           <Link to="/" onClick={scrollToTop} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${path === '/' ? 'text-piu-accent' : 'text-gray-500'}`}>
