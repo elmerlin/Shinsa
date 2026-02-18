@@ -92,9 +92,6 @@ const GRADE_BARS = [
   { key: 'A+', color: '#34d399' },
   { key: 'A', color: '#10b981' },
   { key: 'B', color: '#9ca3af' },
-  { key: 'C', color: '#6b7280' },
-  { key: 'D', color: '#4b5563' },
-  { key: 'F', color: '#374151' },
 ];
 
 const SINGLE_MAX_LEVEL = 26;
@@ -225,10 +222,11 @@ function isStageBreakPlay(play) {
   return (parseInt(play?.score, 10) || 0) <= 0;
 }
 
-function normalizeGradeLabel(grade, score) {
-  const trimmed = String(grade || '').trim();
-  if (trimmed) return trimmed;
-  return getRank(parseInt(score, 10) || 0).label;
+function getChartGradeFromScore(score) {
+  const label = getRank(parseInt(score, 10) || 0).label;
+  // Keep chart compact: fold C/D/F into the B bucket.
+  if (label === 'C' || label === 'D' || label === 'F') return 'B';
+  return label;
 }
 
 function DailyLevelGradeChart({ plays }) {
@@ -250,11 +248,10 @@ function DailyLevelGradeChart({ plays }) {
         continue;
       }
 
-      const grade = normalizeGradeLabel(play.grade, play.score);
-      if (levelMap[level][grade] === undefined) {
-        levelMap[level][grade] = 0;
+      const grade = getChartGradeFromScore(play.score);
+      if (levelMap[level][grade] !== undefined) {
+        levelMap[level][grade] += 1;
       }
-      levelMap[level][grade] += 1;
     }
 
     return Object.values(levelMap).sort((a, b) => a.levelValue - b.levelValue);
@@ -326,7 +323,7 @@ function DailyLevelGradeChart({ plays }) {
         </ResponsiveContainer>
       </div>
       <div className="flex flex-wrap gap-2 mt-2">
-        {GRADE_BARS.filter((g) => ['SSS+','SSS','SS+','SS','S+','S','AAA','AA','A','B','C','D','F'].includes(g.key)).map((g) => (
+        {GRADE_BARS.map((g) => (
           <span key={g.key} className="inline-flex items-center gap-1 text-[9px] text-gray-400">
             <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: g.color }} />
             {g.key}
