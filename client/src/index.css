@@ -3,18 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --mobile-bottom-nav-height: 3.5rem;
-  }
-
-  html, body, #root {
-    min-height: 100%;
-  }
-
-  body {
-    background: #0a0a1a;
-  }
-
   * {
     -webkit-tap-highlight-color: transparent;
   }
@@ -87,23 +75,5 @@
 
   .section-title {
     @apply font-display font-bold text-xl tracking-wider uppercase;
-  }
-
-  .mobile-nav-offset {
-    padding-bottom: 0;
-  }
-
-  .mobile-bottom-nav {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background-color: #141428;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    isolation: isolate;
-  }
-
-  @media (max-width: 639px) {
-    .mobile-nav-offset {
-      padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
-    }
   }
 }
