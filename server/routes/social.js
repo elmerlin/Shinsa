@@ -12,6 +12,7 @@ const {
   notifyActivitySubscribers,
   buildProfilePath,
 } = require('../lib/activitySubscriptions');
+const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
@@ -666,6 +667,9 @@ router.get('/feed', requireAuth, (req, res) => {
     ORDER BY p.created_at DESC
     LIMIT ? OFFSET ?
   `).all(req.user.id, req.user.id, req.user.id, limit, offset);
+  for (const post of posts) {
+    post.avatar = normalizeUserAvatarForList(post.avatar, post.user_id, 64);
+  }
 
   // Get upscores from followed users with pump/comment counts
   const upscores = db.prepare(`
@@ -683,6 +687,9 @@ router.get('/feed', requireAuth, (req, res) => {
     ORDER BY us.created_at DESC
     LIMIT ? OFFSET ?
   `).all(req.user.id, req.user.id, req.user.id, limit, offset);
+  for (const us of upscores) {
+    us.avatar = normalizeUserAvatarForList(us.avatar, us.user_id, 64);
+  }
 
   // Get new clears from followed users with pump/comment counts
   const clears = db.prepare(`
@@ -700,6 +707,9 @@ router.get('/feed', requireAuth, (req, res) => {
     ORDER BY nc.created_at DESC
     LIMIT ? OFFSET ?
   `).all(req.user.id, req.user.id, req.user.id, limit, offset);
+  for (const c of clears) {
+    c.avatar = normalizeUserAvatarForList(c.avatar, c.user_id, 64);
+  }
 
   // Merge and sort by created_at
   const feed = [...posts, ...upscores, ...clears]
@@ -1044,7 +1054,7 @@ router.get('/recent-activity', (req, res) => {
       type: 'new_user', created_at: u.created_at,
       message: `${u.username} joined Pump **Shinsa**`,
       link: buildProfilePath(u.username) || `/profile/${u.id}`,
-      avatar: u.avatar, username: u.username, nationality: u.nationality,
+      avatar: normalizeUserAvatarForList(u.avatar, u.id, 40), username: u.username, nationality: u.nationality,
     });
   }
 
@@ -1061,7 +1071,7 @@ router.get('/recent-activity', (req, res) => {
       type: 'upscore', created_at: us.created_at,
       message: `${us.username} improved ${songCount} score${songCount !== 1 ? 's' : ''}`,
       link: `/upscore/${us.id}`,
-      avatar: us.avatar, username: us.username, nationality: us.nationality,
+      avatar: normalizeUserAvatarForList(us.avatar, us.user_id, 40), username: us.username, nationality: us.nationality,
     });
   }
 
@@ -1087,7 +1097,7 @@ router.get('/recent-activity', (req, res) => {
       type: 'new_clear', created_at: c.created_at,
       message,
       link: `/clear/${c.id}`,
-      avatar: c.avatar, username: c.username, nationality: c.nationality,
+      avatar: normalizeUserAvatarForList(c.avatar, c.user_id, 40), username: c.username, nationality: c.nationality,
     });
   }
 
@@ -1103,7 +1113,7 @@ router.get('/recent-activity', (req, res) => {
       type: 'new_post', created_at: p.created_at,
       message: `${p.username} posted${snippet ? `: "${snippet}"` : ''}`,
       link: `/post/${p.id}`,
-      avatar: p.avatar, username: p.username, nationality: p.nationality,
+      avatar: normalizeUserAvatarForList(p.avatar, p.user_id, 40), username: p.username, nationality: p.nationality,
     });
   }
 

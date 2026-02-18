@@ -1,0 +1,56 @@
+# Example Nginx vhost for Pump Shinsa (reverse proxy to Node on 127.0.0.1:3001)
+# Replace server_name/cert paths as needed.
+
+server {
+    listen 443 ssl http2;
+    server_name pumpshinsa.com www.pumpshinsa.com;
+
+    # ssl_certificate /etc/letsencrypt/live/pumpshinsa.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/pumpshinsa.com/privkey.pem;
+
+    # Compression for API and frontend assets
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_proxied any;
+    gzip_types
+        application/json
+        application/javascript
+        application/xml
+        image/svg+xml
+        text/css
+        text/javascript
+        text/plain;
+
+    # Requires nginx module ngx_brotli (comment out if unavailable)
+    brotli on;
+    brotli_comp_level 5;
+    brotli_static on;
+    brotli_types
+        application/json
+        application/javascript
+        application/xml
+        image/svg+xml
+        text/css
+        text/javascript
+        text/plain;
+
+    client_max_body_size 50m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name pumpshinsa.com www.pumpshinsa.com;
+    return 301 https://$host$request_uri;
+}
+

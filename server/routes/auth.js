@@ -3,9 +3,11 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { addNotificationClient } = require('../lib/notificationHub');
 const { getPublicVapidKey, isWebPushConfigured } = require('../lib/webPush');
+const { isInlineDataAvatar } = require('../lib/avatarProxy');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
@@ -109,6 +111,50 @@ router.get('/me', requireAuth, (req, res) => {
   const user = db.prepare('SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description, created_at FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(user);
+});
+
+// GET /api/auth/avatar/:id - serve user avatar bytes (resized) for inline base64 avatars
+router.get('/avatar/:id', async (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT avatar FROM users WHERE id = ?').get(req.params.id);
+  const avatar = user?.avatar || '';
+  if (!avatar) return res.status(404).end();
+
+  // If this user already stores a URL/path avatar, forward to that path.
+  if (!isInlineDataAvatar(avatar)) {
+    if (avatar.startsWith('/api/auth/avatar/')) return res.status(404).end();
+    if (avatar.startsWith('/')) return res.redirect(302, avatar);
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) return res.redirect(302, avatar);
+    return res.redirect(302, `/${avatar}`);
+  }
+
+  const match = avatar.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i);
+  if (!match) return res.status(415).end();
+
+  let source;
+  try {
+    source = Buffer.from(match[2], 'base64');
+  } catch {
+    return res.status(415).end();
+  }
+  if (!source || source.length === 0) return res.status(415).end();
+
+  const size = Math.max(24, Math.min(512, parseInt(req.query.s, 10) || 64));
+
+  try {
+    const thumb = await sharp(source)
+      .rotate()
+      .resize(size, size, { fit: 'cover' })
+      .webp({ quality: 78 })
+      .toBuffer();
+    res.set('Content-Type', 'image/webp');
+    res.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    return res.send(thumb);
+  } catch {
+    res.set('Content-Type', match[1].toLowerCase());
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.send(source);
+  }
 });
 
 // PUT /api/auth/me

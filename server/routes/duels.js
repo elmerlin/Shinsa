@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth } = require('./auth');
+const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 function getDuelCreatorId(duel) {
   // Legacy fallback: older duels do not have creator_user_id and used player1_user_id as owner.
@@ -18,10 +19,20 @@ function ensureCreatorCanOperate(req, res, duel) {
   return true;
 }
 
+function normalizeDuelAvatars(duel, size = 64) {
+  if (!duel) return duel;
+  return {
+    ...duel,
+    player1_avatar: normalizeUserAvatarForList(duel.player1_avatar, duel.player1_user_id, size),
+    player2_avatar: normalizeUserAvatarForList(duel.player2_avatar, duel.player2_user_id, size),
+  };
+}
+
 // GET all duels
 router.get('/', (req, res) => {
   const db = getDb();
-  const duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC').all();
+  const duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC').all()
+    .map(d => normalizeDuelAvatars(d, 64));
   res.json(duels);
 });
 
@@ -32,7 +43,7 @@ router.get('/:id', (req, res) => {
   if (!duel) return res.status(404).json({ error: 'Duel not found' });
 
   const songs = db.prepare('SELECT * FROM duel_songs WHERE duel_id = ? ORDER BY played_order ASC').all(duel.id);
-  res.json({ ...duel, songs });
+  res.json({ ...normalizeDuelAvatars(duel, 96), songs });
 });
 
 // POST create a duel
@@ -65,7 +76,7 @@ router.post('/', requireAuth, (req, res) => {
     player1_user_id || '', player2_user_id || '', req.user.id);
 
   const duel = db.prepare('SELECT * FROM duels WHERE id = ?').get(id);
-  res.status(201).json(duel);
+  res.status(201).json(normalizeDuelAvatars(duel, 96));
 });
 
 // POST draw a card for a duel
@@ -180,7 +191,7 @@ router.post('/:id/end', requireAuth, (req, res) => {
     .run('COMPLETED', winner, duel.id);
 
   const updated = db.prepare('SELECT * FROM duels WHERE id = ?').get(duel.id);
-  res.json(updated);
+  res.json(normalizeDuelAvatars(updated, 96));
 });
 
 // DELETE a duel

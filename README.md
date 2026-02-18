@@ -266,6 +266,7 @@ pm2 status
 ## Deployment Notes
 
 - Put the app behind a reverse proxy (Nginx/Caddy) for TLS.
+- Example Nginx config with gzip+brotli: `deploy/nginx/shinsa.conf.example`.
 - Web Push requires HTTPS in real browsers (except localhost).
 - Ensure outbound network access for PIUGame scraping endpoints.
 - Persist and back up your SQLite database file.
