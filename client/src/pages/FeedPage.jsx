@@ -126,7 +126,7 @@ function UpscorePumpButton({ upscoreId, initialCount, initialPumped }) {
     <button
       onClick={toggle}
       disabled={!user}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold transition-all ${
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
         pumped
           ? 'text-piu-gold bg-piu-gold/10'
           : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
@@ -136,7 +136,7 @@ function UpscorePumpButton({ upscoreId, initialCount, initialPumped }) {
       <img
         src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
         alt=""
-        className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`}
+        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
       />
       <span>{count > 0 ? count : ''}</span>
     </button>
@@ -199,9 +199,9 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
     <>
       <button
         onClick={toggleOpen}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
         <span>{count > 0 ? count : ''}</span>
@@ -413,7 +413,7 @@ function NewClearPumpButton({ clearId, initialCount, initialPumped }) {
     <button
       onClick={toggle}
       disabled={!user}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold transition-all ${
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
         pumped
           ? 'text-piu-gold bg-piu-gold/10'
           : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
@@ -423,7 +423,7 @@ function NewClearPumpButton({ clearId, initialCount, initialPumped }) {
       <img
         src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
         alt=""
-        className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`}
+        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
       />
       <span>{count > 0 ? count : ''}</span>
     </button>
@@ -486,9 +486,9 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
     <>
       <button
         onClick={toggleOpen}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
         <span>{count > 0 ? count : ''}</span>
@@ -713,7 +713,12 @@ export default function FeedPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display font-bold text-xl">Activity Feed</h2>
-        <Link to="/posts" className="text-xs text-piu-accent hover:underline font-display">My Posts</Link>
+        <Link
+          to="/posts"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-piu-accent/30 bg-piu-accent/10 text-xs font-display font-bold text-piu-accent hover:bg-piu-accent hover:text-white transition-colors"
+        >
+          My Posts
+        </Link>
       </div>
 
       {loading ? (

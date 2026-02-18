@@ -316,6 +316,8 @@ export default function PostsPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -333,13 +335,21 @@ export default function PostsPage() {
     setPosts(prev => [{ ...post, username: user.username, avatar: user.avatar }, ...prev]);
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Delete this post?')) return;
+  const handleDelete = (id) => {
+    setConfirmDeleteId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!confirmDeleteId) return;
+    setDeletingId(confirmDeleteId);
     try {
-      await deletePost(id);
-      setPosts(prev => prev.filter(p => p.id !== id));
+      await deletePost(confirmDeleteId);
+      setPosts(prev => prev.filter(p => p.id !== confirmDeleteId));
+      setConfirmDeleteId(null);
     } catch (err) {
       alert(err.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -365,7 +375,12 @@ export default function PostsPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display font-bold text-xl">My Posts</h2>
-        <Link to="/feed" className="text-xs text-piu-accent hover:underline font-display">Activity Feed</Link>
+        <Link
+          to="/feed"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-piu-accent/30 bg-piu-accent/10 text-xs font-display font-bold text-piu-accent hover:bg-piu-accent hover:text-white transition-colors"
+        >
+          Activity Feed
+        </Link>
       </div>
 
       <PostComposer onPost={handleNewPost} />
@@ -397,6 +412,36 @@ export default function PostsPage() {
               Load more
             </button>
           )}
+        </div>
+      )}
+
+      {confirmDeleteId && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !deletingId && setConfirmDeleteId(null)}
+        >
+          <div className="card max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="font-display font-bold text-lg text-red-400 mb-2">Delete post?</h3>
+            <p className="text-sm text-gray-300">
+              This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={!!deletingId}
+                className="px-3 py-1.5 text-xs font-display font-bold rounded-lg border border-piu-border text-gray-300 hover:text-white hover:bg-piu-dark/60 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={!!deletingId}
+                className="px-3 py-1.5 text-xs font-display font-bold rounded-lg bg-red-500/90 text-white hover:bg-red-500 transition-colors disabled:opacity-50"
+              >
+                {deletingId ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
