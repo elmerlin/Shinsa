@@ -620,13 +620,13 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
           {loading ? (
             <p className="text-xs text-gray-500 py-2">Loading comments...</p>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 max-h-64 overflow-y-auto overflow-x-hidden">
               {comments.map(c => (
                 <div
                   key={c.id}
                   ref={setCommentNodeRef(c.id)}
                   tabIndex={-1}
-                  className={`rounded-lg p-1 -mx-1 outline-none transition-all ${
+                  className={`rounded-lg p-1 outline-none transition-all ${
                     highlightedCommentId === String(c.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
                   }`}
                 >
@@ -641,11 +641,11 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                       )}
                     </Link>
                     <div className="flex-1 min-w-0">
-                      <div className="bg-piu-dark/50 rounded-lg px-2.5 py-1.5">
-                        <Link to={getProfilePath(c.user_id, c.username)} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors leading-none">
+                      <div className="bg-piu-dark/50 rounded-lg px-2.5 py-1">
+                        <Link to={getProfilePath(c.user_id, c.username)} className="font-display font-semibold text-xs text-gray-100 hover:text-piu-accent transition-colors leading-tight">
                           {c.username}
                         </Link>
-                        <div className="text-xs text-gray-200 break-words mt-0.5">{renderFormattedText(c.content)}</div>
+                        <div className="text-[13px] text-gray-200 break-words leading-snug mt-0.5">{renderFormattedText(c.content)}</div>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 px-1">
                         <span className="text-[10px] text-gray-600">{timeAgo(c.created_at)}</span>
@@ -672,7 +672,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                           key={r.id}
                           ref={setCommentNodeRef(r.id)}
                           tabIndex={-1}
-                          className={`flex items-start gap-2 rounded-lg p-1 -mx-1 outline-none transition-all ${
+                          className={`flex items-start gap-2 rounded-lg p-1 outline-none transition-all ${
                             highlightedCommentId === String(r.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
                           }`}
                         >
@@ -687,10 +687,10 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                           </Link>
                           <div className="flex-1 min-w-0">
                             <div className="bg-piu-dark/30 rounded-lg px-2 py-1">
-                              <Link to={getProfilePath(r.user_id, r.username)} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors leading-none">
+                              <Link to={getProfilePath(r.user_id, r.username)} className="font-display font-semibold text-[11px] text-gray-100 hover:text-piu-accent transition-colors leading-tight">
                                 {r.username}
                               </Link>
-                              <div className="text-[11px] text-gray-200 break-words mt-0.5">{renderFormattedText(r.content)}</div>
+                              <div className="text-xs text-gray-200 break-words leading-snug mt-0.5">{renderFormattedText(r.content)}</div>
                             </div>
                             <div className="flex items-center gap-3 mt-0.5 px-1">
                               <span className="text-[9px] text-gray-600">{timeAgo(r.created_at)}</span>
