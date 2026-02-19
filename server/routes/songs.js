@@ -310,7 +310,7 @@ function getSongCatalog(db, aliases) {
 function queryUserBestScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, created_at
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url
     FROM user_best_scores
     WHERE user_id = ?
   `).all(userId);
@@ -319,7 +319,7 @@ function queryUserBestScores(db, userId) {
 function queryUserRecentScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
     FROM user_recently_played
     WHERE user_id = ?
   `).all(userId);
@@ -748,7 +748,7 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
   if (!targetUserId) return res.status(400).json({ error: 'user_id is required' });
 
   const recentRows = db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
     FROM user_recently_played
     WHERE user_id = ? AND mode = ? AND level = ?
     ORDER BY id DESC
@@ -767,7 +767,7 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
         plate: row.plate || '',
         is_pass: isPass,
         is_stage_break: !isPass,
-        date_played: row.date_played || row.created_at || '',
+        date_played: row.date_played || '',
         rating: calculateRating(row.level, grade, isPass),
       };
     });
@@ -798,12 +798,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
   if (targetUserId) {
     const profile = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(targetUserId);
     const bestRows = db.prepare(`
-      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, created_at
+      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url
       FROM user_best_scores
       WHERE user_id = ? AND mode = ? AND level = ?
     `).all(targetUserId, chart.mode, chart.level);
     const recentRows = db.prepare(`
-      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
       FROM user_recently_played
       WHERE user_id = ? AND mode = ? AND level = ?
       ORDER BY id DESC
@@ -826,7 +826,7 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
         plate: row.plate || '',
         is_pass: isPass,
         is_stage_break: !isPass,
-        date_played: row.date_played || row.created_at || '',
+        date_played: row.date_played || '',
         rating: calculateRating(row.level, grade, isPass),
       };
     });
@@ -839,7 +839,7 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
         score: scoreValue(row.score),
         grade: getGrade(row),
         plate: row.plate || '',
-        date_played: row.created_at || '',
+        date_played: '',
       };
       if (!isPassRecord(record)) continue;
       bestPass = compareRecords(bestPass, { ...record, is_pass: true, is_stage_break: false });
@@ -917,12 +917,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
       const followIds = following.map((row) => row.id);
       const placeholders = followIds.map(() => '?').join(', ');
       const bestRows = db.prepare(`
-        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, created_at
+        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url
         FROM user_best_scores
         WHERE user_id IN (${placeholders}) AND mode = ? AND level = ?
       `).all(...followIds, chart.mode, chart.level);
       const recentRows = db.prepare(`
-        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
         FROM user_recently_played
         WHERE user_id IN (${placeholders}) AND mode = ? AND level = ?
       `).all(...followIds, chart.mode, chart.level);
@@ -940,7 +940,7 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
           score,
           grade,
           plate: row.plate || '',
-          date_played: row.date_played || row.created_at || '',
+          date_played: row.date_played || '',
           is_pass: isPassRecord({ score, grade }),
           is_stage_break: !isPassRecord({ score, grade }),
         };

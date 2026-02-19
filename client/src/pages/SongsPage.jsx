@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getSongAnalytics, getSongLibrary } from '../utils/api';
@@ -58,6 +58,8 @@ export default function SongsPage() {
 
   const [search, setSearch] = useState('');
   const [modeFilter, setModeFilter] = useState('All');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchWrapRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,18 +68,30 @@ export default function SongsPage() {
       setLoading(true);
       setError('');
       try {
-        const [libraryData, analyticsData] = await Promise.all([
+        const [libraryResult, analyticsResult] = await Promise.allSettled([
           getSongLibrary(user?.id ? { user_id: user.id } : {}),
           user?.id ? getSongAnalytics(user.id) : Promise.resolve(null),
         ]);
         if (cancelled) return;
-        setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
-        setAnalytics(analyticsData || null);
+
+        if (libraryResult.status === 'fulfilled') {
+          const libraryData = libraryResult.value;
+          setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
+        } else {
+          setLibrary([]);
+          setError(libraryResult.reason?.message || 'Failed to load songs');
+        }
+
+        if (analyticsResult.status === 'fulfilled') {
+          setAnalytics(analyticsResult.value || null);
+        } else {
+          setAnalytics(null);
+        }
       } catch (err) {
         if (cancelled) return;
-        setError(err.message || 'Failed to load songs');
         setLibrary([]);
         setAnalytics(null);
+        setError(err.message || 'Failed to load songs');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -108,6 +122,46 @@ export default function SongsPage() {
       })
       .filter(Boolean);
   }, [library, modeFilter, search]);
+
+  const songSuggestions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+
+    const ranked = [];
+    for (const song of library) {
+      const title = String(song.title || '');
+      const artist = String(song.artist || '');
+      const titleLower = title.toLowerCase();
+      const artistLower = artist.toLowerCase();
+      if (!titleLower.includes(q) && !artistLower.includes(q)) continue;
+
+      const startsWithTitle = titleLower.startsWith(q);
+      const startsWithArtist = artistLower.startsWith(q);
+      ranked.push({
+        song_group_key: song.song_group_key,
+        title,
+        artist,
+        priority: startsWithTitle ? 0 : startsWithArtist ? 1 : 2,
+      });
+    }
+
+    ranked.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+    });
+    return ranked.slice(0, 8);
+  }, [library, search]);
+
+  useEffect(() => {
+    function handleDocClick(event) {
+      if (!searchWrapRef.current) return;
+      if (!searchWrapRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleDocClick);
+    return () => document.removeEventListener('mousedown', handleDocClick);
+  }, []);
 
   if (loading) {
     return <div className="max-w-6xl mx-auto px-4 py-10 text-center text-gray-500">Loading songs...</div>;
@@ -192,12 +246,36 @@ export default function SongsPage() {
 
       <section className="rounded-xl border border-piu-border/60 bg-piu-card/70 p-3">
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Enter search keyword"
-            className="input-field flex-1 min-w-[220px]"
-          />
+          <div ref={searchWrapRef} className="relative flex-1 min-w-[220px]">
+            <input
+              value={search}
+              onFocus={() => setShowSuggestions(true)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setShowSuggestions(true);
+              }}
+              placeholder="Enter search keyword"
+              className="input-field w-full"
+            />
+            {showSuggestions && songSuggestions.length > 0 && (
+              <div className="absolute z-20 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden">
+                {songSuggestions.map((item) => (
+                  <button
+                    key={item.song_group_key}
+                    type="button"
+                    onClick={() => {
+                      setSearch(item.title);
+                      setShowSuggestions(false);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-piu-dark/70 transition-colors border-b border-piu-border/20 last:border-0"
+                  >
+                    <p className="text-sm font-display font-bold truncate">{item.title}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{item.artist || 'Unknown artist'}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {['All', 'Single', 'Double'].map((mode) => (
             <button
               key={mode}
