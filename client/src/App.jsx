@@ -30,6 +30,7 @@ import WorldMaxPage from './pages/WorldMaxPage';
 import WorldMaxMachinePage from './pages/WorldMaxMachinePage';
 import SongsPage from './pages/SongsPage';
 import SongChartPage from './pages/SongChartPage';
+import HeadToHeadPage from './pages/HeadToHeadPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -290,6 +291,17 @@ function UserMenu() {
             Songs
           </Link>
           <Link
+            to="/head-to-head"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8M8 12h8M8 17h8" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h.01M4 12h.01M4 17h.01M20 7h.01M20 12h.01M20 17h.01" />
+            </svg>
+            Head to Head
+          </Link>
+          <Link
             to="/account"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
@@ -360,6 +372,13 @@ export default function App() {
               </svg>
               <span>Songs</span>
             </Link>
+            <Link to="/head-to-head" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8M8 12h8M8 17h8" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h.01M4 12h.01M4 17h.01M20 7h.01M20 12h.01M20 17h.01" />
+              </svg>
+              <span>Head to Head</span>
+            </Link>
             <Link to="/communities" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
               Communities
             </Link>
@@ -408,6 +427,7 @@ export default function App() {
           <Route path="/world-max/machine/:id" element={<WorldMaxMachinePage />} />
           <Route path="/songs" element={<SongsPage />} />
           <Route path="/songs/chart/:chartId" element={<SongChartPage />} />
+          <Route path="/head-to-head" element={<HeadToHeadPage />} />
         </Routes>
       </main>
 

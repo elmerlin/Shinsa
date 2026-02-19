@@ -309,6 +309,16 @@ export default function Dashboard() {
             </svg>
             Songs
           </Link>
+          <Link
+            to="/head-to-head"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8M8 12h8M8 17h8" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h.01M4 12h.01M4 17h.01M20 7h.01M20 12h.01M20 17h.01" />
+            </svg>
+            Head to Head
+          </Link>
         </div>
       </div>
 

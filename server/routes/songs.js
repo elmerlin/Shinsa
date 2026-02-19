@@ -319,7 +319,8 @@ function queryUserBestScores(db, userId) {
 function queryUserRecentScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
+           perfect, great, good, bad, miss, max_combo
     FROM user_recently_played
     WHERE user_id = ?
   `).all(userId);
@@ -441,9 +442,9 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
     getLevelEntry(allLevels, level).total_charts += count;
   }
 
-  const ratingsAll = [];
-  const ratingsSingle = [];
-  const ratingsDouble = [];
+  const ratedEntriesAll = [];
+  const ratedEntriesSingle = [];
+  const ratedEntriesDouble = [];
 
   for (const [chartKey, record] of passBestByChart.entries()) {
     if (!record) continue;
@@ -464,9 +465,23 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
     allEntry.score_sum += scoreValue(record.score);
     allEntry.score_count += 1;
 
-    ratingsAll.push(rating);
-    if (chart.mode === 'Single') ratingsSingle.push(rating);
-    if (chart.mode === 'Double') ratingsDouble.push(rating);
+    const ratedEntry = {
+      chart_id: chart.chart_id,
+      title: chart.title,
+      artist: chart.artist || '',
+      mode: chart.mode,
+      level: chart.level,
+      score: scoreValue(record.score),
+      grade: record.grade || '',
+      plate: record.plate || '',
+      rating,
+      date_played: record.date_played || '',
+      jacket_url: chart.jacket_url || '',
+    };
+
+    ratedEntriesAll.push(ratedEntry);
+    if (chart.mode === 'Single') ratedEntriesSingle.push(ratedEntry);
+    if (chart.mode === 'Double') ratedEntriesDouble.push(ratedEntry);
   }
 
   finalizeLevelEntries(singleLevels, songCatalog.levelModeTotals.Single);
@@ -511,12 +526,21 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
       : 0,
   });
 
-  ratingsAll.sort((a, b) => b - a);
-  ratingsSingle.sort((a, b) => b - a);
-  ratingsDouble.sort((a, b) => b - a);
+  const sortRatedEntries = (a, b) => {
+    if ((b.rating || 0) !== (a.rating || 0)) return (b.rating || 0) - (a.rating || 0);
+    if ((b.score || 0) !== (a.score || 0)) return (b.score || 0) - (a.score || 0);
+    const ad = parseDateMs(a.date_played);
+    const bd = parseDateMs(b.date_played);
+    if (bd !== ad) return bd - ad;
+    return (b.chart_id || 0) - (a.chart_id || 0);
+  };
 
-  const computedPumbility = ratingsAll.slice(0, 50).reduce((sum, value) => sum + value, 0);
-  const singlesPumbility = ratingsSingle.slice(0, 50).reduce((sum, value) => sum + value, 0);
+  ratedEntriesAll.sort(sortRatedEntries);
+  ratedEntriesSingle.sort(sortRatedEntries);
+  ratedEntriesDouble.sort(sortRatedEntries);
+
+  const computedPumbility = ratedEntriesAll.slice(0, 50).reduce((sum, row) => sum + (row.rating || 0), 0);
+  const singlesPumbility = ratedEntriesSingle.slice(0, 50).reduce((sum, row) => sum + (row.rating || 0), 0);
 
   const pumbility = (syncRow?.pumbility_value || 0) > 0
     ? parseInt(syncRow.pumbility_value, 10)
@@ -542,6 +566,11 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
       single: singleEntries,
       double: doubleEntries,
       both: bothEntries,
+    },
+    pumbility_breakdown: {
+      overall_top50: ratedEntriesAll.slice(0, 50),
+      singles_top50: ratedEntriesSingle.slice(0, 50),
+      doubles_top50: ratedEntriesDouble.slice(0, 50),
     },
     competitive_levels: {
       single: getCompetitiveLevel(singleEntries),
@@ -748,7 +777,8 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
   if (!targetUserId) return res.status(400).json({ error: 'user_id is required' });
 
   const recentRows = db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
+           perfect, great, good, bad, miss, max_combo
     FROM user_recently_played
     WHERE user_id = ? AND mode = ? AND level = ?
     ORDER BY id DESC
@@ -769,6 +799,12 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
         is_stage_break: !isPass,
         date_played: row.date_played || '',
         rating: calculateRating(row.level, grade, isPass),
+        perfect: parseInt(row.perfect, 10) || 0,
+        great: parseInt(row.great, 10) || 0,
+        good: parseInt(row.good, 10) || 0,
+        bad: parseInt(row.bad, 10) || 0,
+        miss: parseInt(row.miss, 10) || 0,
+        max_combo: parseInt(row.max_combo, 10) || 0,
       };
     });
 
@@ -803,7 +839,8 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
       WHERE user_id = ? AND mode = ? AND level = ?
     `).all(targetUserId, chart.mode, chart.level);
     const recentRows = db.prepare(`
-      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
+      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
+             perfect, great, good, bad, miss, max_combo
       FROM user_recently_played
       WHERE user_id = ? AND mode = ? AND level = ?
       ORDER BY id DESC
@@ -828,6 +865,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
         is_stage_break: !isPass,
         date_played: row.date_played || '',
         rating: calculateRating(row.level, grade, isPass),
+        perfect: parseInt(row.perfect, 10) || 0,
+        great: parseInt(row.great, 10) || 0,
+        good: parseInt(row.good, 10) || 0,
+        bad: parseInt(row.bad, 10) || 0,
+        miss: parseInt(row.miss, 10) || 0,
+        max_combo: parseInt(row.max_combo, 10) || 0,
       };
     });
 
@@ -869,6 +912,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
         is_stage_break: !!personalBest.is_stage_break,
         date_played: personalBest.date_played || '',
         rating: calculateRating(chart.level, personalBest.grade, !!personalBest.is_pass),
+        perfect: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        miss: 0,
+        max_combo: 0,
       });
     }
 
@@ -1071,8 +1120,13 @@ router.get('/analytics/head-to-head', (req, res) => {
       title: chart?.title || aRecord.song_title || bRecord.song_title,
       mode: chart?.mode || aRecord.mode,
       level: chart?.level || aRecord.level,
+      jacket_url: chart?.jacket_url || '',
       score_a: aRecord.score,
+      grade_a: aRecord.grade || gradeFromScore(aRecord.score),
+      rating_a: calculateRating(chart?.level || aRecord.level, aRecord.grade || gradeFromScore(aRecord.score), true),
       score_b: bRecord.score,
+      grade_b: bRecord.grade || gradeFromScore(bRecord.score),
+      rating_b: calculateRating(chart?.level || bRecord.level, bRecord.grade || gradeFromScore(bRecord.score), true),
       winner,
     });
   }
@@ -1141,6 +1195,20 @@ router.get('/analytics/head-to-head', (req, res) => {
         b: ratingB,
       },
       clear_cut_winner: clearCutWinner,
+    },
+    level_series: {
+      single: {
+        a: userA.analytics.levels.single,
+        b: userB.analytics.levels.single,
+      },
+      double: {
+        a: userA.analytics.levels.double,
+        b: userB.analytics.levels.double,
+      },
+      both: {
+        a: userA.analytics.levels.both,
+        b: userB.analytics.levels.both,
+      },
     },
     top_song_diffs: topSongDiffs,
   });

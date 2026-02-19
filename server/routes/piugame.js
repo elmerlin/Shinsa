@@ -369,9 +369,25 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     const db = getDb();
 
     const insertRecent = db.prepare(`
-      INSERT OR IGNORE INTO user_recently_played
+      INSERT INTO user_recently_played
       (user_id, song_title, mode, level, score, grade, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO UPDATE SET
+        background_url = CASE
+          WHEN excluded.background_url != '' THEN excluded.background_url
+          ELSE user_recently_played.background_url
+        END,
+        plate = CASE
+          WHEN excluded.plate != '' THEN excluded.plate
+          ELSE user_recently_played.plate
+        END,
+        perfect = MAX(COALESCE(user_recently_played.perfect, 0), COALESCE(excluded.perfect, 0)),
+        great = MAX(COALESCE(user_recently_played.great, 0), COALESCE(excluded.great, 0)),
+        good = MAX(COALESCE(user_recently_played.good, 0), COALESCE(excluded.good, 0)),
+        bad = MAX(COALESCE(user_recently_played.bad, 0), COALESCE(excluded.bad, 0)),
+        miss = MAX(COALESCE(user_recently_played.miss, 0), COALESCE(excluded.miss, 0)),
+        max_combo = MAX(COALESCE(user_recently_played.max_combo, 0), COALESCE(excluded.max_combo, 0)),
+        kcal = MAX(COALESCE(user_recently_played.kcal, 0), COALESCE(excluded.kcal, 0))
     `);
 
     // Also update best scores if this play is better
