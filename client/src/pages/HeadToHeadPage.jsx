@@ -56,10 +56,10 @@ function getModeKey(mode) {
   return 'both';
 }
 
-function levelBadge(mode, level) {
+function tinyLevelBadge(mode, level) {
   const isSingle = String(mode || '').toLowerCase().startsWith('s');
   return (
-    <span className={`inline-flex items-center justify-center rounded-full min-w-[34px] h-8 px-2 border text-white font-display font-black text-sm ${
+    <span className={`inline-flex items-center justify-center rounded-full min-w-[24px] h-6 px-1.5 border text-white font-display font-black text-[10px] ${
       isSingle
         ? 'bg-gradient-to-b from-red-500 to-red-800 border-red-300/50'
         : 'bg-gradient-to-b from-green-500 to-emerald-800 border-green-300/50'
@@ -67,12 +67,6 @@ function levelBadge(mode, level) {
       {level}
     </span>
   );
-}
-
-function metricWinnerLabel(a, b, biggerWins = true) {
-  if (a === b) return 'Tie';
-  if (biggerWins) return a > b ? 'A' : 'B';
-  return a < b ? 'A' : 'B';
 }
 
 function PlayerAvatar({ player, fallbackName, size = 'w-10 h-10' }) {
@@ -87,14 +81,32 @@ function PlayerAvatar({ player, fallbackName, size = 'w-10 h-10' }) {
   );
 }
 
-function CompetitiveValue({ entry, prefix, levelColorClass }) {
-  if (!entry?.level) return <span className="text-gray-500">-</span>;
+function CompetitiveInline({ entry, prefix, align = 'left' }) {
+  if (!entry?.level) {
+    return (
+      <div className={`flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+        <div className="rounded-md border border-piu-border/50 bg-piu-dark/40 px-2 py-1 text-gray-500">-</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="text-right">
-      <p className={`font-display font-black text-base ${levelColorClass}`}>{prefix}{entry.level}</p>
-      <p className={`text-xs font-display font-bold ${getGradeColor(entry.average_grade, entry.average_score)}`}>{entry.average_grade || '-'}</p>
-      <p className="text-[10px] text-gray-400">Avg {formatNumber(entry.average_score || 0)}</p>
+    <div className={`flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+      <div className="inline-flex items-center gap-2 rounded-md border border-piu-border/50 bg-piu-dark/45 px-2 py-1">
+        <span className={`font-display font-black ${prefix === 'D' ? 'text-green-400' : 'text-red-400'}`}>{prefix}{entry.level}</span>
+        <span className={`font-display font-bold ${getGradeColor(entry.average_grade, entry.average_score)}`}>{entry.average_grade || '-'}</span>
+        <span className="text-[11px] text-gray-300">Avg {formatNumber(entry.average_score || 0)}</span>
+      </div>
     </div>
+  );
+}
+
+function StarValue({ value, starred, className = '' }) {
+  return (
+    <span className={`inline-flex items-center gap-1 justify-end ${className}`}>
+      {starred && <span className="text-emerald-400">★</span>}
+      <span>{value}</span>
+    </span>
   );
 }
 
@@ -251,9 +263,7 @@ export default function HeadToHeadPage() {
 
   const trendRatingMax = useMemo(() => {
     if (!rangedTrendData.length) return 100;
-    const max = Math.max(
-      ...rangedTrendData.map((row) => Math.max(row.a_rating || 0, row.b_rating || 0)),
-    );
+    const max = Math.max(...rangedTrendData.map((row) => Math.max(row.a_rating || 0, row.b_rating || 0)));
     return max > 0 ? Math.ceil(max / 100) * 100 : 100;
   }, [rangedTrendData]);
 
@@ -324,8 +334,14 @@ export default function HeadToHeadPage() {
   const ratingA = parseInt(comparison?.rating?.a, 10) || 0;
   const ratingB = parseInt(comparison?.rating?.b, 10) || 0;
 
-  const scoreWinner = metricWinnerLabel(winsA, winsB, true);
-  const ratingWinner = metricWinnerLabel(ratingA, ratingB, true);
+  const clearCutWinnerId = comparison?.clear_cut_winner || null;
+  const clearCutName = clearCutWinnerId === userA?.id
+    ? userA?.username
+    : clearCutWinnerId === userB?.id
+      ? userB?.username
+      : 'No Clear Winner';
+
+  const displayedTopDiffs = result?.top_song_diffs || [];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
@@ -425,9 +441,9 @@ export default function HeadToHeadPage() {
           <section className="rounded-xl border border-piu-border/60 bg-gradient-to-r from-[#0f1f37] to-[#172d48] p-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-lg border border-piu-border/50 bg-piu-dark/40 p-3">
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-2 justify-start">
                   <PlayerAvatar player={userA} fallbackName={userA?.username} size="w-10 h-10" />
-                  <p className="font-display font-bold text-base truncate">{userA?.username || 'Player A'}</p>
+                  <p className="font-display font-bold text-base truncate text-left">{userA?.username || 'Player A'}</p>
                 </div>
               </div>
               <div className="rounded-lg border border-piu-border/50 bg-piu-dark/40 p-3">
@@ -439,25 +455,25 @@ export default function HeadToHeadPage() {
             </div>
 
             <div className="rounded-lg border border-piu-border/50 bg-piu-dark/45 p-2.5 space-y-2">
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center">
-                <p className="font-display font-black text-piu-gold">{formatNumber(pumbility?.a || 0)}</p>
-                <p className="text-[11px] font-display font-bold text-piu-gold">Pumbility</p>
-                <p className="font-display font-black text-piu-gold">{formatNumber(pumbility?.b || 0)}</p>
-              </div>
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-center">
-                <p className="font-display font-black text-red-300">{formatNumber(singlesPumbility?.a || 0)}</p>
-                <p className="text-[11px] font-display font-bold text-red-300">Singles Pumbility</p>
-                <p className="font-display font-black text-red-300">{formatNumber(singlesPumbility?.b || 0)}</p>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <p className="font-display font-black text-piu-gold text-left">{formatNumber(pumbility?.a || 0)}</p>
+                <p className="text-[11px] font-display font-bold text-piu-gold text-center">Pumbility</p>
+                <p className="font-display font-black text-piu-gold text-right">{formatNumber(pumbility?.b || 0)}</p>
               </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <CompetitiveValue entry={doublesComp?.a} prefix="D" levelColorClass="text-green-400" />
+                <p className="font-display font-black text-red-300 text-left">{formatNumber(singlesPumbility?.a || 0)}</p>
+                <p className="text-[11px] font-display font-bold text-red-300 text-center">Singles Pumbility</p>
+                <p className="font-display font-black text-red-300 text-right">{formatNumber(singlesPumbility?.b || 0)}</p>
+              </div>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <CompetitiveInline entry={doublesComp?.a} prefix="D" align="left" />
                 <p className="text-[11px] font-display font-bold text-green-300 text-center">Doubles Competitive Level</p>
-                <CompetitiveValue entry={doublesComp?.b} prefix="D" levelColorClass="text-green-400" />
+                <CompetitiveInline entry={doublesComp?.b} prefix="D" align="right" />
               </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <CompetitiveValue entry={singlesComp?.a} prefix="S" levelColorClass="text-red-400" />
+                <CompetitiveInline entry={singlesComp?.a} prefix="S" align="left" />
                 <p className="text-[11px] font-display font-bold text-red-300 text-center">Singles Competitive Level</p>
-                <CompetitiveValue entry={singlesComp?.b} prefix="S" levelColorClass="text-red-400" />
+                <CompetitiveInline entry={singlesComp?.b} prefix="S" align="right" />
               </div>
             </div>
           </section>
@@ -516,10 +532,7 @@ export default function HeadToHeadPage() {
                     <YAxis yAxisId="right" orientation="right" tick={{ fill: '#9ca3af', fontSize: 11 }} domain={[0, trendRatingMax]} />
                     <Tooltip
                       contentStyle={{ background: '#0b1220', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px' }}
-                      formatter={(value, name) => {
-                        if (String(name).includes('Rating')) return [formatNumber(value), name];
-                        return [formatNumber(value), name];
-                      }}
+                      formatter={(value) => [formatNumber(value), '']}
                       labelFormatter={(label) => `Lv.${label}`}
                     />
                     <Line yAxisId="left" type="monotone" dataKey="a_average" name={`${userA?.username || 'Player A'} Avg`} stroke="#fb7185" strokeWidth={2} dot={{ r: 2, fill: '#fb7185' }} />
@@ -543,7 +556,6 @@ export default function HeadToHeadPage() {
                     <th className="px-3 py-2 text-left">Metric</th>
                     <th className="px-3 py-2 text-right">{userA?.username || 'Player A'}</th>
                     <th className="px-3 py-2 text-right">{userB?.username || 'Player B'}</th>
-                    <th className="px-3 py-2 text-center">Winner</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -551,37 +563,33 @@ export default function HeadToHeadPage() {
                     <td className="px-3 py-2">Shared passed charts</td>
                     <td className="px-3 py-2 text-right font-mono">{formatNumber(comparison?.shared_chart_count || 0)}</td>
                     <td className="px-3 py-2 text-right font-mono">{formatNumber(comparison?.shared_chart_count || 0)}</td>
-                    <td className="px-3 py-2 text-center text-gray-400">-</td>
                   </tr>
                   <tr className="border-t border-piu-border/30">
                     <td className="px-3 py-2">Higher score wins</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatNumber(winsA)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatNumber(winsB)}</td>
-                    <td className="px-3 py-2 text-center font-display font-bold">{scoreWinner}</td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      <StarValue value={formatNumber(winsA)} starred={winsA > winsB} />
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      <StarValue value={formatNumber(winsB)} starred={winsB > winsA} />
+                    </td>
                   </tr>
                   <tr className="border-t border-piu-border/30">
                     <td className="px-3 py-2">Ties</td>
                     <td className="px-3 py-2 text-right font-mono">{formatNumber(ties)}</td>
                     <td className="px-3 py-2 text-right font-mono">{formatNumber(ties)}</td>
-                    <td className="px-3 py-2 text-center text-gray-400">-</td>
                   </tr>
                   <tr className="border-t border-piu-border/30">
                     <td className="px-3 py-2">Rating total</td>
-                    <td className="px-3 py-2 text-right font-mono text-piu-gold">{formatNumber(ratingA)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-piu-gold">{formatNumber(ratingB)}</td>
-                    <td className="px-3 py-2 text-center font-display font-bold">{ratingWinner}</td>
+                    <td className="px-3 py-2 text-right font-mono text-piu-gold">
+                      <StarValue value={formatNumber(ratingA)} starred={ratingA > ratingB} className="text-piu-gold" />
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-piu-gold">
+                      <StarValue value={formatNumber(ratingB)} starred={ratingB > ratingA} className="text-piu-gold" />
+                    </td>
                   </tr>
                   <tr className="border-t border-piu-border/30">
                     <td className="px-3 py-2">Clear-cut winner</td>
-                    <td className="px-3 py-2 text-right">{comparison?.clear_cut_winner === userA?.id ? 'Yes' : '-'}</td>
-                    <td className="px-3 py-2 text-right">{comparison?.clear_cut_winner === userB?.id ? 'Yes' : '-'}</td>
-                    <td className="px-3 py-2 text-center font-display font-bold">
-                      {comparison?.clear_cut_winner === userA?.id
-                        ? 'A'
-                        : comparison?.clear_cut_winner === userB?.id
-                          ? 'B'
-                          : 'Tie'}
-                    </td>
+                    <td colSpan={2} className="px-3 py-2 text-center font-display font-bold text-gray-200">{clearCutName}</td>
                   </tr>
                 </tbody>
               </table>
@@ -595,49 +603,54 @@ export default function HeadToHeadPage() {
                 <thead className="bg-[#0f172a] text-gray-400">
                   <tr>
                     <th className="px-3 py-2 text-left">Song</th>
-                    <th className="px-3 py-2 text-center">Level</th>
                     <th className="px-3 py-2 text-right">{userA?.username || 'Player A'}</th>
                     <th className="px-3 py-2 text-right">{userB?.username || 'Player B'}</th>
                     <th className="px-3 py-2 text-right">Diff</th>
-                    <th className="px-3 py-2 text-center">Winner</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(result?.top_song_diffs || []).map((row, index) => {
+                  {displayedTopDiffs.map((row, index) => {
                     const diff = Math.abs((row.score_a || 0) - (row.score_b || 0));
                     const gradeA = row.grade_a || getRank(row.score_a).label;
                     const gradeB = row.grade_b || getRank(row.score_b).label;
+                    const aWins = row.winner === 'a';
+                    const bWins = row.winner === 'b';
                     return (
                       <tr key={`${row.chart_id || row.title}-${index}`} className="border-t border-piu-border/30 hover:bg-piu-dark/35 transition-colors">
                         <td className="px-3 py-2">
                           <Link to={row.chart_id ? `/songs/chart/${row.chart_id}` : '/songs'} className="flex items-center gap-2 min-w-0">
-                            {row.jacket_url ? (
-                              <img src={row.jacket_url} alt={row.title} title={row.title} className="w-10 h-6 rounded object-cover border border-piu-border/40" />
-                            ) : (
-                              <div className="w-10 h-6 rounded bg-piu-dark border border-piu-border/40" />
-                            )}
+                            <div className="relative w-10 h-6 shrink-0">
+                              {row.jacket_url ? (
+                                <img src={row.jacket_url} alt={row.title} title={row.title} className="w-full h-full rounded object-cover border border-piu-border/40" />
+                              ) : (
+                                <div className="w-full h-full rounded bg-piu-dark border border-piu-border/40" />
+                              )}
+                              <div className="absolute -top-2 -right-2">{tinyLevelBadge(row.mode, row.level)}</div>
+                            </div>
                             <p className="truncate font-display font-bold" title={row.title}>{row.title}</p>
                           </Link>
                         </td>
-                        <td className="px-3 py-2 text-center">{levelBadge(row.mode, row.level)}</td>
                         <td className="px-3 py-2 text-right">
-                          <p className="font-mono">{formatNumber(row.score_a)}</p>
+                          <p className="font-mono inline-flex items-center gap-1 justify-end">
+                            {aWins && <span className="text-emerald-400">★</span>}
+                            {formatNumber(row.score_a)}
+                          </p>
                           <p className={`font-display font-bold ${getGradeColor(gradeA, row.score_a)}`}>{gradeA}</p>
                         </td>
                         <td className="px-3 py-2 text-right">
-                          <p className="font-mono">{formatNumber(row.score_b)}</p>
+                          <p className="font-mono inline-flex items-center gap-1 justify-end">
+                            {bWins && <span className="text-emerald-400">★</span>}
+                            {formatNumber(row.score_b)}
+                          </p>
                           <p className={`font-display font-bold ${getGradeColor(gradeB, row.score_b)}`}>{gradeB}</p>
                         </td>
                         <td className="px-3 py-2 text-right font-mono">{formatNumber(diff)}</td>
-                        <td className="px-3 py-2 text-center font-display font-bold">
-                          {row.winner === 'a' ? userA?.username : row.winner === 'b' ? userB?.username : 'Tie'}
-                        </td>
                       </tr>
                     );
                   })}
-                  {(result?.top_song_diffs || []).length === 0 && (
+                  {displayedTopDiffs.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center text-gray-500 py-8">No shared passed charts found for this selection.</td>
+                      <td colSpan={4} className="text-center text-gray-500 py-8">No shared passed charts found for this selection.</td>
                     </tr>
                   )}
                 </tbody>

@@ -123,11 +123,8 @@ function PumbilityBreakdownModal({ open, title, rows, onClose }) {
                       </div>
                     </td>
                     <td className="px-3 py-2 text-center">
-                      <span className="inline-flex items-center gap-1">
-                        <span className={`text-[10px] font-display font-bold ${row.mode === 'Single' ? 'text-red-300' : 'text-green-300'}`}>
-                          {row.mode === 'Single' ? 'S' : 'D'}
-                        </span>
-                        <span className="font-mono text-gray-200">{row.level}</span>
+                      <span className={`font-display font-bold ${row.mode === 'Single' ? 'text-red-300' : 'text-green-300'}`}>
+                        {row.mode === 'Single' ? `S${row.level}` : `D${row.level}`}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{formatNumber(row.score)}</td>
@@ -158,6 +155,7 @@ function CompetitiveLevelCard({
   onCursorChange,
   competitiveLevel,
 }) {
+  const [expanded, setExpanded] = useState(false);
   const selectedRow = rows[cursor] || null;
   const selectedLevel = selectedRow?.level || null;
   const selectedGrade = selectedRow?.average_grade || '';
@@ -170,68 +168,122 @@ function CompetitiveLevelCard({
     : false;
 
   return (
-    <div className="rounded-lg border border-piu-border/50 bg-piu-dark/55 p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[11px] font-display font-bold tracking-wide text-gray-300">{title}</h3>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={rows.length <= 1}
-            onClick={() => onCursorChange((prev) => (prev <= 0 ? rows.length - 1 : prev - 1))}
-            className="w-6 h-6 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40"
-            aria-label={`Previous ${title} level`}
-          >
-            &#8592;
-          </button>
-          <button
-            type="button"
-            disabled={rows.length <= 1}
-            onClick={() => onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1))}
-            className="w-6 h-6 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40"
-            aria-label={`Next ${title} level`}
-          >
-            &#8594;
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-md border border-piu-border/40 bg-[#0b1324]/70 p-2">
-        <p className="text-[10px] text-gray-500">Current viewed level</p>
-        <div className="flex items-baseline justify-between gap-2">
-          <p className={`font-display font-black text-lg ${modeColorClass}`}>
-            {selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}
-          </p>
-          <p className={`text-xs font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
-            {selectedGrade || '-'}
-          </p>
-        </div>
-        <p className="text-[11px] text-gray-300 mt-1">Average score: <span className="font-mono">{selectedAverage ? formatNumber(selectedAverage) : '-'}</span></p>
-        <p className="text-[11px] text-gray-300">Hypothetical grade: <span className={`font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>{selectedGrade || '-'}</span></p>
-        <p className="text-[11px] text-gray-400">Passes at this level: {selectedPassed}/{selectedTotal}</p>
-        <p className={`text-[10px] mt-1 ${qualifies ? 'text-emerald-300' : 'text-gray-500'}`}>
-          {qualifies ? 'This level meets S-or-better threshold.' : 'Below S threshold for competitive level.'}
-        </p>
-      </div>
-
-      <p className="text-[10px] text-gray-500 leading-relaxed">
-        Competitive level is the highest level where the average grade across your passed charts at that level is <span className="font-display font-bold">S</span> or better.
-      </p>
-
-      <div className="text-[10px] text-gray-400 rounded-md border border-piu-border/40 bg-piu-card/50 px-2 py-1.5">
-        <span className="text-gray-500">Computed competitive level: </span>
-        <span className={`font-display font-bold ${modeColorClass}`}>
-          {competitiveLevel?.level ? `${modePrefix}${competitiveLevel.level}` : '-'}
-        </span>
-        {competitiveLevel?.average_grade && (
-          <>
-            <span className="text-gray-500"> | Grade </span>
-            <span className={`font-display font-bold ${getGradeColor(competitiveLevel.average_grade, competitiveLevel.average_score)}`}>
-              {competitiveLevel.average_grade}
+    <div className="rounded-lg border border-piu-border/50 bg-piu-dark/55 p-2.5">
+      <p className="text-[11px] font-display font-bold tracking-wide text-gray-300 mb-1.5">{title}</p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={rows.length <= 1}
+          onClick={() => onCursorChange((prev) => (prev <= 0 ? rows.length - 1 : prev - 1))}
+          className="w-7 h-7 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40"
+          aria-label={`Previous ${title} level`}
+        >
+          &#8592;
+        </button>
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex-1 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-2 py-1.5 text-left hover:border-piu-accent/40 transition-colors"
+          title="Toggle competitive level details"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className={`font-display font-black text-lg ${modeColorClass}`}>
+              {selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}
             </span>
-            <span className="text-gray-500"> | Avg </span>
-            <span className="font-mono text-gray-200">{formatNumber(competitiveLevel.average_score || 0)}</span>
-          </>
-        )}
+            <span className={`text-sm font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
+              {selectedGrade || '-'}
+            </span>
+          </div>
+        </button>
+        <button
+          type="button"
+          disabled={rows.length <= 1}
+          onClick={() => onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1))}
+          className="w-7 h-7 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40"
+          aria-label={`Next ${title} level`}
+        >
+          &#8594;
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-2 text-[10px] text-gray-400 rounded-md border border-piu-border/40 bg-piu-card/50 px-2 py-1.5 space-y-1">
+          <p>Average score: <span className="font-mono text-gray-200">{selectedAverage ? formatNumber(selectedAverage) : '-'}</span></p>
+          <p>Hypothetical grade: <span className={`font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>{selectedGrade || '-'}</span></p>
+          <p>Passes at this level: {selectedPassed}/{selectedTotal}</p>
+          <p className={`${qualifies ? 'text-emerald-300' : 'text-gray-500'}`}>
+            {qualifies ? 'Meets S-or-better threshold at this level.' : 'Below S threshold at this level.'}
+          </p>
+          <p className="text-gray-500 pt-1 border-t border-piu-border/40">
+            Computed competitive level: <span className={`font-display font-bold ${modeColorClass}`}>{competitiveLevel?.level ? `${modePrefix}${competitiveLevel.level}` : '-'}</span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompactMetricButton({ label, value, colorClass, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 hover:border-piu-accent/40 transition-colors text-center"
+    >
+      <p className="text-[10px] text-gray-500">{label}</p>
+      <p className={`font-display font-bold text-base ${colorClass}`}>{value}</p>
+    </button>
+  );
+}
+
+function PlayerMetricsPanel({
+  analytics,
+  singleLevels,
+  doubleLevels,
+  singleCursor,
+  setSingleCursor,
+  doubleCursor,
+  setDoubleCursor,
+  setOpenBreakdown,
+}) {
+  return (
+    <div className="rounded-xl border border-piu-border/60 bg-gradient-to-br from-slate-900/80 to-slate-800/50 p-3 space-y-3">
+      <h2 className="text-xs font-display font-bold tracking-wide text-piu-accent">PLAYER METRICS</h2>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <CompactMetricButton
+          label="Pumbility"
+          value={formatNumber(analytics.pumbility)}
+          colorClass="text-piu-gold"
+          onClick={() => setOpenBreakdown('overall')}
+        />
+        <CompactMetricButton
+          label="Singles Pumbility"
+          value={formatNumber(analytics.singles_pumbility)}
+          colorClass="text-red-300"
+          onClick={() => setOpenBreakdown('singles')}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <CompetitiveLevelCard
+          title="Singles Competitive Level"
+          modePrefix="S"
+          modeColorClass="text-red-400"
+          rows={singleLevels}
+          cursor={singleCursor}
+          onCursorChange={setSingleCursor}
+          competitiveLevel={analytics.competitive_levels?.single}
+        />
+
+        <CompetitiveLevelCard
+          title="Doubles Competitive Level"
+          modePrefix="D"
+          modeColorClass="text-green-400"
+          rows={doubleLevels}
+          cursor={doubleCursor}
+          onCursorChange={setDoubleCursor}
+          competitiveLevel={analytics.competitive_levels?.double}
+        />
       </div>
     </div>
   );
@@ -438,47 +490,16 @@ export default function SongsPage() {
 
       {analytics && (
         <section className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-          <div className="rounded-xl border border-piu-border/60 bg-gradient-to-br from-slate-900/80 to-slate-800/50 p-3 space-y-3">
-            <h2 className="text-xs font-display font-bold tracking-wide text-piu-accent">PLAYER METRICS</h2>
-            <div className="grid grid-cols-2 gap-2 text-center">
-              <button
-                type="button"
-                onClick={() => setOpenBreakdown('overall')}
-                className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 hover:border-piu-gold/50 transition-colors"
-              >
-                <p className="text-[10px] text-gray-500">Pumbility</p>
-                <p className="font-display font-bold text-base text-piu-gold">{formatNumber(analytics.pumbility)}</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpenBreakdown('singles')}
-                className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 hover:border-red-300/50 transition-colors"
-              >
-                <p className="text-[10px] text-gray-500">Singles Pumbility</p>
-                <p className="font-display font-bold text-base text-red-300">{formatNumber(analytics.singles_pumbility)}</p>
-              </button>
-            </div>
-
-            <CompetitiveLevelCard
-              title="Singles Competitive Level"
-              modePrefix="S"
-              modeColorClass="text-red-400"
-              rows={singleLevels}
-              cursor={singleCursor}
-              onCursorChange={setSingleCursor}
-              competitiveLevel={analytics.competitive_levels?.single}
-            />
-
-            <CompetitiveLevelCard
-              title="Doubles Competitive Level"
-              modePrefix="D"
-              modeColorClass="text-green-400"
-              rows={doubleLevels}
-              cursor={doubleCursor}
-              onCursorChange={setDoubleCursor}
-              competitiveLevel={analytics.competitive_levels?.double}
-            />
-          </div>
+          <PlayerMetricsPanel
+            analytics={analytics}
+            singleLevels={singleLevels}
+            doubleLevels={doubleLevels}
+            singleCursor={singleCursor}
+            setSingleCursor={setSingleCursor}
+            doubleCursor={doubleCursor}
+            setDoubleCursor={setDoubleCursor}
+            setOpenBreakdown={setOpenBreakdown}
+          />
 
           <div className="xl:col-span-2 rounded-xl border border-piu-border/60 bg-piu-card/70 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">

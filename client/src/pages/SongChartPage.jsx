@@ -17,6 +17,19 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
+function parseDateMs(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 0;
+  const normalized = raw.replace(/\//g, '-');
+  const direct = Date.parse(normalized.includes('T') ? normalized : normalized.replace(' ', 'T') + 'Z');
+  if (!Number.isNaN(direct)) return direct;
+
+  const ymd = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!ymd) return 0;
+  const ms = Date.parse(`${ymd[1]}-${String(ymd[2]).padStart(2, '0')}-${String(ymd[3]).padStart(2, '0')}T00:00:00Z`);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
 function getRank(score) {
   const s = parseInt(score, 10) || 0;
   if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
@@ -104,6 +117,66 @@ function JudgmentStrip({ row }) {
   );
 }
 
+function HistoryModal({ open, chart, rows, onClose }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-4xl rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
+          <h3 className="font-display font-bold tracking-wide text-sm sm:text-base">CLEAR HISTORY (Highest to Lowest)</h3>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+
+        <div className="max-h-[75vh] overflow-y-auto p-3 space-y-3">
+          {(rows || []).map((row, index) => {
+            const rowGrade = row.grade || getRank(row.score).label;
+            return (
+              <div key={`${row.id}-${index}`} className="relative rounded-xl overflow-hidden border border-piu-border/60">
+                {chart.jacket_url ? (
+                  <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${chart.jacket_url})` }} />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#10253f] to-[#132b49]" />
+                )}
+                <div className="absolute inset-0 bg-black/58" />
+
+                <div className="relative p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xl font-display font-black leading-tight truncate">{chart.title}</p>
+                      <p className="text-sm text-gray-200">{row.date_played ? String(row.date_played).slice(0, 10) : '-'}</p>
+                    </div>
+                    {levelBadge(chart.mode, chart.level)}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 mt-2">
+                    <p className={`text-3xl font-display font-black ${row.is_stage_break ? 'text-red-400' : 'text-white'}`}>
+                      {row.is_stage_break ? 'STAGE BREAK' : formatNumber(row.score)}
+                    </p>
+                    <div className="text-right">
+                      <p className={`text-2xl font-display font-black ${getGradeColor(rowGrade, row.score)}`}>{rowGrade}</p>
+                      <p className="text-xs font-mono text-piu-gold">R {formatNumber(row.rating || 0)}</p>
+                    </div>
+                  </div>
+
+                  <JudgmentStrip row={row} />
+                </div>
+              </div>
+            );
+          })}
+
+          {(rows || []).length === 0 && (
+            <p className="text-sm text-gray-500 py-6 text-center">No historical runs synced yet.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SongChartPage() {
   const { chartId } = useParams();
   const { user } = useAuth();
@@ -111,7 +184,7 @@ export default function SongChartPage() {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,27 +211,42 @@ export default function SongChartPage() {
     return () => { cancelled = true; };
   }, [chartId, user?.id]);
 
-  const progression = useMemo(() => {
+  const rawProgression = useMemo(() => {
     if (!Array.isArray(detail?.progression)) return [];
-    return detail.progression.map((row, i) => ({
-      i: i + 1,
-      label: row.label || `Run ${i + 1}`,
+    return detail.progression.map((row, index) => ({
+      idx: index + 1,
+      label: row.label || `Run ${index + 1}`,
       score: parseInt(row.score, 10) || 0,
       is_stage_break: !!row.is_stage_break,
       grade: row.grade || '',
+      date_played: row.date_played || '',
     }));
   }, [detail?.progression]);
 
+  const progression = useMemo(() => {
+    const improvements = [];
+    let bestScore = -1;
+
+    for (const row of rawProgression) {
+      if (row.is_stage_break) continue;
+      if (row.score <= bestScore) continue;
+      bestScore = row.score;
+      improvements.push({
+        ...row,
+        i: improvements.length + 1,
+      });
+    }
+
+    return improvements;
+  }, [rawProgression]);
+
   const progressionDomain = useMemo(() => {
     if (progression.length === 0) return [0, 1000000];
-    const passing = progression
-      .filter((p) => !p.is_stage_break)
-      .map((p) => p.score)
-      .filter((v) => v > 0);
-    if (passing.length === 0) return [0, 1000000];
+    const scores = progression.map((row) => row.score).filter((value) => value > 0);
+    if (scores.length === 0) return [0, 1000000];
 
-    const minScore = Math.min(...passing);
-    const maxScore = Math.max(...passing);
+    const minScore = Math.min(...scores);
+    const maxScore = Math.max(...scores);
     let domainMin = Math.max(0, Math.floor((minScore - 15000) / 5000) * 5000);
     let domainMax = Math.min(1000000, Math.ceil((maxScore + 15000) / 5000) * 5000);
 
@@ -169,6 +257,17 @@ export default function SongChartPage() {
     }
     return [domainMin, domainMax];
   }, [progression]);
+
+  const historyByScore = useMemo(() => {
+    if (!Array.isArray(detail?.history)) return [];
+    return [...detail.history].sort((a, b) => {
+      const scoreDiff = (parseInt(b.score, 10) || 0) - (parseInt(a.score, 10) || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      const dateDiff = parseDateMs(b.date_played) - parseDateMs(a.date_played);
+      if (dateDiff !== 0) return dateDiff;
+      return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);
+    });
+  }, [detail?.history]);
 
   if (loading) {
     return <div className="max-w-5xl mx-auto px-4 py-12 text-center text-gray-500">Loading chart...</div>;
@@ -192,7 +291,6 @@ export default function SongChartPage() {
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Link to="/songs" className="text-sm text-piu-accent hover:underline">Back to Songs</Link>
-        {levelBadge(chart.mode, chart.level)}
       </div>
 
       <section className="relative rounded-2xl overflow-hidden border border-piu-border/70 shadow-2xl">
@@ -206,29 +304,29 @@ export default function SongChartPage() {
         <div className="relative p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="text-4xl font-display font-black tracking-wide leading-tight truncate">{chart.title}</h1>
-              <p className="text-sm text-gray-200 truncate">{chart.artist || 'Unknown artist'}</p>
+              <h1 className="text-3xl sm:text-5xl font-display font-black tracking-wide leading-tight break-words whitespace-normal">{chart.title}</h1>
+              <p className="text-sm text-gray-200 break-words whitespace-normal">{chart.artist || 'Unknown artist'}</p>
             </div>
             {levelBadge(chart.mode, chart.level)}
           </div>
 
           <div className="mt-3">
-            <p className={`text-5xl font-display font-black ${personalBest?.is_stage_break ? 'text-red-400' : 'text-white'}`}>
+            <p className={`text-4xl sm:text-5xl font-display font-black ${personalBest?.is_stage_break ? 'text-red-400' : 'text-white'}`}>
               {personalBest?.is_stage_break
                 ? 'STAGE BREAK'
                 : personalBest
                   ? formatNumber(personalBest.score)
                   : 'NO SCORE'}
             </p>
-            <div className="flex items-center gap-4 mt-1">
-              <p className="text-2xl text-gray-200">{personalBest?.date_played ? String(personalBest.date_played).slice(0, 10) : '-'}</p>
+            <div className="flex items-center gap-4 mt-1 flex-wrap">
+              <p className="text-lg sm:text-2xl text-gray-200">{personalBest?.date_played ? String(personalBest.date_played).slice(0, 10) : '-'}</p>
               {personalBest && (
-                <p className={`text-3xl font-display font-black ${getGradeColor(personalBestGrade, personalBest.score)}`}>
+                <p className={`text-2xl sm:text-3xl font-display font-black ${getGradeColor(personalBestGrade, personalBest.score)}`}>
                   {personalBestGrade}
                 </p>
               )}
               {personalBest?.plate && (
-                <p className="text-lg font-display font-bold text-gray-100 tracking-wide">{personalBest.plate}</p>
+                <p className="text-base sm:text-lg font-display font-bold text-gray-100 tracking-wide">{personalBest.plate}</p>
               )}
             </div>
           </div>
@@ -240,18 +338,21 @@ export default function SongChartPage() {
           <p className="text-[10px] text-gray-500">Rating</p>
           <p className="font-mono text-base text-piu-gold">{formatNumber(personalBest?.rating || 0)}</p>
         </div>
-        <div className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2">
+        <button
+          type="button"
+          onClick={() => setShowHistoryModal(true)}
+          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-piu-accent/40 transition-colors"
+        >
           <p className="text-[10px] text-gray-500">Logged Plays</p>
           <p className="font-mono text-base text-gray-100">{Array.isArray(detail.history) ? detail.history.length : 0}</p>
-        </div>
+          <p className="text-[10px] text-piu-accent mt-1">View Clear History</p>
+        </button>
       </section>
 
       <section className="card">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-display font-bold text-piu-accent">SCORE PROGRESSION</h2>
-          <button onClick={() => setShowHistory((v) => !v)} className="text-xs text-piu-accent hover:underline">
-            {showHistory ? 'Hide historical scores' : 'Show historical previous scores (incl. fails)'}
-          </button>
+          <p className="text-[10px] text-gray-500">Improvement points only</p>
         </div>
 
         {progression.length > 0 ? (
@@ -264,14 +365,10 @@ export default function SongChartPage() {
                 <Tooltip
                   contentStyle={{ background: '#0b1220', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px' }}
                   labelStyle={{ color: '#d1d5db' }}
-                  formatter={(value, _name, ctx) => {
-                    const row = ctx?.payload;
-                    if (row?.is_stage_break) return ['STAGE BREAK', 'Result'];
-                    return [formatNumber(value), row?.grade || 'Score'];
-                  }}
+                  formatter={(value, _name, ctx) => [formatNumber(value), ctx?.payload?.grade || 'Score']}
                   labelFormatter={(label, payload) => {
                     const row = payload?.[0]?.payload;
-                    return row?.label || `Run ${label}`;
+                    return row?.label || `Improvement ${label}`;
                   }}
                 />
                 <Line
@@ -286,52 +383,9 @@ export default function SongChartPage() {
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="text-sm text-gray-500 py-4">No historical runs synced yet.</p>
+          <p className="text-sm text-gray-500 py-4">No score improvements found yet.</p>
         )}
       </section>
-
-      {showHistory && (
-        <section className="card">
-          <h3 className="text-sm font-display font-bold text-piu-accent mb-3">CLEAR HISTORY</h3>
-          <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
-            {(detail.history || []).map((row, index) => {
-              const rowGrade = row.grade || getRank(row.score).label;
-              return (
-                <div key={`${row.id}-${index}`} className="relative rounded-xl overflow-hidden border border-piu-border/60">
-                  {chart.jacket_url ? (
-                    <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${chart.jacket_url})` }} />
-                  ) : (
-                    <div className="absolute inset-0 bg-gradient-to-br from-[#10253f] to-[#132b49]" />
-                  )}
-                  <div className="absolute inset-0 bg-black/58" />
-
-                  <div className="relative p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xl font-display font-black leading-tight truncate">{chart.title}</p>
-                        <p className="text-sm text-gray-200">{row.date_played ? String(row.date_played).slice(0, 10) : '-'}</p>
-                      </div>
-                      {levelBadge(chart.mode, chart.level)}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 mt-2">
-                      <p className={`text-3xl font-display font-black ${row.is_stage_break ? 'text-red-400' : 'text-white'}`}>
-                        {row.is_stage_break ? 'STAGE BREAK' : formatNumber(row.score)}
-                      </p>
-                      <div className="text-right">
-                        <p className={`text-2xl font-display font-black ${getGradeColor(rowGrade, row.score)}`}>{rowGrade}</p>
-                        <p className="text-xs font-mono text-piu-gold">R {formatNumber(row.rating || 0)}</p>
-                      </div>
-                    </div>
-
-                    <JudgmentStrip row={row} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       <section className="card">
         <h2 className="text-sm font-display font-bold text-piu-accent mb-3">FRIEND BESTS ON THIS CHART</h2>
@@ -368,6 +422,13 @@ export default function SongChartPage() {
           <p className="text-sm text-gray-500">No followed players have a record on this chart yet.</p>
         )}
       </section>
+
+      <HistoryModal
+        open={showHistoryModal}
+        chart={chart}
+        rows={historyByScore}
+        onClose={() => setShowHistoryModal(false)}
+      />
     </div>
   );
 }

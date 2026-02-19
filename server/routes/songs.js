@@ -326,7 +326,16 @@ function queryUserRecentScores(db, userId) {
   `).all(userId);
 }
 
-function buildUserBestByChartMap({ bestScores, recentScores, aliases, validChartKeys = null }) {
+function queryUserPumbilityScores(db, userId) {
+  if (!userId) return [];
+  return db.prepare(`
+    SELECT id, user_id, song_title, mode, level, score, grade, background_url, date_played
+    FROM user_pumbility_scores
+    WHERE user_id = ?
+  `).all(userId);
+}
+
+function buildUserBestByChartMap({ bestScores, recentScores, pumbilityScores, aliases, validChartKeys = null }) {
   const passBest = new Map();
   const failBest = new Map();
 
@@ -363,6 +372,7 @@ function buildUserBestByChartMap({ bestScores, recentScores, aliases, validChart
 
   for (const row of bestScores || []) pushRecord('best', row);
   for (const row of recentScores || []) pushRecord('recent', row);
+  for (const row of pumbilityScores || []) pushRecord('pumbility', row);
 
   const allKeys = new Set([...passBest.keys(), ...failBest.keys()]);
   const bestByChart = new Map();
@@ -591,9 +601,11 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
 function getUserAnalytics(db, userId, aliases, songCatalog) {
   const bestScores = queryUserBestScores(db, userId);
   const recentScores = queryUserRecentScores(db, userId);
+  const pumbilityScores = queryUserPumbilityScores(db, userId);
   const { bestByChart, passBest } = buildUserBestByChartMap({
     bestScores,
     recentScores,
+    pumbilityScores,
     aliases,
     validChartKeys: songCatalog.chartsByKey,
   });
@@ -717,9 +729,11 @@ router.get('/library', optionalAuth, (req, res) => {
   if (userId) {
     const bestScores = queryUserBestScores(db, userId);
     const recentScores = queryUserRecentScores(db, userId);
+    const pumbilityScores = queryUserPumbilityScores(db, userId);
     bestByChart = buildUserBestByChartMap({
       bestScores,
       recentScores,
+      pumbilityScores,
       aliases,
       validChartKeys: songCatalog.chartsByKey,
     }).bestByChart;
