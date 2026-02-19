@@ -314,6 +314,12 @@ export const pumpCommunityComment = (communityId, commentId) => request(`/commun
 // World Max
 export const getWorldMaxMeta = () => request('/world-max/meta');
 export const getWorldMaxPins = () => request('/world-max/pins');
+export const getWorldMaxCitySuggestions = (q, country = '') => {
+  const qs = new URLSearchParams();
+  qs.set('q', String(q || ''));
+  if (country) qs.set('country', String(country));
+  return request(`/world-max/city-suggestions?${qs.toString()}`);
+};
 export const saveWorldMaxLocation = (data) => request('/world-max/location', { method: 'PUT', body: JSON.stringify(data) });
 export const addWorldMaxMachine = (data) => request('/world-max/machines', { method: 'POST', body: JSON.stringify(data) });
 export const getWorldMaxMachine = (machineId) => request(`/world-max/machines/${machineId}`);

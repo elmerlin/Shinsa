@@ -5,10 +5,12 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { COUNTRIES, getCountryFlag } from '../components/PlayerRegistration';
 import {
   addWorldMaxMachine,
+  getWorldMaxCitySuggestions,
   getWorldMaxMeta,
   getWorldMaxPins,
   saveWorldMaxLocation,
 } from '../utils/api';
+import { getProfilePath } from '../utils/profile';
 
 const MAP_WIDTH = 2200;
 const MAP_HEIGHT = 1240;
@@ -64,7 +66,7 @@ function latLngToPoint(lat, lng) {
 
 function MarioUserPin({ user }) {
   const point = latLngToPoint(user.location_lat, user.location_lng);
-  const profilePath = user.username ? `/${encodeURIComponent(user.username)}` : `/profile/${user.id}`;
+  const profilePath = getProfilePath(user.id, user.username);
 
   return (
     <Link
@@ -123,48 +125,308 @@ function MachinePin({ machine, onOpen }) {
   );
 }
 
+const PIXEL_TILE = 20;
+
+const PIXEL_LANDMASSES = [
+  {
+    id: 'north-america',
+    x: 8,
+    y: 11,
+    rows: [
+      '........111111..........',
+      '......1111111111........',
+      '....11111111111111......',
+      '...1111111122211111.....',
+      '..111111122222211111....',
+      '.11111112222222211111...',
+      '.11111112222222221111...',
+      '.11111111222222221111...',
+      '..111111111222221111....',
+      '..111111111111111111....',
+      '...11111111111111111....',
+      '....111111111111111.....',
+      '......111111111111......',
+      '........11111111........',
+      '.........111111.........',
+      '.........11111..........',
+      '........11111...........',
+      '........111.............',
+    ],
+  },
+  {
+    id: 'south-america',
+    x: 29,
+    y: 30,
+    rows: [
+      '....111111....',
+      '...11111111...',
+      '..1111221111..',
+      '..1112222111..',
+      '...11222211...',
+      '....112221....',
+      '....112221....',
+      '....111111....',
+      '.....11111....',
+      '.....11111....',
+      '.....1111.....',
+      '.....1111.....',
+      '......111.....',
+      '......111.....',
+      '......111.....',
+      '.....111......',
+      '.....11.......',
+    ],
+  },
+  {
+    id: 'greenland',
+    x: 33,
+    y: 6,
+    rows: [
+      '...11111..',
+      '..1111111.',
+      '.11111111.',
+      '.11122111.',
+      '.1111111..',
+      '..11111...',
+      '...111....',
+    ],
+  },
+  {
+    id: 'europe-africa',
+    x: 52,
+    y: 14,
+    rows: [
+      '....111111......',
+      '...11111111.....',
+      '..111111111.....',
+      '..111122111.....',
+      '...1111111......',
+      '....111111......',
+      '.....11111......',
+      '....111111......',
+      '...11111111.....',
+      '..111122211.....',
+      '..111222211.....',
+      '..111222211.....',
+      '...11222211.....',
+      '...11222211.....',
+      '...11122211.....',
+      '...11112211.....',
+      '....1111111.....',
+      '....111111......',
+      '....11111.......',
+      '.....1111.......',
+      '.....1111.......',
+      '.....111........',
+      '.....111........',
+      '....1111........',
+      '....111.........',
+    ],
+  },
+  {
+    id: 'asia',
+    x: 66,
+    y: 11,
+    rows: [
+      '......111111111111........',
+      '....1111111111111111......',
+      '...111111122221111111.....',
+      '..11111122222211111111....',
+      '.1111112222222211111111...',
+      '.1111112222222211111111...',
+      '..111112222222211111111...',
+      '...11111222222211111111...',
+      '....111111222221111111....',
+      '....11111112221111111.....',
+      '....1111111111111111......',
+      '.....111111111111111......',
+      '......111111111111111.....',
+      '.......11111111111111.....',
+      '........1111111111111.....',
+      '.........11111111111......',
+      '..........111111111.......',
+      '...........11111111.......',
+      '..........111111111.......',
+      '.........1111111111.......',
+      '........11111111111.......',
+      '.........111111111........',
+      '..........1111111.........',
+    ],
+  },
+  {
+    id: 'australia',
+    x: 86,
+    y: 44,
+    rows: [
+      '...1111111....',
+      '..111111111...',
+      '.11112221111..',
+      '.11122222111..',
+      '.11122222111..',
+      '..111222111...',
+      '...1111111....',
+      '....11111.....',
+      '....1111......',
+    ],
+  },
+];
+
+const PIXEL_CLOUDS = [
+  { id: 'c1', x: 10, y: 6, rows: ['..11111..', '.1111111.', '111111111', '.1111111.', '..11111..'] },
+  { id: 'c2', x: 47, y: 7, rows: ['..1111..', '.111111.', '11111111', '.111111.', '..1111..'] },
+  { id: 'c3', x: 78, y: 6, rows: ['...1111...', '..111111..', '.11111111.', '..111111..', '...1111...'] },
+  { id: 'c4', x: 90, y: 35, rows: ['..11111..', '.1111111.', '111111111', '.1111111.', '..11111..'] },
+];
+
+const PIXEL_ISLANDS = [
+  { id: 'jp1', x: 96, y: 24 },
+  { id: 'jp2', x: 97, y: 25 },
+  { id: 'jp3', x: 98, y: 26 },
+  { id: 'ph1', x: 94, y: 31 },
+  { id: 'ph2', x: 95, y: 32 },
+  { id: 'nz1', x: 101, y: 55 },
+  { id: 'nz2', x: 102, y: 56 },
+];
+
+const PIXEL_ROUTE = [
+  { x: 21, y: 21 },
+  { x: 39, y: 34 },
+  { x: 57, y: 22 },
+  { x: 78, y: 38 },
+  { x: 94, y: 24 },
+];
+
+const PIXEL_WATER_SPARKLES = [
+  [6, 13], [14, 26], [22, 8], [31, 18], [37, 53], [46, 29], [54, 9], [63, 47],
+  [72, 6], [80, 17], [88, 52], [96, 40], [104, 12], [107, 33], [59, 55], [26, 44],
+];
+
+function pixelRectsFromRows(block, palette, stroke = null) {
+  const rects = [];
+  const rows = Array.isArray(block.rows) ? block.rows : [];
+  for (let row = 0; row < rows.length; row++) {
+    const line = rows[row];
+    for (let col = 0; col < line.length; col++) {
+      const token = line[col];
+      const fill = palette[token];
+      if (!fill) continue;
+      rects.push(
+        <rect
+          key={`${block.id}-${row}-${col}`}
+          x={(block.x + col) * PIXEL_TILE}
+          y={(block.y + row) * PIXEL_TILE}
+          width={PIXEL_TILE}
+          height={PIXEL_TILE}
+          fill={fill}
+          stroke={stroke || 'none'}
+          strokeWidth={stroke ? 1 : 0}
+        />
+      );
+    }
+  }
+  return rects;
+}
+
 function MapBackdrop() {
+  const routePoints = PIXEL_ROUTE
+    .map((point) => `${point.x * PIXEL_TILE + PIXEL_TILE / 2},${point.y * PIXEL_TILE + PIXEL_TILE / 2}`)
+    .join(' ');
+
   return (
-    <svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} className="absolute inset-0 w-full h-full" aria-hidden="true">
+    <svg
+      viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+      className="absolute inset-0 w-full h-full"
+      style={{ imageRendering: 'pixelated' }}
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+    >
       <defs>
-        <linearGradient id="wm-ocean" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#56c7f7" />
-          <stop offset="45%" stopColor="#2d8be6" />
-          <stop offset="100%" stopColor="#1650b9" />
-        </linearGradient>
-        <linearGradient id="wm-land" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#8ef24e" />
-          <stop offset="55%" stopColor="#49bf2f" />
-          <stop offset="100%" stopColor="#2a8f26" />
-        </linearGradient>
-        <pattern id="wm-water-tiles" width="44" height="44" patternUnits="userSpaceOnUse">
-          <path d="M0 22C8 18 14 18 22 22C30 26 36 26 44 22" fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="2" />
+        <pattern id="wm-pixel-ocean" width="40" height="40" patternUnits="userSpaceOnUse">
+          <rect width="40" height="40" fill="#2e8fda" />
+          <rect width="20" height="20" fill="#53b8ef" />
+          <rect x="20" y="20" width="20" height="20" fill="#53b8ef" />
         </pattern>
-        <filter id="wm-island-shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="rgba(0,0,0,0.3)" />
+        <pattern id="wm-pixel-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" fill="rgba(255,255,255,0.04)" />
+          <path d="M0 0H20M0 0V20" stroke="rgba(7,35,89,0.45)" strokeWidth="1" />
+        </pattern>
+        <filter id="wm-pixel-shadow" x="-15%" y="-15%" width="130%" height="130%">
+          <feDropShadow dx="0" dy="10" stdDeviation="7" floodColor="rgba(0,0,0,0.35)" />
         </filter>
       </defs>
 
-      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-ocean)" />
-      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-water-tiles)" opacity="0.55" />
+      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-pixel-ocean)" />
+      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-pixel-grid)" opacity="0.34" />
 
-      <g filter="url(#wm-island-shadow)">
-        <path d="M180 350C260 280 420 250 510 300C600 350 610 470 540 540C480 600 360 620 250 580C150 545 90 450 180 350Z" fill="url(#wm-land)" stroke="#1f6f23" strokeWidth="8" />
-        <path d="M560 640C720 560 920 540 1100 580C1260 620 1320 760 1240 860C1140 980 900 1020 700 960C540 910 420 760 560 640Z" fill="url(#wm-land)" stroke="#1f6f23" strokeWidth="8" />
-        <path d="M920 280C1040 170 1240 160 1360 230C1480 300 1490 450 1400 520C1320 575 1160 585 1030 540C920 500 830 390 920 280Z" fill="url(#wm-land)" stroke="#1f6f23" strokeWidth="8" />
-        <path d="M1450 620C1580 540 1780 550 1890 620C1980 680 2010 800 1940 890C1860 990 1680 1030 1530 980C1370 925 1320 720 1450 620Z" fill="url(#wm-land)" stroke="#1f6f23" strokeWidth="8" />
-        <path d="M1620 290C1710 230 1840 240 1920 300C1990 360 1990 470 1930 540C1870 610 1750 620 1660 560C1570 500 1540 360 1620 290Z" fill="url(#wm-land)" stroke="#1f6f23" strokeWidth="8" />
+      <g opacity="0.55">
+        {PIXEL_WATER_SPARKLES.map(([x, y], idx) => (
+          <rect
+            key={`sparkle-${idx}`}
+            x={x * PIXEL_TILE + 6}
+            y={y * PIXEL_TILE + 6}
+            width="8"
+            height="8"
+            fill="#d8fbff"
+          />
+        ))}
       </g>
 
-      <g stroke="#ffe47a" strokeWidth="5" strokeDasharray="10 12" fill="none" opacity="0.9">
-        <path d="M420 430L760 700L1120 430L1540 760L1830 450" />
+      <g opacity="0.9">
+        {PIXEL_CLOUDS.flatMap((cloud) =>
+          pixelRectsFromRows(cloud, { 1: '#f6fcff' }, 'rgba(120,184,226,0.45)')
+        )}
       </g>
-      <g fill="#ffd54a" opacity="0.95">
-        <circle cx="420" cy="430" r="9" />
-        <circle cx="760" cy="700" r="9" />
-        <circle cx="1120" cy="430" r="9" />
-        <circle cx="1540" cy="760" r="9" />
-        <circle cx="1830" cy="450" r="9" />
+
+      <g filter="url(#wm-pixel-shadow)">
+        {PIXEL_LANDMASSES.flatMap((land) =>
+          pixelRectsFromRows(
+            land,
+            { 1: '#79db45', 2: '#59b332' },
+            'rgba(19,66,25,0.55)'
+          )
+        )}
+
+        {PIXEL_ISLANDS.map((island) => (
+          <rect
+            key={island.id}
+            x={island.x * PIXEL_TILE}
+            y={island.y * PIXEL_TILE}
+            width={PIXEL_TILE}
+            height={PIXEL_TILE}
+            fill="#79db45"
+            stroke="rgba(19,66,25,0.55)"
+            strokeWidth="1"
+          />
+        ))}
+      </g>
+
+      <polyline
+        points={routePoints}
+        fill="none"
+        stroke="#ffde63"
+        strokeWidth="8"
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+        opacity="0.9"
+      />
+
+      <g>
+        {PIXEL_ROUTE.map((point, idx) => {
+          const cx = point.x * PIXEL_TILE + PIXEL_TILE / 2;
+          const cy = point.y * PIXEL_TILE + PIXEL_TILE / 2;
+          return (
+            <rect
+              key={`route-node-${idx}`}
+              x={cx - 8}
+              y={cy - 8}
+              width="16"
+              height="16"
+              fill="#ffcc42"
+              stroke="#7e5600"
+              strokeWidth="2"
+            />
+          );
+        })}
       </g>
     </svg>
   );
@@ -176,6 +438,56 @@ function mapByCode(items) {
     map[item.code] = item;
   }
   return map;
+}
+
+function normalizeSuggestText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function uniqueTextValues(values) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values || []) {
+    const text = String(value || '').trim();
+    if (!text) continue;
+    const key = normalizeSuggestText(text);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+  }
+  return out;
+}
+
+function WorldMaxModal({ open, title, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/65 p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-piu-border bg-piu-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-piu-border bg-piu-card/95 backdrop-blur">
+          <h3 className="text-sm sm:text-base font-display font-bold text-white">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg border border-piu-border text-gray-300 hover:text-white hover:border-piu-accent/60"
+            aria-label="Close modal"
+          >
+            x
+          </button>
+        </div>
+        <div className="p-4">{children}</div>
+      </div>
+    </div>
+  );
 }
 
 export default function WorldMaxPage() {
@@ -202,6 +514,14 @@ export default function WorldMaxPage() {
   });
   const [addingMachine, setAddingMachine] = useState(false);
   const [machineMessage, setMachineMessage] = useState('');
+  const [listTab, setListTab] = useState('machines');
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [showMachineModal, setShowMachineModal] = useState(false);
+
+  const [locationCitySuggestions, setLocationCitySuggestions] = useState([]);
+  const [machineCitySuggestions, setMachineCitySuggestions] = useState([]);
+  const locationSuggestSeqRef = useRef(0);
+  const machineSuggestSeqRef = useRef(0);
 
   const viewportRef = useRef(null);
   const dragStateRef = useRef(null);
@@ -209,6 +529,7 @@ export default function WorldMaxPage() {
 
   const gamesByCode = useMemo(() => mapByCode(meta.game_options), [meta.game_options]);
   const machinesByCode = useMemo(() => mapByCode(meta.machine_options), [meta.machine_options]);
+  const countryNames = useMemo(() => uniqueTextValues(COUNTRIES.map((country) => country?.name)), []);
 
   const availableMachineCodes = useMemo(() => {
     const allowed = meta.machine_options_by_game?.[machineForm.game_code] || [];
@@ -217,6 +538,65 @@ export default function WorldMaxPage() {
 
   const selectedGameOption = gamesByCode[machineForm.game_code] || null;
   const selectedMachineOption = machinesByCode[machineForm.machine_code] || null;
+
+  const localCityPairs = useMemo(() => {
+    const pairs = [];
+    for (const row of pins.users || []) {
+      const city = String(row.location_city || '').trim();
+      const country = String(row.location_country || '').trim();
+      if (!city) continue;
+      pairs.push({ city, country });
+    }
+    for (const row of pins.machines || []) {
+      const city = String(row.city || '').trim();
+      const country = String(row.country || '').trim();
+      if (!city) continue;
+      pairs.push({ city, country });
+    }
+    const seen = new Set();
+    const out = [];
+    for (const pair of pairs) {
+      const key = `${normalizeSuggestText(pair.city)}|${normalizeSuggestText(pair.country)}`;
+      if (!pair.city || seen.has(key)) continue;
+      seen.add(key);
+      out.push(pair);
+    }
+    return out;
+  }, [pins.users, pins.machines]);
+
+  const locationCityOptions = useMemo(() => {
+    const queryKey = normalizeSuggestText(locationForm.city);
+    const countryKey = normalizeSuggestText(locationForm.country);
+    const local = localCityPairs
+      .filter((pair) => {
+        if (!queryKey) return false;
+        const cityKey = normalizeSuggestText(pair.city);
+        const pairCountryKey = normalizeSuggestText(pair.country);
+        if (!cityKey.includes(queryKey)) return false;
+        if (!countryKey) return true;
+        return pairCountryKey.includes(countryKey);
+      })
+      .map((pair) => pair.city);
+    const remote = (locationCitySuggestions || []).map((item) => item.city);
+    return uniqueTextValues([...remote, ...local]).slice(0, 12);
+  }, [locationCitySuggestions, localCityPairs, locationForm.city, locationForm.country]);
+
+  const machineCityOptions = useMemo(() => {
+    const queryKey = normalizeSuggestText(machineForm.city);
+    const countryKey = normalizeSuggestText(machineForm.country);
+    const local = localCityPairs
+      .filter((pair) => {
+        if (!queryKey) return false;
+        const cityKey = normalizeSuggestText(pair.city);
+        const pairCountryKey = normalizeSuggestText(pair.country);
+        if (!cityKey.includes(queryKey)) return false;
+        if (!countryKey) return true;
+        return pairCountryKey.includes(countryKey);
+      })
+      .map((pair) => pair.city);
+    const remote = (machineCitySuggestions || []).map((item) => item.city);
+    return uniqueTextValues([...remote, ...local]).slice(0, 12);
+  }, [machineCitySuggestions, localCityPairs, machineForm.city, machineForm.country]);
 
   useEffect(() => {
     if (!availableMachineCodes.includes(machineForm.machine_code) && availableMachineCodes.length > 0) {
@@ -254,6 +634,44 @@ export default function WorldMaxPage() {
   useEffect(() => {
     loadWorldData();
   }, []);
+
+  useEffect(() => {
+    const q = String(locationForm.city || '').trim();
+    if (q.length < 2) {
+      setLocationCitySuggestions([]);
+      return undefined;
+    }
+    const seq = ++locationSuggestSeqRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await getWorldMaxCitySuggestions(q, locationForm.country);
+        if (seq !== locationSuggestSeqRef.current) return;
+        setLocationCitySuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
+      } catch {
+        if (seq === locationSuggestSeqRef.current) setLocationCitySuggestions([]);
+      }
+    }, 260);
+    return () => clearTimeout(timer);
+  }, [locationForm.city, locationForm.country]);
+
+  useEffect(() => {
+    const q = String(machineForm.city || '').trim();
+    if (q.length < 2) {
+      setMachineCitySuggestions([]);
+      return undefined;
+    }
+    const seq = ++machineSuggestSeqRef.current;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await getWorldMaxCitySuggestions(q, machineForm.country);
+        if (seq !== machineSuggestSeqRef.current) return;
+        setMachineCitySuggestions(Array.isArray(data?.suggestions) ? data.suggestions : []);
+      } catch {
+        if (seq === machineSuggestSeqRef.current) setMachineCitySuggestions([]);
+      }
+    }, 260);
+    return () => clearTimeout(timer);
+  }, [machineForm.city, machineForm.country]);
 
   const handleWheel = (e) => {
     e.preventDefault();
@@ -317,6 +735,7 @@ export default function WorldMaxPage() {
       const updated = await getWorldMaxPins();
       setPins(updated);
       setLocationMessage('Location saved and your pin is now on the map.');
+      setShowLocationModal(false);
     } catch (err) {
       setLocationMessage(err.message || 'Failed to save location');
     } finally {
@@ -345,6 +764,7 @@ export default function WorldMaxPage() {
       setPins(refreshed);
       setMachineMessage('Machine location added.');
       setMachineForm((prev) => ({ ...prev, venue_name: '', address: '', price_per_credit: '' }));
+      setShowMachineModal(false);
       if (created?.machine?.id) {
         navigate(`/world-max/machine/${created.machine.id}`);
       }
@@ -486,232 +906,335 @@ export default function WorldMaxPage() {
         </section>
 
         <aside className="space-y-4">
-          <form onSubmit={handleLocationSubmit} className="card space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-sm font-display font-bold text-piu-accent">Pin Yourself</h3>
+          <div className="card space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-display font-bold text-piu-accent">Pin Actions</h3>
               {!user && <Link to="/login" className="text-[11px] text-gray-400 hover:text-white">Login</Link>}
             </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Country</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Japan"
-                value={locationForm.country}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, country: e.target.value }))}
-              />
+            <p className="text-[11px] text-gray-400">
+              Add yourself or a machine without taking up permanent screen space.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setLocationMessage('');
+                  setShowLocationModal(true);
+                }}
+                className="btn-primary w-full text-sm py-2"
+              >
+                Add My Pin
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMachineMessage('');
+                  setShowMachineModal(true);
+                }}
+                className="btn-secondary w-full text-sm py-2"
+              >
+                Add Machine Pin
+              </button>
             </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">City / Town</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Tokyo"
-                value={locationForm.city}
-                onChange={(e) => setLocationForm((prev) => ({ ...prev, city: e.target.value }))}
-              />
-            </div>
-
-            <button type="submit" disabled={savingLocation} className="btn-primary w-full text-sm py-2">
-              {savingLocation ? 'Saving...' : 'Add My Pin'}
-            </button>
-
             {locationMessage && (
               <p className={`text-xs ${locationMessage.toLowerCase().includes('failed') ? 'text-red-300' : 'text-emerald-300'}`}>
                 {locationMessage}
               </p>
             )}
-          </form>
-
-          <form onSubmit={handleMachineSubmit} className="card space-y-3">
-            <h3 className="text-sm font-display font-bold text-piu-accent">Add Machine Location</h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Country</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="South Korea"
-                  value={machineForm.country}
-                  onChange={(e) => setMachineForm((prev) => ({ ...prev, country: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">City / Town</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="Seoul"
-                  value={machineForm.city}
-                  onChange={(e) => setMachineForm((prev) => ({ ...prev, city: e.target.value }))}
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Address</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="123 Arcade Street"
-                value={machineForm.address}
-                onChange={(e) => setMachineForm((prev) => ({ ...prev, address: e.target.value }))}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Price Per Credit</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="e.g. $1.00 / 2 credits"
-                value={machineForm.price_per_credit}
-                onChange={(e) => setMachineForm((prev) => ({ ...prev, price_per_credit: e.target.value }))}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Venue (optional)</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Arcade name"
-                value={machineForm.venue_name}
-                onChange={(e) => setMachineForm((prev) => ({ ...prev, venue_name: e.target.value }))}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Game</label>
-                <select
-                  className="input-field"
-                  value={machineForm.game_code}
-                  onChange={(e) => setMachineForm((prev) => ({ ...prev, game_code: e.target.value }))}
-                >
-                  {meta.game_options.map((game) => (
-                    <option key={game.code} value={game.code}>{game.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">Machine</label>
-                <select
-                  className="input-field"
-                  value={machineForm.machine_code}
-                  onChange={(e) => setMachineForm((prev) => ({ ...prev, machine_code: e.target.value }))}
-                >
-                  {meta.machine_options
-                    .filter((machine) => availableMachineCodes.includes(machine.code))
-                    .map((machine) => (
-                      <option key={machine.code} value={machine.code}>{machine.name}</option>
-                    ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg border border-piu-border/50 p-2 bg-piu-dark/40">
-                <p className="text-[10px] text-gray-500 mb-1">Game Art</p>
-                {selectedGameOption?.image_url ? (
-                  <img src={selectedGameOption.image_url} alt={selectedGameOption.name} className="w-full h-20 object-cover rounded-md border border-piu-border/40" />
-                ) : (
-                  <div className="w-full h-20 rounded-md bg-piu-dark border border-piu-border/40" />
-                )}
-              </div>
-              <div className="rounded-lg border border-piu-border/50 p-2 bg-piu-dark/40">
-                <p className="text-[10px] text-gray-500 mb-1">Machine Art</p>
-                {selectedMachineOption?.image_url ? (
-                  <img src={selectedMachineOption.image_url} alt={selectedMachineOption.name} className="w-full h-20 object-cover rounded-md border border-piu-border/40" />
-                ) : (
-                  <div className="w-full h-20 rounded-md bg-piu-dark border border-piu-border/40" />
-                )}
-              </div>
-            </div>
-
-            <button type="submit" disabled={addingMachine} className="btn-primary w-full text-sm py-2">
-              {addingMachine ? 'Adding machine...' : 'Add Machine Pin'}
-            </button>
-
             {machineMessage && (
               <p className={`text-xs ${machineMessage.toLowerCase().includes('failed') ? 'text-red-300' : 'text-emerald-300'}`}>
                 {machineMessage}
               </p>
             )}
-          </form>
-
-          <div className="card">
-            <h3 className="text-sm font-display font-bold text-piu-accent mb-2">Newest Machine Pins</h3>
-            {loading ? (
-              <p className="text-xs text-gray-500">Loading map data...</p>
-            ) : pins.machines.length === 0 ? (
-              <p className="text-xs text-gray-500">No machine locations yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {pins.machines.slice(0, 24).map((machine) => (
-                  <button
-                    key={machine.id}
-                    type="button"
-                    onClick={() => navigate(`/world-max/machine/${machine.id}`)}
-                    className="w-full text-left rounded-lg border border-piu-border/50 bg-piu-dark/40 p-2.5 transition-colors hover:border-piu-accent/60"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {machine.machine_image_url ? (
-                        <img src={machine.machine_image_url} alt={machine.machine_name} className="w-10 h-10 rounded-md object-cover border border-piu-border/50" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-md bg-piu-card border border-piu-border/50" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-display font-bold text-white truncate">{machine.venue_name || `${machine.city}, ${machine.country}`}</p>
-                        <p className="text-[11px] text-gray-400 truncate">{machine.address || `${machine.city}, ${machine.country}`}</p>
-                        <p className="text-[10px] text-gray-500 truncate">{machine.price_per_credit || 'No price listed'}</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
-          <div className="card">
-            <h3 className="text-sm font-display font-bold text-piu-accent mb-2">Recently Pinned Players</h3>
-            {pins.users.length === 0 ? (
-              <p className="text-xs text-gray-500">No player pins yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {pins.users.slice(0, 20).map((player) => (
-                  <div key={player.id} className="flex items-center gap-2.5 rounded-lg border border-piu-border/40 bg-piu-dark/40 p-2">
-                    {player.avatar ? (
-                      <img src={getAvatarUrl(player.avatar)} alt={player.username} className="w-8 h-8 rounded-full object-cover border border-piu-border" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-piu-card border border-piu-border flex items-center justify-center text-xs font-display font-bold">
-                        {(player.username || '?')[0].toUpperCase()}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-display font-bold text-white truncate">{player.username}</p>
-                      <p className="text-[11px] text-gray-400 truncate">
-                        {player.location_country_code && (
-                          <span className="mr-1 align-middle">{getCountryFlag(player.location_country_code, 'inline-block h-3.5 align-middle')}</span>
-                        )}
-                        {player.location_city}, {player.location_country}
-                      </p>
-                    </div>
+          <div className="card p-0 overflow-hidden">
+            <div className="flex items-center border-b border-piu-border/50">
+              <button
+                type="button"
+                onClick={() => setListTab('machines')}
+                className={`flex-1 px-3 py-2 text-xs font-display font-bold transition-colors ${
+                  listTab === 'machines' ? 'bg-piu-accent/20 text-piu-accent' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Newest Machine Pins
+              </button>
+              <button
+                type="button"
+                onClick={() => setListTab('players')}
+                className={`flex-1 px-3 py-2 text-xs font-display font-bold transition-colors ${
+                  listTab === 'players' ? 'bg-piu-accent/20 text-piu-accent' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Recently Pinned Players
+              </button>
+            </div>
+            <div className="p-3">
+              {loading ? (
+                <p className="text-xs text-gray-500">Loading map data...</p>
+              ) : listTab === 'machines' ? (
+                pins.machines.length === 0 ? (
+                  <p className="text-xs text-gray-500">No machine locations yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
+                    {pins.machines.slice(0, 28).map((machine) => (
+                      <button
+                        key={machine.id}
+                        type="button"
+                        onClick={() => navigate(`/world-max/machine/${machine.id}`)}
+                        className="w-full text-left rounded-lg border border-piu-border/50 bg-piu-dark/40 p-2.5 transition-colors hover:border-piu-accent/60"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {machine.machine_image_url ? (
+                            <img src={machine.machine_image_url} alt={machine.machine_name} className="w-10 h-10 rounded-md object-cover border border-piu-border/50" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-md bg-piu-card border border-piu-border/50" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-display font-bold text-white truncate">{machine.venue_name || `${machine.city}, ${machine.country}`}</p>
+                            <p className="text-[11px] text-gray-400 truncate">{machine.address || `${machine.city}, ${machine.country}`}</p>
+                            <p className="text-[10px] text-gray-500 truncate">{machine.price_per_credit || 'No price listed'}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )
+              ) : pins.users.length === 0 ? (
+                <p className="text-xs text-gray-500">No player pins yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
+                  {pins.users.slice(0, 28).map((player) => (
+                    <Link
+                      key={player.id}
+                      to={getProfilePath(player.id, player.username)}
+                      className="flex items-center gap-2.5 rounded-lg border border-piu-border/40 bg-piu-dark/40 p-2 transition-colors hover:border-piu-accent/55"
+                    >
+                      {player.avatar ? (
+                        <img src={getAvatarUrl(player.avatar)} alt={player.username} className="w-8 h-8 rounded-full object-cover border border-piu-border" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-piu-card border border-piu-border flex items-center justify-center text-xs font-display font-bold">
+                          {(player.username || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-display font-bold text-white truncate">@{player.username}</p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                          {player.location_country_code && (
+                            <span className="mr-1 align-middle">{getCountryFlag(player.location_country_code, 'inline-block h-3.5 align-middle')}</span>
+                          )}
+                          {player.location_city}, {player.location_country}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </aside>
       </div>
+
+      <datalist id="worldmax-country-list">
+        {countryNames.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+      <datalist id="worldmax-location-city-list">
+        {locationCityOptions.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+      <datalist id="worldmax-machine-city-list">
+        {machineCityOptions.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+
+      <WorldMaxModal open={showLocationModal} title="Add My Pin" onClose={() => setShowLocationModal(false)}>
+        <form onSubmit={handleLocationSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Country</label>
+            <input
+              type="text"
+              list="worldmax-country-list"
+              className="input-field"
+              placeholder="Japan"
+              value={locationForm.country}
+              onChange={(e) => setLocationForm((prev) => ({ ...prev, country: e.target.value }))}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">City / Town</label>
+            <input
+              type="text"
+              list="worldmax-location-city-list"
+              className="input-field"
+              placeholder="Tokyo"
+              value={locationForm.city}
+              onChange={(e) => {
+                const cityValue = e.target.value;
+                const matched = (locationCitySuggestions || []).find(
+                  (item) => normalizeSuggestText(item.city) === normalizeSuggestText(cityValue)
+                );
+                setLocationForm((prev) => ({
+                  ...prev,
+                  city: cityValue,
+                  country: prev.country || matched?.country || prev.country,
+                }));
+              }}
+              required
+            />
+          </div>
+
+          <button type="submit" disabled={savingLocation} className="btn-primary w-full text-sm py-2">
+            {savingLocation ? 'Saving...' : 'Add My Pin'}
+          </button>
+
+          {locationMessage && (
+            <p className={`text-xs ${locationMessage.toLowerCase().includes('failed') ? 'text-red-300' : 'text-emerald-300'}`}>
+              {locationMessage}
+            </p>
+          )}
+        </form>
+      </WorldMaxModal>
+
+      <WorldMaxModal open={showMachineModal} title="Add Machine Pin" onClose={() => setShowMachineModal(false)}>
+        <form onSubmit={handleMachineSubmit} className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Country</label>
+              <input
+                type="text"
+                list="worldmax-country-list"
+                className="input-field"
+                placeholder="South Korea"
+                value={machineForm.country}
+                onChange={(e) => setMachineForm((prev) => ({ ...prev, country: e.target.value }))}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">City / Town</label>
+              <input
+                type="text"
+                list="worldmax-machine-city-list"
+                className="input-field"
+                placeholder="Seoul"
+                value={machineForm.city}
+                onChange={(e) => {
+                  const cityValue = e.target.value;
+                  const matched = (machineCitySuggestions || []).find(
+                    (item) => normalizeSuggestText(item.city) === normalizeSuggestText(cityValue)
+                  );
+                  setMachineForm((prev) => ({
+                    ...prev,
+                    city: cityValue,
+                    country: prev.country || matched?.country || prev.country,
+                  }));
+                }}
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Address</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="123 Arcade Street"
+              value={machineForm.address}
+              onChange={(e) => setMachineForm((prev) => ({ ...prev, address: e.target.value }))}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Price Per Credit</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="e.g. $1.00 / 2 credits"
+              value={machineForm.price_per_credit}
+              onChange={(e) => setMachineForm((prev) => ({ ...prev, price_per_credit: e.target.value }))}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Venue (optional)</label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Arcade name"
+              value={machineForm.venue_name}
+              onChange={(e) => setMachineForm((prev) => ({ ...prev, venue_name: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Game</label>
+              <select
+                className="input-field"
+                value={machineForm.game_code}
+                onChange={(e) => setMachineForm((prev) => ({ ...prev, game_code: e.target.value }))}
+              >
+                {meta.game_options.map((game) => (
+                  <option key={game.code} value={game.code}>{game.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Machine</label>
+              <select
+                className="input-field"
+                value={machineForm.machine_code}
+                onChange={(e) => setMachineForm((prev) => ({ ...prev, machine_code: e.target.value }))}
+              >
+                {meta.machine_options
+                  .filter((machine) => availableMachineCodes.includes(machine.code))
+                  .map((machine) => (
+                    <option key={machine.code} value={machine.code}>{machine.name}</option>
+                  ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-piu-border/50 p-2 bg-piu-dark/40">
+              <p className="text-[10px] text-gray-500 mb-1">Game Art</p>
+              {selectedGameOption?.image_url ? (
+                <img src={selectedGameOption.image_url} alt={selectedGameOption.name} className="w-full h-20 object-cover rounded-md border border-piu-border/40" />
+              ) : (
+                <div className="w-full h-20 rounded-md bg-piu-dark border border-piu-border/40" />
+              )}
+            </div>
+            <div className="rounded-lg border border-piu-border/50 p-2 bg-piu-dark/40">
+              <p className="text-[10px] text-gray-500 mb-1">Machine Art</p>
+              {selectedMachineOption?.image_url ? (
+                <img src={selectedMachineOption.image_url} alt={selectedMachineOption.name} className="w-full h-20 object-cover rounded-md border border-piu-border/40" />
+              ) : (
+                <div className="w-full h-20 rounded-md bg-piu-dark border border-piu-border/40" />
+              )}
+            </div>
+          </div>
+
+          <button type="submit" disabled={addingMachine} className="btn-primary w-full text-sm py-2">
+            {addingMachine ? 'Adding machine...' : 'Add Machine Pin'}
+          </button>
+
+          {machineMessage && (
+            <p className={`text-xs ${machineMessage.toLowerCase().includes('failed') ? 'text-red-300' : 'text-emerald-300'}`}>
+              {machineMessage}
+            </p>
+          )}
+        </form>
+      </WorldMaxModal>
     </div>
   );
 }

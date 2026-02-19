@@ -64,6 +64,10 @@ const WORLD_MAX_META = {
   source: 'static-piu-history',
 };
 
+const CITY_SUGGESTION_CACHE_MS = 10 * 60 * 1000;
+const CITY_SUGGESTION_CACHE_MAX = 250;
+const citySuggestionCache = new Map();
+
 const COUNTRY_CENTROIDS = {
   unitedstates: { lat: 39.7837, lng: -100.4459 },
   usa: { lat: 39.7837, lng: -100.4459 },
@@ -201,6 +205,151 @@ async function geocodeCityCountry(city, country) {
   return fallbackGeo(city, country);
 }
 
+function normalizeCountryCode(value) {
+  return String(value || '').trim().toUpperCase().slice(0, 2);
+}
+
+function dedupeCitySuggestions(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items || []) {
+    const city = String(item?.city || '').trim();
+    const country = String(item?.country || '').trim();
+    const countryCode = normalizeCountryCode(item?.country_code || '');
+    if (!city) continue;
+    const key = `${normalizeKey(city)}|${normalizeKey(country)}|${countryCode}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      city,
+      country,
+      country_code: countryCode,
+      display: country ? `${city}, ${country}` : city,
+    });
+  }
+  return out;
+}
+
+async function suggestCitiesFromNominatim(query, country = '') {
+  const q = String(query || '').trim();
+  const countryText = String(country || '').trim();
+  const queryKey = normalizeKey(q);
+  if (q.length < 2) return [];
+
+  const cacheKey = `${normalizeKey(countryText)}|${normalizeKey(q)}`;
+  const cached = citySuggestionCache.get(cacheKey);
+  if (cached && (Date.now() - cached.saved_at) < CITY_SUGGESTION_CACHE_MS) {
+    return cached.suggestions;
+  }
+
+  let suggestions = [];
+
+  try {
+    const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q: countryText ? `${q}, ${countryText}` : q,
+        format: 'jsonv2',
+        addressdetails: 1,
+        limit: 12,
+        'accept-language': 'en',
+      },
+      timeout: 7000,
+      headers: {
+        'User-Agent': 'PumpShinsa WorldMax/1.0 (+https://shinsa.pump)',
+        'Accept-Language': 'en',
+      },
+      validateStatus: (status) => status >= 200 && status < 500,
+    });
+
+    if (Array.isArray(response.data)) {
+      suggestions = response.data.map((row) => {
+        const address = row?.address || {};
+        const city = String(
+          address.city || address.town || address.village || address.municipality || address.hamlet || row?.name || ''
+        ).trim();
+        const countryName = String(address.country || '').trim();
+        const countryCode = normalizeCountryCode(address.country_code || '');
+        return {
+          city,
+          country: countryName,
+          country_code: countryCode,
+          display: String(row?.display_name || (countryName ? `${city}, ${countryName}` : city)),
+        };
+      });
+    }
+  } catch {
+    suggestions = [];
+  }
+
+  const deduped = dedupeCitySuggestions(suggestions)
+    .filter((item) => {
+      const cityKey = normalizeKey(item.city);
+      const displayKey = normalizeKey(item.display);
+      if (!queryKey) return true;
+      return cityKey.includes(queryKey) || displayKey.includes(queryKey);
+    })
+    .slice(0, 12);
+  citySuggestionCache.set(cacheKey, {
+    saved_at: Date.now(),
+    suggestions: deduped,
+  });
+
+  if (citySuggestionCache.size > CITY_SUGGESTION_CACHE_MAX) {
+    const oldestKey = citySuggestionCache.keys().next().value;
+    if (oldestKey) citySuggestionCache.delete(oldestKey);
+  }
+
+  return deduped;
+}
+
+async function suggestCitiesFromOpenMeteo(query, country = '') {
+  const q = String(query || '').trim();
+  const countryText = String(country || '').trim();
+  const queryKey = normalizeKey(q);
+  const countryKey = normalizeKey(countryText);
+  if (q.length < 2) return [];
+
+  try {
+    const response = await axios.get('https://geocoding-api.open-meteo.com/v1/search', {
+      params: {
+        name: q,
+        count: 12,
+        language: 'en',
+        format: 'json',
+      },
+      timeout: 7000,
+      validateStatus: (status) => status >= 200 && status < 500,
+    });
+
+    const results = Array.isArray(response.data?.results) ? response.data.results : [];
+    const mapped = results.map((row) => {
+      const city = String(row?.name || '').trim();
+      const countryName = String(row?.country || '').trim();
+      const countryCode = normalizeCountryCode(row?.country_code || '');
+      return {
+        city,
+        country: countryName,
+        country_code: countryCode,
+        display: countryName ? `${city}, ${countryName}` : city,
+      };
+    });
+
+    return dedupeCitySuggestions(mapped)
+      .filter((item) => {
+        const cityKey = normalizeKey(item.city);
+        const displayKey = normalizeKey(item.display);
+        const itemCountryKey = normalizeKey(item.country);
+        const itemCountryCode = normalizeKey(item.country_code);
+        if (queryKey && !cityKey.includes(queryKey) && !displayKey.includes(queryKey)) return false;
+        if (!countryKey) return true;
+        return itemCountryKey.includes(countryKey) || itemCountryCode === countryKey;
+      })
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
 function normalizeAvatar(row, size = 96) {
   if (!row) return row;
   return {
@@ -242,6 +391,58 @@ function serializeMachineRow(row) {
 // GET /api/world-max/meta
 router.get('/meta', (req, res) => {
   res.json(WORLD_MAX_META);
+});
+
+// GET /api/world-max/city-suggestions?q=...&country=...
+router.get('/city-suggestions', async (req, res) => {
+  const db = getDb();
+  const query = String(req.query?.q || '').trim();
+  const country = String(req.query?.country || '').trim();
+  if (query.length < 2) return res.json({ suggestions: [] });
+
+  const localLike = `%${query}%`;
+  const userRows = db.prepare(`
+    SELECT DISTINCT
+      TRIM(COALESCE(location_city, '')) as city,
+      TRIM(COALESCE(location_country, '')) as country,
+      TRIM(COALESCE(location_country_code, '')) as country_code
+    FROM users
+    WHERE TRIM(COALESCE(location_city, '')) != ''
+      AND LOWER(location_city) LIKE LOWER(?)
+    LIMIT 30
+  `).all(localLike);
+
+  const machineRows = db.prepare(`
+    SELECT DISTINCT
+      TRIM(COALESCE(city, '')) as city,
+      TRIM(COALESCE(country, '')) as country,
+      TRIM(COALESCE(country_code, '')) as country_code
+    FROM world_max_machines
+    WHERE TRIM(COALESCE(city, '')) != ''
+      AND LOWER(city) LIKE LOWER(?)
+    LIMIT 30
+  `).all(localLike);
+
+  const countryNeedle = normalizeKey(country);
+  const localCandidates = [...userRows, ...machineRows].filter((row) => {
+    if (!countryNeedle) return true;
+    const rowCountry = normalizeKey(row.country);
+    const rowCountryCode = normalizeKey(row.country_code);
+    return rowCountry.includes(countryNeedle) || rowCountryCode === countryNeedle;
+  });
+
+  const [openMeteoSuggestions, remoteSuggestions] = await Promise.all([
+    suggestCitiesFromOpenMeteo(query, country),
+    suggestCitiesFromNominatim(query, country),
+  ]);
+  const localSuggestions = dedupeCitySuggestions(localCandidates);
+  const merged = dedupeCitySuggestions([
+    ...localSuggestions,
+    ...openMeteoSuggestions,
+    ...remoteSuggestions,
+  ]).slice(0, 12);
+
+  res.json({ suggestions: merged });
 });
 
 // GET /api/world-max/pins
