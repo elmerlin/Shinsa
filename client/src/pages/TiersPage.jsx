@@ -265,24 +265,25 @@ function JacketOverlayText({
   colorClass,
   baseFontRem,
   overlaySize,
+  fitTemplate,
 }) {
   const frameRef = useRef(null);
   const widthRef = useRef(null);
-  const textRef = useRef(null);
+  const measureRef = useRef(null);
   const [fitScale, setFitScale] = useState(1);
 
   useEffect(() => {
-    let raf = 0;
-    const recalc = () => {
-      const frameEl = frameRef.current;
-      const widthEl = widthRef.current;
-      const textEl = textRef.current;
-      if (!frameEl || !widthEl || !textEl) return;
+    const frameEl = frameRef.current;
+    const widthEl = widthRef.current;
+    const measureEl = measureRef.current;
+    if (!frameEl || !widthEl || !measureEl) return undefined;
 
+    let raf = null;
+    const recalc = () => {
       const availW = widthEl.clientWidth;
       const availH = frameEl.clientHeight * 0.92;
-      const textW = textEl.scrollWidth;
-      const textH = textEl.scrollHeight;
+      const textW = measureEl.scrollWidth;
+      const textH = measureEl.scrollHeight;
 
       let next = 1;
       if (availW > 0 && textW > 0) next = Math.min(next, availW / textW);
@@ -295,29 +296,59 @@ function JacketOverlayText({
       });
     };
 
-    raf = window.requestAnimationFrame(recalc);
-    return () => window.cancelAnimationFrame(raf);
-  }, [text, baseFontRem, overlaySize]);
+    const schedule = () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(recalc);
+    };
+
+    let observer = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(schedule);
+      observer.observe(frameEl);
+      observer.observe(widthEl);
+    }
+
+    window.addEventListener('resize', schedule);
+    schedule();
+
+    return () => {
+      if (raf) window.cancelAnimationFrame(raf);
+      if (observer) observer.disconnect();
+      window.removeEventListener('resize', schedule);
+    };
+  }, [baseFontRem, overlaySize, fitTemplate, text]);
 
   return (
-    <div ref={frameRef} className="absolute inset-0 pointer-events-none flex items-center justify-center">
+    <div ref={frameRef} className="absolute inset-0 pointer-events-none">
       <div
         ref={widthRef}
-        className="flex items-center justify-center"
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
         style={{
           width: `${overlaySize}%`,
           maxWidth: '100%',
+          maxHeight: '100%',
           paddingInline: '2px',
           boxSizing: 'border-box',
         }}
       >
         <span
-          ref={textRef}
-          className={`inline-block whitespace-nowrap text-center font-display font-black leading-none ${colorClass}`}
+          ref={measureRef}
+          aria-hidden="true"
+          className="absolute opacity-0 pointer-events-none whitespace-nowrap font-display font-black leading-none"
+          style={{
+            fontSize: `${baseFontRem}rem`,
+            lineHeight: 1,
+          }}
+        >
+          {fitTemplate}
+        </span>
+        <span
+          className={`inline-flex items-center justify-center whitespace-nowrap text-center font-display font-black ${colorClass}`}
           style={{
             fontSize: `${baseFontRem}rem`,
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
+            lineHeight: 1,
             textShadow: '0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
           }}
         >
@@ -351,6 +382,7 @@ export default function TiersPage() {
   const [defaultLevel, setDefaultLevel] = useState(() => parseIntSafe(localStorage.getItem('tiers_default_level'), 18));
   const [songsPerRow, setSongsPerRow] = useState(() => clampSongsPerRow(localStorage.getItem('tiers_songs_per_row')));
   const [captureBusy, setCaptureBusy] = useState(false);
+  const [captureMode, setCaptureMode] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('tiers_display_mode', displayMode);
@@ -581,8 +613,15 @@ export default function TiersPage() {
   const captureTierImage = async () => {
     if (!captureRef.current || captureBusy) return;
     setCaptureBusy(true);
+    setCaptureMode(true);
     setError('');
     try {
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(resolve);
+        });
+      });
+
       const { default: html2canvas } = await import('html2canvas');
       const canvas = await html2canvas(captureRef.current, {
         backgroundColor: '#071326',
@@ -598,13 +637,22 @@ export default function TiersPage() {
     } catch (err) {
       setError(err?.message || 'Failed to create tier image.');
     } finally {
+      setCaptureMode(false);
       setCaptureBusy(false);
     }
   };
 
   return (
     <div ref={captureRef} className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
-      <div className="sticky top-[56px] sm:top-[64px] z-30 rounded-xl border border-piu-border bg-piu-card/90 backdrop-blur-sm p-3 sm:p-4">
+      {captureMode && (
+        <div className="rounded-xl border border-piu-border/60 bg-piu-card/80 p-3 text-center">
+          <h1 className="font-display font-black text-2xl tracking-wide text-white">
+            {(MODE_PREFIX[mode] || '?')}{level || '-'} Scores
+          </h1>
+        </div>
+      )}
+
+      <div className={`${captureMode ? 'hidden' : 'sticky top-[56px] sm:top-[64px] z-30'} rounded-xl border border-piu-border bg-piu-card/90 backdrop-blur-sm p-3 sm:p-4`}>
         <div className="grid grid-cols-[100px_auto_100px] items-center">
           <div className="flex items-center gap-2">
             <button
@@ -702,6 +750,7 @@ export default function TiersPage() {
                   const overlayText = displayMode === 'score'
                     ? formatOverlayScore(chart.best_score)
                     : overlayGrade;
+                  const overlayTemplate = displayMode === 'score' ? '100.0' : 'SSS+';
                   const overlayColor = getGradeColor(overlayGrade, chart.best_score);
                   const overlayBaseRem = displayMode === 'score' ? 1.2 : 1.45;
                   const overlayScale = overlaySize / 65;
@@ -725,6 +774,7 @@ export default function TiersPage() {
                           colorClass={overlayColor}
                           baseFontRem={overlayFontRem}
                           overlaySize={overlaySize}
+                          fitTemplate={overlayTemplate}
                         />
                       )}
                     </Link>
