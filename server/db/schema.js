@@ -324,6 +324,11 @@ function initializeDb() {
       date_of_birth TEXT DEFAULT '',
       show_age INT DEFAULT 0,
       description TEXT DEFAULT '',
+      location_country TEXT DEFAULT '',
+      location_country_code TEXT DEFAULT '',
+      location_city TEXT DEFAULT '',
+      location_lat REAL DEFAULT NULL,
+      location_lng REAL DEFAULT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -932,6 +937,48 @@ function initializeDb() {
       follower_count INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (user_id, snapshot_date)
     );
+
+    -- World Max map data
+    CREATE TABLE IF NOT EXISTS world_max_machines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      added_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      country TEXT NOT NULL DEFAULT '',
+      country_code TEXT DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      venue_name TEXT DEFAULT '',
+      address TEXT DEFAULT '',
+      price_per_credit TEXT DEFAULT '',
+      game_code TEXT NOT NULL DEFAULT '',
+      game_name TEXT NOT NULL DEFAULT '',
+      machine_code TEXT NOT NULL DEFAULT '',
+      machine_name TEXT NOT NULL DEFAULT '',
+      latitude REAL DEFAULT NULL,
+      longitude REAL DEFAULT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS world_max_machine_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      machine_id INTEGER NOT NULL REFERENCES world_max_machines(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      rating INTEGER DEFAULT 0,
+      comment TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS world_max_machine_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      machine_id INTEGER NOT NULL REFERENCES world_max_machines(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      image_data TEXT NOT NULL,
+      caption TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_world_max_machine_coords ON world_max_machines(latitude, longitude);
+    CREATE INDEX IF NOT EXISTS idx_world_max_machine_city_country ON world_max_machines(city, country);
+    CREATE INDEX IF NOT EXISTS idx_world_max_machine_reviews_machine ON world_max_machine_reviews(machine_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_world_max_machine_photos_machine ON world_max_machine_photos(machine_id, created_at);
   `);
 
   bootstrapSongsFromJsonIfEmpty();
@@ -973,6 +1020,33 @@ function initializeDb() {
     db.exec("ALTER TABLE user_new_clears ADD COLUMN clears_json TEXT DEFAULT ''");
   }
   backfillLegacyGroupedNewClears();
+
+  // Migrations for users table - add world map location fields
+  const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+  const userMigrations = [
+    ['location_country', "TEXT DEFAULT ''"],
+    ['location_country_code', "TEXT DEFAULT ''"],
+    ['location_city', "TEXT DEFAULT ''"],
+    ['location_lat', 'REAL DEFAULT NULL'],
+    ['location_lng', 'REAL DEFAULT NULL'],
+  ];
+  for (const [col, type] of userMigrations) {
+    if (!userCols.includes(col)) {
+      db.exec(`ALTER TABLE users ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  // Migrations for world_max_machines
+  const worldMaxMachineCols = db.prepare("PRAGMA table_info(world_max_machines)").all().map(c => c.name);
+  const worldMaxMachineMigrations = [
+    ['address', "TEXT DEFAULT ''"],
+    ['price_per_credit', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of worldMaxMachineMigrations) {
+    if (!worldMaxMachineCols.includes(col)) {
+      db.exec(`ALTER TABLE world_max_machines ADD COLUMN ${col} ${type}`);
+    }
+  }
 
   // Migrations for piugame sync - add progress tracking
   const syncCols = db.prepare("PRAGMA table_info(user_piugame_sync)").all().map(c => c.name);

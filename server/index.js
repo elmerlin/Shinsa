@@ -16,6 +16,7 @@ const parserRoutes = require('./routes/parser');
 const piugameRoutes = require('./routes/piugame');
 const socialRoutes = require('./routes/social');
 const communityRoutes = require('./routes/communities');
+const worldMaxRoutes = require('./routes/worldMax');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -53,6 +54,7 @@ app.use('/api/parser', parserRoutes);
 app.use('/api/piugame', piugameRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/communities', communityRoutes);
+app.use('/api/world-max', worldMaxRoutes);
 
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {

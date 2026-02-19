@@ -63,7 +63,11 @@ function requireAuth(req, res, next) {
 // POST /api/auth/register
 router.post('/register', (req, res) => {
   const db = getDb();
-  const { username, password, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description } = req.body;
+  const {
+    username, password, email, avatar, pumbility, skill_title, skill_level,
+    gender, nationality, date_of_birth, show_age, description,
+    location_country, location_country_code, location_city, location_lat, location_lng,
+  } = req.body;
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
@@ -84,12 +88,26 @@ router.post('/register', (req, res) => {
   const password_hash = bcrypt.hashSync(password, 10);
 
   db.prepare(`
-    INSERT INTO users (id, username, password_hash, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (
+      id, username, password_hash, email, avatar, pumbility, skill_title, skill_level,
+      gender, nationality, date_of_birth, show_age, description,
+      location_country, location_country_code, location_city, location_lat, location_lng
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, username.trim(), password_hash, email || '', avatar || '', pumbility || 0,
-    skill_title || '', skill_level || 1, gender || '', nationality || '', date_of_birth || '', show_age ? 1 : 0, description || '');
+    skill_title || '', skill_level || 1, gender || '', nationality || '', date_of_birth || '',
+    show_age ? 1 : 0, description || '',
+    location_country || '', location_country_code || '', location_city || '',
+    Number.isFinite(Number(location_lat)) ? Number(location_lat) : null,
+    Number.isFinite(Number(location_lng)) ? Number(location_lng) : null);
 
-  const user = db.prepare('SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description, created_at FROM users WHERE id = ?').get(id);
+  const user = db.prepare(`
+    SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+           date_of_birth, show_age, description,
+           location_country, location_country_code, location_city, location_lat, location_lng,
+           created_at
+    FROM users WHERE id = ?
+  `).get(id);
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 
   res.status(201).json({ user: normalizeClientUser(user, 96), token });
@@ -117,7 +135,13 @@ router.post('/login', (req, res) => {
 // GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
-  const user = db.prepare('SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description, created_at FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare(`
+    SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+           date_of_birth, show_age, description,
+           location_country, location_country_code, location_city, location_lat, location_lng,
+           created_at
+    FROM users WHERE id = ?
+  `).get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(normalizeClientUser(user, 96));
 });
@@ -169,7 +193,11 @@ router.get('/avatar/:id', async (req, res) => {
 // PUT /api/auth/me
 router.put('/me', requireAuth, (req, res) => {
   const db = getDb();
-  const { email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description } = req.body;
+  const {
+    email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    date_of_birth, show_age, description,
+    location_country, location_country_code, location_city, location_lat, location_lng,
+  } = req.body;
 
   db.prepare(`
     UPDATE users SET
@@ -182,11 +210,39 @@ router.put('/me', requireAuth, (req, res) => {
       nationality = COALESCE(?, nationality),
       date_of_birth = COALESCE(?, date_of_birth),
       show_age = COALESCE(?, show_age),
-      description = COALESCE(?, description)
+      description = COALESCE(?, description),
+      location_country = COALESCE(?, location_country),
+      location_country_code = COALESCE(?, location_country_code),
+      location_city = COALESCE(?, location_city),
+      location_lat = COALESCE(?, location_lat),
+      location_lng = COALESCE(?, location_lng)
     WHERE id = ?
-  `).run(email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age !== undefined ? (show_age ? 1 : 0) : null, description, req.user.id);
+  `).run(
+    email,
+    avatar,
+    pumbility,
+    skill_title,
+    skill_level,
+    gender,
+    nationality,
+    date_of_birth,
+    show_age !== undefined ? (show_age ? 1 : 0) : null,
+    description,
+    location_country,
+    location_country_code,
+    location_city,
+    Number.isFinite(Number(location_lat)) ? Number(location_lat) : null,
+    Number.isFinite(Number(location_lng)) ? Number(location_lng) : null,
+    req.user.id
+  );
 
-  const user = db.prepare('SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality, date_of_birth, show_age, description, created_at FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare(`
+    SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+           date_of_birth, show_age, description,
+           location_country, location_country_code, location_city, location_lat, location_lng,
+           created_at
+    FROM users WHERE id = ?
+  `).get(req.user.id);
   res.json(normalizeClientUser(user, 96));
 });
 
@@ -242,7 +298,9 @@ router.get('/user/username/:username', (req, res) => {
 
   const user = db.prepare(`
     SELECT id, username, avatar, pumbility, skill_title, skill_level, gender, nationality,
-           date_of_birth, show_age, description, created_at
+           date_of_birth, show_age, description,
+           location_country, location_country_code, location_city, location_lat, location_lng,
+           created_at
     FROM users WHERE LOWER(username) = LOWER(?)
   `).get(username);
 
@@ -255,7 +313,9 @@ router.get('/user/:id', (req, res) => {
   const db = getDb();
   const user = db.prepare(`
     SELECT id, username, avatar, pumbility, skill_title, skill_level, gender, nationality,
-           date_of_birth, show_age, description, created_at
+           date_of_birth, show_age, description,
+           location_country, location_country_code, location_city, location_lat, location_lng,
+           created_at
     FROM users WHERE id = ?
   `).get(req.params.id);
 

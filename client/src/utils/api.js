@@ -311,6 +311,31 @@ export const addCommunityPostComment = (communityId, postId, content, parentId) 
 export const deleteCommunityPostComment = (communityId, postId, commentId) => request(`/communities/${communityId}/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
 export const pumpCommunityComment = (communityId, commentId) => request(`/communities/${communityId}/comments/${commentId}/pump`, { method: 'POST' });
 
+// World Max
+export const getWorldMaxMeta = () => request('/world-max/meta');
+export const getWorldMaxPins = () => request('/world-max/pins');
+export const saveWorldMaxLocation = (data) => request('/world-max/location', { method: 'PUT', body: JSON.stringify(data) });
+export const addWorldMaxMachine = (data) => request('/world-max/machines', { method: 'POST', body: JSON.stringify(data) });
+export const getWorldMaxMachine = (machineId) => request(`/world-max/machines/${machineId}`);
+export const addWorldMaxMachineReview = (machineId, data) => request(`/world-max/machines/${machineId}/reviews`, { method: 'POST', body: JSON.stringify(data) });
+
+export async function addWorldMaxMachinePhoto(machineId, photoFile, caption = '') {
+  const formData = new FormData();
+  formData.append('photo', photoFile);
+  if (caption) formData.append('caption', caption);
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/world-max/machines/${machineId}/photos`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to upload machine photo');
+  }
+  return res.json();
+}
+
 // Parser
 export async function parseScorePhoto(file) {
   const formData = new FormData();

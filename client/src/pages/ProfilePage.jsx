@@ -1397,6 +1397,8 @@ export default function ProfilePage() {
   const age = profile.show_age && profile.date_of_birth ? getAge(profile.date_of_birth) : null;
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
+  const locationLabel = [profile.location_city, profile.location_country].filter(Boolean).join(', ');
+  const locationFlag = getCountryFlag(profile.location_country_code || profile.nationality, "inline-block h-3.5 align-middle");
 
   const tabs = ['overview', 'posts', 'competitions'];
   if (hasPiuData) {
@@ -1445,6 +1447,13 @@ export default function ProfilePage() {
             </div>
             {profile.description && (
               <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
+            )}
+            {locationLabel && (
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                <span className="text-[12px]">📍</span>
+                {locationFlag && <span>{locationFlag}</span>}
+                <span className="truncate">{locationLabel}</span>
+              </p>
             )}
             <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
               Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
