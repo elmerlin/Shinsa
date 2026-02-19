@@ -3,13 +3,586 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { getDb } = require('../db/schema');
+const { optionalAuth } = require('./auth');
+const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 // Cache the jacket map in memory (loaded once from pump-phoenix.json)
 let cachedJacketMap = null;
 let cachedSongAliases = null;
+let cachedSongCatalog = null;
+
+const SCORE_TO_GRADE = [
+  { min: 995000, grade: 'SSS+' },
+  { min: 990000, grade: 'SSS' },
+  { min: 985000, grade: 'SS+' },
+  { min: 980000, grade: 'SS' },
+  { min: 975000, grade: 'S+' },
+  { min: 970000, grade: 'S' },
+  { min: 960000, grade: 'AAA+' },
+  { min: 950000, grade: 'AAA' },
+  { min: 925000, grade: 'AA+' },
+  { min: 900000, grade: 'AA' },
+  { min: 825000, grade: 'A+' },
+  { min: 750000, grade: 'A' },
+  { min: 650000, grade: 'B' },
+  { min: 550000, grade: 'C' },
+  { min: 450000, grade: 'D' },
+  { min: 0, grade: 'F' },
+];
+
+const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
+const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, index) => [grade, index]));
+
+const LEVEL_BASE_RATING = {
+  10: 100,
+  11: 110,
+  12: 130,
+  13: 160,
+  14: 200,
+  15: 250,
+  16: 310,
+  17: 380,
+  18: 460,
+  19: 550,
+  20: 650,
+  21: 760,
+  22: 880,
+  23: 1010,
+  24: 1150,
+  25: 1300,
+  26: 1460,
+  27: 1630,
+  28: 1810,
+};
+
+const GRADE_MULTIPLIER = {
+  F: 0.40,
+  D: 0.50,
+  C: 0.60,
+  B: 0.70,
+  A: 0.80,
+  'A+': 0.90,
+  AA: 1.00,
+  'AA+': 1.05,
+  AAA: 1.10,
+  'AAA+': 1.15,
+  S: 1.20,
+  'S+': 1.26,
+  SS: 1.32,
+  'SS+': 1.38,
+  SSS: 1.44,
+  'SSS+': 1.50,
+};
 
 function normalizeSongName(name) {
   return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function normalizeMode(mode) {
+  const m = String(mode || '').trim().toLowerCase();
+  if (m === 'single' || m === 'singles' || m === 's') return 'Single';
+  if (m === 'double' || m === 'doubles' || m === 'd') return 'Double';
+  return '';
+}
+
+function normalizeGrade(grade) {
+  const raw = String(grade || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!raw) return '';
+  if (GRADE_INDEX[raw] !== undefined) return raw;
+
+  const aliases = {
+    AP: 'A+',
+    AAP: 'AA+',
+    AAAP: 'AAA+',
+    SP: 'S+',
+    SSP: 'SS+',
+    SSSP: 'SSS+',
+    A_P: 'A+',
+    AA_P: 'AA+',
+    AAA_P: 'AAA+',
+    S_P: 'S+',
+    SS_P: 'SS+',
+    SSS_P: 'SSS+',
+    STAGEBREAK: 'F',
+    STAGE_BREAK: 'F',
+  };
+  if (aliases[raw]) return aliases[raw];
+  if (raw.startsWith('X_')) return normalizeGrade(raw.slice(2));
+  return '';
+}
+
+function gradeFromScore(score) {
+  const value = parseInt(score, 10) || 0;
+  for (const row of SCORE_TO_GRADE) {
+    if (value >= row.min) return row.grade;
+  }
+  return 'F';
+}
+
+function getGrade(record) {
+  const grade = normalizeGrade(record?.grade);
+  return grade || gradeFromScore(record?.score);
+}
+
+function isPassRecord(record) {
+  const score = parseInt(record?.score, 10) || 0;
+  if (score <= 0) return false;
+  return getGrade(record) !== 'F';
+}
+
+function scoreValue(value) {
+  return parseInt(value, 10) || 0;
+}
+
+function parseDateMs(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return 0;
+
+  const normalized = raw.replace(/\//g, '-');
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalized)) {
+    const ms = Date.parse(`${normalized}T00:00:00Z`);
+    return Number.isNaN(ms) ? 0 : ms;
+  }
+
+  const direct = Date.parse(normalized.includes('T') ? normalized : normalized.replace(' ', 'T') + 'Z');
+  if (!Number.isNaN(direct)) return direct;
+
+  const ymd = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymd) {
+    const ms = Date.parse(`${ymd[1]}-${String(ymd[2]).padStart(2, '0')}-${String(ymd[3]).padStart(2, '0')}T00:00:00Z`);
+    return Number.isNaN(ms) ? 0 : ms;
+  }
+  return 0;
+}
+
+function compareRecords(a, b) {
+  if (!a) return b || null;
+  if (!b) return a || null;
+
+  const aScore = scoreValue(a.score);
+  const bScore = scoreValue(b.score);
+  if (aScore !== bScore) return bScore > aScore ? b : a;
+
+  const aDate = parseDateMs(a.date_played || a.created_at || '');
+  const bDate = parseDateMs(b.date_played || b.created_at || '');
+  if (aDate !== bDate) return bDate > aDate ? b : a;
+
+  const aId = parseInt(a.id, 10) || 0;
+  const bId = parseInt(b.id, 10) || 0;
+  if (aId !== bId) return bId > aId ? b : a;
+
+  return a;
+}
+
+function toCanonicalTitle(title, aliases) {
+  let normalized = normalizeSongName(title);
+  if (!normalized) return '';
+
+  const seen = new Set();
+  while (aliases[normalized] && !seen.has(normalized)) {
+    seen.add(normalized);
+    normalized = aliases[normalized];
+  }
+  return normalized;
+}
+
+function makeChartKey(title, mode, level, aliases) {
+  const canonicalTitle = toCanonicalTitle(title, aliases);
+  const canonicalMode = normalizeMode(mode);
+  const lv = parseInt(level, 10) || 0;
+  if (!canonicalTitle || !canonicalMode || !lv) return '';
+  return `${canonicalTitle}|${canonicalMode}|${lv}`;
+}
+
+function levelModeSort(a, b) {
+  const modeA = a.mode === 'Single' ? 0 : 1;
+  const modeB = b.mode === 'Single' ? 0 : 1;
+  if (modeA !== modeB) return modeA - modeB;
+  if (a.level !== b.level) return a.level - b.level;
+  return (a.chart_id || 0) - (b.chart_id || 0);
+}
+
+function calculateRating(level, grade, isPass = true) {
+  if (!isPass) return 0;
+  const base = LEVEL_BASE_RATING[parseInt(level, 10)];
+  if (!base) return 0;
+  const normalizedGrade = normalizeGrade(grade);
+  const mult = GRADE_MULTIPLIER[normalizedGrade];
+  if (!mult) return 0;
+  return Math.round(base * mult);
+}
+
+function expandMode(mode) {
+  const normalized = String(mode || '').trim().toLowerCase();
+  if (!normalized || normalized === 'both' || normalized === 'all') return ['Single', 'Double'];
+  if (normalized.startsWith('s')) return ['Single'];
+  if (normalized.startsWith('d')) return ['Double'];
+  return ['Single', 'Double'];
+}
+
+function getSongCatalog(db, aliases) {
+  if (cachedSongCatalog) return cachedSongCatalog;
+
+  const rows = db.prepare(`
+    SELECT id, title, artist, jacket_url, mode, level, bpm, song_key, flags
+    FROM songs
+    ORDER BY title COLLATE NOCASE ASC, artist COLLATE NOCASE ASC, mode ASC, level ASC, id ASC
+  `).all();
+
+  const songsByGroup = new Map();
+  const seenChartKeys = new Set();
+  const charts = [];
+  const chartsByKey = new Map();
+  const chartsById = new Map();
+  const levelModeTotals = { Single: new Map(), Double: new Map() };
+
+  for (const row of rows) {
+    const mode = normalizeMode(row.mode);
+    if (!mode) continue;
+    const level = parseInt(row.level, 10) || 0;
+    if (level <= 0) continue;
+
+    const chartKey = makeChartKey(row.title, mode, level, aliases);
+    if (!chartKey || seenChartKeys.has(chartKey)) continue;
+    seenChartKeys.add(chartKey);
+
+    const canonicalTitle = toCanonicalTitle(row.title, aliases);
+    const artistNorm = normalizeSongName(row.artist);
+    const groupKey = (row.song_key && String(row.song_key).trim())
+      ? `song_key:${String(row.song_key).trim()}`
+      : `${canonicalTitle}|${artistNorm}`;
+
+    if (!songsByGroup.has(groupKey)) {
+      songsByGroup.set(groupKey, {
+        song_group_key: groupKey,
+        title: row.title,
+        artist: row.artist || '',
+        jacket_url: row.jacket_url || '',
+        song_key: row.song_key || '',
+        flags: row.flags || '',
+        charts: [],
+        searchable_title: canonicalTitle,
+      });
+    }
+
+    const group = songsByGroup.get(groupKey);
+    const chart = {
+      chart_id: row.id,
+      key: chartKey,
+      title: row.title,
+      artist: row.artist || '',
+      mode,
+      level,
+      jacket_url: row.jacket_url || '',
+      bpm: row.bpm || '',
+      song_key: row.song_key || '',
+      flags: row.flags || '',
+    };
+
+    group.charts.push(chart);
+    charts.push(chart);
+    chartsByKey.set(chartKey, chart);
+    chartsById.set(String(row.id), chart);
+
+    const modeTotals = levelModeTotals[mode];
+    modeTotals.set(level, (modeTotals.get(level) || 0) + 1);
+  }
+
+  const songs = Array.from(songsByGroup.values()).map((song) => {
+    song.charts.sort(levelModeSort);
+    return song;
+  }).sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+
+  const levels = new Set([...levelModeTotals.Single.keys(), ...levelModeTotals.Double.keys()]);
+  const sortedLevels = Array.from(levels).sort((a, b) => a - b);
+
+  cachedSongCatalog = {
+    songs,
+    charts,
+    chartsByKey,
+    chartsById,
+    levelModeTotals,
+    levels: sortedLevels,
+  };
+  return cachedSongCatalog;
+}
+
+function queryUserBestScores(db, userId) {
+  if (!userId) return [];
+  return db.prepare(`
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, created_at
+    FROM user_best_scores
+    WHERE user_id = ?
+  `).all(userId);
+}
+
+function queryUserRecentScores(db, userId) {
+  if (!userId) return [];
+  return db.prepare(`
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+    FROM user_recently_played
+    WHERE user_id = ?
+  `).all(userId);
+}
+
+function buildUserBestByChartMap({ bestScores, recentScores, aliases, validChartKeys = null }) {
+  const passBest = new Map();
+  const failBest = new Map();
+
+  const pushRecord = (source, row) => {
+    const key = makeChartKey(row.song_title, row.mode, row.level, aliases);
+    if (!key) return;
+    if (validChartKeys && !validChartKeys.has(key)) return;
+
+    const score = scoreValue(row.score);
+    const grade = getGrade(row);
+    const shaped = {
+      id: row.id,
+      source,
+      user_id: row.user_id,
+      song_title: row.song_title,
+      mode: normalizeMode(row.mode),
+      level: parseInt(row.level, 10) || 0,
+      score,
+      grade,
+      plate: row.plate || '',
+      background_url: row.background_url || '',
+      date_played: row.date_played || row.created_at || '',
+      is_pass: isPassRecord({ score, grade }),
+      is_stage_break: !isPassRecord({ score, grade }),
+      rating: calculateRating(row.level, grade, isPassRecord({ score, grade })),
+    };
+
+    if (shaped.is_pass) {
+      passBest.set(key, compareRecords(passBest.get(key), shaped));
+    } else {
+      failBest.set(key, compareRecords(failBest.get(key), shaped));
+    }
+  };
+
+  for (const row of bestScores || []) pushRecord('best', row);
+  for (const row of recentScores || []) pushRecord('recent', row);
+
+  const allKeys = new Set([...passBest.keys(), ...failBest.keys()]);
+  const bestByChart = new Map();
+  for (const key of allKeys) {
+    bestByChart.set(key, passBest.get(key) || failBest.get(key) || null);
+  }
+  return { bestByChart, passBest, failBest };
+}
+
+function getLevelEntry(map, level) {
+  if (!map.has(level)) {
+    map.set(level, {
+      level,
+      total_charts: 0,
+      cleared_charts: 0,
+      clear_percentage: 0,
+      rating_total: 0,
+      score_sum: 0,
+      score_count: 0,
+      average_score: 0,
+      average_grade: '',
+    });
+  }
+  return map.get(level);
+}
+
+function finalizeLevelEntries(levelMap, totalChartsByLevel) {
+  for (const [level, total] of totalChartsByLevel.entries()) {
+    const entry = getLevelEntry(levelMap, level);
+    entry.total_charts = total;
+    entry.clear_percentage = total > 0
+      ? Number(((entry.cleared_charts / total) * 100).toFixed(2))
+      : 0;
+    entry.average_score = entry.score_count > 0
+      ? Math.round(entry.score_sum / entry.score_count)
+      : 0;
+    entry.average_grade = entry.average_score > 0 ? gradeFromScore(entry.average_score) : '';
+  }
+}
+
+function getCompetitiveLevel(entries) {
+  let best = null;
+  for (const entry of entries) {
+    if (!entry || entry.score_count <= 0) continue;
+    const grade = entry.average_grade || 'F';
+    if ((GRADE_INDEX[grade] || 0) < (GRADE_INDEX.S || 0)) continue;
+    if (!best || entry.level > best.level) {
+      best = {
+        level: entry.level,
+        average_score: entry.average_score,
+        average_grade: grade,
+        passed_charts: entry.cleared_charts,
+        total_charts: entry.total_charts,
+      };
+    }
+  }
+  return best || {
+    level: null,
+    average_score: 0,
+    average_grade: '',
+    passed_charts: 0,
+    total_charts: 0,
+  };
+}
+
+function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, passBestByChart) {
+  const singleLevels = new Map();
+  const doubleLevels = new Map();
+  const allLevels = new Map();
+
+  for (const [level, count] of songCatalog.levelModeTotals.Single.entries()) {
+    getLevelEntry(singleLevels, level).total_charts = count;
+    getLevelEntry(allLevels, level).total_charts += count;
+  }
+  for (const [level, count] of songCatalog.levelModeTotals.Double.entries()) {
+    getLevelEntry(doubleLevels, level).total_charts = count;
+    getLevelEntry(allLevels, level).total_charts += count;
+  }
+
+  const ratingsAll = [];
+  const ratingsSingle = [];
+  const ratingsDouble = [];
+
+  for (const [chartKey, record] of passBestByChart.entries()) {
+    if (!record) continue;
+    const chart = songCatalog.chartsByKey.get(chartKey);
+    if (!chart) continue;
+    const rating = calculateRating(chart.level, record.grade, true);
+    const modeMap = chart.mode === 'Single' ? singleLevels : doubleLevels;
+    const modeEntry = getLevelEntry(modeMap, chart.level);
+    const allEntry = getLevelEntry(allLevels, chart.level);
+
+    modeEntry.cleared_charts += 1;
+    modeEntry.rating_total += rating;
+    modeEntry.score_sum += scoreValue(record.score);
+    modeEntry.score_count += 1;
+
+    allEntry.cleared_charts += 1;
+    allEntry.rating_total += rating;
+    allEntry.score_sum += scoreValue(record.score);
+    allEntry.score_count += 1;
+
+    ratingsAll.push(rating);
+    if (chart.mode === 'Single') ratingsSingle.push(rating);
+    if (chart.mode === 'Double') ratingsDouble.push(rating);
+  }
+
+  finalizeLevelEntries(singleLevels, songCatalog.levelModeTotals.Single);
+  finalizeLevelEntries(doubleLevels, songCatalog.levelModeTotals.Double);
+
+  const bothTotalsByLevel = new Map();
+  for (const level of songCatalog.levels) {
+    const total = (songCatalog.levelModeTotals.Single.get(level) || 0) + (songCatalog.levelModeTotals.Double.get(level) || 0);
+    bothTotalsByLevel.set(level, total);
+  }
+  finalizeLevelEntries(allLevels, bothTotalsByLevel);
+
+  const singleEntries = Array.from(singleLevels.values()).sort((a, b) => a.level - b.level);
+  const doubleEntries = Array.from(doubleLevels.values()).sort((a, b) => a.level - b.level);
+  const bothEntries = Array.from(allLevels.values()).sort((a, b) => a.level - b.level);
+
+  const singleTotals = singleEntries.reduce((acc, row) => {
+    acc.total_charts += row.total_charts;
+    acc.cleared_charts += row.cleared_charts;
+    acc.rating_total += row.rating_total;
+    return acc;
+  }, { total_charts: 0, cleared_charts: 0, rating_total: 0 });
+
+  const doubleTotals = doubleEntries.reduce((acc, row) => {
+    acc.total_charts += row.total_charts;
+    acc.cleared_charts += row.cleared_charts;
+    acc.rating_total += row.rating_total;
+    return acc;
+  }, { total_charts: 0, cleared_charts: 0, rating_total: 0 });
+
+  const bothTotals = bothEntries.reduce((acc, row) => {
+    acc.total_charts += row.total_charts;
+    acc.cleared_charts += row.cleared_charts;
+    acc.rating_total += row.rating_total;
+    return acc;
+  }, { total_charts: 0, cleared_charts: 0, rating_total: 0 });
+
+  const applyPercent = (totals) => ({
+    ...totals,
+    clear_percentage: totals.total_charts > 0
+      ? Number(((totals.cleared_charts / totals.total_charts) * 100).toFixed(2))
+      : 0,
+  });
+
+  ratingsAll.sort((a, b) => b - a);
+  ratingsSingle.sort((a, b) => b - a);
+  ratingsDouble.sort((a, b) => b - a);
+
+  const computedPumbility = ratingsAll.slice(0, 50).reduce((sum, value) => sum + value, 0);
+  const singlesPumbility = ratingsSingle.slice(0, 50).reduce((sum, value) => sum + value, 0);
+
+  const pumbility = (syncRow?.pumbility_value || 0) > 0
+    ? parseInt(syncRow.pumbility_value, 10)
+    : computedPumbility;
+
+  return {
+    user_id: userId,
+    user: profile ? {
+      id: profile.id,
+      username: profile.username,
+      avatar: normalizeUserAvatarForList(profile.avatar, profile.id, 64),
+      pumbility: parseInt(profile.pumbility, 10) || 0,
+    } : null,
+    pumbility,
+    computed_pumbility: computedPumbility,
+    singles_pumbility: singlesPumbility,
+    totals: {
+      single: applyPercent(singleTotals),
+      double: applyPercent(doubleTotals),
+      both: applyPercent(bothTotals),
+    },
+    levels: {
+      single: singleEntries,
+      double: doubleEntries,
+      both: bothEntries,
+    },
+    competitive_levels: {
+      single: getCompetitiveLevel(singleEntries),
+      double: getCompetitiveLevel(doubleEntries),
+    },
+    sync: syncRow ? {
+      best_scores_imported: !!syncRow.best_scores_imported,
+      last_best_scores_sync: syncRow.last_best_scores_sync || null,
+      pumbility_value: parseInt(syncRow.pumbility_value, 10) || 0,
+    } : {
+      best_scores_imported: false,
+      last_best_scores_sync: null,
+      pumbility_value: 0,
+    },
+  };
+}
+
+function getUserAnalytics(db, userId, aliases, songCatalog) {
+  const bestScores = queryUserBestScores(db, userId);
+  const recentScores = queryUserRecentScores(db, userId);
+  const { bestByChart, passBest } = buildUserBestByChartMap({
+    bestScores,
+    recentScores,
+    aliases,
+    validChartKeys: songCatalog.chartsByKey,
+  });
+
+  const profile = db.prepare('SELECT id, username, avatar, pumbility FROM users WHERE id = ?').get(userId) || null;
+  const syncRow = db.prepare('SELECT best_scores_imported, last_best_scores_sync, pumbility_value FROM user_piugame_sync WHERE user_id = ?').get(userId) || null;
+
+  return {
+    bestByChart,
+    passBestByChart: passBest,
+    analytics: formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, passBest),
+  };
+}
+
+function parseLevelQuery(levelRaw) {
+  if (levelRaw === undefined || levelRaw === null || levelRaw === '') return null;
+  const level = parseInt(levelRaw, 10);
+  return Number.isFinite(level) && level > 0 ? level : null;
 }
 
 function loadSongAliases() {
@@ -89,10 +662,488 @@ function loadJacketMap() {
   return map;
 }
 
+function invalidateSongCaches() {
+  cachedJacketMap = null;
+  cachedSongCatalog = null;
+}
+
 // GET /api/songs/jacket-map — return song name → local jacket URL mapping
 router.get('/jacket-map', (req, res) => {
   const map = loadJacketMap();
   res.json(map);
+});
+
+// GET /api/songs/library — grouped songs + per-chart user best snapshot
+router.get('/library', optionalAuth, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+
+  const search = String(req.query.search || '').trim().toLowerCase();
+  const modeFilter = normalizeMode(req.query.mode);
+  const levelFilter = parseLevelQuery(req.query.level);
+  const userId = String(req.query.user_id || req.user?.id || '').trim();
+
+  let bestByChart = new Map();
+  if (userId) {
+    const bestScores = queryUserBestScores(db, userId);
+    const recentScores = queryUserRecentScores(db, userId);
+    bestByChart = buildUserBestByChartMap({
+      bestScores,
+      recentScores,
+      aliases,
+      validChartKeys: songCatalog.chartsByKey,
+    }).bestByChart;
+  }
+
+  const songs = [];
+  for (const song of songCatalog.songs) {
+    const filteredCharts = song.charts.filter((chart) => {
+      if (modeFilter && chart.mode !== modeFilter) return false;
+      if (levelFilter && chart.level !== levelFilter) return false;
+      if (search) {
+        const haystack = `${song.title} ${song.artist}`.toLowerCase();
+        if (!haystack.includes(search)) return false;
+      }
+      return true;
+    }).map((chart) => {
+      const best = bestByChart.get(chart.key) || null;
+      return {
+        ...chart,
+        best_score: best ? best.score : null,
+        best_grade: best ? best.grade : '',
+        is_pass: best ? !!best.is_pass : false,
+        is_stage_break: best ? !!best.is_stage_break : false,
+      };
+    });
+
+    if (filteredCharts.length === 0) continue;
+    songs.push({
+      song_group_key: song.song_group_key,
+      title: song.title,
+      artist: song.artist,
+      jacket_url: song.jacket_url,
+      song_key: song.song_key,
+      flags: song.flags,
+      charts: filteredCharts,
+    });
+  }
+
+  res.json({
+    total_songs: songs.length,
+    total_charts: songs.reduce((sum, song) => sum + song.charts.length, 0),
+    songs,
+  });
+});
+
+// GET /api/songs/chart/:chartId/history — historical scores on a chart (includes fails)
+router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const chart = songCatalog.chartsById.get(String(req.params.chartId));
+  if (!chart) return res.status(404).json({ error: 'Chart not found' });
+
+  const targetUserId = String(req.query.user_id || req.user?.id || '').trim();
+  if (!targetUserId) return res.status(400).json({ error: 'user_id is required' });
+
+  const recentRows = db.prepare(`
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+    FROM user_recently_played
+    WHERE user_id = ? AND mode = ? AND level = ?
+    ORDER BY id DESC
+  `).all(targetUserId, chart.mode, chart.level);
+
+  const chartHistory = recentRows
+    .filter((row) => makeChartKey(row.song_title, row.mode, row.level, aliases) === chart.key)
+    .map((row) => {
+      const grade = getGrade(row);
+      const score = scoreValue(row.score);
+      const isPass = isPassRecord({ score, grade });
+      return {
+        id: row.id,
+        score,
+        grade,
+        plate: row.plate || '',
+        is_pass: isPass,
+        is_stage_break: !isPass,
+        date_played: row.date_played || row.created_at || '',
+        rating: calculateRating(row.level, grade, isPass),
+      };
+    });
+
+  res.json({
+    chart_id: chart.chart_id,
+    title: chart.title,
+    mode: chart.mode,
+    level: chart.level,
+    history: chartHistory,
+  });
+});
+
+// GET /api/songs/chart/:chartId — chart page payload
+router.get('/chart/:chartId', optionalAuth, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const chart = songCatalog.chartsById.get(String(req.params.chartId));
+  if (!chart) return res.status(404).json({ error: 'Chart not found' });
+
+  const targetUserId = String(req.query.user_id || req.user?.id || '').trim();
+  const followFromUserId = String(req.query.follow_from_user_id || req.user?.id || '').trim();
+
+  let userSummary = null;
+  let history = [];
+
+  if (targetUserId) {
+    const profile = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(targetUserId);
+    const bestRows = db.prepare(`
+      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, created_at
+      FROM user_best_scores
+      WHERE user_id = ? AND mode = ? AND level = ?
+    `).all(targetUserId, chart.mode, chart.level);
+    const recentRows = db.prepare(`
+      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+      FROM user_recently_played
+      WHERE user_id = ? AND mode = ? AND level = ?
+      ORDER BY id DESC
+    `).all(targetUserId, chart.mode, chart.level);
+
+    const bestCandidates = bestRows
+      .filter((row) => makeChartKey(row.song_title, row.mode, row.level, aliases) === chart.key);
+    const historyRows = recentRows
+      .filter((row) => makeChartKey(row.song_title, row.mode, row.level, aliases) === chart.key);
+
+    history = historyRows.map((row) => {
+      const grade = getGrade(row);
+      const score = scoreValue(row.score);
+      const isPass = isPassRecord({ score, grade });
+      return {
+        id: row.id,
+        source: 'recent',
+        score,
+        grade,
+        plate: row.plate || '',
+        is_pass: isPass,
+        is_stage_break: !isPass,
+        date_played: row.date_played || row.created_at || '',
+        rating: calculateRating(row.level, grade, isPass),
+      };
+    });
+
+    let bestPass = null;
+    for (const row of bestCandidates) {
+      const record = {
+        id: row.id,
+        source: 'best',
+        score: scoreValue(row.score),
+        grade: getGrade(row),
+        plate: row.plate || '',
+        date_played: row.created_at || '',
+      };
+      if (!isPassRecord(record)) continue;
+      bestPass = compareRecords(bestPass, { ...record, is_pass: true, is_stage_break: false });
+    }
+    for (const row of history) {
+      if (!row.is_pass) continue;
+      bestPass = compareRecords(bestPass, row);
+    }
+
+    let bestFail = null;
+    for (const row of history) {
+      if (row.is_pass) continue;
+      bestFail = compareRecords(bestFail, row);
+    }
+
+    const personalBest = bestPass || bestFail || null;
+
+    // Include best score as a synthetic history point when older runs are missing from recent sync.
+    if (personalBest && !history.some((entry) => entry.score === personalBest.score && entry.grade === personalBest.grade)) {
+      history.push({
+        id: `best-${personalBest.id}`,
+        source: 'best',
+        score: personalBest.score,
+        grade: personalBest.grade,
+        plate: personalBest.plate || '',
+        is_pass: !!personalBest.is_pass,
+        is_stage_break: !!personalBest.is_stage_break,
+        date_played: personalBest.date_played || '',
+        rating: calculateRating(chart.level, personalBest.grade, !!personalBest.is_pass),
+      });
+    }
+
+    userSummary = {
+      user: profile ? {
+        id: profile.id,
+        username: profile.username,
+        avatar: normalizeUserAvatarForList(profile.avatar, profile.id, 64),
+      } : null,
+      best: personalBest ? {
+        ...personalBest,
+        rating: calculateRating(chart.level, personalBest.grade, !!personalBest.is_pass),
+      } : null,
+    };
+  }
+
+  const progression = [...history]
+    .sort((a, b) => {
+      const aTime = parseDateMs(a.date_played);
+      const bTime = parseDateMs(b.date_played);
+      if (aTime !== bTime) return aTime - bTime;
+      const aId = parseInt(a.id, 10) || 0;
+      const bId = parseInt(b.id, 10) || 0;
+      return aId - bId;
+    })
+    .map((row, idx) => ({
+      idx: idx + 1,
+      score: row.score,
+      grade: row.grade,
+      is_pass: row.is_pass,
+      is_stage_break: row.is_stage_break,
+      date_played: row.date_played || '',
+      label: row.date_played ? String(row.date_played).slice(0, 10) : `Run ${idx + 1}`,
+    }));
+
+  let friendRecords = [];
+  if (followFromUserId) {
+    const following = db.prepare(`
+      SELECT u.id, u.username, u.avatar
+      FROM user_follows f
+      JOIN users u ON u.id = f.following_id
+      WHERE f.follower_id = ?
+    `).all(followFromUserId);
+
+    if (following.length > 0) {
+      const followIds = following.map((row) => row.id);
+      const placeholders = followIds.map(() => '?').join(', ');
+      const bestRows = db.prepare(`
+        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, created_at
+        FROM user_best_scores
+        WHERE user_id IN (${placeholders}) AND mode = ? AND level = ?
+      `).all(...followIds, chart.mode, chart.level);
+      const recentRows = db.prepare(`
+        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, created_at
+        FROM user_recently_played
+        WHERE user_id IN (${placeholders}) AND mode = ? AND level = ?
+      `).all(...followIds, chart.mode, chart.level);
+
+      const byUserPass = new Map();
+      const byUserFail = new Map();
+      const maybeAssign = (row, source) => {
+        if (makeChartKey(row.song_title, row.mode, row.level, aliases) !== chart.key) return;
+        const score = scoreValue(row.score);
+        const grade = getGrade(row);
+        const shaped = {
+          id: row.id,
+          source,
+          user_id: row.user_id,
+          score,
+          grade,
+          plate: row.plate || '',
+          date_played: row.date_played || row.created_at || '',
+          is_pass: isPassRecord({ score, grade }),
+          is_stage_break: !isPassRecord({ score, grade }),
+        };
+        if (shaped.is_pass) {
+          byUserPass.set(row.user_id, compareRecords(byUserPass.get(row.user_id), shaped));
+        } else {
+          byUserFail.set(row.user_id, compareRecords(byUserFail.get(row.user_id), shaped));
+        }
+      };
+
+      for (const row of bestRows) maybeAssign(row, 'best');
+      for (const row of recentRows) maybeAssign(row, 'recent');
+
+      friendRecords = following.map((friend) => {
+        const record = byUserPass.get(friend.id) || byUserFail.get(friend.id) || null;
+        if (!record) return null;
+        return {
+          user: {
+            id: friend.id,
+            username: friend.username,
+            avatar: normalizeUserAvatarForList(friend.avatar, friend.id, 56),
+          },
+          best: {
+            ...record,
+            rating: calculateRating(chart.level, record.grade, record.is_pass),
+          },
+        };
+      }).filter(Boolean);
+
+      friendRecords.sort((a, b) => {
+        if (a.best.is_pass !== b.best.is_pass) return a.best.is_pass ? -1 : 1;
+        if (a.best.score !== b.best.score) return b.best.score - a.best.score;
+        return parseDateMs(b.best.date_played) - parseDateMs(a.best.date_played);
+      });
+    }
+  }
+
+  res.json({
+    chart,
+    user_summary: userSummary,
+    progression,
+    history: history.sort((a, b) => {
+      const dt = parseDateMs(b.date_played) - parseDateMs(a.date_played);
+      if (dt !== 0) return dt;
+      return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);
+    }),
+    friend_records: friendRecords,
+  });
+});
+
+// GET /api/songs/analytics/user/:userId — clear/rating progress, level totals, pumbility metrics
+router.get('/analytics/user/:userId', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const userExists = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!userExists) return res.status(404).json({ error: 'User not found' });
+
+  const result = getUserAnalytics(db, userId, aliases, songCatalog);
+  res.json(result.analytics);
+});
+
+// GET /api/songs/analytics/head-to-head
+// Query:
+// - user_a_id, user_b_id (required)
+// - level (optional)
+// - mode: Single | Double | Both (default Both)
+router.get('/analytics/head-to-head', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+
+  const userAId = String(req.query.user_a_id || '').trim();
+  const userBId = String(req.query.user_b_id || '').trim();
+  if (!userAId || !userBId) return res.status(400).json({ error: 'user_a_id and user_b_id are required' });
+  const userAExists = db.prepare('SELECT id FROM users WHERE id = ?').get(userAId);
+  const userBExists = db.prepare('SELECT id FROM users WHERE id = ?').get(userBId);
+  if (!userAExists || !userBExists) return res.status(404).json({ error: 'One or both users were not found' });
+
+  const modeList = expandMode(req.query.mode);
+  const level = parseLevelQuery(req.query.level);
+
+  const userA = getUserAnalytics(db, userAId, aliases, songCatalog);
+  const userB = getUserAnalytics(db, userBId, aliases, songCatalog);
+
+  const inFilter = (record) => {
+    if (!record) return false;
+    if (!modeList.includes(record.mode)) return false;
+    if (level && record.level !== level) return false;
+    return true;
+  };
+
+  const aPass = new Map(
+    [...userA.passBestByChart.entries()].filter(([, record]) => inFilter(record))
+  );
+  const bPass = new Map(
+    [...userB.passBestByChart.entries()].filter(([, record]) => inFilter(record))
+  );
+
+  let sharedCount = 0;
+  let userAWins = 0;
+  let userBWins = 0;
+  let ties = 0;
+  const songResults = [];
+
+  for (const [key, aRecord] of aPass.entries()) {
+    const bRecord = bPass.get(key);
+    if (!aRecord || !bRecord) continue;
+
+    sharedCount += 1;
+    let winner = 'tie';
+    if (aRecord.score > bRecord.score) {
+      userAWins += 1;
+      winner = 'a';
+    } else if (bRecord.score > aRecord.score) {
+      userBWins += 1;
+      winner = 'b';
+    } else {
+      ties += 1;
+    }
+
+    const chart = songCatalog.chartsByKey.get(key);
+    songResults.push({
+      chart_id: chart?.chart_id || null,
+      title: chart?.title || aRecord.song_title || bRecord.song_title,
+      mode: chart?.mode || aRecord.mode,
+      level: chart?.level || aRecord.level,
+      score_a: aRecord.score,
+      score_b: bRecord.score,
+      winner,
+    });
+  }
+
+  const modeLabel = modeList.length === 2 ? 'both' : (modeList[0] || '').toLowerCase();
+
+  const ratingFor = (analytics) => {
+    const source = modeLabel === 'single'
+      ? analytics.levels.single
+      : modeLabel === 'double'
+        ? analytics.levels.double
+        : analytics.levels.both;
+    if (!Array.isArray(source)) return 0;
+    if (!level) {
+      return source.reduce((sum, row) => sum + (parseInt(row.rating_total, 10) || 0), 0);
+    }
+    const row = source.find((entry) => entry.level === level);
+    return row ? parseInt(row.rating_total, 10) || 0 : 0;
+  };
+
+  const ratingA = ratingFor(userA.analytics);
+  const ratingB = ratingFor(userB.analytics);
+
+  let clearCutWinner = null;
+  if (userAWins > userBWins && ratingA > ratingB) clearCutWinner = userAId;
+  if (userBWins > userAWins && ratingB > ratingA) clearCutWinner = userBId;
+
+  const topSongDiffs = songResults
+    .sort((a, b) => Math.abs(b.score_a - b.score_b) - Math.abs(a.score_a - a.score_b))
+    .slice(0, 25);
+
+  res.json({
+    users: {
+      a: userA.analytics.user,
+      b: userB.analytics.user,
+    },
+    highlighted_stats: {
+      pumbility: {
+        a: userA.analytics.pumbility,
+        b: userB.analytics.pumbility,
+      },
+      singles_pumbility: {
+        a: userA.analytics.singles_pumbility,
+        b: userB.analytics.singles_pumbility,
+      },
+      doubles_competitive_level: {
+        a: userA.analytics.competitive_levels.double,
+        b: userB.analytics.competitive_levels.double,
+      },
+      singles_competitive_level: {
+        a: userA.analytics.competitive_levels.single,
+        b: userB.analytics.competitive_levels.single,
+      },
+    },
+    comparison: {
+      level,
+      mode: modeLabel,
+      shared_chart_count: sharedCount,
+      wins: {
+        a: userAWins,
+        b: userBWins,
+        ties,
+      },
+      rating: {
+        a: ratingA,
+        b: ratingB,
+      },
+      clear_cut_winner: clearCutWinner,
+    },
+    top_song_diffs: topSongDiffs,
+  });
 });
 
 // GET all songs (with optional filters)
@@ -109,7 +1160,6 @@ router.get('/', (req, res) => {
 
   query += ' ORDER BY level ASC, title ASC';
   const songs = db.prepare(query).all(...params);
-  db.close();
   res.json(songs);
 });
 
@@ -120,7 +1170,6 @@ router.get('/stats', (req, res) => {
     'SELECT level, mode, COUNT(*) as count FROM songs GROUP BY level, mode ORDER BY level ASC'
   ).all();
   const total = db.prepare('SELECT COUNT(*) as count FROM songs').get();
-  db.close();
   res.json({ total: total.count, by_level: stats });
 });
 
@@ -145,7 +1194,7 @@ router.post('/import', (req, res) => {
   });
 
   const count = importSongs(songs);
-  db.close();
+  invalidateSongCaches();
   res.json({ imported: count });
 });
 

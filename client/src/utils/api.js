@@ -88,6 +88,23 @@ export const getSongs = (params = {}) => {
   return request(`/songs${qs ? `?${qs}` : ''}`);
 };
 export const getJacketMap = () => request('/songs/jacket-map');
+export const getSongLibrary = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/library${qs ? `?${qs}` : ''}`);
+};
+export const getSongChartDetail = (chartId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/chart/${chartId}${qs ? `?${qs}` : ''}`);
+};
+export const getSongChartHistory = (chartId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/chart/${chartId}/history${qs ? `?${qs}` : ''}`);
+};
+export const getSongAnalytics = (userId) => request(`/songs/analytics/user/${userId}`);
+export const getSongHeadToHead = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/head-to-head${qs ? `?${qs}` : ''}`);
+};
 
 // Duels
 export const getDuels = () => request('/duels');
