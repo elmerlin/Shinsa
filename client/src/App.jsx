@@ -122,15 +122,27 @@ function UserSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const ref = useRef(null);
+  const inputRef = useRef(null);
   const navigate = useNavigate();
   const debounceRef = useRef(null);
 
   useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    function handleClick(e) {
+      if (!ref.current || ref.current.contains(e.target)) return;
+      setOpen(false);
+      setExpanded(false);
+    }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  useEffect(() => {
+    if (expanded) {
+      inputRef.current?.focus();
+    }
+  }, [expanded]);
 
   const handleChange = (val) => {
     setQuery(val);
@@ -149,23 +161,49 @@ function UserSearch() {
     setQuery('');
     setResults([]);
     setOpen(false);
+    setExpanded(false);
     navigate(getProfilePath(user?.id, user?.username));
   };
 
   return (
     <div className="relative" ref={ref}>
-      <div className="relative">
-        <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          value={query}
-          onChange={e => handleChange(e.target.value)}
-          onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder="Search players..."
-          className="w-28 sm:w-40 bg-piu-dark border border-piu-border rounded-lg text-xs py-1.5 pl-7 pr-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-piu-accent/50 transition-colors"
-        />
+      <div className="flex items-center justify-end gap-1">
+        <div
+          className={`overflow-hidden transition-all duration-200 ${expanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          style={{ width: expanded ? 'min(20rem, calc(100vw - 10rem))' : 0 }}
+        >
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={e => handleChange(e.target.value)}
+            onFocus={() => results.length > 0 && setOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setExpanded(false);
+                setOpen(false);
+              }
+            }}
+            placeholder="Search players..."
+            className="w-full bg-piu-dark border border-piu-border rounded-lg text-xs py-1.5 px-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-piu-accent/50 transition-colors"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded((prev) => {
+              const next = !prev;
+              if (!next) setOpen(false);
+              return next;
+            });
+          }}
+          className="p-1.5 text-gray-400 hover:text-white transition-colors"
+          aria-label="Search players"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
       </div>
       {open && results.length > 0 && (
         <div className="absolute right-0 top-full mt-1 w-64 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto">
@@ -402,7 +440,7 @@ export default function App() {
             <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
-                <div className="hidden sm:block"><NotificationBell /></div>
+                <NotificationBell />
                 <UserMenu />
               </div>
             ) : (
@@ -463,82 +501,9 @@ export default function App() {
   );
 }
 
-function MobileNotificationsPage({ onClose }) {
-  const { notifications, unreadCount, markRead, markAllRead, dismiss, invitationCount } = useNotifications();
-  const navigate = useNavigate();
-
-  return (
-    <div className="fixed inset-0 z-[60] bg-piu-dark flex flex-col sm:hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border bg-piu-card/90 backdrop-blur-md">
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <span className="font-display font-bold text-sm tracking-wider">NOTIFICATIONS</span>
-        {unreadCount > 0 ? (
-          <button onClick={markAllRead} className="text-[11px] text-piu-accent hover:underline font-display">Mark all read</button>
-        ) : <span className="w-16" />}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {invitationCount > 0 && (
-          <Link
-            to="/account"
-            onClick={onClose}
-            className="flex items-center gap-3 px-4 py-3 bg-piu-accent/10 hover:bg-piu-accent/20 transition-colors border-b border-piu-border/30"
-          >
-            <span className="text-piu-accent text-lg">&#9993;</span>
-            <span className="text-sm font-display font-bold text-piu-accent">
-              {invitationCount} pending invitation{invitationCount > 1 ? 's' : ''}
-            </span>
-          </Link>
-        )}
-
-        {notifications.length === 0 && invitationCount === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mb-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <p className="text-sm font-display">No notifications yet</p>
-          </div>
-        )}
-
-        {notifications.map(n => (
-          <div
-            key={n.id}
-            className={`flex items-start gap-3 px-4 py-3 border-b border-piu-border/20 active:bg-piu-dark/50 transition-colors cursor-pointer ${!n.read ? 'bg-piu-card/40' : ''}`}
-            onClick={() => {
-              if (!n.read) markRead(n.id);
-              if (n.link) { navigate(n.link); onClose(); }
-            }}
-          >
-            <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${!n.read ? 'bg-piu-accent' : 'bg-transparent'}`} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-display font-bold">{n.title}</p>
-              {n.message && <p className="text-xs text-gray-400 mt-0.5">{n.message}</p>}
-              <p className="text-[11px] text-gray-600 mt-1">{new Date(n.created_at + 'Z').toLocaleString()}</p>
-            </div>
-            <button
-              onClick={e => { e.stopPropagation(); dismiss(n.id); }}
-              className="text-gray-600 hover:text-red-400 text-sm shrink-0 p-1"
-            >
-              x
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function MobileBottomNav() {
   const location = useLocation();
   const { user } = useAuth();
-  const { totalBadge } = useNotifications();
-  const [showNotifs, setShowNotifs] = useState(false);
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -549,73 +514,55 @@ function MobileBottomNav() {
   const profileLegacyPath = user?.id ? `/profile/${user.id}` : '';
   const profileActive = profilePath ? (path === profilePath || path === profileLegacyPath) : false;
 
-  // Close notifications page on route change
-  useEffect(() => {
-    setShowNotifs(false);
-  }, [path]);
-
   return (
-    <>
-      {showNotifs && <MobileNotificationsPage onClose={() => setShowNotifs(false)} />}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-piu-card border-t border-piu-border">
-        <div className="flex items-center justify-around h-14 px-2">
-          {/* Home */}
-          <Link to="/" onClick={scrollToTop} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${path === '/' ? 'text-piu-accent' : 'text-gray-500'}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+    <nav className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-piu-card border-t border-piu-border">
+      <div className="flex items-center justify-around h-14 px-2">
+        {/* Home */}
+        <Link to="/" onClick={scrollToTop} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${path === '/' ? 'text-piu-accent' : 'text-gray-500'}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span className="text-[9px] font-display">Home</span>
+        </Link>
+
+        {/* Feed */}
+        <Link to="/feed" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/feed') ? 'text-piu-accent' : 'text-gray-500'}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+          </svg>
+          <span className="text-[9px] font-display">Feed</span>
+        </Link>
+
+        {/* Add Post */}
+        <Link to="/posts" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/posts') ? 'text-piu-accent' : 'text-gray-500'}`}>
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-piu-gold flex items-center justify-center -mt-3 shadow-lg shadow-piu-accent/30">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            <span className="text-[9px] font-display">Home</span>
-          </Link>
+          </div>
+          <span className="text-[9px] font-display">Post</span>
+        </Link>
 
-          {/* Feed */}
-          <Link to="/feed" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/feed') ? 'text-piu-accent' : 'text-gray-500'}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-            </svg>
-            <span className="text-[9px] font-display">Feed</span>
-          </Link>
+        {/* Tiers */}
+        <Link to="/tiers" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/tiers') ? 'text-piu-accent' : 'text-gray-500'}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h12M4 17h8" />
+          </svg>
+          <span className="text-[9px] font-display">Tiers</span>
+        </Link>
 
-          {/* Add Post */}
-          <Link to="/posts" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/posts') ? 'text-piu-accent' : 'text-gray-500'}`}>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-piu-gold flex items-center justify-center -mt-3 shadow-lg shadow-piu-accent/30">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
+        {/* Profile */}
+        <Link to={profilePath} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${profileActive ? 'text-piu-accent' : 'text-gray-500'}`}>
+          {user.avatar ? (
+            <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${profileActive ? 'ring-1 ring-piu-accent' : ''}`} />
+          ) : (
+            <div className={`w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] ${profileActive ? 'ring-1 ring-piu-accent' : ''}`}>
+              {user.username[0].toUpperCase()}
             </div>
-            <span className="text-[9px] font-display">Post</span>
-          </Link>
-
-          {/* Notifications */}
-          <button
-            onClick={() => setShowNotifs(true)}
-            className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${showNotifs ? 'text-piu-accent' : 'text-gray-500'}`}
-          >
-            <div className="relative">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              {totalBadge > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[8px] font-bold px-0.5">
-                  {totalBadge > 99 ? '99+' : totalBadge}
-                </span>
-              )}
-            </div>
-            <span className="text-[9px] font-display">Alerts</span>
-          </button>
-
-          {/* Profile */}
-          <Link to={profilePath} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${profileActive ? 'text-piu-accent' : 'text-gray-500'}`}>
-            {user.avatar ? (
-              <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${profileActive ? 'ring-1 ring-piu-accent' : ''}`} />
-            ) : (
-              <div className={`w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] ${profileActive ? 'ring-1 ring-piu-accent' : ''}`}>
-                {user.username[0].toUpperCase()}
-              </div>
-            )}
-            <span className="text-[9px] font-display">Profile</span>
-          </Link>
-        </div>
-      </nav>
-    </>
+          )}
+          <span className="text-[9px] font-display">Profile</span>
+        </Link>
+      </div>
+    </nav>
   );
 }

@@ -6,6 +6,8 @@ import { getSongTierMeta, getSongTiers } from '../utils/api';
 const TIER_LIST_TYPE = 'Pass';
 const MODE_ORDER = ['Single', 'Double', 'CoOp'];
 const MODE_PREFIX = { Single: 'S', Double: 'D', CoOp: 'C' };
+const OVERLAY_MIN = 20;
+const OVERLAY_MAX = 100;
 
 const TIER_STYLE = {
   Overrated: 'bg-indigo-500 text-white',
@@ -26,6 +28,24 @@ const TIER_LABEL = {
   VeryHard: 'Very hard',
   Underrated: 'Underrated',
 };
+
+function normalizeMode(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  if (mode === 'single' || mode === 's') return 'Single';
+  if (mode === 'double' || mode === 'd') return 'Double';
+  if (mode === 'coop' || mode === 'co-op' || mode === 'co op' || mode === 'c') return 'CoOp';
+  return '';
+}
+
+function parseIntSafe(value, fallback = null) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function clampOverlaySize(value) {
+  const parsed = parseIntSafe(value, 65);
+  return Math.min(OVERLAY_MAX, Math.max(OVERLAY_MIN, parsed));
+}
 
 function getRank(score) {
   const s = parseInt(score, 10) || 0;
@@ -84,10 +104,20 @@ function SettingsModal({
   open,
   displayMode,
   setDisplayMode,
+  overlaySize,
+  setOverlaySize,
   showUnplayed,
   setShowUnplayed,
   showEmptyTiers,
   setShowEmptyTiers,
+  hideCoOp,
+  setHideCoOp,
+  defaultMode,
+  setDefaultMode,
+  defaultLevel,
+  setDefaultLevel,
+  defaultModeChoices,
+  defaultLevelOptions,
   onClose,
 }) {
   if (!open) return null;
@@ -121,6 +151,23 @@ function SettingsModal({
           </div>
         </div>
 
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-gray-400 font-display">Overlay Size</p>
+            <span className="text-[11px] font-display text-gray-300">{overlaySize}%</span>
+          </div>
+          <input
+            type="range"
+            min={OVERLAY_MIN}
+            max={OVERLAY_MAX}
+            step={1}
+            value={overlaySize}
+            onChange={(event) => setOverlaySize(clampOverlaySize(event.target.value))}
+            className="w-full accent-piu-accent"
+          />
+          <p className="text-[10px] text-gray-500">20% minimum, 100% maximum.</p>
+        </div>
+
         <label className="flex items-center justify-between text-xs text-gray-300">
           <span>Show unplayed charts</span>
           <input
@@ -140,6 +187,51 @@ function SettingsModal({
             className="accent-piu-accent"
           />
         </label>
+
+        <label className="flex items-center justify-between text-xs text-gray-300">
+          <span>Don&apos;t show CoOp</span>
+          <input
+            type="checkbox"
+            checked={hideCoOp}
+            onChange={(event) => setHideCoOp(event.target.checked)}
+            className="accent-piu-accent"
+          />
+        </label>
+
+        <div className="space-y-2">
+          <p className="text-[11px] text-gray-400 font-display">Default Tier Level</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setDefaultMode('Double')}
+              disabled={!defaultModeChoices.includes('Double')}
+              className={`rounded-lg border px-2 py-1.5 text-xs font-display disabled:opacity-40 disabled:cursor-not-allowed ${defaultMode === 'Double' ? 'border-piu-accent text-piu-accent bg-piu-accent/10' : 'border-piu-border text-gray-300'}`}
+            >
+              Doubles
+            </button>
+            <button
+              onClick={() => setDefaultMode('Single')}
+              disabled={!defaultModeChoices.includes('Single')}
+              className={`rounded-lg border px-2 py-1.5 text-xs font-display disabled:opacity-40 disabled:cursor-not-allowed ${defaultMode === 'Single' ? 'border-piu-accent text-piu-accent bg-piu-accent/10' : 'border-piu-border text-gray-300'}`}
+            >
+              Singles
+            </button>
+          </div>
+          {defaultLevelOptions.length > 0 ? (
+            <select
+              value={String(defaultLevel || '')}
+              onChange={(event) => setDefaultLevel(parseIntSafe(event.target.value, defaultLevel || 18))}
+              className="w-full bg-piu-dark border border-piu-border rounded-lg text-xs py-1.5 px-2 text-gray-200 focus:outline-none focus:border-piu-accent/50"
+            >
+              {defaultLevelOptions.map((entry) => (
+                <option key={entry.level} value={entry.level}>
+                  {(MODE_PREFIX[defaultMode] || '?')}{entry.level}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-[11px] text-gray-500">No levels available for this mode.</div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -158,6 +250,13 @@ export default function TiersPage() {
   const [displayMode, setDisplayMode] = useState(() => localStorage.getItem('tiers_display_mode') || 'grade');
   const [showUnplayed, setShowUnplayed] = useState(() => localStorage.getItem('tiers_show_unplayed') !== '0');
   const [showEmptyTiers, setShowEmptyTiers] = useState(() => localStorage.getItem('tiers_show_empty') === '1');
+  const [hideCoOp, setHideCoOp] = useState(() => localStorage.getItem('tiers_hide_coop') !== '0');
+  const [overlaySize, setOverlaySize] = useState(() => clampOverlaySize(localStorage.getItem('tiers_overlay_size')));
+  const [defaultMode, setDefaultMode] = useState(() => {
+    const stored = normalizeMode(localStorage.getItem('tiers_default_mode'));
+    return stored === 'Single' || stored === 'Double' ? stored : 'Double';
+  });
+  const [defaultLevel, setDefaultLevel] = useState(() => parseIntSafe(localStorage.getItem('tiers_default_level'), 18));
 
   useEffect(() => {
     localStorage.setItem('tiers_display_mode', displayMode);
@@ -172,6 +271,32 @@ export default function TiersPage() {
   }, [showEmptyTiers]);
 
   useEffect(() => {
+    localStorage.setItem('tiers_hide_coop', hideCoOp ? '1' : '0');
+  }, [hideCoOp]);
+
+  useEffect(() => {
+    localStorage.setItem('tiers_overlay_size', String(overlaySize));
+  }, [overlaySize]);
+
+  useEffect(() => {
+    localStorage.setItem('tiers_default_mode', defaultMode);
+  }, [defaultMode]);
+
+  useEffect(() => {
+    localStorage.setItem('tiers_default_level', String(defaultLevel));
+  }, [defaultLevel]);
+
+  useEffect(() => {
+    if (!mode) return;
+    localStorage.setItem('tiers_last_mode', mode);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!level) return;
+    localStorage.setItem('tiers_last_level', String(level));
+  }, [level]);
+
+  useEffect(() => {
     let alive = true;
     setLoadingMeta(true);
     setError('');
@@ -180,8 +305,6 @@ export default function TiersPage() {
       .then((response) => {
         if (!alive) return;
         setMeta(response);
-        setMode((prev) => prev || response.default_mode || 'Double');
-        setLevel((prev) => prev || response.default_level || null);
       })
       .catch((err) => {
         if (!alive) return;
@@ -194,6 +317,87 @@ export default function TiersPage() {
 
     return () => { alive = false; };
   }, []);
+
+  const modeChoices = useMemo(() => {
+    const levelsByMode = meta?.levels_by_mode || {};
+    return MODE_ORDER.filter((candidate) => {
+      if (hideCoOp && candidate === 'CoOp') return false;
+      return Array.isArray(levelsByMode[candidate]) && levelsByMode[candidate].length > 0;
+    });
+  }, [meta, hideCoOp]);
+
+  const defaultModeChoices = useMemo(() => {
+    const levelsByMode = meta?.levels_by_mode || {};
+    return ['Double', 'Single'].filter((candidate) => Array.isArray(levelsByMode[candidate]) && levelsByMode[candidate].length > 0);
+  }, [meta]);
+
+  useEffect(() => {
+    if (defaultModeChoices.length === 0) return;
+    if (!defaultModeChoices.includes(defaultMode)) {
+      setDefaultMode(defaultModeChoices[0]);
+    }
+  }, [defaultModeChoices, defaultMode]);
+
+  const defaultLevelOptions = useMemo(() => {
+    const rows = meta?.levels_by_mode?.[defaultMode];
+    return Array.isArray(rows) ? rows : [];
+  }, [meta, defaultMode]);
+
+  useEffect(() => {
+    if (defaultLevelOptions.length === 0) return;
+    if (!defaultLevelOptions.some((entry) => entry.level === defaultLevel)) {
+      setDefaultLevel(nearestLevel(defaultLevelOptions, defaultLevel || 18));
+    }
+  }, [defaultLevelOptions, defaultLevel]);
+
+  useEffect(() => {
+    if (!meta) return;
+    const levelsByMode = meta?.levels_by_mode || {};
+
+    const resolveChoice = (targetMode, targetLevel) => {
+      const normalizedMode = normalizeMode(targetMode);
+      if (!modeChoices.includes(normalizedMode)) return null;
+      const levels = Array.isArray(levelsByMode[normalizedMode]) ? levelsByMode[normalizedMode] : [];
+      if (levels.length === 0) return null;
+      return {
+        mode: normalizedMode,
+        level: nearestLevel(levels, parseIntSafe(targetLevel, levels[0].level)),
+      };
+    };
+
+    if (!mode || !level) {
+      const remembered = resolveChoice(localStorage.getItem('tiers_last_mode'), localStorage.getItem('tiers_last_level'));
+      const configuredDefault = resolveChoice(defaultMode, defaultLevel);
+      const metaDefault = resolveChoice(meta.default_mode, meta.default_level);
+      const fallbackMode = modeChoices[0];
+      const fallbackLevels = fallbackMode ? (levelsByMode[fallbackMode] || []) : [];
+      const fallback = fallbackMode && fallbackLevels.length > 0
+        ? { mode: fallbackMode, level: fallbackLevels[0].level }
+        : null;
+      const picked = remembered || configuredDefault || metaDefault || fallback;
+      if (picked) {
+        setMode(picked.mode);
+        setLevel(picked.level);
+      }
+      return;
+    }
+
+    const currentLevels = Array.isArray(levelsByMode[mode]) ? levelsByMode[mode] : [];
+    if (!modeChoices.includes(mode) || currentLevels.length === 0) {
+      const fallback = resolveChoice(defaultMode, defaultLevel)
+        || resolveChoice(meta.default_mode, meta.default_level)
+        || resolveChoice(modeChoices[0], null);
+      if (fallback) {
+        setMode(fallback.mode);
+        setLevel(fallback.level);
+      }
+      return;
+    }
+
+    if (!currentLevels.some((entry) => entry.level === level)) {
+      setLevel(nearestLevel(currentLevels, level));
+    }
+  }, [meta, modeChoices, mode, level, defaultMode, defaultLevel]);
 
   useEffect(() => {
     if (!mode || !level) return;
@@ -229,11 +433,6 @@ export default function TiersPage() {
     const rows = meta?.levels_by_mode?.[mode];
     return Array.isArray(rows) ? rows : [];
   }, [meta, mode]);
-
-  const modeChoices = useMemo(() => {
-    const levelsByMode = meta?.levels_by_mode || {};
-    return MODE_ORDER.filter((m) => Array.isArray(levelsByMode[m]) && levelsByMode[m].length > 0);
-  }, [meta]);
 
   const currentLevelIndex = useMemo(
     () => levelsForMode.findIndex((entry) => entry.level === level),
@@ -283,35 +482,39 @@ export default function TiersPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
-      <div className="rounded-xl border border-piu-border bg-piu-card/80 p-3 sm:p-4">
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={goPrevLevel}
-            disabled={!canGoPrev}
-            className="w-10 h-10 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40"
-            aria-label="Previous level"
-          >
-            &#8592;
-          </button>
+      <div className="sticky top-[56px] sm:top-[64px] z-30 rounded-xl border border-piu-border bg-piu-card/90 backdrop-blur-sm p-3 sm:p-4">
+        <div className="grid grid-cols-[92px_auto_92px] items-center">
+          <div className="flex items-center">
+            <button
+              type="button"
+              onClick={goPrevLevel}
+              disabled={!canGoPrev}
+              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
+              aria-label="Previous level"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          </div>
 
           <button
             type="button"
             onClick={handleModeCycle}
-            className="px-4 py-1.5 rounded-lg bg-piu-dark border border-piu-border font-display font-black text-2xl tracking-wide"
-            title="Tap to switch mode"
+            className="justify-self-center px-4 py-1.5 rounded-lg bg-piu-dark border border-piu-border font-display font-black text-2xl tracking-wide"
+            title="Switch mode"
           >
             {(MODE_PREFIX[mode] || '?')}{level || '-'}
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="w-10 h-10 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white"
+              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white flex items-center justify-center"
               aria-label="Tier settings"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317a1 1 0 011.9 0l.31 1.24a1 1 0 00.95.757h1.3a1 1 0 01.75 1.66l-.97 1.11a1 1 0 000 1.318l.97 1.11a1 1 0 01-.75 1.66h-1.3a1 1 0 00-.95.757l-.31 1.24a1 1 0 01-1.9 0l-.31-1.24a1 1 0 00-.95-.757h-1.3a1 1 0 01-.75-1.66l.97-1.11a1 1 0 000-1.318l-.97-1.11a1 1 0 01.75-1.66h1.3a1 1 0 00.95-.757l.31-1.24z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
               </svg>
@@ -320,16 +523,14 @@ export default function TiersPage() {
               type="button"
               onClick={goNextLevel}
               disabled={!canGoNext}
-              className="w-10 h-10 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40"
+              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
               aria-label="Next level"
             >
-              &#8594;
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
             </button>
           </div>
-        </div>
-
-        <div className="mt-2 text-[11px] text-gray-500 text-center font-display">
-          Tap <span className="text-gray-300">S/D/C + level</span> to switch mode
         </div>
       </div>
 
@@ -366,6 +567,9 @@ export default function TiersPage() {
                     ? formatOverlayScore(chart.best_score)
                     : overlayGrade;
                   const overlayColor = getGradeColor(overlayGrade, chart.best_score);
+                  const overlayBaseRem = displayMode === 'score' ? 1.2 : 1.45;
+                  const overlayScale = overlaySize / 65;
+                  const overlayFontRem = Math.max(0.7, Math.min(2.2, overlayBaseRem * overlayScale));
 
                   return (
                     <Link
@@ -380,8 +584,17 @@ export default function TiersPage() {
                         <div className="w-full aspect-[16/10] bg-piu-dark" />
                       )}
                       {chart.is_pass && chart.best_score > 0 && (
-                        <div className={`absolute right-1 bottom-1 px-1.5 py-0.5 rounded bg-black/75 border border-white/10 text-[10px] font-display font-black leading-none ${overlayColor}`}>
-                          {overlayText}
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                          <div
+                            className={`max-w-full overflow-hidden whitespace-nowrap text-center font-display font-black leading-none ${overlayColor}`}
+                            style={{
+                              width: `${overlaySize}%`,
+                              fontSize: `${overlayFontRem}rem`,
+                              textShadow: '0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
+                            }}
+                          >
+                            {overlayText}
+                          </div>
                         </div>
                       )}
                     </Link>
@@ -397,10 +610,20 @@ export default function TiersPage() {
         open={settingsOpen}
         displayMode={displayMode}
         setDisplayMode={setDisplayMode}
+        overlaySize={overlaySize}
+        setOverlaySize={setOverlaySize}
         showUnplayed={showUnplayed}
         setShowUnplayed={setShowUnplayed}
         showEmptyTiers={showEmptyTiers}
         setShowEmptyTiers={setShowEmptyTiers}
+        hideCoOp={hideCoOp}
+        setHideCoOp={setHideCoOp}
+        defaultMode={defaultMode}
+        setDefaultMode={setDefaultMode}
+        defaultLevel={defaultLevel}
+        setDefaultLevel={setDefaultLevel}
+        defaultModeChoices={defaultModeChoices}
+        defaultLevelOptions={defaultLevelOptions}
         onClose={() => setSettingsOpen(false)}
       />
     </div>
