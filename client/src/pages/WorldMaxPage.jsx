@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
@@ -11,24 +11,16 @@ import {
   saveWorldMaxLocation,
 } from '../utils/api';
 import { getProfilePath } from '../utils/profile';
-
-const MAP_WIDTH = 2200;
-const MAP_HEIGHT = 1240;
-
-const LANDMARKS = [
-  { id: 'nyc', name: 'New York', icon: '🗽', lat: 40.7128, lng: -74.006 },
-  { id: 'toronto', name: 'Toronto', icon: '🏙️', lat: 43.6532, lng: -79.3832 },
-  { id: 'mexico-city', name: 'Mexico City', icon: '🦅', lat: 19.4326, lng: -99.1332 },
-  { id: 'rio', name: 'Rio', icon: '⛪', lat: -22.9068, lng: -43.1729 },
-  { id: 'london', name: 'London', icon: '🕰️', lat: 51.5072, lng: -0.1276 },
-  { id: 'paris', name: 'Paris', icon: '🗼', lat: 48.8566, lng: 2.3522 },
-  { id: 'rome', name: 'Rome', icon: '🏛️', lat: 41.9028, lng: 12.4964 },
-  { id: 'cairo', name: 'Cairo', icon: '🔺', lat: 30.0444, lng: 31.2357 },
-  { id: 'seoul', name: 'Seoul', icon: '🎆', lat: 37.5665, lng: 126.978 },
-  { id: 'tokyo', name: 'Tokyo', icon: '🗺️', lat: 35.6762, lng: 139.6503 },
-  { id: 'beijing', name: 'Beijing', icon: '🏯', lat: 39.9042, lng: 116.4074 },
-  { id: 'sydney', name: 'Sydney', icon: '🎭', lat: -33.8688, lng: 151.2093 },
-];
+import {
+  PIXEL_TILE,
+  MAP_WIDTH,
+  MAP_HEIGHT,
+  WORLD_GRID,
+  TERRAIN_PALETTE,
+  PIXEL_CLOUDS,
+  PIXEL_WATER_SPARKLES,
+  LANDMARKS,
+} from '../utils/worldMapData';
 
 const COUNTRY_LOOKUP = (() => {
   const map = new Map();
@@ -125,181 +117,33 @@ function MachinePin({ machine, onOpen }) {
   );
 }
 
-const PIXEL_TILE = 20;
-
-const PIXEL_LANDMASSES = [
-  {
-    id: 'north-america',
-    x: 8,
-    y: 11,
-    rows: [
-      '........111111..........',
-      '......1111111111........',
-      '....11111111111111......',
-      '...1111111122211111.....',
-      '..111111122222211111....',
-      '.11111112222222211111...',
-      '.11111112222222221111...',
-      '.11111111222222221111...',
-      '..111111111222221111....',
-      '..111111111111111111....',
-      '...11111111111111111....',
-      '....111111111111111.....',
-      '......111111111111......',
-      '........11111111........',
-      '.........111111.........',
-      '.........11111..........',
-      '........11111...........',
-      '........111.............',
-    ],
-  },
-  {
-    id: 'south-america',
-    x: 29,
-    y: 30,
-    rows: [
-      '....111111....',
-      '...11111111...',
-      '..1111221111..',
-      '..1112222111..',
-      '...11222211...',
-      '....112221....',
-      '....112221....',
-      '....111111....',
-      '.....11111....',
-      '.....11111....',
-      '.....1111.....',
-      '.....1111.....',
-      '......111.....',
-      '......111.....',
-      '......111.....',
-      '.....111......',
-      '.....11.......',
-    ],
-  },
-  {
-    id: 'greenland',
-    x: 33,
-    y: 6,
-    rows: [
-      '...11111..',
-      '..1111111.',
-      '.11111111.',
-      '.11122111.',
-      '.1111111..',
-      '..11111...',
-      '...111....',
-    ],
-  },
-  {
-    id: 'europe-africa',
-    x: 52,
-    y: 14,
-    rows: [
-      '....111111......',
-      '...11111111.....',
-      '..111111111.....',
-      '..111122111.....',
-      '...1111111......',
-      '....111111......',
-      '.....11111......',
-      '....111111......',
-      '...11111111.....',
-      '..111122211.....',
-      '..111222211.....',
-      '..111222211.....',
-      '...11222211.....',
-      '...11222211.....',
-      '...11122211.....',
-      '...11112211.....',
-      '....1111111.....',
-      '....111111......',
-      '....11111.......',
-      '.....1111.......',
-      '.....1111.......',
-      '.....111........',
-      '.....111........',
-      '....1111........',
-      '....111.........',
-    ],
-  },
-  {
-    id: 'asia',
-    x: 66,
-    y: 11,
-    rows: [
-      '......111111111111........',
-      '....1111111111111111......',
-      '...111111122221111111.....',
-      '..11111122222211111111....',
-      '.1111112222222211111111...',
-      '.1111112222222211111111...',
-      '..111112222222211111111...',
-      '...11111222222211111111...',
-      '....111111222221111111....',
-      '....11111112221111111.....',
-      '....1111111111111111......',
-      '.....111111111111111......',
-      '......111111111111111.....',
-      '.......11111111111111.....',
-      '........1111111111111.....',
-      '.........11111111111......',
-      '..........111111111.......',
-      '...........11111111.......',
-      '..........111111111.......',
-      '.........1111111111.......',
-      '........11111111111.......',
-      '.........111111111........',
-      '..........1111111.........',
-    ],
-  },
-  {
-    id: 'australia',
-    x: 86,
-    y: 44,
-    rows: [
-      '...1111111....',
-      '..111111111...',
-      '.11112221111..',
-      '.11122222111..',
-      '.11122222111..',
-      '..111222111...',
-      '...1111111....',
-      '....11111.....',
-      '....1111......',
-    ],
-  },
-];
-
-const PIXEL_CLOUDS = [
-  { id: 'c1', x: 10, y: 6, rows: ['..11111..', '.1111111.', '111111111', '.1111111.', '..11111..'] },
-  { id: 'c2', x: 47, y: 7, rows: ['..1111..', '.111111.', '11111111', '.111111.', '..1111..'] },
-  { id: 'c3', x: 78, y: 6, rows: ['...1111...', '..111111..', '.11111111.', '..111111..', '...1111...'] },
-  { id: 'c4', x: 90, y: 35, rows: ['..11111..', '.1111111.', '111111111', '.1111111.', '..11111..'] },
-];
-
-const PIXEL_ISLANDS = [
-  { id: 'jp1', x: 96, y: 24 },
-  { id: 'jp2', x: 97, y: 25 },
-  { id: 'jp3', x: 98, y: 26 },
-  { id: 'ph1', x: 94, y: 31 },
-  { id: 'ph2', x: 95, y: 32 },
-  { id: 'nz1', x: 101, y: 55 },
-  { id: 'nz2', x: 102, y: 56 },
-];
-
-const PIXEL_ROUTE = [
-  { x: 21, y: 21 },
-  { x: 39, y: 34 },
-  { x: 57, y: 22 },
-  { x: 78, y: 38 },
-  { x: 94, y: 24 },
-];
-
-const PIXEL_WATER_SPARKLES = [
-  [6, 13], [14, 26], [22, 8], [31, 18], [37, 53], [46, 29], [54, 9], [63, 47],
-  [72, 6], [80, 17], [88, 52], [96, 40], [104, 12], [107, 33], [59, 55], [26, 44],
-];
+// Render the full world grid with run-length merging for performance
+function pixelRectsFromGrid(gridRows, palette) {
+  const rects = [];
+  for (let row = 0; row < gridRows.length; row++) {
+    const line = gridRows[row];
+    let col = 0;
+    while (col < line.length) {
+      const token = line[col];
+      const fill = palette[token];
+      if (!fill) { col++; continue; }
+      let runLen = 1;
+      while (col + runLen < line.length && line[col + runLen] === token) runLen++;
+      rects.push(
+        <rect
+          key={`${row}-${col}`}
+          x={col * PIXEL_TILE}
+          y={row * PIXEL_TILE}
+          width={runLen * PIXEL_TILE}
+          height={PIXEL_TILE}
+          fill={fill}
+        />
+      );
+      col += runLen;
+    }
+  }
+  return rects;
+}
 
 function pixelRectsFromRows(block, palette, stroke = null) {
   const rects = [];
@@ -328,10 +172,6 @@ function pixelRectsFromRows(block, palette, stroke = null) {
 }
 
 function MapBackdrop() {
-  const routePoints = PIXEL_ROUTE
-    .map((point) => `${point.x * PIXEL_TILE + PIXEL_TILE / 2},${point.y * PIXEL_TILE + PIXEL_TILE / 2}`)
-    .join(' ');
-
   return (
     <svg
       viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
@@ -341,92 +181,44 @@ function MapBackdrop() {
       aria-hidden="true"
     >
       <defs>
-        <pattern id="wm-pixel-ocean" width="40" height="40" patternUnits="userSpaceOnUse">
-          <rect width="40" height="40" fill="#2e8fda" />
-          <rect width="20" height="20" fill="#53b8ef" />
-          <rect x="20" y="20" width="20" height="20" fill="#53b8ef" />
+        <pattern id="wm-pixel-ocean" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" fill="#1a75c4" />
+          <rect width="10" height="10" fill="#2088d4" />
+          <rect x="10" y="10" width="10" height="10" fill="#2088d4" />
         </pattern>
-        <pattern id="wm-pixel-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <rect width="20" height="20" fill="rgba(255,255,255,0.04)" />
-          <path d="M0 0H20M0 0V20" stroke="rgba(7,35,89,0.45)" strokeWidth="1" />
+        <pattern id="wm-pixel-grid" width="10" height="10" patternUnits="userSpaceOnUse">
+          <rect width="10" height="10" fill="rgba(255,255,255,0.02)" />
+          <path d="M0 0H10M0 0V10" stroke="rgba(7,35,89,0.25)" strokeWidth="0.5" />
         </pattern>
-        <filter id="wm-pixel-shadow" x="-15%" y="-15%" width="130%" height="130%">
-          <feDropShadow dx="0" dy="10" stdDeviation="7" floodColor="rgba(0,0,0,0.35)" />
+        <filter id="wm-pixel-shadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="rgba(0,0,0,0.30)" />
         </filter>
       </defs>
 
       <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-pixel-ocean)" />
-      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-pixel-grid)" opacity="0.34" />
+      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-pixel-grid)" opacity="0.15" />
 
-      <g opacity="0.55">
+      <g opacity="0.45">
         {PIXEL_WATER_SPARKLES.map(([x, y], idx) => (
           <rect
             key={`sparkle-${idx}`}
-            x={x * PIXEL_TILE + 6}
-            y={y * PIXEL_TILE + 6}
-            width="8"
-            height="8"
-            fill="#d8fbff"
+            x={x * PIXEL_TILE + 2}
+            y={y * PIXEL_TILE + 2}
+            width="6"
+            height="6"
+            fill="#a0e8ff"
           />
         ))}
       </g>
 
-      <g opacity="0.9">
+      <g opacity="0.8">
         {PIXEL_CLOUDS.flatMap((cloud) =>
-          pixelRectsFromRows(cloud, { 1: '#f6fcff' }, 'rgba(120,184,226,0.45)')
+          pixelRectsFromRows(cloud, { 1: '#f0f8ff' }, 'rgba(120,184,226,0.35)')
         )}
       </g>
 
       <g filter="url(#wm-pixel-shadow)">
-        {PIXEL_LANDMASSES.flatMap((land) =>
-          pixelRectsFromRows(
-            land,
-            { 1: '#79db45', 2: '#59b332' },
-            'rgba(19,66,25,0.55)'
-          )
-        )}
-
-        {PIXEL_ISLANDS.map((island) => (
-          <rect
-            key={island.id}
-            x={island.x * PIXEL_TILE}
-            y={island.y * PIXEL_TILE}
-            width={PIXEL_TILE}
-            height={PIXEL_TILE}
-            fill="#79db45"
-            stroke="rgba(19,66,25,0.55)"
-            strokeWidth="1"
-          />
-        ))}
-      </g>
-
-      <polyline
-        points={routePoints}
-        fill="none"
-        stroke="#ffde63"
-        strokeWidth="8"
-        strokeLinejoin="miter"
-        strokeLinecap="square"
-        opacity="0.9"
-      />
-
-      <g>
-        {PIXEL_ROUTE.map((point, idx) => {
-          const cx = point.x * PIXEL_TILE + PIXEL_TILE / 2;
-          const cy = point.y * PIXEL_TILE + PIXEL_TILE / 2;
-          return (
-            <rect
-              key={`route-node-${idx}`}
-              x={cx - 8}
-              y={cy - 8}
-              width="16"
-              height="16"
-              fill="#ffcc42"
-              stroke="#7e5600"
-              strokeWidth="2"
-            />
-          );
-        })}
+        {pixelRectsFromGrid(WORLD_GRID, TERRAIN_PALETTE)}
       </g>
     </svg>
   );
@@ -525,7 +317,17 @@ export default function WorldMaxPage() {
 
   const viewportRef = useRef(null);
   const dragStateRef = useRef(null);
-  const [viewState, setViewState] = useState({ zoom: 1, panX: -480, panY: -110 });
+  const [viewState, setViewState] = useState(null);
+
+  const computeFitView = useCallback(() => {
+    if (!viewportRef.current) return { zoom: 0.5, panX: 0, panY: 0 };
+    const rect = viewportRef.current.getBoundingClientRect();
+    const pad = 20;
+    const zoom = Math.min((rect.width - pad * 2) / MAP_WIDTH, (rect.height - pad * 2) / MAP_HEIGHT);
+    const panX = (rect.width - MAP_WIDTH * zoom) / 2;
+    const panY = (rect.height - MAP_HEIGHT * zoom) / 2;
+    return { zoom, panX, panY };
+  }, []);
 
   const gamesByCode = useMemo(() => mapByCode(meta.game_options), [meta.game_options]);
   const machinesByCode = useMemo(() => mapByCode(meta.machine_options), [meta.machine_options]);
@@ -673,9 +475,19 @@ export default function WorldMaxPage() {
     return () => clearTimeout(timer);
   }, [machineForm.city, machineForm.country]);
 
+  // Compute initial fit-to-viewport view on mount
+  useEffect(() => {
+    if (viewState !== null) return;
+    // Use a short timeout to ensure the viewport ref is measured
+    const timer = setTimeout(() => {
+      setViewState(computeFitView());
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [viewState, computeFitView]);
+
   const handleWheel = (e) => {
     e.preventDefault();
-    if (!viewportRef.current) return;
+    if (!viewportRef.current || !viewState) return;
 
     const rect = viewportRef.current.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -683,7 +495,8 @@ export default function WorldMaxPage() {
     const direction = e.deltaY < 0 ? 1 : -1;
 
     setViewState((prev) => {
-      const nextZoom = clamp(prev.zoom + direction * 0.12, 0.65, 2.9);
+      if (!prev) return prev;
+      const nextZoom = clamp(prev.zoom + direction * 0.12, 0.28, 3.5);
       const worldX = (mouseX - prev.panX) / prev.zoom;
       const worldY = (mouseY - prev.panY) / prev.zoom;
       const nextPanX = mouseX - worldX * nextZoom;
@@ -693,6 +506,7 @@ export default function WorldMaxPage() {
   };
 
   const beginDrag = (clientX, clientY) => {
+    if (!viewState) return;
     dragStateRef.current = {
       clientX,
       clientY,
@@ -805,13 +619,13 @@ export default function WorldMaxPage() {
         <section className="card p-0 overflow-hidden">
           <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 border-b border-piu-border/60 bg-piu-card/60">
             <div>
-              <h2 className="text-sm sm:text-base font-display font-bold text-white">Mario-Style World Map</h2>
+              <h2 className="text-sm sm:text-base font-display font-bold text-white">Pixel Art World Map</h2>
               <p className="text-[11px] sm:text-xs text-gray-400">Drag to move. Use wheel or controls to zoom. Click machine pins for details.</p>
             </div>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setViewState((prev) => ({ ...prev, zoom: clamp(prev.zoom - 0.16, 0.65, 2.9) }))}
+                onClick={() => setViewState((prev) => prev ? { ...prev, zoom: clamp(prev.zoom - 0.16, 0.28, 3.5) } : prev)}
                 className="w-8 h-8 rounded-lg bg-piu-dark border border-piu-border text-sm font-bold hover:border-piu-accent/60"
                 aria-label="Zoom out"
               >
@@ -819,7 +633,7 @@ export default function WorldMaxPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setViewState((prev) => ({ ...prev, zoom: clamp(prev.zoom + 0.16, 0.65, 2.9) }))}
+                onClick={() => setViewState((prev) => prev ? { ...prev, zoom: clamp(prev.zoom + 0.16, 0.28, 3.5) } : prev)}
                 className="w-8 h-8 rounded-lg bg-piu-dark border border-piu-border text-sm font-bold hover:border-piu-accent/60"
                 aria-label="Zoom in"
               >
@@ -827,7 +641,7 @@ export default function WorldMaxPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setViewState({ zoom: 1, panX: -480, panY: -110 })}
+                onClick={() => setViewState(computeFitView())}
                 className="px-2.5 h-8 rounded-lg bg-piu-dark border border-piu-border text-[11px] font-display font-bold hover:border-piu-accent/60"
               >
                 Reset
@@ -858,7 +672,7 @@ export default function WorldMaxPage() {
               style={{
                 width: `${MAP_WIDTH}px`,
                 height: `${MAP_HEIGHT}px`,
-                transform: `translate(${viewState.panX}px, ${viewState.panY}px) scale(${viewState.zoom})`,
+                transform: viewState ? `translate(${viewState.panX}px, ${viewState.panY}px) scale(${viewState.zoom})` : 'scale(0.5)',
                 transformOrigin: '0 0',
               }}
             >
