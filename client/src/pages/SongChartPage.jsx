@@ -396,9 +396,8 @@ export default function SongChartPage() {
         <button
           type="button"
           onClick={() => setShowHistoryModal(true)}
-          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-piu-accent/40 transition-colors flex flex-col justify-between"
+          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-piu-accent/40 transition-colors flex items-center"
         >
-          <p className="font-mono text-base text-gray-100">{Array.isArray(detail.history) ? detail.history.length : 0} plays</p>
           <span className="inline-flex items-center justify-center rounded-md border border-piu-accent/45 bg-piu-accent/15 text-piu-accent px-2 py-1 text-[11px] font-display font-bold w-fit">
             Clear History
           </span>

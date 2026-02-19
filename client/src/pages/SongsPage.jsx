@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import SongAnalyticsPanel from '../components/SongAnalyticsPanel';
-import { getSongAnalytics, getSongLibrary } from '../utils/api';
+import { getSongLibrary } from '../utils/api';
 
 function ChartBadge({ chart }) {
   const isSingle = chart.mode === 'Single';
@@ -25,7 +24,6 @@ export default function SongsPage() {
   const { user } = useAuth();
 
   const [library, setLibrary] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -40,30 +38,12 @@ export default function SongsPage() {
       setLoading(true);
       setError('');
       try {
-        const [libraryResult, analyticsResult] = await Promise.allSettled([
-          getSongLibrary(user?.id ? { user_id: user.id } : {}),
-          user?.id ? getSongAnalytics(user.id) : Promise.resolve(null),
-        ]);
-
+        const libraryData = await getSongLibrary(user?.id ? { user_id: user.id } : {});
         if (cancelled) return;
-
-        if (libraryResult.status === 'fulfilled') {
-          const libraryData = libraryResult.value;
-          setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
-        } else {
-          setLibrary([]);
-          setError(libraryResult.reason?.message || 'Failed to load songs');
-        }
-
-        if (analyticsResult.status === 'fulfilled') {
-          setAnalytics(analyticsResult.value || null);
-        } else {
-          setAnalytics(null);
-        }
+        setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
       } catch (err) {
         if (cancelled) return;
         setLibrary([]);
-        setAnalytics(null);
         setError(err.message || 'Failed to load songs');
       } finally {
         if (!cancelled) setLoading(false);
@@ -160,10 +140,6 @@ export default function SongsPage() {
         <div className="card border-red-500/40 bg-red-900/20 text-red-200 text-sm">
           {error}
         </div>
-      )}
-
-      {analytics && (
-        <SongAnalyticsPanel analytics={analytics} />
       )}
 
       <section className="rounded-xl border border-piu-border/60 bg-piu-card/70 p-3">

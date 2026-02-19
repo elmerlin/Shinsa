@@ -260,6 +260,74 @@ function SettingsModal({
   );
 }
 
+function JacketOverlayText({
+  text,
+  colorClass,
+  baseFontRem,
+  overlaySize,
+}) {
+  const frameRef = useRef(null);
+  const widthRef = useRef(null);
+  const textRef = useRef(null);
+  const [fitScale, setFitScale] = useState(1);
+
+  useEffect(() => {
+    let raf = 0;
+    const recalc = () => {
+      const frameEl = frameRef.current;
+      const widthEl = widthRef.current;
+      const textEl = textRef.current;
+      if (!frameEl || !widthEl || !textEl) return;
+
+      const availW = widthEl.clientWidth;
+      const availH = frameEl.clientHeight * 0.92;
+      const textW = textEl.scrollWidth;
+      const textH = textEl.scrollHeight;
+
+      let next = 1;
+      if (availW > 0 && textW > 0) next = Math.min(next, availW / textW);
+      if (availH > 0 && textH > 0) next = Math.min(next, availH / textH);
+      if (!Number.isFinite(next) || next <= 0) next = 1;
+
+      setFitScale((prev) => {
+        const rounded = Number(next.toFixed(3));
+        return Math.abs(prev - rounded) < 0.01 ? prev : rounded;
+      });
+    };
+
+    raf = window.requestAnimationFrame(recalc);
+    return () => window.cancelAnimationFrame(raf);
+  }, [text, baseFontRem, overlaySize]);
+
+  return (
+    <div ref={frameRef} className="absolute inset-0 pointer-events-none flex items-center justify-center">
+      <div
+        ref={widthRef}
+        className="flex items-center justify-center"
+        style={{
+          width: `${overlaySize}%`,
+          maxWidth: '100%',
+          paddingInline: '2px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <span
+          ref={textRef}
+          className={`inline-block whitespace-nowrap text-center font-display font-black leading-none ${colorClass}`}
+          style={{
+            fontSize: `${baseFontRem}rem`,
+            transform: `scale(${fitScale})`,
+            transformOrigin: 'center center',
+            textShadow: '0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
+          }}
+        >
+          {text}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function TiersPage() {
   const { user } = useAuth();
   const captureRef = useRef(null);
@@ -652,18 +720,12 @@ export default function TiersPage() {
                         <div className="w-full aspect-[16/10] bg-piu-dark" />
                       )}
                       {chart.is_pass && chart.best_score > 0 && (
-                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                          <div
-                            className={`max-w-full overflow-hidden whitespace-nowrap text-center font-display font-black leading-none ${overlayColor}`}
-                            style={{
-                              width: `${overlaySize}%`,
-                              fontSize: `${overlayFontRem}rem`,
-                              textShadow: '0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
-                            }}
-                          >
-                            {overlayText}
-                          </div>
-                        </div>
+                        <JacketOverlayText
+                          text={overlayText}
+                          colorClass={overlayColor}
+                          baseFontRem={overlayFontRem}
+                          overlaySize={overlaySize}
+                        />
                       )}
                     </Link>
                   );

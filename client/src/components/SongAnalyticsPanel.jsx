@@ -169,29 +169,31 @@ function CompetitiveLevelCard({
     : false;
 
   return (
-    <div className="rounded-lg border border-piu-border/50 bg-piu-dark/55 p-2.5">
+    <div className="rounded-lg border border-piu-border/50 bg-piu-dark/55 p-2.5 overflow-hidden">
       <p className="text-[11px] font-display font-bold tracking-wide text-gray-300 mb-1.5">{title}</p>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 min-w-0">
         <button
           type="button"
           disabled={rows.length <= 1}
           onClick={() => onCursorChange((prev) => (prev <= 0 ? rows.length - 1 : prev - 1))}
-          className="w-7 h-7 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40"
+          className="w-6 h-6 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
           aria-label={`Previous ${title} level`}
         >
-          &#8592;
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
         </button>
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
-          className="flex-1 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-2 py-1.5 text-left hover:border-piu-accent/40 transition-colors"
+          className="min-w-0 flex-1 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-1.5 py-1.5 text-left hover:border-piu-accent/40 transition-colors"
           title="Toggle competitive level details"
         >
-          <div className="flex items-center justify-between gap-2">
-            <span className={`font-display font-black text-lg ${modeColorClass}`}>
+          <div className="flex items-center justify-between gap-1 min-w-0">
+            <span className={`font-display font-black text-base ${modeColorClass}`}>
               {selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}
             </span>
-            <span className={`text-sm font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
+            <span className={`shrink-0 text-xs font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
               {selectedGrade || '-'}
             </span>
           </div>
@@ -200,10 +202,12 @@ function CompetitiveLevelCard({
           type="button"
           disabled={rows.length <= 1}
           onClick={() => onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1))}
-          className="w-7 h-7 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40"
+          className="w-6 h-6 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
           aria-label={`Next ${title} level`}
         >
-          &#8594;
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
         </button>
       </div>
 
