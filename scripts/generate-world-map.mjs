@@ -16,6 +16,9 @@ const countries = feature(topo, topo.objects.countries);
 // Map dimensions (same coordinate space as before)
 const MAP_W = 2200;
 const MAP_H = 1240;
+const PROJECTED_MAP_H = MAP_W / 2;
+const MAP_VERTICAL_OFFSET = (MAP_H - PROJECTED_MAP_H) / 2;
+const MAP_Y_STRETCH = MAP_H / PROJECTED_MAP_H;
 
 const projection = geoEquirectangular()
   .scale(MAP_W / (2 * Math.PI))
@@ -56,6 +59,26 @@ function simplifyPath(d, tolerance = 1.8) {
     }
   }
 
+  return out.join('');
+}
+
+function remapPathYToWorldGrid(d) {
+  const commands = d.match(/[MLZ][^MLZ]*/g);
+  if (!commands) return d;
+  const out = [];
+  for (const cmd of commands) {
+    if (cmd === 'Z') {
+      out.push('Z');
+      continue;
+    }
+    const type = cmd[0];
+    const [xRaw, yRaw] = cmd.slice(1).split(',');
+    const x = Number(xRaw);
+    const y = Number(yRaw);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    const mappedY = Math.round((y - MAP_VERTICAL_OFFSET) * MAP_Y_STRETCH);
+    out.push(`${type}${Math.round(x)},${Math.max(0, Math.min(MAP_H, mappedY))}`);
+  }
   return out.join('');
 }
 
@@ -282,7 +305,8 @@ for (const feat of countries.features) {
 
   const rawPath = pathGenerator(feat);
   if (!rawPath || rawPath.length < 10) continue;
-  const d = simplifyPath(rawPath, 1.8);
+  const remapped = remapPathYToWorldGrid(rawPath);
+  const d = simplifyPath(remapped, 1.8);
   if (!d || d.length < 10) continue;
 
   const biome = BIOME_MAP[idCode] || DEFAULT_BIOME;

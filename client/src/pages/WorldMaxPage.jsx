@@ -289,6 +289,52 @@ export default function WorldMaxPage() {
     return { zoom, panX, panY };
   }, []);
 
+  const computeViewForPoints = useCallback((points) => {
+    if (!viewportRef.current || !Array.isArray(points) || points.length === 0) return null;
+    const rect = viewportRef.current.getBoundingClientRect();
+    const pad = 24;
+
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    for (const point of points) {
+      if (!point) continue;
+      const x = Number(point.x);
+      const y = Number(point.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+      return null;
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const spanX = Math.max(maxX - minX, 160);
+    const spanY = Math.max(maxY - minY, 120);
+
+    minX = centerX - spanX / 2;
+    maxX = centerX + spanX / 2;
+    minY = centerY - spanY / 2;
+    maxY = centerY + spanY / 2;
+
+    const zoom = clamp(
+      Math.min((rect.width - pad * 2) / Math.max(10, maxX - minX), (rect.height - pad * 2) / Math.max(10, maxY - minY)),
+      0.28,
+      3.5
+    );
+
+    const panX = (rect.width - (maxX - minX) * zoom) / 2 - minX * zoom;
+    const panY = (rect.height - (maxY - minY) * zoom) / 2 - minY * zoom;
+    return { zoom, panX, panY };
+  }, []);
+
   const gamesByCode = useMemo(() => mapByCode(meta.game_options), [meta.game_options]);
   const machinesByCode = useMemo(() => mapByCode(meta.machine_options), [meta.machine_options]);
   const countryNames = useMemo(() => uniqueTextValues(COUNTRIES.map((country) => country?.name)), []);
@@ -414,11 +460,49 @@ export default function WorldMaxPage() {
     filteredMachines,
   ]);
 
+  const playerFocusPoints = useMemo(() => {
+    if (!showPlayers || !playerCountryFilter) return [];
+    const points = filteredUsers.map((row) => latLngToPoint(row.location_lat, row.location_lng));
+    if (points.length > 0) return points;
+    return LANDMARKS
+      .filter((landmark) => countryMatchesFilter(landmark.country, playerCountryFilter))
+      .map((landmark) => latLngToPoint(landmark.lat, landmark.lng));
+  }, [showPlayers, playerCountryFilter, filteredUsers]);
+
+  const machineFocusPoints = useMemo(() => {
+    if (!showMachines || !machineCountryFilter) return [];
+    const points = filteredMachines.map((row) => latLngToPoint(row.latitude, row.longitude));
+    if (points.length > 0) return points;
+    return LANDMARKS
+      .filter((landmark) => countryMatchesFilter(landmark.country, machineCountryFilter))
+      .map((landmark) => latLngToPoint(landmark.lat, landmark.lng));
+  }, [showMachines, machineCountryFilter, filteredMachines]);
+
+  const focusPoints = useMemo(
+    () => [...playerFocusPoints, ...machineFocusPoints],
+    [playerFocusPoints, machineFocusPoints]
+  );
+
   useEffect(() => {
     if (!availableMachineCodes.includes(machineForm.machine_code) && availableMachineCodes.length > 0) {
       setMachineForm((prev) => ({ ...prev, machine_code: availableMachineCodes[0] }));
     }
   }, [availableMachineCodes, machineForm.machine_code]);
+
+  useEffect(() => {
+    const hasCountryFocus = (showPlayers && !!playerCountryFilter) || (showMachines && !!machineCountryFilter);
+    if (!hasCountryFocus || focusPoints.length === 0) return;
+    const next = computeViewForPoints(focusPoints);
+    if (!next) return;
+    setViewState(next);
+  }, [
+    showPlayers,
+    showMachines,
+    playerCountryFilter,
+    machineCountryFilter,
+    focusPoints,
+    computeViewForPoints,
+  ]);
 
   useEffect(() => {
     setLocationForm({
