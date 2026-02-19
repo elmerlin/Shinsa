@@ -6,6 +6,7 @@
  */
 import { readFileSync, writeFileSync } from 'fs';
 import { feature } from 'topojson-client';
+import { geoEquirectangular, geoPath } from 'd3-geo';
 
 // Use 50m for better detail (10m would be too large)
 const topoPath = new URL('../node_modules/world-atlas/countries-50m.json', import.meta.url).pathname;
@@ -16,91 +17,46 @@ const countries = feature(topo, topo.objects.countries);
 const MAP_W = 2200;
 const MAP_H = 1240;
 
-// Equirectangular projection
-function projectLng(lng) {
-  return ((lng + 180) / 360) * MAP_W;
-}
-function projectLat(lat) {
-  return ((90 - lat) / 180) * MAP_H;
-}
+const projection = geoEquirectangular()
+  .scale(MAP_W / (2 * Math.PI))
+  .translate([MAP_W / 2, MAP_H / 2]);
 
-// Convert a ring of [lng, lat] coords to SVG path commands
-function ringToPath(coords) {
-  if (!coords || coords.length < 2) return '';
-  const parts = [];
-  for (let i = 0; i < coords.length; i++) {
-    const [lng, lat] = coords[i];
-    const x = projectLng(lng);
-    const y = projectLat(lat);
-    // Round to integer for compact output — at 2200px wide this is sub-pixel accuracy
-    const rx = Math.round(x);
-    const ry = Math.round(y);
-    parts.push(`${i === 0 ? 'M' : 'L'}${rx},${ry}`);
-  }
-  parts.push('Z');
-  return parts.join('');
-}
+const pathGenerator = geoPath(projection).digits(0);
 
-// Convert a GeoJSON geometry to a single SVG path d-string
-function geometryToPath(geometry) {
-  if (!geometry) return '';
-  const paths = [];
-
-  if (geometry.type === 'Polygon') {
-    for (const ring of geometry.coordinates) {
-      paths.push(ringToPath(ring));
-    }
-  } else if (geometry.type === 'MultiPolygon') {
-    for (const polygon of geometry.coordinates) {
-      for (const ring of polygon) {
-        paths.push(ringToPath(ring));
-      }
-    }
-  }
-  return paths.join('');
-}
-
-// Simplify path by removing points that are very close together
-// This reduces file size substantially
-function simplifyPath(d, tolerance = 1.5) {
-  // Parse path into commands
+// Reduce output size by dropping collinear/nearby points while preserving shape.
+function simplifyPath(d, tolerance = 1.8) {
   const commands = d.match(/[MLZ][^MLZ]*/g);
   if (!commands) return d;
-
-  const result = [];
-  let lastX = null, lastY = null;
+  const out = [];
+  let lastX = null;
+  let lastY = null;
 
   for (const cmd of commands) {
     if (cmd === 'Z') {
-      result.push('Z');
-      lastX = lastY = null;
+      out.push('Z');
+      lastX = null;
+      lastY = null;
       continue;
     }
-
     const type = cmd[0];
-    const coords = cmd.slice(1).split(',').map(Number);
-    const x = coords[0], y = coords[1];
-
+    const [xRaw, yRaw] = cmd.slice(1).split(',');
+    const x = Number(xRaw);
+    const y = Number(yRaw);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     if (type === 'M') {
-      result.push(cmd);
+      out.push(`M${x},${y}`);
       lastX = x;
       lastY = y;
-    } else if (type === 'L') {
-      if (lastX === null || Math.abs(x - lastX) > tolerance || Math.abs(y - lastY) > tolerance) {
-        result.push(cmd);
-        lastX = x;
-        lastY = y;
-      }
+      continue;
+    }
+    if (lastX === null || Math.abs(x - lastX) > tolerance || Math.abs(y - lastY) > tolerance) {
+      out.push(`L${x},${y}`);
+      lastX = x;
+      lastY = y;
     }
   }
 
-  return result.join('');
-}
-
-// Country ID to name mapping (ISO 3166-1 numeric)
-const countryNames = {};
-for (const f of countries.features) {
-  countryNames[f.id] = f.properties?.name || f.id;
+  return out.join('');
 }
 
 // Biome classification for each country (ISO 3166-1 numeric codes)
@@ -310,22 +266,29 @@ const BIOME_COLORS = {
 };
 
 const DEFAULT_BIOME = 'grassland';
+const EXCLUDED_COUNTRY_IDS = new Set(['010', '260']);
+const EXCLUDED_NAME_TOKENS = ['antarctica', 'antarctic'];
 
 // Process each country
 const countryPaths = [];
 for (const feat of countries.features) {
-  const id = feat.id;
-  const name = feat.properties?.name || id;
-  const rawPath = geometryToPath(feat.geometry);
-  if (!rawPath) continue;
+  const rawId = String(feat.id ?? '');
+  const idCode = rawId.padStart(3, '0');
+  const name = String(feat.properties?.name || feat.id || '').trim();
+  const normalizedName = name.toLowerCase();
+  if (!name) continue;
+  if (EXCLUDED_COUNTRY_IDS.has(idCode)) continue;
+  if (EXCLUDED_NAME_TOKENS.some((token) => normalizedName.includes(token))) continue;
 
-  const d = simplifyPath(rawPath, 2.0);
+  const rawPath = pathGenerator(feat);
+  if (!rawPath || rawPath.length < 10) continue;
+  const d = simplifyPath(rawPath, 1.8);
   if (!d || d.length < 10) continue;
 
-  const biome = BIOME_MAP[id] || DEFAULT_BIOME;
+  const biome = BIOME_MAP[idCode] || DEFAULT_BIOME;
 
   countryPaths.push({
-    id,
+    id: feat.id,
     name,
     biome,
     d,
@@ -338,6 +301,58 @@ countryPaths.sort((a, b) => b.d.length - a.d.length);
 // Generate output
 const totalChars = countryPaths.reduce((sum, c) => sum + c.d.length, 0);
 console.log(`Processed ${countryPaths.length} countries, total path data: ${(totalChars / 1024).toFixed(1)}KB`);
+
+const LANDMARKS = [
+  ['vancouver', 'Vancouver', '📍', 49.2827, -123.1207, 'Canada'],
+  ['toronto', 'Toronto', '📍', 43.6532, -79.3832, 'Canada'],
+  ['montreal', 'Montreal', '📍', 45.5017, -73.5673, 'Canada'],
+  ['nyc', 'New York', '📍', 40.7128, -74.006, 'United States'],
+  ['mexico-city', 'Mexico City', '📍', 19.4326, -99.1332, 'Mexico'],
+  ['bogota', 'Bogota', '📍', 4.711, -74.0721, 'Colombia'],
+  ['lima', 'Lima', '📍', -12.0464, -77.0428, 'Peru'],
+  ['santiago', 'Santiago', '📍', -33.4489, -70.6693, 'Chile'],
+  ['buenos-aires', 'Buenos Aires', '📍', -34.6037, -58.3816, 'Argentina'],
+  ['rio', 'Rio', '📍', -22.9068, -43.1729, 'Brazil'],
+  ['london', 'London', '📍', 51.5072, -0.1276, 'United Kingdom'],
+  ['dublin', 'Dublin', '📍', 53.3498, -6.2603, 'Ireland'],
+  ['lisbon', 'Lisbon', '📍', 38.7223, -9.1393, 'Portugal'],
+  ['madrid', 'Madrid', '📍', 40.4168, -3.7038, 'Spain'],
+  ['paris', 'Paris', '📍', 48.8566, 2.3522, 'France'],
+  ['amsterdam', 'Amsterdam', '📍', 52.3676, 4.9041, 'Netherlands'],
+  ['brussels', 'Brussels', '📍', 50.8503, 4.3517, 'Belgium'],
+  ['berlin', 'Berlin', '📍', 52.52, 13.405, 'Germany'],
+  ['copenhagen', 'Copenhagen', '📍', 55.6761, 12.5683, 'Denmark'],
+  ['oslo', 'Oslo', '📍', 59.9139, 10.7522, 'Norway'],
+  ['stockholm', 'Stockholm', '📍', 59.3293, 18.0686, 'Sweden'],
+  ['helsinki', 'Helsinki', '📍', 60.1699, 24.9384, 'Finland'],
+  ['warsaw', 'Warsaw', '📍', 52.2297, 21.0122, 'Poland'],
+  ['prague', 'Prague', '📍', 50.0755, 14.4378, 'Czechia'],
+  ['vienna', 'Vienna', '📍', 48.2082, 16.3738, 'Austria'],
+  ['budapest', 'Budapest', '📍', 47.4979, 19.0402, 'Hungary'],
+  ['rome', 'Rome', '📍', 41.9028, 12.4964, 'Italy'],
+  ['athens', 'Athens', '📍', 37.9838, 23.7275, 'Greece'],
+  ['bucharest', 'Bucharest', '📍', 44.4268, 26.1025, 'Romania'],
+  ['moscow', 'Moscow', '📍', 55.7558, 37.6173, 'Russia'],
+  ['cairo', 'Cairo', '📍', 30.0444, 31.2357, 'Egypt'],
+  ['new-delhi', 'New Delhi', '📍', 28.6139, 77.209, 'India'],
+  ['mumbai', 'Mumbai', '📍', 19.076, 72.8777, 'India'],
+  ['beijing', 'Beijing', '📍', 39.9042, 116.4074, 'China'],
+  ['shanghai', 'Shanghai', '📍', 31.2304, 121.4737, 'China'],
+  ['hong-kong', 'Hong Kong', '📍', 22.3193, 114.1694, 'Hong Kong'],
+  ['taipei', 'Taipei', '📍', 25.033, 121.5654, 'Taiwan'],
+  ['seoul', 'Seoul', '📍', 37.5665, 126.978, 'South Korea'],
+  ['tokyo', 'Tokyo', '📍', 35.6762, 139.6503, 'Japan'],
+  ['singapore', 'Singapore', '📍', 1.3521, 103.8198, 'Singapore'],
+  ['kuala-lumpur', 'Kuala Lumpur', '📍', 3.139, 101.6869, 'Malaysia'],
+  ['bangkok', 'Bangkok', '📍', 13.7563, 100.5018, 'Thailand'],
+  ['manila', 'Manila', '📍', 14.5995, 120.9842, 'Philippines'],
+  ['jakarta', 'Jakarta', '📍', -6.2088, 106.8456, 'Indonesia'],
+  ['johannesburg', 'Johannesburg', '📍', -26.2041, 28.0473, 'South Africa'],
+  ['cape-town', 'Cape Town', '📍', -33.9249, 18.4241, 'South Africa'],
+  ['sydney', 'Sydney', '📍', -33.8688, 151.2093, 'Australia'],
+  ['auckland', 'Auckland', '📍', -36.8485, 174.7633, 'New Zealand'],
+  ['wellington', 'Wellington', '📍', -41.2866, 174.7756, 'New Zealand'],
+].map(([id, name, icon, lat, lng, country]) => ({ id, name, icon, lat, lng, country }));
 
 const output = `// Auto-generated world map vector data from Natural Earth 50m
 // Generated by scripts/generate-world-map.mjs
@@ -355,20 +370,7 @@ ${countryPaths.map(c => `  { id: ${JSON.stringify(c.id)}, name: ${JSON.stringify
 ];
 
 // Landmark labels overlaid on the map
-export const LANDMARKS = [
-  { id: 'nyc', name: 'New York', icon: '\\u{1F5FD}', lat: 40.7128, lng: -74.006 },
-  { id: 'toronto', name: 'Toronto', icon: '\\u{1F3D9}\\uFE0F', lat: 43.6532, lng: -79.3832 },
-  { id: 'mexico-city', name: 'Mexico City', icon: '\\u{1F985}', lat: 19.4326, lng: -99.1332 },
-  { id: 'rio', name: 'Rio', icon: '\\u26EA', lat: -22.9068, lng: -43.1729 },
-  { id: 'london', name: 'London', icon: '\\u{1F570}\\uFE0F', lat: 51.5072, lng: -0.1276 },
-  { id: 'paris', name: 'Paris', icon: '\\u{1F5FC}', lat: 48.8566, lng: 2.3522 },
-  { id: 'rome', name: 'Rome', icon: '\\u{1F3DB}\\uFE0F', lat: 41.9028, lng: 12.4964 },
-  { id: 'cairo', name: 'Cairo', icon: '\\u{1F53A}', lat: 30.0444, lng: 31.2357 },
-  { id: 'seoul', name: 'Seoul', icon: '\\u{1F386}', lat: 37.5665, lng: 126.978 },
-  { id: 'tokyo', name: 'Tokyo', icon: '\\u{1F5FA}\\uFE0F', lat: 35.6762, lng: 139.6503 },
-  { id: 'beijing', name: 'Beijing', icon: '\\u{1F3EF}', lat: 39.9042, lng: 116.4074 },
-  { id: 'sydney', name: 'Sydney', icon: '\\u{1F3AD}', lat: -33.8688, lng: 151.2093 },
-];
+export const LANDMARKS = ${JSON.stringify(LANDMARKS, null, 2)};
 `;
 
 const outPath = new URL('../client/src/utils/worldMapPaths.js', import.meta.url).pathname;

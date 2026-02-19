@@ -53,16 +53,35 @@ function latLngToPoint(lat, lng) {
   return { x, y };
 }
 
-function MarioUserPin({ user }) {
-  const point = latLngToPoint(user.location_lat, user.location_lng);
+function pointToViewport(point, viewState) {
+  if (!viewState) return point;
+  return {
+    x: point.x * viewState.zoom + viewState.panX,
+    y: point.y * viewState.zoom + viewState.panY,
+  };
+}
+
+function hasValidCoords(lat, lng) {
+  return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+}
+
+function countryMatchesFilter(value, filterValue) {
+  if (!filterValue) return true;
+  return normalizeSuggestText(value) === normalizeSuggestText(filterValue);
+}
+
+function MarioUserPin({ user, viewState }) {
+  const point = pointToViewport(latLngToPoint(user.location_lat, user.location_lng), viewState);
   const profilePath = getProfilePath(user.id, user.username);
 
   return (
     <Link
       to={profilePath}
       title={`${user.username} - ${user.location_city}, ${user.location_country}`}
-      className="absolute -translate-x-1/2 -translate-y-full group"
+      className="absolute -translate-x-1/2 -translate-y-full group pointer-events-auto"
       style={{ left: `${point.x}px`, top: `${point.y}px` }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
       <div className="flex flex-col items-center">
         <div className="mb-1 px-2 py-0.5 rounded-full bg-black/70 border border-white/20 text-[10px] text-white font-display shadow-lg whitespace-nowrap">
@@ -83,8 +102,8 @@ function MarioUserPin({ user }) {
   );
 }
 
-function MachinePin({ machine, onOpen }) {
-  const point = latLngToPoint(machine.latitude, machine.longitude);
+function MachinePin({ machine, viewState, onOpen }) {
+  const point = pointToViewport(latLngToPoint(machine.latitude, machine.longitude), viewState);
   const label = machine.venue_name
     ? `${machine.venue_name} - ${machine.city}, ${machine.country}`
     : `${machine.city}, ${machine.country}`;
@@ -94,8 +113,10 @@ function MachinePin({ machine, onOpen }) {
       type="button"
       title={label}
       onClick={onOpen}
-      className="absolute -translate-x-1/2 -translate-y-full group"
+      className="absolute -translate-x-1/2 -translate-y-full group pointer-events-auto"
       style={{ left: `${point.x}px`, top: `${point.y}px` }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
       <div className="flex flex-col items-center">
         <div className="mb-1 px-2 py-0.5 rounded-full bg-amber-500/90 border border-yellow-100/70 text-[10px] text-black font-display shadow-lg whitespace-nowrap max-w-[180px] truncate">
@@ -243,6 +264,11 @@ export default function WorldMaxPage() {
   const [listTab, setListTab] = useState('machines');
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [showMachineModal, setShowMachineModal] = useState(false);
+  const [showPlayers, setShowPlayers] = useState(true);
+  const [showMachines, setShowMachines] = useState(true);
+  const [showCities, setShowCities] = useState(true);
+  const [playerCountryFilter, setPlayerCountryFilter] = useState('');
+  const [machineCountryFilter, setMachineCountryFilter] = useState('');
 
   const [locationCitySuggestions, setLocationCitySuggestions] = useState([]);
   const [machineCitySuggestions, setMachineCitySuggestions] = useState([]);
@@ -333,6 +359,60 @@ export default function WorldMaxPage() {
     const remote = (machineCitySuggestions || []).map((item) => item.city);
     return uniqueTextValues([...remote, ...local]).slice(0, 12);
   }, [machineCitySuggestions, localCityPairs, machineForm.city, machineForm.country]);
+
+  const playerCountryOptions = useMemo(
+    () => uniqueTextValues((pins.users || []).map((row) => row?.location_country)).sort((a, b) => a.localeCompare(b)),
+    [pins.users]
+  );
+  const machineCountryOptions = useMemo(
+    () => uniqueTextValues((pins.machines || []).map((row) => row?.country)).sort((a, b) => a.localeCompare(b)),
+    [pins.machines]
+  );
+
+  const filteredUsers = useMemo(
+    () => (pins.users || []).filter((row) => (
+      hasValidCoords(row.location_lat, row.location_lng)
+      && countryMatchesFilter(row.location_country, playerCountryFilter)
+    )),
+    [pins.users, playerCountryFilter]
+  );
+
+  const filteredMachines = useMemo(
+    () => (pins.machines || []).filter((row) => (
+      hasValidCoords(row.latitude, row.longitude)
+      && countryMatchesFilter(row.country, machineCountryFilter)
+    )),
+    [pins.machines, machineCountryFilter]
+  );
+
+  const visibleLandmarks = useMemo(() => {
+    if (!showCities) return [];
+
+    const playerCountryKey = normalizeSuggestText(playerCountryFilter);
+    const machineCountryKey = normalizeSuggestText(machineCountryFilter);
+    const userCountries = new Set(filteredUsers.map((row) => normalizeSuggestText(row.location_country)));
+    const machineCountries = new Set(filteredMachines.map((row) => normalizeSuggestText(row.country)));
+
+    if (!showPlayers && !showMachines) return LANDMARKS;
+    if (showPlayers && !playerCountryKey && showMachines && !machineCountryKey) return LANDMARKS;
+
+    return LANDMARKS.filter((landmark) => {
+      const landmarkCountry = normalizeSuggestText(landmark.country);
+      const inPlayerScope = showPlayers
+        && (playerCountryKey ? landmarkCountry === playerCountryKey : userCountries.has(landmarkCountry));
+      const inMachineScope = showMachines
+        && (machineCountryKey ? landmarkCountry === machineCountryKey : machineCountries.has(landmarkCountry));
+      return inPlayerScope || inMachineScope;
+    });
+  }, [
+    showCities,
+    showPlayers,
+    showMachines,
+    playerCountryFilter,
+    machineCountryFilter,
+    filteredUsers,
+    filteredMachines,
+  ]);
 
   useEffect(() => {
     if (!availableMachineCodes.includes(machineForm.machine_code) && availableMachineCodes.length > 0) {
@@ -523,8 +603,9 @@ export default function WorldMaxPage() {
     }
   };
 
-  const usersCount = pins.users.length;
-  const machinesCount = pins.machines.length;
+  const activeViewState = viewState || { zoom: 0.5, panX: 0, panY: 0 };
+  const usersCount = showPlayers ? filteredUsers.length : 0;
+  const machinesCount = showMachines ? filteredMachines.length : 0;
 
   return (
     <div className="max-w-[1400px] mx-auto px-3 sm:px-4 py-6 sm:py-8 space-y-4 sm:space-y-6">
@@ -559,7 +640,7 @@ export default function WorldMaxPage() {
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setViewState((prev) => prev ? { ...prev, zoom: clamp(prev.zoom - 0.16, 0.28, 3.5) } : prev)}
+                onClick={() => setViewState((prev) => (prev ? { ...prev, zoom: clamp(prev.zoom - 0.16, 0.28, 3.5) } : prev))}
                 className="w-8 h-8 rounded-lg bg-piu-dark border border-piu-border text-sm font-bold hover:border-piu-accent/60"
                 aria-label="Zoom out"
               >
@@ -567,7 +648,7 @@ export default function WorldMaxPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setViewState((prev) => prev ? { ...prev, zoom: clamp(prev.zoom + 0.16, 0.28, 3.5) } : prev)}
+                onClick={() => setViewState((prev) => (prev ? { ...prev, zoom: clamp(prev.zoom + 0.16, 0.28, 3.5) } : prev))}
                 className="w-8 h-8 rounded-lg bg-piu-dark border border-piu-border text-sm font-bold hover:border-piu-accent/60"
                 aria-label="Zoom in"
               >
@@ -581,6 +662,60 @@ export default function WorldMaxPage() {
                 Reset
               </button>
             </div>
+          </div>
+
+          <div className="px-3 sm:px-4 py-2.5 border-b border-piu-border/60 bg-piu-dark/25 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPlayers((prev) => !prev)}
+              className={`px-2.5 h-8 rounded-lg border text-[11px] font-display font-bold transition-colors ${
+                showPlayers ? 'border-blue-300/60 bg-blue-500/25 text-blue-100' : 'border-piu-border bg-piu-dark text-gray-400'
+              }`}
+            >
+              Players
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMachines((prev) => !prev)}
+              className={`px-2.5 h-8 rounded-lg border text-[11px] font-display font-bold transition-colors ${
+                showMachines ? 'border-emerald-300/60 bg-emerald-500/25 text-emerald-100' : 'border-piu-border bg-piu-dark text-gray-400'
+              }`}
+            >
+              Machines
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCities((prev) => !prev)}
+              className={`px-2.5 h-8 rounded-lg border text-[11px] font-display font-bold transition-colors ${
+                showCities ? 'border-amber-300/60 bg-amber-500/25 text-amber-100' : 'border-piu-border bg-piu-dark text-gray-400'
+              }`}
+            >
+              Cities
+            </button>
+
+            <label className="text-[11px] text-gray-400 ml-1">Players in</label>
+            <select
+              className="h-8 rounded-lg bg-piu-dark border border-piu-border text-white text-[11px] px-2 min-w-[140px]"
+              value={playerCountryFilter}
+              onChange={(e) => setPlayerCountryFilter(e.target.value)}
+            >
+              <option value="">All countries</option>
+              {playerCountryOptions.map((country) => (
+                <option key={country} value={country}>{country}</option>
+              ))}
+            </select>
+
+            <label className="text-[11px] text-gray-400 ml-1">Machines in</label>
+            <select
+              className="h-8 rounded-lg bg-piu-dark border border-piu-border text-white text-[11px] px-2 min-w-[140px]"
+              value={machineCountryFilter}
+              onChange={(e) => setMachineCountryFilter(e.target.value)}
+            >
+              <option value="">All countries</option>
+              {machineCountryOptions.map((country) => (
+                <option key={country} value={country}>{country}</option>
+              ))}
+            </select>
           </div>
 
           <div
@@ -602,18 +737,20 @@ export default function WorldMaxPage() {
             className="relative h-[58vh] min-h-[420px] max-h-[760px] overflow-hidden cursor-grab active:cursor-grabbing bg-[#14387d]"
           >
             <div
-              className="absolute left-0 top-0"
+              className="absolute left-0 top-0 pointer-events-none"
               style={{
                 width: `${MAP_WIDTH}px`,
                 height: `${MAP_HEIGHT}px`,
-                transform: viewState ? `translate(${viewState.panX}px, ${viewState.panY}px) scale(${viewState.zoom})` : 'scale(0.5)',
+                transform: `translate(${activeViewState.panX}px, ${activeViewState.panY}px) scale(${activeViewState.zoom})`,
                 transformOrigin: '0 0',
               }}
             >
               <MapBackdrop />
+            </div>
 
-              {LANDMARKS.map((landmark) => {
-                const point = latLngToPoint(landmark.lat, landmark.lng);
+            <div className="absolute inset-0 pointer-events-none">
+              {visibleLandmarks.map((landmark) => {
+                const point = pointToViewport(latLngToPoint(landmark.lat, landmark.lng), activeViewState);
                 return (
                   <div
                     key={landmark.id}
@@ -628,21 +765,18 @@ export default function WorldMaxPage() {
                 );
               })}
 
-              {pins.users
-                .filter((u) => Number.isFinite(Number(u.location_lat)) && Number.isFinite(Number(u.location_lng)))
-                .map((u) => (
-                  <MarioUserPin key={`u-${u.id}`} user={u} />
-                ))}
+              {showPlayers && filteredUsers.map((u) => (
+                <MarioUserPin key={`u-${u.id}`} user={u} viewState={activeViewState} />
+              ))}
 
-              {pins.machines
-                .filter((m) => Number.isFinite(Number(m.latitude)) && Number.isFinite(Number(m.longitude)))
-                .map((m) => (
-                  <MachinePin
-                    key={`m-${m.id}`}
-                    machine={m}
-                    onOpen={() => navigate(`/world-max/machine/${m.id}`)}
-                  />
-                ))}
+              {showMachines && filteredMachines.map((m) => (
+                <MachinePin
+                  key={`m-${m.id}`}
+                  machine={m}
+                  viewState={activeViewState}
+                  onOpen={() => navigate(`/world-max/machine/${m.id}`)}
+                />
+              ))}
             </div>
           </div>
 
@@ -721,11 +855,13 @@ export default function WorldMaxPage() {
               {loading ? (
                 <p className="text-xs text-gray-500">Loading map data...</p>
               ) : listTab === 'machines' ? (
-                pins.machines.length === 0 ? (
-                  <p className="text-xs text-gray-500">No machine locations yet.</p>
+                filteredMachines.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    {machineCountryFilter ? `No machine pins found for ${machineCountryFilter}.` : 'No machine locations yet.'}
+                  </p>
                 ) : (
                   <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
-                    {pins.machines.slice(0, 28).map((machine) => (
+                    {filteredMachines.slice(0, 28).map((machine) => (
                       <button
                         key={machine.id}
                         type="button"
@@ -748,11 +884,13 @@ export default function WorldMaxPage() {
                     ))}
                   </div>
                 )
-              ) : pins.users.length === 0 ? (
-                <p className="text-xs text-gray-500">No player pins yet.</p>
+              ) : filteredUsers.length === 0 ? (
+                <p className="text-xs text-gray-500">
+                  {playerCountryFilter ? `No player pins found for ${playerCountryFilter}.` : 'No player pins yet.'}
+                </p>
               ) : (
                 <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1">
-                  {pins.users.slice(0, 28).map((player) => (
+                  {filteredUsers.slice(0, 28).map((player) => (
                     <Link
                       key={player.id}
                       to={getProfilePath(player.id, player.username)}
