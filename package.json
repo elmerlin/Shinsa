@@ -10,6 +10,7 @@
     "build": "cd client && npx vite build",
     "seed": "node server/db/seed.js",
     "piu:aliases": "node server/scripts/generatePiugameSongAliases.js --date=202602 --mode=total",
+    "piu:tiers:import": "node server/scripts/importPiuScoresTierLists.js --tier-list-type=Pass",
     "start": "node server/index.js"
   },
   "dependencies": {
@@ -20,6 +21,7 @@
     "concurrently": "^9.1.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
+    "html2canvas": "^1.4.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^1.4.5-lts.1",
     "sharp": "^0.34.5",
@@ -30,5 +32,6 @@
   "devDependencies": {
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
+    "playwright": "^1.58.2"
   }
 }

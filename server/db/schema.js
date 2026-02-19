@@ -13,6 +13,193 @@ function getDb() {
   return db;
 }
 
+function chartModeLevelFromJson(chart) {
+  if (!chart || typeof chart !== 'object') return null;
+  const diffClass = String(chart.diffClass || '').trim().toUpperCase();
+  const style = String(chart.style || '').trim().toLowerCase();
+
+  if ((diffClass === 'S' || diffClass === 'D') && style === 'solo') {
+    return {
+      mode: diffClass === 'S' ? 'Single' : 'Double',
+      level: parseInt(chart.lvl, 10) || 0,
+    };
+  }
+
+  if (style === 'coop' && /^C[2-5]$/.test(diffClass)) {
+    // PIU co-op charts encode player count in diff class (C2..C5).
+    return {
+      mode: 'CoOp',
+      level: parseInt(diffClass.slice(1), 10) || 0,
+    };
+  }
+
+  return null;
+}
+
+function ensureCoOpChartsFromJson() {
+  const jsonPath = path.join(__dirname, '..', '..', 'pump-phoenix.json');
+  if (!fs.existsSync(jsonPath)) return;
+
+  try {
+    const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    const songs = Array.isArray(data?.songs) ? data.songs : [];
+    if (songs.length === 0) return;
+
+    const existingRows = db.prepare(`
+      SELECT title, artist, level, song_key
+      FROM songs
+      WHERE mode = 'CoOp'
+    `).all();
+    const existing = new Set(
+      existingRows.map((row) => `${row.title}||${row.artist || ''}||${parseInt(row.level, 10) || 0}||${row.song_key || ''}`)
+    );
+
+    const insertSong = db.prepare(`
+      INSERT INTO songs (title, artist, jacket_url, mode, level, bpm, song_key, flags)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertMissing = db.transaction((songList) => {
+      let inserted = 0;
+      for (const song of songList) {
+        const jacketUrl = song.jacket ? `/jackets/${song.jacket}` : '';
+        const flags = Array.isArray(song.flags) ? song.flags.join(',') : (song.flags || '');
+        const songName = song.name || '';
+        const artist = song.artist || '';
+        const songKey = song.saIndex || '';
+
+        for (const chart of (song.charts || [])) {
+          const mapped = chartModeLevelFromJson(chart);
+          if (!mapped || mapped.mode !== 'CoOp' || mapped.level <= 0) continue;
+
+          const key = `${songName}||${artist}||${mapped.level}||${songKey}`;
+          if (existing.has(key)) continue;
+
+          insertSong.run(
+            songName,
+            artist,
+            jacketUrl,
+            'CoOp',
+            mapped.level,
+            song.bpm || '',
+            songKey,
+            flags
+          );
+          existing.add(key);
+          inserted++;
+        }
+      }
+      return inserted;
+    });
+
+    const inserted = insertMissing(songs);
+    if (inserted > 0) {
+      console.log(`Added ${inserted} missing CoOp charts from pump-phoenix.json`);
+    }
+  } catch (err) {
+    console.error('Failed to backfill CoOp charts from pump-phoenix.json:', err.message);
+  }
+}
+
+function bootstrapChartTiersFromSnapshotIfEmpty() {
+  let tierCount = 0;
+  try {
+    tierCount = db.prepare("SELECT COUNT(*) as c FROM chart_tiers WHERE tier_list_type = 'Pass'").get().c || 0;
+  } catch {
+    return;
+  }
+  if (tierCount > 0) return;
+
+  const snapshotPath = path.join(__dirname, '..', 'data', 'piuscores-tier-pass.json');
+  if (!fs.existsSync(snapshotPath)) return;
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
+    const levels = Array.isArray(payload?.levels) ? payload.levels : [];
+    if (levels.length === 0) return;
+
+    const rows = [];
+    for (const levelRow of levels) {
+      for (const row of (levelRow?.rows || [])) {
+        rows.push({
+          tier_list_type: 'Pass',
+          mode: String(row.mode || ''),
+          level: parseInt(row.level, 10) || 0,
+          tier_name: String(row.tier_name || ''),
+          tier_rank: parseInt(row.tier_rank, 10) || 0,
+          chart_id: parseInt(row.chart_id, 10) || 0,
+          source_slug: String(row.source_slug || ''),
+          source_url: String(row.source_url || ''),
+        });
+      }
+    }
+    if (rows.length === 0) return;
+
+    const existingCharts = new Map(
+      db.prepare('SELECT id, mode, level FROM songs').all().map((row) => [parseInt(row.id, 10), row])
+    );
+
+    const clearStmt = db.prepare("DELETE FROM chart_tiers WHERE tier_list_type = 'Pass'");
+    const insertStmt = db.prepare(`
+      INSERT INTO chart_tiers (
+        tier_list_type,
+        mode,
+        level,
+        tier_name,
+        tier_rank,
+        chart_id,
+        source_slug,
+        source_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(tier_list_type, mode, level, chart_id)
+      DO UPDATE SET
+        tier_name = excluded.tier_name,
+        tier_rank = excluded.tier_rank,
+        source_slug = excluded.source_slug,
+        source_url = excluded.source_url
+    `);
+
+    const bootstrap = db.transaction((tierRows) => {
+      clearStmt.run();
+      let inserted = 0;
+      let skipped = 0;
+      for (const row of tierRows) {
+        const chart = existingCharts.get(row.chart_id);
+        if (!chart) {
+          skipped++;
+          continue;
+        }
+        const chartMode = String(chart.mode || '');
+        const chartLevel = parseInt(chart.level, 10) || 0;
+        if (chartMode !== row.mode || chartLevel !== row.level) {
+          skipped++;
+          continue;
+        }
+
+        insertStmt.run(
+          row.tier_list_type,
+          row.mode,
+          row.level,
+          row.tier_name,
+          row.tier_rank,
+          row.chart_id,
+          row.source_slug,
+          row.source_url
+        );
+        inserted++;
+      }
+      return { inserted, skipped };
+    });
+
+    const result = bootstrap(rows);
+    if (result.inserted > 0) {
+      console.log(`Bootstrapped ${result.inserted} chart_tiers rows from snapshot (${result.skipped} skipped)`);
+    }
+  } catch (err) {
+    console.error('Failed to bootstrap chart tiers from snapshot:', err.message);
+  }
+}
+
 function bootstrapSongsFromJsonIfEmpty() {
   const songCount = db.prepare('SELECT COUNT(*) as c FROM songs').get();
   if (songCount.c > 0) return;
@@ -40,20 +227,19 @@ function bootstrapSongsFromJsonIfEmpty() {
         const flags = Array.isArray(song.flags) ? song.flags.join(',') : (song.flags || '');
 
         for (const chart of (song.charts || [])) {
-          if ((chart.diffClass === 'S' || chart.diffClass === 'D') && chart.style === 'solo') {
-            const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
-            insertSong.run(
-              song.name || '',
-              song.artist || '',
-              jacketUrl,
-              mode,
-              chart.lvl,
-              song.bpm || '',
-              song.saIndex || '',
-              flags
-            );
-            inserted++;
-          }
+          const mapped = chartModeLevelFromJson(chart);
+          if (!mapped || mapped.level <= 0 || mapped.mode === 'CoOp') continue;
+          insertSong.run(
+            song.name || '',
+            song.artist || '',
+            jacketUrl,
+            mapped.mode,
+            mapped.level,
+            song.bpm || '',
+            song.saIndex || '',
+            flags
+          );
+          inserted++;
         }
       }
       return inserted;
@@ -246,6 +432,20 @@ function initializeDb() {
       flags TEXT DEFAULT ''
     );
 
+    CREATE TABLE IF NOT EXISTS chart_tiers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tier_list_type TEXT NOT NULL DEFAULT 'Pass',
+      mode TEXT NOT NULL,
+      level INT NOT NULL,
+      tier_name TEXT NOT NULL,
+      tier_rank INT NOT NULL DEFAULT 0,
+      chart_id INTEGER NOT NULL,
+      source_slug TEXT DEFAULT '',
+      source_url TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (chart_id) REFERENCES songs(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS matches (
       id TEXT PRIMARY KEY,
       tournament_id TEXT NOT NULL,
@@ -428,6 +628,10 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_matches_round ON matches(tournament_id, round_number);
     CREATE INDEX IF NOT EXISTS idx_songs_level ON songs(level);
     CREATE INDEX IF NOT EXISTS idx_songs_mode ON songs(mode);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_chart_tiers_unique_chart
+      ON chart_tiers(tier_list_type, mode, level, chart_id);
+    CREATE INDEX IF NOT EXISTS idx_chart_tiers_mode_level_rank
+      ON chart_tiers(tier_list_type, mode, level, tier_rank, chart_id);
     CREATE INDEX IF NOT EXISTS idx_duel_songs_duel ON duel_songs(duel_id);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);
@@ -982,6 +1186,8 @@ function initializeDb() {
   `);
 
   bootstrapSongsFromJsonIfEmpty();
+  ensureCoOpChartsFromJson();
+  bootstrapChartTiersFromSnapshotIfEmpty();
 
   // Migration: backfill empty song flags from pump-phoenix.json
   const emptyFlagCount = db.prepare("SELECT COUNT(*) as c FROM songs WHERE flags = '' OR flags IS NULL").get();
@@ -997,11 +1203,10 @@ function initializeDb() {
             const flags = (song.flags || []).join(',');
             if (!flags) continue;
             for (const chart of (song.charts || [])) {
-              if ((chart.diffClass === 'S' || chart.diffClass === 'D') && chart.style === 'solo') {
-                const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
-                const result = updateStmt.run(flags, song.name, mode, chart.lvl);
-                updated += result.changes;
-              }
+              const mapped = chartModeLevelFromJson(chart);
+              if (!mapped || mapped.level <= 0) continue;
+              const result = updateStmt.run(flags, song.name, mapped.mode, mapped.level);
+              updated += result.changes;
             }
           }
           return updated;

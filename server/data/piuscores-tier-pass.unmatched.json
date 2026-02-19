@@ -1,0 +1,26 @@
+[
+  {
+    "mode": "Double",
+    "level": 17,
+    "tier_name": "VeryHard",
+    "tier_rank": 5,
+    "source_slug": "LoveisaDangerZone2TryToBPM",
+    "source_url": "https://piuimages.arroweclip.se/songs/LoveisaDangerZone2TryToBPM.png"
+  },
+  {
+    "mode": "Double",
+    "level": 20,
+    "tier_name": "VeryHard",
+    "tier_rank": 5,
+    "source_slug": "XTream",
+    "source_url": "https://piuimages.arroweclip.se/songs/XTream.png"
+  },
+  {
+    "mode": "CoOp",
+    "level": 3,
+    "tier_name": "Medium",
+    "tier_rank": 2,
+    "source_slug": "Storm",
+    "source_url": "https://piuimages.arroweclip.se/songs/Storm.png"
+  }
+]

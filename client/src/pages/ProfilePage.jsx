@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import {
   getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap,
+  getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
@@ -15,6 +16,7 @@ import {
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import PostCard, { timeAgo } from '../components/PostCard';
+import SongAnalyticsPanel from '../components/SongAnalyticsPanel';
 import { getProfilePath } from '../utils/profile';
 
 function getAge(dateStr) {
@@ -725,6 +727,7 @@ export default function ProfilePage() {
   const [myFollowingIds, setMyFollowingIds] = useState(new Set());
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
+  const [songAnalytics, setSongAnalytics] = useState(null);
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
@@ -744,6 +747,7 @@ export default function ProfilePage() {
     setSyncProgress({ in_progress: '', progress: 0, total: 0 });
     setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
     setActivityItems([]);
+    setSongAnalytics(null);
     setFollowersLoaded(false);
     setTab('overview');
     setSelectedOverviewDateKey('');
@@ -832,6 +836,26 @@ export default function ProfilePage() {
       }
     }
   }, [tab, profileId, followersLoaded, authUser]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!profileId) {
+      setSongAnalytics(null);
+      return () => { cancelled = true; };
+    }
+
+    getSongAnalytics(profileId)
+      .then((data) => {
+        if (cancelled) return;
+        setSongAnalytics(data || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSongAnalytics(null);
+      });
+
+    return () => { cancelled = true; };
+  }, [profileId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1669,6 +1693,10 @@ export default function ProfilePage() {
       {/* Tab Content */}
       {tab === 'overview' && (
         <div className="space-y-4">
+          {songAnalytics && (
+            <SongAnalyticsPanel analytics={songAnalytics} />
+          )}
+
           {(overviewPlayHeatmap.weeks.length > 0 || hasPiuData) && (
             <div className="card">
               <div className="flex items-center justify-between mb-3">

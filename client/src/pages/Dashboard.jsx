@@ -292,7 +292,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2">
           <Link
             to="/world-max"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 border border-sky-200/30 text-white font-display font-bold text-sm tracking-wide shadow-lg shadow-sky-900/30 hover:brightness-110 transition-all"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 border border-sky-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-sky-900/30 hover:brightness-110 transition-all whitespace-nowrap"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -302,7 +302,7 @@ export default function Dashboard() {
           </Link>
           <Link
             to="/songs"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border border-emerald-200/30 text-white font-display font-bold text-sm tracking-wide shadow-lg shadow-emerald-900/30 hover:brightness-110 transition-all"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border border-emerald-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-900/30 hover:brightness-110 transition-all whitespace-nowrap"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
@@ -311,11 +311,11 @@ export default function Dashboard() {
           </Link>
           <Link
             to="/head-to-head"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all whitespace-nowrap"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8M8 12h8M8 17h8" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h.01M4 12h.01M4 17h.01M20 7h.01M20 12h.01M20 17h.01" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
             </svg>
             Head to Head
           </Link>
