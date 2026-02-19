@@ -12,15 +12,12 @@ import {
 } from '../utils/api';
 import { getProfilePath } from '../utils/profile';
 import {
-  PIXEL_TILE,
   MAP_WIDTH,
   MAP_HEIGHT,
-  WORLD_GRID,
-  TERRAIN_PALETTE,
-  PIXEL_CLOUDS,
-  PIXEL_WATER_SPARKLES,
+  BIOME_COLORS,
+  COUNTRY_PATHS,
   LANDMARKS,
-} from '../utils/worldMapData';
+} from '../utils/worldMapPaths';
 
 const COUNTRY_LOOKUP = (() => {
   const map = new Map();
@@ -117,108 +114,45 @@ function MachinePin({ machine, onOpen }) {
   );
 }
 
-// Render the full world grid with run-length merging for performance
-function pixelRectsFromGrid(gridRows, palette) {
-  const rects = [];
-  for (let row = 0; row < gridRows.length; row++) {
-    const line = gridRows[row];
-    let col = 0;
-    while (col < line.length) {
-      const token = line[col];
-      const fill = palette[token];
-      if (!fill) { col++; continue; }
-      let runLen = 1;
-      while (col + runLen < line.length && line[col + runLen] === token) runLen++;
-      rects.push(
-        <rect
-          key={`${row}-${col}`}
-          x={col * PIXEL_TILE}
-          y={row * PIXEL_TILE}
-          width={runLen * PIXEL_TILE}
-          height={PIXEL_TILE}
-          fill={fill}
-        />
-      );
-      col += runLen;
-    }
-  }
-  return rects;
-}
-
-function pixelRectsFromRows(block, palette, stroke = null) {
-  const rects = [];
-  const rows = Array.isArray(block.rows) ? block.rows : [];
-  for (let row = 0; row < rows.length; row++) {
-    const line = rows[row];
-    for (let col = 0; col < line.length; col++) {
-      const token = line[col];
-      const fill = palette[token];
-      if (!fill) continue;
-      rects.push(
-        <rect
-          key={`${block.id}-${row}-${col}`}
-          x={(block.x + col) * PIXEL_TILE}
-          y={(block.y + row) * PIXEL_TILE}
-          width={PIXEL_TILE}
-          height={PIXEL_TILE}
-          fill={fill}
-          stroke={stroke || 'none'}
-          strokeWidth={stroke ? 1 : 0}
-        />
-      );
-    }
-  }
-  return rects;
-}
-
 function MapBackdrop() {
   return (
     <svg
       viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
       className="absolute inset-0 w-full h-full"
-      style={{ imageRendering: 'pixelated' }}
-      shapeRendering="crispEdges"
       aria-hidden="true"
     >
       <defs>
-        <pattern id="wm-pixel-ocean" width="20" height="20" patternUnits="userSpaceOnUse">
-          <rect width="20" height="20" fill="#1a75c4" />
-          <rect width="10" height="10" fill="#2088d4" />
-          <rect x="10" y="10" width="10" height="10" fill="#2088d4" />
-        </pattern>
-        <pattern id="wm-pixel-grid" width="10" height="10" patternUnits="userSpaceOnUse">
-          <rect width="10" height="10" fill="rgba(255,255,255,0.02)" />
-          <path d="M0 0H10M0 0V10" stroke="rgba(7,35,89,0.25)" strokeWidth="0.5" />
-        </pattern>
-        <filter id="wm-pixel-shadow" x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="6" stdDeviation="4" floodColor="rgba(0,0,0,0.30)" />
+        <radialGradient id="wm-ocean-grad" cx="50%" cy="45%" r="60%">
+          <stop offset="0%" stopColor="#2088d4" />
+          <stop offset="100%" stopColor="#14387d" />
+        </radialGradient>
+        <filter id="wm-land-shadow" x="-2%" y="-2%" width="104%" height="108%">
+          <feDropShadow dx="0" dy="4" stdDeviation="3" floodColor="rgba(0,0,0,0.25)" />
         </filter>
       </defs>
 
-      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-pixel-ocean)" />
-      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-pixel-grid)" opacity="0.15" />
+      <rect x="0" y="0" width={MAP_WIDTH} height={MAP_HEIGHT} fill="url(#wm-ocean-grad)" />
 
-      <g opacity="0.45">
-        {PIXEL_WATER_SPARKLES.map(([x, y], idx) => (
-          <rect
-            key={`sparkle-${idx}`}
-            x={x * PIXEL_TILE + 2}
-            y={y * PIXEL_TILE + 2}
-            width="6"
-            height="6"
-            fill="#a0e8ff"
-          />
-        ))}
+      <g filter="url(#wm-land-shadow)">
+        {COUNTRY_PATHS.map((country) => {
+          const colors = BIOME_COLORS[country.biome] || BIOME_COLORS.grassland;
+          return (
+            <path
+              key={country.id}
+              d={country.d}
+              fill={colors.fill}
+              stroke={colors.stroke}
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+          );
+        })}
       </g>
 
-      <g opacity="0.8">
-        {PIXEL_CLOUDS.flatMap((cloud) =>
-          pixelRectsFromRows(cloud, { 1: '#f0f8ff' }, 'rgba(120,184,226,0.35)')
-        )}
-      </g>
-
-      <g filter="url(#wm-pixel-shadow)">
-        {pixelRectsFromGrid(WORLD_GRID, TERRAIN_PALETTE)}
+      <g opacity="0.08">
+        <line x1="0" y1={MAP_HEIGHT / 2} x2={MAP_WIDTH} y2={MAP_HEIGHT / 2} stroke="white" strokeWidth="1.5" strokeDasharray="12,8" />
+        <line x1="0" y1={MAP_HEIGHT * 0.259} x2={MAP_WIDTH} y2={MAP_HEIGHT * 0.259} stroke="white" strokeWidth="0.8" strokeDasharray="8,12" />
+        <line x1="0" y1={MAP_HEIGHT * 0.741} x2={MAP_WIDTH} y2={MAP_HEIGHT * 0.741} stroke="white" strokeWidth="0.8" strokeDasharray="8,12" />
       </g>
     </svg>
   );
@@ -619,7 +553,7 @@ export default function WorldMaxPage() {
         <section className="card p-0 overflow-hidden">
           <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 border-b border-piu-border/60 bg-piu-card/60">
             <div>
-              <h2 className="text-sm sm:text-base font-display font-bold text-white">Pixel Art World Map</h2>
+              <h2 className="text-sm sm:text-base font-display font-bold text-white">World Map</h2>
               <p className="text-[11px] sm:text-xs text-gray-400">Drag to move. Use wheel or controls to zoom. Click machine pins for details.</p>
             </div>
             <div className="flex items-center gap-1.5">
