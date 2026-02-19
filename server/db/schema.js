@@ -101,6 +101,105 @@ function ensureCoOpChartsFromJson() {
   }
 }
 
+function bootstrapChartTiersFromSnapshotIfEmpty() {
+  let tierCount = 0;
+  try {
+    tierCount = db.prepare("SELECT COUNT(*) as c FROM chart_tiers WHERE tier_list_type = 'Pass'").get().c || 0;
+  } catch {
+    return;
+  }
+  if (tierCount > 0) return;
+
+  const snapshotPath = path.join(__dirname, '..', 'data', 'piuscores-tier-pass.json');
+  if (!fs.existsSync(snapshotPath)) return;
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
+    const levels = Array.isArray(payload?.levels) ? payload.levels : [];
+    if (levels.length === 0) return;
+
+    const rows = [];
+    for (const levelRow of levels) {
+      for (const row of (levelRow?.rows || [])) {
+        rows.push({
+          tier_list_type: 'Pass',
+          mode: String(row.mode || ''),
+          level: parseInt(row.level, 10) || 0,
+          tier_name: String(row.tier_name || ''),
+          tier_rank: parseInt(row.tier_rank, 10) || 0,
+          chart_id: parseInt(row.chart_id, 10) || 0,
+          source_slug: String(row.source_slug || ''),
+          source_url: String(row.source_url || ''),
+        });
+      }
+    }
+    if (rows.length === 0) return;
+
+    const existingCharts = new Map(
+      db.prepare('SELECT id, mode, level FROM songs').all().map((row) => [parseInt(row.id, 10), row])
+    );
+
+    const clearStmt = db.prepare("DELETE FROM chart_tiers WHERE tier_list_type = 'Pass'");
+    const insertStmt = db.prepare(`
+      INSERT INTO chart_tiers (
+        tier_list_type,
+        mode,
+        level,
+        tier_name,
+        tier_rank,
+        chart_id,
+        source_slug,
+        source_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(tier_list_type, mode, level, chart_id)
+      DO UPDATE SET
+        tier_name = excluded.tier_name,
+        tier_rank = excluded.tier_rank,
+        source_slug = excluded.source_slug,
+        source_url = excluded.source_url
+    `);
+
+    const bootstrap = db.transaction((tierRows) => {
+      clearStmt.run();
+      let inserted = 0;
+      let skipped = 0;
+      for (const row of tierRows) {
+        const chart = existingCharts.get(row.chart_id);
+        if (!chart) {
+          skipped++;
+          continue;
+        }
+        const chartMode = String(chart.mode || '');
+        const chartLevel = parseInt(chart.level, 10) || 0;
+        if (chartMode !== row.mode || chartLevel !== row.level) {
+          skipped++;
+          continue;
+        }
+
+        insertStmt.run(
+          row.tier_list_type,
+          row.mode,
+          row.level,
+          row.tier_name,
+          row.tier_rank,
+          row.chart_id,
+          row.source_slug,
+          row.source_url
+        );
+        inserted++;
+      }
+      return { inserted, skipped };
+    });
+
+    const result = bootstrap(rows);
+    if (result.inserted > 0) {
+      console.log(`Bootstrapped ${result.inserted} chart_tiers rows from snapshot (${result.skipped} skipped)`);
+    }
+  } catch (err) {
+    console.error('Failed to bootstrap chart tiers from snapshot:', err.message);
+  }
+}
+
 function bootstrapSongsFromJsonIfEmpty() {
   const songCount = db.prepare('SELECT COUNT(*) as c FROM songs').get();
   if (songCount.c > 0) return;
@@ -129,7 +228,7 @@ function bootstrapSongsFromJsonIfEmpty() {
 
         for (const chart of (song.charts || [])) {
           const mapped = chartModeLevelFromJson(chart);
-          if (!mapped || mapped.level <= 0) continue;
+          if (!mapped || mapped.level <= 0 || mapped.mode === 'CoOp') continue;
           insertSong.run(
             song.name || '',
             song.artist || '',
@@ -1088,6 +1187,7 @@ function initializeDb() {
 
   bootstrapSongsFromJsonIfEmpty();
   ensureCoOpChartsFromJson();
+  bootstrapChartTiersFromSnapshotIfEmpty();
 
   // Migration: backfill empty song flags from pump-phoenix.json
   const emptyFlagCount = db.prepare("SELECT COUNT(*) as c FROM songs WHERE flags = '' OR flags IS NULL").get();
