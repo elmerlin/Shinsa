@@ -177,6 +177,56 @@ function HistoryModal({ open, chart, rows, onClose }) {
   );
 }
 
+function FriendJudgmentModal({ open, chart, entry, onClose }) {
+  if (!open || !entry) return null;
+
+  const grade = entry.grade || getRank(entry.score).label;
+
+  return (
+    <div className="fixed inset-0 z-[75] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-lg rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
+          <h3 className="font-display font-bold tracking-wide text-sm sm:text-base">Friend Score Details</h3>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+
+        <div className="p-4">
+          <div className="relative rounded-xl overflow-hidden border border-piu-border/60">
+            {chart?.jacket_url ? (
+              <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${chart.jacket_url})` }} />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-[#10253f] to-[#132b49]" />
+            )}
+            <div className="absolute inset-0 bg-black/58" />
+
+            <div className="relative p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-display font-bold truncate">{entry.username}</p>
+                  <p className="text-[11px] text-gray-300">{entry.date_played ? String(entry.date_played).slice(0, 10) : '-'}</p>
+                </div>
+                {levelBadge(chart?.mode, chart?.level)}
+              </div>
+
+              <div className="flex items-center justify-between gap-3 mt-2">
+                <p className={`text-3xl font-display font-black ${entry.is_stage_break ? 'text-red-400' : 'text-white'}`}>
+                  {entry.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.score)}
+                </p>
+                <p className={`text-2xl font-display font-black ${getGradeColor(grade, entry.score)}`}>{grade}</p>
+              </div>
+
+              <JudgmentStrip row={entry} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SongChartPage() {
   const { chartId } = useParams();
   const { user } = useAuth();
@@ -185,6 +235,7 @@ export default function SongChartPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedFriendRecord, setSelectedFriendRecord] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -303,8 +354,12 @@ export default function SongChartPage() {
 
         <div className="relative p-4">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="text-3xl sm:text-5xl font-display font-black tracking-wide leading-tight break-words whitespace-normal">{chart.title}</h1>
+            <div className="min-w-0 flex-1">
+              <div className="overflow-x-auto">
+                <h1 className="text-[clamp(0.95rem,4.4vw,2.75rem)] font-display font-black tracking-wide leading-tight whitespace-nowrap">
+                  {chart.title}
+                </h1>
+              </div>
               <p className="text-sm text-gray-200 break-words whitespace-normal">{chart.artist || 'Unknown artist'}</p>
             </div>
             {levelBadge(chart.mode, chart.level)}
@@ -341,11 +396,12 @@ export default function SongChartPage() {
         <button
           type="button"
           onClick={() => setShowHistoryModal(true)}
-          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-piu-accent/40 transition-colors"
+          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-piu-accent/40 transition-colors flex flex-col justify-between"
         >
-          <p className="text-[10px] text-gray-500">Logged Plays</p>
-          <p className="font-mono text-base text-gray-100">{Array.isArray(detail.history) ? detail.history.length : 0}</p>
-          <p className="text-[10px] text-piu-accent mt-1">View Clear History</p>
+          <p className="font-mono text-base text-gray-100">{Array.isArray(detail.history) ? detail.history.length : 0} plays</p>
+          <span className="inline-flex items-center justify-center rounded-md border border-piu-accent/45 bg-piu-accent/15 text-piu-accent px-2 py-1 text-[11px] font-display font-bold w-fit">
+            Clear History
+          </span>
         </button>
       </section>
 
@@ -409,9 +465,23 @@ export default function SongChartPage() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className={`text-sm font-display font-bold ${entry.best.is_stage_break ? 'text-red-400' : 'text-white'}`}>
-                      {entry.best.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.best.score)}
-                    </p>
+                    {hasJudgments(entry.best) ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFriendRecord({
+                          ...entry.best,
+                          username: entry.user.username,
+                        })}
+                        className={`text-sm font-display font-bold ${entry.best.is_stage_break ? 'text-red-400' : 'text-white'} hover:text-piu-accent transition-colors`}
+                        title="View judgment details"
+                      >
+                        {entry.best.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.best.score)}
+                      </button>
+                    ) : (
+                      <p className={`text-sm font-display font-bold ${entry.best.is_stage_break ? 'text-red-400' : 'text-white'}`}>
+                        {entry.best.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.best.score)}
+                      </p>
+                    )}
                     <p className={`text-xs font-display font-bold ${getGradeColor(grade, entry.best.score)}`}>{grade}</p>
                   </div>
                 </div>
@@ -428,6 +498,13 @@ export default function SongChartPage() {
         chart={chart}
         rows={historyByScore}
         onClose={() => setShowHistoryModal(false)}
+      />
+
+      <FriendJudgmentModal
+        open={!!selectedFriendRecord}
+        chart={chart}
+        entry={selectedFriendRecord}
+        onClose={() => setSelectedFriendRecord(null)}
       />
     </div>
   );

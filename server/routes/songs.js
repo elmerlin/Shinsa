@@ -1042,7 +1042,8 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
         WHERE user_id IN (${placeholders}) AND mode = ? AND level = ?
       `).all(...followIds, chart.mode, chart.level);
       const recentRows = db.prepare(`
-        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played
+        SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
+               perfect, great, good, bad, miss, max_combo
         FROM user_recently_played
         WHERE user_id IN (${placeholders}) AND mode = ? AND level = ?
       `).all(...followIds, chart.mode, chart.level);
@@ -1061,6 +1062,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
           grade,
           plate: row.plate || '',
           date_played: row.date_played || '',
+          perfect: parseInt(row.perfect, 10) || 0,
+          great: parseInt(row.great, 10) || 0,
+          good: parseInt(row.good, 10) || 0,
+          bad: parseInt(row.bad, 10) || 0,
+          miss: parseInt(row.miss, 10) || 0,
+          max_combo: parseInt(row.max_combo, 10) || 0,
           is_pass: isPassRecord({ score, grade }),
           is_stage_break: !isPassRecord({ score, grade }),
         };
@@ -1204,12 +1211,17 @@ router.get('/analytics/head-to-head', (req, res) => {
 
   const modeLabel = modeList.length === 2 ? 'both' : (modeList[0] || '').toLowerCase();
 
-  const ratingFor = (analytics) => {
+  const sourceFor = (analytics) => {
     const source = modeLabel === 'single'
-      ? analytics.levels.single
+      ? analytics?.levels?.single
       : modeLabel === 'double'
-        ? analytics.levels.double
-        : analytics.levels.both;
+        ? analytics?.levels?.double
+        : analytics?.levels?.both;
+    return Array.isArray(source) ? source : [];
+  };
+
+  const ratingFor = (analytics) => {
+    const source = sourceFor(analytics);
     if (!Array.isArray(source)) return 0;
     if (!level) {
       return source.reduce((sum, row) => sum + (parseInt(row.rating_total, 10) || 0), 0);
@@ -1218,12 +1230,33 @@ router.get('/analytics/head-to-head', (req, res) => {
     return row ? parseInt(row.rating_total, 10) || 0 : 0;
   };
 
+  const totalPassedFor = (analytics) => {
+    const source = sourceFor(analytics);
+    if (!Array.isArray(source)) return 0;
+    if (!level) {
+      return source.reduce((sum, row) => sum + (parseInt(row.cleared_charts, 10) || 0), 0);
+    }
+    const row = source.find((entry) => entry.level === level);
+    return row ? parseInt(row.cleared_charts, 10) || 0 : 0;
+  };
+
   const ratingA = ratingFor(userA.analytics);
   const ratingB = ratingFor(userB.analytics);
+  const totalPassedA = totalPassedFor(userA.analytics);
+  const totalPassedB = totalPassedFor(userB.analytics);
+
+  const metricWins = {
+    higher_score: userAWins > userBWins ? 'a' : userBWins > userAWins ? 'b' : null,
+    rating_total: ratingA > ratingB ? 'a' : ratingB > ratingA ? 'b' : null,
+    total_passed: totalPassedA > totalPassedB ? 'a' : totalPassedB > totalPassedA ? 'b' : null,
+  };
+
+  const userAMetricWins = Object.values(metricWins).filter((winner) => winner === 'a').length;
+  const userBMetricWins = Object.values(metricWins).filter((winner) => winner === 'b').length;
 
   let clearCutWinner = null;
-  if (userAWins > userBWins && ratingA > ratingB) clearCutWinner = userAId;
-  if (userBWins > userAWins && ratingB > ratingA) clearCutWinner = userBId;
+  if (userAMetricWins >= 2 && userAMetricWins > userBMetricWins) clearCutWinner = userAId;
+  if (userBMetricWins >= 2 && userBMetricWins > userAMetricWins) clearCutWinner = userBId;
 
   const topSongDiffs = songResults
     .sort((a, b) => Math.abs(b.score_a - b.score_b) - Math.abs(a.score_a - a.score_b))
@@ -1265,6 +1298,11 @@ router.get('/analytics/head-to-head', (req, res) => {
         a: ratingA,
         b: ratingB,
       },
+      total_passed: {
+        a: totalPassedA,
+        b: totalPassedB,
+      },
+      metric_wins: metricWins,
       clear_cut_winner: clearCutWinner,
     },
     level_series: {

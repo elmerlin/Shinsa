@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getFollowing, getSongHeadToHead, searchUsers } from '../utils/api';
+import { getFollowing, getSongHeadToHead, getSongLibrary, searchUsers } from '../utils/api';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -101,6 +101,16 @@ function CompetitiveInline({ entry, prefix, align = 'left' }) {
   );
 }
 
+function MetricValueBox({ value, colorClass, align = 'left' }) {
+  return (
+    <div className={`flex ${align === 'right' ? 'justify-end' : 'justify-start'}`}>
+      <div className={`rounded-md border border-piu-border/50 bg-piu-dark/45 px-2 py-1 font-display font-black ${colorClass}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function StarValue({ value, starred, className = '' }) {
   return (
     <span className={`inline-flex items-center gap-1 justify-end ${className}`}>
@@ -108,6 +118,54 @@ function StarValue({ value, starred, className = '' }) {
       <span>{value}</span>
     </span>
   );
+}
+
+function getLevelOptionsFromLibrary(payload) {
+  const singles = new Set();
+  const doubles = new Set();
+
+  const songs = Array.isArray(payload?.songs) ? payload.songs : [];
+  for (const song of songs) {
+    const charts = Array.isArray(song?.charts) ? song.charts : [];
+    for (const chart of charts) {
+      const level = parseInt(chart?.level, 10);
+      if (!Number.isFinite(level) || level <= 0) continue;
+      if (chart.mode === 'Single') singles.add(level);
+      if (chart.mode === 'Double') doubles.add(level);
+    }
+  }
+
+  const singlesList = Array.from(singles).sort((a, b) => a - b);
+  const doublesList = Array.from(doubles).sort((a, b) => a - b);
+  const bothList = Array.from(new Set([...singlesList, ...doublesList])).sort((a, b) => a - b);
+
+  return {
+    Both: bothList,
+    Singles: singlesList,
+    Doubles: doublesList,
+  };
+}
+
+function getTotalPassedFromSeries(result, mode, selectedLevel) {
+  const modeKey = getModeKey(mode);
+  const rowsA = result?.level_series?.[modeKey]?.a || [];
+  const rowsB = result?.level_series?.[modeKey]?.b || [];
+
+  const level = selectedLevel === 'All' ? null : parseInt(selectedLevel, 10);
+
+  const sumRows = (rows) => {
+    if (!Array.isArray(rows)) return 0;
+    if (!level) {
+      return rows.reduce((sum, row) => sum + (parseInt(row.cleared_charts, 10) || 0), 0);
+    }
+    const matched = rows.find((row) => row.level === level);
+    return matched ? (parseInt(matched.cleared_charts, 10) || 0) : 0;
+  };
+
+  return {
+    a: sumRows(rowsA),
+    b: sumRows(rowsB),
+  };
 }
 
 export default function HeadToHeadPage() {
@@ -125,9 +183,20 @@ export default function HeadToHeadPage() {
   const [minLevel, setMinLevel] = useState('');
   const [maxLevel, setMaxLevel] = useState('');
 
+  const [modeLevels, setModeLevels] = useState({ Both: [], Singles: [], Doubles: [] });
+
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [lineVisibility, setLineVisibility] = useState({
+    a_average: true,
+    b_average: true,
+    a_rating: true,
+    b_rating: true,
+  });
+
+  const [openSongInfoKey, setOpenSongInfoKey] = useState('');
 
   const searchWrapRef = useRef(null);
 
@@ -137,9 +206,15 @@ export default function HeadToHeadPage() {
 
     (async () => {
       try {
-        const list = await getFollowing(user.id);
+        const [followList, library] = await Promise.all([
+          getFollowing(user.id),
+          getSongLibrary().catch(() => null),
+        ]);
         if (cancelled) return;
-        setFollowing(Array.isArray(list) ? list : []);
+        setFollowing(Array.isArray(followList) ? followList : []);
+        if (library) {
+          setModeLevels(getLevelOptionsFromLibrary(library));
+        }
       } catch {
         if (cancelled) return;
         setFollowing([]);
@@ -187,6 +262,9 @@ export default function HeadToHeadPage() {
   }, []);
 
   const compareLevels = useMemo(() => {
+    const fromLibrary = modeLevels[mode] || [];
+    if (fromLibrary.length > 0) return fromLibrary;
+
     if (!result) return [];
     const modeKey = getModeKey(mode);
     const rowsA = result.level_series?.[modeKey]?.a || [];
@@ -196,7 +274,15 @@ export default function HeadToHeadPage() {
       ...rowsB.map((row) => row.level),
     ]);
     return Array.from(levels).sort((a, b) => a - b);
-  }, [result, mode]);
+  }, [modeLevels, mode, result]);
+
+  useEffect(() => {
+    if (selectedLevel === 'All') return;
+    const parsed = parseInt(selectedLevel, 10);
+    if (!compareLevels.includes(parsed)) {
+      setSelectedLevel('All');
+    }
+  }, [compareLevels, selectedLevel]);
 
   const trendData = useMemo(() => {
     if (!result) return [];
@@ -287,6 +373,7 @@ export default function HeadToHeadPage() {
 
     setLoading(true);
     setError('');
+    setOpenSongInfoKey('');
 
     try {
       const params = {
@@ -306,11 +393,17 @@ export default function HeadToHeadPage() {
     }
   };
 
+  const toggleLine = (key) => {
+    setLineVisibility((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   if (!user) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10 space-y-4">
         <div className="card text-center text-gray-400">Login required to run head-to-head comparisons.</div>
-        <Link to="/songs" className="text-sm text-piu-accent hover:underline">Back to Songs</Link>
+        <Link to="/songs" className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border border-emerald-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-900/30 hover:brightness-110 transition-all whitespace-nowrap">
+          Songs
+        </Link>
       </div>
     );
   }
@@ -334,12 +427,24 @@ export default function HeadToHeadPage() {
   const ratingA = parseInt(comparison?.rating?.a, 10) || 0;
   const ratingB = parseInt(comparison?.rating?.b, 10) || 0;
 
-  const clearCutWinnerId = comparison?.clear_cut_winner || null;
-  const clearCutName = clearCutWinnerId === userA?.id
-    ? userA?.username
-    : clearCutWinnerId === userB?.id
-      ? userB?.username
-      : 'No Clear Winner';
+  const totalPassed = comparison?.total_passed || getTotalPassedFromSeries(result, mode, selectedLevel);
+  const totalPassedA = parseInt(totalPassed?.a, 10) || 0;
+  const totalPassedB = parseInt(totalPassed?.b, 10) || 0;
+
+  const metricWinner = {
+    higherScore: winsA > winsB ? 'a' : winsB > winsA ? 'b' : null,
+    totalPassed: totalPassedA > totalPassedB ? 'a' : totalPassedB > totalPassedA ? 'b' : null,
+    ratingTotal: ratingA > ratingB ? 'a' : ratingB > ratingA ? 'b' : null,
+  };
+
+  const metricWinsA = Object.values(metricWinner).filter((winner) => winner === 'a').length;
+  const metricWinsB = Object.values(metricWinner).filter((winner) => winner === 'b').length;
+
+  const clearCutPlayer = metricWinsA >= 2 && metricWinsA > metricWinsB
+    ? userA
+    : metricWinsB >= 2 && metricWinsB > metricWinsA
+      ? userB
+      : null;
 
   const displayedTopDiffs = result?.top_song_diffs || [];
 
@@ -350,10 +455,15 @@ export default function HeadToHeadPage() {
           <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">HEAD TO HEAD</h1>
           <p className="text-xs text-gray-500">Compare scores, rating, and level performance</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/songs" className="text-xs sm:text-sm text-piu-accent hover:underline">Songs</Link>
-          <Link to="/" className="text-xs sm:text-sm text-piu-accent hover:underline">Back to Home</Link>
-        </div>
+        <Link
+          to="/songs"
+          className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border border-emerald-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
+          </svg>
+          Songs
+        </Link>
       </div>
 
       <section className="rounded-xl border border-piu-border/60 bg-piu-card/70 p-3 space-y-3">
@@ -409,7 +519,7 @@ export default function HeadToHeadPage() {
                 onChange={(event) => setSelectedLevel(event.target.value)}
                 className="input-field w-full"
               >
-                <option value="All">All levels</option>
+                <option value="All">All Levels</option>
                 {compareLevels.map((level) => (
                   <option key={level} value={String(level)}>Lv.{level}</option>
                 ))}
@@ -456,14 +566,14 @@ export default function HeadToHeadPage() {
 
             <div className="rounded-lg border border-piu-border/50 bg-piu-dark/45 p-2.5 space-y-2">
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <p className="font-display font-black text-piu-gold text-left">{formatNumber(pumbility?.a || 0)}</p>
+                <MetricValueBox value={formatNumber(pumbility?.a || 0)} colorClass="text-piu-gold" align="left" />
                 <p className="text-[11px] font-display font-bold text-piu-gold text-center">Pumbility</p>
-                <p className="font-display font-black text-piu-gold text-right">{formatNumber(pumbility?.b || 0)}</p>
+                <MetricValueBox value={formatNumber(pumbility?.b || 0)} colorClass="text-piu-gold" align="right" />
               </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <p className="font-display font-black text-red-300 text-left">{formatNumber(singlesPumbility?.a || 0)}</p>
+                <MetricValueBox value={formatNumber(singlesPumbility?.a || 0)} colorClass="text-red-300" align="left" />
                 <p className="text-[11px] font-display font-bold text-red-300 text-center">Singles Pumbility</p>
-                <p className="font-display font-black text-red-300 text-right">{formatNumber(singlesPumbility?.b || 0)}</p>
+                <MetricValueBox value={formatNumber(singlesPumbility?.b || 0)} colorClass="text-red-300" align="right" />
               </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <CompetitiveInline entry={doublesComp?.a} prefix="D" align="left" />
@@ -479,46 +589,68 @@ export default function HeadToHeadPage() {
           </section>
 
           <section className="rounded-xl border border-piu-border/60 bg-piu-card/70 p-3 space-y-3">
-            <div className="flex flex-wrap items-end justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-display font-bold text-piu-accent">RATING + AVERAGE SCORE BY LEVEL</h2>
                 <p className="text-[11px] text-gray-500">Left axis: average score | Right axis: total rating</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <select value={trendMode} onChange={(event) => setTrendMode(event.target.value)} className="input-field text-sm">
+
+              <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap pb-1">
+                <select value={trendMode} onChange={(event) => setTrendMode(event.target.value)} className="input-field text-xs h-9 px-2 py-1 min-w-[86px]">
                   <option>Both</option>
                   <option>Singles</option>
                   <option>Doubles</option>
                 </select>
-                <select value={minLevel} onChange={(event) => setMinLevel(event.target.value)} className="input-field text-sm">
+                <select value={minLevel} onChange={(event) => setMinLevel(event.target.value)} className="input-field text-xs h-9 px-2 py-1 min-w-[84px]">
                   {trendLevels.map((level) => (
-                    <option key={`min-${level}`} value={String(level)}>From Lv.{level}</option>
+                    <option key={`min-${level}`} value={String(level)}>From {level}</option>
                   ))}
                 </select>
-                <select value={maxLevel} onChange={(event) => setMaxLevel(event.target.value)} className="input-field text-sm">
+                <select value={maxLevel} onChange={(event) => setMaxLevel(event.target.value)} className="input-field text-xs h-9 px-2 py-1 min-w-[72px]">
                   {trendLevels.map((level) => (
-                    <option key={`max-${level}`} value={String(level)}>To Lv.{level}</option>
+                    <option key={`max-${level}`} value={String(level)}>To {level}</option>
                   ))}
                 </select>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-xs rounded-lg border border-piu-border/40 bg-piu-dark/40 px-3 py-2">
-              <div className="flex items-center gap-1.5">
-                <PlayerAvatar player={userA} fallbackName={userA?.username} size="w-6 h-6" />
-                <span>{userA?.username || 'Player A'}</span>
-                <span className="inline-flex items-center gap-1 text-gray-400">
-                  <span className="w-3 h-0.5 bg-rose-400 inline-block" /> Avg
+            <div className="flex flex-wrap items-center gap-2 text-xs rounded-lg border border-piu-border/40 bg-piu-dark/40 px-2 py-2">
+              <div className="inline-flex items-center gap-1 rounded-md border border-piu-border/50 bg-piu-card/60 px-2 py-1">
+                <PlayerAvatar player={userA} fallbackName={userA?.username} size="w-5 h-5" />
+                <span className="font-display font-bold">{userA?.username || 'Player A'}</span>
+                <button
+                  type="button"
+                  onClick={() => toggleLine('a_average')}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${lineVisibility.a_average ? 'text-rose-300 bg-rose-500/10' : 'text-gray-500 bg-transparent'}`}
+                >
+                  <span className="w-3 h-0.5 bg-rose-400 inline-block" /> Avg Score
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleLine('a_rating')}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${lineVisibility.a_rating ? 'text-rose-200 bg-rose-500/10' : 'text-gray-500 bg-transparent'}`}
+                >
                   <span className="w-3 h-0.5 border-t border-dashed border-rose-300 inline-block" /> Rating
-                </span>
+                </button>
               </div>
-              <div className="flex items-center gap-1.5">
-                <PlayerAvatar player={userB} fallbackName={userB?.username} size="w-6 h-6" />
-                <span>{userB?.username || 'Player B'}</span>
-                <span className="inline-flex items-center gap-1 text-gray-400">
-                  <span className="w-3 h-0.5 bg-cyan-400 inline-block" /> Avg
+
+              <div className="inline-flex items-center gap-1 rounded-md border border-piu-border/50 bg-piu-card/60 px-2 py-1">
+                <PlayerAvatar player={userB} fallbackName={userB?.username} size="w-5 h-5" />
+                <span className="font-display font-bold">{userB?.username || 'Player B'}</span>
+                <button
+                  type="button"
+                  onClick={() => toggleLine('b_average')}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${lineVisibility.b_average ? 'text-cyan-300 bg-cyan-500/10' : 'text-gray-500 bg-transparent'}`}
+                >
+                  <span className="w-3 h-0.5 bg-cyan-400 inline-block" /> Avg Score
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleLine('b_rating')}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${lineVisibility.b_rating ? 'text-cyan-200 bg-cyan-500/10' : 'text-gray-500 bg-transparent'}`}
+                >
                   <span className="w-3 h-0.5 border-t border-dashed border-cyan-300 inline-block" /> Rating
-                </span>
+                </button>
               </div>
             </div>
 
@@ -532,13 +664,21 @@ export default function HeadToHeadPage() {
                     <YAxis yAxisId="right" orientation="right" tick={{ fill: '#9ca3af', fontSize: 11 }} domain={[0, trendRatingMax]} />
                     <Tooltip
                       contentStyle={{ background: '#0b1220', border: '1px solid rgba(148,163,184,0.3)', borderRadius: '8px' }}
-                      formatter={(value) => [formatNumber(value), '']}
+                      formatter={(value, name) => [formatNumber(value), name]}
                       labelFormatter={(label) => `Lv.${label}`}
                     />
-                    <Line yAxisId="left" type="monotone" dataKey="a_average" name={`${userA?.username || 'Player A'} Avg`} stroke="#fb7185" strokeWidth={2} dot={{ r: 2, fill: '#fb7185' }} />
-                    <Line yAxisId="left" type="monotone" dataKey="b_average" name={`${userB?.username || 'Player B'} Avg`} stroke="#22d3ee" strokeWidth={2} dot={{ r: 2, fill: '#22d3ee' }} />
-                    <Line yAxisId="right" type="monotone" dataKey="a_rating" name={`${userA?.username || 'Player A'} Rating`} stroke="#fda4af" strokeWidth={2} strokeDasharray="5 4" dot={false} />
-                    <Line yAxisId="right" type="monotone" dataKey="b_rating" name={`${userB?.username || 'Player B'} Rating`} stroke="#67e8f9" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                    {lineVisibility.a_average && (
+                      <Line yAxisId="left" type="monotone" dataKey="a_average" name={`${userA?.username || 'Player A'} Avg Score`} stroke="#fb7185" strokeWidth={2} dot={{ r: 2, fill: '#fb7185' }} />
+                    )}
+                    {lineVisibility.b_average && (
+                      <Line yAxisId="left" type="monotone" dataKey="b_average" name={`${userB?.username || 'Player B'} Avg Score`} stroke="#22d3ee" strokeWidth={2} dot={{ r: 2, fill: '#22d3ee' }} />
+                    )}
+                    {lineVisibility.a_rating && (
+                      <Line yAxisId="right" type="monotone" dataKey="a_rating" name={`${userA?.username || 'Player A'} Rating`} stroke="#fda4af" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                    )}
+                    {lineVisibility.b_rating && (
+                      <Line yAxisId="right" type="monotone" dataKey="b_rating" name={`${userB?.username || 'Player B'} Rating`} stroke="#67e8f9" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -567,10 +707,28 @@ export default function HeadToHeadPage() {
                   <tr className="border-t border-piu-border/30">
                     <td className="px-3 py-2">Higher score wins</td>
                     <td className="px-3 py-2 text-right font-mono">
-                      <StarValue value={formatNumber(winsA)} starred={winsA > winsB} />
+                      <StarValue value={formatNumber(winsA)} starred={metricWinner.higherScore === 'a'} />
                     </td>
                     <td className="px-3 py-2 text-right font-mono">
-                      <StarValue value={formatNumber(winsB)} starred={winsB > winsA} />
+                      <StarValue value={formatNumber(winsB)} starred={metricWinner.higherScore === 'b'} />
+                    </td>
+                  </tr>
+                  <tr className="border-t border-piu-border/30">
+                    <td className="px-3 py-2">Total passed</td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      <StarValue value={formatNumber(totalPassedA)} starred={metricWinner.totalPassed === 'a'} />
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono">
+                      <StarValue value={formatNumber(totalPassedB)} starred={metricWinner.totalPassed === 'b'} />
+                    </td>
+                  </tr>
+                  <tr className="border-t border-piu-border/30">
+                    <td className="px-3 py-2">Rating total</td>
+                    <td className="px-3 py-2 text-right font-mono text-piu-gold">
+                      <StarValue value={formatNumber(ratingA)} starred={metricWinner.ratingTotal === 'a'} className="text-piu-gold" />
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-piu-gold">
+                      <StarValue value={formatNumber(ratingB)} starred={metricWinner.ratingTotal === 'b'} className="text-piu-gold" />
                     </td>
                   </tr>
                   <tr className="border-t border-piu-border/30">
@@ -579,17 +737,17 @@ export default function HeadToHeadPage() {
                     <td className="px-3 py-2 text-right font-mono">{formatNumber(ties)}</td>
                   </tr>
                   <tr className="border-t border-piu-border/30">
-                    <td className="px-3 py-2">Rating total</td>
-                    <td className="px-3 py-2 text-right font-mono text-piu-gold">
-                      <StarValue value={formatNumber(ratingA)} starred={ratingA > ratingB} className="text-piu-gold" />
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono text-piu-gold">
-                      <StarValue value={formatNumber(ratingB)} starred={ratingB > ratingA} className="text-piu-gold" />
-                    </td>
-                  </tr>
-                  <tr className="border-t border-piu-border/30">
                     <td className="px-3 py-2">Clear-cut winner</td>
-                    <td colSpan={2} className="px-3 py-2 text-center font-display font-bold text-gray-200">{clearCutName}</td>
+                    <td colSpan={2} className="px-3 py-2 text-center">
+                      {clearCutPlayer ? (
+                        <span className="inline-flex items-center gap-2 font-display font-bold text-gray-200">
+                          <PlayerAvatar player={clearCutPlayer} fallbackName={clearCutPlayer.username} size="w-6 h-6" />
+                          {clearCutPlayer.username}
+                        </span>
+                      ) : (
+                        <span className="font-display font-bold text-gray-400">No Clear Winner</span>
+                      )}
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -603,8 +761,18 @@ export default function HeadToHeadPage() {
                 <thead className="bg-[#0f172a] text-gray-400">
                   <tr>
                     <th className="px-3 py-2 text-left">Song</th>
-                    <th className="px-3 py-2 text-right">{userA?.username || 'Player A'}</th>
-                    <th className="px-3 py-2 text-right">{userB?.username || 'Player B'}</th>
+                    <th className="px-3 py-2 text-right">
+                      <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                        <PlayerAvatar player={userA} fallbackName={userA?.username} size="w-6 h-6" />
+                        <span>{userA?.username || 'Player A'}</span>
+                      </span>
+                    </th>
+                    <th className="px-3 py-2 text-right">
+                      <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                        <PlayerAvatar player={userB} fallbackName={userB?.username} size="w-6 h-6" />
+                        <span>{userB?.username || 'Player B'}</span>
+                      </span>
+                    </th>
                     <th className="px-3 py-2 text-right">Diff</th>
                   </tr>
                 </thead>
@@ -615,20 +783,32 @@ export default function HeadToHeadPage() {
                     const gradeB = row.grade_b || getRank(row.score_b).label;
                     const aWins = row.winner === 'a';
                     const bWins = row.winner === 'b';
+                    const rowKey = `${row.chart_id || row.title}-${index}`;
+                    const showInfo = openSongInfoKey === rowKey;
+
                     return (
-                      <tr key={`${row.chart_id || row.title}-${index}`} className="border-t border-piu-border/30 hover:bg-piu-dark/35 transition-colors">
-                        <td className="px-3 py-2">
-                          <Link to={row.chart_id ? `/songs/chart/${row.chart_id}` : '/songs'} className="flex items-center gap-2 min-w-0">
-                            <div className="relative w-10 h-6 shrink-0">
+                      <tr key={rowKey} className="border-t border-piu-border/30 hover:bg-piu-dark/35 transition-colors">
+                        <td className="px-3 py-2 align-top">
+                          <button
+                            type="button"
+                            onClick={() => setOpenSongInfoKey((prev) => (prev === rowKey ? '' : rowKey))}
+                            className="inline-flex flex-col items-start"
+                            title={row.title || 'Song'}
+                          >
+                            <span className="relative inline-block w-10 h-6 shrink-0">
                               {row.jacket_url ? (
-                                <img src={row.jacket_url} alt={row.title} title={row.title} className="w-full h-full rounded object-cover border border-piu-border/40" />
+                                <img src={row.jacket_url} alt={row.title} className="w-full h-full rounded object-cover border border-piu-border/40" />
                               ) : (
-                                <div className="w-full h-full rounded bg-piu-dark border border-piu-border/40" />
+                                <span className="w-full h-full rounded bg-piu-dark border border-piu-border/40 inline-block" />
                               )}
-                              <div className="absolute -top-2 -right-2">{tinyLevelBadge(row.mode, row.level)}</div>
-                            </div>
-                            <p className="truncate font-display font-bold" title={row.title}>{row.title}</p>
-                          </Link>
+                              <span className="absolute -top-2 -right-2">{tinyLevelBadge(row.mode, row.level)}</span>
+                            </span>
+                            {showInfo && (
+                              <span className="mt-1 rounded-md border border-piu-border/40 bg-[#0b1324]/80 px-1.5 py-1 text-[10px] text-left leading-tight text-gray-200 max-w-[160px] break-words">
+                                {row.title}
+                              </span>
+                            )}
+                          </button>
                         </td>
                         <td className="px-3 py-2 text-right">
                           <p className="font-mono inline-flex items-center gap-1 justify-end">
