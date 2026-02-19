@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getSongTierMeta, getSongTiers } from '../utils/api';
@@ -8,6 +8,7 @@ const MODE_ORDER = ['Single', 'Double', 'CoOp'];
 const MODE_PREFIX = { Single: 'S', Double: 'D', CoOp: 'C' };
 const OVERLAY_MIN = 20;
 const OVERLAY_MAX = 100;
+const SONGS_PER_ROW_OPTIONS = [4, 5, 6, 7];
 
 const TIER_STYLE = {
   Overrated: 'bg-indigo-500 text-white',
@@ -45,6 +46,11 @@ function parseIntSafe(value, fallback = null) {
 function clampOverlaySize(value) {
   const parsed = parseIntSafe(value, 65);
   return Math.min(OVERLAY_MAX, Math.max(OVERLAY_MIN, parsed));
+}
+
+function clampSongsPerRow(value) {
+  const parsed = parseIntSafe(value, 4);
+  return SONGS_PER_ROW_OPTIONS.includes(parsed) ? parsed : 4;
 }
 
 function getRank(score) {
@@ -118,6 +124,8 @@ function SettingsModal({
   setDefaultLevel,
   defaultModeChoices,
   defaultLevelOptions,
+  songsPerRow,
+  setSongsPerRow,
   onClose,
 }) {
   if (!open) return null;
@@ -232,6 +240,21 @@ function SettingsModal({
             <div className="text-[11px] text-gray-500">No levels available for this mode.</div>
           )}
         </div>
+
+        <div className="space-y-2">
+          <p className="text-[11px] text-gray-400 font-display">Songs Per Row</p>
+          <div className="grid grid-cols-4 gap-2">
+            {SONGS_PER_ROW_OPTIONS.map((count) => (
+              <button
+                key={count}
+                onClick={() => setSongsPerRow(count)}
+                className={`rounded-lg border px-2 py-1.5 text-xs font-display ${songsPerRow === count ? 'border-piu-accent text-piu-accent bg-piu-accent/10' : 'border-piu-border text-gray-300'}`}
+              >
+                {count}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -239,6 +262,7 @@ function SettingsModal({
 
 export default function TiersPage() {
   const { user } = useAuth();
+  const captureRef = useRef(null);
   const [meta, setMeta] = useState(null);
   const [mode, setMode] = useState('');
   const [level, setLevel] = useState(null);
@@ -257,6 +281,8 @@ export default function TiersPage() {
     return stored === 'Single' || stored === 'Double' ? stored : 'Double';
   });
   const [defaultLevel, setDefaultLevel] = useState(() => parseIntSafe(localStorage.getItem('tiers_default_level'), 18));
+  const [songsPerRow, setSongsPerRow] = useState(() => clampSongsPerRow(localStorage.getItem('tiers_songs_per_row')));
+  const [captureBusy, setCaptureBusy] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('tiers_display_mode', displayMode);
@@ -285,6 +311,10 @@ export default function TiersPage() {
   useEffect(() => {
     localStorage.setItem('tiers_default_level', String(defaultLevel));
   }, [defaultLevel]);
+
+  useEffect(() => {
+    localStorage.setItem('tiers_songs_per_row', String(songsPerRow));
+  }, [songsPerRow]);
 
   useEffect(() => {
     if (!mode) return;
@@ -480,11 +510,35 @@ export default function TiersPage() {
     setLevel(next.level);
   };
 
+  const captureTierImage = async () => {
+    if (!captureRef.current || captureBusy) return;
+    setCaptureBusy(true);
+    setError('');
+    try {
+      const { default: html2canvas } = await import('html2canvas');
+      const canvas = await html2canvas(captureRef.current, {
+        backgroundColor: '#071326',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const download = document.createElement('a');
+      const levelLabel = `${MODE_PREFIX[mode] || '?'}${level || '-'}`;
+      download.download = `tiers-${levelLabel}.png`;
+      download.href = canvas.toDataURL('image/png');
+      download.click();
+    } catch (err) {
+      setError(err?.message || 'Failed to create tier image.');
+    } finally {
+      setCaptureBusy(false);
+    }
+  };
+
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
+    <div ref={captureRef} className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
       <div className="sticky top-[56px] sm:top-[64px] z-30 rounded-xl border border-piu-border bg-piu-card/90 backdrop-blur-sm p-3 sm:p-4">
-        <div className="grid grid-cols-[92px_auto_92px] items-center">
-          <div className="flex items-center">
+        <div className="grid grid-cols-[100px_auto_100px] items-center">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={goPrevLevel}
@@ -494,6 +548,20 @@ export default function TiersPage() {
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={captureTierImage}
+              disabled={captureBusy}
+              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
+              aria-label="Download tier image"
+              title="Download tier image"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5A2.5 2.5 0 015.5 5h13A2.5 2.5 0 0121 7.5v9a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 16.5v-9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 8.5h2.5l1-1.5h3l1 1.5H17" />
+                <circle cx="12" cy="13" r="3.25" />
               </svg>
             </button>
           </div>
@@ -560,7 +628,7 @@ export default function TiersPage() {
               {TIER_LABEL[tier.name] || tier.name}
             </div>
             <div className="p-2 sm:p-3 bg-[#061327]">
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${songsPerRow}, minmax(0, 1fr))` }}>
                 {tier.charts.map((chart) => {
                   const overlayGrade = chart.best_grade || getRank(chart.best_score).label;
                   const overlayText = displayMode === 'score'
@@ -579,7 +647,7 @@ export default function TiersPage() {
                       title={`${chart.title} (${MODE_PREFIX[chart.mode] || '?'}${chart.level})`}
                     >
                       {chart.jacket_url ? (
-                        <img src={chart.jacket_url} alt={chart.title} className="w-full aspect-[16/10] object-cover" />
+                        <img src={chart.jacket_url} alt={chart.title} className="w-full aspect-[16/10] object-cover opacity-90" />
                       ) : (
                         <div className="w-full aspect-[16/10] bg-piu-dark" />
                       )}
@@ -624,6 +692,8 @@ export default function TiersPage() {
         setDefaultLevel={setDefaultLevel}
         defaultModeChoices={defaultModeChoices}
         defaultLevelOptions={defaultLevelOptions}
+        songsPerRow={songsPerRow}
+        setSongsPerRow={setSongsPerRow}
         onClose={() => setSettingsOpen(false)}
       />
     </div>
