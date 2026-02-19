@@ -9,7 +9,7 @@ const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 // Cache the jacket map in memory (loaded once from pump-phoenix.json)
 let cachedJacketMap = null;
 let cachedSongAliases = null;
-let cachedSongCatalog = null;
+let cachedSongCatalogByModes = new Map();
 
 const SCORE_TO_GRADE = [
   { min: 995000, grade: 'SSS+' },
@@ -32,6 +32,8 @@ const SCORE_TO_GRADE = [
 
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, index) => [grade, index]));
+const TIER_NAME_ORDER = ['Overrated', 'VeryEasy', 'Easy', 'Medium', 'Hard', 'VeryHard', 'Underrated'];
+const TIER_NAME_INDEX = Object.fromEntries(TIER_NAME_ORDER.map((name, index) => [name, index]));
 
 const LEVEL_BASE_RATING = {
   10: 100,
@@ -82,6 +84,7 @@ function normalizeMode(mode) {
   const m = String(mode || '').trim().toLowerCase();
   if (m === 'single' || m === 'singles' || m === 's') return 'Single';
   if (m === 'double' || m === 'doubles' || m === 'd') return 'Double';
+  if (m === 'coop' || m === 'co-op' || m === 'co op' || m === 'cooperative' || m === 'c') return 'CoOp';
   return '';
 }
 
@@ -195,8 +198,9 @@ function makeChartKey(title, mode, level, aliases) {
 }
 
 function levelModeSort(a, b) {
-  const modeA = a.mode === 'Single' ? 0 : 1;
-  const modeB = b.mode === 'Single' ? 0 : 1;
+  const modeOrder = { Single: 0, Double: 1, CoOp: 2 };
+  const modeA = modeOrder[a.mode] ?? 99;
+  const modeB = modeOrder[b.mode] ?? 99;
   if (modeA !== modeB) return modeA - modeB;
   if (a.level !== b.level) return a.level - b.level;
   return (a.chart_id || 0) - (b.chart_id || 0);
@@ -220,8 +224,14 @@ function expandMode(mode) {
   return ['Single', 'Double'];
 }
 
-function getSongCatalog(db, aliases) {
-  if (cachedSongCatalog) return cachedSongCatalog;
+function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
+  const normalizedAllowedModes = allowedModes
+    .map((mode) => normalizeMode(mode))
+    .filter(Boolean);
+  const modeKey = normalizedAllowedModes.slice().sort().join('|') || 'none';
+  if (cachedSongCatalogByModes.has(modeKey)) {
+    return cachedSongCatalogByModes.get(modeKey);
+  }
 
   const rows = db.prepare(`
     SELECT id, title, artist, jacket_url, mode, level, bpm, song_key, flags
@@ -234,11 +244,17 @@ function getSongCatalog(db, aliases) {
   const charts = [];
   const chartsByKey = new Map();
   const chartsById = new Map();
-  const levelModeTotals = { Single: new Map(), Double: new Map() };
+  const allowedSet = new Set(normalizedAllowedModes);
+  const levelModeTotals = {
+    Single: new Map(),
+    Double: new Map(),
+    CoOp: new Map(),
+  };
 
   for (const row of rows) {
     const mode = normalizeMode(row.mode);
     if (!mode) continue;
+    if (allowedSet.size > 0 && !allowedSet.has(mode)) continue;
     const level = parseInt(row.level, 10) || 0;
     if (level <= 0) continue;
 
@@ -284,8 +300,10 @@ function getSongCatalog(db, aliases) {
     chartsByKey.set(chartKey, chart);
     chartsById.set(String(row.id), chart);
 
-    const modeTotals = levelModeTotals[mode];
-    modeTotals.set(level, (modeTotals.get(level) || 0) + 1);
+    if (levelModeTotals[mode]) {
+      const modeTotals = levelModeTotals[mode];
+      modeTotals.set(level, (modeTotals.get(level) || 0) + 1);
+    }
   }
 
   const songs = Array.from(songsByGroup.values()).map((song) => {
@@ -293,10 +311,14 @@ function getSongCatalog(db, aliases) {
     return song;
   }).sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 
-  const levels = new Set([...levelModeTotals.Single.keys(), ...levelModeTotals.Double.keys()]);
+  const levels = new Set([
+    ...levelModeTotals.Single.keys(),
+    ...levelModeTotals.Double.keys(),
+    ...levelModeTotals.CoOp.keys(),
+  ]);
   const sortedLevels = Array.from(levels).sort((a, b) => a - b);
 
-  cachedSongCatalog = {
+  const catalog = {
     songs,
     charts,
     chartsByKey,
@@ -304,7 +326,8 @@ function getSongCatalog(db, aliases) {
     levelModeTotals,
     levels: sortedLevels,
   };
-  return cachedSongCatalog;
+  cachedSongCatalogByModes.set(modeKey, catalog);
+  return catalog;
 }
 
 function queryUserBestScores(db, userId) {
@@ -626,6 +649,36 @@ function parseLevelQuery(levelRaw) {
   return Number.isFinite(level) && level > 0 ? level : null;
 }
 
+function normalizeTierName(name) {
+  const compact = String(name || '').trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (!compact) return '';
+  if (compact === 'overrated') return 'Overrated';
+  if (compact === 'veryeasy') return 'VeryEasy';
+  if (compact === 'easy') return 'Easy';
+  if (compact === 'medium' || compact === 'mid') return 'Medium';
+  if (compact === 'hard') return 'Hard';
+  if (compact === 'veryhard') return 'VeryHard';
+  if (compact === 'underrated') return 'Underrated';
+  return String(name || '').trim();
+}
+
+function getTierRank(name) {
+  const normalized = normalizeTierName(name);
+  if (TIER_NAME_INDEX[normalized] !== undefined) return TIER_NAME_INDEX[normalized];
+  return 999;
+}
+
+function normalizeTierListType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return 'Pass';
+  if (raw === 'pass') return 'Pass';
+  if (raw === 'score') return 'Score';
+  if (raw === 'stagebreak' || raw === 'stage_break' || raw === 'stage-break') return 'StageBreak';
+  if (raw === 'officialscores' || raw === 'official_scores' || raw === 'official-scores') return 'OfficialScores';
+  if (raw === 'popularity') return 'Popularity';
+  return 'Pass';
+}
+
 function loadSongAliases() {
   if (cachedSongAliases) return cachedSongAliases;
 
@@ -705,7 +758,7 @@ function loadJacketMap() {
 
 function invalidateSongCaches() {
   cachedJacketMap = null;
-  cachedSongCatalog = null;
+  cachedSongCatalogByModes = new Map();
 }
 
 // GET /api/songs/jacket-map — return song name → local jacket URL mapping
@@ -718,10 +771,14 @@ router.get('/jacket-map', (req, res) => {
 router.get('/library', optionalAuth, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
-  const songCatalog = getSongCatalog(db, aliases);
+  const modeFilter = normalizeMode(req.query.mode);
+  const songCatalog = getSongCatalog(
+    db,
+    aliases,
+    modeFilter === 'CoOp' ? ['CoOp'] : ['Single', 'Double']
+  );
 
   const search = String(req.query.search || '').trim().toLowerCase();
-  const modeFilter = normalizeMode(req.query.mode);
   const levelFilter = parseLevelQuery(req.query.level);
   const userId = String(req.query.user_id || req.user?.id || '').trim();
 
@@ -783,7 +840,7 @@ router.get('/library', optionalAuth, (req, res) => {
 router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
-  const songCatalog = getSongCatalog(db, aliases);
+  const songCatalog = getSongCatalog(db, aliases, ['Single', 'Double', 'CoOp']);
   const chart = songCatalog.chartsById.get(String(req.params.chartId));
   if (!chart) return res.status(404).json({ error: 'Chart not found' });
 
@@ -835,7 +892,7 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
 router.get('/chart/:chartId', optionalAuth, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
-  const songCatalog = getSongCatalog(db, aliases);
+  const songCatalog = getSongCatalog(db, aliases, ['Single', 'Double', 'CoOp']);
   const chart = songCatalog.chartsById.get(String(req.params.chartId));
   if (!chart) return res.status(404).json({ error: 'Chart not found' });
 
@@ -1225,6 +1282,209 @@ router.get('/analytics/head-to-head', (req, res) => {
       },
     },
     top_song_diffs: topSongDiffs,
+  });
+});
+
+// GET /api/songs/tiers/meta — available tier levels by mode
+router.get('/tiers/meta', (req, res) => {
+  const db = getDb();
+  const tierListType = normalizeTierListType(req.query.tier_list_type);
+  const rows = db.prepare(`
+    SELECT mode, level, COUNT(*) as chart_count
+    FROM chart_tiers
+    WHERE tier_list_type = ?
+    GROUP BY mode, level
+    ORDER BY mode ASC, level ASC
+  `).all(tierListType);
+
+  const levelsByMode = { Single: [], Double: [], CoOp: [] };
+  for (const row of rows) {
+    const mode = normalizeMode(row.mode);
+    const level = parseInt(row.level, 10) || 0;
+    if (!mode || level <= 0) continue;
+    levelsByMode[mode].push({
+      level,
+      chart_count: parseInt(row.chart_count, 10) || 0,
+    });
+  }
+
+  for (const mode of Object.keys(levelsByMode)) {
+    levelsByMode[mode].sort((a, b) => a.level - b.level);
+  }
+
+  const modePriority = ['Double', 'Single', 'CoOp'];
+  const defaultMode = modePriority.find((mode) => levelsByMode[mode].length > 0)
+    || Object.keys(levelsByMode).find((mode) => levelsByMode[mode].length > 0)
+    || 'Double';
+  const defaultLevel = levelsByMode[defaultMode][0]?.level || null;
+
+  res.json({
+    tier_list_type: tierListType,
+    levels_by_mode: levelsByMode,
+    tier_order: TIER_NAME_ORDER,
+    default_mode: defaultMode,
+    default_level: defaultLevel,
+  });
+});
+
+// GET /api/songs/tiers — tier rows for a mode + level (with optional user overlay)
+router.get('/tiers', optionalAuth, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const tierListType = normalizeTierListType(req.query.tier_list_type);
+
+  const levelsByModeRows = db.prepare(`
+    SELECT mode, level, COUNT(*) as chart_count
+    FROM chart_tiers
+    WHERE tier_list_type = ?
+    GROUP BY mode, level
+    ORDER BY mode ASC, level ASC
+  `).all(tierListType);
+
+  const levelsByMode = { Single: [], Double: [], CoOp: [] };
+  for (const row of levelsByModeRows) {
+    const mode = normalizeMode(row.mode);
+    const level = parseInt(row.level, 10) || 0;
+    if (!mode || level <= 0) continue;
+    levelsByMode[mode].push({
+      level,
+      chart_count: parseInt(row.chart_count, 10) || 0,
+    });
+  }
+  for (const mode of Object.keys(levelsByMode)) {
+    levelsByMode[mode].sort((a, b) => a.level - b.level);
+  }
+
+  const modePriority = ['Double', 'Single', 'CoOp'];
+  const fallbackMode = modePriority.find((mode) => levelsByMode[mode].length > 0)
+    || Object.keys(levelsByMode).find((mode) => levelsByMode[mode].length > 0)
+    || 'Double';
+
+  let mode = normalizeMode(req.query.mode) || fallbackMode;
+  if (!levelsByMode[mode] || levelsByMode[mode].length === 0) {
+    mode = fallbackMode;
+  }
+
+  const levelList = levelsByMode[mode] || [];
+  let level = parseLevelQuery(req.query.level);
+  if (!levelList.some((entry) => entry.level === level)) {
+    level = levelList[0]?.level || null;
+  }
+
+  if (!level || !mode) {
+    return res.json({
+      tier_list_type: tierListType,
+      mode,
+      level,
+      levels_by_mode: levelsByMode,
+      tier_order: TIER_NAME_ORDER,
+      total_charts: 0,
+      tiers: [],
+    });
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      ct.tier_name,
+      ct.tier_rank,
+      ct.chart_id,
+      ct.source_slug,
+      ct.source_url,
+      s.title,
+      s.artist,
+      s.jacket_url,
+      s.mode as song_mode,
+      s.level as song_level,
+      s.flags,
+      s.song_key,
+      s.bpm
+    FROM chart_tiers ct
+    JOIN songs s ON s.id = ct.chart_id
+    WHERE ct.tier_list_type = ? AND ct.mode = ? AND ct.level = ?
+    ORDER BY ct.tier_rank ASC, s.title COLLATE NOCASE ASC, s.id ASC
+  `).all(tierListType, mode, level);
+
+  const selectedChartKeys = new Set();
+  const chartKeyByChartId = new Map();
+  for (const row of rows) {
+    const key = makeChartKey(row.title, row.song_mode, row.song_level, aliases);
+    if (!key) continue;
+    selectedChartKeys.add(key);
+    chartKeyByChartId.set(parseInt(row.chart_id, 10), key);
+  }
+
+  const targetUserId = String(req.query.user_id || req.user?.id || '').trim();
+  let bestByChart = new Map();
+  if (targetUserId && selectedChartKeys.size > 0) {
+    const bestScores = queryUserBestScores(db, targetUserId);
+    const recentScores = queryUserRecentScores(db, targetUserId);
+    const pumbilityScores = queryUserPumbilityScores(db, targetUserId);
+    bestByChart = buildUserBestByChartMap({
+      bestScores,
+      recentScores,
+      pumbilityScores,
+      aliases,
+      validChartKeys: selectedChartKeys,
+    }).bestByChart;
+  }
+
+  const tierMap = new Map();
+  for (const row of rows) {
+    const tierName = normalizeTierName(row.tier_name);
+    const tierRank = Number.isFinite(parseInt(row.tier_rank, 10))
+      ? parseInt(row.tier_rank, 10)
+      : getTierRank(tierName);
+
+    if (!tierMap.has(tierName)) {
+      tierMap.set(tierName, {
+        name: tierName,
+        rank: tierRank,
+        charts: [],
+      });
+    }
+
+    const chartId = parseInt(row.chart_id, 10) || 0;
+    const chartKey = chartKeyByChartId.get(chartId) || '';
+    const best = chartKey ? bestByChart.get(chartKey) : null;
+
+    tierMap.get(tierName).charts.push({
+      chart_id: chartId,
+      title: row.title,
+      artist: row.artist || '',
+      mode: normalizeMode(row.song_mode) || mode,
+      level: parseInt(row.song_level, 10) || level,
+      jacket_url: row.jacket_url || '',
+      bpm: row.bpm || '',
+      song_key: row.song_key || '',
+      flags: String(row.flags || '')
+        .split(',')
+        .map((flag) => flag.trim())
+        .filter(Boolean),
+      source_slug: row.source_slug || '',
+      source_url: row.source_url || '',
+      best_score: best ? best.score : null,
+      best_grade: best ? best.grade : '',
+      is_pass: best ? !!best.is_pass : false,
+      is_stage_break: best ? !!best.is_stage_break : false,
+      best_source: best ? best.source : '',
+      best_date_played: best ? best.date_played || '' : '',
+    });
+  }
+
+  const tiers = Array.from(tierMap.values())
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+
+  res.json({
+    tier_list_type: tierListType,
+    mode,
+    level,
+    levels_by_mode: levelsByMode,
+    tier_order: TIER_NAME_ORDER,
+    total_charts: rows.length,
+    tiers,
   });
 });
 
