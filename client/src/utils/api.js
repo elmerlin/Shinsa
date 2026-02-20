@@ -381,6 +381,54 @@ export async function addWorldMaxMachinePhoto(machineId, photoFile, caption = ''
   return res.json();
 }
 
+// Chatbot — streaming SSE
+export async function streamChatbotAsk(message, history, onEvent) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/chatbot/ask`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ message, history }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Request failed');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE lines
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // Keep incomplete line in buffer
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const event = JSON.parse(line.slice(6));
+          onEvent(event);
+        } catch { /* ignore parse errors */ }
+      }
+    }
+  }
+
+  // Process any remaining buffer
+  if (buffer.startsWith('data: ')) {
+    try {
+      const event = JSON.parse(buffer.slice(6));
+      onEvent(event);
+    } catch { /* ignore */ }
+  }
+}
+
 // Parser
 export async function parseScorePhoto(file) {
   const formData = new FormData();
