@@ -1,5 +1,5 @@
 const express = require('express');
-const Anthropic = require('@anthropic-ai/sdk').default;
+const OpenAI = require('openai');
 const Database = require('better-sqlite3');
 const { requireAuth } = require('./auth');
 const { DB_PATH } = require('../db/schema');
@@ -248,11 +248,9 @@ function buildSystemPrompt(user) {
 // Validate that a SQL query is a safe SELECT statement
 function validateQuery(sql) {
   const trimmed = sql.trim();
-  // Must start with SELECT (case-insensitive)
   if (!/^SELECT\b/i.test(trimmed)) {
     return { valid: false, error: 'Only SELECT queries are allowed.' };
   }
-  // Block dangerous keywords
   const blocked = /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|ATTACH|DETACH|PRAGMA|VACUUM|REINDEX)\b/i;
   if (blocked.test(trimmed)) {
     return { valid: false, error: 'Query contains disallowed keywords.' };
@@ -266,7 +264,6 @@ function executeQuery(sql) {
   try {
     readonlyDb.pragma('busy_timeout = 5000');
     const rows = readonlyDb.prepare(sql).all();
-    // Limit to 100 rows
     const limited = rows.slice(0, 100);
     return { rows: limited, rowCount: rows.length, truncated: rows.length > 100 };
   } finally {
@@ -275,29 +272,32 @@ function executeQuery(sql) {
 }
 
 const TOOL_DEFINITION = {
-  name: 'execute_sql_query',
-  description: 'Execute a read-only SQL SELECT query against the Shinsa database. Returns rows as JSON. Use this to answer questions about songs, scores, users, and statistics.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      sql: {
-        type: 'string',
-        description: 'The SQL SELECT query to execute.',
+  type: 'function',
+  function: {
+    name: 'execute_sql_query',
+    description: 'Execute a read-only SQL SELECT query against the Shinsa database. Returns rows as JSON. Use this to answer questions about songs, scores, users, and statistics.',
+    parameters: {
+      type: 'object',
+      properties: {
+        sql: {
+          type: 'string',
+          description: 'The SQL SELECT query to execute.',
+        },
+        explanation: {
+          type: 'string',
+          description: 'A brief explanation of what this query does and why you chose it.',
+        },
       },
-      explanation: {
-        type: 'string',
-        description: 'A brief explanation of what this query does and why you chose it.',
-      },
+      required: ['sql'],
     },
-    required: ['sql'],
   },
 };
 
 // POST /api/chatbot/ask — streaming SSE response
 router.post('/ask', requireAuth, async (req, res) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return res.status(503).json({ error: 'Chatbot is not configured. ANTHROPIC_API_KEY is missing.' });
+    return res.status(503).json({ error: 'Chatbot is not configured. OPENAI_API_KEY is missing.' });
   }
 
   if (!checkRateLimit(req.user.id)) {
@@ -310,9 +310,11 @@ router.post('/ask', requireAuth, async (req, res) => {
   }
 
   // Build conversation messages from history
-  const messages = [];
+  const messages = [
+    { role: 'system', content: buildSystemPrompt(req.user) },
+  ];
   if (Array.isArray(history)) {
-    for (const h of history.slice(-20)) { // Keep last 20 messages for context
+    for (const h of history.slice(-20)) {
       if (h.role === 'user' || h.role === 'assistant') {
         messages.push({ role: h.role, content: h.content });
       }
@@ -327,40 +329,38 @@ router.post('/ask', requireAuth, async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  const client = new Anthropic({ apiKey });
-  const systemPrompt = buildSystemPrompt(req.user);
+  const client = new OpenAI({ apiKey });
 
   try {
-    // Phase 1: Initial call — may return tool_use or direct text
     let currentMessages = [...messages];
-    let maxToolRounds = 3; // Prevent infinite tool loops
+    const maxToolRounds = 3;
 
     for (let round = 0; round < maxToolRounds; round++) {
-      const response = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
+      // Non-streaming call to check for tool use
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
         max_tokens: 2048,
-        system: systemPrompt,
-        tools: [TOOL_DEFINITION],
         messages: currentMessages,
+        tools: [TOOL_DEFINITION],
       });
 
-      // Check if the response contains a tool use
-      const toolUseBlock = response.content.find(b => b.type === 'tool_use');
+      const choice = response.choices[0];
+      const toolCalls = choice.message.tool_calls;
 
-      if (!toolUseBlock) {
-        // No tool use — stream the final text response
-        // Re-call with streaming for the final response
-        const stream = client.messages.stream({
-          model: 'claude-sonnet-4-20250514',
+      if (!toolCalls || toolCalls.length === 0) {
+        // No tool use — re-call with streaming for the final response
+        const stream = await client.chat.completions.create({
+          model: 'gpt-4o-mini',
           max_tokens: 2048,
-          system: systemPrompt,
-          tools: [TOOL_DEFINITION],
           messages: currentMessages,
+          tools: [TOOL_DEFINITION],
+          stream: true,
         });
 
-        for await (const event of stream) {
-          if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-            res.write(`data: ${JSON.stringify({ type: 'text', content: event.delta.text })}\n\n`);
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta;
+          if (delta?.content) {
+            res.write(`data: ${JSON.stringify({ type: 'text', content: delta.content })}\n\n`);
           }
         }
 
@@ -369,62 +369,78 @@ router.post('/ask', requireAuth, async (req, res) => {
         return;
       }
 
-      // Tool use — execute the SQL query
-      const { sql, explanation } = toolUseBlock.input;
+      // Process tool calls
+      currentMessages.push(choice.message);
 
-      // Send the SQL being executed to the client (for transparency)
-      if (explanation) {
-        res.write(`data: ${JSON.stringify({ type: 'status', content: explanation })}\n\n`);
-      }
-      res.write(`data: ${JSON.stringify({ type: 'query', content: sql })}\n\n`);
-
-      // Validate and execute
-      const validation = validateQuery(sql);
-      let toolResult;
-      if (!validation.valid) {
-        toolResult = { error: validation.error };
-      } else {
-        try {
-          const result = executeQuery(sql);
-          toolResult = result;
-        } catch (err) {
-          toolResult = { error: `Query failed: ${err.message}` };
+      for (const toolCall of toolCalls) {
+        if (toolCall.function.name !== 'execute_sql_query') {
+          currentMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ error: 'Unknown tool.' }),
+          });
+          continue;
         }
-      }
 
-      // Also send any text blocks that came before the tool use
-      const textBlocks = response.content.filter(b => b.type === 'text');
-      for (const tb of textBlocks) {
-        res.write(`data: ${JSON.stringify({ type: 'text', content: tb.text })}\n\n`);
-      }
+        let args;
+        try {
+          args = JSON.parse(toolCall.function.arguments);
+        } catch {
+          currentMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            content: JSON.stringify({ error: 'Invalid tool arguments.' }),
+          });
+          continue;
+        }
 
-      // Add assistant response and tool result to messages for next round
-      currentMessages.push({
-        role: 'assistant',
-        content: response.content,
-      });
-      currentMessages.push({
-        role: 'user',
-        content: [{
-          type: 'tool_result',
-          tool_use_id: toolUseBlock.id,
+        const { sql, explanation } = args;
+
+        // Send status to the client
+        if (explanation) {
+          res.write(`data: ${JSON.stringify({ type: 'status', content: explanation })}\n\n`);
+        }
+        res.write(`data: ${JSON.stringify({ type: 'query', content: sql })}\n\n`);
+
+        // Validate and execute
+        const validation = validateQuery(sql);
+        let toolResult;
+        if (!validation.valid) {
+          toolResult = { error: validation.error };
+        } else {
+          try {
+            toolResult = executeQuery(sql);
+          } catch (err) {
+            toolResult = { error: `Query failed: ${err.message}` };
+          }
+        }
+
+        currentMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
           content: JSON.stringify(toolResult),
-        }],
-      });
+        });
+      }
+
+      // Send any text content from the assistant message
+      if (choice.message.content) {
+        res.write(`data: ${JSON.stringify({ type: 'text', content: choice.message.content })}\n\n`);
+      }
     }
 
     // Final round — stream the response after tool use
-    const finalStream = client.messages.stream({
-      model: 'claude-sonnet-4-20250514',
+    const finalStream = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
       max_tokens: 2048,
-      system: systemPrompt,
-      tools: [TOOL_DEFINITION],
       messages: currentMessages,
+      tools: [TOOL_DEFINITION],
+      stream: true,
     });
 
-    for await (const event of finalStream) {
-      if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-        res.write(`data: ${JSON.stringify({ type: 'text', content: event.delta.text })}\n\n`);
+    for await (const chunk of finalStream) {
+      const delta = chunk.choices[0]?.delta;
+      if (delta?.content) {
+        res.write(`data: ${JSON.stringify({ type: 'text', content: delta.content })}\n\n`);
       }
     }
 
