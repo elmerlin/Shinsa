@@ -34,6 +34,41 @@ const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 
 const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, index) => [grade, index]));
 const TIER_NAME_ORDER = ['Overrated', 'VeryEasy', 'Easy', 'Medium', 'Hard', 'VeryHard', 'Underrated'];
 const TIER_NAME_INDEX = Object.fromEntries(TIER_NAME_ORDER.map((name, index) => [name, index]));
+const KNOWN_CHART_SKILLS = [
+  { slug: 'jump', name: 'jump' },
+  { slug: 'drill', name: 'drill' },
+  { slug: 'run', name: 'run' },
+  { slug: 'anchor_run', name: 'anchor run' },
+  { slug: 'run_without_twists', name: 'run without twists' },
+  { slug: 'twist_90', name: 'twist 90' },
+  { slug: 'twist_over90', name: 'twist over90' },
+  { slug: 'twist_close', name: 'twist close' },
+  { slug: 'twist_far', name: 'twist far' },
+  { slug: 'side3_singles', name: 'side3 singles' },
+  { slug: 'mid6_doubles', name: 'mid6 doubles' },
+  { slug: 'mid4_doubles', name: 'mid4 doubles' },
+  { slug: 'doublestep', name: 'doublestep' },
+  { slug: 'jack', name: 'jack' },
+  { slug: 'footswitch', name: 'footswitch' },
+  { slug: 'bracket', name: 'bracket' },
+  { slug: 'staggered_bracket', name: 'staggered bracket' },
+  { slug: 'bracket_run', name: 'bracket run' },
+  { slug: 'bracket_drill', name: 'bracket drill' },
+  { slug: 'bracket_jump', name: 'bracket jump' },
+  { slug: 'bracket_twist', name: 'bracket twist' },
+  { slug: '5-stair', name: '5-stair' },
+  { slug: '10-stair', name: '10-stair' },
+  { slug: 'yog_walk', name: 'yog walk' },
+  { slug: 'cross-pad_transition', name: 'cross-pad transition' },
+  { slug: 'co-op_pad_transition', name: 'co-op pad transition' },
+  { slug: 'split', name: 'split' },
+  { slug: 'hold_footswitch', name: 'hold footswitch' },
+  { slug: 'hold_footslide', name: 'hold footslide' },
+  { slug: 'hands', name: 'hands' },
+  { slug: 'bursty', name: 'bursty' },
+  { slug: 'sustained', name: 'sustained' },
+];
+const KNOWN_SKILL_NAME_BY_SLUG = new Map(KNOWN_CHART_SKILLS.map((skill) => [skill.slug, skill.name]));
 
 const LEVEL_BASE_RATING = {
   10: 100,
@@ -86,6 +121,132 @@ function normalizeMode(mode) {
   if (m === 'double' || m === 'doubles' || m === 'd') return 'Double';
   if (m === 'coop' || m === 'co-op' || m === 'co op' || m === 'cooperative' || m === 'c') return 'CoOp';
   return '';
+}
+
+function normalizeSkillSlug(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+
+  const fromPath = raw.includes('/skill/')
+    ? raw.slice(raw.lastIndexOf('/skill/') + '/skill/'.length)
+    : raw;
+
+  const normalized = fromPath
+    .replace(/\?.*$/, '')
+    .replace(/#.*$/, '')
+    .replace(/\/+$/, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_-]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/-+/g, '-')
+    .trim();
+
+  return normalized;
+}
+
+function humanizeSkillSlug(slug) {
+  return String(slug || '')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeSkillName(name) {
+  return String(name || '').replace(/\s+/g, ' ').trim();
+}
+
+function getSkillNameForSlug(slug, fallbackName = '') {
+  const normalizedSlug = normalizeSkillSlug(slug);
+  if (!normalizedSlug) return '';
+  const known = KNOWN_SKILL_NAME_BY_SLUG.get(normalizedSlug);
+  if (known) return known;
+  const normalizedFallback = normalizeSkillName(fallbackName);
+  if (normalizedFallback) return normalizedFallback;
+  return humanizeSkillSlug(normalizedSlug);
+}
+
+function queryChartSkills(db, chartId) {
+  const rows = db.prepare(`
+    SELECT skill_slug, skill_name, source
+    FROM chart_skills
+    WHERE chart_id = ?
+    ORDER BY skill_name COLLATE NOCASE ASC, skill_slug ASC
+  `).all(chartId);
+
+  const seen = new Set();
+  const skills = [];
+  for (const row of rows) {
+    const slug = normalizeSkillSlug(row.skill_slug);
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    skills.push({
+      slug,
+      name: getSkillNameForSlug(slug, row.skill_name),
+      source: String(row.source || ''),
+    });
+  }
+  return skills;
+}
+
+function loadChartSkillsById(db) {
+  const rows = db.prepare(`
+    SELECT chart_id, skill_slug, skill_name, source
+    FROM chart_skills
+    ORDER BY chart_id ASC, skill_name COLLATE NOCASE ASC, skill_slug ASC
+  `).all();
+
+  const map = new Map();
+  for (const row of rows) {
+    const chartId = String(parseInt(row.chart_id, 10) || 0);
+    if (!chartId || chartId === '0') continue;
+    const slug = normalizeSkillSlug(row.skill_slug);
+    if (!slug) continue;
+
+    if (!map.has(chartId)) map.set(chartId, []);
+    const current = map.get(chartId);
+    if (current.some((skill) => skill.slug === slug)) continue;
+
+    current.push({
+      slug,
+      name: getSkillNameForSlug(slug, row.skill_name),
+      source: String(row.source || ''),
+    });
+  }
+  return map;
+}
+
+function getSkillCatalogWithCounts(db) {
+  const rows = db.prepare(`
+    SELECT skill_slug, MAX(skill_name) as skill_name, COUNT(*) as chart_count
+    FROM chart_skills
+    GROUP BY skill_slug
+    ORDER BY skill_name COLLATE NOCASE ASC, skill_slug ASC
+  `).all();
+
+  const bySlug = new Map();
+  for (const skill of KNOWN_CHART_SKILLS) {
+    bySlug.set(skill.slug, {
+      slug: skill.slug,
+      name: skill.name,
+      chart_count: 0,
+    });
+  }
+
+  for (const row of rows) {
+    const slug = normalizeSkillSlug(row.skill_slug);
+    if (!slug) continue;
+    bySlug.set(slug, {
+      slug,
+      name: getSkillNameForSlug(slug, row.skill_name),
+      chart_count: parseInt(row.chart_count, 10) || 0,
+    });
+  }
+
+  return Array.from(bySlug.values()).sort((a, b) => {
+    const nameCompare = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    if (nameCompare !== 0) return nameCompare;
+    return a.slug.localeCompare(b.slug, undefined, { sensitivity: 'base' });
+  });
 }
 
 function normalizeGrade(grade) {
@@ -233,6 +394,8 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
     return cachedSongCatalogByModes.get(modeKey);
   }
 
+  const chartSkillsById = loadChartSkillsById(db);
+
   const rows = db.prepare(`
     SELECT id, title, artist, jacket_url, mode, level, bpm, song_key, flags
     FROM songs
@@ -293,6 +456,7 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
       bpm: row.bpm || '',
       song_key: row.song_key || '',
       flags: row.flags || '',
+      skills: chartSkillsById.get(String(row.id)) || [],
     };
 
     group.charts.push(chart);
@@ -798,6 +962,202 @@ router.get('/chart-key-map', (req, res) => {
   }
 
   res.json(map);
+});
+
+// GET /api/songs/skills/meta — available chart skills and coverage stats
+router.get('/skills/meta', (req, res) => {
+  const db = getDb();
+  const skills = getSkillCatalogWithCounts(db);
+
+  const totalChartRow = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM songs
+    WHERE mode IN ('Single', 'Double')
+  `).get();
+
+  const withSkillsRow = db.prepare(`
+    SELECT COUNT(DISTINCT s.id) as count
+    FROM songs s
+    JOIN chart_skills cs ON cs.chart_id = s.id
+    WHERE s.mode IN ('Single', 'Double')
+  `).get();
+
+  const totalCharts = parseInt(totalChartRow?.count, 10) || 0;
+  const chartsWithSkills = parseInt(withSkillsRow?.count, 10) || 0;
+
+  res.json({
+    skills,
+    totals: {
+      total_charts: totalCharts,
+      charts_with_skills: chartsWithSkills,
+      charts_missing_skills: Math.max(0, totalCharts - chartsWithSkills),
+    },
+  });
+});
+
+// GET /api/songs/skills/missing — charts with no skill assignments yet
+router.get('/skills/missing', (req, res) => {
+  const db = getDb();
+
+  const modeRaw = String(req.query.mode || '').trim().toLowerCase();
+  let modeFilter = ['Single', 'Double'];
+  if (modeRaw && modeRaw !== 'both' && modeRaw !== 'all') {
+    const mode = normalizeMode(modeRaw);
+    if (!mode) return res.status(400).json({ error: 'Invalid mode filter' });
+    modeFilter = [mode];
+  }
+
+  const levelFilter = parseLevelQuery(req.query.level);
+  const search = String(req.query.search || '').trim();
+
+  const limitRaw = parseInt(req.query.limit, 10);
+  const offsetRaw = parseInt(req.query.offset, 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0
+    ? Math.min(limitRaw, 1000)
+    : 250;
+  const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
+
+  const modePlaceholders = modeFilter.map(() => '?').join(', ');
+  const whereClauses = [`s.mode IN (${modePlaceholders})`, 'cs.chart_id IS NULL'];
+  const params = [...modeFilter];
+
+  if (levelFilter) {
+    whereClauses.push('s.level = ?');
+    params.push(levelFilter);
+  }
+
+  if (search) {
+    whereClauses.push('(s.title LIKE ? OR s.artist LIKE ?)');
+    params.push(`%${search}%`, `%${search}%`);
+  }
+
+  const whereSql = whereClauses.join(' AND ');
+
+  const totalRow = db.prepare(`
+    SELECT COUNT(*) as count
+    FROM songs s
+    LEFT JOIN chart_skills cs ON cs.chart_id = s.id
+    WHERE ${whereSql}
+  `).get(...params);
+
+  const rows = db.prepare(`
+    SELECT
+      s.id as chart_id,
+      s.title,
+      s.artist,
+      s.mode,
+      s.level,
+      s.jacket_url,
+      s.bpm,
+      s.song_key,
+      s.flags
+    FROM songs s
+    LEFT JOIN chart_skills cs ON cs.chart_id = s.id
+    WHERE ${whereSql}
+    ORDER BY s.level ASC, s.mode ASC, s.title COLLATE NOCASE ASC, s.id ASC
+    LIMIT ? OFFSET ?
+  `).all(...params, limit, offset);
+
+  res.json({
+    total_missing_charts: parseInt(totalRow?.count, 10) || 0,
+    limit,
+    offset,
+    mode_filter: modeFilter,
+    skills: getSkillCatalogWithCounts(db),
+    charts: rows.map((row) => ({
+      chart_id: row.chart_id,
+      title: row.title,
+      artist: row.artist || '',
+      mode: normalizeMode(row.mode) || row.mode,
+      level: parseInt(row.level, 10) || 0,
+      jacket_url: row.jacket_url || '',
+      bpm: row.bpm || '',
+      song_key: row.song_key || '',
+      flags: row.flags || '',
+      skills: [],
+    })),
+  });
+});
+
+// PUT /api/songs/chart/:chartId/skills — replace chart skill set
+router.put('/chart/:chartId/skills', optionalAuth, (req, res) => {
+  const db = getDb();
+  const chartId = parseInt(req.params.chartId, 10);
+  if (!Number.isFinite(chartId) || chartId <= 0) {
+    return res.status(400).json({ error: 'Invalid chart ID' });
+  }
+
+  const chart = db.prepare(`
+    SELECT id, title, artist, mode, level, jacket_url, bpm, song_key, flags
+    FROM songs
+    WHERE id = ?
+  `).get(chartId);
+  if (!chart) return res.status(404).json({ error: 'Chart not found' });
+
+  if (!Array.isArray(req.body?.skills)) {
+    return res.status(400).json({ error: 'skills must be an array' });
+  }
+
+  const normalized = [];
+  const seen = new Set();
+  for (const value of req.body.skills) {
+    const rawSlug = typeof value === 'string'
+      ? value
+      : (value?.slug || value?.skill_slug || value?.name || value?.skill_name || '');
+    const rawName = typeof value === 'object' && value
+      ? (value.name || value.skill_name || '')
+      : '';
+    const slug = normalizeSkillSlug(rawSlug);
+    if (!slug || seen.has(slug)) continue;
+    seen.add(slug);
+    normalized.push({
+      slug,
+      name: getSkillNameForSlug(slug, rawName),
+    });
+  }
+
+  if (normalized.length > 64) {
+    return res.status(400).json({ error: 'Too many skills; max is 64' });
+  }
+
+  const updateSkills = db.transaction((skills) => {
+    db.prepare('DELETE FROM chart_skills WHERE chart_id = ?').run(chartId);
+    const insertStmt = db.prepare(`
+      INSERT INTO chart_skills (chart_id, skill_slug, skill_name, source, created_at, updated_at)
+      VALUES (?, ?, ?, 'manual', datetime('now'), datetime('now'))
+      ON CONFLICT(chart_id, skill_slug)
+      DO UPDATE SET
+        skill_name = excluded.skill_name,
+        source = 'manual',
+        updated_at = datetime('now')
+    `);
+    for (const skill of skills) {
+      insertStmt.run(chartId, skill.slug, skill.name);
+    }
+  });
+  updateSkills(normalized);
+
+  invalidateSongCaches();
+
+  const aliases = loadSongAliases();
+  const mode = normalizeMode(chart.mode) || chart.mode;
+  const level = parseInt(chart.level, 10) || 0;
+
+  res.json({
+    chart: {
+      chart_id: chart.id,
+      key: makeChartKey(chart.title, mode, level, aliases),
+      title: chart.title,
+      artist: chart.artist || '',
+      mode,
+      level,
+      jacket_url: chart.jacket_url || '',
+      bpm: chart.bpm || '',
+      song_key: chart.song_key || '',
+      flags: chart.flags || '',
+      skills: queryChartSkills(db, chartId),
+    },
+  });
 });
 
 // GET /api/songs/library — grouped songs + per-chart user best snapshot

@@ -361,6 +361,21 @@ export default function SongChartPage() {
                 </h1>
               </div>
               <p className="text-sm text-gray-200 break-words whitespace-normal">{chart.artist || 'Unknown artist'}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(chart.skills || []).map((skill) => (
+                  <span
+                    key={skill.slug}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-[11px] border border-piu-accent/45 bg-piu-accent/15 text-piu-accent font-display font-bold"
+                  >
+                    {skill.name}
+                  </span>
+                ))}
+                {(chart.skills || []).length === 0 && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] border border-piu-border/40 bg-piu-dark/55 text-gray-400">
+                    No skills tagged yet
+                  </span>
+                )}
+              </div>
             </div>
             {levelBadge(chart.mode, chart.level)}
           </div>

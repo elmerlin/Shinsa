@@ -446,6 +446,17 @@ function initializeDb() {
       FOREIGN KEY (chart_id) REFERENCES songs(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS chart_skills (
+      chart_id INTEGER NOT NULL,
+      skill_slug TEXT NOT NULL,
+      skill_name TEXT NOT NULL,
+      source TEXT DEFAULT 'manual',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (chart_id, skill_slug),
+      FOREIGN KEY (chart_id) REFERENCES songs(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS matches (
       id TEXT PRIMARY KEY,
       tournament_id TEXT NOT NULL,
@@ -632,6 +643,10 @@ function initializeDb() {
       ON chart_tiers(tier_list_type, mode, level, chart_id);
     CREATE INDEX IF NOT EXISTS idx_chart_tiers_mode_level_rank
       ON chart_tiers(tier_list_type, mode, level, tier_rank, chart_id);
+    CREATE INDEX IF NOT EXISTS idx_chart_skills_chart
+      ON chart_skills(chart_id);
+    CREATE INDEX IF NOT EXISTS idx_chart_skills_skill
+      ON chart_skills(skill_slug);
     CREATE INDEX IF NOT EXISTS idx_duel_songs_duel ON duel_songs(duel_id);
     CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
     CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at);

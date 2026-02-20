@@ -114,6 +114,15 @@ export const getSongTiers = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/tiers${qs ? `?${qs}` : ''}`);
 };
+export const getSongSkillsMeta = () => request('/songs/skills/meta');
+export const getSongMissingSkills = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/skills/missing${qs ? `?${qs}` : ''}`);
+};
+export const updateSongChartSkills = (chartId, skills = []) => request(`/songs/chart/${chartId}/skills`, {
+  method: 'PUT',
+  body: JSON.stringify({ skills }),
+});
 
 // Duels
 export const getDuels = () => request('/duels');
