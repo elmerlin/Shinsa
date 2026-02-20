@@ -26,6 +26,8 @@ function parseArgs(argv) {
     saveRaw: false,
     dryRun: false,
     skillFilters: [],
+    includeSearch: true,
+    includeSkillPages: true,
   };
 
   for (const arg of argv) {
@@ -40,6 +42,13 @@ function parseArgs(argv) {
       opts.saveRaw = true;
     } else if (arg === '--dry-run') {
       opts.dryRun = true;
+    } else if (arg === '--skip-search') {
+      opts.includeSearch = false;
+    } else if (arg === '--skip-skill-pages') {
+      opts.includeSkillPages = false;
+    } else if (arg === '--search-only') {
+      opts.includeSearch = true;
+      opts.includeSkillPages = false;
     } else if (arg.startsWith('--skill=')) {
       const slug = normalizeSkillSlug(arg.slice('--skill='.length));
       if (slug) opts.skillFilters.push(slug);
@@ -81,6 +90,13 @@ function normalizeSkillSlug(value) {
 
 function normalizeSkillName(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function humanizeSkillSlug(slug) {
+  return String(slug || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function compactKey(value) {
@@ -176,6 +192,50 @@ function parseChartRefFromHref(href) {
 
   if (!mode || level <= 0) return null;
   return { mode, level, slug };
+}
+
+function extractTitleFromChartSlug(chartSlug) {
+  const raw = String(chartSlug || '')
+    .trim()
+    .replace(/^\/?chart\//i, '')
+    .replace(/\/+$/, '');
+  if (!raw) return '';
+
+  const parts = raw.split('_');
+  let diffIdx = -1;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (/^[SDC]\d+$/i.test(String(parts[i] || '').trim())) {
+      diffIdx = i;
+      break;
+    }
+  }
+  if (diffIdx <= 0) return '';
+
+  const beforeDiff = parts.slice(0, diffIdx).join('_');
+  if (!beforeDiff) return '';
+
+  const artistSeparatorIdx = beforeDiff.lastIndexOf('_-_');
+  const titlePart = artistSeparatorIdx >= 0
+    ? beforeDiff.slice(0, artistSeparatorIdx)
+    : beforeDiff;
+
+  return titlePart.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function stripDifficultyFromChartLabel(label, mode, level) {
+  const raw = String(label || '').replace(/\s+/g, ' ').trim();
+  if (!raw || !mode || !level) return raw;
+  const prefix = mode === 'Single' ? 'S' : mode === 'Double' ? 'D' : mode === 'CoOp' ? 'C' : '';
+  if (!prefix) return raw;
+
+  const diffToken = `${prefix}${parseInt(level, 10) || 0}`;
+  if (!/\d+/.test(diffToken)) return raw;
+
+  const escaped = diffToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return raw
+    .replace(new RegExp(`\\s+${escaped}(?:\\b.*)?$`, 'i'), '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function buildChartIndexes(db, aliases) {
@@ -300,6 +360,127 @@ async function scrapeSkillPage(page, skill, timeoutMs) {
   };
 }
 
+async function waitForSearchRows(page, timeoutMs) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const count = await page.locator('table.search-results tbody tr').count();
+    if (count > 0) return count;
+    await page.waitForTimeout(120);
+  }
+  return page.locator('table.search-results tbody tr').count();
+}
+
+async function scrapeSearchPages(page, timeoutMs) {
+  const searchUrl = `${SOURCE_BASE}/search?levelSort=none`;
+  await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await waitForSearchRows(page, timeoutMs);
+
+  const initialPageInfo = await page.evaluate(() => {
+    const span = document.querySelector('.pagination-controls .page-navigation span');
+    const text = String(span?.textContent || '').replace(/\s+/g, ' ').trim();
+    const match = text.match(/Page\s+(\d+)\s+of\s+(\d+)\s*\((\d+)\s*stepcharts\)/i);
+    return {
+      page: match ? parseInt(match[1], 10) || 1 : 1,
+      totalPages: match ? parseInt(match[2], 10) || 1 : 1,
+      totalStepcharts: match ? parseInt(match[3], 10) || 0 : 0,
+      label: text,
+    };
+  });
+
+  const totalPages = Math.max(1, initialPageInfo.totalPages || 1);
+  const nextButton = page.locator('.pagination-controls .page-navigation button').nth(1);
+  const rawPages = [];
+
+  for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+    await waitForSearchRows(page, timeoutMs);
+
+    const pageRows = await page.$$eval('table.search-results tbody tr', (rows) => {
+      return rows.map((row) => {
+        const chartLink = row.querySelector('a[href^="/chart/"]');
+        const chartHref = String(chartLink?.getAttribute('href') || '').trim();
+        const chartName = String(chartLink?.textContent || '').replace(/\s+/g, ' ').trim();
+
+        const skills = [];
+        for (const skillLink of row.querySelectorAll('a[href^="/skill/"]')) {
+          const href = String(skillLink.getAttribute('href') || '').trim();
+          const text = String(skillLink.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!text) continue;
+          skills.push({ href, text });
+        }
+
+        return { chart_href: chartHref, chart_name: chartName, skills };
+      }).filter((row) => row.chart_href && row.chart_name);
+    });
+
+    rawPages.push({
+      page: pageNum,
+      row_count: pageRows.length,
+      rows: pageRows,
+    });
+
+    if (pageNum >= totalPages) break;
+
+    await nextButton.click();
+    await page.waitForFunction((expectedPage) => {
+      const span = document.querySelector('.pagination-controls .page-navigation span');
+      const text = String(span?.textContent || '').replace(/\s+/g, ' ').trim();
+      const match = text.match(/Page\s+(\d+)\s+of\s+(\d+)/i);
+      return !!(match && Number(match[1]) === expectedPage);
+    }, pageNum + 1, { timeout: timeoutMs });
+  }
+
+  const entries = [];
+  let totalRows = 0;
+  for (const pageRow of rawPages) {
+    totalRows += pageRow.row_count;
+
+    for (const row of pageRow.rows) {
+      const parsed = parseChartRefFromHref(row.chart_href);
+      if (!parsed) continue;
+
+      const parsedTitle = normalizeSkillName(extractTitleFromChartSlug(parsed.slug));
+      const labelTitle = normalizeSkillName(stripDifficultyFromChartLabel(row.chart_name, parsed.mode, parsed.level));
+      const fallbackTitle = normalizeSkillName(row.chart_name);
+      const title = parsedTitle || labelTitle || fallbackTitle;
+      if (!title) continue;
+
+      const seenSkills = new Set();
+      for (const skillRow of row.skills) {
+        const slugFromHref = normalizeSkillSlug(skillRow.href);
+        const slugFromText = normalizeSkillSlug(skillRow.text);
+        const skillSlug = slugFromHref || slugFromText;
+        if (!skillSlug || seenSkills.has(skillSlug)) continue;
+        seenSkills.add(skillSlug);
+
+        const skillName = normalizeSkillName(skillRow.text) || humanizeSkillSlug(skillSlug);
+        const sourceSkillUrl = slugFromHref
+          ? `${SOURCE_BASE}/skill/${slugFromHref}`
+          : searchUrl;
+
+        entries.push({
+          skill_slug: skillSlug,
+          skill_name: skillName,
+          source_skill_url: sourceSkillUrl,
+          source_chart_url: row.chart_href.startsWith('http') ? row.chart_href : `${SOURCE_BASE}${row.chart_href}`,
+          title,
+          mode: parsed.mode,
+          level: parsed.level,
+        });
+      }
+    }
+  }
+
+  return {
+    source_url: searchUrl,
+    total_pages: totalPages,
+    total_stepcharts: initialPageInfo.totalStepcharts || 0,
+    total_rows: totalRows,
+    parsed_entries: entries.length,
+    entries,
+    raw_pages: rawPages,
+  };
+}
+
 function mapScrapedEntry(entry, chartIndexes, aliases) {
   const directKey = makeChartKey(entry.title, entry.mode, entry.level, aliases);
   if (directKey && chartIndexes.byChartKey.has(directKey)) {
@@ -366,6 +547,9 @@ function saveAssignments(db, assignments) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  if (!opts.includeSkillPages && !opts.includeSearch) {
+    throw new Error('Nothing to scrape: enable at least one source (--skip-search / --skip-skill-pages)');
+  }
 
   initializeDb();
   const db = getDb();
@@ -375,29 +559,21 @@ async function main() {
   const browser = await chromium.launch({ headless: opts.headless });
   const page = await browser.newPage({ viewport: { width: 1400, height: 1800 } });
 
-  const skillIndex = await scrapeSkillIndex(page);
-  const filteredSkills = opts.skillFilters.length > 0
-    ? skillIndex.filter((skill) => opts.skillFilters.includes(skill.slug))
-    : skillIndex;
-
-  if (filteredSkills.length === 0) {
-    await browser.close();
-    throw new Error('No skills to scrape (check --skill filters)');
-  }
-
   const rawResults = [];
   const assignments = [];
   const unmatched = [];
+  const sourceSummary = {
+    skill_pages: null,
+    search: null,
+  };
 
-  for (const skill of filteredSkills) {
-    const raw = await scrapeSkillPage(page, skill, opts.timeoutMs);
-    rawResults.push(raw);
-
-    let matchedForSkill = 0;
-    for (const entry of raw.entries) {
+  const mapEntries = (entries, sourceTag) => {
+    let matched = 0;
+    for (const entry of entries) {
       const mapped = mapScrapedEntry(entry, chartIndexes, aliases);
       if (!mapped.chart) {
         unmatched.push({
+          source: sourceTag,
           skill_slug: entry.skill_slug,
           skill_name: entry.skill_name,
           title: entry.title,
@@ -411,6 +587,7 @@ async function main() {
       }
 
       assignments.push({
+        source: sourceTag,
         chart_id: mapped.chart.chart_id,
         title: mapped.chart.title,
         mode: mapped.chart.mode,
@@ -421,12 +598,68 @@ async function main() {
         source_chart_url: entry.source_chart_url,
         map_method: mapped.method,
       });
-      matchedForSkill++;
+      matched++;
+    }
+    return matched;
+  };
+
+  let filteredSkills = [];
+  if (opts.includeSkillPages) {
+    const skillIndex = await scrapeSkillIndex(page);
+    filteredSkills = opts.skillFilters.length > 0
+      ? skillIndex.filter((skill) => opts.skillFilters.includes(skill.slug))
+      : skillIndex;
+
+    if (filteredSkills.length === 0) {
+      await browser.close();
+      throw new Error('No skills to scrape (check --skill filters)');
     }
 
+    for (const skill of filteredSkills) {
+      const raw = await scrapeSkillPage(page, skill, opts.timeoutMs);
+      rawResults.push({
+        type: 'skill_page',
+        ...raw,
+      });
+
+      const matchedForSkill = mapEntries(raw.entries, `skill:${skill.slug}`);
+      console.log(
+        `[${skill.slug}] links=${raw.total_links} parsed=${raw.parsed_entries} matched=${matchedForSkill} unmatched=${raw.parsed_entries - matchedForSkill}`
+      );
+    }
+
+    sourceSummary.skill_pages = {
+      enabled: true,
+      site: `${SOURCE_BASE}/skill`,
+      skill_count: filteredSkills.length,
+      skills: filteredSkills.map((skill) => ({
+        slug: skill.slug,
+        name: skill.name,
+        url: skill.url,
+      })),
+    };
+  }
+
+  if (opts.includeSearch) {
+    const rawSearch = await scrapeSearchPages(page, opts.timeoutMs);
+    rawResults.push({
+      type: 'search',
+      ...rawSearch,
+    });
+
+    const matchedFromSearch = mapEntries(rawSearch.entries, 'search');
     console.log(
-      `[${skill.slug}] links=${raw.total_links} parsed=${raw.parsed_entries} matched=${matchedForSkill} unmatched=${raw.parsed_entries - matchedForSkill}`
+      `[search] pages=${rawSearch.total_pages} charts=${rawSearch.total_stepcharts || rawSearch.total_rows} parsed=${rawSearch.parsed_entries} matched=${matchedFromSearch} unmatched=${rawSearch.parsed_entries - matchedFromSearch}`
     );
+
+    sourceSummary.search = {
+      enabled: true,
+      site: rawSearch.source_url,
+      total_pages: rawSearch.total_pages,
+      total_stepcharts: rawSearch.total_stepcharts,
+      total_rows: rawSearch.total_rows,
+      parsed_entries: rawSearch.parsed_entries,
+    };
   }
 
   await browser.close();
@@ -446,18 +679,11 @@ async function main() {
 
   const outPayload = {
     generated_at: new Date().toISOString(),
-    source: {
-      site: `${SOURCE_BASE}/skill`,
-      skill_count: filteredSkills.length,
-      skills: filteredSkills.map((skill) => ({
-        slug: skill.slug,
-        name: skill.name,
-        url: skill.url,
-      })),
-    },
+    source: sourceSummary,
     summary: {
       dry_run: !!opts.dryRun,
-      scraped_entries: rawResults.reduce((sum, row) => sum + row.parsed_entries, 0),
+      scraped_entries: rawResults.reduce((sum, row) => sum + (parseInt(row.parsed_entries, 10) || 0), 0),
+      mapped_rows_before_dedupe: assignments.length,
       mapped_rows: deduped.length,
       unmatched_rows: unmatched.length,
     },
