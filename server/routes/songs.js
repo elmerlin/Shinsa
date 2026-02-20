@@ -10,6 +10,7 @@ const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 let cachedJacketMap = null;
 let cachedSongAliases = null;
 let cachedSongCatalogByModes = new Map();
+let cachedSongCatalogVersion = '';
 
 const SCORE_TO_GRADE = [
   { min: 995000, grade: 'SSS+' },
@@ -385,7 +386,30 @@ function expandMode(mode) {
   return ['Single', 'Double'];
 }
 
+function getSongCatalogVersion(db) {
+  const row = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM songs) as songs_count,
+      (SELECT IFNULL(MAX(id), 0) FROM songs) as songs_max_id,
+      (SELECT COUNT(*) FROM chart_skills) as skills_count,
+      (SELECT IFNULL(MAX(updated_at), '') FROM chart_skills) as skills_max_updated_at
+  `).get();
+
+  return [
+    parseInt(row?.songs_count, 10) || 0,
+    parseInt(row?.songs_max_id, 10) || 0,
+    parseInt(row?.skills_count, 10) || 0,
+    String(row?.skills_max_updated_at || ''),
+  ].join('|');
+}
+
 function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
+  const catalogVersion = getSongCatalogVersion(db);
+  if (catalogVersion !== cachedSongCatalogVersion) {
+    cachedSongCatalogByModes = new Map();
+    cachedSongCatalogVersion = catalogVersion;
+  }
+
   const normalizedAllowedModes = allowedModes
     .map((mode) => normalizeMode(mode))
     .filter(Boolean);
@@ -923,6 +947,7 @@ function loadJacketMap() {
 function invalidateSongCaches() {
   cachedJacketMap = null;
   cachedSongCatalogByModes = new Map();
+  cachedSongCatalogVersion = '';
 }
 
 // GET /api/songs/jacket-map — return song name → local jacket URL mapping
