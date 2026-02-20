@@ -67,7 +67,9 @@ function YouTubeEmbed({ url }) {
 }
 
 // Single image cell with error fallback
-function GridImage({ src, className, onClick }) {
+// Uses object-position to bias crop towards the upper portion of images
+// so faces (which are usually near the top) are visible in thumbnails.
+function GridImage({ src, className, onClick, isSingle }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
@@ -81,6 +83,7 @@ function GridImage({ src, className, onClick }) {
       src={src}
       alt=""
       className={className}
+      style={isSingle ? undefined : { objectPosition: 'center 20%' }}
       onClick={onClick}
       onError={() => setFailed(true)}
     />
@@ -114,6 +117,7 @@ function ImageGrid({ images, onImageClick }) {
           src={img}
           className={`w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity ${imgHeight}`}
           onClick={() => onImageClick(i)}
+          isSingle={count === 1}
         />
       ))}
     </div>

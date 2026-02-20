@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getSongLibrary } from '../utils/api';
 
@@ -27,7 +27,8 @@ export default function SongsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get('q') || '');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchWrapRef = useRef(null);
 

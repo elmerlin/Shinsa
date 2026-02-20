@@ -1818,14 +1818,16 @@ export default function ProfilePage() {
                           const isBreak = isStageBreakPlay(play);
                           return (
                             <div key={`${play.song_title}-${play.mode}-${play.level}-${idx}`} className="flex items-center gap-2 py-1 border-b border-piu-border/20 last:border-0">
-                              <PiuSongJacket
-                                title={play.song_title}
-                                mode={play.mode}
-                                level={play.level}
-                                bgUrl={play.background_url}
-                                jacketLookup={jacketLookup}
-                                size="sm"
-                              />
+                              <Link to={`/songs?q=${encodeURIComponent(play.song_title || '')}`}>
+                                <PiuSongJacket
+                                  title={play.song_title}
+                                  mode={play.mode}
+                                  level={play.level}
+                                  bgUrl={play.background_url}
+                                  jacketLookup={jacketLookup}
+                                  size="sm"
+                                />
+                              </Link>
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs font-display font-bold truncate">{play.song_title}</p>
                                 <p className="text-[10px] text-gray-500">
@@ -1835,7 +1837,11 @@ export default function ProfilePage() {
                                   )}
                                 </p>
                               </div>
-                              <div className="text-right shrink-0">
+                              <button
+                                type="button"
+                                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                                onClick={() => setSelectedPlay(play)}
+                              >
                                 {isBreak ? (
                                   <span className="text-xs leading-none font-display font-bold text-red-500">STAGE BREAK</span>
                                 ) : (
@@ -1846,7 +1852,7 @@ export default function ProfilePage() {
                                     <p className="text-[11px] leading-none font-mono font-bold mt-0.5">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
                                   </>
                                 )}
-                              </div>
+                              </button>
                             </div>
                           );
                         })}

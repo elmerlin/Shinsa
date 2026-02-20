@@ -71,6 +71,118 @@ function getClearItems(item) {
   }
 }
 
+function getGradeColor(grade, score = 0) {
+  const normalized = String(grade || '').toUpperCase();
+  if (normalized) {
+    if (normalized.includes('SSS')) return 'text-sky-300';
+    if (normalized.includes('SS')) return 'text-piu-gold';
+    if (normalized.includes('S')) return 'text-amber-400';
+    if (normalized.includes('AAA')) return 'text-piu-silver';
+    if (normalized.includes('AA')) return 'text-piu-bronze';
+    if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
+  }
+  return getRank(score).color;
+}
+
+const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
+const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
+
+function ScoreDetailModal({ score, jacketUrl, onClose }) {
+  if (!score) return null;
+  const rank = getRank(score.new_score ?? score.score ?? 0);
+  const displayScore = score.new_score ?? score.score ?? 0;
+  const grade = score.new_grade || score.grade || rank.label;
+  const plateName = PLATE_NAMES[score.plate] || score.plate || '';
+  const plateColor = PLATE_COLORS[score.plate] || 'text-gray-400';
+  const hasJudgments = (score.perfect > 0 || score.great > 0 || score.good > 0 || score.bad > 0 || score.miss > 0);
+  const judgments = [
+    { label: 'PERFECT', value: score.perfect || 0, textColor: 'text-sky-400' },
+    { label: 'GREAT', value: score.great || 0, textColor: 'text-green-400' },
+    { label: 'GOOD', value: score.good || 0, textColor: 'text-yellow-400' },
+    { label: 'BAD', value: score.bad || 0, textColor: 'text-fuchsia-400' },
+    { label: 'MISS', value: score.miss || 0, textColor: 'text-gray-400' },
+  ];
+  const isUpscore = score.old_score !== undefined;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {jacketUrl && (
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-15"
+            style={{ backgroundImage: `url(${jacketUrl})` }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
+
+        <div className="relative p-5">
+          <button
+            className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
+            onClick={onClose}
+          >
+            x
+          </button>
+
+          <p className="font-display font-bold text-lg leading-tight pr-6">{score.song_title}</p>
+
+          <div className="flex items-center gap-3 mt-4">
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
+              score.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : score.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
+            }`}>
+              <span className={`font-display font-bold text-[10px] uppercase ${score.mode === 'Single' ? 'text-red-400' : score.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{score.mode}</span>
+              <span className={`font-display font-bold text-base ${score.mode === 'Single' ? 'text-red-300' : score.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{score.level}</span>
+            </div>
+            <div className="text-center flex-1">
+              {displayScore > 0 ? (
+                <p className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)}`}>
+                  {grade}
+                </p>
+              ) : (
+                <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+              )}
+            </div>
+          </div>
+
+          {plateName && (
+            <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+          )}
+
+          {displayScore > 0 && (
+            <p className="text-center font-mono text-2xl font-bold mt-2">{displayScore.toLocaleString()}</p>
+          )}
+
+          {isUpscore && score.old_score > 0 && (
+            <div className="text-center mt-2 space-y-0.5">
+              <p className="text-[10px] text-gray-500">Previous: <span className="font-mono">{score.old_score.toLocaleString()}</span> {score.old_grade || getRank(score.old_score).label}</p>
+              <p className="text-xs text-piu-green font-mono font-bold">+{(displayScore - score.old_score).toLocaleString()}</p>
+            </div>
+          )}
+
+          {hasJudgments && (
+            <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
+              {judgments.map(j => (
+                <div key={j.label}>
+                  <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
+                  <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!hasJudgments && displayScore > 0 && (
+            <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
+              Judgment breakdown not available
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FeedCommentPumpButton({ commentId, type, initialCount, initialPumped }) {
   const { user } = useAuth();
   const [pumped, setPumped] = useState(!!initialPumped);
@@ -288,7 +400,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
   );
 }
 
-function UpscoreCard({ item, jacketLookup }) {
+function UpscoreCard({ item, jacketLookup, onScoreClick }) {
   const [showAll, setShowAll] = useState(false);
   const upscores = (() => {
     try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; }
@@ -337,13 +449,15 @@ function UpscoreCard({ item, jacketLookup }) {
 
           return (
             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-              {jacketUrl ? (
-                <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover shrink-0" />
-              ) : (
-                <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500 shrink-0">
-                  {(u.song_title || '?')[0]}
-                </div>
-              )}
+              <Link to={`/songs?q=${encodeURIComponent(u.song_title || '')}`} className="shrink-0">
+                {jacketUrl ? (
+                  <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover hover:brightness-110 transition-all" />
+                ) : (
+                  <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500 hover:brightness-110 transition-all">
+                    {(u.song_title || '?')[0]}
+                  </div>
+                )}
+              </Link>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-display font-bold truncate">{u.song_title}</p>
                 <div className="flex items-center gap-1 mt-0.5">
@@ -352,7 +466,11 @@ function UpscoreCard({ item, jacketLookup }) {
                   </span>
                 </div>
               </div>
-              <div className="text-right shrink-0">
+              <button
+                type="button"
+                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                onClick={() => onScoreClick && onScoreClick({ ...u, _jacketUrl: jacketUrl })}
+              >
                 <div className="flex items-center gap-1 justify-end">
                   <span className={`text-[10px] font-mono ${oldRank.color}`}>{u.old_score.toLocaleString()}</span>
                   <span className={`text-[10px] font-display ${oldRank.color}`}>{oldRank.label}</span>
@@ -361,7 +479,7 @@ function UpscoreCard({ item, jacketLookup }) {
                   <span className={`text-xs font-display font-bold ${newRank.color}`}>{newRank.label}</span>
                 </div>
                 <p className="text-[10px] text-piu-green font-mono">+{improvement.toLocaleString()}</p>
-              </div>
+              </button>
             </div>
           );
         })}
@@ -573,7 +691,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
   );
 }
 
-function NewClearCard({ item, jacketLookup }) {
+function NewClearCard({ item, jacketLookup, onScoreClick }) {
   const [showAll, setShowAll] = useState(false);
   const clears = getClearItems(item);
   const hasMore = clears.length > 5;
@@ -621,13 +739,15 @@ function NewClearCard({ item, jacketLookup }) {
 
           return (
             <div key={`${clear.song_title}-${clear.mode}-${clear.level}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-              {jacketUrl ? (
-                <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
-              ) : (
-                <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 shrink-0">
-                  {(clear.song_title || '?')[0]}
-                </div>
-              )}
+              <Link to={`/songs?q=${encodeURIComponent(clear.song_title || '')}`} className="shrink-0">
+                {jacketUrl ? (
+                  <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover hover:brightness-110 transition-all" />
+                ) : (
+                  <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 hover:brightness-110 transition-all">
+                    {(clear.song_title || '?')[0]}
+                  </div>
+                )}
+              </Link>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-display font-bold truncate">{clear.song_title}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -639,10 +759,14 @@ function NewClearCard({ item, jacketLookup }) {
                   )}
                 </div>
               </div>
-              <div className="text-right shrink-0">
+              <button
+                type="button"
+                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                onClick={() => onScoreClick && onScoreClick({ ...clear, _jacketUrl: jacketUrl })}
+              >
                 <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
                 <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
-              </div>
+              </button>
             </div>
           );
         })}
@@ -675,6 +799,7 @@ export default function FeedPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [jacketLookup, setJacketLookup] = useState({});
+  const [selectedScore, setSelectedScore] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -734,9 +859,9 @@ export default function FeedPage() {
             if (item.type === 'post') {
               return <PostCard key={`post-${item.id}`} post={item} showAuthor={true} />;
             } else if (item.type === 'upscore') {
-              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} />;
+              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} onScoreClick={setSelectedScore} />;
             } else if (item.type === 'clear') {
-              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} />;
+              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} onScoreClick={setSelectedScore} />;
             }
             return null;
           })}
@@ -751,6 +876,12 @@ export default function FeedPage() {
           )}
         </div>
       )}
+
+      <ScoreDetailModal
+        score={selectedScore}
+        jacketUrl={selectedScore?._jacketUrl || ''}
+        onClose={() => setSelectedScore(null)}
+      />
     </div>
   );
 }
