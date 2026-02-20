@@ -34,6 +34,7 @@ import HeadToHeadPage from './pages/HeadToHeadPage';
 import TiersPage from './pages/TiersPage';
 import SkillsPage from './pages/SkillsPage';
 import SkillChartsPage from './pages/SkillChartsPage';
+import ChatPage from './pages/ChatPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -353,6 +354,16 @@ function UserMenu() {
             Head to Head
           </Link>
           <Link
+            to="/chat"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            Chat
+          </Link>
+          <Link
             to="/account"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
@@ -439,6 +450,14 @@ export default function App() {
             <Link to="/communities" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
               Communities
             </Link>
+            {user && (
+              <Link to="/chat" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                <span>Chat</span>
+              </Link>
+            )}
             <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
@@ -488,6 +507,7 @@ export default function App() {
           <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
           <Route path="/tiers" element={<TiersPage />} />
           <Route path="/head-to-head" element={<HeadToHeadPage />} />
+          <Route path="/chat" element={<ChatPage />} />
         </Routes>
       </main>
 
@@ -547,12 +567,12 @@ function MobileBottomNav() {
           <span className="text-[9px] font-display">Post</span>
         </Link>
 
-        {/* Tiers */}
-        <Link to="/tiers" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/tiers') ? 'text-piu-accent' : 'text-gray-500'}`}>
+        {/* Chat */}
+        <Link to="/chat" className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${isActive('/chat') ? 'text-piu-accent' : 'text-gray-500'}`}>
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h12M4 17h8" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
           </svg>
-          <span className="text-[9px] font-display">Tiers</span>
+          <span className="text-[9px] font-display">Chat</span>
         </Link>
 
         {/* Profile */}
