@@ -793,6 +793,17 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 ml-2.5">
                   <span className="text-[9px] text-gray-600">{timeAgo(reply.created_at)}</span>
+                  {isMember && (
+                    <button
+                      onClick={() => {
+                        setReplyTo(comment.id);
+                        setCommentTexts(prev => ({ ...prev, [comment.id]: `@${reply.username} ` }));
+                      }}
+                      className="text-[9px] text-gray-500 hover:text-piu-accent font-display font-bold"
+                    >
+                      Reply
+                    </button>
+                  )}
                   {(user?.id === reply.user_id || isModOrOwner) && (
                     <button onClick={() => onDelete(postId, reply.id)} className="text-[9px] text-gray-600 hover:text-red-400">Delete</button>
                   )}
