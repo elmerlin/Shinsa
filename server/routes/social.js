@@ -26,8 +26,12 @@ function parseBooleanInput(value) {
   return null;
 }
 
+function stripSessionSummaryMarkers(text) {
+  return String(text || '').replace(/\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '').trim();
+}
+
 function textSnippet(text, max = 80) {
-  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+  const compact = stripSessionSummaryMarkers(text).replace(/\s+/g, ' ').trim();
   if (!compact) return '';
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
@@ -1181,7 +1185,7 @@ router.get('/recent-activity', (req, res) => {
     ORDER BY p.created_at DESC LIMIT 10
   `).all();
   for (const p of posts) {
-    const snippet = (p.content || '').slice(0, 60) + ((p.content || '').length > 60 ? '...' : '');
+    const snippet = textSnippet(p.content || '', 60);
     activities.push({
       type: 'new_post', created_at: p.created_at,
       message: `${p.username} posted${snippet ? `: "${snippet}"` : ''}`,

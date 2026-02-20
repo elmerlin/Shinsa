@@ -7,12 +7,15 @@ import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
+import SessionSummaryCard from '../components/SessionSummaryCard';
 import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
   getCommunityMembers, searchCommunityMentions, getPiugameRecentlyPlayed, getJacketMap,
 } from '../utils/api';
+import { calculateClearRating } from '../utils/clearRating';
+import { serializeSessionSummaryMarker, splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -250,18 +253,7 @@ function toLevel(play) {
 }
 
 function getPlayRating(play) {
-  const scoreRatio = Math.max(0, Math.min(1, toScore(play) / 1000000));
-  const levelRatio = Math.max(0, Math.min(1, toLevel(play) / 28));
-  const perfect = parseInt(play?.perfect, 10) || 0;
-  const great = parseInt(play?.great, 10) || 0;
-  const good = parseInt(play?.good, 10) || 0;
-  const bad = parseInt(play?.bad, 10) || 0;
-  const miss = parseInt(play?.miss, 10) || 0;
-  const steps = perfect + great + good + bad + miss;
-  const accuracyRatio = steps > 0
-    ? (perfect + great * 0.7 + good * 0.4 + bad * 0.1) / steps
-    : scoreRatio;
-  return (accuracyRatio * 0.65 + scoreRatio * 0.2 + levelRatio * 0.15) * 100;
+  return calculateClearRating(play?.level, play?.grade, play?.score);
 }
 
 function buildSessionSummary(sessionRows, jacketLookup = {}) {
@@ -388,7 +380,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     '',
     '⭐ Top 3 by rating:',
     ...(topSongsByRating.length > 0
-      ? topSongsByRating.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | Rating ${play._rating.toFixed(2)}`)
+      ? topSongsByRating.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | Rating ${formatNumber(play._rating)}`)
       : ['No rated songs in this session']),
   ].filter(Boolean);
 
@@ -638,9 +630,8 @@ export default function CommunityPage() {
   const handleCreatePost = async (e) => {
     e.preventDefault();
     const sanitizedContent = stripSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
-    const finalContent = postSummaryPreview
-      ? [sanitizedContent.trim(), postSummaryPreview.postText].filter(Boolean).join('\n\n')
-      : sanitizedContent.trim();
+    const summaryMarker = postSummaryPreview ? serializeSessionSummaryMarker(postSummaryPreview) : '';
+    const finalContent = [sanitizedContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
     if (!finalContent && newPostImages.length === 0 && !newPostYoutube) return;
     setPosting(true);
     try {
@@ -971,16 +962,12 @@ function PostsTab({
           )}
 
           {postSummaryPreview && (
-            <div className="mt-2 rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="text-[10px] font-display font-bold uppercase tracking-wider text-emerald-300">Session summary preview</p>
-                  <p className="text-xs text-gray-300">
-                    {postSummaryPreview.sessionDateLabel}
-                    {postSummaryPreview.sessionTimeRange ? ` • ${postSummaryPreview.sessionTimeRange}` : ''}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
+            <SessionSummaryCard
+              summary={postSummaryPreview}
+              title="Session Summary Preview"
+              className="mt-2"
+              actions={(
+                <>
                   <button
                     type="button"
                     onClick={onGeneratePostSummary}
@@ -996,75 +983,9 @@ function PostsTab({
                   >
                     Remove
                   </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-                <SummaryStat label="Songs" value={postSummaryPreview.songCount} />
-                <SummaryStat label="Clears" value={`${postSummaryPreview.clearCount} (${postSummaryPreview.clearRate}%)`} />
-                <SummaryStat label="Steps" value={postSummaryPreview.totalSteps.toLocaleString()} />
-                <SummaryStat label="Estimated Calories" value={`~${postSummaryPreview.estimatedKcal.toLocaleString()} kcal`} />
-              </div>
-
-              <div className="mt-3 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Mode split</p>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-red-500/20 border border-red-500/40">
-                    <span className="text-[10px] text-red-300 font-display font-bold">Singles</span>
-                    <span className="min-w-[20px] h-[18px] px-1 rounded bg-red-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                      {postSummaryPreview.singleCount}
-                    </span>
-                  </div>
-                  <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-green-500/20 border border-green-500/40">
-                    <span className="text-[10px] text-green-300 font-display font-bold">Doubles</span>
-                    <span className="min-w-[20px] h-[18px] px-1 rounded bg-green-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                      {postSummaryPreview.doubleCount}
-                    </span>
-                  </div>
-                  {postSummaryPreview.otherCount > 0 && (
-                    <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-blue-500/20 border border-blue-500/40">
-                      <span className="text-[10px] text-blue-300 font-display font-bold">Other</span>
-                      <span className="min-w-[20px] h-[18px] px-1 rounded bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                        {postSummaryPreview.otherCount}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Judgment totals</p>
-                <p className="mt-1 text-xs">
-                  <span className="text-sky-400">P {postSummaryPreview.judgmentTotals.perfect.toLocaleString()}</span>
-                  <span className="text-gray-500"> | </span>
-                  <span className="text-green-400">G {postSummaryPreview.judgmentTotals.great.toLocaleString()}</span>
-                  <span className="text-gray-500"> | </span>
-                  <span className="text-yellow-400">Good {postSummaryPreview.judgmentTotals.good.toLocaleString()}</span>
-                  <span className="text-gray-500"> | </span>
-                  <span className="text-purple-400">Bad {postSummaryPreview.judgmentTotals.bad.toLocaleString()}</span>
-                  <span className="text-gray-500"> | </span>
-                  <span className="text-red-400">Miss {postSummaryPreview.judgmentTotals.miss.toLocaleString()}</span>
-                </p>
-                <p className="text-xs font-display font-bold text-emerald-300 mt-1">
-                  {postSummaryPreview.perfectRate}% Perfects!
-                </p>
-              </div>
-
-              <div className="mt-3 rounded-xl border border-cyan-400/25 bg-black/15 p-2.5">
-                <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide mb-2">Top Plays</p>
-                <div className="space-y-2">
-                  <SummarySongTable title="Top 3 songs by score" rows={postSummaryPreview.topSongsByScore || []} type="score" />
-                  <SummarySongTable title="Top 3 songs by rating" rows={postSummaryPreview.topSongsByRating || []} type="rating" />
-                </div>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-piu-border/30">
-                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Post preview</p>
-                <div className="mt-1 text-xs text-gray-200 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto pr-1">
-                  {postSummaryPreview.postText}
-                </div>
-              </div>
-            </div>
+                </>
+              )}
+            />
           )}
 
           {postSummaryError && (
@@ -1183,6 +1104,7 @@ function CommunityPostCard({
   const isAuthor = user?.id === post.user_id;
   const canDelete = isAuthor || isModOrOwner;
   const youtubeId = post.youtube_url ? extractYoutubeId(post.youtube_url) : null;
+  const { text: postText, summary: postSummary } = splitSessionSummaryContent(post.content || '');
 
   return (
     <div className="bg-piu-card border border-piu-border rounded-xl overflow-hidden">
@@ -1251,10 +1173,14 @@ function CommunityPostCard({
         </div>
 
         {/* Content */}
-        {post.content && (
+        {postText && (
           <div className="text-sm text-gray-300 mb-3 whitespace-pre-wrap break-words leading-relaxed">
-            {renderFormattedText(post.content)}
+            {renderFormattedText(postText)}
           </div>
+        )}
+
+        {postSummary && (
+          <SessionSummaryCard summary={postSummary} title="Session Summary" className="mb-3" />
         )}
 
         {/* Images */}

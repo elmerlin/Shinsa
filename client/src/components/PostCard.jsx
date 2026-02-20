@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from './AvatarPicker';
@@ -6,6 +6,8 @@ import { getCountryFlag } from './PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment, searchUsers } from '../utils/api';
+import SessionSummaryCard from './SessionSummaryCard';
+import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -807,14 +809,18 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 // Full Post Card used in Feed and Profile
 export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false, focusCommentId = null }) {
   const { user } = useAuth();
+  const initialSplit = useMemo(() => splitSessionSummaryContent(post.content || ''), [post.content]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(post.content || '');
+  const [editContent, setEditContent] = useState(initialSplit.text || '');
   const [editYoutubeUrl, setEditYoutubeUrl] = useState(post.youtube_url || '');
   const [saving, setSaving] = useState(false);
   const [currentContent, setCurrentContent] = useState(post.content || '');
   const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
+  const parsedCurrent = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
+  const visibleContent = parsedCurrent.text || '';
+  const currentSummary = parsedCurrent.summary;
 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }
@@ -824,7 +830,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const canEdit = user && user.id === post.user_id;
 
   const handleEdit = () => {
-    setEditContent(currentContent);
+    setEditContent(visibleContent);
     setEditYoutubeUrl(currentYoutubeUrl);
     setEditing(true);
   };
@@ -832,7 +838,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await editPost(post.id, { content: editContent, youtube_url: editYoutubeUrl });
+      const summaryMarker = currentSummary ? serializeSessionSummaryMarker(currentSummary) : '';
+      const contentToSave = [editContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
+      const updated = await editPost(post.id, { content: contentToSave, youtube_url: editYoutubeUrl });
       setCurrentContent(updated.content || '');
       setCurrentYoutubeUrl(updated.youtube_url || '');
       setWasEdited(true);
@@ -846,7 +854,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   };
 
   const handleCancel = () => {
-    setEditContent(currentContent);
+    setEditContent(visibleContent);
     setEditYoutubeUrl(currentYoutubeUrl);
     setEditing(false);
   };
@@ -942,10 +950,13 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
         </div>
       ) : (
         <>
-          {currentContent && (
+          {visibleContent && (
             <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
-              {renderFormattedText(currentContent)}
+              {renderFormattedText(visibleContent)}
             </div>
+          )}
+          {currentSummary && (
+            <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
           )}
         </>
       )}

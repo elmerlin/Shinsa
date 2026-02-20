@@ -5,6 +5,9 @@ import { getUserPosts, createPost, deletePost, getPiugameRecentlyPlayed, getJack
 import { getAvatarUrl } from '../components/AvatarPicker';
 import PostCard from '../components/PostCard';
 import ImageEditor from '../components/ImageEditor';
+import SessionSummaryCard from '../components/SessionSummaryCard';
+import { calculateClearRating } from '../utils/clearRating';
+import { serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 
 // Common emoji sets for quick insert
 const EMOJI_GROUPS = [
@@ -223,18 +226,7 @@ function toLevel(play) {
 }
 
 function getPlayRating(play) {
-  const scoreRatio = Math.max(0, Math.min(1, toScore(play) / 1000000));
-  const levelRatio = Math.max(0, Math.min(1, toLevel(play) / 28));
-  const perfect = parseInt(play?.perfect, 10) || 0;
-  const great = parseInt(play?.great, 10) || 0;
-  const good = parseInt(play?.good, 10) || 0;
-  const bad = parseInt(play?.bad, 10) || 0;
-  const miss = parseInt(play?.miss, 10) || 0;
-  const steps = perfect + great + good + bad + miss;
-  const accuracyRatio = steps > 0
-    ? (perfect + great * 0.7 + good * 0.4 + bad * 0.1) / steps
-    : scoreRatio;
-  return (accuracyRatio * 0.65 + scoreRatio * 0.2 + levelRatio * 0.15) * 100;
+  return calculateClearRating(play?.level, play?.grade, play?.score);
 }
 
 function buildSessionSummary(sessionRows, jacketLookup = {}) {
@@ -361,7 +353,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     '',
     '⭐ Top 3 by rating:',
     ...(topSongsByRating.length > 0
-      ? topSongsByRating.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | Rating ${play._rating.toFixed(2)}`)
+      ? topSongsByRating.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | Rating ${formatNumber(play._rating)}`)
       : ['No rated songs in this session']),
   ].filter(Boolean);
 
@@ -596,9 +588,8 @@ function PostComposer({ onPost }) {
   };
 
   const handleSubmit = async () => {
-    const finalText = summaryPreview
-      ? [sanitizedContent.trim(), summaryPreview.postText].filter(Boolean).join('\n\n')
-      : sanitizedContent.trim();
+    const summaryMarker = summaryPreview ? serializeSessionSummaryMarker(summaryPreview) : '';
+    const finalText = [sanitizedContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
     if (!finalText && images.length === 0 && !youtubeUrl.trim()) return;
 
     setPosting(true);
@@ -658,16 +649,12 @@ function PostComposer({ onPost }) {
       )}
 
       {summaryPreview && (
-        <div className="mb-3 rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-display font-bold uppercase tracking-wider text-emerald-300">Session summary preview</p>
-              <p className="text-xs text-gray-300">
-                {summaryPreview.sessionDateLabel}
-                {summaryPreview.sessionTimeRange ? ` • ${summaryPreview.sessionTimeRange}` : ''}
-              </p>
-            </div>
-            <div className="flex items-center gap-1">
+        <SessionSummaryCard
+          summary={summaryPreview}
+          title="Session Summary Preview"
+          className="mb-3"
+          actions={(
+            <>
               <button
                 onClick={handleGenerateSummary}
                 disabled={summaryLoading}
@@ -681,75 +668,9 @@ function PostComposer({ onPost }) {
               >
                 Remove
               </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-            <SummaryStat label="Songs" value={summaryPreview.songCount} />
-            <SummaryStat label="Clears" value={`${summaryPreview.clearCount} (${summaryPreview.clearRate}%)`} />
-            <SummaryStat label="Steps" value={summaryPreview.totalSteps.toLocaleString()} />
-            <SummaryStat label="Estimated Calories" value={`~${summaryPreview.estimatedKcal.toLocaleString()} kcal`} />
-          </div>
-
-          <div className="mt-3 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Mode split</p>
-            <div className="mt-1 flex items-center gap-2">
-              <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-red-500/20 border border-red-500/40">
-                <span className="text-[10px] text-red-300 font-display font-bold">Singles</span>
-                <span className="min-w-[20px] h-[18px] px-1 rounded bg-red-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                  {summaryPreview.singleCount}
-                </span>
-              </div>
-              <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-green-500/20 border border-green-500/40">
-                <span className="text-[10px] text-green-300 font-display font-bold">Doubles</span>
-                <span className="min-w-[20px] h-[18px] px-1 rounded bg-green-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                  {summaryPreview.doubleCount}
-                </span>
-              </div>
-              {summaryPreview.otherCount > 0 && (
-                <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-blue-500/20 border border-blue-500/40">
-                  <span className="text-[10px] text-blue-300 font-display font-bold">Other</span>
-                  <span className="min-w-[20px] h-[18px] px-1 rounded bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                    {summaryPreview.otherCount}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Judgment totals</p>
-            <p className="mt-1 text-xs">
-              <span className="text-sky-400">P {summaryPreview.judgmentTotals.perfect.toLocaleString()}</span>
-              <span className="text-gray-500"> | </span>
-              <span className="text-green-400">G {summaryPreview.judgmentTotals.great.toLocaleString()}</span>
-              <span className="text-gray-500"> | </span>
-              <span className="text-yellow-400">Good {summaryPreview.judgmentTotals.good.toLocaleString()}</span>
-              <span className="text-gray-500"> | </span>
-              <span className="text-purple-400">Bad {summaryPreview.judgmentTotals.bad.toLocaleString()}</span>
-              <span className="text-gray-500"> | </span>
-              <span className="text-red-400">Miss {summaryPreview.judgmentTotals.miss.toLocaleString()}</span>
-            </p>
-            <p className="text-xs font-display font-bold text-emerald-300 mt-1">
-              {summaryPreview.perfectRate}% Perfects!
-            </p>
-          </div>
-
-          <div className="mt-3 rounded-xl border border-cyan-400/25 bg-black/15 p-2.5">
-            <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide mb-2">Top Plays</p>
-            <div className="space-y-2">
-              <SummarySongTable title="Top 3 songs by score" rows={summaryPreview.topSongsByScore || []} type="score" />
-              <SummarySongTable title="Top 3 songs by rating" rows={summaryPreview.topSongsByRating || []} type="rating" />
-            </div>
-          </div>
-
-          <div className="mt-3 pt-3 border-t border-piu-border/30">
-            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Post preview</p>
-            <div className="mt-1 text-xs text-gray-200 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto pr-1">
-              {summaryPreview.postText}
-            </div>
-          </div>
-        </div>
+            </>
+          )}
+        />
       )}
 
       {summaryError && (
