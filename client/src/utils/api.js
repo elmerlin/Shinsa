@@ -88,6 +88,7 @@ export const getSongs = (params = {}) => {
   return request(`/songs${qs ? `?${qs}` : ''}`);
 };
 export const getJacketMap = () => request('/songs/jacket-map');
+export const getChartKeyMap = () => request('/songs/chart-key-map');
 export const getSongLibrary = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/library${qs ? `?${qs}` : ''}`);

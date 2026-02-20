@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap,
+  getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap, getChartKeyMap,
   getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
@@ -701,6 +701,7 @@ export default function ProfilePage() {
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
+  const [chartKeyMap, setChartKeyMap] = useState({});
   const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
   const [bestScoreSearch, setBestScoreSearch] = useState('');
   const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
@@ -926,9 +927,11 @@ export default function ProfilePage() {
       getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
       getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
+      getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
     }
   }, [isPiuTab, profileId, piuDataLoaded]);
 
+  const hasChartKeyMap = Object.keys(chartKeyMap).length > 0;
   useEffect(() => {
     if (tab !== 'overview' || !profileId || !hasPiuData) return;
     if (!piuRecentlyPlayed) {
@@ -937,7 +940,10 @@ export default function ProfilePage() {
     if (!hasJacketLookup) {
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
     }
-  }, [tab, profileId, hasPiuData, piuRecentlyPlayed, hasJacketLookup]);
+    if (!hasChartKeyMap) {
+      getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
+    }
+  }, [tab, profileId, hasPiuData, piuRecentlyPlayed, hasJacketLookup, hasChartKeyMap]);
 
   // Auto-sync pumbility + recently played (NOT best scores) for profile owner
   useEffect(() => {
@@ -1816,9 +1822,13 @@ export default function ProfilePage() {
                         {selectedOverviewDay.plays.map((play, idx) => {
                           const rank = getRank(play.score);
                           const isBreak = isStageBreakPlay(play);
+                          const playNorm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                          const playChartKey = `${playNorm}|${play.mode}|${play.level}`;
+                          const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[playNorm];
+                          const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
                           return (
                             <div key={`${play.song_title}-${play.mode}-${play.level}-${idx}`} className="flex items-center gap-2 py-1 border-b border-piu-border/20 last:border-0">
-                              <Link to={`/songs?q=${encodeURIComponent(play.song_title || '')}`}>
+                              <Link to={playChartLink}>
                                 <PiuSongJacket
                                   title={play.song_title}
                                   mode={play.mode}

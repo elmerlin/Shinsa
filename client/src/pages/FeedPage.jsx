@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFeed, getJacketMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment } from '../utils/api';
+import { getFeed, getJacketMap, getChartKeyMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
@@ -65,6 +65,8 @@ function getClearItems(item) {
       grade: c.grade || '',
       plate: c.plate || '',
       background_url: c.background_url || '',
+      perfect: c.perfect || 0, great: c.great || 0, good: c.good || 0,
+      bad: c.bad || 0, miss: c.miss || 0,
     }));
   } catch {
     return fallback;
@@ -87,7 +89,7 @@ function getGradeColor(grade, score = 0) {
 const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
 const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
 
-function ScoreDetailModal({ score, jacketUrl, onClose }) {
+function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
   if (!score) return null;
   const rank = getRank(score.new_score ?? score.score ?? 0);
   const displayScore = score.new_score ?? score.score ?? 0;
@@ -126,7 +128,11 @@ function ScoreDetailModal({ score, jacketUrl, onClose }) {
             x
           </button>
 
-          <p className="font-display font-bold text-lg leading-tight pr-6">{score.song_title}</p>
+          {chartLink ? (
+            <Link to={chartLink} className="font-display font-bold text-lg leading-tight pr-6 hover:text-piu-accent transition-colors block" onClick={onClose}>{score.song_title}</Link>
+          ) : (
+            <p className="font-display font-bold text-lg leading-tight pr-6">{score.song_title}</p>
+          )}
 
           <div className="flex items-center gap-3 mt-4">
             <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
@@ -400,7 +406,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
   );
 }
 
-function UpscoreCard({ item, jacketLookup, onScoreClick }) {
+function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
   const [showAll, setShowAll] = useState(false);
   const upscores = (() => {
     try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; }
@@ -447,9 +453,12 @@ function UpscoreCard({ item, jacketLookup, onScoreClick }) {
           const exactKey = `${norm}|${u.mode}|${u.level}`;
           const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
 
+          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
+          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(u.song_title || '')}`;
+
           return (
             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-              <Link to={`/songs?q=${encodeURIComponent(u.song_title || '')}`} className="shrink-0">
+              <Link to={chartLink} className="shrink-0">
                 {jacketUrl ? (
                   <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover hover:brightness-110 transition-all" />
                 ) : (
@@ -469,7 +478,7 @@ function UpscoreCard({ item, jacketLookup, onScoreClick }) {
               <button
                 type="button"
                 className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                onClick={() => onScoreClick && onScoreClick({ ...u, _jacketUrl: jacketUrl })}
+                onClick={() => onScoreClick && onScoreClick({ ...u, _jacketUrl: jacketUrl, _chartLink: chartLink })}
               >
                 <div className="flex items-center gap-1 justify-end">
                   <span className={`text-[10px] font-mono ${oldRank.color}`}>{u.old_score.toLocaleString()}</span>
@@ -691,7 +700,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
   );
 }
 
-function NewClearCard({ item, jacketLookup, onScoreClick }) {
+function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
   const [showAll, setShowAll] = useState(false);
   const clears = getClearItems(item);
   const hasMore = clears.length > 5;
@@ -736,10 +745,12 @@ function NewClearCard({ item, jacketLookup, onScoreClick }) {
           const norm = (clear.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
           const exactKey = `${norm}|${clear.mode}|${clear.level}`;
           const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
+          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
+          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(clear.song_title || '')}`;
 
           return (
             <div key={`${clear.song_title}-${clear.mode}-${clear.level}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-              <Link to={`/songs?q=${encodeURIComponent(clear.song_title || '')}`} className="shrink-0">
+              <Link to={chartLink} className="shrink-0">
                 {jacketUrl ? (
                   <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover hover:brightness-110 transition-all" />
                 ) : (
@@ -762,7 +773,7 @@ function NewClearCard({ item, jacketLookup, onScoreClick }) {
               <button
                 type="button"
                 className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                onClick={() => onScoreClick && onScoreClick({ ...clear, _jacketUrl: jacketUrl })}
+                onClick={() => onScoreClick && onScoreClick({ ...clear, _jacketUrl: jacketUrl, _chartLink: chartLink })}
               >
                 <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
                 <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
@@ -799,6 +810,7 @@ export default function FeedPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [jacketLookup, setJacketLookup] = useState({});
+  const [chartKeyMap, setChartKeyMap] = useState({});
   const [selectedScore, setSelectedScore] = useState(null);
 
   useEffect(() => {
@@ -814,6 +826,8 @@ export default function FeedPage() {
 
     // Load jacket map from pump-phoenix.json (server-side, normalized)
     getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
+    // Load chart key → chart_id mapping for direct chart links
+    getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
   }, [user]);
 
   const loadMore = async () => {
@@ -859,9 +873,9 @@ export default function FeedPage() {
             if (item.type === 'post') {
               return <PostCard key={`post-${item.id}`} post={item} showAuthor={true} />;
             } else if (item.type === 'upscore') {
-              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} onScoreClick={setSelectedScore} />;
+              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} />;
             } else if (item.type === 'clear') {
-              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} onScoreClick={setSelectedScore} />;
+              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} />;
             }
             return null;
           })}
@@ -880,6 +894,7 @@ export default function FeedPage() {
       <ScoreDetailModal
         score={selectedScore}
         jacketUrl={selectedScore?._jacketUrl || ''}
+        chartLink={selectedScore?._chartLink || ''}
         onClose={() => setSelectedScore(null)}
       />
     </div>
