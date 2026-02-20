@@ -290,6 +290,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <SingleCommentPumpButton commentId={r.id} type={commentType} initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                      {user && <button onClick={() => { setReplyTo(c.id); setReplyText(`@${r.username} `); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
                       {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
                     </div>
                   </div>
@@ -300,6 +301,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                   <input className="input-field text-[11px] py-1 flex-1" placeholder="Reply..." value={replyText}
                     onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitReply(c.id)} autoFocus />
                   <button onClick={() => submitReply(c.id)} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
+                  <button onClick={() => { setReplyTo(null); setReplyText(''); }} className="text-[10px] text-gray-600 hover:text-gray-400 font-display px-1">&#10005;</button>
                 </div>
               )}
             </div>

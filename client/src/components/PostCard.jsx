@@ -714,6 +714,11 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                             <div className="flex items-center gap-3 mt-0.5 px-1">
                               <span className="text-[9px] text-gray-600">{timeAgo(r.created_at)}</span>
                               <CommentPumpButton commentId={r.id} type="post" initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                              {user && !disabled && (
+                                <button onClick={() => startReply(c.id, r.username)} className="text-[9px] text-gray-500 hover:text-piu-accent">
+                                  Reply
+                                </button>
+                              )}
                               {user && (r.user_id === user.id || user.id === postAuthorId) && (
                                 <button onClick={() => handleDelete(r.id, true, c.id)} className="text-[9px] text-gray-600 hover:text-red-400">
                                   Delete
