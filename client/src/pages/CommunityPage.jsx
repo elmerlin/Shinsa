@@ -11,7 +11,7 @@ import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
-  getCommunityMembers, searchCommunityMentions,
+  getCommunityMembers, searchCommunityMentions, getPiugameRecentlyPlayed,
 } from '../utils/api';
 
 function timeAgo(dateStr) {
@@ -41,6 +41,317 @@ function getActiveMentionQuery(text, cursor) {
   };
 }
 
+const SLASH_COMMANDS = {
+  summary: {
+    trigger: '/summary',
+    buttonLabel: 'Generate session summary',
+  },
+};
+
+const SUMMARY_SESSION_GAP_MS = 90 * 60 * 1000;
+const SUMMARY_KCAL_PER_SONG = 18;
+const SUMMARY_TOP_SONGS = 3;
+
+function getRankLabel(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return 'SSS+';
+  if (s >= 990000) return 'SSS';
+  if (s >= 985000) return 'SS+';
+  if (s >= 980000) return 'SS';
+  if (s >= 975000) return 'S+';
+  if (s >= 970000) return 'S';
+  if (s >= 960000) return 'AAA+';
+  if (s >= 950000) return 'AAA';
+  if (s >= 925000) return 'AA+';
+  if (s >= 900000) return 'AA';
+  if (s >= 825000) return 'A+';
+  if (s >= 750000) return 'A';
+  if (s >= 650000) return 'B';
+  if (s >= 550000) return 'C';
+  if (s >= 450000) return 'D';
+  return 'F';
+}
+
+function parsePlayedAt(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/[./]/g, '-');
+  const ymd = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
+  );
+  if (ymd) {
+    const y = parseInt(ymd[1], 10);
+    const m = parseInt(ymd[2], 10) - 1;
+    const d = parseInt(ymd[3], 10);
+    const hh = parseInt(ymd[4] || '0', 10);
+    const mm = parseInt(ymd[5] || '0', 10);
+    const ss = parseInt(ymd[6] || '0', 10);
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const ymdLoose = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdLoose) {
+    const y = parseInt(ymdLoose[1], 10);
+    const m = parseInt(ymdLoose[2], 10) - 1;
+    const d = parseInt(ymdLoose[3], 10);
+    const timeMatch = normalized.match(/(\d{1,2})(?::(\d{2}))(?::(\d{2}))?\s*([APap][Mm])?/);
+    let hh = parseInt(timeMatch?.[1] || '0', 10);
+    const mm = parseInt(timeMatch?.[2] || '0', 10);
+    const ss = parseInt(timeMatch?.[3] || '0', 10);
+    const meridiem = String(timeMatch?.[4] || '').toUpperCase();
+    if (meridiem === 'PM' && hh < 12) hh += 12;
+    if (meridiem === 'AM' && hh === 12) hh = 0;
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const md = normalized.match(/^(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (md) {
+    const year = new Date().getFullYear();
+    const m = parseInt(md[1], 10) - 1;
+    const d = parseInt(md[2], 10);
+    const hh = parseInt(md[3] || '0', 10);
+    const mm = parseInt(md[4] || '0', 10);
+    return new Date(year, m, d, hh, mm, 0);
+  }
+
+  const direct = new Date(normalized);
+  if (!Number.isNaN(direct.getTime())) return direct;
+  return null;
+}
+
+function toDayKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parsePlayDayKey(value) {
+  const parsed = parsePlayedAt(value);
+  if (parsed) return toDayKey(parsed);
+
+  const fallback = String(value || '').trim().replace(/[./]/g, '-');
+  const m = fallback.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasSlashCommand(text, trigger) {
+  const pattern = new RegExp(`(^|\\s)${escapeRegExp(trigger)}\\b`, 'i');
+  return pattern.test(String(text || ''));
+}
+
+function stripSlashCommand(text, trigger) {
+  const pattern = new RegExp(`(^|\\s)${escapeRegExp(trigger)}\\b`, 'gi');
+  return String(text || '')
+    .replace(pattern, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function sortRecentPlays(plays) {
+  const rows = Array.isArray(plays) ? plays : [];
+  return rows
+    .map((play, index) => {
+      const parsedAt = parsePlayedAt(play?.date_played);
+      return {
+        ...play,
+        _index: index,
+        _playedAt: parsedAt,
+        _playedAtMs: parsedAt ? parsedAt.getTime() : null,
+        _dayKey: parsedAt ? toDayKey(parsedAt) : parsePlayDayKey(play?.date_played),
+      };
+    })
+    .sort((a, b) => {
+      if (a._playedAtMs !== null && b._playedAtMs !== null && a._playedAtMs !== b._playedAtMs) {
+        return b._playedAtMs - a._playedAtMs;
+      }
+      if (a._playedAtMs !== null) return -1;
+      if (b._playedAtMs !== null) return 1;
+      return b._index - a._index;
+    });
+}
+
+function getMostRecentSession(sortedRows) {
+  if (!Array.isArray(sortedRows) || sortedRows.length === 0) return [];
+  const session = [sortedRows[0]];
+  const sessionDayKey = sortedRows[0]._dayKey;
+
+  for (let i = 1; i < sortedRows.length; i++) {
+    const prev = session[session.length - 1];
+    const current = sortedRows[i];
+
+    if (prev._playedAtMs !== null && current._playedAtMs !== null) {
+      const gap = prev._playedAtMs - current._playedAtMs;
+      if (gap <= SUMMARY_SESSION_GAP_MS) {
+        session.push(current);
+        continue;
+      }
+      break;
+    }
+
+    if (sessionDayKey && current._dayKey === sessionDayKey) {
+      session.push(current);
+      continue;
+    }
+    break;
+  }
+
+  return session;
+}
+
+function formatNumber(value) {
+  return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function modeShort(mode) {
+  if (mode === 'Single') return 'S';
+  if (mode === 'Double') return 'D';
+  return 'X';
+}
+
+function buildMeter(count, total) {
+  const width = 12;
+  const safeTotal = Math.max(1, total);
+  const filled = Math.max(0, Math.min(width, Math.round((count / safeTotal) * width)));
+  return `[${'='.repeat(filled)}${'-'.repeat(width - filled)}]`;
+}
+
+function buildSessionSummary(sessionRows) {
+  if (!Array.isArray(sessionRows) || sessionRows.length === 0) return null;
+
+  let singleCount = 0;
+  let doubleCount = 0;
+  let otherCount = 0;
+  let stageBreakCount = 0;
+  let scoredCount = 0;
+  let scoreTotal = 0;
+  let levelCount = 0;
+  let levelTotal = 0;
+  let totalSteps = 0;
+  let judgedSongCount = 0;
+
+  const judgmentTotals = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
+
+  for (const play of sessionRows) {
+    if (play.mode === 'Single') singleCount += 1;
+    else if (play.mode === 'Double') doubleCount += 1;
+    else otherCount += 1;
+
+    const score = parseInt(play.score, 10) || 0;
+    if (score > 0) {
+      scoredCount += 1;
+      scoreTotal += score;
+    } else {
+      stageBreakCount += 1;
+    }
+
+    const level = parseInt(play.level, 10) || 0;
+    if (level > 0) {
+      levelCount += 1;
+      levelTotal += level;
+    }
+
+    const perfect = parseInt(play.perfect, 10) || 0;
+    const great = parseInt(play.great, 10) || 0;
+    const good = parseInt(play.good, 10) || 0;
+    const bad = parseInt(play.bad, 10) || 0;
+    const miss = parseInt(play.miss, 10) || 0;
+    const steps = perfect + great + good + bad + miss;
+    if (steps > 0) judgedSongCount += 1;
+    totalSteps += steps;
+    judgmentTotals.perfect += perfect;
+    judgmentTotals.great += great;
+    judgmentTotals.good += good;
+    judgmentTotals.bad += bad;
+    judgmentTotals.miss += miss;
+  }
+
+  const songCount = sessionRows.length;
+  const clearCount = songCount - stageBreakCount;
+  const clearRate = songCount > 0 ? Math.round((clearCount / songCount) * 100) : 0;
+  const averageScore = scoredCount > 0 ? Math.round(scoreTotal / scoredCount) : 0;
+  const averageLevel = levelCount > 0 ? (levelTotal / levelCount) : 0;
+  const estimatedKcal = songCount * SUMMARY_KCAL_PER_SONG;
+
+  const sortedByScore = [...sessionRows]
+    .map(play => ({ ...play, _score: parseInt(play.score, 10) || 0 }))
+    .sort((a, b) => b._score - a._score);
+  const topSongs = sortedByScore.filter(play => play._score > 0).slice(0, SUMMARY_TOP_SONGS);
+  const bestPlay = topSongs[0] || null;
+
+  const newest = sessionRows[0]?._playedAt || parsePlayedAt(sessionRows[0]?.date_played);
+  const oldest = sessionRows[sessionRows.length - 1]?._playedAt || parsePlayedAt(sessionRows[sessionRows.length - 1]?.date_played);
+  const sessionDateLabel = newest
+    ? newest.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    : 'Recent session';
+  const sessionTimeRange = newest && oldest
+    ? `${oldest.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${newest.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : '';
+
+  const modeTotal = Math.max(1, singleCount + doubleCount + otherCount);
+  const singlePct = Math.round((singleCount / modeTotal) * 100);
+  const doublePct = Math.round((doubleCount / modeTotal) * 100);
+  const otherPct = Math.max(0, 100 - singlePct - doublePct);
+  const judgmentCoverageLabel = judgedSongCount < songCount
+    ? ` (${judgedSongCount}/${songCount} songs with data)`
+    : '';
+
+  const postLines = [
+    '📊 **Session Summary**',
+    `🗓️ ${sessionDateLabel}${sessionTimeRange ? ` • ${sessionTimeRange}` : ''}`,
+    `🎵 **${songCount} songs** | 🏁 Clears: **${clearCount}/${songCount}** (${clearRate}%)`,
+    `🦶 Judged steps: **${totalSteps.toLocaleString()}**${judgmentCoverageLabel}`,
+    `🔥 Estimated burn: **~${estimatedKcal.toLocaleString()} kcal** (${songCount} x ${SUMMARY_KCAL_PER_SONG})`,
+    '',
+    `🎛️ Mode split: S ${singleCount} ${buildMeter(singleCount, songCount)} | D ${doubleCount} ${buildMeter(doubleCount, songCount)}`,
+    averageLevel > 0 ? `📈 Avg level: **Lv.${averageLevel.toFixed(1)}**` : '',
+    averageScore > 0 ? `🎯 Avg score: **${averageScore.toLocaleString()}**` : '',
+    bestPlay
+      ? `🏆 Best chart: **${bestPlay.song_title}** (${modeShort(bestPlay.mode)}${bestPlay.level || '?'}) • ${(bestPlay.grade || getRankLabel(bestPlay._score))} ${formatNumber(bestPlay._score)}`
+      : '',
+    '',
+    `🧮 Judgment totals: P ${judgmentTotals.perfect.toLocaleString()} | G ${judgmentTotals.great.toLocaleString()} | Good ${judgmentTotals.good.toLocaleString()} | Bad ${judgmentTotals.bad.toLocaleString()} | Miss ${judgmentTotals.miss.toLocaleString()}`,
+    '',
+    'Top plays:',
+    ...topSongs.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | ${(play.grade || getRankLabel(play._score))} ${formatNumber(play._score)}`),
+    songCount > topSongs.length ? `+${songCount - topSongs.length} more from this session` : '',
+  ].filter(Boolean);
+
+  return {
+    songCount,
+    clearCount,
+    clearRate,
+    totalSteps,
+    estimatedKcal,
+    singleCount,
+    doubleCount,
+    otherCount,
+    singlePct,
+    doublePct,
+    otherPct,
+    sessionDateLabel,
+    sessionTimeRange,
+    postText: postLines.join('\n'),
+  };
+}
+
+function SummaryStat({ label, value }) {
+  return (
+    <div className="rounded-lg border border-piu-border/30 bg-piu-dark/50 px-2.5 py-2">
+      <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{label}</p>
+      <p className="text-sm font-display font-bold text-gray-100">{value}</p>
+    </div>
+  );
+}
+
 export default function CommunityPage() {
   const { communityName } = useParams();
   const { user } = useAuth();
@@ -62,6 +373,9 @@ export default function CommunityPage() {
   const [newPostImages, setNewPostImages] = useState([]);
   const [newPostYoutube, setNewPostYoutube] = useState('');
   const [posting, setPosting] = useState(false);
+  const [postSummaryPreview, setPostSummaryPreview] = useState(null);
+  const [postSummaryLoading, setPostSummaryLoading] = useState(false);
+  const [postSummaryError, setPostSummaryError] = useState('');
 
   // Comment state
   const [expandedComments, setExpandedComments] = useState({});
@@ -135,13 +449,41 @@ export default function CommunityPage() {
     } catch (err) { setError(err.message); }
   };
 
+  const handleGeneratePostSummary = async () => {
+    if (!user?.id || postSummaryLoading) return;
+    setPostSummaryError('');
+    setPostSummaryLoading(true);
+    try {
+      const data = await getPiugameRecentlyPlayed(user.id);
+      const sortedRows = sortRecentPlays(data?.plays || []);
+      const sessionRows = getMostRecentSession(sortedRows);
+      if (sessionRows.length === 0) {
+        throw new Error('No recently played data found. Sync recently played first.');
+      }
+      const summary = buildSessionSummary(sessionRows);
+      if (!summary) {
+        throw new Error('Failed to build session summary from recently played data.');
+      }
+      setPostSummaryPreview(summary);
+      setNewPostContent(prev => stripSlashCommand(prev, SLASH_COMMANDS.summary.trigger));
+    } catch (err) {
+      setPostSummaryError(err.message || 'Failed to generate session summary.');
+    } finally {
+      setPostSummaryLoading(false);
+    }
+  };
+
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    if (!newPostContent.trim() && newPostImages.length === 0 && !newPostYoutube) return;
+    const sanitizedContent = stripSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
+    const finalContent = postSummaryPreview
+      ? [sanitizedContent.trim(), postSummaryPreview.postText].filter(Boolean).join('\n\n')
+      : sanitizedContent.trim();
+    if (!finalContent && newPostImages.length === 0 && !newPostYoutube) return;
     setPosting(true);
     try {
       const formData = new FormData();
-      formData.append('content', newPostContent);
+      formData.append('content', finalContent);
       if (newPostYoutube) formData.append('youtube_url', newPostYoutube);
       for (const f of newPostImages) formData.append('images', f);
       const post = await createCommunityPost(community.id, formData);
@@ -149,6 +491,8 @@ export default function CommunityPage() {
       setNewPostContent('');
       setNewPostImages([]);
       setNewPostYoutube('');
+      setPostSummaryPreview(null);
+      setPostSummaryError('');
     } catch (err) { setError(err.message); }
     finally { setPosting(false); }
   };
@@ -363,6 +707,11 @@ export default function CommunityPage() {
             newPostYoutube={newPostYoutube}
             setNewPostYoutube={setNewPostYoutube}
             posting={posting}
+            postSummaryPreview={postSummaryPreview}
+            postSummaryLoading={postSummaryLoading}
+            postSummaryError={postSummaryError}
+            onGeneratePostSummary={handleGeneratePostSummary}
+            onClearPostSummary={() => { setPostSummaryPreview(null); setPostSummaryError(''); }}
             onCreatePost={handleCreatePost}
             onDeletePost={handleDeletePost}
             onPinPost={handlePinPost}
@@ -397,11 +746,17 @@ function PostsTab({
   community, posts, loading, isMember, isModOrOwner, user,
   postSort, setPostSort,
   newPostContent, setNewPostContent, newPostImages, setNewPostImages,
-  newPostYoutube, setNewPostYoutube, posting, onCreatePost,
+  newPostYoutube, setNewPostYoutube, posting,
+  postSummaryPreview, postSummaryLoading, postSummaryError,
+  onGeneratePostSummary, onClearPostSummary, onCreatePost,
   onDeletePost, onPinPost, onPumpPost,
   expandedComments, toggleComments, commentTexts, setCommentTexts,
   replyTo, setReplyTo, onAddComment, onDeleteComment,
 }) {
+  const hasSummaryCommand = hasSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
+  const sanitizedContent = stripSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
+  const canSubmit = !!(sanitizedContent.trim() || newPostImages.length > 0 || newPostYoutube || postSummaryPreview);
+
   return (
     <div>
       {/* Sort toggle */}
@@ -432,9 +787,97 @@ function PostsTab({
             onChange={(e) => setNewPostContent(e.target.value)}
             className="w-full bg-transparent border-none text-white text-sm resize-none focus:outline-none placeholder-gray-600"
             rows={3}
-            placeholder="Share something with the community..."
+            placeholder="Share something with the community... Try /summary"
             maxLength={5000}
           />
+
+          {hasSummaryCommand && !postSummaryPreview && (
+            <div className="mt-2 rounded-lg border border-piu-accent/30 bg-piu-accent/10 p-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-display font-bold text-piu-accent">{SLASH_COMMANDS.summary.trigger} command detected</p>
+                <p className="text-[11px] text-gray-400">Build a recap from your latest recently-played session.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onGeneratePostSummary}
+                disabled={postSummaryLoading}
+                className="px-3 py-1.5 bg-piu-accent rounded-lg text-[11px] font-display font-bold hover:bg-piu-accent/80 transition-colors disabled:opacity-50"
+              >
+                {postSummaryLoading ? 'Generating...' : SLASH_COMMANDS.summary.buttonLabel}
+              </button>
+            </div>
+          )}
+
+          {postSummaryPreview && (
+            <div className="mt-2 rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-display font-bold uppercase tracking-wider text-emerald-300">Session summary preview</p>
+                  <p className="text-xs text-gray-300">
+                    {postSummaryPreview.sessionDateLabel}
+                    {postSummaryPreview.sessionTimeRange ? ` • ${postSummaryPreview.sessionTimeRange}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={onGeneratePostSummary}
+                    disabled={postSummaryLoading}
+                    className="px-2 py-1 rounded border border-cyan-400/40 text-cyan-300 hover:bg-cyan-400/10 text-[10px] font-display font-bold disabled:opacity-50"
+                  >
+                    {postSummaryLoading ? 'Generating...' : 'Regenerate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClearPostSummary}
+                    className="px-2 py-1 rounded border border-red-400/40 text-red-300 hover:bg-red-400/10 text-[10px] font-display font-bold"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                <SummaryStat label="Songs" value={postSummaryPreview.songCount} />
+                <SummaryStat label="Clears" value={`${postSummaryPreview.clearCount} (${postSummaryPreview.clearRate}%)`} />
+                <SummaryStat label="Steps" value={postSummaryPreview.totalSteps.toLocaleString()} />
+                <SummaryStat label="Calories" value={`~${postSummaryPreview.estimatedKcal.toLocaleString()} kcal`} />
+              </div>
+
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
+                  <span>Mode split</span>
+                  <span>
+                    S {postSummaryPreview.singleCount} | D {postSummaryPreview.doubleCount}
+                    {postSummaryPreview.otherCount > 0 ? ` | X ${postSummaryPreview.otherCount}` : ''}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full overflow-hidden bg-piu-dark border border-piu-border/40 flex">
+                  {postSummaryPreview.singlePct > 0 && (
+                    <div className="h-full bg-red-500/80" style={{ width: `${postSummaryPreview.singlePct}%` }} />
+                  )}
+                  {postSummaryPreview.doublePct > 0 && (
+                    <div className="h-full bg-green-500/80" style={{ width: `${postSummaryPreview.doublePct}%` }} />
+                  )}
+                  {postSummaryPreview.otherPct > 0 && (
+                    <div className="h-full bg-blue-500/80" style={{ width: `${postSummaryPreview.otherPct}%` }} />
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-piu-border/30">
+                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Post preview</p>
+                <div className="mt-1 text-xs text-gray-200 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto pr-1">
+                  {postSummaryPreview.postText}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {postSummaryError && (
+            <p className="mt-2 text-xs text-red-400">{postSummaryError}</p>
+          )}
+
           {/* Image previews */}
           {newPostImages.length > 0 && (
             <div className="flex gap-2 mt-2 flex-wrap">
@@ -474,7 +917,7 @@ function PostsTab({
             </div>
             <button
               type="submit"
-              disabled={posting || (!newPostContent.trim() && newPostImages.length === 0 && !newPostYoutube)}
+              disabled={posting || !canSubmit}
               className="px-4 py-1.5 bg-piu-accent rounded-lg text-xs font-display font-bold hover:bg-piu-accent/80 transition-colors disabled:opacity-40"
             >
               {posting ? 'Posting...' : 'Post'}
