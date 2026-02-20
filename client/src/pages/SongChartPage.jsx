@@ -363,12 +363,13 @@ export default function SongChartPage() {
               <p className="text-sm text-gray-200 break-words whitespace-normal">{chart.artist || 'Unknown artist'}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {(chart.skills || []).map((skill) => (
-                  <span
+                  <Link
                     key={skill.slug}
-                    className="inline-flex items-center px-2 py-1 rounded-full text-[11px] border border-emerald-300/45 bg-emerald-500/15 text-emerald-200 font-display font-bold"
+                    to={`/skill/${encodeURIComponent(skill.slug)}`}
+                    className="inline-flex items-center px-2 py-1 rounded-full text-[11px] border border-emerald-300/45 bg-emerald-500/15 text-emerald-200 font-display font-bold hover:border-emerald-200/60 hover:bg-emerald-500/25 transition-colors"
                   >
                     {skill.name}
-                  </span>
+                  </Link>
                 ))}
                 {(chart.skills || []).length === 0 && (
                   <span className="inline-flex items-center px-2 py-1 rounded-full text-[11px] border border-piu-border/40 bg-piu-dark/55 text-gray-400">

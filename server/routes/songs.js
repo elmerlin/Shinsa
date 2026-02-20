@@ -11,6 +11,7 @@ let cachedJacketMap = null;
 let cachedSongAliases = null;
 let cachedSongCatalogByModes = new Map();
 let cachedSongCatalogVersion = '';
+let cachedSkillMetadataBySlug = null;
 
 const SCORE_TO_GRADE = [
   { min: 995000, grade: 'SSS+' },
@@ -70,6 +71,10 @@ const KNOWN_CHART_SKILLS = [
   { slug: 'sustained', name: 'sustained' },
 ];
 const KNOWN_SKILL_NAME_BY_SLUG = new Map(KNOWN_CHART_SKILLS.map((skill) => [skill.slug, skill.name]));
+const PIUCENTER_SKILL_BASE_URL = 'https://www.piucenter.com/skill';
+const SKILL_METADATA_PATH = path.join(__dirname, '..', 'data', 'piucenter-skill-metadata.json');
+const SKILL_ELIGIBLE_WHERE_SQL = "((s.mode = 'Single' AND s.level > 6) OR (s.mode = 'Double' AND s.level > 9))";
+const SKILL_SORTS = new Set(['level_asc', 'level_desc', 'score_asc', 'score_desc']);
 
 const LEVEL_BASE_RATING = {
   10: 100,
@@ -164,6 +169,92 @@ function getSkillNameForSlug(slug, fallbackName = '') {
   const normalizedFallback = normalizeSkillName(fallbackName);
   if (normalizedFallback) return normalizedFallback;
   return humanizeSkillSlug(normalizedSlug);
+}
+
+function loadSkillMetadataBySlug() {
+  if (cachedSkillMetadataBySlug) return cachedSkillMetadataBySlug;
+
+  const metadata = new Map();
+  if (!fs.existsSync(SKILL_METADATA_PATH)) {
+    cachedSkillMetadataBySlug = metadata;
+    return metadata;
+  }
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(SKILL_METADATA_PATH, 'utf-8'));
+    const skills = Array.isArray(payload?.skills) ? payload.skills : [];
+
+    for (const row of skills) {
+      const slug = normalizeSkillSlug(row?.slug);
+      if (!slug) continue;
+
+      const descriptionSegments = [];
+      if (Array.isArray(row?.description_segments)) {
+        for (const segment of row.description_segments) {
+          if (!segment || typeof segment !== 'object') continue;
+
+          if (segment.type === 'image') {
+            const url = String(segment.url || '').trim();
+            if (!url) continue;
+            descriptionSegments.push({
+              type: 'image',
+              url,
+              alt: String(segment.alt || '').trim(),
+            });
+            continue;
+          }
+
+          if (segment.type === 'text') {
+            const text = String(segment.text || '');
+            if (!text) continue;
+            descriptionSegments.push({
+              type: 'text',
+              text,
+            });
+          }
+        }
+      }
+
+      const imageSet = new Set();
+      const patternImages = [];
+
+      for (const imageUrl of Array.isArray(row?.pattern_images) ? row.pattern_images : []) {
+        const url = String(imageUrl || '').trim();
+        if (!url || imageSet.has(url)) continue;
+        imageSet.add(url);
+        patternImages.push(url);
+      }
+
+      if (patternImages.length === 0) {
+        for (const segment of descriptionSegments) {
+          if (segment.type !== 'image') continue;
+          if (imageSet.has(segment.url)) continue;
+          imageSet.add(segment.url);
+          patternImages.push(segment.url);
+        }
+      }
+
+      metadata.set(slug, {
+        slug,
+        name: getSkillNameForSlug(slug, row?.name),
+        description_text: String(row?.description_text || '').trim(),
+        description_segments: descriptionSegments,
+        pattern_images: patternImages,
+        source_url: String(row?.url || row?.source_url || `${PIUCENTER_SKILL_BASE_URL}/${slug}`),
+      });
+    }
+  } catch (err) {
+    console.warn('Failed to load piucenter-skill-metadata.json:', err.message);
+  }
+
+  cachedSkillMetadataBySlug = metadata;
+  return metadata;
+}
+
+function getSkillMetadata(slug) {
+  const normalizedSlug = normalizeSkillSlug(slug);
+  if (!normalizedSlug) return null;
+  return loadSkillMetadataBySlug().get(normalizedSlug) || null;
 }
 
 function queryChartSkills(db, chartId) {
@@ -837,6 +928,52 @@ function parseLevelQuery(levelRaw) {
   return Number.isFinite(level) && level > 0 ? level : null;
 }
 
+function parseLevelBound(levelRaw) {
+  if (levelRaw === undefined || levelRaw === null || levelRaw === '') return null;
+  const level = parseInt(levelRaw, 10);
+  return Number.isFinite(level) && level > 0 ? level : null;
+}
+
+function normalizeSkillSort(sortRaw) {
+  const normalized = String(sortRaw || '').trim().toLowerCase();
+  if (SKILL_SORTS.has(normalized)) return normalized;
+  return 'level_asc';
+}
+
+function compareSkillChartBase(a, b) {
+  if ((a.level || 0) !== (b.level || 0)) return (a.level || 0) - (b.level || 0);
+  const modeOrder = { Single: 0, Double: 1 };
+  const modeA = modeOrder[a.mode] ?? 99;
+  const modeB = modeOrder[b.mode] ?? 99;
+  if (modeA !== modeB) return modeA - modeB;
+  const titleCompare = String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+  if (titleCompare !== 0) return titleCompare;
+  return (a.chart_id || 0) - (b.chart_id || 0);
+}
+
+function compareSkillCharts(a, b, sort) {
+  const aScore = Number.isFinite(a.best_score) ? a.best_score : null;
+  const bScore = Number.isFinite(b.best_score) ? b.best_score : null;
+
+  if (sort === 'level_desc') {
+    const levelDiff = (b.level || 0) - (a.level || 0);
+    if (levelDiff !== 0) return levelDiff;
+    return compareSkillChartBase(a, b);
+  }
+
+  if (sort === 'score_asc' || sort === 'score_desc') {
+    const direction = sort === 'score_asc' ? 1 : -1;
+    if (aScore === null && bScore !== null) return 1;
+    if (aScore !== null && bScore === null) return -1;
+    if (aScore !== null && bScore !== null && aScore !== bScore) {
+      return (aScore - bScore) * direction;
+    }
+    return compareSkillChartBase(a, b);
+  }
+
+  return compareSkillChartBase(a, b);
+}
+
 function normalizeTierName(name) {
   const compact = String(name || '').trim().toLowerCase().replace(/[^a-z]/g, '');
   if (!compact) return '';
@@ -948,6 +1085,7 @@ function invalidateSongCaches() {
   cachedJacketMap = null;
   cachedSongCatalogByModes = new Map();
   cachedSongCatalogVersion = '';
+  cachedSkillMetadataBySlug = null;
 }
 
 // GET /api/songs/jacket-map — return song name → local jacket URL mapping
@@ -996,8 +1134,9 @@ router.get('/skills/meta', (req, res) => {
 
   const totalChartRow = db.prepare(`
     SELECT COUNT(*) as count
-    FROM songs
-    WHERE mode IN ('Single', 'Double')
+    FROM songs s
+    WHERE s.mode IN ('Single', 'Double')
+      AND ${SKILL_ELIGIBLE_WHERE_SQL}
   `).get();
 
   const withSkillsRow = db.prepare(`
@@ -1005,6 +1144,7 @@ router.get('/skills/meta', (req, res) => {
     FROM songs s
     JOIN chart_skills cs ON cs.chart_id = s.id
     WHERE s.mode IN ('Single', 'Double')
+      AND ${SKILL_ELIGIBLE_WHERE_SQL}
   `).get();
 
   const totalCharts = parseInt(totalChartRow?.count, 10) || 0;
@@ -1028,7 +1168,7 @@ router.get('/skills/missing', (req, res) => {
   let modeFilter = ['Single', 'Double'];
   if (modeRaw && modeRaw !== 'both' && modeRaw !== 'all') {
     const mode = normalizeMode(modeRaw);
-    if (!mode) return res.status(400).json({ error: 'Invalid mode filter' });
+    if (!mode || mode === 'CoOp') return res.status(400).json({ error: 'Invalid mode filter' });
     modeFilter = [mode];
   }
 
@@ -1043,7 +1183,7 @@ router.get('/skills/missing', (req, res) => {
   const offset = Number.isFinite(offsetRaw) && offsetRaw >= 0 ? offsetRaw : 0;
 
   const modePlaceholders = modeFilter.map(() => '?').join(', ');
-  const whereClauses = [`s.mode IN (${modePlaceholders})`, 'cs.chart_id IS NULL'];
+  const whereClauses = [SKILL_ELIGIBLE_WHERE_SQL, `s.mode IN (${modePlaceholders})`, 'cs.chart_id IS NULL'];
   const params = [...modeFilter];
 
   if (levelFilter) {
@@ -1101,6 +1241,147 @@ router.get('/skills/missing', (req, res) => {
       flags: row.flags || '',
       skills: [],
     })),
+  });
+});
+
+// GET /api/songs/skill/:skillSlug — charts tagged with a specific skill
+router.get('/skill/:skillSlug', optionalAuth, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const skillSlug = normalizeSkillSlug(req.params.skillSlug);
+  if (!skillSlug) return res.status(400).json({ error: 'Invalid skill slug' });
+
+  const modeRaw = String(req.query.mode || '').trim().toLowerCase();
+  let modeFilter = ['Single', 'Double'];
+  if (modeRaw && modeRaw !== 'both' && modeRaw !== 'all') {
+    const mode = normalizeMode(modeRaw);
+    if (!mode || mode === 'CoOp') return res.status(400).json({ error: 'Invalid mode filter' });
+    modeFilter = [mode];
+  }
+
+  const minLevel = parseLevelBound(req.query.min_level);
+  const maxLevel = parseLevelBound(req.query.max_level);
+  if (minLevel && maxLevel && minLevel > maxLevel) {
+    return res.status(400).json({ error: 'min_level cannot exceed max_level' });
+  }
+
+  const sort = normalizeSkillSort(req.query.sort);
+  const targetUserId = String(req.query.user_id || req.user?.id || '').trim();
+
+  const modePlaceholders = modeFilter.map(() => '?').join(', ');
+  const whereClauses = [
+    SKILL_ELIGIBLE_WHERE_SQL,
+    `s.mode IN (${modePlaceholders})`,
+    '(cs.skill_slug = ? OR LOWER(cs.skill_slug) = ? OR cs.skill_slug LIKE ?)',
+  ];
+  const params = [...modeFilter, skillSlug, skillSlug, `%/skill/${skillSlug}`];
+
+  if (minLevel) {
+    whereClauses.push('s.level >= ?');
+    params.push(minLevel);
+  }
+  if (maxLevel) {
+    whereClauses.push('s.level <= ?');
+    params.push(maxLevel);
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      s.id as chart_id,
+      s.title,
+      s.artist,
+      s.mode,
+      s.level,
+      s.jacket_url,
+      s.bpm,
+      s.song_key,
+      s.flags,
+      cs.skill_slug,
+      cs.skill_name
+    FROM songs s
+    JOIN chart_skills cs ON cs.chart_id = s.id
+    WHERE ${whereClauses.join(' AND ')}
+  `).all(...params);
+
+  const chartsById = new Map();
+  let resolvedSkillName = '';
+  for (const row of rows) {
+    const rowSlug = normalizeSkillSlug(row.skill_slug);
+    if (rowSlug !== skillSlug) continue;
+    if (!resolvedSkillName) resolvedSkillName = getSkillNameForSlug(rowSlug, row.skill_name);
+
+    const chartId = parseInt(row.chart_id, 10) || 0;
+    if (!chartId || chartsById.has(chartId)) continue;
+
+    const mode = normalizeMode(row.mode);
+    const level = parseInt(row.level, 10) || 0;
+    if (!mode || level <= 0) continue;
+
+    chartsById.set(chartId, {
+      chart_id: chartId,
+      title: row.title,
+      artist: row.artist || '',
+      mode,
+      level,
+      jacket_url: row.jacket_url || '',
+      bpm: row.bpm || '',
+      song_key: row.song_key || '',
+      flags: row.flags || '',
+      key: makeChartKey(row.title, mode, level, aliases),
+    });
+  }
+
+  let bestByChart = new Map();
+  if (targetUserId) {
+    const songCatalog = getSongCatalog(db, aliases);
+    bestByChart = buildUserBestByChartMap({
+      bestScores: queryUserBestScores(db, targetUserId),
+      recentScores: queryUserRecentScores(db, targetUserId),
+      pumbilityScores: queryUserPumbilityScores(db, targetUserId),
+      aliases,
+      validChartKeys: songCatalog.chartsByKey,
+    }).bestByChart;
+  }
+
+  const charts = Array.from(chartsById.values()).map((chart) => {
+    const best = chart.key ? (bestByChart.get(chart.key) || null) : null;
+    return {
+      chart_id: chart.chart_id,
+      title: chart.title,
+      artist: chart.artist,
+      mode: chart.mode,
+      level: chart.level,
+      jacket_url: chart.jacket_url,
+      bpm: chart.bpm,
+      song_key: chart.song_key,
+      flags: chart.flags,
+      best_score: best ? best.score : null,
+      best_grade: best ? (best.grade || '') : '',
+      is_pass: best ? !!best.is_pass : false,
+      is_stage_break: best ? !!best.is_stage_break : false,
+      date_played: best ? (best.date_played || '') : '',
+    };
+  });
+
+  charts.sort((a, b) => compareSkillCharts(a, b, sort));
+  const skillMetadata = getSkillMetadata(skillSlug);
+
+  res.json({
+    skill: {
+      slug: skillSlug,
+      name: skillMetadata?.name || resolvedSkillName || getSkillNameForSlug(skillSlug),
+      description_text: skillMetadata?.description_text || '',
+      description_segments: skillMetadata?.description_segments || [],
+      pattern_images: skillMetadata?.pattern_images || [],
+      source_url: skillMetadata?.source_url || `${PIUCENTER_SKILL_BASE_URL}/${skillSlug}`,
+    },
+    total_charts: charts.length,
+    mode_filter: modeFilter,
+    min_level: minLevel,
+    max_level: maxLevel,
+    sort,
+    user_id: targetUserId || '',
+    charts,
   });
 });
 

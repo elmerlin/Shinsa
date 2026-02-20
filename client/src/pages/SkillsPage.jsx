@@ -302,7 +302,7 @@ export default function SkillsPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">SKILL COVERAGE</h1>
-          <p className="text-xs text-gray-500">Charts missing PIU Center skill tags and manual skill assignment tools</p>
+          <p className="text-xs text-gray-500">Charts missing PIU Center skill tags (Single 7+ and Double 10+) and manual skill assignment tools</p>
         </div>
         <Link to="/songs" className="text-sm text-piu-accent hover:underline">Back to Songs</Link>
       </div>
@@ -310,7 +310,7 @@ export default function SkillsPage() {
       {meta?.totals && (
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="rounded-lg border border-piu-border/50 bg-piu-card/60 p-3">
-            <p className="text-[10px] text-gray-500">Charts (S + D)</p>
+            <p className="text-[10px] text-gray-500">Eligible Charts (S7+ / D10+)</p>
             <p className="text-lg font-mono">{(meta.totals.total_charts || 0).toLocaleString()}</p>
           </div>
           <div className="rounded-lg border border-piu-border/50 bg-piu-card/60 p-3">
@@ -342,7 +342,6 @@ export default function SkillsPage() {
             <option value="both">Single + Double</option>
             <option value="single">Single</option>
             <option value="double">Double</option>
-            <option value="coop">CoOp</option>
           </select>
           <input
             value={level}

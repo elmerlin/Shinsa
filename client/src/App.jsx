@@ -33,6 +33,7 @@ import SongChartPage from './pages/SongChartPage';
 import HeadToHeadPage from './pages/HeadToHeadPage';
 import TiersPage from './pages/TiersPage';
 import SkillsPage from './pages/SkillsPage';
+import SkillChartsPage from './pages/SkillChartsPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -484,7 +485,7 @@ export default function App() {
           <Route path="/songs" element={<SongsPage />} />
           <Route path="/songs/chart/:chartId" element={<SongChartPage />} />
           <Route path="/skill" element={<SkillsPage />} />
-          <Route path="/skills" element={<SkillsPage />} />
+          <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
           <Route path="/tiers" element={<TiersPage />} />
           <Route path="/head-to-head" element={<HeadToHeadPage />} />
         </Routes>

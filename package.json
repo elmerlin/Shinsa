@@ -12,6 +12,7 @@
     "piu:aliases": "node server/scripts/generatePiugameSongAliases.js --date=202602 --mode=total",
     "piu:tiers:import": "node server/scripts/importPiuScoresTierLists.js --tier-list-type=Pass",
     "piu:skills:import": "node server/scripts/importPiuCenterSkills.js",
+    "piu:skills:metadata": "node server/scripts/scrapePiuCenterSkillMetadata.js",
     "start": "node server/index.js"
   },
   "dependencies": {
