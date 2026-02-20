@@ -445,36 +445,63 @@ router.get('/posts/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const postId = parseInt(req.params.id);
 
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar,
-           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'post' AND comment_id = c.id) as pump_count
+  // Fetch all comments (parents + replies) in a single query
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
     FROM post_comments c
     JOIN users u ON c.user_id = u.id
-    WHERE c.post_id = ? AND c.parent_id IS NULL
+    WHERE c.post_id = ?
     ORDER BY c.created_at ASC
   `).all(postId);
 
-  // Attach replies and pump status
-  for (const comment of comments) {
-    if (req.user) {
-      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('post', comment.id, req.user.id);
+  if (allComments.length === 0) return res.json([]);
+
+  const commentIds = allComments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  // Batch pump counts
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt
+    FROM comment_pumps
+    WHERE comment_type = 'post' AND comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  // Batch user pump status
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id
+      FROM comment_pumps
+      WHERE comment_type = 'post' AND user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
+  }
+
+  // Assemble: attach pump data and group into parent/replies
+  for (const c of allComments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+  }
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of allComments) {
+    if (!c.parent_id) {
+      c.replies = [];
+      topLevel.push(c);
+      replyMap[c.id] = c.replies;
     }
-    comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar,
-             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'post' AND comment_id = c.id) as pump_count
-      FROM post_comments c
-      JOIN users u ON c.user_id = u.id
-      WHERE c.parent_id = ?
-      ORDER BY c.created_at ASC
-    `).all(comment.id);
-    if (req.user) {
-      for (const reply of comment.replies) {
-        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('post', reply.id, req.user.id);
-      }
+  }
+  for (const c of allComments) {
+    if (c.parent_id && replyMap[c.parent_id]) {
+      replyMap[c.parent_id].push(c);
     }
   }
 
-  res.json(comments);
+  res.json(topLevel);
 });
 
 // POST /api/social/posts/:id/comments — add a comment
@@ -757,33 +784,51 @@ router.post('/upscores/:id/pump', requireAuth, (req, res) => {
 router.get('/upscores/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const upscoreId = parseInt(req.params.id);
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar,
-           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'upscore' AND comment_id = c.id) as pump_count
+
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
     FROM upscore_comments c JOIN users u ON c.user_id = u.id
-    WHERE c.upscore_id = ? AND c.parent_id IS NULL
+    WHERE c.upscore_id = ?
     ORDER BY c.created_at ASC
   `).all(upscoreId);
 
-  for (const comment of comments) {
-    if (req.user) {
-      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('upscore', comment.id, req.user.id);
-    }
-    comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar,
-             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'upscore' AND comment_id = c.id) as pump_count
-      FROM upscore_comments c JOIN users u ON c.user_id = u.id
-      WHERE c.parent_id = ?
-      ORDER BY c.created_at ASC
-    `).all(comment.id);
-    if (req.user) {
-      for (const reply of comment.replies) {
-        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('upscore', reply.id, req.user.id);
-      }
-    }
+  if (allComments.length === 0) return res.json([]);
+
+  const commentIds = allComments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt FROM comment_pumps
+    WHERE comment_type = 'upscore' AND comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id FROM comment_pumps
+      WHERE comment_type = 'upscore' AND user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
   }
 
-  res.json(comments);
+  for (const c of allComments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+  }
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of allComments) {
+    if (!c.parent_id) { c.replies = []; topLevel.push(c); replyMap[c.id] = c.replies; }
+  }
+  for (const c of allComments) {
+    if (c.parent_id && replyMap[c.parent_id]) replyMap[c.parent_id].push(c);
+  }
+
+  res.json(topLevel);
 });
 
 // POST /api/social/upscores/:id/comments
@@ -895,33 +940,51 @@ router.post('/clears/:id/pump', requireAuth, (req, res) => {
 router.get('/clears/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const clearId = parseInt(req.params.id);
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar,
-           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'clear' AND comment_id = c.id) as pump_count
+
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
     FROM new_clear_comments c JOIN users u ON c.user_id = u.id
-    WHERE c.clear_id = ? AND c.parent_id IS NULL
+    WHERE c.clear_id = ?
     ORDER BY c.created_at ASC
   `).all(clearId);
 
-  for (const comment of comments) {
-    if (req.user) {
-      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('clear', comment.id, req.user.id);
-    }
-    comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar,
-             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'clear' AND comment_id = c.id) as pump_count
-      FROM new_clear_comments c JOIN users u ON c.user_id = u.id
-      WHERE c.parent_id = ?
-      ORDER BY c.created_at ASC
-    `).all(comment.id);
-    if (req.user) {
-      for (const reply of comment.replies) {
-        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('clear', reply.id, req.user.id);
-      }
-    }
+  if (allComments.length === 0) return res.json([]);
+
+  const commentIds = allComments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt FROM comment_pumps
+    WHERE comment_type = 'clear' AND comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id FROM comment_pumps
+      WHERE comment_type = 'clear' AND user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
   }
 
-  res.json(comments);
+  for (const c of allComments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+  }
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of allComments) {
+    if (!c.parent_id) { c.replies = []; topLevel.push(c); replyMap[c.id] = c.replies; }
+  }
+  for (const c of allComments) {
+    if (c.parent_id && replyMap[c.parent_id]) replyMap[c.parent_id].push(c);
+  }
+
+  res.json(topLevel);
 });
 
 // POST /api/social/clears/:id/comments

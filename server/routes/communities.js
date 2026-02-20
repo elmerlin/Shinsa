@@ -830,28 +830,56 @@ router.get('/:id/posts/:postId/comments', optionalAuth, (req, res) => {
   if (!access.ok) return res.status(access.status).json({ error: access.error });
 
   const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar as user_avatar,
-           (SELECT COUNT(*) FROM community_comment_pumps WHERE comment_id = c.id) as pump_count
+    SELECT c.*, u.username, u.avatar as user_avatar
     FROM community_post_comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.post_id = ?
     ORDER BY c.created_at ASC
   `).all(req.params.postId);
 
-  // Attach author tags and user pump status
-  for (const comment of comments) {
-    comment.author_tags = db.prepare(`
-      SELECT ct.id, ct.name, ct.color, ct.text_color
-      FROM community_member_tags cmt
-      JOIN community_tags ct ON cmt.tag_id = ct.id
-      WHERE cmt.community_id = ? AND cmt.user_id = ?
-    `).all(req.params.id, comment.user_id);
+  if (comments.length === 0) return res.json([]);
 
-    if (req.user) {
-      comment.user_pumped = !!db.prepare(
-        'SELECT 1 FROM community_comment_pumps WHERE comment_id = ? AND user_id = ?'
-      ).get(comment.id, req.user.id);
-    }
+  const commentIds = comments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  // Batch pump counts
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt FROM community_comment_pumps
+    WHERE comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  // Batch user pump status
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id FROM community_comment_pumps
+      WHERE user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
+  }
+
+  // Batch author tags — get all tags for distinct user_ids in this community
+  const uniqueUserIds = [...new Set(comments.map(c => c.user_id))];
+  const userPlaceholders = uniqueUserIds.map(() => '?').join(',');
+  const allTags = db.prepare(`
+    SELECT cmt.user_id, ct.id, ct.name, ct.color, ct.text_color
+    FROM community_member_tags cmt
+    JOIN community_tags ct ON cmt.tag_id = ct.id
+    WHERE cmt.community_id = ? AND cmt.user_id IN (${userPlaceholders})
+  `).all(req.params.id, ...uniqueUserIds);
+  const tagMap = {};
+  for (const tag of allTags) {
+    if (!tagMap[tag.user_id]) tagMap[tag.user_id] = [];
+    tagMap[tag.user_id].push({ id: tag.id, name: tag.name, color: tag.color, text_color: tag.text_color });
+  }
+
+  for (const c of comments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+    c.author_tags = tagMap[c.user_id] || [];
   }
 
   res.json(comments);
