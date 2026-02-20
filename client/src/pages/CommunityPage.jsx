@@ -11,7 +11,7 @@ import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
-  getCommunityMembers, searchCommunityMentions, getPiugameRecentlyPlayed,
+  getCommunityMembers, searchCommunityMentions, getPiugameRecentlyPlayed, getJacketMap,
 } from '../utils/api';
 
 function timeAgo(dateStr) {
@@ -70,6 +70,20 @@ function getRankLabel(score) {
   if (s >= 550000) return 'C';
   if (s >= 450000) return 'D';
   return 'F';
+}
+
+function getGradeColorClass(grade) {
+  const normalized = String(grade || '').toUpperCase();
+  if (normalized.includes('SSS')) return 'text-sky-300';
+  if (normalized.includes('SS')) return 'text-piu-gold';
+  if (normalized.includes('S')) return 'text-amber-400';
+  if (normalized.includes('AAA')) return 'text-piu-silver';
+  if (normalized.includes('AA')) return 'text-piu-bronze';
+  if (normalized === 'A+' || normalized === 'A') return 'text-amber-500';
+  if (normalized === 'B') return 'text-gray-300';
+  if (normalized === 'C') return 'text-gray-400';
+  if (normalized === 'D' || normalized === 'F') return 'text-gray-500';
+  return 'text-gray-300';
 }
 
 function parsePlayedAt(value) {
@@ -217,15 +231,55 @@ function modeShort(mode) {
   return 'X';
 }
 
-function buildMeter(count, total) {
-  const width = 12;
-  const safeTotal = Math.max(1, total);
-  const filled = Math.max(0, Math.min(width, Math.round((count / safeTotal) * width)));
-  return `[${'='.repeat(filled)}${'-'.repeat(width - filled)}]`;
+function normalizeSongKey(title) {
+  return String(title || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function buildSessionSummary(sessionRows) {
+function getJacketForPlay(play, jacketLookup) {
+  const norm = normalizeSongKey(play?.song_title);
+  const exactKey = `${norm}|${play?.mode || ''}|${play?.level || ''}`;
+  return jacketLookup?.[exactKey] || jacketLookup?.[norm] || '';
+}
+
+function toScore(play) {
+  return parseInt(play?.score, 10) || 0;
+}
+
+function toLevel(play) {
+  return parseInt(play?.level, 10) || 0;
+}
+
+function getPlayRating(play) {
+  const scoreRatio = Math.max(0, Math.min(1, toScore(play) / 1000000));
+  const levelRatio = Math.max(0, Math.min(1, toLevel(play) / 28));
+  const perfect = parseInt(play?.perfect, 10) || 0;
+  const great = parseInt(play?.great, 10) || 0;
+  const good = parseInt(play?.good, 10) || 0;
+  const bad = parseInt(play?.bad, 10) || 0;
+  const miss = parseInt(play?.miss, 10) || 0;
+  const steps = perfect + great + good + bad + miss;
+  const accuracyRatio = steps > 0
+    ? (perfect + great * 0.7 + good * 0.4 + bad * 0.1) / steps
+    : scoreRatio;
+  return (accuracyRatio * 0.65 + scoreRatio * 0.2 + levelRatio * 0.15) * 100;
+}
+
+function buildSessionSummary(sessionRows, jacketLookup = {}) {
   if (!Array.isArray(sessionRows) || sessionRows.length === 0) return null;
+
+  const enrichedRows = sessionRows.map((play) => {
+    const score = toScore(play);
+    const level = toLevel(play);
+    const rating = getPlayRating(play);
+    return {
+      ...play,
+      _score: score,
+      _level: level,
+      _rating: rating,
+      _jacketUrl: getJacketForPlay(play, jacketLookup),
+      _grade: play?.grade || getRankLabel(score),
+    };
+  });
 
   let singleCount = 0;
   let doubleCount = 0;
@@ -240,12 +294,12 @@ function buildSessionSummary(sessionRows) {
 
   const judgmentTotals = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
 
-  for (const play of sessionRows) {
+  for (const play of enrichedRows) {
     if (play.mode === 'Single') singleCount += 1;
     else if (play.mode === 'Double') doubleCount += 1;
     else otherCount += 1;
 
-    const score = parseInt(play.score, 10) || 0;
+    const score = play._score;
     if (score > 0) {
       scoredCount += 1;
       scoreTotal += score;
@@ -253,7 +307,7 @@ function buildSessionSummary(sessionRows) {
       stageBreakCount += 1;
     }
 
-    const level = parseInt(play.level, 10) || 0;
+    const level = play._level;
     if (level > 0) {
       levelCount += 1;
       levelTotal += level;
@@ -274,21 +328,28 @@ function buildSessionSummary(sessionRows) {
     judgmentTotals.miss += miss;
   }
 
-  const songCount = sessionRows.length;
+  const songCount = enrichedRows.length;
   const clearCount = songCount - stageBreakCount;
   const clearRate = songCount > 0 ? Math.round((clearCount / songCount) * 100) : 0;
   const averageScore = scoredCount > 0 ? Math.round(scoreTotal / scoredCount) : 0;
   const averageLevel = levelCount > 0 ? (levelTotal / levelCount) : 0;
   const estimatedKcal = songCount * SUMMARY_KCAL_PER_SONG;
+  const perfectRate = totalSteps > 0 ? Math.round((judgmentTotals.perfect / totalSteps) * 100) : 0;
 
-  const sortedByScore = [...sessionRows]
-    .map(play => ({ ...play, _score: parseInt(play.score, 10) || 0 }))
+  const sortedByScore = [...enrichedRows]
     .sort((a, b) => b._score - a._score);
-  const topSongs = sortedByScore.filter(play => play._score > 0).slice(0, SUMMARY_TOP_SONGS);
-  const bestPlay = topSongs[0] || null;
+  const topSongsByScore = sortedByScore.filter(play => play._score > 0).slice(0, SUMMARY_TOP_SONGS);
+  const topSongsByRating = [...enrichedRows]
+    .filter(play => play._score > 0)
+    .sort((a, b) => {
+      if (b._rating !== a._rating) return b._rating - a._rating;
+      return b._score - a._score;
+    })
+    .slice(0, SUMMARY_TOP_SONGS);
+  const bestPlay = topSongsByScore[0] || null;
 
-  const newest = sessionRows[0]?._playedAt || parsePlayedAt(sessionRows[0]?.date_played);
-  const oldest = sessionRows[sessionRows.length - 1]?._playedAt || parsePlayedAt(sessionRows[sessionRows.length - 1]?.date_played);
+  const newest = enrichedRows[0]?._playedAt || parsePlayedAt(enrichedRows[0]?.date_played);
+  const oldest = enrichedRows[enrichedRows.length - 1]?._playedAt || parsePlayedAt(enrichedRows[enrichedRows.length - 1]?.date_played);
   const sessionDateLabel = newest
     ? newest.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
     : 'Recent session';
@@ -309,20 +370,26 @@ function buildSessionSummary(sessionRows) {
     `🗓️ ${sessionDateLabel}${sessionTimeRange ? ` • ${sessionTimeRange}` : ''}`,
     `🎵 **${songCount} songs** | 🏁 Clears: **${clearCount}/${songCount}** (${clearRate}%)`,
     `🦶 Judged steps: **${totalSteps.toLocaleString()}**${judgmentCoverageLabel}`,
-    `🔥 Estimated burn: **~${estimatedKcal.toLocaleString()} kcal** (${songCount} x ${SUMMARY_KCAL_PER_SONG})`,
+    `🔥 Estimated calories: **~${estimatedKcal.toLocaleString()} kcal**`,
     '',
-    `🎛️ Mode split: S ${singleCount} ${buildMeter(singleCount, songCount)} | D ${doubleCount} ${buildMeter(doubleCount, songCount)}`,
+    `🎛️ Mode split: S ${singleCount} | D ${doubleCount}${otherCount > 0 ? ` | X ${otherCount}` : ''}`,
     averageLevel > 0 ? `📈 Avg level: **Lv.${averageLevel.toFixed(1)}**` : '',
     averageScore > 0 ? `🎯 Avg score: **${averageScore.toLocaleString()}**` : '',
     bestPlay
       ? `🏆 Best chart: **${bestPlay.song_title}** (${modeShort(bestPlay.mode)}${bestPlay.level || '?'}) • ${(bestPlay.grade || getRankLabel(bestPlay._score))} ${formatNumber(bestPlay._score)}`
       : '',
     '',
-    `🧮 Judgment totals: P ${judgmentTotals.perfect.toLocaleString()} | G ${judgmentTotals.great.toLocaleString()} | Good ${judgmentTotals.good.toLocaleString()} | Bad ${judgmentTotals.bad.toLocaleString()} | Miss ${judgmentTotals.miss.toLocaleString()}`,
+    `🧮 Judgment totals: P ${judgmentTotals.perfect.toLocaleString()} | G ${judgmentTotals.great.toLocaleString()} | Good ${judgmentTotals.good.toLocaleString()} | Bad ${judgmentTotals.bad.toLocaleString()} | Miss ${judgmentTotals.miss.toLocaleString()} | ${perfectRate}% Perfects!`,
     '',
-    'Top plays:',
-    ...topSongs.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | ${(play.grade || getRankLabel(play._score))} ${formatNumber(play._score)}`),
-    songCount > topSongs.length ? `+${songCount - topSongs.length} more from this session` : '',
+    '🏆 Top 3 by score:',
+    ...(topSongsByScore.length > 0
+      ? topSongsByScore.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | ${play._grade} ${formatNumber(play._score)}`)
+      : ['No scored songs in this session']),
+    '',
+    '⭐ Top 3 by rating:',
+    ...(topSongsByRating.length > 0
+      ? topSongsByRating.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | Rating ${play._rating.toFixed(2)}`)
+      : ['No rated songs in this session']),
   ].filter(Boolean);
 
   return {
@@ -337,17 +404,109 @@ function buildSessionSummary(sessionRows) {
     singlePct,
     doublePct,
     otherPct,
+    averageScore,
+    averageLevel,
+    judgedSongCount,
+    judgmentTotals,
+    perfectRate,
+    topSongsByScore,
+    topSongsByRating,
     sessionDateLabel,
     sessionTimeRange,
     postText: postLines.join('\n'),
   };
 }
 
-function SummaryStat({ label, value }) {
+function SummaryStat({ label, value, subvalue = '' }) {
   return (
     <div className="rounded-lg border border-piu-border/30 bg-piu-dark/50 px-2.5 py-2">
       <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{label}</p>
       <p className="text-sm font-display font-bold text-gray-100">{value}</p>
+      {subvalue ? (
+        <p className="text-[10px] text-gray-500 mt-0.5">{subvalue}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function SummarySongJacket({ play }) {
+  const isSingle = play?.mode === 'Single';
+  const isDouble = play?.mode === 'Double';
+  const badgeColor = isSingle ? 'bg-red-600' : isDouble ? 'bg-green-600' : 'bg-blue-600';
+  const level = play?._level || play?.level || '?';
+
+  return (
+    <div className="relative shrink-0">
+      {play?._jacketUrl ? (
+        <img src={play._jacketUrl} alt="" className="w-12 h-12 rounded object-cover border border-piu-border/50" />
+      ) : (
+        <div className="w-12 h-12 rounded bg-piu-dark border border-piu-border/50 flex items-center justify-center font-display font-bold text-sm text-gray-500">
+          {(play?.song_title || '?')[0]}
+        </div>
+      )}
+      <span className={`absolute -bottom-1 -right-1 min-w-[18px] h-[16px] px-1 rounded text-[9px] flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
+        {level}
+      </span>
+    </div>
+  );
+}
+
+function SummarySongTable({ title, rows, type }) {
+  return (
+    <div className="rounded-lg border border-piu-border/40 bg-piu-dark/35 overflow-hidden">
+      <div className="px-3 py-2 border-b border-piu-border/30 bg-piu-dark/40">
+        <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">{title}</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-gray-500">No scored songs in this session.</p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
+              <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
+              <th className="text-left px-2 py-1 font-display font-bold">Song</th>
+              {type === 'score' ? (
+                <>
+                  <th className="text-right px-2 py-1 font-display font-bold">Score</th>
+                  <th className="text-right px-2 py-1 font-display font-bold">Grade</th>
+                </>
+              ) : (
+                <>
+                  <th className="text-right px-2 py-1 font-display font-bold">Rating</th>
+                  <th className="text-right px-2 py-1 font-display font-bold">Score</th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((play, idx) => (
+              <tr key={`${type}-${idx}-${play.song_title}-${play.mode}-${play.level}`} className="border-b border-piu-border/20 last:border-0">
+                <td className="px-2 py-1.5 text-gray-400 font-mono align-top">{idx + 1}</td>
+                <td className="px-2 py-1.5">
+                  <div className="flex items-start gap-2">
+                    <SummarySongJacket play={play} />
+                    <div className="min-w-0">
+                      <p className="text-gray-200 font-display font-bold truncate max-w-[170px]">{play.song_title}</p>
+                      <p className="text-[10px] text-gray-500">{modeShort(play.mode)}{play._level || play.level || '?'}</p>
+                    </div>
+                  </div>
+                </td>
+                {type === 'score' ? (
+                  <>
+                    <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(play._score)}</td>
+                    <td className={`px-2 py-1.5 text-right font-display font-bold ${getGradeColorClass(play._grade)}`}>{play._grade}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-2 py-1.5 text-right font-mono text-cyan-300">{play._rating.toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(play._score)}</td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
@@ -454,13 +613,16 @@ export default function CommunityPage() {
     setPostSummaryError('');
     setPostSummaryLoading(true);
     try {
-      const data = await getPiugameRecentlyPlayed(user.id);
+      const [data, jacketLookup] = await Promise.all([
+        getPiugameRecentlyPlayed(user.id),
+        getJacketMap().catch(() => ({})),
+      ]);
       const sortedRows = sortRecentPlays(data?.plays || []);
       const sessionRows = getMostRecentSession(sortedRows);
       if (sessionRows.length === 0) {
         throw new Error('No recently played data found. Sync recently played first.');
       }
-      const summary = buildSessionSummary(sessionRows);
+      const summary = buildSessionSummary(sessionRows, jacketLookup || {});
       if (!summary) {
         throw new Error('Failed to build session summary from recently played data.');
       }
@@ -841,27 +1003,58 @@ function PostsTab({
                 <SummaryStat label="Songs" value={postSummaryPreview.songCount} />
                 <SummaryStat label="Clears" value={`${postSummaryPreview.clearCount} (${postSummaryPreview.clearRate}%)`} />
                 <SummaryStat label="Steps" value={postSummaryPreview.totalSteps.toLocaleString()} />
-                <SummaryStat label="Calories" value={`~${postSummaryPreview.estimatedKcal.toLocaleString()} kcal`} />
+                <SummaryStat label="Estimated Calories" value={`~${postSummaryPreview.estimatedKcal.toLocaleString()} kcal`} />
               </div>
 
-              <div className="mt-3">
-                <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
-                  <span>Mode split</span>
-                  <span>
-                    S {postSummaryPreview.singleCount} | D {postSummaryPreview.doubleCount}
-                    {postSummaryPreview.otherCount > 0 ? ` | X ${postSummaryPreview.otherCount}` : ''}
-                  </span>
+              <div className="mt-3 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
+                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Mode split</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-red-500/20 border border-red-500/40">
+                    <span className="text-[10px] text-red-300 font-display font-bold">Singles</span>
+                    <span className="min-w-[20px] h-[18px] px-1 rounded bg-red-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+                      {postSummaryPreview.singleCount}
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-green-500/20 border border-green-500/40">
+                    <span className="text-[10px] text-green-300 font-display font-bold">Doubles</span>
+                    <span className="min-w-[20px] h-[18px] px-1 rounded bg-green-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+                      {postSummaryPreview.doubleCount}
+                    </span>
+                  </div>
+                  {postSummaryPreview.otherCount > 0 && (
+                    <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-blue-500/20 border border-blue-500/40">
+                      <span className="text-[10px] text-blue-300 font-display font-bold">Other</span>
+                      <span className="min-w-[20px] h-[18px] px-1 rounded bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+                        {postSummaryPreview.otherCount}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <div className="h-2 rounded-full overflow-hidden bg-piu-dark border border-piu-border/40 flex">
-                  {postSummaryPreview.singlePct > 0 && (
-                    <div className="h-full bg-red-500/80" style={{ width: `${postSummaryPreview.singlePct}%` }} />
-                  )}
-                  {postSummaryPreview.doublePct > 0 && (
-                    <div className="h-full bg-green-500/80" style={{ width: `${postSummaryPreview.doublePct}%` }} />
-                  )}
-                  {postSummaryPreview.otherPct > 0 && (
-                    <div className="h-full bg-blue-500/80" style={{ width: `${postSummaryPreview.otherPct}%` }} />
-                  )}
+              </div>
+
+              <div className="mt-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
+                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Judgment totals</p>
+                <p className="mt-1 text-xs">
+                  <span className="text-sky-400">P {postSummaryPreview.judgmentTotals.perfect.toLocaleString()}</span>
+                  <span className="text-gray-500"> | </span>
+                  <span className="text-green-400">G {postSummaryPreview.judgmentTotals.great.toLocaleString()}</span>
+                  <span className="text-gray-500"> | </span>
+                  <span className="text-yellow-400">Good {postSummaryPreview.judgmentTotals.good.toLocaleString()}</span>
+                  <span className="text-gray-500"> | </span>
+                  <span className="text-purple-400">Bad {postSummaryPreview.judgmentTotals.bad.toLocaleString()}</span>
+                  <span className="text-gray-500"> | </span>
+                  <span className="text-red-400">Miss {postSummaryPreview.judgmentTotals.miss.toLocaleString()}</span>
+                </p>
+                <p className="text-xs font-display font-bold text-emerald-300 mt-1">
+                  {postSummaryPreview.perfectRate}% Perfects!
+                </p>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-cyan-400/25 bg-black/15 p-2.5">
+                <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide mb-2">Top Plays</p>
+                <div className="space-y-2">
+                  <SummarySongTable title="Top 3 songs by score" rows={postSummaryPreview.topSongsByScore || []} type="score" />
+                  <SummarySongTable title="Top 3 songs by rating" rows={postSummaryPreview.topSongsByRating || []} type="rating" />
                 </div>
               </div>
 
