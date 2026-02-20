@@ -40,6 +40,39 @@ function compareByScore(a, b, direction = 'desc') {
   return String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' });
 }
 
+function getRank(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
+  return { label: 'F', color: 'text-gray-600' };
+}
+
+function getGradeColor(grade, score = 0) {
+  const normalized = String(grade || '').toUpperCase();
+  if (normalized) {
+    if (normalized.includes('SSS')) return 'text-sky-300';
+    if (normalized.includes('SS')) return 'text-piu-gold';
+    if (normalized.includes('S')) return 'text-amber-400';
+    if (normalized.includes('AAA')) return 'text-piu-silver';
+    if (normalized.includes('AA')) return 'text-piu-bronze';
+    if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
+  }
+  return getRank(score).color;
+}
+
 function formatChartResult(chart) {
   const hasScore = Number.isFinite(chart?.best_score);
   if (!hasScore) return 'No score';
@@ -134,10 +167,29 @@ function GroupedDifficultyLayout({ groups }) {
                 to={`/songs/chart/${chart.chart_id}`}
                 className="rounded-md border border-piu-border/45 bg-black/30 px-2 py-1.5 hover:border-piu-accent/55 hover:bg-black/45 transition-colors"
               >
-                <p className="text-[12px] font-display font-bold leading-tight break-words line-clamp-2">{chart.title}</p>
-                <p className={`text-[10px] mt-0.5 ${chart.is_stage_break ? 'text-red-300' : 'text-gray-400'}`}>
-                  {formatChartResult(chart)}
-                </p>
+                <div className="flex items-start gap-2 min-w-0">
+                  {chart.jacket_url ? (
+                    <img
+                      src={chart.jacket_url}
+                      alt={chart.title}
+                      className="w-9 h-9 rounded object-cover border border-piu-border/45 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded bg-piu-dark border border-piu-border/45 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-display font-bold leading-tight break-words line-clamp-2">{chart.title}</p>
+                    <p className={`text-[10px] mt-0.5 ${
+                      Number.isFinite(chart.best_score)
+                        ? chart.is_stage_break
+                          ? 'text-red-300'
+                          : getGradeColor(chart.best_grade, chart.best_score)
+                        : 'text-gray-500'
+                    }`}>
+                      {formatChartResult(chart)}
+                    </p>
+                  </div>
+                </div>
               </Link>
             ))}
           </div>
@@ -160,24 +212,24 @@ export default function SkillChartsPage() {
   const [minLevel, setMinLevel] = useState('');
   const [maxLevel, setMaxLevel] = useState('');
   const [sort, setSort] = useState('level_asc');
-  const [layout, setLayout] = useState('cards');
+  const [rangeError, setRangeError] = useState('');
 
-  const fetchCharts = async (overrides = {}) => {
-    const nextMode = overrides.mode ?? mode;
-    const nextMinLevel = overrides.minLevel ?? minLevel;
-    const nextMaxLevel = overrides.maxLevel ?? maxLevel;
-    const nextSort = overrides.sort ?? sort;
-
+  const fetchCharts = async ({
+    activeMode,
+    activeMinLevel,
+    activeMaxLevel,
+    activeSort,
+  }) => {
     setLoading(true);
     setError('');
 
     try {
       const params = {
-        mode: nextMode,
-        sort: nextSort,
+        mode: activeMode,
+        sort: activeSort,
       };
-      if (String(nextMinLevel).trim()) params.min_level = String(nextMinLevel).trim();
-      if (String(nextMaxLevel).trim()) params.max_level = String(nextMaxLevel).trim();
+      if (String(activeMinLevel).trim()) params.min_level = String(activeMinLevel).trim();
+      if (String(activeMaxLevel).trim()) params.max_level = String(activeMaxLevel).trim();
       if (user?.id) params.user_id = user.id;
 
       const data = await getSongSkillCharts(skillSlug, params);
@@ -192,27 +244,37 @@ export default function SkillChartsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchCharts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skillSlug, user?.id]);
+  const minLevelNum = parseInt(minLevel, 10) || 0;
+  const maxLevelNum = parseInt(maxLevel, 10) || 0;
+  const hasMin = String(minLevel).trim() !== '';
+  const hasMax = String(maxLevel).trim() !== '';
+  const levelRangeValid = !(hasMin && hasMax && minLevelNum > maxLevelNum);
 
-  const applyFilters = async (event) => {
-    event.preventDefault();
-    await fetchCharts();
-  };
+  useEffect(() => {
+    if (!levelRangeValid) {
+      setRangeError('Min level must be less than or equal to max level');
+      return;
+    }
+
+    setRangeError('');
+    const timer = setTimeout(() => {
+      fetchCharts({
+        activeMode: mode,
+        activeMinLevel: minLevel,
+        activeMaxLevel: maxLevel,
+        activeSort: sort,
+      });
+    }, 120);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skillSlug, user?.id, mode, minLevel, maxLevel, sort, levelRangeValid]);
 
   const resetFilters = async () => {
     setMode('both');
     setMinLevel('');
     setMaxLevel('');
     setSort('level_asc');
-    await fetchCharts({
-      mode: 'both',
-      minLevel: '',
-      maxLevel: '',
-      sort: 'level_asc',
-    });
   };
 
   const skillName = payload?.skill?.name || skillSlug;
@@ -273,7 +335,7 @@ export default function SkillChartsPage() {
       <SkillDescription skill={payload?.skill || null} />
 
       <section className="rounded-xl border border-piu-border/60 bg-piu-card/70 p-3">
-        <form className="grid grid-cols-1 sm:grid-cols-6 gap-2" onSubmit={applyFilters}>
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
           <select value={mode} onChange={(event) => setMode(event.target.value)} className="input-field">
             <option value="both">Single + Double</option>
             <option value="single">Single</option>
@@ -297,27 +359,24 @@ export default function SkillChartsPage() {
             <option value="score_asc">Score: low to high</option>
             <option value="score_desc">Score: high to low</option>
           </select>
-          <select value={layout} onChange={(event) => setLayout(event.target.value)} className="input-field">
-            <option value="cards">Layout: cards</option>
-            <option value="difficulty_groups">Layout: grouped by difficulty</option>
-          </select>
-          <div className="flex gap-2">
-            <button type="submit" className="flex-1 px-3 py-2 rounded-lg border border-piu-accent/55 bg-piu-accent/15 text-piu-accent text-xs font-display font-bold">
-              Apply
-            </button>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="flex-1 px-3 py-2 rounded-lg border border-piu-border/60 bg-piu-dark/60 text-xs font-display font-bold"
-            >
-              Reset
-            </button>
-          </div>
-          <div className="sm:col-span-6 text-xs text-gray-500">
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="px-3 py-2 rounded-lg border border-piu-border/60 bg-piu-dark/60 text-xs font-display font-bold"
+          >
+            Reset Filters
+          </button>
+          <div className="sm:col-span-5 text-xs text-gray-500">
             Showing {charts.length.toLocaleString()} chart{charts.length === 1 ? '' : 's'}
             {!user && ' • Log in to view your own score and grade data'}
+            {' • Filters auto-apply'}
           </div>
-        </form>
+          {rangeError && (
+            <div className="sm:col-span-5 text-xs text-amber-300">
+              {rangeError}
+            </div>
+          )}
+        </div>
       </section>
 
       {loading ? (
@@ -328,61 +387,8 @@ export default function SkillChartsPage() {
             <p className="text-center text-sm text-gray-500 py-8">
               No charts found for this skill and filter combination.
             </p>
-          ) : layout === 'difficulty_groups' ? (
-            <GroupedDifficultyLayout groups={groupedCharts} />
           ) : (
-            <section className="space-y-2">
-              {charts.map((chart) => {
-                const hasScore = Number.isFinite(chart.best_score);
-                const isStageBreak = hasScore && !!chart.is_stage_break;
-                return (
-                  <div key={chart.chart_id} className="rounded-xl border border-piu-border/50 bg-gradient-to-r from-[#112947] to-[#1b3554] p-3">
-                    <div className="flex items-start gap-3">
-                      {chart.jacket_url ? (
-                        <img src={chart.jacket_url} alt={chart.title} className="w-24 h-14 sm:w-28 sm:h-16 rounded object-cover border border-piu-border/40 shrink-0" />
-                      ) : (
-                        <div className="w-24 h-14 sm:w-28 sm:h-16 rounded bg-piu-dark border border-piu-border/40 flex items-center justify-center text-xs text-gray-500 shrink-0">
-                          No image
-                        </div>
-                      )}
-
-                      <div className="min-w-0 flex-1">
-                        <p className="text-lg font-display font-bold leading-tight truncate">{chart.title}</p>
-                        <p className="text-xs text-gray-400 truncate">{chart.artist || 'Unknown artist'}</p>
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <span className={`inline-flex items-center justify-center min-w-[42px] h-[42px] text-sm rounded-full border bg-gradient-to-b ${modeBadgeClass(chart.mode)} text-white font-display font-black shadow-md`}>
-                            {chart.level}
-                          </span>
-                          <span className="text-xs text-gray-400">{modeShort(chart.mode)}{chart.level}</span>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0 min-w-[120px]">
-                        {hasScore ? (
-                          <>
-                            <p className={`text-lg font-display font-black ${isStageBreak ? 'text-red-400' : 'text-white'}`}>
-                              {isStageBreak ? 'STAGE BREAK' : formatNumber(chart.best_score)}
-                            </p>
-                            <p className={`text-xs font-display font-bold ${isStageBreak ? 'text-red-300' : 'text-piu-gold'}`}>
-                              {chart.best_grade || (isStageBreak ? 'F' : '-')}
-                            </p>
-                            <p className="text-[10px] text-gray-500">{chart.date_played ? String(chart.date_played).slice(0, 10) : ''}</p>
-                          </>
-                        ) : (
-                          <p className="text-xs text-gray-500 mt-2">No score</p>
-                        )}
-                        <Link
-                          to={`/songs/chart/${chart.chart_id}`}
-                          className="inline-flex mt-2 px-2.5 py-1.5 rounded-md border border-piu-border/55 text-[11px] font-display font-bold hover:border-piu-accent/45 hover:text-piu-accent transition-colors"
-                        >
-                          Open Chart
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </section>
+            <GroupedDifficultyLayout groups={groupedCharts} />
           )}
         </>
       )}

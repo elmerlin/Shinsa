@@ -57,6 +57,8 @@ function normalizeSkillName(value) {
 function toAbsoluteUrl(url) {
   const raw = String(url || '').trim();
   if (!raw) return '';
+  if (raw.startsWith('data:')) return raw;
+  if (raw.startsWith('blob:')) return raw;
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
   if (raw.startsWith('//')) return `https:${raw}`;
   if (raw.startsWith('/')) return `${SOURCE_BASE}${raw}`;
@@ -153,6 +155,13 @@ async function scrapeSkillMetadata(page, skill, timeoutMs) {
   await page.waitForSelector('.markdown-content', { timeout: timeoutMs }).catch(() => null);
 
   const raw = await page.evaluate(() => {
+    const extractBgImageUrl = (value) => {
+      const rawValue = String(value || '').trim();
+      if (!rawValue || rawValue === 'none') return '';
+      const match = rawValue.match(/url\((['"]?)(.*?)\1\)/i);
+      return match ? String(match[2] || '').trim() : '';
+    };
+
     const root = document.querySelector('.markdown-content');
     if (!root) {
       return {
@@ -184,6 +193,20 @@ async function scrapeSkillMetadata(page, skill, timeoutMs) {
           });
           continue;
         }
+
+        const iconClass = Array.from(el.classList || []).find((className) => String(className || '').startsWith('icon-'));
+        if (iconClass) {
+          const bgImageUrl = extractBgImageUrl(getComputedStyle(el).backgroundImage);
+          if (bgImageUrl) {
+            paragraphSegments.push({
+              type: 'image',
+              url: bgImageUrl,
+              alt: iconClass,
+            });
+            continue;
+          }
+        }
+
         paragraphSegments.push({
           type: 'text',
           text: String(el.textContent || ''),
