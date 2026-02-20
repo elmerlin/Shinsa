@@ -767,6 +767,39 @@ router.get('/jacket-map', (req, res) => {
   res.json(map);
 });
 
+// GET /api/songs/chart-key-map — return normalised "title|Mode|level" → chart_id mapping
+router.get('/chart-key-map', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const catalog = getSongCatalog(db, aliases);
+  const map = {};
+
+  // Primary entries using canonical chart keys
+  for (const [key, chart] of catalog.chartsByKey) {
+    map[key] = chart.chart_id;
+  }
+
+  // Add entries keyed by raw DB title (may differ from canonical)
+  for (const chart of catalog.charts) {
+    const rawNorm = normalizeSongName(chart.title);
+    const rawKey = `${rawNorm}|${chart.mode}|${chart.level}`;
+    if (!map[rawKey]) map[rawKey] = chart.chart_id;
+  }
+
+  // Expand aliases so non-canonical titles also resolve
+  for (const [aliasNorm, canonicalNorm] of Object.entries(aliases)) {
+    for (const [key, chart] of catalog.chartsByKey) {
+      if (key.startsWith(canonicalNorm + '|')) {
+        const suffix = key.slice(canonicalNorm.length);
+        const aliasKey = aliasNorm + suffix;
+        if (!map[aliasKey]) map[aliasKey] = chart.chart_id;
+      }
+    }
+  }
+
+  res.json(map);
+});
+
 // GET /api/songs/library — grouped songs + per-chart user best snapshot
 router.get('/library', optionalAuth, (req, res) => {
   const db = getDb();

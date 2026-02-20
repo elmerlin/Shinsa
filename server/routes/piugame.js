@@ -127,6 +127,8 @@ function insertGroupedNewClearPost(db, userId, clears) {
     grade: c.grade || '',
     plate: c.plate || '',
     background_url: c.background_url || '',
+    perfect: c.perfect || 0, great: c.great || 0, good: c.good || 0,
+    bad: c.bad || 0, miss: c.miss || 0,
   }));
   const first = normalized[0];
 
@@ -424,6 +426,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 old_score: existing.score, new_score: p.score,
                 old_grade: existing.grade || '', new_grade: p.grade || '',
                 background_url: p.background_url || '',
+                perfect: p.perfect || 0, great: p.great || 0, good: p.good || 0,
+                bad: p.bad || 0, miss: p.miss || 0,
               });
             } else if (!existing) {
               // New clear - first time playing this song
@@ -435,6 +439,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 grade: p.grade || '',
                 plate: p.plate || '',
                 background_url: p.background_url || '',
+                perfect: p.perfect || 0, great: p.great || 0, good: p.good || 0,
+                bad: p.bad || 0, miss: p.miss || 0,
               });
             }
             updateBest.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade);
