@@ -26,6 +26,15 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function formatDurationLabel(totalMinutes) {
+  const minutes = Math.max(0, parseInt(totalMinutes, 10) || 0);
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours > 0 && remainder > 0) return `${hours}h ${remainder}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainder}m`;
+}
+
 function sanitizeSongRows(rows) {
   if (!Array.isArray(rows)) return [];
   return rows.slice(0, 3).map((row) => ({
@@ -41,10 +50,17 @@ function sanitizeSongRows(rows) {
 
 function sanitizeSummary(summary) {
   const src = summary || {};
+  const sessionDurationMinutes = toInt(src.sessionDurationMinutes);
+  const hasDurationMinutes = src.sessionDurationMinutes !== undefined
+    && src.sessionDurationMinutes !== null
+    && String(src.sessionDurationMinutes).trim() !== '';
+  const explicitDurationLabel = String(src.sessionDurationLabel || '');
   return {
     version: 1,
     sessionDateLabel: String(src.sessionDateLabel || ''),
     sessionTimeRange: String(src.sessionTimeRange || ''),
+    sessionDurationMinutes,
+    sessionDurationLabel: explicitDurationLabel || (hasDurationMinutes ? formatDurationLabel(sessionDurationMinutes) : ''),
     songCount: toInt(src.songCount),
     clearCount: toInt(src.clearCount),
     clearRate: toInt(src.clearRate),

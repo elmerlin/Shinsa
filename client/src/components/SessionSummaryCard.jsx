@@ -138,6 +138,7 @@ export default function SessionSummaryCard({
           <p className="text-xs text-gray-300">
             {summary.sessionDateLabel}
             {summary.sessionTimeRange ? ` • ${summary.sessionTimeRange}` : ''}
+            {summary.sessionDurationLabel ? ` • ${summary.sessionDurationLabel}` : ''}
           </p>
         </div>
         {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
