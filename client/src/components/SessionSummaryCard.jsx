@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -43,13 +43,13 @@ function SongJacket({ row }) {
   return (
     <div className="relative shrink-0">
       {jacketUrl ? (
-        <img src={jacketUrl} alt="" className="w-12 h-12 rounded object-cover border border-piu-border/50" />
+        <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover" />
       ) : (
-        <div className="w-12 h-12 rounded bg-piu-dark border border-piu-border/50 flex items-center justify-center font-display font-bold text-sm text-gray-500">
+        <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-xs text-gray-500">
           {(row?.song_title || '?')[0]}
         </div>
       )}
-      <span className={`absolute -bottom-1 -right-1 min-w-[18px] h-[16px] px-1 rounded text-[9px] flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
+      <span className={`absolute -bottom-1 -right-1 min-w-[16px] h-[14px] px-1 rounded text-[8px] flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
         {level}
       </span>
     </div>
@@ -135,89 +135,105 @@ export default function SessionSummaryCard({
   title = 'Session Summary',
   actions = null,
 }) {
+  const [topPlaysExpanded, setTopPlaysExpanded] = useState(false);
   if (!summary) return null;
   return (
-    <div className={`space-y-2 ${className}`.trim()}>
-      <div className="overflow-x-auto snap-x snap-mandatory touch-pan-x pb-1">
-        <div className="flex gap-3">
-          <div className="snap-start shrink-0 w-full rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-[10px] font-display font-bold uppercase tracking-wider text-emerald-300">{title}</p>
-                <p className="text-xs text-gray-300">
-                  {summary.sessionDateLabel}
-                  {summary.sessionTimeRange ? ` • ${summary.sessionTimeRange}` : ''}
-                  {summary.sessionDurationLabel ? ` • ${summary.sessionDurationLabel}` : ''}
-                </p>
-              </div>
-              {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
-            </div>
+    <div className={`rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3 ${className}`.trim()}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-display font-bold uppercase tracking-wider text-emerald-300">{title}</p>
+          <p className="text-xs text-gray-300">
+            {summary.sessionDateLabel}
+            {summary.sessionTimeRange ? ` • ${summary.sessionTimeRange}` : ''}
+            {summary.sessionDurationLabel ? ` • ${summary.sessionDurationLabel}` : ''}
+          </p>
+          {summary.sessionMachineName ? (
+            <p className="text-[11px] text-cyan-300/90 mt-0.5">Machine: {summary.sessionMachineName}</p>
+          ) : null}
+        </div>
+        {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
+      </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-              <Stat label="Songs" value={summary.songCount} />
-              <Stat label="Clears" value={`${summary.clearCount} (${summary.clearRate}%)`} />
-              <Stat label="Steps" value={formatNumber(summary.totalSteps)} />
-              <Stat label="Estimated Calories" value={`~${formatNumber(summary.estimatedKcal)} kcal`} />
-            </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        <Stat label="Songs" value={summary.songCount} />
+        <Stat label="Clears" value={`${summary.clearCount} (${summary.clearRate}%)`} />
+        <Stat label="Steps" value={formatNumber(summary.totalSteps)} />
+        <Stat label="Estimated Calories" value={`~${formatNumber(summary.estimatedKcal)} kcal`} />
+      </div>
 
-            <div className="mt-3 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Mode split</p>
-              <div className="mt-1 flex items-center gap-2">
-                <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-red-500/20 border border-red-500/40">
-                  <span className="text-[10px] text-red-300 font-display font-bold">Singles</span>
-                  <span className="min-w-[20px] h-[18px] px-1 rounded bg-red-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                    {summary.singleCount || 0}
-                  </span>
-                </div>
-                <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-green-500/20 border border-green-500/40">
-                  <span className="text-[10px] text-green-300 font-display font-bold">Doubles</span>
-                  <span className="min-w-[20px] h-[18px] px-1 rounded bg-green-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                    {summary.doubleCount || 0}
-                  </span>
-                </div>
-                {(summary.otherCount || 0) > 0 ? (
-                  <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-blue-500/20 border border-blue-500/40">
-                    <span className="text-[10px] text-blue-300 font-display font-bold">Other</span>
-                    <span className="min-w-[20px] h-[18px] px-1 rounded bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                      {summary.otherCount}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="mt-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Judgment totals</p>
-              <p className="mt-1 text-xs">
-                <span className="text-sky-400">P {formatNumber(summary?.judgmentTotals?.perfect)}</span>
-                <span className="text-gray-500"> | </span>
-                <span className="text-green-400">G {formatNumber(summary?.judgmentTotals?.great)}</span>
-                <span className="text-gray-500"> | </span>
-                <span className="text-yellow-400">Good {formatNumber(summary?.judgmentTotals?.good)}</span>
-                <span className="text-gray-500"> | </span>
-                <span className="text-purple-400">Bad {formatNumber(summary?.judgmentTotals?.bad)}</span>
-                <span className="text-gray-500"> | </span>
-                <span className="text-red-400">Miss {formatNumber(summary?.judgmentTotals?.miss)}</span>
-              </p>
-              <p className="text-xs font-display font-bold text-emerald-300 mt-1">
-                {parseInt(summary?.perfectRate, 10) || 0}% Perfects!
-              </p>
-            </div>
+      <div className="mt-3 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
+        <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Mode split</p>
+        <div className="mt-1 flex items-center gap-2">
+          <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-red-500/20 border border-red-500/40">
+            <span className="text-[10px] text-red-300 font-display font-bold">Singles</span>
+            <span className="min-w-[20px] h-[18px] px-1 rounded bg-red-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+              {summary.singleCount || 0}
+            </span>
           </div>
-
-          <div className="snap-start shrink-0 w-full rounded-xl border border-cyan-400/25 bg-gradient-to-br from-cyan-500/12 via-blue-500/8 to-transparent p-3">
-            <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide mb-2">Top Plays</p>
-            <div className="space-y-2">
-              <SongTable title="Top 3 songs by score" rows={summary?.topSongsByScore || []} type="score" />
-              <SongTable title="Top 3 songs by rating" rows={summary?.topSongsByRating || []} type="rating" />
-            </div>
+          <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-green-500/20 border border-green-500/40">
+            <span className="text-[10px] text-green-300 font-display font-bold">Doubles</span>
+            <span className="min-w-[20px] h-[18px] px-1 rounded bg-green-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+              {summary.doubleCount || 0}
+            </span>
           </div>
+          {(summary.otherCount || 0) > 0 ? (
+            <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-blue-500/20 border border-blue-500/40">
+              <span className="text-[10px] text-blue-300 font-display font-bold">Other</span>
+              <span className="min-w-[20px] h-[18px] px-1 rounded bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+                {summary.otherCount}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide text-center">
-        Swipe left/right for cards
-      </p>
+      <div className="mt-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
+        <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Judgment totals</p>
+        <p className="mt-1 text-xs">
+          <span className="text-sky-400">P {formatNumber(summary?.judgmentTotals?.perfect)}</span>
+          <span className="text-gray-500"> | </span>
+          <span className="text-green-400">G {formatNumber(summary?.judgmentTotals?.great)}</span>
+          <span className="text-gray-500"> | </span>
+          <span className="text-yellow-400">Good {formatNumber(summary?.judgmentTotals?.good)}</span>
+          <span className="text-gray-500"> | </span>
+          <span className="text-purple-400">Bad {formatNumber(summary?.judgmentTotals?.bad)}</span>
+          <span className="text-gray-500"> | </span>
+          <span className="text-red-400">Miss {formatNumber(summary?.judgmentTotals?.miss)}</span>
+        </p>
+        <p className="text-xs font-display font-bold text-emerald-300 mt-1">
+          {parseInt(summary?.perfectRate, 10) || 0}% Perfects!
+        </p>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-cyan-400/25 bg-black/15 p-2.5">
+        <button
+          type="button"
+          className="w-full flex items-center justify-between gap-2"
+          onClick={() => setTopPlaysExpanded((prev) => !prev)}
+          aria-expanded={topPlaysExpanded}
+        >
+          <span className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">Top Plays</span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-display font-bold uppercase tracking-wide text-cyan-300/90">
+            {topPlaysExpanded ? 'Hide' : 'Show'}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className={`w-3 h-3 transition-transform ${topPlaysExpanded ? 'rotate-180' : ''}`}
+            >
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </span>
+        </button>
+        {topPlaysExpanded ? (
+          <div className="space-y-2 mt-2">
+            <SongTable title="Top 3 songs by score" rows={summary?.topSongsByScore || []} type="score" />
+            <SongTable title="Top 3 songs by rating" rows={summary?.topSongsByRating || []} type="rating" />
+          </div>
+        ) : (
+          <p className="text-[10px] text-gray-500 mt-1.5">Tap to expand</p>
+        )}
+      </div>
     </div>
   );
 }

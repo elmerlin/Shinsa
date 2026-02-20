@@ -688,6 +688,7 @@ function initializeDb() {
       level INTEGER NOT NULL,
       score INTEGER NOT NULL,
       grade TEXT DEFAULT '',
+      machine_name TEXT DEFAULT '',
       background_url TEXT DEFAULT '',
       date_played TEXT DEFAULT '',
       perfect INTEGER,
@@ -912,6 +913,7 @@ function initializeDb() {
     ['max_combo', 'INT DEFAULT 0'],
     ['kcal', 'REAL DEFAULT 0'],
     ['plate', "TEXT DEFAULT ''"],
+    ['machine_name', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of recentMigrations) {
     if (!recentCols.includes(col)) {

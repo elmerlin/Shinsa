@@ -372,9 +372,13 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
 
     const insertRecent = db.prepare(`
       INSERT INTO user_recently_played
-      (user_id, song_title, mode, level, score, grade, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO UPDATE SET
+        machine_name = CASE
+          WHEN excluded.machine_name != '' THEN excluded.machine_name
+          ELSE user_recently_played.machine_name
+        END,
         background_url = CASE
           WHEN excluded.background_url != '' THEN excluded.background_url
           ELSE user_recently_played.background_url
@@ -411,7 +415,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       // Keep historical rows and only add newly scraped plays.
       // Duplicate prevention is handled by a unique index in schema migration.
       for (const p of plays) {
-        insertRecent.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade, p.background_url, p.date_played,
+        insertRecent.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade, p.machine_name || '', p.background_url, p.date_played,
           p.perfect || 0, p.great || 0, p.good || 0, p.bad || 0, p.miss || 0, p.max_combo || 0, p.kcal || 0, p.plate || '');
 
         // Only update best scores if this was a real play (not stage break)

@@ -311,6 +311,32 @@ function parseJudgmentsFromRecentlyPlayedItem($, $li) {
   return judgments;
 }
 
+function parseRecentlyAccessGame($) {
+  const LABEL_RE = /^Recently\s*Access\s*Games\s*:\s*/i;
+  const ALT_LABEL_RE = /^최근\s*접속\s*게임장\s*:\s*/i;
+  let value = '';
+
+  $('i.tt, p.tt, span.tt, div.tt').each((_, el) => {
+    if (value) return;
+    const text = collapseWhitespace($(el).text());
+    if (!text) return;
+    if (LABEL_RE.test(text)) {
+      value = collapseWhitespace(text.replace(LABEL_RE, ''));
+      return;
+    }
+    if (ALT_LABEL_RE.test(text)) {
+      value = collapseWhitespace(text.replace(ALT_LABEL_RE, ''));
+    }
+  });
+
+  if (value) return value;
+
+  const fullText = collapseWhitespace($('body').text());
+  const inlineMatch = fullText.match(/Recently\s*Access\s*Games\s*:\s*(.+?)(?=\s+(?:Last\s*Access\s*Date|Switch\s*Account|More)\b|$)/i);
+  if (inlineMatch?.[1]) return collapseWhitespace(inlineMatch[1]);
+  return '';
+}
+
 /**
  * Scrape pumbility page - returns { pumbilityValue, scores[] }
  */
@@ -873,6 +899,7 @@ async function scrapeRecentlyPlayed(client) {
   const res = await client.get(`${PIU_BASE}/my_page/recently_played.php`);
   const $ = cheerio.load(res.data);
   const plays = [];
+  const machineName = parseRecentlyAccessGame($);
 
   // Note: class is "recently_playeList" (typo in actual site)
   $('ul.recently_playeList > li, ul.recently_playedList > li').each((_, li) => {
@@ -926,6 +953,7 @@ async function scrapeRecentlyPlayed(client) {
       level,
       score,
       grade,
+      machine_name: machineName,
       plate,
       background_url: bgUrl,
       date_played: datePlayed,

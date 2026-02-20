@@ -61,6 +61,7 @@ function sanitizeSummary(summary) {
     sessionTimeRange: String(src.sessionTimeRange || ''),
     sessionDurationMinutes,
     sessionDurationLabel: explicitDurationLabel || (hasDurationMinutes ? formatDurationLabel(sessionDurationMinutes) : ''),
+    sessionMachineName: String(src.sessionMachineName || ''),
     songCount: toInt(src.songCount),
     clearCount: toInt(src.clearCount),
     clearRate: toInt(src.clearRate),

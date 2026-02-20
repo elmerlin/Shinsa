@@ -361,6 +361,9 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     ? Math.max(0, Math.round((newest.getTime() - oldest.getTime()) / 60000))
     : 0;
   const sessionDurationLabel = formatDurationLabel(sessionDurationMinutes);
+  const sessionMachineName = enrichedRows
+    .map((play) => String(play?.machine_name || '').trim())
+    .find(Boolean) || '';
 
   const modeTotal = Math.max(1, singleCount + doubleCount + otherCount);
   const singlePct = Math.round((singleCount / modeTotal) * 100);
@@ -373,6 +376,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
   const postLines = [
     '📊 **Session Summary**',
     `🗓️ ${sessionDateLabel}${sessionTimeRange ? ` • ${sessionTimeRange}` : ''}${sessionDurationLabel ? ` • ${sessionDurationLabel}` : ''}`,
+    sessionMachineName ? `🕹️ Machine: **${sessionMachineName}**` : '',
     `🎵 **${songCount} songs** | 🏁 Clears: **${clearCount}/${songCount}** (${clearRate}%)`,
     `🦶 Judged steps: **${totalSteps.toLocaleString()}**${judgmentCoverageLabel}`,
     `🔥 Estimated calories: **~${estimatedKcal.toLocaleString()} kcal**`,
@@ -420,6 +424,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     sessionTimeRange,
     sessionDurationMinutes,
     sessionDurationLabel,
+    sessionMachineName,
     postText: postLines.join('\n'),
   };
 }
