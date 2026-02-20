@@ -155,6 +155,7 @@ function CompetitiveLevelCard({
   cursor,
   onCursorChange,
   competitiveLevel,
+  onTitleClick,
 }) {
   const [expanded, setExpanded] = useState(false);
   const selectedRow = rows[cursor] || null;
@@ -168,47 +169,50 @@ function CompetitiveLevelCard({
     ? (GRADE_INDEX[selectedGrade] || 0) >= (GRADE_INDEX.S || 0)
     : false;
 
+  const handleBoxClick = (e) => {
+    if (rows.length <= 1) {
+      setExpanded((value) => !value);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const halfWidth = rect.width / 2;
+    if (clickX < halfWidth) {
+      onCursorChange((prev) => (prev <= 0 ? rows.length - 1 : prev - 1));
+    } else {
+      onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1));
+    }
+  };
+
   return (
     <div className="rounded-lg border border-piu-border/50 bg-piu-dark/55 p-2.5 overflow-hidden">
-      <p className="text-[11px] font-display font-bold tracking-wide text-gray-300 mb-1.5">{title}</p>
-      <div className="flex items-center gap-1.5 min-w-0">
-        <button
-          type="button"
-          disabled={rows.length <= 1}
-          onClick={() => onCursorChange((prev) => (prev <= 0 ? rows.length - 1 : prev - 1))}
-          className="w-6 h-6 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
-          aria-label={`Previous ${title} level`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="min-w-0 flex-1 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-1.5 py-1.5 text-left hover:border-piu-accent/40 transition-colors"
-          title="Toggle competitive level details"
-        >
-          <div className="flex items-center justify-between gap-1 min-w-0">
-            <span className={`font-display font-black text-base ${modeColorClass}`}>
-              {selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}
-            </span>
-            <span className={`shrink-0 text-xs font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
-              {selectedGrade || '-'}
-            </span>
-          </div>
-        </button>
-        <button
-          type="button"
-          disabled={rows.length <= 1}
-          onClick={() => onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1))}
-          className="w-6 h-6 shrink-0 rounded bg-piu-card border border-piu-border/60 text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
-          aria-label={`Next ${title} level`}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+      <button
+        type="button"
+        onClick={onTitleClick}
+        className="text-[11px] font-display font-bold tracking-wide text-gray-300 mb-1.5 hover:text-piu-accent transition-colors underline decoration-dotted underline-offset-2"
+      >
+        {title}
+      </button>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleBoxClick}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') onCursorChange((prev) => (prev <= 0 ? rows.length - 1 : prev - 1));
+          if (e.key === 'ArrowRight') onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1));
+          if (e.key === 'Enter' || e.key === ' ') setExpanded((value) => !value);
+        }}
+        className="min-w-0 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-2.5 py-2 text-left hover:border-piu-accent/40 transition-colors cursor-pointer select-none"
+        title={rows.length > 1 ? 'Tap left/right edge to navigate levels' : 'Competitive level details'}
+      >
+        <div className="flex items-center justify-between gap-1 min-w-0">
+          <span className={`font-display font-black text-base ${modeColorClass}`}>
+            {selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}
+          </span>
+          <span className={`shrink-0 text-xs font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
+            {selectedGrade || '-'}
+          </span>
+        </div>
       </div>
 
       {expanded && (
@@ -224,6 +228,36 @@ function CompetitiveLevelCard({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function CompetitiveLevelInfoModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
+          <h3 className="font-display font-bold tracking-wide text-sm">Competitive Level</h3>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+        <div className="px-4 py-4 text-sm text-gray-300 leading-relaxed space-y-3">
+          <p>
+            The competitive level is defined as the level of a folder for which your average score
+            across all the songs you have passed is 970,000 Grade S or better. The number of songs
+            passed in the folder must also be more than 50% of the folder.
+          </p>
+          <p className="text-xs text-gray-500">
+            A folder is just the songs within a mode and level. For instance the S23 folder, or D23 folder etc.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -251,6 +285,8 @@ function PlayerMetricsPanel({
   setDoubleCursor,
   setOpenBreakdown,
 }) {
+  const [showCompLevelInfo, setShowCompLevelInfo] = useState(false);
+
   return (
     <div className="rounded-xl border border-piu-border/60 bg-gradient-to-br from-slate-900/80 to-slate-800/50 p-3 space-y-3">
       <h2 className="text-xs font-display font-bold tracking-wide text-piu-accent">PLAYER METRICS</h2>
@@ -278,6 +314,7 @@ function PlayerMetricsPanel({
           cursor={singleCursor}
           onCursorChange={setSingleCursor}
           competitiveLevel={analytics.competitive_levels?.single}
+          onTitleClick={() => setShowCompLevelInfo(true)}
         />
 
         <CompetitiveLevelCard
@@ -288,8 +325,11 @@ function PlayerMetricsPanel({
           cursor={doubleCursor}
           onCursorChange={setDoubleCursor}
           competitiveLevel={analytics.competitive_levels?.double}
+          onTitleClick={() => setShowCompLevelInfo(true)}
         />
       </div>
+
+      <CompetitiveLevelInfoModal open={showCompLevelInfo} onClose={() => setShowCompLevelInfo(false)} />
     </div>
   );
 }
