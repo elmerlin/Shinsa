@@ -365,7 +365,7 @@ export default function SongChartPage() {
                 {(chart.skills || []).map((skill) => (
                   <span
                     key={skill.slug}
-                    className="inline-flex items-center px-2 py-1 rounded-full text-[11px] border border-piu-accent/45 bg-piu-accent/15 text-piu-accent font-display font-bold"
+                    className="inline-flex items-center px-2 py-1 rounded-full text-[11px] border border-emerald-300/45 bg-emerald-500/15 text-emerald-200 font-display font-bold"
                   >
                     {skill.name}
                   </span>
@@ -411,9 +411,9 @@ export default function SongChartPage() {
         <button
           type="button"
           onClick={() => setShowHistoryModal(true)}
-          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-piu-accent/40 transition-colors flex items-center"
+          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-emerald-400/40 transition-colors flex items-center"
         >
-          <span className="inline-flex items-center justify-center rounded-md border border-piu-accent/45 bg-piu-accent/15 text-piu-accent px-2 py-1 text-[11px] font-display font-bold w-fit">
+          <span className="inline-flex items-center justify-center rounded-md border border-emerald-300/45 bg-emerald-500/15 text-emerald-200 px-2 py-1 text-[11px] font-display font-bold w-fit">
             Clear History
           </span>
         </button>
