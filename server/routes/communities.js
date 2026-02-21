@@ -237,7 +237,17 @@ router.post('/', requireAuth, upload.fields([
   { name: 'banner', maxCount: 1 },
 ]), async (req, res) => {
   const db = getDb();
-  const { display_name, description, is_invite_only, badge_text, badge_color, badge_text_color } = req.body;
+  const {
+    display_name,
+    description,
+    about,
+    location_country,
+    rules,
+    is_invite_only,
+    badge_text,
+    badge_color,
+    badge_text_color,
+  } = req.body;
 
   if (!display_name || display_name.trim().length < 2) {
     return res.status(400).json({ error: 'Community name must be at least 2 characters' });
@@ -275,9 +285,27 @@ router.post('/', requireAuth, upload.fields([
   }
 
   db.prepare(`
-    INSERT INTO communities (id, name, display_name, description, avatar, banner, owner_id, is_invite_only, badge_text, badge_color, badge_text_color)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, name, display_name.trim(), description || '', avatarData, bannerData, req.user.id, is_invite_only === 'true' || is_invite_only === '1' ? 1 : 0, badge_text || '', badge_color || '#ff3366', badge_text_color || '#ffffff');
+    INSERT INTO communities (
+      id, name, display_name, description, about, location_country, rules,
+      avatar, banner, owner_id, is_invite_only, badge_text, badge_color, badge_text_color
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    name,
+    display_name.trim(),
+    description || '',
+    about || '',
+    location_country || '',
+    rules || '',
+    avatarData,
+    bannerData,
+    req.user.id,
+    is_invite_only === 'true' || is_invite_only === '1' ? 1 : 0,
+    badge_text || '',
+    badge_color || '#ff3366',
+    badge_text_color || '#ffffff'
+  );
 
   // Auto-add creator as owner member
   db.prepare(
@@ -421,7 +449,17 @@ router.put('/:id', requireAuth, upload.fields([
   }
 
   const updates = {};
-  const fields = ['display_name', 'description', 'is_invite_only', 'badge_text', 'badge_color', 'badge_text_color'];
+  const fields = [
+    'display_name',
+    'description',
+    'about',
+    'location_country',
+    'rules',
+    'is_invite_only',
+    'badge_text',
+    'badge_color',
+    'badge_text_color',
+  ];
   for (const f of fields) {
     if (req.body[f] !== undefined) updates[f] = req.body[f];
   }
@@ -460,11 +498,12 @@ router.put('/:id', requireAuth, upload.fields([
 
   const updated = db.prepare(`
     SELECT c.*, u.username as owner_username, u.avatar as owner_avatar,
-           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count
+           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count,
+           ? as user_role
     FROM communities c
     JOIN users u ON c.owner_id = u.id
     WHERE c.id = ?
-  `).get(community.id);
+  `).get(role, community.id);
   res.json(updated);
 });
 

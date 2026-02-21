@@ -1051,6 +1051,9 @@ function initializeDb() {
       name TEXT NOT NULL UNIQUE,
       display_name TEXT NOT NULL,
       description TEXT DEFAULT '',
+      about TEXT DEFAULT '',
+      location_country TEXT DEFAULT '',
+      rules TEXT DEFAULT '',
       avatar TEXT DEFAULT '',
       banner TEXT DEFAULT '',
       owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1321,6 +1324,19 @@ function initializeDb() {
   for (const [col, type] of syncMigrations) {
     if (!syncCols.includes(col)) {
       db.exec(`ALTER TABLE user_piugame_sync ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  // Migrations for communities table
+  const communityCols = db.prepare("PRAGMA table_info(communities)").all().map(c => c.name);
+  const communityMigrations = [
+    ['about', "TEXT DEFAULT ''"],
+    ['location_country', "TEXT DEFAULT ''"],
+    ['rules', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of communityMigrations) {
+    if (!communityCols.includes(col)) {
+      db.exec(`ALTER TABLE communities ADD COLUMN ${col} ${type}`);
     }
   }
 }

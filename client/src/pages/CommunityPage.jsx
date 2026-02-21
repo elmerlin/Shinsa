@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getCountryFlag } from '../components/PlayerRegistration';
+import { COUNTRIES, getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import CommunityBadge from '../components/CommunityBadge';
@@ -27,6 +27,11 @@ const EMOJI_GROUPS = [
   { label: 'PIU', emojis: ['🎵','🎶','🎤','🎮','🕹️','🏆','🥇','🥈','🥉','🔥','⭐','💥','💯','🚀','⚡'] },
   { label: 'Hearts', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💖'] },
 ];
+
+const COUNTRY_NAME_BY_CODE = COUNTRIES.reduce((acc, country) => {
+  if (country?.code) acc[country.code] = country.name;
+  return acc;
+}, {});
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -638,6 +643,12 @@ export default function CommunityPage() {
     }
   }, [community]);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [communityName]);
+
   useEffect(() => { loadCommunity(); }, [loadCommunity]);
   useEffect(() => { if (community && activeTab === 'posts') loadPosts(); }, [community, activeTab, postSort, loadPosts]);
   useEffect(() => { if (community && activeTab === 'members') loadMembers(); }, [community, activeTab, memberSort, loadMembers]);
@@ -877,6 +888,7 @@ export default function CommunityPage() {
   }
 
   const isMember = !!community.user_role;
+  const isOwner = community.user_role === 'owner';
   const isModOrOwner = community.user_role === 'owner' || community.user_role === 'moderator';
   const canConfigureCommunityNotify = !!user && (!community.is_invite_only || isMember);
 
@@ -892,93 +904,15 @@ export default function CommunityPage() {
 
       {/* Community Header */}
       <div className="px-4 sm:px-6 -mt-10 relative z-10">
-        <div className="flex items-end gap-4">
-          {/* Avatar */}
-          {community.avatar ? (
-            <img src={community.avatar.startsWith('data:') ? community.avatar : getAvatarUrl(community.avatar)} alt="" className="w-20 h-20 rounded-xl object-cover border-4 border-piu-dark shadow-lg" />
-          ) : (
-            <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-piu-accent to-purple-700 border-4 border-piu-dark shadow-lg flex items-center justify-center">
-              <span className="font-display font-bold text-2xl text-white">{community.display_name[0]?.toUpperCase()}</span>
-            </div>
-          )}
-          <div className="flex-1 min-w-0 pb-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="font-display font-bold text-xl sm:text-2xl tracking-wide truncate">{community.display_name}</h1>
-              {community.badge_text && (
-                <CommunityBadge text={community.badge_text} bgColor={community.badge_color} textColor={community.badge_text_color} />
-              )}
-              {community.is_invite_only ? (
-                <span className="text-[10px] font-display text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-full">Invite Only</span>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-              <span>{community.member_count} member{community.member_count !== 1 ? 's' : ''}</span>
-              <span>{community.posts_last_week || 0} post{(community.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
-            </div>
-          </div>
-        </div>
-
-        {activeMembers.length > 0 && (
-          <div className="mt-3">
-            <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Most Active Members This Week</p>
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-              {activeMembers.map((member) => (
-                <Link
-                  key={member.id}
-                  to={getProfilePath(member.id, member.username)}
-                  className="shrink-0 w-9 h-9 rounded-full border border-piu-border hover:border-piu-accent transition-colors overflow-hidden"
-                  title={`${member.username} • ${member.recent_activity_count || 0} activity`}
-                >
-                  {member.avatar ? (
-                    <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt={member.username} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[11px]">
-                      {member.username[0]?.toUpperCase()}
-                    </div>
-                  )}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Description */}
-        {community.description && (
-          <p className="text-sm text-gray-400 mt-3 leading-relaxed">{community.description}</p>
-        )}
-
-        {/* Action bar */}
-        <div className="flex items-center gap-2 mt-4">
-          {user && !isMember && !community.user_pending_request && (
-            <button
-              onClick={handleJoin}
-              disabled={joining}
-              className="px-5 py-2 bg-piu-accent rounded-lg font-display font-bold text-sm hover:bg-piu-accent/80 transition-colors disabled:opacity-50"
-            >
-              {joining ? 'Joining...' : (community.is_invite_only ? 'Request to Join' : 'Join')}
-            </button>
-          )}
-          {community.user_pending_request && (
-            <span className="px-5 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg font-display font-bold text-sm">
-              Request Pending
-            </span>
-          )}
-          {isMember && community.user_role !== 'owner' && (
-            <button
-              onClick={handleLeave}
-              className="px-5 py-2 bg-piu-dark border border-piu-border rounded-lg font-display font-bold text-sm text-gray-400 hover:text-red-400 hover:border-red-400/50 transition-colors"
-            >
-              Leave
-            </button>
-          )}
+        <div className="absolute right-4 sm:right-6 -top-8 sm:-top-10 z-30 flex items-center gap-2">
           {canConfigureCommunityNotify && (
             <div className="relative" ref={notifyMenuRef}>
               <button
                 onClick={() => setCommunityNotifyMenuOpen(v => !v)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-display font-bold border transition-colors ${
+                className={`px-3.5 py-2 rounded-lg text-xs font-display font-bold border transition-colors backdrop-blur-sm ${
                   communityNotifyPrefs.subscribed
-                    ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
-                    : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
+                    ? 'bg-piu-dark/85 border-emerald-400/40 text-gray-100'
+                    : 'bg-piu-dark/85 border-piu-border text-gray-300 hover:text-white'
                 }`}
               >
                 <span className="inline-flex items-center gap-1.5">
@@ -989,7 +923,7 @@ export default function CommunityPage() {
                 </span>
               </button>
               {communityNotifyMenuOpen && (
-                <div className="absolute left-0 top-full mt-2 z-30 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+                <div className="absolute right-0 top-full mt-2 z-30 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
                   <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
                     Notify About {community.display_name}
                   </p>
@@ -1033,10 +967,10 @@ export default function CommunityPage() {
               )}
             </div>
           )}
-          {isModOrOwner && (
+          {isOwner && (
             <Link
               to={`/c/${community.name}/settings`}
-              className="ml-auto p-2 text-gray-500 hover:text-white transition-colors"
+              className="p-2 rounded-lg bg-piu-dark/85 border border-piu-border text-gray-300 hover:text-white transition-colors"
               title="Community Settings"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1044,6 +978,87 @@ export default function CommunityPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </Link>
+          )}
+        </div>
+
+        <div className="flex items-end gap-4 pr-28 sm:pr-0">
+          {/* Avatar */}
+          {community.avatar ? (
+            <img src={community.avatar.startsWith('data:') ? community.avatar : getAvatarUrl(community.avatar)} alt="" className="w-20 h-20 rounded-xl object-cover border-4 border-piu-dark shadow-lg" />
+          ) : (
+            <div className="w-20 h-20 rounded-xl bg-gradient-to-br from-piu-accent to-purple-700 border-4 border-piu-dark shadow-lg flex items-center justify-center">
+              <span className="font-display font-bold text-2xl text-white">{community.display_name[0]?.toUpperCase()}</span>
+            </div>
+          )}
+          <div className="flex-1 min-w-0 pb-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="font-display font-bold text-xl sm:text-2xl tracking-wide truncate">{community.display_name}</h1>
+              {community.badge_text && (
+                <CommunityBadge text={community.badge_text} bgColor={community.badge_color} textColor={community.badge_text_color} />
+              )}
+              {community.is_invite_only ? (
+                <span className="text-[10px] font-display text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-full">Invite Only</span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
+              <span>{community.member_count} member{community.member_count !== 1 ? 's' : ''}</span>
+              <span>{community.posts_last_week || 0} post{(community.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Description */}
+        {community.description && (
+          <p className="text-sm text-gray-400 mt-3 leading-relaxed">{community.description}</p>
+        )}
+
+        {activeMembers.length > 0 && (
+          <div className="mt-3">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Most Active Members This Week</p>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {activeMembers.map((member) => (
+                <Link
+                  key={member.id}
+                  to={getProfilePath(member.id, member.username)}
+                  className="shrink-0 w-9 h-9 rounded-full border border-piu-border hover:border-piu-accent transition-colors overflow-hidden"
+                  title={`${member.username} • ${member.recent_activity_count || 0} activity`}
+                >
+                  {member.avatar ? (
+                    <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt={member.username} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[11px]">
+                      {member.username[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Action bar */}
+        <div className="flex items-center gap-2 mt-4">
+          {user && !isMember && !community.user_pending_request && (
+            <button
+              onClick={handleJoin}
+              disabled={joining}
+              className="px-5 py-2 bg-piu-accent rounded-lg font-display font-bold text-sm hover:bg-piu-accent/80 transition-colors disabled:opacity-50"
+            >
+              {joining ? 'Joining...' : (community.is_invite_only ? 'Request to Join' : 'Join')}
+            </button>
+          )}
+          {community.user_pending_request && (
+            <span className="px-5 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg font-display font-bold text-sm">
+              Request Pending
+            </span>
+          )}
+          {isMember && community.user_role !== 'owner' && (
+            <button
+              onClick={handleLeave}
+              className="px-5 py-2 bg-piu-dark border border-piu-border rounded-lg font-display font-bold text-sm text-gray-400 hover:text-red-400 hover:border-red-400/50 transition-colors"
+            >
+              Leave
+            </button>
           )}
         </div>
 
@@ -1062,6 +1077,14 @@ export default function CommunityPage() {
             }`}
           >
             Posts
+          </button>
+          <button
+            onClick={() => setActiveTab('about')}
+            className={`px-4 py-2.5 font-display font-bold text-sm border-b-2 transition-colors ${
+              activeTab === 'about' ? 'border-piu-accent text-piu-accent' : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            About
           </button>
           <button
             onClick={() => setActiveTab('members')}
@@ -1112,6 +1135,9 @@ export default function CommunityPage() {
             onDeleteComment={handleDeleteComment}
           />
         )}
+        {activeTab === 'about' && (
+          <AboutTab community={community} />
+        )}
         {activeTab === 'members' && (
           <MembersTab
             members={members}
@@ -1148,6 +1174,7 @@ function PostsTab({
   const [customEmojis, setCustomEmojis] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
+  const [showCommandInfo, setShowCommandInfo] = useState(false);
   const textRef = useRef(null);
   const fileRef = useRef(null);
   const emojiRef = useRef(null);
@@ -1167,6 +1194,27 @@ function PostsTab({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  useEffect(() => {
+    if (!showCommandInfo) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setShowCommandInfo(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showCommandInfo]);
+
+  const resizeComposer = useCallback(() => {
+    const textarea = textRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const maxHeight = 220;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+  }, []);
+
+  useEffect(() => {
+    resizeComposer();
+  }, [newPostContent, resizeComposer]);
 
   const insertEmoji = (emoji) => {
     const textarea = textRef.current;
@@ -1197,6 +1245,11 @@ function PostsTab({
       textarea.selectionEnd = end + prefix.length;
       textarea.focus();
     }, 0);
+  };
+
+  const handleComposerChange = (e) => {
+    setNewPostContent(e.target.value);
+    resizeComposer();
   };
 
   const handleImageSelect = (e) => {
@@ -1257,10 +1310,10 @@ function PostsTab({
             <textarea
               ref={textRef}
               value={newPostContent}
-              onChange={(e) => setNewPostContent(e.target.value)}
-              className="input-field flex-1 resize-none min-h-[80px]"
-              rows={3}
-              placeholder="Share something with the community... Try /summary"
+              onChange={handleComposerChange}
+              className="input-field flex-1 resize-none min-h-[44px] max-h-[220px] overflow-y-auto"
+              rows={1}
+              placeholder="Share something"
               maxLength={5000}
             />
           </div>
@@ -1427,6 +1480,15 @@ function PostsTab({
                   <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z"/>
                 </svg>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setShowCommandInfo(true)}
+                className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm"
+                title="Extra commands"
+              >
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-current text-[11px] font-display font-bold">i</span>
+              </button>
             </div>
 
             <button
@@ -1438,6 +1500,36 @@ function PostsTab({
             </button>
           </div>
         </form>
+      )}
+
+      {showCommandInfo && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowCommandInfo(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-piu-border bg-piu-card p-4 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-display font-bold text-sm tracking-wide">Extra Commands</h3>
+              <button
+                type="button"
+                onClick={() => setShowCommandInfo(false)}
+                className="text-gray-500 hover:text-white transition-colors"
+                aria-label="Close command info"
+              >
+                &#10005;
+              </button>
+            </div>
+            <div className="mt-3 rounded-lg border border-piu-border/50 bg-piu-dark/40 px-3 py-2">
+              <p className="text-[11px] text-gray-300">
+                <span className="font-mono text-piu-accent">{SLASH_COMMANDS.summary.trigger}</span>
+                {' '}Generate a recap from your latest recently-played session.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Not a member notice */}
@@ -1995,6 +2087,64 @@ function MentionCommentInput({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function AboutTab({ community }) {
+  const aboutText = String(community.about || '').trim();
+  const rulesText = String(community.rules || '').trim();
+  const rawLocation = String(community.location_country || '').trim();
+  const locationCode = rawLocation.toUpperCase();
+  const knownCountry = COUNTRY_NAME_BY_CODE[locationCode] || '';
+  const locationName = knownCountry || rawLocation;
+
+  return (
+    <div className="space-y-4">
+      <section className="card">
+        <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">About</p>
+        {aboutText ? (
+          <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{aboutText}</p>
+        ) : (
+          <p className="text-sm text-gray-500">No long description has been added yet.</p>
+        )}
+      </section>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <section className="card">
+          <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Privacy</p>
+          <p className="text-sm font-display font-bold text-gray-100">{community.is_invite_only ? 'Private' : 'Public'}</p>
+        </section>
+
+        <section className="card">
+          <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Location</p>
+          {locationName ? (
+            <div className="inline-flex items-center gap-2 text-sm text-gray-100">
+              {knownCountry && (
+                <span>{getCountryFlag(locationCode, 'inline-block h-4 align-middle')}</span>
+              )}
+              <span>{locationName}</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 text-sm text-gray-300">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
+              </svg>
+              <span>Global</span>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="card">
+        <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Rules</p>
+        {rulesText ? (
+          <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{rulesText}</p>
+        ) : (
+          <p className="text-sm text-gray-500">No community rules have been added yet.</p>
+        )}
+      </section>
     </div>
   );
 }

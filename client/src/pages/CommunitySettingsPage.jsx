@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getCountryFlag } from '../components/PlayerRegistration';
+import { COUNTRIES, getCountryFlag } from '../components/PlayerRegistration';
 import CommunityTag from '../components/CommunityTag';
 import {
   getCommunityByName, updateCommunity, deleteCommunity,
@@ -128,6 +128,9 @@ export default function CommunitySettingsPage() {
 function GeneralTab({ community, isOwner, onUpdate, onDelete, setError }) {
   const [displayName, setDisplayName] = useState(community.display_name);
   const [description, setDescription] = useState(community.description || '');
+  const [about, setAbout] = useState(community.about || '');
+  const [locationCountry, setLocationCountry] = useState(community.location_country || '');
+  const [rules, setRules] = useState(community.rules || '');
   const [inviteOnly, setInviteOnly] = useState(!!community.is_invite_only);
   const [badgeText, setBadgeText] = useState(community.badge_text || '');
   const [badgeColor, setBadgeColor] = useState(community.badge_color || '#ff3366');
@@ -146,6 +149,9 @@ function GeneralTab({ community, isOwner, onUpdate, onDelete, setError }) {
       const formData = new FormData();
       formData.append('display_name', displayName);
       formData.append('description', description);
+      formData.append('about', about);
+      formData.append('location_country', locationCountry);
+      formData.append('rules', rules);
       formData.append('is_invite_only', inviteOnly ? 'true' : 'false');
       formData.append('badge_text', badgeText);
       formData.append('badge_color', badgeColor);
@@ -188,6 +194,46 @@ function GeneralTab({ community, isOwner, onUpdate, onDelete, setError }) {
           className="w-full bg-piu-dark border border-piu-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-piu-accent resize-none"
           rows={3}
           maxLength={500}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-display font-bold text-gray-400 mb-1">About (Long Description)</label>
+        <textarea
+          value={about}
+          onChange={(e) => setAbout(e.target.value)}
+          className="w-full bg-piu-dark border border-piu-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-piu-accent resize-none"
+          rows={5}
+          maxLength={3000}
+          placeholder="Optional longer description shown on the About tab."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-display font-bold text-gray-400 mb-1">Location</label>
+        <select
+          value={locationCountry}
+          onChange={(e) => setLocationCountry(e.target.value)}
+          className="w-full bg-piu-dark border border-piu-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-piu-accent"
+        >
+          <option value="">Global (no country)</option>
+          {COUNTRIES.filter(c => c.code).map(c => (
+            <option key={c.code} value={c.code}>
+              {c.flag ? `${c.flag} ` : ''}{c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-display font-bold text-gray-400 mb-1">Rules</label>
+        <textarea
+          value={rules}
+          onChange={(e) => setRules(e.target.value)}
+          className="w-full bg-piu-dark border border-piu-border rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-piu-accent resize-none"
+          rows={5}
+          maxLength={3000}
+          placeholder="Optional rules shown in the community About tab."
         />
       </div>
 
