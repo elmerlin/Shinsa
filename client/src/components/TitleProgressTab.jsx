@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -1143,6 +1144,397 @@ function WaypointNode({
   );
 }
 
+function createTextSprite(text, options = {}) {
+  const {
+    bg = 'rgba(10, 18, 44, 0.86)',
+    fg = '#FFFFFF',
+    stroke = 'rgba(255, 255, 255, 0.24)',
+    fontSize = 24,
+    paddingX = 18,
+    paddingY = 12,
+  } = options;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const fontFamily = '"Cinzel","Trebuchet MS",serif';
+  const font = `700 ${fontSize}px ${fontFamily}`;
+  ctx.font = font;
+  const metrics = ctx.measureText(text);
+  const textW = Math.ceil(metrics.width);
+  const w = textW + paddingX * 2;
+  const h = fontSize + paddingY * 2;
+  canvas.width = w;
+  canvas.height = h;
+  ctx.font = font;
+  ctx.fillStyle = bg;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 2;
+  const radius = 14;
+  ctx.beginPath();
+  ctx.moveTo(radius, 0);
+  ctx.lineTo(w - radius, 0);
+  ctx.quadraticCurveTo(w, 0, w, radius);
+  ctx.lineTo(w, h - radius);
+  ctx.quadraticCurveTo(w, h, w - radius, h);
+  ctx.lineTo(radius, h);
+  ctx.quadraticCurveTo(0, h, 0, h - radius);
+  ctx.lineTo(0, radius);
+  ctx.quadraticCurveTo(0, 0, radius, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = fg;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, paddingX, h / 2 + 1);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(w / 20, h / 20, 1);
+  sprite.renderOrder = 20;
+  return sprite;
+}
+
+function createProp(type, position, colorSet = {}) {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  let mesh = null;
+  if (type === 'mountain') {
+    const geo = new THREE.ConeGeometry(1.1, 2.8, 5);
+    const mat = new THREE.MeshStandardMaterial({ color: colorSet.main || '#7A6554', roughness: 0.9, metalness: 0.08 });
+    mesh = new THREE.Mesh(geo, mat);
+    const splitGeo = new THREE.ConeGeometry(0.95, 2.6, 3, 1, true);
+    const splitMat = new THREE.MeshStandardMaterial({ color: colorSet.shade || '#5A493B', roughness: 0.95 });
+    const split = new THREE.Mesh(splitGeo, splitMat);
+    split.rotation.y = Math.PI * 0.14;
+    split.position.y = 0.05;
+    group.add(split);
+  } else if (type === 'ruin') {
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.95, 1.05, 0.75, 10),
+      new THREE.MeshStandardMaterial({ color: colorSet.main || '#A98C69', roughness: 0.92 })
+    );
+    base.position.y = 0.37;
+    const top = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.45, 1.25, 8),
+      new THREE.MeshStandardMaterial({ color: colorSet.shade || '#7E654A', roughness: 0.94 })
+    );
+    top.position.y = 1.2;
+    group.add(base, top);
+  } else {
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.26, 1.25, 8),
+      new THREE.MeshStandardMaterial({ color: '#4B3628', roughness: 0.95 })
+    );
+    trunk.position.y = 0.6;
+    const canopy = new THREE.Mesh(
+      new THREE.ConeGeometry(0.9, 2.1, 7),
+      new THREE.MeshStandardMaterial({ color: colorSet.main || '#3D6E4A', roughness: 0.9 })
+    );
+    canopy.position.y = 1.9;
+    group.add(trunk, canopy);
+  }
+  if (mesh) group.add(mesh);
+
+  group.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  // Placeholder architecture: this function can swap to GLTFLoader meshes later.
+  return group;
+}
+
+function ThreeProgressMap({
+  width,
+  height,
+  points,
+  titles,
+  biomeZones,
+  cursor,
+  mapScrollTop,
+  mapViewportHeight,
+  currentIndex,
+  onNodeSelect,
+}) {
+  const hostRef = useRef(null);
+  const onNodeSelectRef = useRef(onNodeSelect);
+  const liveRef = useRef({
+    cursor,
+    mapScrollTop,
+    mapViewportHeight,
+  });
+
+  useEffect(() => {
+    onNodeSelectRef.current = onNodeSelect;
+  }, [onNodeSelect]);
+
+  useEffect(() => {
+    liveRef.current = { cursor, mapScrollTop, mapViewportHeight };
+  }, [cursor, mapScrollTop, mapViewportHeight]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !points.length) return undefined;
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0f1224, 70, 165);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    host.appendChild(renderer.domElement);
+
+    const camera = new THREE.OrthographicCamera(-26, 26, 20, -20, 0.1, 420);
+    camera.position.set(50, 50, 50);
+    camera.lookAt(0, 0, 0);
+
+    const ambientLight = new THREE.AmbientLight(0x9fb4ff, 0.7);
+    scene.add(ambientLight);
+    const sun = new THREE.DirectionalLight(0xfff1d4, 1.05);
+    sun.position.set(36, 54, 22);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 180;
+    sun.shadow.camera.left = -60;
+    sun.shadow.camera.right = 60;
+    sun.shadow.camera.top = 60;
+    sun.shadow.camera.bottom = -60;
+    scene.add(sun);
+
+    const zoneHeights = { haunted: 3.2, ruins: 16.4, volcanic: 29.6 };
+    const worldPoints = points.map((point, index) => {
+      const t = points.length <= 1 ? 0 : index / (points.length - 1);
+      const zone = biomeZones.find((candidate) => index >= candidate.start && index <= candidate.end) || biomeZones[0];
+      const x = ((point.x / width) - 0.5) * 34;
+      const y = (zoneHeights[zone?.id] || 6) + Math.sin(index * 0.42) * 0.16;
+      const z = THREE.MathUtils.lerp(16, -86, t);
+      return new THREE.Vector3(x, y, z);
+    });
+
+    biomeZones.forEach((zone) => {
+      const zoneSlice = worldPoints.slice(zone.start, zone.end + 1);
+      const center = zoneSlice.reduce((acc, point) => acc.add(point), new THREE.Vector3()).multiplyScalar(1 / zoneSlice.length);
+      const span = Math.max(6, zoneSlice.length * 2.9);
+      const thickness = zone.id === 'haunted' ? 7.8 : zone.id === 'ruins' ? 7.2 : 6.8;
+      const topColor = zone.id === 'haunted' ? '#527B67' : zone.id === 'ruins' ? '#B08354' : '#BC5541';
+      const sideColor = zone.id === 'haunted' ? '#2B4339' : zone.id === 'ruins' ? '#5A3A24' : '#4E221F';
+
+      const top = new THREE.Mesh(
+        new THREE.CylinderGeometry(span * 0.88, span * 1.04, thickness, 8),
+        new THREE.MeshStandardMaterial({ color: topColor, roughness: 0.9, metalness: 0.05 })
+      );
+      top.position.set(center.x + (zone.id === 'volcanic' ? 1.4 : zone.id === 'haunted' ? -1.1 : 0), center.y - thickness / 2, center.z);
+      top.castShadow = true;
+      top.receiveShadow = true;
+      scene.add(top);
+
+      const rim = new THREE.Mesh(
+        new THREE.CylinderGeometry(span * 0.85, span * 0.9, 0.7, 8),
+        new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.95, metalness: 0.02 })
+      );
+      rim.position.set(top.position.x, center.y + 0.01, top.position.z);
+      rim.castShadow = true;
+      rim.receiveShadow = true;
+      scene.add(rim);
+
+      const propColorSet = zone.id === 'volcanic'
+        ? { main: '#7A3228', shade: '#4A1F19' }
+        : zone.id === 'ruins'
+          ? { main: '#B89A75', shade: '#7C6249' }
+          : { main: '#466B53', shade: '#2E4738' };
+      for (let i = 0; i < zoneSlice.length; i += 2) {
+        const basePoint = zoneSlice[i];
+        const offset = i % 4 === 0 ? 2.8 : -2.4;
+        const propPos = new THREE.Vector3(basePoint.x + offset, basePoint.y + 0.2, basePoint.z + (i % 3 === 0 ? 2 : -2));
+        const propType = zone.id === 'ruins' ? 'ruin' : zone.id === 'volcanic' ? 'mountain' : 'tree';
+        const prop = createProp(propType, propPos, propColorSet);
+        scene.add(prop);
+      }
+    });
+
+    const pathCurve = new THREE.CatmullRomCurve3(worldPoints, false, 'catmullrom', 0.25);
+    const pathMesh = new THREE.Mesh(
+      new THREE.TubeGeometry(pathCurve, Math.max(100, points.length * 14), 0.6, 14, false),
+      new THREE.MeshStandardMaterial({
+        color: 0xffd57c,
+        emissive: 0xffa84e,
+        emissiveIntensity: 0.7,
+        roughness: 0.28,
+        metalness: 0.08,
+      })
+    );
+    pathMesh.castShadow = true;
+    pathMesh.receiveShadow = true;
+    pathMesh.renderOrder = 1;
+    scene.add(pathMesh);
+
+    const nodeMeshes = [];
+    titles.forEach((title) => {
+      const point = worldPoints[title.index];
+      if (!point) return;
+      const unlocked = title.index <= currentIndex;
+      const node = new THREE.Mesh(
+        new THREE.CylinderGeometry(title.index % 8 === 0 ? 1.45 : 1.12, title.index % 8 === 0 ? 1.45 : 1.12, 0.42, 28),
+        new THREE.MeshStandardMaterial({
+          color: unlocked ? '#f2f5ff' : '#6b7382',
+          emissive: unlocked ? '#f4be61' : '#1f2733',
+          emissiveIntensity: unlocked ? 0.44 : 0.08,
+          roughness: 0.4,
+          metalness: 0.3,
+        })
+      );
+      node.position.set(point.x, point.y + 0.7, point.z);
+      node.castShadow = true;
+      node.receiveShadow = true;
+      node.renderOrder = 6;
+      node.userData = { titleIndex: title.index };
+      scene.add(node);
+      nodeMeshes.push(node);
+
+      const label = createTextSprite(`${title.name} • ${titleLevelLabel(title)}`, {
+        bg: unlocked ? 'rgba(13, 20, 52, 0.84)' : 'rgba(26, 28, 36, 0.86)',
+        fg: unlocked ? '#FFFFFF' : '#D2DAE6',
+      });
+      label.position.set(point.x, point.y + 2.5, point.z);
+      scene.add(label);
+    });
+
+    const familyAnchors = ['Intermediate', 'Advanced', 'Expert', 'The Master', 'Master']
+      .map((family) => {
+        const anchor = titles
+          .filter((title) => familyName(title) === family)
+          .sort((a, b) => a.index - b.index)[0];
+        if (!anchor) return null;
+        const anchorPoint = worldPoints[anchor.index];
+        if (!anchorPoint) return null;
+        const sprite = createTextSprite(family === 'Master' ? 'The Master' : family, {
+          bg: 'rgba(58, 26, 20, 0.82)',
+          fg: '#FFE6BC',
+          fontSize: 28,
+          paddingX: 24,
+          paddingY: 12,
+        });
+        sprite.position.set(anchorPoint.x + 3.2, anchorPoint.y + 4.4, anchorPoint.z - 0.8);
+        scene.add(sprite);
+        return sprite;
+      })
+      .filter(Boolean);
+
+    const avatar = new THREE.Group();
+    const avatarBody = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.7, 1.3, 12),
+      new THREE.MeshStandardMaterial({ color: 0x3f7df0, roughness: 0.35, metalness: 0.2 })
+    );
+    avatarBody.position.y = 0.8;
+    const avatarHead = new THREE.Mesh(
+      new THREE.SphereGeometry(0.45, 16, 16),
+      new THREE.MeshStandardMaterial({ color: 0xf4d4c1, roughness: 0.5, metalness: 0.02 })
+    );
+    avatarHead.position.y = 1.75;
+    avatar.add(avatarBody, avatarHead);
+    avatar.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    scene.add(avatar);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const onPointerDown = (event) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObjects(nodeMeshes, false)[0];
+      if (!hit) return;
+      const titleIndex = hit.object?.userData?.titleIndex;
+      const target = titles.find((title) => title.index === titleIndex);
+      if (target && onNodeSelectRef.current) onNodeSelectRef.current(target);
+    };
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+    const onResize = () => {
+      const w = Math.max(1, host.clientWidth);
+      const h = Math.max(1, host.clientHeight);
+      const aspect = w / h;
+      const frustumSize = 48;
+      camera.left = (-frustumSize * aspect) / 2;
+      camera.right = (frustumSize * aspect) / 2;
+      camera.top = frustumSize / 2;
+      camera.bottom = -frustumSize / 2;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+
+    const camStart = new THREE.Vector3(44, 28, 40);
+    const camEnd = new THREE.Vector3(44, 60, -26);
+    const lookStart = new THREE.Vector3(0, 5, 14);
+    const lookEnd = new THREE.Vector3(0, 28, -66);
+    const workLook = new THREE.Vector3();
+    const workCam = new THREE.Vector3();
+
+    let rafId = 0;
+    const animate = () => {
+      rafId = requestAnimationFrame(animate);
+      const live = liveRef.current;
+      const denom = Math.max(1, height - Math.max(1, live.mapViewportHeight || 1));
+      const scrollT = clamp((live.mapScrollTop || 0) / denom, 0, 1);
+      workCam.lerpVectors(camStart, camEnd, scrollT);
+      workLook.lerpVectors(lookStart, lookEnd, scrollT);
+      camera.position.copy(workCam);
+      camera.lookAt(workLook);
+
+      const pathT = points.length <= 1 ? 0 : clamp((live.cursor || 0) / (points.length - 1), 0, 1);
+      const avatarPos = pathCurve.getPoint(pathT);
+      avatar.position.set(avatarPos.x, avatarPos.y + 0.9, avatarPos.z);
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('resize', onResize);
+      scene.traverse((obj) => {
+        if (obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((material) => {
+            if (material.map) material.map.dispose?.();
+            material.dispose?.();
+          });
+        }
+        if (obj.geometry) obj.geometry.dispose?.();
+      });
+      host.removeChild(renderer.domElement);
+      renderer.dispose();
+      familyAnchors.length = 0;
+    };
+  }, [points, titles, biomeZones, width, height, currentIndex]);
+
+  return (
+    <div className="sticky top-0 w-full h-[68vh] sm:h-[74vh] pointer-events-auto">
+      <div ref={hostRef} className="w-full h-full" />
+    </div>
+  );
+}
+
 /* ── Main Component ───────────────────────────────────────────────── */
 
 export default function TitleProgressTab({
@@ -1173,6 +1565,7 @@ export default function TitleProgressTab({
   const chatterIntervalRef = useRef(null);
   const audioCtxRef = useRef(null);
   const [mapScrollTop, setMapScrollTop] = useState(0);
+  const [mapViewportHeight, setMapViewportHeight] = useState(0);
 
   function clearSpeechTimer() {
     if (!speechTimeoutRef.current) return;
@@ -1323,6 +1716,23 @@ export default function TitleProgressTab({
   }, []);
 
   useEffect(() => {
+    const el = mapScrollRef.current;
+    if (!el) return undefined;
+    const update = () => setMapViewportHeight(el.clientHeight || 0);
+    update();
+    let observer = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(update);
+      observer.observe(el);
+    }
+    window.addEventListener('resize', update);
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [titles.length]);
+
+  useEffect(() => {
     if (!groups.length || Object.keys(collapsedGroups).length > 0) return;
     const currentFamily = summary?.current_title?.skill_family || '';
     const initial = {};
@@ -1341,7 +1751,6 @@ export default function TitleProgressTab({
 
   const { points, width, height } = useMemo(() => buildWorldPoints(titles.length || 1), [titles.length]);
   const avatarPos = useMemo(() => interpolatePoint(points, cursor), [points, cursor]);
-  const avatarLeftPercent = (avatarPos.x / width) * 100;
 
   const nextLevelPoints = nextTitle ? (levelMap[nextTitle.level]?.points || 0) : 0;
   const sameLevelSegment = nextTitle && summary?.current_title?.level === nextTitle.level;
@@ -1349,34 +1758,9 @@ export default function TitleProgressTab({
   const segmentEarned = Math.max(0, nextLevelPoints - segmentStart);
   const segmentNeeded = nextTitle ? Math.max(1, nextTitle.required_points - segmentStart) : 0;
   const displayedProgress = nextTitle ? clamp(Number(summary?.segment_progress_percent) || 0, 0, 100) : 100;
-  const isRunning = target !== null;
 
   const biomeZones = useMemo(() => buildBiomeZones(points), [points]);
-  const biomeIslands = useMemo(() => buildVolumetricIslands(biomeZones, width), [biomeZones, width]);
   const avatarNodeIndex = titles.length > 0 ? clamp(Math.round(cursor), 0, titles.length - 1) : 0;
-
-  const islandPropsByZone = useMemo(() => {
-    const byId = {};
-    for (const island of biomeIslands) {
-      const zonePoints = points.slice(island.start, island.end + 1).filter(Boolean);
-      byId[island.id] = buildIslandProps(island, zonePoints);
-    }
-    return byId;
-  }, [biomeIslands, points]);
-
-  const milestoneIds = useMemo(() => {
-    const families = ['Advanced', 'Expert', 'Master'];
-    const set = new Set();
-    for (const family of families) {
-      const anchor = titles
-        .filter((title) => familyName(title) === family)
-        .sort((a, b) => a.index - b.index)[0];
-      if (anchor?.id) set.add(anchor.id);
-    }
-    return set;
-  }, [titles]);
-
-  const roadPath = useMemo(() => buildRoadPath(points), [points]);
 
   const activeNodeTitle = useMemo(() => {
     if (!titles.length) return null;
@@ -1439,9 +1823,11 @@ export default function TitleProgressTab({
 
   function handleMapScroll(event) {
     const nextTop = event.currentTarget.scrollTop;
+    const nextViewHeight = event.currentTarget.clientHeight || 0;
     if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     scrollRafRef.current = requestAnimationFrame(() => {
       setMapScrollTop(nextTop);
+      setMapViewportHeight(nextViewHeight);
       scrollRafRef.current = null;
     });
   }
@@ -1495,7 +1881,7 @@ export default function TitleProgressTab({
           <div>
             <h3 className="font-display font-bold text-base text-piu-accent">TITLE PROGRESSION</h3>
             <p className="text-xs text-gray-500 mt-1">
-              {summary.current_title ? titleLevelLabel(summary.current_title) : 'Title Lv.1'}
+              {summary.current_title ? titleLevelLabel(summary.current_title) : 'Title Level 1'}
               {nextTitle ? ` → ${titleLevelLabel(nextTitle)}` : ' → Completed'}
             </p>
           </div>
@@ -1545,151 +1931,18 @@ export default function TitleProgressTab({
             className="max-h-[68vh] sm:max-h-[74vh] overflow-y-auto overflow-x-hidden title-map-scroll"
           >
             <div className="relative w-full title-map-world" style={{ height: `${height}px` }}>
-              <div className="absolute inset-0 title-map-void" />
-              <div
-                className="absolute inset-0 pointer-events-none title-map-godrays"
-                style={{ transform: `translateY(${mapScrollTop * 0.06}px)` }}
+              <ThreeProgressMap
+                width={width}
+                height={height}
+                points={points}
+                titles={titles}
+                biomeZones={biomeZones}
+                cursor={cursor}
+                mapScrollTop={mapScrollTop}
+                mapViewportHeight={mapViewportHeight}
+                currentIndex={currentIndex}
+                onNodeSelect={handleTitleTap}
               />
-
-              {[...biomeIslands]
-                .sort((a, b) => b.top - a.top)
-                .map((island, idx) => (
-                  <div
-                    key={`vol-island-${island.id}`}
-                    className={`title-faux-island biome-${island.id}`}
-                    style={{
-                      left: `${(island.left / width) * 100}%`,
-                      top: `${island.top + mapScrollTop * island.parallax * 0.25}px`,
-                      width: `${(island.widthPx / width) * 100}%`,
-                      height: `${island.heightPx}px`,
-                      zIndex: 8 + idx,
-                      '--island-top-a': island.topA,
-                      '--island-top-b': island.topB,
-                      '--island-side-a': island.sideA,
-                      '--island-side-b': island.sideB,
-                      '--island-rim': island.rim || '#ffffff',
-                      '--island-thickness': `${Math.round(island.thickness * 0.95)}px`,
-                      '--island-clip': island.clipPath,
-                    }}
-                  >
-                    <div className={`title-faux-island-top texture-${island.texture}`}>
-                      <div className="title-faux-island-rim" />
-                      <div className="title-prop-sprite-field">
-                        {(islandPropsByZone[island.id] || []).map((prop) => (
-                          <FauxPropSprite key={prop.id} prop={prop} />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-              <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="riverCore" x1="0" y1="1" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#FFBC46" />
-                    <stop offset="50%" stopColor="#FFE699" />
-                    <stop offset="100%" stopColor="#FFF8D2" />
-                  </linearGradient>
-                  <linearGradient id="riverShell" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#E88945" />
-                    <stop offset="100%" stopColor="#8B4A26" />
-                  </linearGradient>
-                  <filter id="riverGlow">
-                    <feGaussianBlur stdDeviation="4.8" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-
-                <path
-                  d={roadPath}
-                  fill="none"
-                  stroke="rgba(0,0,0,0.52)"
-                  strokeWidth="36"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  transform="translate(5,8)"
-                />
-                <path
-                  d={roadPath}
-                  fill="none"
-                  stroke="url(#riverShell)"
-                  strokeWidth="30"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d={roadPath}
-                  fill="none"
-                  stroke="url(#riverCore)"
-                  strokeWidth="22"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  filter="url(#riverGlow)"
-                />
-                <path
-                  d={roadPath}
-                  fill="none"
-                  stroke="rgba(255,255,255,0.62)"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray="28 18"
-                  className="title-river-flow"
-                />
-              </svg>
-
-              {biomeIslands.map((island) => (
-                <div
-                  key={`label-${island.id}`}
-                  className="absolute left-3 z-30"
-                  style={{ top: `${island.labelY + mapScrollTop * island.parallax}px` }}
-                >
-                  <div
-                    className="title-zone-banner px-3 py-1.5 rounded-lg"
-                    style={{
-                      background: `linear-gradient(140deg, ${island.banner}df, ${island.banner}8b)`,
-                      boxShadow: `0 5px 16px ${island.banner}4f, inset 0 1px 0 rgba(255,255,255,0.3)`,
-                      border: '1px solid rgba(255,255,255,0.36)',
-                    }}
-                  >
-                    <p className="text-[11px] font-display font-bold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.46)' }}>
-                      {island.title}
-                    </p>
-                    <p className="text-[9px] text-white/84">{island.subtitle}</p>
-                  </div>
-                </div>
-              ))}
-
-              {titles.map((title) => {
-                const point = points[title.index];
-                return (
-                  <WaypointNode
-                    key={title.id}
-                    title={title}
-                    point={point}
-                    width={width}
-                    isCurrent={title.index === avatarNodeIndex}
-                    isProgressNode={title.index === currentIndex}
-                    isMilestone={milestoneIds.has(title.id)}
-                    isTarget={target !== null && Math.abs(title.index - target) < 0.2}
-                    onClick={() => handleTitleTap(title)}
-                  />
-                );
-              })}
-
-              <div
-                className="absolute pointer-events-none -translate-x-1/2 -translate-y-[88%] z-30"
-                style={{ left: `${avatarLeftPercent}%`, top: `${avatarPos.y}px` }}
-              >
-                <JourneyCharacter
-                  running={isRunning}
-                  avatarUrl={avatarUrl}
-                  username={username}
-                  gender={gender}
-                />
-              </div>
             </div>
           </div>
 
