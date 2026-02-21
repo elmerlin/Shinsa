@@ -719,6 +719,12 @@ function getCompetitiveLevel(entries) {
   let best = null;
   for (const entry of entries) {
     if (!entry || entry.score_count <= 0) continue;
+    const totalCharts = parseInt(entry.total_charts, 10) || 0;
+    const scoredCharts = parseInt(entry.score_count, 10) || 0;
+    const clearedCharts = parseInt(entry.cleared_charts, 10) || 0;
+    if (totalCharts <= 0) continue;
+    if ((scoredCharts / totalCharts) < 0.5) continue;
+    if ((clearedCharts / totalCharts) < 0.5) continue;
     const grade = entry.average_grade || 'F';
     if ((GRADE_INDEX[grade] || 0) < (GRADE_INDEX.S || 0)) continue;
     if (!best || entry.level > best.level) {
@@ -728,6 +734,7 @@ function getCompetitiveLevel(entries) {
         average_grade: grade,
         passed_charts: entry.cleared_charts,
         total_charts: entry.total_charts,
+        clear_percentage: entry.clear_percentage,
       };
     }
   }
@@ -737,6 +744,7 @@ function getCompetitiveLevel(entries) {
     average_grade: '',
     passed_charts: 0,
     total_charts: 0,
+    clear_percentage: 0,
   };
 }
 

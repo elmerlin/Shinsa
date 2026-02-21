@@ -164,10 +164,15 @@ function CompetitiveLevelCard({
   const selectedAverage = selectedRow?.average_score || 0;
   const selectedPassed = selectedRow?.cleared_charts || 0;
   const selectedTotal = selectedRow?.total_charts || 0;
+  const selectedPassPercent = selectedTotal > 0
+    ? Number(((selectedPassed / selectedTotal) * 100).toFixed(2))
+    : 0;
 
-  const qualifies = selectedGrade
+  const meetsScoreThreshold = selectedGrade
     ? (GRADE_INDEX[selectedGrade] || 0) >= (GRADE_INDEX.S || 0)
     : false;
+  const meetsCoverageThreshold = selectedTotal > 0 && selectedPassPercent >= 50;
+  const qualifies = meetsScoreThreshold && meetsCoverageThreshold;
 
   const handleBoxClick = (e) => {
     if (rows.length <= 1) {
@@ -176,12 +181,16 @@ function CompetitiveLevelCard({
     }
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
-    const halfWidth = rect.width / 2;
-    if (clickX < halfWidth) {
+    const edgeThreshold = rect.width * 0.26;
+    if (clickX <= edgeThreshold) {
       onCursorChange((prev) => (prev <= 0 ? rows.length - 1 : prev - 1));
-    } else {
-      onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1));
+      return;
     }
+    if (clickX >= (rect.width - edgeThreshold)) {
+      onCursorChange((prev) => (prev >= rows.length - 1 ? 0 : prev + 1));
+      return;
+    }
+    setExpanded((value) => !value);
   };
 
   return (
@@ -203,25 +212,43 @@ function CompetitiveLevelCard({
           if (e.key === 'Enter' || e.key === ' ') setExpanded((value) => !value);
         }}
         className="min-w-0 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-2.5 py-2 text-left hover:border-piu-accent/40 transition-colors cursor-pointer select-none"
-        title={rows.length > 1 ? 'Tap left/right edge to navigate levels' : 'Competitive level details'}
+        title={rows.length > 1
+          ? 'Tap center to show breakdown. Tap left/right edge to navigate levels.'
+          : 'Tap to show competitive level breakdown'}
       >
         <div className="flex items-center justify-between gap-1 min-w-0">
           <span className={`font-display font-black text-base ${modeColorClass}`}>
             {selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}
           </span>
-          <span className={`shrink-0 text-xs font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
-            {selectedGrade || '-'}
-          </span>
+          <div className="shrink-0 flex items-center gap-1.5">
+            <span className={`text-xs font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
+              {selectedGrade || '-'}
+            </span>
+            <span className="sm:hidden text-[10px] font-mono text-gray-400">
+              {selectedAverage ? formatNumber(selectedAverage) : '-'}
+            </span>
+          </div>
         </div>
+      </div>
+
+      <div className="hidden xl:block mt-2 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-2 py-1.5">
+        <p className="text-[10px] text-gray-500">Average Score ({selectedLevel ? `${modePrefix}${selectedLevel}` : '-'})</p>
+        <p className="text-xs font-mono text-gray-100">{selectedAverage ? formatNumber(selectedAverage) : '-'}</p>
       </div>
 
       {expanded && (
         <div className="mt-2 text-[10px] text-gray-400 rounded-md border border-piu-border/40 bg-piu-card/50 px-2 py-1.5 space-y-1">
+          <p>% passed: <span className="font-mono text-gray-200">{selectedTotal > 0 ? `${selectedPassPercent}% (${selectedPassed}/${selectedTotal})` : '-'}</span></p>
           <p>Average score: <span className="font-mono text-gray-200">{selectedAverage ? formatNumber(selectedAverage) : '-'}</span></p>
           <p>Hypothetical grade: <span className={`font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>{selectedGrade || '-'}</span></p>
-          <p>Passes at this level: {selectedPassed}/{selectedTotal}</p>
+          <p className={meetsCoverageThreshold ? 'text-emerald-300' : 'text-gray-500'}>
+            50%+ clear requirement: {meetsCoverageThreshold ? 'met' : 'not met'}.
+          </p>
+          <p className={meetsScoreThreshold ? 'text-emerald-300' : 'text-gray-500'}>
+            S-or-better average requirement: {meetsScoreThreshold ? 'met' : 'not met'}.
+          </p>
           <p className={`${qualifies ? 'text-emerald-300' : 'text-gray-500'}`}>
-            {qualifies ? 'Meets S-or-better threshold at this level.' : 'Below S threshold at this level.'}
+            {qualifies ? 'This level qualifies for competitive level.' : 'This level does not qualify for competitive level.'}
           </p>
           <p className="text-gray-500 pt-1 border-t border-piu-border/40">
             Computed competitive level: <span className={`font-display font-bold ${modeColorClass}`}>{competitiveLevel?.level ? `${modePrefix}${competitiveLevel.level}` : '-'}</span>
@@ -250,8 +277,8 @@ function CompetitiveLevelInfoModal({ open, onClose }) {
         <div className="px-4 py-4 text-sm text-gray-300 leading-relaxed space-y-3">
           <p>
             The competitive level is defined as the level of a folder for which your average score
-            across all the songs you have passed is 970,000 Grade S or better. The number of songs
-            passed in the folder must also be more than 50% of the folder.
+            across cleared songs is 970,000 (Grade S) or better. You must also clear at least 50%
+            of charts in that folder.
           </p>
           <p className="text-xs text-gray-500">
             A folder is just the songs within a mode and level. For instance the S23 folder, or D23 folder etc.
