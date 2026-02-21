@@ -85,7 +85,7 @@
 
 @keyframes title-run-bob {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-5px); }
 }
 
 .title-idle {
@@ -109,4 +109,45 @@
     radial-gradient(circle at 12% 18%, rgba(34, 197, 94, 0.18), transparent 26%),
     radial-gradient(circle at 83% 72%, rgba(56, 189, 248, 0.18), transparent 30%);
   background-size: auto, 22px 22px, 22px 22px, auto, auto;
+}
+
+@keyframes title-waypoint-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0.08), 0 0 12px rgba(125, 211, 252, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 rgba(255, 255, 255, 0.2), 0 0 18px rgba(253, 224, 71, 0.55);
+  }
+}
+
+.title-waypoint-unlocked {
+  animation: title-waypoint-glow 2.3s ease-in-out infinite;
+}
+
+.title-map-frame {
+  background:
+    radial-gradient(circle at 15% 8%, rgba(56, 189, 248, 0.22), transparent 32%),
+    radial-gradient(circle at 84% 14%, rgba(236, 72, 153, 0.2), transparent 28%),
+    linear-gradient(180deg, rgba(8, 22, 49, 0.9) 0%, rgba(5, 10, 26, 0.96) 100%);
+}
+
+.title-zone-child {
+  background:
+    radial-gradient(circle at 25% 75%, rgba(16, 185, 129, 0.26), transparent 45%),
+    radial-gradient(circle at 70% 20%, rgba(251, 191, 36, 0.3), transparent 40%),
+    linear-gradient(180deg, rgba(16, 185, 129, 0.28), rgba(21, 128, 61, 0.2));
+}
+
+.title-zone-adolescent {
+  background:
+    radial-gradient(circle at 75% 30%, rgba(96, 165, 250, 0.25), transparent 45%),
+    radial-gradient(circle at 20% 70%, rgba(129, 140, 248, 0.27), transparent 40%),
+    linear-gradient(180deg, rgba(59, 130, 246, 0.2), rgba(30, 64, 175, 0.16));
+}
+
+.title-zone-adult {
+  background:
+    radial-gradient(circle at 30% 22%, rgba(244, 114, 182, 0.22), transparent 38%),
+    radial-gradient(circle at 70% 78%, rgba(56, 189, 248, 0.24), transparent 42%),
+    linear-gradient(180deg, rgba(49, 46, 129, 0.25), rgba(15, 23, 42, 0.22));
 }

@@ -2499,6 +2499,7 @@ export default function ProfilePage() {
           data={piuTitles}
           avatarUrl={profile.avatar ? getAvatarUrl(profile.avatar) : ''}
           username={profile.username}
+          gender={profile.gender || ''}
           isOwner={isOwner}
         />
       )}

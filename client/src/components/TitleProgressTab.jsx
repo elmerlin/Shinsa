@@ -1,37 +1,62 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function tierClasses(tier, unlocked) {
-  const base = unlocked ? '' : 'opacity-45';
-  if (tier === 'bronze') return `${base} bg-amber-700/35 border-amber-400/60 text-amber-100`;
-  if (tier === 'silver') return `${base} bg-slate-300/20 border-slate-200/70 text-slate-100`;
-  if (tier === 'gold') return `${base} bg-yellow-500/30 border-yellow-300/70 text-yellow-100`;
-  if (tier === 'blue') return `${base} bg-sky-500/30 border-sky-300/70 text-sky-100`;
-  return `${base} bg-emerald-600/30 border-emerald-300/70 text-emerald-100`;
+const GROUP_ORDER = ['Master', 'Expert', 'Advanced', 'Intermediate', 'Beginner'];
+
+const TIER_PALETTE = {
+  beginner: { bg: 'from-emerald-400 to-emerald-700', ring: 'ring-emerald-200/80', glow: 'shadow-emerald-300/70' },
+  bronze: { bg: 'from-amber-300 to-amber-700', ring: 'ring-amber-200/80', glow: 'shadow-amber-300/70' },
+  silver: { bg: 'from-slate-100 to-slate-500', ring: 'ring-slate-100/90', glow: 'shadow-slate-100/70' },
+  gold: { bg: 'from-yellow-200 to-yellow-600', ring: 'ring-yellow-200/90', glow: 'shadow-yellow-200/70' },
+  blue: { bg: 'from-cyan-200 to-blue-700', ring: 'ring-cyan-200/90', glow: 'shadow-cyan-200/70' },
+  default: { bg: 'from-slate-200 to-slate-600', ring: 'ring-slate-200/70', glow: 'shadow-slate-300/60' },
+};
+
+const ZONE_PROPS = {
+  child: [
+    { icon: '🧸', x: 14, y: 18 },
+    { icon: '🧩', x: 77, y: 31 },
+    { icon: '🎈', x: 28, y: 64 },
+    { icon: '🌳', x: 83, y: 74 },
+  ],
+  adolescent: [
+    { icon: '🛹', x: 20, y: 20 },
+    { icon: '🎧', x: 80, y: 34 },
+    { icon: '⚡', x: 27, y: 70 },
+    { icon: '🪨', x: 74, y: 78 },
+  ],
+  adult: [
+    { icon: '🏰', x: 18, y: 14 },
+    { icon: '⚔️', x: 75, y: 28 },
+    { icon: '🧭', x: 26, y: 72 },
+    { icon: '🔮', x: 81, y: 77 },
+  ],
+};
+
+function familyName(title) {
+  return String(title?.skill_family || '').trim() || 'Other';
 }
 
-function buildWaypoints(count, columns = 6) {
+function buildWorldPoints(count) {
   const safeCount = Math.max(1, count);
-  const safeColumns = Math.max(2, columns);
-  const stepX = 106;
-  const stepY = 86;
+  const width = 1000;
+  const laneMin = 130;
+  const laneMax = 870;
+  const stepY = 78;
+  const topPad = 120;
+  const bottomPad = 110;
+  const height = topPad + bottomPad + Math.max(0, safeCount - 1) * stepY;
   const points = [];
 
   for (let i = 0; i < safeCount; i++) {
-    const row = Math.floor(i / safeColumns);
-    const col = i % safeColumns;
-    const snakeCol = row % 2 === 0 ? col : (safeColumns - 1 - col);
-    const x = 52 + snakeCol * stepX;
-    const y = 52 + row * stepY + (snakeCol % 2 === 0 ? -8 : 8);
+    const wave = Math.sin(i * 0.75) * 225 + Math.cos(i * 0.23) * 90;
+    const x = clamp(500 + wave, laneMin, laneMax);
+    const y = height - bottomPad - i * stepY;
     points.push({ x, y });
   }
-
-  const rows = Math.ceil(safeCount / safeColumns);
-  const width = 104 + (safeColumns - 1) * stepX;
-  const height = 120 + Math.max(0, rows - 1) * stepY;
 
   return { points, width, height };
 }
@@ -40,25 +65,97 @@ function interpolatePoint(points, floatIndex) {
   if (!points.length) return { x: 0, y: 0 };
   const maxIndex = points.length - 1;
   const idx = clamp(floatIndex, 0, maxIndex);
-  const fromIndex = Math.floor(idx);
-  const toIndex = Math.min(maxIndex, fromIndex + 1);
-  const from = points[fromIndex];
-  const to = points[toIndex];
-  const t = idx - fromIndex;
+  const fromIdx = Math.floor(idx);
+  const toIdx = Math.min(maxIndex, fromIdx + 1);
+  const from = points[fromIdx];
+  const to = points[toIdx];
+  const t = idx - fromIdx;
   return {
     x: from.x + (to.x - from.x) * t,
     y: from.y + (to.y - from.y) * t,
   };
 }
 
+function getZone(points, titles, families, id, label, className) {
+  const indices = titles
+    .filter((title) => families.includes(familyName(title)))
+    .map((title) => title.index);
+  if (indices.length === 0) return null;
+  const ys = indices.map((idx) => points[idx].y);
+  const top = Math.max(0, Math.min(...ys) - 92);
+  const bottom = Math.max(...ys) + 92;
+  return {
+    id,
+    label,
+    className,
+    top,
+    height: Math.max(150, bottom - top),
+  };
+}
+
+function groupTitles(titles) {
+  const ordered = [...titles].sort((a, b) => b.index - a.index);
+  const map = new Map();
+  for (const title of ordered) {
+    const family = familyName(title);
+    if (!map.has(family)) map.set(family, []);
+    map.get(family).push(title);
+  }
+
+  const known = GROUP_ORDER.filter((family) => map.has(family)).map((family) => ({
+    family,
+    titles: map.get(family),
+  }));
+  const extra = Array.from(map.keys())
+    .filter((family) => !GROUP_ORDER.includes(family))
+    .map((family) => ({ family, titles: map.get(family) }));
+  return [...known, ...extra];
+}
+
+function JourneyCharacter({ running, avatarUrl, username, gender }) {
+  const isFemale = gender === 'female';
+  const bodyGradient = isFemale ? 'from-pink-300 to-fuchsia-700' : 'from-cyan-300 to-blue-700';
+  const accentColor = isFemale ? 'bg-rose-300' : 'bg-sky-200';
+
+  return (
+    <div className={`relative w-14 h-16 title-pixel ${running ? 'title-run' : 'title-idle'}`}>
+      <span className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-2 rounded-full bg-black/60 blur-[1px]" />
+      <div className={`absolute left-1/2 top-7 -translate-x-1/2 w-9 h-7 rounded-md border-2 border-black/60 bg-gradient-to-b ${bodyGradient} shadow-[inset_0_2px_0_rgba(255,255,255,0.45)]`} />
+      <div className={`absolute left-1/2 top-4 -translate-x-1/2 w-4 h-3 rounded-sm border-2 border-black/60 ${accentColor}`} />
+      <div className="absolute left-[34%] top-[76%] w-3 h-5 rounded-b border-2 border-black/60 bg-slate-700" />
+      <div className="absolute left-[57%] top-[76%] w-3 h-5 rounded-b border-2 border-black/60 bg-slate-700" />
+      <div className="absolute left-[22%] top-[42%] w-3 h-2 rounded-sm border border-black/60 bg-slate-700/80" />
+      <div className="absolute left-[72%] top-[42%] w-3 h-2 rounded-sm border border-black/60 bg-slate-700/80" />
+
+      <div className="absolute left-1/2 top-0 -translate-x-1/2 w-8 h-8 rounded-full border-2 border-black/60 overflow-hidden bg-gradient-to-br from-slate-100 to-slate-500">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={username || 'avatar'} className="w-full h-full object-cover" draggable={false} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center font-display font-bold text-[10px] text-black">
+            {(username || '?')[0].toUpperCase()}
+          </div>
+        )}
+      </div>
+
+      {isFemale ? (
+        <div className="absolute left-1/2 top-[2px] -translate-x-1/2 w-10 h-2 rounded-full bg-fuchsia-800/80" />
+      ) : (
+        <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 w-4 h-2 rounded-sm bg-sky-900/80" />
+      )}
+    </div>
+  );
+}
+
 export default function TitleProgressTab({
   data,
   avatarUrl,
   username,
+  gender = '',
   isOwner = false,
 }) {
   const imported = !!data?.imported;
   const titles = useMemo(() => (Array.isArray(data?.titles) ? data.titles : []), [data]);
+  const groups = useMemo(() => groupTitles(titles), [titles]);
   const summary = data?.summary || null;
   const currentIndex = Math.max(0, parseInt(summary?.current_index, 10) || 0);
   const nextTitle = summary?.next_title || null;
@@ -66,11 +163,11 @@ export default function TitleProgressTab({
   const currentFloat = currentIndex + (nextTitle ? segmentProgress : 0);
   const [cursor, setCursor] = useState(currentFloat);
   const [target, setTarget] = useState(null);
+  const [collapsedGroups, setCollapsedGroups] = useState({});
+  const mapScrollRef = useRef(null);
 
   useEffect(() => {
-    if (target === null) {
-      setCursor(currentFloat);
-    }
+    if (target === null) setCursor(currentFloat);
   }, [currentFloat, target]);
 
   useEffect(() => {
@@ -96,8 +193,17 @@ export default function TitleProgressTab({
     };
   }, [target]);
 
-  const { points, width, height } = useMemo(() => buildWaypoints(titles.length || 1), [titles.length]);
+  useEffect(() => {
+    if (!groups.length || Object.keys(collapsedGroups).length > 0) return;
+    const currentFamily = summary?.current_title?.skill_family || '';
+    const initial = {};
+    for (const group of groups) initial[group.family] = group.family !== currentFamily;
+    setCollapsedGroups(initial);
+  }, [groups, collapsedGroups, summary]);
+
+  const { points, width, height } = useMemo(() => buildWorldPoints(titles.length || 1), [titles.length]);
   const avatarPos = useMemo(() => interpolatePoint(points, cursor), [points, cursor]);
+  const avatarLeftPercent = (avatarPos.x / width) * 100;
 
   const levels = Array.isArray(data?.levels) ? data.levels : [];
   const levelMap = useMemo(() => {
@@ -113,6 +219,25 @@ export default function TitleProgressTab({
   const segmentNeeded = nextTitle ? Math.max(1, nextTitle.required_points - segmentStart) : 0;
   const displayedProgress = nextTitle ? clamp(Number(summary?.segment_progress_percent) || 0, 0, 100) : 100;
   const isRunning = target !== null;
+
+  const zones = useMemo(() => {
+    const child = getZone(points, titles, ['Beginner', 'Intermediate'], 'child', 'Child Realm (Intermediate)', 'title-zone-child');
+    const adolescent = getZone(points, titles, ['Advanced'], 'adolescent', 'Adolescent Realm (Advanced)', 'title-zone-adolescent');
+    const adult = getZone(points, titles, ['Expert', 'Master'], 'adult', 'Grown Realm (Expert)', 'title-zone-adult');
+    return [adult, adolescent, child].filter(Boolean);
+  }, [points, titles]);
+
+  useEffect(() => {
+    const el = mapScrollRef.current;
+    if (!el || !height) return;
+    const viewHeight = el.clientHeight;
+    const contentHeight = el.scrollHeight;
+    const wanted = clamp(avatarPos.y - viewHeight * 0.52, 0, Math.max(0, contentHeight - viewHeight));
+    const behavior = target !== null ? 'smooth' : 'auto';
+    if (Math.abs(el.scrollTop - wanted) > 8) {
+      el.scrollTo({ top: wanted, behavior });
+    }
+  }, [avatarPos.y, target, height]);
 
   if (!data) {
     return (
@@ -179,76 +304,105 @@ export default function TitleProgressTab({
           </div>
         )}
 
-        <div className="mt-4 overflow-x-auto pb-1">
-          <div
-            className="relative title-map-grid rounded-xl border border-piu-border/50 overflow-hidden"
-            style={{ width: `${width}px`, minWidth: `${width}px`, height: `${height}px` }}
-          >
-            <svg
-              className="absolute inset-0 pointer-events-none"
-              width={width}
-              height={height}
-              viewBox={`0 0 ${width} ${height}`}
-            >
-              {points.slice(0, -1).map((point, idx) => {
-                const nextPoint = points[idx + 1];
+        <div className="mt-4 title-map-frame rounded-xl border border-piu-border/50 overflow-hidden">
+          <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden">
+            <div className="relative w-full" style={{ height: `${height}px` }}>
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="mapPathGlow" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7dd3fc" />
+                    <stop offset="50%" stopColor="#facc15" />
+                    <stop offset="100%" stopColor="#34d399" />
+                  </linearGradient>
+                </defs>
+                {points.slice(0, -1).map((point, idx) => {
+                  const next = points[idx + 1];
+                  return (
+                    <line
+                      key={`path-${idx}`}
+                      x1={point.x}
+                      y1={point.y}
+                      x2={next.x}
+                      y2={next.y}
+                      stroke="url(#mapPathGlow)"
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      opacity="0.55"
+                      strokeDasharray={idx % 2 === 0 ? '14 10' : '10 9'}
+                    />
+                  );
+                })}
+              </svg>
+
+              {zones.map((zone) => (
+                <div
+                  key={zone.id}
+                  className={`absolute left-2 right-2 rounded-3xl border border-white/20 ${zone.className}`}
+                  style={{ top: `${zone.top}px`, height: `${zone.height}px` }}
+                >
+                  <div className="absolute left-3 top-2 px-2 py-1 rounded-md bg-black/40 text-[10px] font-display font-bold tracking-wide text-white/90">
+                    {zone.label}
+                  </div>
+                  {(ZONE_PROPS[zone.id] || []).map((prop, idx) => (
+                    <span
+                      key={`${zone.id}-prop-${idx}`}
+                      className="absolute w-9 h-9 rounded-full bg-black/25 border border-white/40 flex items-center justify-center text-base backdrop-blur-[1px]"
+                      style={{
+                        left: `${prop.x}%`,
+                        top: `${prop.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                    >
+                      {prop.icon}
+                    </span>
+                  ))}
+                </div>
+              ))}
+
+              {titles.map((title) => {
+                const point = points[title.index];
+                const unlocked = !!title.unlocked;
+                const isCurrent = title.index === currentIndex;
+                const canTravel = unlocked && title.index <= currentIndex;
+                const isTarget = target !== null && title.index === target;
+                const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
                 return (
-                  <line
-                    key={`path-${idx}`}
-                    x1={point.x}
-                    y1={point.y}
-                    x2={nextPoint.x}
-                    y2={nextPoint.y}
-                    stroke="rgba(148, 163, 184, 0.55)"
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                    strokeDasharray={idx % 2 === 0 ? '10 8' : '8 7'}
-                  />
+                  <button
+                    key={title.id}
+                    type="button"
+                    onClick={() => {
+                      if (!canTravel) return;
+                      setTarget(title.index);
+                    }}
+                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-xl border-2 transition-all ${
+                      unlocked
+                        ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked ${palette.glow}`
+                        : 'bg-slate-800/80 border-slate-500/80 text-slate-300'
+                    } ${
+                      isCurrent ? `ring-2 ${palette.ring} scale-110` : ''
+                    } ${
+                      isTarget ? 'ring-2 ring-cyan-300/90' : ''
+                    } ${
+                      canTravel ? 'cursor-pointer hover:scale-110' : 'cursor-default'
+                    }`}
+                    style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
+                    title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
+                  >
+                    <span className="text-[13px] leading-none">{unlocked ? '✦' : '🔒'}</span>
+                  </button>
                 );
               })}
-            </svg>
 
-            {titles.map((title) => {
-              const point = points[title.index];
-              const unlocked = !!title.unlocked;
-              const isCurrent = title.index === currentIndex;
-              const canTravel = unlocked && title.index <= currentIndex;
-              const isTarget = target !== null && title.index === target;
-              return (
-                <button
-                  key={title.id}
-                  type="button"
-                  onClick={() => {
-                    if (!canTravel) return;
-                    setTarget(title.index);
-                  }}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-md border transition-all ${tierClasses(title.tier, unlocked)} ${
-                    isCurrent ? 'ring-2 ring-white/90 shadow-[0_0_0_2px_rgba(14,165,233,0.55)]' : ''
-                  } ${isTarget ? 'ring-2 ring-cyan-300/90' : ''} ${canTravel ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
-                  style={{ left: `${point.x}px`, top: `${point.y}px` }}
-                  title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
+              <div
+                className="absolute pointer-events-none -translate-x-1/2 -translate-y-[86%]"
+                style={{ left: `${avatarLeftPercent}%`, top: `${avatarPos.y}px` }}
+              >
+                <JourneyCharacter
+                  running={isRunning}
+                  avatarUrl={avatarUrl}
+                  username={username}
+                  gender={gender}
                 />
-              );
-            })}
-
-            <div
-              className="absolute pointer-events-none -translate-x-1/2 -translate-y-[82%]"
-              style={{ left: `${avatarPos.x}px`, top: `${avatarPos.y}px` }}
-            >
-              <div className={`relative w-12 h-12 ${isRunning ? 'title-run' : 'title-idle'}`}>
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={username || 'avatar'}
-                    className="w-full h-full object-cover rounded-sm border-2 border-black/60 title-pixel shadow-lg"
-                    draggable={false}
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-sm bg-emerald-700 border-2 border-black/60 flex items-center justify-center font-display font-bold title-pixel">
-                    {(username || '?')[0].toUpperCase()}
-                  </div>
-                )}
-                <span className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-6 h-1.5 rounded-full bg-black/50 blur-[1px]" />
               </div>
             </div>
           </div>
@@ -256,43 +410,73 @@ export default function TitleProgressTab({
 
         <div className="mt-3">
           <p className="text-[11px] text-gray-500">
-            Click unlocked waypoints to run back along the route.
-            {isOwner ? ' Your title updates automatically when best scores change.' : ''}
+            Mobile-safe vertical map. Tap unlocked waypoints to run to that checkpoint.
+            {isOwner ? ' Title unlocks are computed from imported best scores.' : ''}
           </p>
         </div>
       </div>
 
       <div className="card">
         <h4 className="text-xs font-display font-bold text-piu-accent mb-2">TITLE CHECKPOINTS</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {titles.map((title) => {
-            const unlocked = !!title.unlocked;
-            const isCurrent = title.index === currentIndex;
-            const canTravel = unlocked && title.index <= currentIndex;
+        <div className="space-y-2">
+          {groups.map((group) => {
+            const lockedCount = group.titles.filter((title) => !title.unlocked).length;
+            const collapsed = collapsedGroups[group.family] !== undefined
+              ? collapsedGroups[group.family]
+              : group.family !== (summary?.current_title?.skill_family || '');
             return (
-              <button
-                key={`checkpoint-${title.id}`}
-                type="button"
-                onClick={() => {
-                  if (!canTravel) return;
-                  setTarget(title.index);
-                }}
-                className={`text-left px-3 py-2 rounded-lg border transition-colors ${tierClasses(title.tier, unlocked)} ${
-                  isCurrent ? 'ring-1 ring-white/80' : ''
-                } ${canTravel ? 'hover:border-white/90 cursor-pointer' : 'cursor-default'}`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-display font-bold">{title.name}</p>
-                  <span className="text-[10px] font-mono">
-                    {unlocked ? 'Unlocked' : `${title.progress_percent.toFixed(1)}%`}
-                  </span>
-                </div>
-                {title.required_points > 0 && (
-                  <p className="text-[10px] text-gray-200/80 mt-1">
-                    Lv.{title.level}: {title.earned_points.toLocaleString()} / {title.required_points.toLocaleString()}
-                  </p>
+              <div key={group.family} className="rounded-lg border border-piu-border/50 bg-piu-dark/40">
+                <button
+                  type="button"
+                  onClick={() => setCollapsedGroups((prev) => ({ ...prev, [group.family]: !collapsed }))}
+                  className="w-full px-3 py-2 flex items-center justify-between gap-2 text-left"
+                >
+                  <div>
+                    <p className="text-sm font-display font-bold text-gray-100">{group.family}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {group.titles.length - lockedCount}/{group.titles.length} unlocked
+                    </p>
+                  </div>
+                  <span className="text-xs text-gray-400">{collapsed ? 'Show' : 'Hide'}</span>
+                </button>
+                {!collapsed && (
+                  <div className="px-2 pb-2 space-y-1.5">
+                    {group.titles.map((title) => {
+                      const unlocked = !!title.unlocked;
+                      const isCurrent = title.index === currentIndex;
+                      const canTravel = unlocked && title.index <= currentIndex;
+                      const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
+                      return (
+                        <button
+                          key={`checkpoint-${title.id}`}
+                          type="button"
+                          onClick={() => {
+                            if (!canTravel) return;
+                            setTarget(title.index);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-md border transition-colors ${
+                            unlocked
+                              ? `bg-gradient-to-r ${palette.bg} border-white/50 text-white`
+                              : 'bg-slate-900/60 border-slate-600/50 text-slate-300'
+                          } ${isCurrent ? `ring-1 ${palette.ring}` : ''} ${canTravel ? 'cursor-pointer hover:border-white/90' : 'cursor-default'}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-display font-bold">{title.name}</p>
+                            <span className="text-[10px] font-mono">
+                              {unlocked ? 'UNLOCKED' : `${title.progress_percent.toFixed(1)}%`}
+                            </span>
+                          </div>
+                          {title.required_points > 0 && (
+                            <p className="text-[10px] mt-1 opacity-90">
+                              Lv.{title.level}: {title.earned_points.toLocaleString()} / {title.required_points.toLocaleString()}
+                            </p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
