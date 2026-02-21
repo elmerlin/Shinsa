@@ -17,6 +17,19 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
+function getInitialLevelCursor(rows, targetLevel) {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  if (targetLevel) {
+    const idx = rows.findIndex((row) => row.level === targetLevel);
+    if (idx >= 0) return idx;
+  }
+  for (let idx = rows.length - 1; idx >= 0; idx -= 1) {
+    const cleared = parseInt(rows[idx]?.cleared_charts, 10) || 0;
+    if (cleared > 0) return idx;
+  }
+  return 0;
+}
+
 function getRank(score) {
   const s = parseInt(score, 10) || 0;
   if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
@@ -160,9 +173,9 @@ function CompetitiveLevelCard({
   const [expanded, setExpanded] = useState(false);
   const selectedRow = rows[cursor] || null;
   const computedLevel = parseInt(competitiveLevel?.level, 10) || null;
-  const displayLevel = computedLevel ? `${modePrefix}${computedLevel}` : '-';
-  const displayGrade = competitiveLevel?.average_grade || '';
-  const displayAverage = parseInt(competitiveLevel?.average_score, 10) || 0;
+  const displayLevel = selectedRow?.level ? `${modePrefix}${selectedRow.level}` : '-';
+  const displayGrade = selectedRow?.average_grade || '';
+  const displayAverage = parseInt(selectedRow?.average_score, 10) || 0;
 
   const selectedLevel = selectedRow?.level || null;
   const selectedGrade = selectedRow?.average_grade || '';
@@ -240,6 +253,13 @@ function CompetitiveLevelCard({
         <p className="text-[10px] text-gray-500">Average Score ({displayLevel})</p>
         <p className="text-xs font-mono text-gray-100">{displayAverage ? formatNumber(displayAverage) : '-'}</p>
       </div>
+
+      <p className="mt-2 text-[10px] text-gray-500">
+        Computed competitive level:{' '}
+        <span className={`font-display font-bold ${modeColorClass}`}>
+          {computedLevel ? `${modePrefix}${computedLevel}` : '-'}
+        </span>
+      </p>
 
       {expanded && (
         <div className="mt-2 text-[10px] text-gray-400 rounded-md border border-piu-border/40 bg-piu-card/50 px-2 py-1.5 space-y-1">
@@ -382,31 +402,13 @@ export default function SongAnalyticsPanel({ analytics }) {
   const doubleLevels = analytics?.levels?.double || [];
 
   useEffect(() => {
-    const targetLevel = analytics?.competitive_levels?.single?.level;
-    if (!singleLevels.length) {
-      setSingleCursor(0);
-      return;
-    }
-    if (!targetLevel) {
-      setSingleCursor(0);
-      return;
-    }
-    const idx = singleLevels.findIndex((row) => row.level === targetLevel);
-    setSingleCursor(idx >= 0 ? idx : 0);
+    const targetLevel = parseInt(analytics?.competitive_levels?.single?.level, 10) || null;
+    setSingleCursor(getInitialLevelCursor(singleLevels, targetLevel));
   }, [analytics?.competitive_levels?.single?.level, singleLevels]);
 
   useEffect(() => {
-    const targetLevel = analytics?.competitive_levels?.double?.level;
-    if (!doubleLevels.length) {
-      setDoubleCursor(0);
-      return;
-    }
-    if (!targetLevel) {
-      setDoubleCursor(0);
-      return;
-    }
-    const idx = doubleLevels.findIndex((row) => row.level === targetLevel);
-    setDoubleCursor(idx >= 0 ? idx : 0);
+    const targetLevel = parseInt(analytics?.competitive_levels?.double?.level, 10) || null;
+    setDoubleCursor(getInitialLevelCursor(doubleLevels, targetLevel));
   }, [analytics?.competitive_levels?.double?.level, doubleLevels]);
 
   const progressRows = useMemo(() => {
