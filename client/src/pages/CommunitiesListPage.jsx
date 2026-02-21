@@ -11,7 +11,7 @@ export default function CommunitiesListPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    getCommunities({ q: search || undefined })
+    getCommunities(search ? { q: search } : {})
       .then(setCommunities)
       .catch(() => {})
       .finally(() => setLoading(false));

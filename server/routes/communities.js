@@ -364,13 +364,19 @@ router.get('/:id/members', (req, res) => {
       ${orderBy}
   `).all(req.params.id);
 
-  // Attach tags for each member
+  // Attach tags and badges for each member
   for (const member of members) {
     member.tags = db.prepare(`
       SELECT ct.id, ct.name, ct.color, ct.text_color
       FROM community_member_tags cmt
       JOIN community_tags ct ON cmt.tag_id = ct.id
       WHERE cmt.community_id = ? AND cmt.user_id = ?
+    `).all(req.params.id, member.id);
+    member.badges = db.prepare(`
+      SELECT rb.id, rb.name, rb.image
+      FROM community_member_badges cmb
+      JOIN community_role_badges rb ON cmb.badge_id = rb.id
+      WHERE cmb.community_id = ? AND cmb.user_id = ?
     `).all(req.params.id, member.id);
   }
 
@@ -692,12 +698,19 @@ router.post('/:id/posts', requireAuth, upload.array('images', 9), async (req, re
     WHERE p.id = ?
   `).get(id);
 
-  // Attach author's tags in this community
+  // Attach author's tags and badges in this community
   post.author_tags = db.prepare(`
     SELECT ct.id, ct.name, ct.color, ct.text_color
     FROM community_member_tags cmt
     JOIN community_tags ct ON cmt.tag_id = ct.id
     WHERE cmt.community_id = ? AND cmt.user_id = ?
+  `).all(req.params.id, req.user.id);
+
+  post.author_badges = db.prepare(`
+    SELECT rb.id, rb.name, rb.image
+    FROM community_member_badges cmb
+    JOIN community_role_badges rb ON cmb.badge_id = rb.id
+    WHERE cmb.community_id = ? AND cmb.user_id = ?
   `).all(req.params.id, req.user.id);
 
   res.status(201).json({ ...post, pump_count: 0, comment_count: 0 });
@@ -737,13 +750,20 @@ router.get('/:id/posts', optionalAuth, (req, res) => {
     LIMIT ? OFFSET ?
   `).all(req.params.id, limit, offset);
 
-  // Attach author tags and user pump status
+  // Attach author tags, badges, and user pump status
   for (const post of posts) {
     post.author_tags = db.prepare(`
       SELECT ct.id, ct.name, ct.color, ct.text_color
       FROM community_member_tags cmt
       JOIN community_tags ct ON cmt.tag_id = ct.id
       WHERE cmt.community_id = ? AND cmt.user_id = ?
+    `).all(req.params.id, post.user_id);
+
+    post.author_badges = db.prepare(`
+      SELECT rb.id, rb.name, rb.image
+      FROM community_member_badges cmb
+      JOIN community_role_badges rb ON cmb.badge_id = rb.id
+      WHERE cmb.community_id = ? AND cmb.user_id = ?
     `).all(req.params.id, post.user_id);
 
     if (req.user) {
@@ -876,10 +896,24 @@ router.get('/:id/posts/:postId/comments', optionalAuth, (req, res) => {
     tagMap[tag.user_id].push({ id: tag.id, name: tag.name, color: tag.color, text_color: tag.text_color });
   }
 
+  // Batch author badges
+  const allBadges = db.prepare(`
+    SELECT cmb.user_id, rb.id, rb.name, rb.image
+    FROM community_member_badges cmb
+    JOIN community_role_badges rb ON cmb.badge_id = rb.id
+    WHERE cmb.community_id = ? AND cmb.user_id IN (${userPlaceholders})
+  `).all(req.params.id, ...uniqueUserIds);
+  const badgeMap = {};
+  for (const badge of allBadges) {
+    if (!badgeMap[badge.user_id]) badgeMap[badge.user_id] = [];
+    badgeMap[badge.user_id].push({ id: badge.id, name: badge.name, image: badge.image });
+  }
+
   for (const c of comments) {
     c.pump_count = pumpMap[c.id] || 0;
     c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
     c.author_tags = tagMap[c.user_id] || [];
+    c.author_badges = badgeMap[c.user_id] || [];
   }
 
   res.json(comments);
@@ -922,6 +956,13 @@ router.post('/:id/posts/:postId/comments', requireAuth, (req, res) => {
     FROM community_member_tags cmt
     JOIN community_tags ct ON cmt.tag_id = ct.id
     WHERE cmt.community_id = ? AND cmt.user_id = ?
+  `).all(req.params.id, req.user.id);
+
+  comment.author_badges = db.prepare(`
+    SELECT rb.id, rb.name, rb.image
+    FROM community_member_badges cmb
+    JOIN community_role_badges rb ON cmb.badge_id = rb.id
+    WHERE cmb.community_id = ? AND cmb.user_id = ?
   `).all(req.params.id, req.user.id);
 
   const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
@@ -995,6 +1036,228 @@ router.post('/:id/comments/:commentId/pump', requireAuth, (req, res) => {
 
   const count = db.prepare('SELECT COUNT(*) as c FROM community_comment_pumps WHERE comment_id = ?').get(req.params.commentId);
   res.json({ pumped: !existing, pump_count: count.c });
+});
+
+// ─── Custom Emojis ──────────────────────────────────
+
+// GET /api/communities/:id/emojis — list community emojis
+router.get('/:id/emojis', (req, res) => {
+  const db = getDb();
+  const emojis = db.prepare('SELECT * FROM community_emojis WHERE community_id = ? ORDER BY created_at ASC').all(req.params.id);
+  res.json(emojis);
+});
+
+// POST /api/communities/:id/emojis/upload-sheet — process sprite sheet into emojis
+router.post('/:id/emojis/upload-sheet', requireAuth, upload.single('sheet'), async (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can manage emojis' });
+  }
+
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+
+  const cols = parseInt(req.body.cols) || 4;
+  const rows = parseInt(req.body.rows) || 4;
+  const prefix = (req.body.prefix || 'emoji').trim();
+
+  try {
+    const metadata = await sharp(req.file.buffer).metadata();
+    const cellW = Math.floor(metadata.width / cols);
+    const cellH = Math.floor(metadata.height / rows);
+
+    const emojis = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const left = c * cellW;
+        const top = r * cellH;
+        const cellBuffer = await sharp(req.file.buffer)
+          .extract({ left, top, width: cellW, height: cellH })
+          .resize(64, 64, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+          .png()
+          .toBuffer();
+
+        // Skip fully transparent cells
+        const stats = await sharp(cellBuffer).stats();
+        if (stats.channels[3] && stats.channels[3].mean < 5) continue;
+
+        const id = uuidv4();
+        const name = `${prefix}_${r * cols + c + 1}`;
+        const image = `data:image/png;base64,${cellBuffer.toString('base64')}`;
+
+        db.prepare(
+          'INSERT INTO community_emojis (id, community_id, name, image) VALUES (?, ?, ?, ?)'
+        ).run(id, req.params.id, name, image);
+
+        emojis.push({ id, community_id: req.params.id, name, image });
+      }
+    }
+
+    res.status(201).json(emojis);
+  } catch (err) {
+    console.error('Emoji sheet processing error:', err.message);
+    res.status(500).json({ error: 'Failed to process sprite sheet' });
+  }
+});
+
+// PUT /api/communities/:id/emojis/:emojiId — rename emoji
+router.put('/:id/emojis/:emojiId', requireAuth, (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can manage emojis' });
+  }
+
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+
+  db.prepare('UPDATE community_emojis SET name = ? WHERE id = ? AND community_id = ?')
+    .run(name.trim(), req.params.emojiId, req.params.id);
+
+  const emoji = db.prepare('SELECT * FROM community_emojis WHERE id = ?').get(req.params.emojiId);
+  res.json(emoji);
+});
+
+// DELETE /api/communities/:id/emojis/:emojiId — delete emoji
+router.delete('/:id/emojis/:emojiId', requireAuth, (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can manage emojis' });
+  }
+
+  db.prepare('DELETE FROM community_emojis WHERE id = ? AND community_id = ?').run(req.params.emojiId, req.params.id);
+  res.json({ success: true });
+});
+
+// ─── Role Badges ────────────────────────────────────
+
+// GET /api/communities/:id/badges — list community role badges
+router.get('/:id/badges', (req, res) => {
+  const db = getDb();
+  const badges = db.prepare('SELECT * FROM community_role_badges WHERE community_id = ? ORDER BY created_at ASC').all(req.params.id);
+  res.json(badges);
+});
+
+// POST /api/communities/:id/badges/upload-sheet — process sprite sheet into badges
+router.post('/:id/badges/upload-sheet', requireAuth, upload.single('sheet'), async (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can manage badges' });
+  }
+
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+
+  const cols = parseInt(req.body.cols) || 4;
+  const rows = parseInt(req.body.rows) || 4;
+  const prefix = (req.body.prefix || 'badge').trim();
+
+  try {
+    const metadata = await sharp(req.file.buffer).metadata();
+    const cellW = Math.floor(metadata.width / cols);
+    const cellH = Math.floor(metadata.height / rows);
+
+    const badges = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const left = c * cellW;
+        const top = r * cellH;
+        const cellBuffer = await sharp(req.file.buffer)
+          .extract({ left, top, width: cellW, height: cellH })
+          .resize(32, 32, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+          .png()
+          .toBuffer();
+
+        // Skip fully transparent cells
+        const stats = await sharp(cellBuffer).stats();
+        if (stats.channels[3] && stats.channels[3].mean < 5) continue;
+
+        const id = uuidv4();
+        const name = `${prefix}_${r * cols + c + 1}`;
+        const image = `data:image/png;base64,${cellBuffer.toString('base64')}`;
+
+        db.prepare(
+          'INSERT INTO community_role_badges (id, community_id, name, image) VALUES (?, ?, ?, ?)'
+        ).run(id, req.params.id, name, image);
+
+        badges.push({ id, community_id: req.params.id, name, image });
+      }
+    }
+
+    res.status(201).json(badges);
+  } catch (err) {
+    console.error('Badge sheet processing error:', err.message);
+    res.status(500).json({ error: 'Failed to process sprite sheet' });
+  }
+});
+
+// PUT /api/communities/:id/badges/:badgeId — rename badge
+router.put('/:id/badges/:badgeId', requireAuth, (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can manage badges' });
+  }
+
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+
+  db.prepare('UPDATE community_role_badges SET name = ? WHERE id = ? AND community_id = ?')
+    .run(name.trim(), req.params.badgeId, req.params.id);
+
+  const badge = db.prepare('SELECT * FROM community_role_badges WHERE id = ?').get(req.params.badgeId);
+  res.json(badge);
+});
+
+// DELETE /api/communities/:id/badges/:badgeId — delete badge
+router.delete('/:id/badges/:badgeId', requireAuth, (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can manage badges' });
+  }
+
+  db.prepare('DELETE FROM community_role_badges WHERE id = ? AND community_id = ?').run(req.params.badgeId, req.params.id);
+  res.json({ success: true });
+});
+
+// POST /api/communities/:id/badges/:badgeId/assign/:userId — assign badge to member
+router.post('/:id/badges/:badgeId/assign/:userId', requireAuth, (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can assign badges' });
+  }
+
+  const member = db.prepare(
+    'SELECT 1 FROM community_members WHERE community_id = ? AND user_id = ?'
+  ).get(req.params.id, req.params.userId);
+  if (!member) return res.status(404).json({ error: 'User is not a member' });
+
+  const badge = db.prepare(
+    'SELECT 1 FROM community_role_badges WHERE id = ? AND community_id = ?'
+  ).get(req.params.badgeId, req.params.id);
+  if (!badge) return res.status(404).json({ error: 'Badge not found' });
+
+  db.prepare(
+    'INSERT OR IGNORE INTO community_member_badges (community_id, user_id, badge_id) VALUES (?, ?, ?)'
+  ).run(req.params.id, req.params.userId, req.params.badgeId);
+  res.json({ success: true });
+});
+
+// DELETE /api/communities/:id/badges/:badgeId/assign/:userId — remove badge from member
+router.delete('/:id/badges/:badgeId/assign/:userId', requireAuth, (req, res) => {
+  const db = getDb();
+  const role = getMemberRole(db, req.params.id, req.user.id);
+  if (!isModOrOwner(role)) {
+    return res.status(403).json({ error: 'Only moderators and owners can remove badges' });
+  }
+
+  db.prepare(
+    'DELETE FROM community_member_badges WHERE community_id = ? AND user_id = ? AND badge_id = ?'
+  ).run(req.params.id, req.params.userId, req.params.badgeId);
+  res.json({ success: true });
 });
 
 // ─── User's communities (for profile) ───────────────
