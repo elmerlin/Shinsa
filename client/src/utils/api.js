@@ -350,6 +350,54 @@ export const addCommunityPostComment = (communityId, postId, content, parentId) 
 export const deleteCommunityPostComment = (communityId, postId, commentId) => request(`/communities/${communityId}/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
 export const pumpCommunityComment = (communityId, commentId) => request(`/communities/${communityId}/comments/${commentId}/pump`, { method: 'POST' });
 
+// Community Emojis
+export const getCommunityEmojis = (communityId) => request(`/communities/${communityId}/emojis`);
+export async function uploadEmojiSheet(communityId, file, cols, rows, prefix) {
+  const formData = new FormData();
+  formData.append('sheet', file);
+  formData.append('cols', cols);
+  formData.append('rows', rows);
+  formData.append('prefix', prefix);
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/communities/${communityId}/emojis/upload-sheet`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to upload emoji sheet');
+  }
+  return res.json();
+}
+export const updateCommunityEmoji = (communityId, emojiId, name) => request(`/communities/${communityId}/emojis/${emojiId}`, { method: 'PUT', body: JSON.stringify({ name }) });
+export const deleteCommunityEmoji = (communityId, emojiId) => request(`/communities/${communityId}/emojis/${emojiId}`, { method: 'DELETE' });
+
+// Community Role Badges
+export const getCommunityBadges = (communityId) => request(`/communities/${communityId}/badges`);
+export async function uploadBadgeSheet(communityId, file, cols, rows, prefix) {
+  const formData = new FormData();
+  formData.append('sheet', file);
+  formData.append('cols', cols);
+  formData.append('rows', rows);
+  formData.append('prefix', prefix);
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/communities/${communityId}/badges/upload-sheet`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to upload badge sheet');
+  }
+  return res.json();
+}
+export const updateCommunityBadge = (communityId, badgeId, name) => request(`/communities/${communityId}/badges/${badgeId}`, { method: 'PUT', body: JSON.stringify({ name }) });
+export const deleteCommunityBadge = (communityId, badgeId) => request(`/communities/${communityId}/badges/${badgeId}`, { method: 'DELETE' });
+export const assignCommunityBadge = (communityId, badgeId, userId) => request(`/communities/${communityId}/badges/${badgeId}/assign/${userId}`, { method: 'POST' });
+export const removeCommunityBadge = (communityId, badgeId, userId) => request(`/communities/${communityId}/badges/${badgeId}/assign/${userId}`, { method: 'DELETE' });
+
 // World Max
 export const getWorldMaxMeta = () => request('/world-max/meta');
 export const getWorldMaxPins = () => request('/world-max/pins');

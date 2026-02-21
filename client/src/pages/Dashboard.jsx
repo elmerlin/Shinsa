@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, joinCommunity } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [featuredCommunities, setFeaturedCommunities] = useState([]);
+  const [joiningCommunity, setJoiningCommunity] = useState(null);
 
   const matchesSearch = (value, q) => String(value || '').toLowerCase().includes(q);
   const duelMatchesSearch = (duel, q) => (
@@ -386,27 +387,59 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {featuredCommunities.map(c => (
-              <Link
-                key={c.id}
-                to={`/c/${c.name}`}
-                className="card-hover flex items-start gap-3 group"
-              >
-                {c.avatar ? (
-                  <img src={c.avatar} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md shrink-0">
-                    {c.display_name[0]?.toUpperCase()}
+              <div key={c.id} className="card-hover flex items-start gap-3 group relative">
+                <Link to={`/c/${c.name}`} className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="relative shrink-0">
+                    {c.avatar ? (
+                      <img src={c.avatar} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md" />
+                    ) : (
+                      <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
+                        {c.display_name[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    {!!c.is_invite_only && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center" title="Private">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-2.5 h-2.5 text-black" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-display font-bold text-sm group-hover:text-piu-accent transition-colors truncate">{c.display_name}</h3>
+                    <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">{c.description || 'A community'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span className="text-[9px] text-gray-600">{c.member_count} member{c.member_count !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                </Link>
+                {user && (
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setJoiningCommunity(c.id);
+                      try {
+                        await joinCommunity(c.id);
+                        setFeaturedCommunities(prev => prev.map(fc => fc.id === c.id ? { ...fc, joined: true } : fc));
+                      } catch (err) {
+                        if (!err.message.includes('Already')) alert(err.message);
+                      } finally {
+                        setJoiningCommunity(null);
+                      }
+                    }}
+                    disabled={joiningCommunity === c.id || c.joined}
+                    className={`shrink-0 mt-1 px-2.5 py-1 rounded-lg text-[9px] font-display font-bold transition-colors ${
+                      c.joined ? 'bg-green-500/20 text-green-400 cursor-default' : 'bg-piu-accent/20 text-piu-accent hover:bg-piu-accent/30'
+                    } disabled:opacity-50`}
+                  >
+                    {c.joined ? 'Joined' : joiningCommunity === c.id ? '...' : (c.is_invite_only ? 'Request' : 'Join')}
+                  </button>
                 )}
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-display font-bold text-sm group-hover:text-piu-accent transition-colors truncate">{c.display_name}</h3>
-                  <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">{c.description || 'A community'}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[9px] text-gray-600">{c.member_count} member{c.member_count !== 1 ? 's' : ''}</span>
-                    <span className="text-[9px] text-gray-600">by {c.owner_username}</span>
-                  </div>
-                </div>
-              </Link>
+              </div>
             ))}
           </div>
         </div>

@@ -1159,6 +1159,36 @@ function initializeDb() {
       PRIMARY KEY (user_id, snapshot_date)
     );
 
+    -- Community custom emojis (from sprite sheet uploads)
+    CREATE TABLE IF NOT EXISTS community_emojis (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      image TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Community role badges (from sprite sheet uploads)
+    CREATE TABLE IF NOT EXISTS community_role_badges (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      image TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Badge assignments to members
+    CREATE TABLE IF NOT EXISTS community_member_badges (
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      badge_id TEXT NOT NULL REFERENCES community_role_badges(id) ON DELETE CASCADE,
+      PRIMARY KEY (community_id, user_id, badge_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_community_emojis ON community_emojis(community_id);
+    CREATE INDEX IF NOT EXISTS idx_community_role_badges ON community_role_badges(community_id);
+    CREATE INDEX IF NOT EXISTS idx_community_member_badges ON community_member_badges(community_id);
+
     -- World Max map data
     CREATE TABLE IF NOT EXISTS world_max_machines (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
