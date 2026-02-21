@@ -15,83 +15,139 @@ const TIER_PALETTE = {
   default: { bg: 'from-slate-200 to-slate-600', ring: 'ring-slate-200/70', glow: 'shadow-slate-300/60' },
 };
 
-const TIER_WAYPOINT_ICON = {
-  beginner: '🌱',
-  bronze: '🥉',
-  silver: '🥈',
-  gold: '🥇',
-  blue: '💠',
-  default: '✦',
+const TIER_PIP_COLOR = {
+  beginner: '#86efac',
+  bronze: '#f59e0b',
+  silver: '#cbd5e1',
+  gold: '#facc15',
+  blue: '#38bdf8',
+  default: '#94a3b8',
 };
 
 const ZONE_PROPS = {
   child: [
-    { icon: '🧸', x: 14, y: 18 },
-    { icon: '🧩', x: 77, y: 31 },
-    { icon: '🎈', x: 28, y: 64 },
-    { icon: '🌳', x: 83, y: 74 },
+    { token: 'toy-bear', x: 14, y: 18 },
+    { token: 'puzzle-grid', x: 77, y: 31 },
+    { token: 'balloon-node', x: 28, y: 64 },
+    { token: 'tree-bloom', x: 83, y: 74 },
   ],
   adolescent: [
-    { icon: '🛹', x: 20, y: 20 },
-    { icon: '🎧', x: 80, y: 34 },
-    { icon: '⚡', x: 27, y: 70 },
-    { icon: '🪨', x: 74, y: 78 },
+    { token: 'skate-deck', x: 20, y: 20 },
+    { token: 'headset-core', x: 80, y: 34 },
+    { token: 'voltage-z', x: 27, y: 70 },
+    { token: 'stone-slab', x: 74, y: 78 },
   ],
   adult: [
-    { icon: '🏰', x: 18, y: 14 },
-    { icon: '⚔️', x: 75, y: 28 },
-    { icon: '🧭', x: 26, y: 72 },
-    { icon: '🔮', x: 81, y: 77 },
+    { token: 'citadel-spire', x: 18, y: 14 },
+    { token: 'blade-cross', x: 75, y: 28 },
+    { token: 'compass-glyph', x: 26, y: 72 },
+    { token: 'aether-orb', x: 81, y: 77 },
   ],
 };
 
 const LEVEL_BAND_PROPS = {
-  0: ['🌱', '🍀', '🧸', '🪁'],
-  1: ['🧩', '🎠', '🍭', '🌼'],
-  2: ['🛹', '🎧', '⚡', '🧭'],
-  3: ['🧗', '⚔️', '🏛️', '🗺️'],
-  4: ['🔥', '🛡️', '👑', '🏰'],
-  5: ['💎', '🌌', '🗡️', '🏯'],
+  0: ['seed-sprout', 'leaf-clover', 'toy-bear', 'kite-flare'],
+  1: ['puzzle-grid', 'carousel-pin', 'candy-drop', 'flower-crown'],
+  2: ['skate-deck', 'headset-core', 'voltage-z', 'compass-glyph'],
+  3: ['peak-climb', 'blade-cross', 'academy-arch', 'map-fold'],
+  4: ['ember-core', 'shield-guard', 'crown-crest', 'citadel-spire'],
+  5: ['crystal-prism', 'starlight-gate', 'mythic-blade', 'void-pillar'],
 };
 
 const INTERMEDIATE_TITLE_THEMES = [
-  { icon: '🌼', landmark: 'Dawn Meadow' },
-  { icon: '🎠', landmark: 'Carousel Bend' },
-  { icon: '🧩', landmark: 'Puzzle Crossing' },
-  { icon: '🪁', landmark: 'Kite Ridge' },
-  { icon: '🎈', landmark: 'Balloon Rise' },
-  { icon: '🧸', landmark: 'Toy Bastion' },
-  { icon: '🍭', landmark: 'Candy Causeway' },
-  { icon: '🌱', landmark: 'Sprout Terrace' },
-  { icon: '🍀', landmark: 'Clover Loop' },
-  { icon: '🎨', landmark: 'Color Workshop' },
+  { sprite: 'seed-sprout', landmark: 'Dawn Meadow' },
+  { sprite: 'carousel-pin', landmark: 'Carousel Bend' },
+  { sprite: 'puzzle-grid', landmark: 'Puzzle Crossing' },
+  { sprite: 'kite-flare', landmark: 'Kite Ridge' },
+  { sprite: 'balloon-node', landmark: 'Balloon Rise' },
+  { sprite: 'toy-bear', landmark: 'Toy Bastion' },
+  { sprite: 'candy-drop', landmark: 'Candy Causeway' },
+  { sprite: 'sprout-arch', landmark: 'Sprout Terrace' },
+  { sprite: 'leaf-clover', landmark: 'Clover Loop' },
+  { sprite: 'paint-spark', landmark: 'Color Workshop' },
 ];
 
 const ADVANCED_TITLE_THEMES = [
-  { icon: '🛹', landmark: 'Street Drift' },
-  { icon: '🎧', landmark: 'Rhythm Alley' },
-  { icon: '⚡', landmark: 'Voltage Pier' },
-  { icon: '🧭', landmark: 'Compass Gate' },
-  { icon: '🧪', landmark: 'Fusion Lab' },
-  { icon: '🏁', landmark: 'Sprint District' },
-  { icon: '🎮', landmark: 'Arcade Terrace' },
-  { icon: '🛰️', landmark: 'Orbit Deck' },
-  { icon: '🪨', landmark: 'Stone Rampart' },
-  { icon: '🏟️', landmark: 'Champion Grounds' },
+  { sprite: 'skate-deck', landmark: 'Street Drift' },
+  { sprite: 'headset-core', landmark: 'Rhythm Alley' },
+  { sprite: 'voltage-z', landmark: 'Voltage Pier' },
+  { sprite: 'compass-glyph', landmark: 'Compass Gate' },
+  { sprite: 'fusion-vial', landmark: 'Fusion Lab' },
+  { sprite: 'sprint-flag', landmark: 'Sprint District' },
+  { sprite: 'arcade-grid', landmark: 'Arcade Terrace' },
+  { sprite: 'orbit-signal', landmark: 'Orbit Deck' },
+  { sprite: 'stone-slab', landmark: 'Stone Rampart' },
+  { sprite: 'champion-ring', landmark: 'Champion Grounds' },
 ];
 
 const EXPERT_TITLE_THEMES = [
-  { icon: '⚔️', landmark: 'Bladewalk' },
-  { icon: '🔥', landmark: 'Ember Span' },
-  { icon: '🛡️', landmark: 'Aegis Keep' },
-  { icon: '🏔️', landmark: 'Summit Spiral' },
-  { icon: '👑', landmark: 'Royal Vault' },
-  { icon: '🏰', landmark: 'Citadel Rise' },
-  { icon: '🗿', landmark: 'Ancient Pillar' },
-  { icon: '🧿', landmark: 'Oracle Rift' },
-  { icon: '🌌', landmark: 'Starlight Vault' },
-  { icon: '🌀', landmark: 'Void Nexus' },
+  { sprite: 'blade-cross', landmark: 'Bladewalk' },
+  { sprite: 'ember-core', landmark: 'Ember Span' },
+  { sprite: 'shield-guard', landmark: 'Aegis Keep' },
+  { sprite: 'summit-peak', landmark: 'Summit Spiral' },
+  { sprite: 'crown-crest', landmark: 'Royal Vault' },
+  { sprite: 'citadel-spire', landmark: 'Citadel Rise' },
+  { sprite: 'ancient-idol', landmark: 'Ancient Pillar' },
+  { sprite: 'oracle-eye', landmark: 'Oracle Rift' },
+  { sprite: 'starlight-gate', landmark: 'Starlight Vault' },
+  { sprite: 'void-nexus', landmark: 'Void Nexus' },
 ];
+
+const FAMILY_SPRITE_TOKEN = {
+  Beginner: 'seed-sprout',
+  Intermediate: 'puzzle-grid',
+  Advanced: 'arcade-grid',
+  Expert: 'citadel-spire',
+  Master: 'aether-core',
+};
+
+const SPRITE_LIBRARY = {
+  default: { variant: 'star', bg: '#0f172a', edge: '#475569', main: '#cbd5e1', accent: '#94a3b8', light: '#e2e8f0' },
+
+  'seed-sprout': { variant: 'sprout', bg: '#052e16', edge: '#166534', main: '#4ade80', accent: '#22c55e', light: '#bbf7d0' },
+  'leaf-clover': { variant: 'clover', bg: '#052e16', edge: '#14532d', main: '#34d399', accent: '#10b981', light: '#a7f3d0' },
+  'toy-bear': { variant: 'totem', bg: '#422006', edge: '#78350f', main: '#f59e0b', accent: '#fbbf24', light: '#fde68a' },
+  'kite-flare': { variant: 'kite', bg: '#3f1d12', edge: '#7c2d12', main: '#fb923c', accent: '#f97316', light: '#fed7aa' },
+  'carousel-pin': { variant: 'pinwheel', bg: '#4a044e', edge: '#86198f', main: '#e879f9', accent: '#d946ef', light: '#f5d0fe' },
+  'puzzle-grid': { variant: 'grid', bg: '#312e81', edge: '#4338ca', main: '#818cf8', accent: '#6366f1', light: '#c7d2fe' },
+  'candy-drop': { variant: 'drop', bg: '#831843', edge: '#be185d', main: '#fb7185', accent: '#f43f5e', light: '#fecdd3' },
+  'balloon-node': { variant: 'orb', bg: '#0c4a6e', edge: '#0369a1', main: '#38bdf8', accent: '#0ea5e9', light: '#bae6fd' },
+  'sprout-arch': { variant: 'arch', bg: '#14532d', edge: '#15803d', main: '#4ade80', accent: '#22c55e', light: '#dcfce7' },
+  'paint-spark': { variant: 'spark', bg: '#4a044e', edge: '#7e22ce', main: '#c084fc', accent: '#a855f7', light: '#e9d5ff' },
+  'flower-crown': { variant: 'flower', bg: '#713f12', edge: '#92400e', main: '#fbbf24', accent: '#f59e0b', light: '#fef3c7' },
+
+  'skate-deck': { variant: 'deck', bg: '#1e293b', edge: '#334155', main: '#60a5fa', accent: '#3b82f6', light: '#bfdbfe' },
+  'headset-core': { variant: 'headset', bg: '#312e81', edge: '#4338ca', main: '#a5b4fc', accent: '#818cf8', light: '#e0e7ff' },
+  'voltage-z': { variant: 'bolt', bg: '#451a03', edge: '#92400e', main: '#fbbf24', accent: '#f59e0b', light: '#fde68a' },
+  'compass-glyph': { variant: 'compass', bg: '#0f172a', edge: '#334155', main: '#67e8f9', accent: '#06b6d4', light: '#cffafe' },
+  'fusion-vial': { variant: 'vial', bg: '#083344', edge: '#0e7490', main: '#22d3ee', accent: '#06b6d4', light: '#a5f3fc' },
+  'sprint-flag': { variant: 'flag', bg: '#172554', edge: '#1d4ed8', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
+  'arcade-grid': { variant: 'console', bg: '#111827', edge: '#374151', main: '#a78bfa', accent: '#8b5cf6', light: '#ddd6fe' },
+  'orbit-signal': { variant: 'orbit', bg: '#164e63', edge: '#0891b2', main: '#67e8f9', accent: '#22d3ee', light: '#cffafe' },
+  'stone-slab': { variant: 'monolith', bg: '#111827', edge: '#4b5563', main: '#9ca3af', accent: '#6b7280', light: '#d1d5db' },
+  'champion-ring': { variant: 'ring', bg: '#422006', edge: '#92400e', main: '#fbbf24', accent: '#f59e0b', light: '#fde68a' },
+
+  'peak-climb': { variant: 'peak', bg: '#1e1b4b', edge: '#312e81', main: '#a5b4fc', accent: '#818cf8', light: '#e0e7ff' },
+  'map-fold': { variant: 'map', bg: '#1f2937', edge: '#374151', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
+  'academy-arch': { variant: 'archway', bg: '#0f172a', edge: '#334155', main: '#cbd5e1', accent: '#94a3b8', light: '#e2e8f0' },
+
+  'ember-core': { variant: 'core', bg: '#431407', edge: '#9a3412', main: '#fb923c', accent: '#f97316', light: '#fed7aa' },
+  'shield-guard': { variant: 'shield', bg: '#172554', edge: '#1d4ed8', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
+  'crown-crest': { variant: 'crown', bg: '#422006', edge: '#92400e', main: '#fde047', accent: '#facc15', light: '#fef9c3' },
+  'citadel-spire': { variant: 'spire', bg: '#312e81', edge: '#5b21b6', main: '#c4b5fd', accent: '#a78bfa', light: '#ede9fe' },
+  'summit-peak': { variant: 'peak', bg: '#0f172a', edge: '#334155', main: '#94a3b8', accent: '#64748b', light: '#cbd5e1' },
+  'ancient-idol': { variant: 'idol', bg: '#292524', edge: '#57534e', main: '#d6d3d1', accent: '#a8a29e', light: '#f5f5f4' },
+  'oracle-eye': { variant: 'eye', bg: '#4c1d95', edge: '#7e22ce', main: '#c084fc', accent: '#a855f7', light: '#f3e8ff' },
+  'starlight-gate': { variant: 'gate', bg: '#0c4a6e', edge: '#0369a1', main: '#67e8f9', accent: '#06b6d4', light: '#cffafe' },
+  'void-nexus': { variant: 'nexus', bg: '#111827', edge: '#374151', main: '#c4b5fd', accent: '#8b5cf6', light: '#e9d5ff' },
+  'mythic-blade': { variant: 'blade', bg: '#3f3f46', edge: '#52525b', main: '#e4e4e7', accent: '#a1a1aa', light: '#fafafa' },
+  'void-pillar': { variant: 'pillar', bg: '#18181b', edge: '#3f3f46', main: '#a5f3fc', accent: '#22d3ee', light: '#ecfeff' },
+  'crystal-prism': { variant: 'prism', bg: '#1e1b4b', edge: '#4338ca', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
+  'aether-orb': { variant: 'orb', bg: '#164e63', edge: '#0891b2', main: '#67e8f9', accent: '#22d3ee', light: '#cffafe' },
+  'blade-cross': { variant: 'blade', bg: '#172554', edge: '#1d4ed8', main: '#bfdbfe', accent: '#93c5fd', light: '#eff6ff' },
+  'aether-core': { variant: 'aether', bg: '#083344', edge: '#0e7490', main: '#67e8f9', accent: '#22d3ee', light: '#ecfeff' },
+  'tree-bloom': { variant: 'tree', bg: '#14532d', edge: '#166534', main: '#86efac', accent: '#4ade80', light: '#dcfce7' },
+};
 
 function familyName(title) {
   return String(title?.skill_family || '').trim() || 'Other';
@@ -100,15 +156,15 @@ function familyName(title) {
 function getTitleTheme(title) {
   const id = String(title?.id || '');
   if (id === 'beginner') {
-    return { icon: '🌱', landmark: 'Starter Camp', chipClass: 'title-landmark-beginner' };
+    return { sprite: 'seed-sprout', landmark: 'Starter Camp', chipClass: 'title-landmark-beginner' };
   }
   if (id === 'master') {
-    return { icon: '💠', landmark: 'Aether Citadel', chipClass: 'title-landmark-master' };
+    return { sprite: 'aether-core', landmark: 'Aether Citadel', chipClass: 'title-landmark-master' };
   }
 
   const match = id.match(/^(intermediate|advanced|expert)-(\d+)$/);
   if (!match) {
-    return { icon: '✦', landmark: 'Unknown Outpost', chipClass: 'title-landmark-neutral' };
+    return { sprite: 'default', landmark: 'Unknown Outpost', chipClass: 'title-landmark-neutral' };
   }
   const family = match[1];
   const index = clamp((parseInt(match[2], 10) || 1) - 1, 0, 9);
@@ -213,21 +269,379 @@ function buildBandProps(points, titles, width) {
     const point = points[title.index];
     if (!point) continue;
     const band = getLevelBand(title.level);
-    const iconSet = LEVEL_BAND_PROPS[band] || LEVEL_BAND_PROPS[0];
-    const icon = iconSet[title.index % iconSet.length];
+    const tokenSet = LEVEL_BAND_PROPS[band] || LEVEL_BAND_PROPS[0];
+    const token = tokenSet[title.index % tokenSet.length];
     const xOffset = title.index % 2 === 0 ? -36 : 36;
     const yOffset = title.index % 3 === 0 ? -18 : 18;
     const pxX = clamp(point.x + xOffset, 22, width - 22);
     const pxY = point.y + yOffset;
     props.push({
       id: `${title.id}-prop`,
-      icon,
+      token,
       xPercent: (pxX / width) * 100,
       y: pxY,
       unlocked: !!title.unlocked,
     });
   }
   return props;
+}
+
+function lockedSpritePalette() {
+  return {
+    bg: '#1f2937',
+    edge: '#475569',
+    main: '#94a3b8',
+    accent: '#64748b',
+    light: '#cbd5e1',
+  };
+}
+
+function spriteParts(variant, palette) {
+  const p = palette;
+  if (variant === 'sprout') {
+    return (
+      <>
+        <rect x="7" y="6" width="2" height="6" fill={p.main} />
+        <rect x="4" y="4" width="3" height="2" fill={p.accent} />
+        <rect x="9" y="3" width="3" height="2" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'clover') {
+    return (
+      <>
+        <rect x="5" y="4" width="2" height="2" fill={p.main} />
+        <rect x="8" y="4" width="2" height="2" fill={p.main} />
+        <rect x="5" y="7" width="2" height="2" fill={p.accent} />
+        <rect x="8" y="7" width="2" height="2" fill={p.accent} />
+        <rect x="7" y="9" width="2" height="3" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'kite') {
+    return (
+      <>
+        <polygon points="8,3 12,8 8,13 4,8" fill={p.main} />
+        <rect x="7" y="7" width="2" height="2" fill={p.light} />
+        <rect x="8" y="13" width="1" height="2" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'pinwheel') {
+    return (
+      <>
+        <polygon points="8,3 11,6 8,7" fill={p.main} />
+        <polygon points="13,8 10,11 9,8" fill={p.accent} />
+        <polygon points="8,13 5,10 8,9" fill={p.light} />
+        <polygon points="3,8 6,5 7,8" fill={p.main} />
+        <rect x="7" y="7" width="2" height="2" fill={p.edge} />
+      </>
+    );
+  }
+  if (variant === 'grid') {
+    return (
+      <>
+        <rect x="4" y="4" width="3" height="3" fill={p.main} />
+        <rect x="9" y="4" width="3" height="3" fill={p.accent} />
+        <rect x="4" y="9" width="3" height="3" fill={p.light} />
+        <rect x="9" y="9" width="3" height="3" fill={p.main} />
+      </>
+    );
+  }
+  if (variant === 'drop') {
+    return (
+      <>
+        <polygon points="8,3 11,8 8,13 5,8" fill={p.main} />
+        <rect x="7" y="8" width="2" height="3" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'totem') {
+    return (
+      <>
+        <rect x="5" y="4" width="6" height="8" fill={p.main} />
+        <rect x="6" y="5" width="1" height="1" fill={p.light} />
+        <rect x="9" y="5" width="1" height="1" fill={p.light} />
+        <rect x="7" y="9" width="2" height="2" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'flower') {
+    return (
+      <>
+        <rect x="7" y="3" width="2" height="2" fill={p.main} />
+        <rect x="4" y="6" width="2" height="2" fill={p.main} />
+        <rect x="10" y="6" width="2" height="2" fill={p.main} />
+        <rect x="7" y="9" width="2" height="2" fill={p.main} />
+        <rect x="7" y="6" width="2" height="2" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'deck') {
+    return (
+      <>
+        <rect x="4" y="7" width="8" height="2" rx="1" fill={p.main} />
+        <circle cx="5.5" cy="10.5" r="1.2" fill={p.accent} />
+        <circle cx="10.5" cy="10.5" r="1.2" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'headset') {
+    return (
+      <>
+        <path d="M4 8a4 4 0 0 1 8 0" fill="none" stroke={p.main} strokeWidth="2" />
+        <rect x="3.5" y="8" width="2" height="4" fill={p.accent} />
+        <rect x="10.5" y="8" width="2" height="4" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'bolt') {
+    return <polygon points="9,2 5,9 8,9 6,14 11,7 8,7" fill={p.main} />;
+  }
+  if (variant === 'compass') {
+    return (
+      <>
+        <polygon points="8,3 11,8 8,13 5,8" fill={p.main} />
+        <polygon points="8,5 10,8 8,11 6,8" fill={p.light} />
+        <rect x="7.5" y="2" width="1" height="1" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'vial') {
+    return (
+      <>
+        <rect x="6" y="3" width="4" height="2" fill={p.light} />
+        <path d="M6 5h4v2l2 4H4l2-4z" fill={p.main} />
+        <rect x="6" y="8" width="4" height="2" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'flag') {
+    return (
+      <>
+        <rect x="5" y="3" width="1.5" height="10" fill={p.light} />
+        <polygon points="7,3 12,5 7,7" fill={p.main} />
+        <rect x="7" y="5" width="2" height="1" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'console') {
+    return (
+      <>
+        <rect x="4" y="4" width="8" height="8" rx="2" fill={p.main} />
+        <rect x="6" y="6" width="4" height="2" fill={p.light} />
+        <rect x="6" y="9" width="1.5" height="1.5" fill={p.accent} />
+        <rect x="8.5" y="9" width="1.5" height="1.5" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'orbit') {
+    return (
+      <>
+        <circle cx="8" cy="8" r="2.4" fill={p.main} />
+        <ellipse cx="8" cy="8" rx="5.2" ry="2.2" fill="none" stroke={p.accent} strokeWidth="1.4" />
+        <circle cx="12.3" cy="8" r="1.1" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'monolith') {
+    return (
+      <>
+        <rect x="5" y="3" width="6" height="10" fill={p.main} />
+        <rect x="6" y="4" width="1" height="8" fill={p.light} />
+        <rect x="9" y="4" width="1" height="8" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'ring') {
+    return (
+      <>
+        <circle cx="8" cy="8" r="4.6" fill={p.main} />
+        <circle cx="8" cy="8" r="2.6" fill={p.bg} />
+        <rect x="7.2" y="3" width="1.6" height="2" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'map') {
+    return (
+      <>
+        <polygon points="4,4 7,5 10,4 12,5 12,12 10,11 7,12 4,11" fill={p.main} />
+        <rect x="6.8" y="5" width="0.9" height="6" fill={p.light} />
+        <rect x="9.7" y="5" width="0.9" height="6" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'archway') {
+    return (
+      <>
+        <rect x="4" y="4" width="8" height="8" fill={p.main} />
+        <rect x="6.5" y="6" width="3" height="6" fill={p.bg} />
+        <rect x="4" y="4" width="8" height="2" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'peak') {
+    return (
+      <>
+        <polygon points="3,12 8,4 13,12" fill={p.main} />
+        <polygon points="8,4 10,7 6,7" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'core') {
+    return (
+      <>
+        <circle cx="8" cy="8" r="4.2" fill={p.main} />
+        <circle cx="8" cy="8" r="2.2" fill={p.light} />
+        <rect x="7.2" y="2.8" width="1.6" height="2.2" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'shield') {
+    return <path d="M8 3l4 1.5v3.6c0 2.3-1.5 4.2-4 5.9-2.5-1.7-4-3.6-4-5.9V4.5L8 3z" fill={p.main} />;
+  }
+  if (variant === 'crown') {
+    return (
+      <>
+        <polygon points="3,10 5,5 8,8 11,5 13,10" fill={p.main} />
+        <rect x="3" y="10" width="10" height="2" fill={p.accent} />
+        <rect x="5" y="7" width="1" height="1" fill={p.light} />
+        <rect x="10" y="7" width="1" height="1" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'spire') {
+    return (
+      <>
+        <polygon points="8,2 12,7 11,13 5,13 4,7" fill={p.main} />
+        <rect x="7" y="6" width="2" height="7" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'idol') {
+    return (
+      <>
+        <rect x="5" y="3" width="6" height="10" fill={p.main} />
+        <rect x="6" y="5" width="1" height="1" fill={p.light} />
+        <rect x="9" y="5" width="1" height="1" fill={p.light} />
+        <rect x="7" y="9" width="2" height="2" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'eye') {
+    return (
+      <>
+        <ellipse cx="8" cy="8" rx="5.3" ry="3.2" fill={p.main} />
+        <circle cx="8" cy="8" r="2.1" fill={p.accent} />
+        <circle cx="8.8" cy="7.4" r="0.8" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'gate') {
+    return (
+      <>
+        <rect x="4" y="3" width="8" height="10" fill={p.main} />
+        <rect x="6.5" y="5.5" width="3" height="7.5" fill={p.bg} />
+        <rect x="4" y="3" width="8" height="2" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'nexus') {
+    return (
+      <>
+        <polygon points="8,2.5 10.5,5.2 13.2,8 10.5,10.8 8,13.5 5.5,10.8 2.8,8 5.5,5.2" fill={p.main} />
+        <polygon points="8,5 10,8 8,11 6,8" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'blade') {
+    return (
+      <>
+        <polygon points="8,2 10,6 8,12 6,6" fill={p.main} />
+        <rect x="6" y="11.5" width="4" height="1.5" fill={p.accent} />
+        <rect x="7.2" y="12.5" width="1.6" height="1.5" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'pillar') {
+    return (
+      <>
+        <rect x="6" y="2.5" width="4" height="11" fill={p.main} />
+        <rect x="5" y="2" width="6" height="2" fill={p.light} />
+        <rect x="5" y="12" width="6" height="2" fill={p.accent} />
+      </>
+    );
+  }
+  if (variant === 'prism') {
+    return (
+      <>
+        <polygon points="8,2.5 12.5,8 8,13.5 3.5,8" fill={p.main} />
+        <polygon points="8,4.7 10.4,8 8,11.3 5.6,8" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'aether') {
+    return (
+      <>
+        <circle cx="8" cy="8" r="4.2" fill={p.main} />
+        <rect x="7.2" y="1.8" width="1.6" height="3" fill={p.light} />
+        <rect x="11.2" y="7.2" width="3" height="1.6" fill={p.light} />
+        <rect x="7.2" y="11.2" width="1.6" height="3" fill={p.light} />
+        <rect x="1.8" y="7.2" width="3" height="1.6" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'tree') {
+    return (
+      <>
+        <rect x="7" y="9" width="2" height="4" fill={p.accent} />
+        <polygon points="8,3 12,9 4,9" fill={p.main} />
+        <polygon points="8,4.8 10.3,8 5.7,8" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'orb') {
+    return (
+      <>
+        <circle cx="8" cy="8" r="4" fill={p.main} />
+        <circle cx="8" cy="8" r="2" fill={p.light} />
+      </>
+    );
+  }
+  if (variant === 'spark') {
+    return (
+      <>
+        <polygon points="8,2.5 9.5,6.5 13.5,8 9.5,9.5 8,13.5 6.5,9.5 2.5,8 6.5,6.5" fill={p.main} />
+        <circle cx="8" cy="8" r="1.3" fill={p.light} />
+      </>
+    );
+  }
+  return (
+    <>
+      <polygon points="8,3 10,7 14,8 10,9 8,13 6,9 2,8 6,7" fill={p.main} />
+      <circle cx="8" cy="8" r="1.5" fill={p.light} />
+    </>
+  );
+}
+
+function SpriteIcon({ token = 'default', size = 16, locked = false }) {
+  const cfg = SPRITE_LIBRARY[token] || SPRITE_LIBRARY.default;
+  const palette = locked ? lockedSpritePalette() : cfg;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      className="title-sprite"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="1" y="1" width="14" height="14" rx="2" fill={palette.bg} stroke={palette.edge} strokeWidth="1" />
+      <rect x="2" y="2" width="12" height="1.2" fill={palette.light} opacity="0.35" />
+      {spriteParts(cfg.variant, palette)}
+    </svg>
+  );
 }
 
 function JourneyCharacter({ running, avatarUrl, username, gender }) {
@@ -467,14 +881,14 @@ export default function TitleProgressTab({
                   {(ZONE_PROPS[zone.id] || []).map((prop, idx) => (
                     <span
                       key={`${zone.id}-prop-${idx}`}
-                      className="absolute w-9 h-9 rounded-full bg-black/25 border border-white/40 flex items-center justify-center text-base backdrop-blur-[1px]"
+                      className="absolute w-9 h-9 rounded-full bg-black/25 border border-white/40 flex items-center justify-center backdrop-blur-[1px]"
                       style={{
                         left: `${prop.x}%`,
                         top: `${prop.y}%`,
                         transform: 'translate(-50%, -50%)',
                       }}
                     >
-                      {prop.icon}
+                      <SpriteIcon token={prop.token} size={17} />
                     </span>
                   ))}
                 </div>
@@ -483,7 +897,7 @@ export default function TitleProgressTab({
               {bandProps.map((prop) => (
                 <span
                   key={prop.id}
-                  className={`absolute w-8 h-8 rounded-full border flex items-center justify-center text-[13px] title-prop ${
+                  className={`absolute w-8 h-8 rounded-full border flex items-center justify-center title-prop ${
                     prop.unlocked
                       ? 'bg-black/30 border-white/55 text-white'
                       : 'bg-black/20 border-slate-500/60 text-slate-300'
@@ -494,7 +908,7 @@ export default function TitleProgressTab({
                     transform: 'translate(-50%, -50%)',
                   }}
                 >
-                  {prop.icon}
+                  <SpriteIcon token={prop.token} size={15} locked={!prop.unlocked} />
                 </span>
               ))}
 
@@ -506,7 +920,7 @@ export default function TitleProgressTab({
                 const isTarget = target !== null && title.index === target;
                 const isNext = !!nextTitle && nextTitle.id === title.id;
                 const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
-                const tierIcon = TIER_WAYPOINT_ICON[title.tier] || TIER_WAYPOINT_ICON.default;
+                const pipColor = TIER_PIP_COLOR[title.tier] || TIER_PIP_COLOR.default;
                 const theme = getTitleTheme(title);
                 const showPlaque = isCurrent || isTarget || isNext;
                 return (
@@ -539,8 +953,13 @@ export default function TitleProgressTab({
                       }`}
                       title={`${title.name} • ${theme.landmark} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
                     >
-                      <span className="absolute left-[2px] top-[1px] text-[8px] leading-none opacity-80">{tierIcon}</span>
-                      <span className="text-[12px] leading-none">{theme.icon}</span>
+                      <span
+                        className="absolute left-[3px] top-[3px] w-1.5 h-1.5 rounded-full border border-white/70"
+                        style={{ backgroundColor: pipColor }}
+                      />
+                      <span className="inline-flex items-center justify-center">
+                        <SpriteIcon token={theme.sprite} size={17} locked={!unlocked} />
+                      </span>
                       {!unlocked && (
                         <span className="absolute right-[-4px] bottom-[-5px] text-[10px] leading-none">🔒</span>
                       )}
@@ -590,8 +1009,8 @@ export default function TitleProgressTab({
                   <div>
                     <p className="text-sm font-display font-bold text-gray-100">
                       {group.family}
-                      <span className="ml-1.5 text-[12px] align-middle">
-                        {group.family === 'Master' ? '💠' : group.family === 'Expert' ? '🥇' : group.family === 'Advanced' ? '🥈' : group.family === 'Intermediate' ? '🥉' : '🌱'}
+                      <span className="ml-1.5 inline-flex align-middle">
+                        <SpriteIcon token={FAMILY_SPRITE_TOKEN[group.family] || 'default'} size={14} />
                       </span>
                     </p>
                     <p className="text-[10px] text-gray-500">
@@ -624,7 +1043,9 @@ export default function TitleProgressTab({
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-display font-bold inline-flex items-center gap-1.5">
-                              <span className="text-sm leading-none">{theme.icon}</span>
+                              <span className="inline-flex">
+                                <SpriteIcon token={theme.sprite} size={14} locked={!unlocked} />
+                              </span>
                               <span>{title.name}</span>
                             </p>
                             <span className="text-[10px] font-mono">
