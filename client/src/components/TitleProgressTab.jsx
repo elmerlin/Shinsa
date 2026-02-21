@@ -4,27 +4,6 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function rectsOverlap(a, b) {
-  if (!a || !b) return false;
-  return (
-    a.x < b.x + b.w &&
-    a.x + a.w > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.h > b.y
-  );
-}
-
-function clampRect(rect, bounds, pad = 8) {
-  if (!rect) return null;
-  const maxX = Math.max(pad, bounds.w - rect.w - pad);
-  const maxY = Math.max(pad, bounds.h - rect.h - pad);
-  return {
-    ...rect,
-    x: clamp(rect.x, pad, maxX),
-    y: clamp(rect.y, pad, maxY),
-  };
-}
-
 const GROUP_ORDER = ['Master', 'Expert', 'Advanced', 'Intermediate', 'Beginner'];
 
 const TIER_PALETTE = {
@@ -114,7 +93,7 @@ function compactTitleName(name) {
 
 function titleLevelLabel(title) {
   const level = parseInt(title?.level, 10) || 0;
-  return level > 0 ? `Title Lv.${level}` : 'Title Lv.?';
+  return level > 0 ? `Title Level ${level}` : 'Title Level ?';
 }
 
 function fillTemplate(line, values = {}) {
@@ -896,7 +875,7 @@ function generateAdultScenery(points) {
   return items;
 }
 
-/* ── Volumetric island props (CSS 3D) ────────────────────────────── */
+/* ── Faux-3D island props (2.5D sprites) ─────────────────────────── */
 
 function seededValue(i, salt = 1) {
   return ((i * 92821 + salt * 337 + 97) % 1000) / 1000;
@@ -918,8 +897,8 @@ function buildIslandProps(island, zonePoints) {
 
     if (island.id === 'volcanic') {
       props.push({
-        id: `${island.id}-cone-${i}`,
-        type: 'cone',
+        id: `${island.id}-mountain-${i}`,
+        type: 'mountain',
         x,
         y,
         scale: 1 + seed * 1.05,
@@ -927,8 +906,8 @@ function buildIslandProps(island, zonePoints) {
       });
       if (i % 2 === 0) {
         props.push({
-          id: `${island.id}-pyramid-${i}`,
-          type: 'pyramid',
+          id: `${island.id}-spire-${i}`,
+          type: 'spire',
           x: clamp(localX - laneBias * 0.5, 0.08, 0.92),
           y: clamp(y + 0.06, 0.1, 0.95),
           scale: 0.84 + seed * 0.72,
@@ -937,8 +916,8 @@ function buildIslandProps(island, zonePoints) {
       }
     } else if (island.id === 'ruins') {
       props.push({
-        id: `${island.id}-pyramid-${i}`,
-        type: 'pyramid',
+        id: `${island.id}-mountain-${i}`,
+        type: 'mountain',
         x,
         y,
         scale: 0.82 + seed * 0.88,
@@ -946,8 +925,8 @@ function buildIslandProps(island, zonePoints) {
       });
       if (i % 3 === 1) {
         props.push({
-          id: `${island.id}-obelisk-${i}`,
-          type: 'obelisk',
+          id: `${island.id}-arch-${i}`,
+          type: 'arch',
           x: clamp(localX + laneBias * 0.35, 0.06, 0.94),
           y: clamp(localY + 0.04, 0.08, 0.95),
           scale: 0.8 + seed * 0.75,
@@ -956,8 +935,8 @@ function buildIslandProps(island, zonePoints) {
       }
     } else {
       props.push({
-        id: `${island.id}-pyramid-${i}`,
-        type: 'pyramid',
+        id: `${island.id}-mountain-${i}`,
+        type: 'mountain',
         x,
         y,
         scale: 0.9 + seed * 0.95,
@@ -965,8 +944,8 @@ function buildIslandProps(island, zonePoints) {
       });
       if (i % 3 === 0) {
         props.push({
-          id: `${island.id}-portal-${i}`,
-          type: 'portal',
+          id: `${island.id}-tree-${i}`,
+          type: 'tree',
           x: clamp(localX - laneBias * 0.45, 0.07, 0.93),
           y: clamp(localY + 0.03, 0.08, 0.94),
           scale: 0.78 + seed * 0.62,
@@ -981,34 +960,57 @@ function buildIslandProps(island, zonePoints) {
   return props.slice(0, maxProps);
 }
 
-function FloatingProp3D({ prop }) {
+function FauxPropSprite({ prop }) {
   const style = {
     left: `${(prop.x * 100).toFixed(2)}%`,
     top: `${(prop.y * 100).toFixed(2)}%`,
-    '--prop-scale': prop.scale,
+    width: `${Math.round(34 * prop.scale)}px`,
+    height: `${Math.round(34 * prop.scale)}px`,
   };
 
-  if (prop.type === 'cone') {
+  if (prop.type === 'tree') {
     return (
-      <div className={`title-prop3d title-prop-cone variant-${prop.variant || 0}`} style={style}>
-        <span className="title-prop-cone-tip" />
+      <div className={`title-prop-sprite variant-${prop.variant || 0}`} style={style}>
+        <svg viewBox="0 0 60 70" className="w-full h-full">
+          <path d="M30 66 L24 30 L36 30 L30 66 Z" fill="#3f2d25" />
+          <path d="M8 42 L30 6 L52 42 Z" fill="#406748" />
+          <path d="M16 42 L30 15 L44 42 Z" fill="#6ea071" />
+        </svg>
       </div>
     );
   }
 
-  if (prop.type === 'obelisk') {
-    return <div className={`title-prop3d title-prop-obelisk variant-${prop.variant || 0}`} style={style} />;
+  if (prop.type === 'arch') {
+    return (
+      <div className={`title-prop-sprite variant-${prop.variant || 0}`} style={style}>
+        <svg viewBox="0 0 60 60" className="w-full h-full">
+          <rect x="10" y="26" width="10" height="28" rx="2" fill="#9f7b55" />
+          <rect x="40" y="26" width="10" height="28" rx="2" fill="#846445" />
+          <path d="M10 26 Q30 6 50 26 L43 26 Q30 14 17 26 Z" fill="#c6a27b" />
+        </svg>
+      </div>
+    );
   }
 
-  if (prop.type === 'portal') {
-    return <div className={`title-prop3d title-prop-portal variant-${prop.variant || 0}`} style={style} />;
+  if (prop.type === 'spire') {
+    return (
+      <div className={`title-prop-sprite variant-${prop.variant || 0}`} style={style}>
+        <svg viewBox="0 0 60 60" className="w-full h-full">
+          <polygon points="30,6 12,54 48,54" fill="#5a2a20" />
+          <polygon points="30,6 30,54 48,54" fill="#3b1a15" />
+          <ellipse cx="30" cy="8" rx="6" ry="4" fill="#ff8f3d" />
+        </svg>
+      </div>
+    );
   }
 
   return (
-    <div className={`title-prop3d title-prop-pyramid variant-${prop.variant || 0}`} style={style}>
-      <span className="face front" />
-      <span className="face left" />
-      <span className="face right" />
+    <div className={`title-prop-sprite variant-${prop.variant || 0}`} style={style}>
+      <svg viewBox="0 0 60 60" className="w-full h-full">
+        <polygon points="30,4 6,52 54,52" fill="#8f7457" />
+        <polygon points="30,4 30,52 54,52" fill="#6e5740" />
+        <line x1="30" y1="5" x2="30" y2="52" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+      </svg>
     </div>
   );
 }
@@ -1107,10 +1109,10 @@ function WaypointNode({
       >
         <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none" style={{ height: '50%' }} />
         <span className="absolute inset-0 rounded-full pointer-events-none bg-[radial-gradient(circle_at_40%_35%,rgba(255,255,255,0.45),rgba(255,255,255,0)_58%)]" />
-        <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rotate-45 rounded-[3px] border ${
-          unlocked ? 'bg-white/90 border-white/95' : 'bg-slate-400/60 border-slate-300/80'
+        <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full border ${
+          unlocked ? 'bg-white/20 border-white/70' : 'bg-slate-500/35 border-slate-300/60'
         }`} style={{ boxShadow: '0 0 8px rgba(255,255,255,0.35)' }} />
-        <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${
+        <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ${
           unlocked ? 'bg-amber-300' : 'bg-slate-200/60'
         }`} />
         {isMilestone && (
@@ -1171,7 +1173,6 @@ export default function TitleProgressTab({
   const chatterIntervalRef = useRef(null);
   const audioCtxRef = useRef(null);
   const [mapScrollTop, setMapScrollTop] = useState(0);
-  const [mapViewport, setMapViewport] = useState({ w: 0, h: 0 });
 
   function clearSpeechTimer() {
     if (!speechTimeoutRef.current) return;
@@ -1322,25 +1323,6 @@ export default function TitleProgressTab({
   }, []);
 
   useEffect(() => {
-    const el = mapScrollRef.current;
-    if (!el) return undefined;
-    const updateViewport = () => {
-      setMapViewport({ w: el.clientWidth, h: el.clientHeight });
-    };
-    updateViewport();
-    let observer = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(updateViewport);
-      observer.observe(el);
-    }
-    window.addEventListener('resize', updateViewport);
-    return () => {
-      if (observer) observer.disconnect();
-      window.removeEventListener('resize', updateViewport);
-    };
-  }, [imported, titles.length]);
-
-  useEffect(() => {
     if (!groups.length || Object.keys(collapsedGroups).length > 0) return;
     const currentFamily = summary?.current_title?.skill_family || '';
     const initial = {};
@@ -1371,9 +1353,6 @@ export default function TitleProgressTab({
 
   const biomeZones = useMemo(() => buildBiomeZones(points), [points]);
   const biomeIslands = useMemo(() => buildVolumetricIslands(biomeZones, width), [biomeZones, width]);
-  const biomeStairs = useMemo(() => buildBiomeStairs(points, biomeZones), [points, biomeZones]);
-  const zoneRoadPaths = useMemo(() => buildZoneRoadPaths(points, biomeZones), [points, biomeZones]);
-  const zoneDropConnectors = useMemo(() => buildDropConnectors(points, biomeZones), [points, biomeZones]);
   const avatarNodeIndex = titles.length > 0 ? clamp(Math.round(cursor), 0, titles.length - 1) : 0;
 
   const islandPropsByZone = useMemo(() => {
@@ -1397,6 +1376,8 @@ export default function TitleProgressTab({
     return set;
   }, [titles]);
 
+  const roadPath = useMemo(() => buildRoadPath(points), [points]);
+
   const activeNodeTitle = useMemo(() => {
     if (!titles.length) return null;
     if (anchoredIndex !== null) {
@@ -1416,62 +1397,21 @@ export default function TitleProgressTab({
     return `${titleLevelLabel(activeNodeTitle)} ${status}. ${activeNodeTitle.earned_points.toLocaleString()} / ${activeNodeTitle.required_points.toLocaleString()} pts (${progressPct.toFixed(1)}%).`;
   }, [activeNodeTitle]);
 
-  const bubbleLayout = useMemo(() => {
-    if (mapViewport.w < 120 || mapViewport.h < 120) {
-      return { characterRect: null, nodeRect: null, avatarAnchor: null, nodeAnchor: null };
-    }
-    const bounds = { w: mapViewport.w, h: mapViewport.h };
-    const scaleX = bounds.w / width;
-    const avatarAnchor = {
-      x: avatarPos.x * scaleX,
-      y: avatarPos.y - mapScrollTop,
-    };
-    const characterRect = clampRect({
-      x: avatarAnchor.x - Math.min(340, bounds.w - 16) / 2,
-      y: avatarAnchor.y - 164,
-      w: Math.min(340, bounds.w - 16),
-      h: 104,
-    }, bounds, 8);
-
-    if (!characterRect || !activeNodeTitle) {
-      return { characterRect, nodeRect: null, avatarAnchor, nodeAnchor: null };
-    }
-
-    const anchorPoint = points[activeNodeTitle.index];
-    if (!anchorPoint) {
-      return { characterRect, nodeRect: null, avatarAnchor, nodeAnchor: null };
-    }
-    const nodeAnchor = {
-      x: anchorPoint.x * scaleX,
-      y: anchorPoint.y - mapScrollTop,
-    };
-    const nodeW = Math.min(268, bounds.w - 16);
-    const nodeH = 84;
-    let nodeRect = clampRect({
-      x: nodeAnchor.x + (nodeAnchor.x < bounds.w * 0.55 ? 26 : -nodeW - 26),
-      y: nodeAnchor.y - 108,
-      w: nodeW,
-      h: nodeH,
-    }, bounds, 8);
-
-    if (rectsOverlap(nodeRect, characterRect)) {
-      nodeRect = clampRect({ ...nodeRect, y: nodeAnchor.y + 36 }, bounds, 8);
-    }
-    if (rectsOverlap(nodeRect, characterRect)) {
-      nodeRect = clampRect({
-        ...nodeRect,
-        x: nodeAnchor.x < bounds.w * 0.5 ? nodeAnchor.x - nodeW - 26 : nodeAnchor.x + 26,
-      }, bounds, 8);
-    }
-    if (rectsOverlap(nodeRect, characterRect)) {
-      nodeRect = clampRect({ ...nodeRect, y: nodeAnchor.y - 132 }, bounds, 8);
-    }
-
-    return { characterRect, nodeRect, avatarAnchor, nodeAnchor };
-  }, [mapViewport, width, avatarPos, mapScrollTop, activeNodeTitle, points]);
-
   function handleTitleTap(title) {
     if (!title) return;
+    if (title.index > currentIndex) {
+      const safeCurrent = titles[clamp(currentIndex, 0, Math.max(0, titles.length - 1))] || summary?.current_title || null;
+      playNodeTouchSound(false);
+      setAnchoredIndex(currentIndex);
+      setTarget(currentIndex);
+      setJourneyMode('inspect');
+      setActiveJourneyTitle(safeCurrent);
+      say(
+        `You can only travel up to ${titleLevelLabel(safeCurrent)}. Earn more points to unlock ${titleLevelLabel(title)}.`,
+        2200
+      );
+      return;
+    }
     const unlocked = !!title.unlocked;
     const movingForward = title.index > (cursor + 0.08);
     const mode = unlocked ? (movingForward ? 'forward' : 'inspect') : 'scout';
@@ -1585,9 +1525,15 @@ export default function TitleProgressTab({
         )}
 
         <div className="mt-3 rounded-xl border border-white/25 bg-slate-950/55 px-3 py-2">
-          <p className="text-[10px] text-slate-200/90">
-            Volumetric mode active: stacked 3D islands, animated River of Light, and viewport-safe Final Fantasy style dialogue bubbles.
-          </p>
+          <p className="text-[9px] uppercase tracking-[0.16em] text-sky-200/70 font-display">Journey Dialogue</p>
+          <div className="relative mt-1">
+            <div className="title-speech-3d rounded-xl px-3.5 py-3 text-[12px] leading-relaxed text-white">
+              <p>{speech?.text || 'Select a title level node to hear your journey reflection.'}</p>
+              {activeNodeTitle && (
+                <p className="mt-2 text-[10px] leading-relaxed text-slate-200/90">{nodeBubbleText}</p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ── 3D World Map ──────────────────────────────────────── */}
@@ -1606,14 +1552,14 @@ export default function TitleProgressTab({
               />
 
               {[...biomeIslands]
-                .sort((a, b) => b.zLift - a.zLift)
+                .sort((a, b) => b.top - a.top)
                 .map((island, idx) => (
                   <div
                     key={`vol-island-${island.id}`}
-                    className={`title-vol-island biome-${island.id}`}
+                    className={`title-faux-island biome-${island.id}`}
                     style={{
                       left: `${(island.left / width) * 100}%`,
-                      top: `${island.top + mapScrollTop * island.parallax}px`,
+                      top: `${island.top + mapScrollTop * island.parallax * 0.25}px`,
                       width: `${(island.widthPx / width) * 100}%`,
                       height: `${island.heightPx}px`,
                       zIndex: 8 + idx,
@@ -1621,24 +1567,19 @@ export default function TitleProgressTab({
                       '--island-top-b': island.topB,
                       '--island-side-a': island.sideA,
                       '--island-side-b': island.sideB,
-                      '--island-rim': island.rim,
-                      '--island-thickness': `${island.thickness}px`,
-                      '--island-z': `${-island.zLift}px`,
+                      '--island-rim': island.rim || '#ffffff',
+                      '--island-thickness': `${Math.round(island.thickness * 0.95)}px`,
                       '--island-clip': island.clipPath,
-                      filter: island.id === 'volcanic' ? 'blur(1.1px)' : island.id === 'ruins' ? 'blur(0.45px)' : 'none',
                     }}
                   >
-                    <div className="title-vol-island-shadow" />
-                    <div className={`title-vol-island-top texture-${island.texture}`}>
-                      <div className="title-vol-island-rim" />
-                      <div className="title-prop-field">
+                    <div className={`title-faux-island-top texture-${island.texture}`}>
+                      <div className="title-faux-island-rim" />
+                      <div className="title-prop-sprite-field">
                         {(islandPropsByZone[island.id] || []).map((prop) => (
-                          <FloatingProp3D key={prop.id} prop={prop} />
+                          <FauxPropSprite key={prop.id} prop={prop} />
                         ))}
                       </div>
                     </div>
-                    <div className="title-vol-island-side title-vol-island-side-front" />
-                    <div className="title-vol-island-side title-vol-island-side-right" />
                   </div>
                 ))}
 
@@ -1653,10 +1594,6 @@ export default function TitleProgressTab({
                     <stop offset="0%" stopColor="#E88945" />
                     <stop offset="100%" stopColor="#8B4A26" />
                   </linearGradient>
-                  <linearGradient id="dropBeam" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(255, 236, 163, 0.95)" />
-                    <stop offset="100%" stopColor="rgba(239, 110, 40, 0.65)" />
-                  </linearGradient>
                   <filter id="riverGlow">
                     <feGaussianBlur stdDeviation="4.8" result="blur" />
                     <feMerge>
@@ -1666,69 +1603,41 @@ export default function TitleProgressTab({
                   </filter>
                 </defs>
 
-                {zoneDropConnectors.map((link) => (
-                  <path
-                    key={link.id}
-                    d={`M ${link.x1} ${link.y1} C ${link.x1} ${(link.y1 + link.y2) / 2}, ${link.x2} ${(link.y1 + link.y2) / 2}, ${link.x2} ${link.y2}`}
-                    fill="none"
-                    stroke="url(#dropBeam)"
-                    strokeWidth="10"
-                    strokeLinecap="round"
-                    opacity="0.9"
-                    filter="url(#riverGlow)"
-                  />
-                ))}
-
-                {zoneRoadPaths.map((segment) => (
-                  <g key={`river-${segment.id}`} transform={`translate(0 ${mapScrollTop * segment.parallax})`}>
-                    <path
-                      d={segment.d}
-                      fill="none"
-                      stroke="rgba(0,0,0,0.5)"
-                      strokeWidth="34"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      transform="translate(4,7)"
-                    />
-                    <path
-                      d={segment.d}
-                      fill="none"
-                      stroke="url(#riverShell)"
-                      strokeWidth="30"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d={segment.d}
-                      fill="none"
-                      stroke="url(#riverCore)"
-                      strokeWidth="22"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      filter="url(#riverGlow)"
-                    />
-                    <path
-                      d={segment.d}
-                      fill="none"
-                      stroke="rgba(255,255,255,0.55)"
-                      strokeWidth="4"
-                      strokeLinecap="round"
-                      strokeDasharray="28 18"
-                      className="title-river-flow"
-                    />
-                  </g>
-                ))}
-
-                {biomeStairs.map((stairs) => (
-                  <StairBridge3D
-                    key={stairs.id}
-                    x={stairs.x}
-                    y={stairs.y}
-                    angle={stairs.angle}
-                    width={stairs.width}
-                    drop={stairs.drop}
-                  />
-                ))}
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="rgba(0,0,0,0.52)"
+                  strokeWidth="36"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  transform="translate(5,8)"
+                />
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="url(#riverShell)"
+                  strokeWidth="30"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="url(#riverCore)"
+                  strokeWidth="22"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  filter="url(#riverGlow)"
+                />
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.62)"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray="28 18"
+                  className="title-river-flow"
+                />
               </svg>
 
               {biomeIslands.map((island) => (
@@ -1782,63 +1691,6 @@ export default function TitleProgressTab({
                 />
               </div>
             </div>
-          </div>
-
-          <div className="absolute inset-0 pointer-events-none z-40">
-            {bubbleLayout.characterRect && (
-              <div
-                className="title-ff-bubble title-ff-character-bubble"
-                style={{
-                  left: `${bubbleLayout.characterRect.x}px`,
-                  top: `${bubbleLayout.characterRect.y}px`,
-                  width: `${bubbleLayout.characterRect.w}px`,
-                }}
-              >
-                <p className="text-[12px] leading-relaxed text-white">
-                  {speech?.text || 'Select a title level node to hear your journey reflection.'}
-                </p>
-                {bubbleLayout.avatarAnchor && (
-                  <span
-                    className="title-ff-bubble-tail"
-                    style={{
-                      left: `${clamp(
-                        bubbleLayout.avatarAnchor.x - bubbleLayout.characterRect.x - 10,
-                        14,
-                        bubbleLayout.characterRect.w - 26
-                      )}px`,
-                    }}
-                  />
-                )}
-              </div>
-            )}
-
-            {bubbleLayout.nodeRect && activeNodeTitle && (
-              <div
-                className="title-ff-bubble title-ff-node-bubble"
-                style={{
-                  left: `${bubbleLayout.nodeRect.x}px`,
-                  top: `${bubbleLayout.nodeRect.y}px`,
-                  width: `${bubbleLayout.nodeRect.w}px`,
-                }}
-              >
-                <p className="text-[10px] uppercase tracking-[0.12em] text-amber-200/95 font-display">
-                  {titleLevelLabel(activeNodeTitle)}
-                </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-slate-100">{nodeBubbleText}</p>
-                {bubbleLayout.nodeAnchor && (
-                  <span
-                    className="title-ff-bubble-tail title-ff-bubble-tail-node"
-                    style={{
-                      left: `${clamp(
-                        bubbleLayout.nodeAnchor.x - bubbleLayout.nodeRect.x - 10,
-                        14,
-                        bubbleLayout.nodeRect.w - 26
-                      )}px`,
-                    }}
-                  />
-                )}
-              </div>
-            )}
           </div>
 
           {anchoredIndex !== null && (
