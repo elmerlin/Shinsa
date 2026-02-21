@@ -352,6 +352,22 @@
     inset 0 -8px 18px rgba(0, 0, 0, 0.25);
 }
 
+.title-fixed-bubble .title-speech-3d {
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-height: 700px) {
+  .title-fixed-bubble-node {
+    top: max(8px, env(safe-area-inset-top));
+  }
+
+  .title-fixed-bubble-character {
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
 .title-speech-3d-tail {
   background: linear-gradient(135deg, rgba(14, 20, 50, 0.98) 52%, rgba(25, 32, 76, 0.98) 52%);
   border-right: 2px solid rgba(221, 229, 255, 0.75);

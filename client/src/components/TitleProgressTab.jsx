@@ -102,9 +102,17 @@ function inferSkillLevel(title) {
 }
 
 function titleLevelLabel(title) {
+  const name = String(title?.name || '').trim();
   const familyRaw = String(title?.skill_family || '').trim();
-  const family = familyRaw || String(title?.skill_title || '').trim();
+  const familyFromNameMatch = name.match(/\b(Beginner|Intermediate|Advanced|Expert|Master)\b/i);
+  const familyFromName = familyFromNameMatch ? `${familyFromNameMatch[1][0].toUpperCase()}${familyFromNameMatch[1].slice(1).toLowerCase()}` : '';
+  const family = familyRaw || familyFromName;
   const skillLevel = inferSkillLevel(title);
+  const pairFromName = name.match(/\b(Beginner|Intermediate|Advanced|Expert|Master)\s*(?:lv|lvl|level)?\.?\s*(\d+)\b/i);
+
+  if (pairFromName) {
+    return `${pairFromName[1][0].toUpperCase()}${pairFromName[1].slice(1).toLowerCase()} Lv.${parseInt(pairFromName[2], 10)}`;
+  }
 
   if (/^master$/i.test(family) || /the\s+master/i.test(family)) {
     return skillLevel > 1 ? `Master Lv.${skillLevel}` : 'The Master';
@@ -112,8 +120,7 @@ function titleLevelLabel(title) {
   if (family && skillLevel > 0) return `${family} Lv.${skillLevel}`;
   if (family) return family;
 
-  const fallbackLevel = parseInt(title?.level, 10) || 0;
-  return fallbackLevel > 0 ? `Level ${fallbackLevel}` : 'Title';
+  return 'Title';
 }
 
 function fillTemplate(line, values = {}) {
@@ -1522,6 +1529,90 @@ function createFlowTexture() {
   return texture;
 }
 
+const BIOME_TILE_LIBRARY = {
+  lower: [
+    '/models/kenney/hexagon/stone-rocks.glb',
+    '/models/kenney/hexagon/stone.glb',
+  ],
+  middle: [
+    '/models/kenney/hexagon/dirt.glb',
+    '/models/kenney/hexagon/sand.glb',
+  ],
+  upper: [
+    '/models/kenney/hexagon/stone-hill.glb',
+    '/models/kenney/hexagon/stone.glb',
+  ],
+};
+
+const BIOME_PROP_LIBRARY = {
+  lower: [
+    '/models/kenney/nature/tree_default_dark.glb',
+    '/models/kenney/nature/stump_oldTall.glb',
+    '/models/kenney/nature/rock_largeA.glb',
+  ],
+  middle: [
+    '/models/kenney/nature/tree_pineTallA.glb',
+    '/models/kenney/nature/rock_largeA.glb',
+    '/models/kenney/fantasy/wall-arch.glb',
+  ],
+  upper: [
+    '/models/kenney/nature/tree_pineTallA.glb',
+    '/models/kenney/nature/rock_largeA.glb',
+    '/models/kenney/castle/tower-square-arch.glb',
+  ],
+};
+
+const MILESTONE_PROP_LIBRARY = [
+  '/models/kenney/castle/castle-arch.glb',
+  '/models/kenney/fantasy/town-house.glb',
+];
+
+function zoneToBiome(zoneId) {
+  if (zoneId === 'haunted') return 'lower';
+  if (zoneId === 'ruins') return 'middle';
+  return 'upper';
+}
+
+function corridorPointAt(t) {
+  const z = THREE.MathUtils.lerp(100, -500, t);
+  const weave = Math.sin(t * 10.4 + 0.7) * 6.4 + Math.sin(t * 24.2 + 0.15) * 2.7;
+  const x = clamp(weave, -10, 10);
+  return { x, z };
+}
+
+function buildHexOffsets(seed, targetCount) {
+  const dirs = [
+    [1, 0],
+    [1, -1],
+    [0, -1],
+    [-1, 0],
+    [-1, 1],
+    [0, 1],
+  ];
+  const offsets = [{ q: 0, r: 0 }];
+  for (let radius = 1; radius <= 2; radius++) {
+    let q = dirs[4][0] * radius;
+    let r = dirs[4][1] * radius;
+    for (let side = 0; side < 6; side++) {
+      for (let step = 0; step < radius; step++) {
+        offsets.push({ q, r });
+        q += dirs[side][0];
+        r += dirs[side][1];
+      }
+    }
+  }
+  const filtered = offsets.filter((offset, idx) => {
+    if (idx === 0) return true;
+    const wobble = hashNoise2d(seed * 0.17 + idx * 0.91, seed * 0.31 - idx * 0.47);
+    return wobble > 0.16;
+  });
+  return filtered.slice(0, clamp(targetCount, 15, 20));
+}
+
+function hexDistance(offset) {
+  return (Math.abs(offset.q) + Math.abs(offset.r) + Math.abs(offset.q + offset.r)) / 2;
+}
+
 function ThreeProgressMap({
   width,
   height,
@@ -1556,7 +1647,7 @@ function ThreeProgressMap({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b0f21);
-    scene.fog = new THREE.FogExp2(0x11152a, 0.0125);
+    scene.fog = new THREE.FogExp2(0x0d1226, 0.011);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -1568,14 +1659,14 @@ function ThreeProgressMap({
     renderer.physicallyCorrectLights = true;
     host.appendChild(renderer.domElement);
 
-    const camera = new THREE.OrthographicCamera(-52, 52, 32, -32, 0.1, 900);
+    const camera = new THREE.OrthographicCamera(-58, 58, 34, -34, 0.1, 1700);
     camera.position.set(100, 100, 100);
-    camera.zoom = 1.45;
+    camera.zoom = 1;
     camera.lookAt(0, 0, 0);
 
     const composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.88, 0.54, 0.22);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.96, 0.66, 0.19);
     composer.addPass(renderPass);
     composer.addPass(bloomPass);
 
@@ -1594,90 +1685,41 @@ function ThreeProgressMap({
     scene.add(sun);
 
     const maxAnisotropy = Math.max(1, Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1));
-    const zStart = 36;
-    const zEnd = -194;
-    const xScale = 74;
-    const basePoints = points.map((point, index) => {
-      const t = points.length <= 1 ? 0 : index / (points.length - 1);
-      return new THREE.Vector3(
-        ((point.x / width) - 0.5) * xScale,
-        0,
-        THREE.MathUtils.lerp(zStart, zEnd, t)
-      );
-    });
-
-    const zoneBaseY = { haunted: 12, ruins: 40, volcanic: 72 };
-    const terrainMeshes = [];
     const disposableTextures = [];
-    const islandCenters = [];
+    const spawnedModels = [];
+    const nodeMeshes = [];
+    const labelSprites = [];
+    const pendingSpawns = [];
+    const worldBounds = { minX: -12, maxX: 12, minZ: -510, maxZ: 110 };
+    let disposed = false;
 
-    biomeZones.forEach((zone) => {
-      const zoneSlice = basePoints.slice(zone.start, zone.end + 1);
-      if (!zoneSlice.length) return;
-      const center = zoneSlice.reduce((acc, point) => acc.add(point), new THREE.Vector3()).multiplyScalar(1 / zoneSlice.length);
-      const xs = zoneSlice.map((p) => p.x);
-      const zs = zoneSlice.map((p) => p.z);
-      const extentX = Math.max(...xs) - Math.min(...xs);
-      const extentZ = Math.max(...zs) - Math.min(...zs);
-      const radiusX = clamp(18 + extentX * 0.5 + zoneSlice.length * 0.42, 18, 36);
-      const radiusZ = clamp(24 + extentZ * 0.36 + zoneSlice.length * 0.82, 24, 56);
-      const thickness = zone.id === 'haunted' ? 9.5 : zone.id === 'ruins' ? 10.5 : 12;
-      const topY = zoneBaseY[zone.id] || 12;
-      const shape = buildIslandShape(radiusX, radiusZ, zone.start + zone.end);
-      const geometry = new THREE.ExtrudeGeometry(shape, {
-        depth: thickness,
-        bevelEnabled: false,
-        steps: 1,
-        curveSegments: 28,
-      });
-      geometry.rotateX(-Math.PI / 2);
-      geometry.translate(center.x, topY - thickness, center.z);
+    const defaultZones = biomeZones?.length
+      ? biomeZones
+      : [
+        { id: 'haunted', start: 0, end: Math.max(0, Math.floor(points.length / 3) - 1) },
+        { id: 'ruins', start: Math.floor(points.length / 3), end: Math.max(0, Math.floor((points.length * 2) / 3) - 1) },
+        { id: 'volcanic', start: Math.floor((points.length * 2) / 3), end: Math.max(0, points.length - 1) },
+      ];
+    const zoneElevation = { haunted: 9, ruins: 29, volcanic: 51 };
+    const nodeCount = Math.max(2, points.length);
 
-      const pos = geometry.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i);
-        const y = pos.getY(i);
-        const z = pos.getZ(i);
-        if (y > topY - 0.55) {
-          const hill = fbmNoise2d(x * 0.08 + zone.start * 0.11, z * 0.08 - zone.end * 0.07, 4);
-          const ridge = Math.sin((x + z) * 0.12 + zone.start * 0.33) * 0.45;
-          pos.setY(i, y + (hill - 0.48) * 2.4 + ridge);
-        }
-      }
-      pos.needsUpdate = true;
-      geometry.computeVertexNormals();
+    const elevationForIndex = (index) => {
+      const zone = defaultZones.find((item) => index >= item.start && index <= item.end) || defaultZones[defaultZones.length - 1];
+      const base = zoneElevation[zone?.id] || 9;
+      const range = Math.max(1, (zone?.end || 0) - (zone?.start || 0));
+      const inZoneT = clamp((index - (zone?.start || 0)) / range, 0, 1);
+      return base + inZoneT * 2.2;
+    };
 
-      const textureSet = getTerrainTextures(zone.id);
-      const topMat = new THREE.MeshStandardMaterial({
-        map: textureSet.albedo,
-        normalMap: textureSet.normalMap,
-        roughnessMap: textureSet.roughnessMap,
-        color: '#ffffff',
-        roughness: 0.82,
-        metalness: 0.06,
-      });
-      const sideMat = new THREE.MeshStandardMaterial({
-        map: textureSet.cliffMap,
-        color: '#d8d8d8',
-        roughness: 0.95,
-        metalness: 0.02,
-      });
-      [textureSet.albedo, textureSet.normalMap, textureSet.roughnessMap, textureSet.cliffMap].forEach((texture) => {
-        texture.anisotropy = maxAnisotropy;
-      });
-      textureSet.albedo.repeat.set(3.2, 3.2);
-      textureSet.normalMap.repeat.set(3.2, 3.2);
-      textureSet.roughnessMap.repeat.set(3.2, 3.2);
-      textureSet.cliffMap.repeat.set(2.4, 5.4);
-
-      const island = new THREE.Mesh(geometry, [topMat, sideMat]);
-      setShadows(island);
-      island.renderOrder = 1;
-      scene.add(island);
-      terrainMeshes.push(island);
-      islandCenters.push({ zone, center: center.clone(), topY });
-      disposableTextures.push(textureSet.albedo, textureSet.normalMap, textureSet.roughnessMap, textureSet.cliffMap);
+    const basePathPoints = Array.from({ length: nodeCount }).map((_, index) => {
+      const t = nodeCount <= 1 ? 0 : index / (nodeCount - 1);
+      const { x, z } = corridorPointAt(t);
+      const y = elevationForIndex(index) + Math.sin(index * 0.58) * 0.52;
+      return new THREE.Vector3(x, y, z);
     });
+    const baseCurve = new THREE.CatmullRomCurve3(basePathPoints, false, 'catmullrom', 0.34);
+    const samplePoints = baseCurve.getPoints(Math.max(420, nodeCount * 42));
+    const pathCurve = new THREE.CatmullRomCurve3(samplePoints, false, 'catmullrom', 0.22);
 
     const skyGlowTexture = createCanvasTexture(512, (ctx, size) => {
       const radial = ctx.createRadialGradient(size * 0.12, size * 0.12, size * 0.05, size * 0.5, size * 0.55, size * 0.62);
@@ -1702,58 +1744,41 @@ function ThreeProgressMap({
       new THREE.SpriteMaterial({
         map: skyGlowTexture,
         transparent: true,
-        opacity: 0.35,
+        opacity: 0.4,
         depthWrite: false,
         depthTest: false,
       })
     );
-    skyGlow.position.set(0, 132, -36);
-    skyGlow.scale.set(320, 240, 1);
+    skyGlow.position.set(0, 144, -112);
+    skyGlow.scale.set(420, 280, 1);
     skyGlow.renderOrder = 0;
     scene.add(skyGlow);
     disposableTextures.push(skyGlowTexture);
-
-    const terrainRaycaster = new THREE.Raycaster();
-    const projectToTerrainY = (x, z, fallback = 0) => {
-      terrainRaycaster.set(new THREE.Vector3(x, 260, z), new THREE.Vector3(0, -1, 0));
-      const hits = terrainRaycaster.intersectObjects(terrainMeshes, false);
-      if (!hits.length) return fallback;
-      return hits[0].point.y;
-    };
-
-    const baseCurve = new THREE.CatmullRomCurve3(basePoints, false, 'catmullrom', 0.3);
-    const projectedSampleCount = Math.max(220, points.length * 26);
-    const projectedPoints = baseCurve.getPoints(projectedSampleCount).map((point, idx) => {
-      const normalized = projectedSampleCount <= 1 ? 0 : idx / projectedSampleCount;
-      const blendY = THREE.MathUtils.lerp(zoneBaseY.haunted, zoneBaseY.volcanic, normalized * 0.85);
-      return new THREE.Vector3(point.x, projectToTerrainY(point.x, point.z, blendY) + 0.42, point.z);
-    });
-    const pathCurve = new THREE.CatmullRomCurve3(projectedPoints, false, 'catmullrom', 0.22);
 
     const flowTexture = createFlowTexture();
     flowTexture.anisotropy = maxAnisotropy;
     disposableTextures.push(flowTexture);
 
     const pathBed = new THREE.Mesh(
-      new THREE.TubeGeometry(pathCurve, Math.max(280, points.length * 42), 0.96, 14, false),
+      new THREE.TubeGeometry(pathCurve, Math.max(360, nodeCount * 46), 1.16, 16, false),
       new THREE.MeshStandardMaterial({
-        color: 0x6f4b2d,
-        roughness: 0.78,
+        color: 0x563b24,
+        roughness: 0.74,
         metalness: 0.04,
       })
     );
-    pathBed.renderOrder = 2;
+    pathBed.renderOrder = 3;
     pathBed.receiveShadow = true;
     scene.add(pathBed);
 
     const pathMesh = new THREE.Mesh(
-      new THREE.TubeGeometry(pathCurve, Math.max(280, points.length * 42), 0.6, 18, false),
+      new THREE.TubeGeometry(pathCurve, Math.max(360, nodeCount * 46), 0.74, 20, false),
       new THREE.MeshStandardMaterial({
         color: 0xffdd80,
         map: flowTexture,
         emissive: 0xffcc00,
         emissiveMap: flowTexture,
-        emissiveIntensity: 2,
+        emissiveIntensity: 2.1,
         roughness: 0.18,
         metalness: 0.08,
         transparent: true,
@@ -1769,16 +1794,151 @@ function ThreeProgressMap({
     stoneTexture.anisotropy = maxAnisotropy;
     disposableTextures.push(stoneTexture);
 
-    const nodeMeshes = [];
-    const labelSprites = [];
+    const ensureUniqueMaterials = (root) => {
+      root.traverse((child) => {
+        if (!child?.isMesh || !child.material) return;
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map((material) => material?.clone?.() || material);
+        } else {
+          child.material = child.material.clone?.() || child.material;
+        }
+      });
+    };
+
+    const tintModelMaterials = (root, biome) => {
+      root.traverse((child) => {
+        if (!child?.isMesh || !child.material) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((material) => {
+          if (!material?.color) return;
+          if (biome === 'upper') {
+            material.color.multiply(new THREE.Color('#e6eeff'));
+            material.roughness = Math.min(1, (material.roughness ?? 0.8) + 0.06);
+          } else if (biome === 'lower') {
+            material.color.multiply(new THREE.Color('#a07a71'));
+            material.roughness = Math.min(1, (material.roughness ?? 0.8) + 0.09);
+          } else {
+            material.color.multiply(new THREE.Color('#f3c68b'));
+          }
+          material.needsUpdate = true;
+        });
+      });
+    };
+
+    const spawnModel = async ({
+      url,
+      position,
+      scale = 1,
+      rotationY = 0,
+      biome = 'middle',
+      fallbackType = 'ruins',
+    }) => {
+      try {
+        const template = await loadModelTemplate(url);
+        if (!template || disposed) return null;
+        const model = cloneSkinned(template);
+        ensureUniqueMaterials(model);
+        tintModelMaterials(model, biome);
+        model.position.copy(position);
+        model.rotation.y = rotationY;
+        model.scale.setScalar(scale);
+        setShadows(model);
+        scene.add(model);
+        spawnedModels.push(model);
+        return model;
+      } catch {
+        if (disposed) return null;
+        const fallback = createFallbackProp(fallbackType, position, scale * 0.72, biome === 'lower'
+          ? { main: '#7a322a', shade: '#4a1d1b' }
+          : biome === 'upper'
+            ? { main: '#788aa1', shade: '#4d5b71' }
+            : { main: '#b58a61', shade: '#7f6243' });
+        fallback.rotation.y = rotationY;
+        scene.add(fallback);
+        spawnedModels.push(fallback);
+        return fallback;
+      }
+    };
+
+    const spawnIslandCluster = async (biome, centerX, centerZ, elevationY) => {
+      const targetCount = 15 + Math.floor(hashNoise2d(centerX * 0.2 + 2.1, centerZ * 0.13 - 1.8) * 6);
+      const offsets = buildHexOffsets(centerX + centerZ + elevationY, targetCount);
+      const tileModels = BIOME_TILE_LIBRARY[biome] || BIOME_TILE_LIBRARY.middle;
+      const propModels = BIOME_PROP_LIBRARY[biome] || BIOME_PROP_LIBRARY.middle;
+      const hexSpacing = 6.2;
+      const tileScale = 3.35;
+      const spawnTasks = [];
+
+      offsets.forEach((offset, index) => {
+        const localX = Math.sqrt(3) * (offset.q + offset.r / 2) * hexSpacing;
+        const localZ = 1.5 * offset.r * hexSpacing;
+        const jitterX = (hashNoise2d(index * 0.67, centerZ * 0.07 + 11.2) - 0.5) * 1.4;
+        const jitterZ = (hashNoise2d(index * 0.39 + 2.7, centerX * 0.09) - 0.5) * 1.4;
+        const tileX = centerX + localX + jitterX;
+        const tileZ = centerZ + localZ + jitterZ;
+        const tileY = elevationY + (hashNoise2d(tileX * 0.12, tileZ * 0.11) - 0.5) * 1.6;
+        worldBounds.minX = Math.min(worldBounds.minX, tileX - 4.2);
+        worldBounds.maxX = Math.max(worldBounds.maxX, tileX + 4.2);
+        worldBounds.minZ = Math.min(worldBounds.minZ, tileZ - 4.2);
+        worldBounds.maxZ = Math.max(worldBounds.maxZ, tileZ + 4.2);
+        spawnTasks.push(
+          spawnModel({
+            url: tileModels[index % tileModels.length],
+            position: new THREE.Vector3(tileX, tileY, tileZ),
+            scale: tileScale,
+            rotationY: (Math.PI / 3) * Math.round(hashNoise2d(tileX * 0.17, tileZ * 0.21) * 6),
+            biome,
+            fallbackType: biome === 'lower' ? 'volcanic' : 'ruins',
+          })
+        );
+      });
+
+      const edgeOffsets = offsets.filter((offset) => hexDistance(offset) >= 1.5);
+      const propCount = clamp(Math.floor(offsets.length * 0.62), 8, 12);
+      for (let i = 0; i < propCount; i++) {
+        const edge = edgeOffsets[i % edgeOffsets.length];
+        if (!edge) continue;
+        const localX = Math.sqrt(3) * (edge.q + edge.r / 2) * hexSpacing;
+        const localZ = 1.5 * edge.r * hexSpacing;
+        const sideX = (hashNoise2d(i * 0.61, centerX * 0.03 + 8.4) - 0.5) * 3.1;
+        const sideZ = (hashNoise2d(i * 0.71, centerZ * 0.03 - 3.4) - 0.5) * 3.1;
+        const propX = centerX + localX + sideX;
+        const propZ = centerZ + localZ + sideZ;
+        const propY = elevationY + 1.8 + (hashNoise2d(propX * 0.14, propZ * 0.1) - 0.5) * 0.9;
+        const propScale = biome === 'lower' ? 4.8 : biome === 'middle' ? 4.1 : 3.9;
+        spawnTasks.push(
+          spawnModel({
+            url: propModels[i % propModels.length],
+            position: new THREE.Vector3(propX, propY, propZ),
+            scale: propScale,
+            rotationY: hashNoise2d(i * 0.29, propX * 0.12) * Math.PI * 2,
+            biome,
+            fallbackType: biome === 'lower' ? 'volcanic' : 'haunted',
+          })
+        );
+      }
+
+      await Promise.all(spawnTasks);
+    };
+
+    defaultZones.forEach((zone) => {
+      const biome = zoneToBiome(zone.id);
+      const midT = nodeCount <= 1 ? 0 : clamp(((zone.start + zone.end) / 2) / (nodeCount - 1), 0, 1);
+      const center = corridorPointAt(midT);
+      const elevation = zoneElevation[zone.id] || 10;
+      pendingSpawns.push(spawnIslandCluster(biome, center.x, center.z, elevation));
+    });
+
+    let milestoneVisualCounter = 0;
     titles.forEach((title) => {
       if (title.index < 0 || title.index >= points.length) return;
       const t = points.length <= 1 ? 0 : clamp(title.index / (points.length - 1), 0, 1);
       const point = pathCurve.getPoint(t);
       const unlocked = title.index <= currentIndex;
       const skillLevel = inferSkillLevel(title);
-      const isMilestone = skillLevel === 1 || /master/i.test(title?.skill_family || '');
-      const radius = isMilestone ? 1.6 : 1.24;
+      const machineLevel = parseInt(title?.level, 10) || 0;
+      const isMilestone = [10, 20, 30].includes(machineLevel) || skillLevel === 1 || /master/i.test(title?.skill_family || '');
+      const radius = isMilestone ? 1.92 : 1.3;
 
       const node = new THREE.Mesh(
         new THREE.CylinderGeometry(radius, radius * 1.04, 0.56, 34),
@@ -1791,10 +1951,10 @@ function ThreeProgressMap({
           metalness: unlocked ? 0.18 : 0.04,
         })
       );
-      node.position.set(point.x, point.y + 0.66, point.z);
+      node.position.set(point.x, point.y + 0.88, point.z);
       node.castShadow = true;
       node.receiveShadow = true;
-      node.renderOrder = 30;
+      node.renderOrder = 25;
       node.userData = { titleIndex: title.index };
       scene.add(node);
       nodeMeshes.push(node);
@@ -1818,32 +1978,26 @@ function ThreeProgressMap({
         fg: unlocked ? '#FFFFFF' : '#D2DAE6',
         fontSize: isMilestone ? 24 : 22,
       });
-      label.position.set(point.x, point.y + (isMilestone ? 3.2 : 2.7), point.z);
+      label.position.set(point.x, point.y + (isMilestone ? 3.55 : 2.95), point.z);
       scene.add(label);
       labelSprites.push(label);
-    });
 
-    const familyAnchors = ['Intermediate', 'Advanced', 'Expert', 'Master']
-      .map((family) => {
-        const anchor = titles
-          .filter((title) => familyName(title) === family || (family === 'Master' && /master/i.test(familyName(title))))
-          .sort((a, b) => a.index - b.index)[0];
-        if (!anchor) return null;
-        const t = points.length <= 1 ? 0 : clamp(anchor.index / (points.length - 1), 0, 1);
-        const anchorPoint = pathCurve.getPoint(t);
-        if (!anchorPoint) return null;
-        const sprite = createTextSprite(family === 'Master' ? 'The Master' : `${family} Zone`, {
-          bg: 'rgba(58, 26, 20, 0.82)',
-          fg: '#FFE6BC',
-          fontSize: 26,
-          paddingX: 24,
-          paddingY: 12,
-        });
-        sprite.position.set(anchorPoint.x + 5.2, anchorPoint.y + 5.8, anchorPoint.z - 1.2);
-        scene.add(sprite);
-        return sprite;
-      })
-      .filter(Boolean);
+      if ([10, 20, 30].includes(machineLevel)) {
+        const side = milestoneVisualCounter % 2 === 0 ? 1 : -1;
+        const anchorUrl = MILESTONE_PROP_LIBRARY[milestoneVisualCounter % MILESTONE_PROP_LIBRARY.length];
+        milestoneVisualCounter += 1;
+        pendingSpawns.push(
+          spawnModel({
+            url: anchorUrl,
+            position: new THREE.Vector3(point.x + side * 8.4, point.y + 1.4, point.z + side * 2.8),
+            scale: anchorUrl.includes('town-house') ? 3.4 : 4.2,
+            rotationY: side > 0 ? Math.PI * 0.82 : Math.PI * 0.18,
+            biome: zoneToBiome((defaultZones.find((zone) => title.index >= zone.start && title.index <= zone.end) || {}).id),
+            fallbackType: 'ruins',
+          })
+        );
+      }
+    });
 
     const avatar = new THREE.Group();
     const avatarBody = new THREE.Mesh(
@@ -1865,71 +2019,6 @@ function ThreeProgressMap({
     });
     scene.add(avatar);
 
-    const spawnedProps = [];
-    let propsDisposed = false;
-
-    const spawnModel = async ({ url, position, scale = 1, rotationY = 0, fallbackType = 'ruins', palette = {} }) => {
-      try {
-        const template = await loadModelTemplate(url);
-        if (!template || propsDisposed) return;
-        const model = cloneSkinned(template);
-        model.position.copy(position);
-        model.rotation.y = rotationY;
-        model.scale.setScalar(scale);
-        setShadows(model);
-        scene.add(model);
-        spawnedProps.push(model);
-      } catch {
-        if (propsDisposed) return;
-        const fallback = createFallbackProp(fallbackType, position, scale * 0.82, palette);
-        fallback.rotation.y = rotationY;
-        scene.add(fallback);
-        spawnedProps.push(fallback);
-      }
-    };
-
-    islandCenters.forEach(({ zone, center, topY }) => {
-      const palette = zone.id === 'volcanic'
-        ? { main: '#88342A', shade: '#57201C' }
-        : zone.id === 'ruins'
-          ? { main: '#AB845E', shade: '#775940' }
-          : { main: '#4A7A5E', shade: '#2E4D3D' };
-      const modelPool = BIOME_MODEL_LIBRARY[zone.id] || BIOME_MODEL_LIBRARY.ruins;
-      const slots = Math.max(6, (zone.end - zone.start + 1) * 2);
-      for (let i = 0; i < slots; i++) {
-        const anchorIndex = clamp(zone.start + Math.floor((i / slots) * (zone.end - zone.start + 1)), zone.start, zone.end);
-        const anchor = basePoints[anchorIndex];
-        if (!anchor) continue;
-        const side = i % 2 === 0 ? -1 : 1;
-        const spread = 5.8 + fbmNoise2d(i * 0.47, zone.start * 0.21, 3) * 6.2;
-        const x = anchor.x + side * spread;
-        const z = anchor.z + (fbmNoise2d(i * 0.61, zone.end * 0.17, 3) - 0.5) * 9.2;
-        const y = projectToTerrainY(x, z, topY) + 0.2;
-        const scale = zone.id === 'volcanic'
-          ? 2.35 + fbmNoise2d(i * 0.3, 4.2, 2) * 1.35
-          : zone.id === 'ruins'
-            ? 2.1 + fbmNoise2d(i * 0.4, 7.8, 2) * 1.2
-            : 2.7 + fbmNoise2d(i * 0.5, 2.6, 2) * 1.45;
-        const modelUrl = modelPool[i % modelPool.length];
-        spawnModel({
-          url: modelUrl,
-          position: new THREE.Vector3(x, y, z),
-          scale,
-          rotationY: hashNoise2d(i * 1.3, zone.start * 0.17) * Math.PI * 2,
-          fallbackType: zone.id,
-          palette,
-        });
-      }
-      const islandMonolith = createFallbackProp(
-        zone.id,
-        new THREE.Vector3(center.x + (zone.id === 'volcanic' ? 8.5 : zone.id === 'ruins' ? -7.4 : 7.9), topY + 0.4, center.z),
-        zone.id === 'volcanic' ? 4.3 : 3.9,
-        palette
-      );
-      scene.add(islandMonolith);
-      spawnedProps.push(islandMonolith);
-    });
-
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const onPointerDown = (event) => {
@@ -1950,25 +2039,32 @@ function ThreeProgressMap({
       const w = Math.max(1, host.clientWidth);
       const h = Math.max(1, host.clientHeight);
       const aspect = w / h;
-      const frustumSize = 74;
-      camera.left = (-frustumSize * aspect) / 2;
-      camera.right = (frustumSize * aspect) / 2;
-      camera.top = frustumSize / 2;
-      camera.bottom = -frustumSize / 2;
+      const neededHalfWidth = Math.max(28, (worldBounds.maxX - worldBounds.minX) * 0.5 + 14);
+      const minAspect = Math.max(0.34, aspect);
+      const baseHalfHeight = 35;
+      const halfHeight = Math.max(baseHalfHeight, neededHalfWidth / minAspect);
+      camera.left = -halfHeight * aspect;
+      camera.right = halfHeight * aspect;
+      camera.top = halfHeight;
+      camera.bottom = -halfHeight;
+      camera.zoom = w < 760 ? clamp(w / 760, 0.68, 0.92) : 1;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
       composer.setSize(w, h);
       bloomPass.setSize(w, h);
     };
     onResize();
+    Promise.all(pendingSpawns).finally(() => {
+      if (!disposed) onResize();
+    });
     window.addEventListener('resize', onResize);
 
-    const camStart = new THREE.Vector3(100, 100, 100);
-    const camEnd = new THREE.Vector3(128, 100, 18);
-    const lookStart = new THREE.Vector3(-8, 18, 30);
-    const lookEnd = new THREE.Vector3(18, 66, -178);
+    const cameraX = 94;
+    const cameraZStart = 144;
+    const cameraZEnd = -552;
+    const camYStart = 42;
+    const camYEnd = 86;
     const workLook = new THREE.Vector3();
-    const workCam = new THREE.Vector3();
     const tangent = new THREE.Vector3();
 
     let rafId = 0;
@@ -1977,9 +2073,13 @@ function ThreeProgressMap({
       const live = liveRef.current;
       const denom = Math.max(1, height - Math.max(1, live.mapViewportHeight || 1));
       const scrollT = clamp((live.mapScrollTop || 0) / denom, 0, 1);
-      workCam.lerpVectors(camStart, camEnd, scrollT);
-      workLook.lerpVectors(lookStart, lookEnd, scrollT);
-      camera.position.copy(workCam);
+      const followPoint = pathCurve.getPoint(scrollT);
+      camera.position.set(
+        cameraX,
+        THREE.MathUtils.lerp(camYStart, camYEnd, scrollT),
+        THREE.MathUtils.lerp(cameraZStart, cameraZEnd, scrollT)
+      );
+      workLook.set(0, followPoint.y + 3.2, followPoint.z - 16);
       camera.lookAt(workLook);
 
       const pathT = points.length <= 1 ? 0 : clamp((live.cursor || 0) / (points.length - 1), 0, 1);
@@ -1988,7 +2088,7 @@ function ThreeProgressMap({
       avatar.position.set(avatarPos.x, avatarPos.y + 0.9, avatarPos.z);
       avatar.rotation.y = Math.atan2(tangent.x, tangent.z);
       flowTexture.offset.x = (flowTexture.offset.x - 0.0075) % 1;
-      skyGlow.position.set(workLook.x + 24, workLook.y + 52, workLook.z - 28);
+      skyGlow.position.set(0, workLook.y + 65, workLook.z - 65);
 
       composer.render();
     };
@@ -1996,7 +2096,7 @@ function ThreeProgressMap({
 
     return () => {
       cancelAnimationFrame(rafId);
-      propsDisposed = true;
+      disposed = true;
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('resize', onResize);
       scene.traverse((obj) => {
@@ -2011,11 +2111,10 @@ function ThreeProgressMap({
       });
       disposableTextures.forEach((texture) => texture?.dispose?.());
       labelSprites.length = 0;
-      spawnedProps.length = 0;
+      spawnedModels.length = 0;
       composer.dispose?.();
       if (host.contains(renderer.domElement)) host.removeChild(renderer.domElement);
       renderer.dispose();
-      familyAnchors.length = 0;
     };
   }, [points, titles, biomeZones, width, height, currentIndex]);
 
@@ -2425,20 +2524,45 @@ export default function TitleProgressTab({
             </div>
           </div>
 
-          <div className="pointer-events-none absolute inset-x-2 top-2 z-40">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed text-white min-h-[78px]">
-                <p className="text-[9px] uppercase tracking-[0.14em] text-sky-200/80 font-display mb-1">Character Speech</p>
-                <p className="text-[12px] leading-relaxed">
-                  {speech?.text || 'Tap a title node to travel and hear your journey reflection.'}
-                </p>
-              </div>
-              <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed text-white min-h-[78px]">
-                <p className="text-[9px] uppercase tracking-[0.14em] text-amber-200/80 font-display mb-1">Node Speech</p>
-                <p className="text-[12px] leading-relaxed">
-                  {activeNodeTitle ? nodeBubbleText : 'Node status appears here and always stays in frame.'}
-                </p>
-              </div>
+          <div
+            className="title-fixed-bubble title-fixed-bubble-node pointer-events-none z-[45]"
+            style={{
+              position: 'fixed',
+              top: 'max(14px, env(safe-area-inset-top))',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '90%',
+              maxWidth: '400px',
+              boxSizing: 'border-box',
+              wordWrap: 'break-word',
+            }}
+          >
+            <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-white min-h-[82px]">
+              <p className="text-[clamp(0.56rem,1.9vw,0.66rem)] uppercase tracking-[0.14em] text-amber-200/80 font-display mb-1">Node Speech</p>
+              <p className="text-[clamp(0.76rem,2.6vw,0.92rem)] leading-[1.45]">
+                {activeNodeTitle ? nodeBubbleText : 'Node status appears here and always stays in frame.'}
+              </p>
+            </div>
+          </div>
+
+          <div
+            className="title-fixed-bubble title-fixed-bubble-character pointer-events-none z-[46]"
+            style={{
+              position: 'fixed',
+              bottom: 'max(20px, env(safe-area-inset-bottom))',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '90%',
+              maxWidth: '400px',
+              boxSizing: 'border-box',
+              wordWrap: 'break-word',
+            }}
+          >
+            <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-white min-h-[86px]">
+              <p className="text-[clamp(0.56rem,1.9vw,0.66rem)] uppercase tracking-[0.14em] text-sky-200/80 font-display mb-1">Character Speech</p>
+              <p className="text-[clamp(0.76rem,2.6vw,0.92rem)] leading-[1.45]">
+                {speech?.text || 'Tap a title node to travel and hear your journey reflection.'}
+              </p>
             </div>
           </div>
 
