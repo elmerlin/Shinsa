@@ -54,8 +54,75 @@ const LEVEL_BAND_PROPS = {
   5: ['💎', '🌌', '🗡️', '🏯'],
 };
 
+const INTERMEDIATE_TITLE_THEMES = [
+  { icon: '🌼', landmark: 'Dawn Meadow' },
+  { icon: '🎠', landmark: 'Carousel Bend' },
+  { icon: '🧩', landmark: 'Puzzle Crossing' },
+  { icon: '🪁', landmark: 'Kite Ridge' },
+  { icon: '🎈', landmark: 'Balloon Rise' },
+  { icon: '🧸', landmark: 'Toy Bastion' },
+  { icon: '🍭', landmark: 'Candy Causeway' },
+  { icon: '🌱', landmark: 'Sprout Terrace' },
+  { icon: '🍀', landmark: 'Clover Loop' },
+  { icon: '🎨', landmark: 'Color Workshop' },
+];
+
+const ADVANCED_TITLE_THEMES = [
+  { icon: '🛹', landmark: 'Street Drift' },
+  { icon: '🎧', landmark: 'Rhythm Alley' },
+  { icon: '⚡', landmark: 'Voltage Pier' },
+  { icon: '🧭', landmark: 'Compass Gate' },
+  { icon: '🧪', landmark: 'Fusion Lab' },
+  { icon: '🏁', landmark: 'Sprint District' },
+  { icon: '🎮', landmark: 'Arcade Terrace' },
+  { icon: '🛰️', landmark: 'Orbit Deck' },
+  { icon: '🪨', landmark: 'Stone Rampart' },
+  { icon: '🏟️', landmark: 'Champion Grounds' },
+];
+
+const EXPERT_TITLE_THEMES = [
+  { icon: '⚔️', landmark: 'Bladewalk' },
+  { icon: '🔥', landmark: 'Ember Span' },
+  { icon: '🛡️', landmark: 'Aegis Keep' },
+  { icon: '🏔️', landmark: 'Summit Spiral' },
+  { icon: '👑', landmark: 'Royal Vault' },
+  { icon: '🏰', landmark: 'Citadel Rise' },
+  { icon: '🗿', landmark: 'Ancient Pillar' },
+  { icon: '🧿', landmark: 'Oracle Rift' },
+  { icon: '🌌', landmark: 'Starlight Vault' },
+  { icon: '🌀', landmark: 'Void Nexus' },
+];
+
 function familyName(title) {
   return String(title?.skill_family || '').trim() || 'Other';
+}
+
+function getTitleTheme(title) {
+  const id = String(title?.id || '');
+  if (id === 'beginner') {
+    return { icon: '🌱', landmark: 'Starter Camp', chipClass: 'title-landmark-beginner' };
+  }
+  if (id === 'master') {
+    return { icon: '💠', landmark: 'Aether Citadel', chipClass: 'title-landmark-master' };
+  }
+
+  const match = id.match(/^(intermediate|advanced|expert)-(\d+)$/);
+  if (!match) {
+    return { icon: '✦', landmark: 'Unknown Outpost', chipClass: 'title-landmark-neutral' };
+  }
+  const family = match[1];
+  const index = clamp((parseInt(match[2], 10) || 1) - 1, 0, 9);
+
+  if (family === 'intermediate') {
+    const row = INTERMEDIATE_TITLE_THEMES[index];
+    return { ...row, chipClass: 'title-landmark-child' };
+  }
+  if (family === 'advanced') {
+    const row = ADVANCED_TITLE_THEMES[index];
+    return { ...row, chipClass: 'title-landmark-adolescent' };
+  }
+  const row = EXPERT_TITLE_THEMES[index];
+  return { ...row, chipClass: 'title-landmark-adult' };
 }
 
 function getLevelBand(level) {
@@ -437,35 +504,48 @@ export default function TitleProgressTab({
                 const isCurrent = title.index === currentIndex;
                 const canTravel = unlocked && title.index <= currentIndex;
                 const isTarget = target !== null && title.index === target;
+                const isNext = !!nextTitle && nextTitle.id === title.id;
                 const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
                 const tierIcon = TIER_WAYPOINT_ICON[title.tier] || TIER_WAYPOINT_ICON.default;
+                const theme = getTitleTheme(title);
+                const showPlaque = isCurrent || isTarget || isNext;
                 return (
-                  <button
+                  <div
                     key={title.id}
-                    type="button"
-                    onClick={() => {
-                      if (!canTravel) return;
-                      setTarget(title.index);
-                    }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-xl border-2 transition-all ${
-                      unlocked
-                        ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked title-waypoint-spark ${palette.glow}`
-                        : 'bg-slate-800/80 border-slate-500/80 text-slate-300'
-                    } ${
-                      isCurrent ? `ring-2 ${palette.ring} scale-110` : ''
-                    } ${
-                      isTarget ? 'ring-2 ring-cyan-300/90' : ''
-                    } ${
-                      canTravel ? 'cursor-pointer hover:scale-110' : 'cursor-default'
-                    }`}
+                    className="absolute -translate-x-1/2 -translate-y-1/2"
                     style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
-                    title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
                   >
-                    <span className="text-[12px] leading-none">{tierIcon}</span>
-                    {!unlocked && (
-                      <span className="absolute right-[-4px] bottom-[-5px] text-[10px] leading-none">🔒</span>
+                    {showPlaque && (
+                      <div className="absolute left-1/2 -translate-x-1/2 -top-8 whitespace-nowrap px-2 py-[2px] rounded-full border border-white/40 bg-black/55 text-[9px] font-display font-bold text-white pointer-events-none">
+                        {theme.landmark}
+                      </div>
                     )}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canTravel) return;
+                        setTarget(title.index);
+                      }}
+                      className={`relative w-9 h-9 rounded-xl border-2 transition-all ${
+                        unlocked
+                          ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked title-waypoint-spark ${palette.glow}`
+                          : 'bg-slate-800/80 border-slate-500/80 text-slate-300'
+                      } ${
+                        isCurrent ? `ring-2 ${palette.ring} scale-110` : ''
+                      } ${
+                        isTarget ? 'ring-2 ring-cyan-300/90' : ''
+                      } ${
+                        canTravel ? 'cursor-pointer hover:scale-110' : 'cursor-default'
+                      }`}
+                      title={`${title.name} • ${theme.landmark} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
+                    >
+                      <span className="absolute left-[2px] top-[1px] text-[8px] leading-none opacity-80">{tierIcon}</span>
+                      <span className="text-[12px] leading-none">{theme.icon}</span>
+                      {!unlocked && (
+                        <span className="absolute right-[-4px] bottom-[-5px] text-[10px] leading-none">🔒</span>
+                      )}
+                    </button>
+                  </div>
                 );
               })}
 
@@ -527,6 +607,7 @@ export default function TitleProgressTab({
                       const isCurrent = title.index === currentIndex;
                       const canTravel = unlocked && title.index <= currentIndex;
                       const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
+                      const theme = getTitleTheme(title);
                       return (
                         <button
                           key={`checkpoint-${title.id}`}
@@ -542,11 +623,17 @@ export default function TitleProgressTab({
                           } ${isCurrent ? `ring-1 ${palette.ring}` : ''} ${canTravel ? 'cursor-pointer hover:border-white/90' : 'cursor-default'}`}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-display font-bold">{title.name}</p>
+                            <p className="text-xs font-display font-bold inline-flex items-center gap-1.5">
+                              <span className="text-sm leading-none">{theme.icon}</span>
+                              <span>{title.name}</span>
+                            </p>
                             <span className="text-[10px] font-mono">
                               {unlocked ? 'UNLOCKED' : `${title.progress_percent.toFixed(1)}%`}
                             </span>
                           </div>
+                          <p className={`inline-flex items-center rounded-full px-2 py-[2px] mt-1 text-[9px] font-display font-bold border ${theme.chipClass}`}>
+                            {theme.landmark}
+                          </p>
                           {title.required_points > 0 && (
                             <p className="text-[10px] mt-1 opacity-90">
                               Lv.{title.level}: {title.earned_points.toLocaleString()} / {title.required_points.toLocaleString()}
