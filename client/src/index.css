@@ -160,6 +160,30 @@
   pointer-events: none;
 }
 
+@keyframes title-bubble-pop {
+  0% { transform: translateY(6px) scale(0.92); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes title-bubble-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+.title-journey-bubble {
+  animation: title-bubble-pop 160ms ease-out, title-bubble-float 2.2s ease-in-out infinite;
+  box-shadow:
+    0 8px 16px rgba(15, 23, 42, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.title-node-reply {
+  animation: title-bubble-pop 180ms ease-out;
+  box-shadow:
+    0 10px 18px rgba(15, 23, 42, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
 .title-map-frame {
   background:
     radial-gradient(circle at 18% 7%, rgba(255, 255, 255, 0.34), transparent 27%),

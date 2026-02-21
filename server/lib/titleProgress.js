@@ -246,6 +246,16 @@ function computeTitleProgressFromBestScores(bestScores = []) {
   const segmentProgressPercent = computeSegmentProgressPercent(currentTitle, nextTitle, pointsByLevel);
   const totalPoints = Object.values(pointsByLevel).reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
   const unlockedCount = titles.filter((title) => title.unlocked).length;
+  const nextLevelPoints = nextTitle ? (parseInt(pointsByLevel[nextTitle.level], 10) || 0) : 0;
+  const remaining_points_to_next_title = nextTitle
+    ? Math.max(0, (parseInt(nextTitle.required_points, 10) || 0) - nextLevelPoints)
+    : 0;
+  const aa_points_per_clear_for_next_level = nextTitle
+    ? (LEVEL_BASE_POINTS[parseInt(nextTitle.level, 10)] || 0)
+    : 0;
+  const remaining_aa_clears_to_next_title = nextTitle && aa_points_per_clear_for_next_level > 0
+    ? Math.ceil(remaining_points_to_next_title / aa_points_per_clear_for_next_level)
+    : 0;
 
   const levels = Object.keys(LEVEL_BASE_POINTS)
     .map((key) => parseInt(key, 10))
@@ -253,6 +263,7 @@ function computeTitleProgressFromBestScores(bestScores = []) {
     .map((level) => ({
       level,
       points: parseInt(pointsByLevel[level], 10) || 0,
+      aa_points_per_clear: LEVEL_BASE_POINTS[level] || 0,
       thresholds: TITLE_THRESHOLDS_BY_LEVEL[level] || [],
     }));
 
@@ -267,6 +278,9 @@ function computeTitleProgressFromBestScores(bestScores = []) {
       total_titles: titles.length,
       segment_progress_percent: segmentProgressPercent,
       total_points: totalPoints,
+      remaining_points_to_next_title,
+      aa_points_per_clear_for_next_level,
+      remaining_aa_clears_to_next_title,
     },
   };
 }
@@ -331,4 +345,3 @@ module.exports = {
   getUserTitleProgress,
   updateUserSkillTitleFromBestScores,
 };
-

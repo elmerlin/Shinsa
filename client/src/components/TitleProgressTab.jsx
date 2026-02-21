@@ -101,6 +101,77 @@ const FAMILY_SPRITE_TOKEN = {
   Master: 'aether-core',
 };
 
+const LEVEL_AA_CLEAR_POINTS = {
+  10: 100,
+  11: 110,
+  12: 130,
+  13: 160,
+  14: 200,
+  15: 250,
+  16: 310,
+  17: 380,
+  18: 460,
+  19: 550,
+  20: 650,
+  21: 760,
+  22: 880,
+  23: 1010,
+  24: 1150,
+  25: 1300,
+  26: 1460,
+  27: 1630,
+  28: 1810,
+};
+
+const FORWARD_START_LINES = [
+  'Onwards and upwards!',
+  'To infinity and beyond!',
+  "Let's push higher!",
+  'Full speed to the next one!',
+];
+
+const INSPECT_START_LINES = [
+  "Let's inspect this checkpoint.",
+  'Taking a look back.',
+  'Revisiting this title.',
+  'Quick checkpoint review.',
+];
+
+const FORWARD_TRAVEL_LINES = [
+  'Keep climbing!',
+  'One step at a time.',
+  'Steady pace, strong finish.',
+  'Momentum up!',
+];
+
+const INSPECT_TRAVEL_LINES = [
+  'Backtracking to inspect.',
+  'Checking the route.',
+  'Taking a closer look.',
+  'Surveying old ground.',
+];
+
+const BLOCKED_ATTEMPT_LINES = [
+  'Almost there!',
+  'Let me try anyway...',
+  'One more push!',
+];
+
+function pickRandomLine(lines, fallback = '') {
+  if (!Array.isArray(lines) || lines.length === 0) return fallback;
+  return lines[Math.floor(Math.random() * lines.length)] || fallback;
+}
+
+function compactTitleName(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return 'checkpoint';
+  return raw
+    .replace(/\bLv\.\s*/gi, '')
+    .replace(/\blvl\.\s*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 const SPRITE_LIBRARY = {
   default: { variant: 'star', bg: '#0f172a', edge: '#475569', main: '#cbd5e1', accent: '#94a3b8', light: '#e2e8f0' },
 
@@ -693,7 +764,58 @@ export default function TitleProgressTab({
   const [cursor, setCursor] = useState(currentFloat);
   const [target, setTarget] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [speech, setSpeech] = useState(null);
+  const [journeyMode, setJourneyMode] = useState('inspect');
+  const [activeJourneyTitle, setActiveJourneyTitle] = useState(null);
+  const [nodeMessage, setNodeMessage] = useState(null);
+  const [attemptingRun, setAttemptingRun] = useState(false);
   const mapScrollRef = useRef(null);
+  const speechTimeoutRef = useRef(null);
+  const chatterIntervalRef = useRef(null);
+  const nodeMessageTimeoutRef = useRef(null);
+  const runAttemptTimeoutRef = useRef(null);
+
+  function clearSpeechTimer() {
+    if (!speechTimeoutRef.current) return;
+    clearTimeout(speechTimeoutRef.current);
+    speechTimeoutRef.current = null;
+  }
+
+  function clearNodeMessageTimer() {
+    if (!nodeMessageTimeoutRef.current) return;
+    clearTimeout(nodeMessageTimeoutRef.current);
+    nodeMessageTimeoutRef.current = null;
+  }
+
+  function clearRunAttemptTimer() {
+    if (!runAttemptTimeoutRef.current) return;
+    clearTimeout(runAttemptTimeoutRef.current);
+    runAttemptTimeoutRef.current = null;
+  }
+
+  function say(text, duration = 1700) {
+    const line = String(text || '').trim();
+    if (!line) return;
+    setSpeech({ key: `${Date.now()}-${Math.random()}`, text: line });
+    clearSpeechTimer();
+    if (duration > 0) {
+      speechTimeoutRef.current = setTimeout(() => setSpeech(null), duration);
+    }
+  }
+
+  function showNodeReply(index, text, duration = 3000) {
+    const line = String(text || '').trim();
+    if (!line) return;
+    setNodeMessage({ key: `${Date.now()}-${Math.random()}`, index, text: line });
+    clearNodeMessageTimer();
+    nodeMessageTimeoutRef.current = setTimeout(() => setNodeMessage(null), duration);
+  }
+
+  function startRunAttempt(duration = 900) {
+    setAttemptingRun(true);
+    clearRunAttemptTimer();
+    runAttemptTimeoutRef.current = setTimeout(() => setAttemptingRun(false), duration);
+  }
 
   useEffect(() => {
     if (target === null) setCursor(currentFloat);
@@ -723,6 +845,41 @@ export default function TitleProgressTab({
   }, [target]);
 
   useEffect(() => {
+    if (target === null) {
+      if (chatterIntervalRef.current) {
+        clearInterval(chatterIntervalRef.current);
+        chatterIntervalRef.current = null;
+      }
+      return undefined;
+    }
+
+    const lines = journeyMode === 'forward' ? FORWARD_TRAVEL_LINES : INSPECT_TRAVEL_LINES;
+    chatterIntervalRef.current = setInterval(() => {
+      say(pickRandomLine(lines, 'On the move...'), 1200);
+    }, 1400);
+
+    return () => {
+      if (chatterIntervalRef.current) {
+        clearInterval(chatterIntervalRef.current);
+        chatterIntervalRef.current = null;
+      }
+    };
+  }, [target, journeyMode]);
+
+  useEffect(() => {
+    if (target !== null || !activeJourneyTitle) return;
+    say(`Yeah ${compactTitleName(activeJourneyTitle.name)}!`, 1800);
+    setActiveJourneyTitle(null);
+  }, [target, activeJourneyTitle]);
+
+  useEffect(() => () => {
+    clearSpeechTimer();
+    clearNodeMessageTimer();
+    clearRunAttemptTimer();
+    if (chatterIntervalRef.current) clearInterval(chatterIntervalRef.current);
+  }, []);
+
+  useEffect(() => {
     if (!groups.length || Object.keys(collapsedGroups).length > 0) return;
     const currentFamily = summary?.current_title?.skill_family || '';
     const initial = {};
@@ -743,12 +900,71 @@ export default function TitleProgressTab({
   }, [levels]);
 
   const nextLevelPoints = nextTitle ? (levelMap[nextTitle.level]?.points || 0) : 0;
+  const nextLevelAaPoints = nextTitle
+    ? (
+      parseInt(summary?.aa_points_per_clear_for_next_level, 10)
+      || parseInt(levelMap[nextTitle.level]?.aa_points_per_clear, 10)
+      || LEVEL_AA_CLEAR_POINTS[nextTitle.level]
+      || 0
+    )
+    : 0;
+  const remainingPointsToNextTitle = nextTitle
+    ? Math.max(
+      0,
+      parseInt(summary?.remaining_points_to_next_title, 10) || (nextTitle.required_points - nextLevelPoints)
+    )
+    : 0;
+  const remainingAaClearsToNextTitle = nextTitle
+    ? Math.max(
+      0,
+      parseInt(summary?.remaining_aa_clears_to_next_title, 10)
+      || (nextLevelAaPoints > 0 ? Math.ceil(remainingPointsToNextTitle / nextLevelAaPoints) : 0)
+    )
+    : 0;
   const sameLevelSegment = nextTitle && summary?.current_title?.level === nextTitle.level;
   const segmentStart = sameLevelSegment ? (summary?.current_title?.required_points || 0) : 0;
   const segmentEarned = Math.max(0, nextLevelPoints - segmentStart);
   const segmentNeeded = nextTitle ? Math.max(1, nextTitle.required_points - segmentStart) : 0;
   const displayedProgress = nextTitle ? clamp(Number(summary?.segment_progress_percent) || 0, 0, 100) : 100;
-  const isRunning = target !== null;
+  const isRunning = target !== null || attemptingRun;
+
+  function handleTitleTap(title) {
+    if (!title) return;
+    const unlocked = !!title.unlocked;
+    const canTravel = unlocked && title.index <= currentIndex;
+    const isLockedNextTarget = !unlocked && !!nextTitle && nextTitle.id === title.id;
+
+    if (canTravel) {
+      const movingForward = title.index > (cursor + 0.08);
+      setJourneyMode(movingForward ? 'forward' : 'inspect');
+      setActiveJourneyTitle({ id: title.id, name: title.name });
+      setNodeMessage(null);
+      setTarget(title.index);
+      say(
+        movingForward
+          ? pickRandomLine(FORWARD_START_LINES, 'Onwards!')
+          : pickRandomLine(INSPECT_START_LINES, 'Let us inspect this one.'),
+        1500
+      );
+      return;
+    }
+
+    if (isLockedNextTarget) {
+      startRunAttempt(1100);
+      say(pickRandomLine(BLOCKED_ATTEMPT_LINES, 'Almost there!'), 1250);
+      const neededClears = Math.max(1, remainingAaClearsToNextTitle || 0);
+      showNodeReply(
+        title.index,
+        `Not so fast, you need at least ${neededClears.toLocaleString()} more Level ${nextTitle.level} AA clears.`,
+        3600
+      );
+      return;
+    }
+
+    if (!unlocked) {
+      showNodeReply(title.index, 'This checkpoint is still locked.', 2200);
+    }
+  }
 
   const zones = useMemo(() => {
     const child = getZone(points, titles, ['Beginner', 'Intermediate'], 'child', 'Child Realm (Intermediate)', 'title-zone-child');
@@ -937,22 +1153,27 @@ export default function TitleProgressTab({
                 const unlocked = !!title.unlocked;
                 const isCurrent = title.index === currentIndex;
                 const canTravel = unlocked && title.index <= currentIndex;
+                const isLockedNextTarget = !unlocked && !!nextTitle && nextTitle.id === title.id;
                 const isTarget = target !== null && title.index === target;
                 const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
                 const pipColor = TIER_PIP_COLOR[title.tier] || TIER_PIP_COLOR.default;
                 const theme = getTitleTheme(title);
+                const hasNodeReply = nodeMessage && nodeMessage.index === title.index;
                 return (
                   <div
                     key={title.id}
                     className="absolute -translate-x-1/2 -translate-y-1/2"
                     style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
                   >
+                    {hasNodeReply && (
+                      <div className="absolute left-1/2 -translate-x-1/2 -top-[62px] w-44 px-2 py-1.5 rounded-lg border border-white/60 bg-black/75 text-[10px] text-white leading-tight text-center pointer-events-none title-node-reply">
+                        {nodeMessage.text}
+                        <span className="absolute left-1/2 -translate-x-1/2 -bottom-[5px] w-3 h-3 rotate-45 border-r border-b border-white/60 bg-black/75" />
+                      </div>
+                    )}
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!canTravel) return;
-                        setTarget(title.index);
-                      }}
+                      onClick={() => handleTitleTap(title)}
                       className={`relative w-10 h-10 rounded-full border-2 transition-all title-waypoint-node ${
                         unlocked
                           ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked title-waypoint-spark ${palette.glow}`
@@ -962,7 +1183,9 @@ export default function TitleProgressTab({
                       } ${
                         isTarget ? 'ring-2 ring-cyan-300/90' : ''
                       } ${
-                        canTravel ? 'cursor-pointer hover:scale-110' : 'cursor-default'
+                        canTravel
+                          ? 'cursor-pointer hover:scale-110'
+                          : (isLockedNextTarget ? 'cursor-pointer hover:scale-105 ring-1 ring-amber-300/75' : 'cursor-default')
                       }`}
                       title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
                     >
@@ -991,6 +1214,12 @@ export default function TitleProgressTab({
                 className="absolute pointer-events-none -translate-x-1/2 -translate-y-[86%]"
                 style={{ left: `${avatarLeftPercent}%`, top: `${avatarPos.y}px` }}
               >
+                {speech && (
+                  <div key={speech.key} className="absolute left-1/2 -translate-x-1/2 -top-14 max-w-[160px] px-2 py-1.5 rounded-lg border border-white/60 bg-black/75 text-[10px] leading-tight text-center text-white title-journey-bubble">
+                    {speech.text}
+                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[5px] w-3 h-3 rotate-45 border-r border-b border-white/60 bg-black/75" />
+                  </div>
+                )}
                 <JourneyCharacter
                   running={isRunning}
                   avatarUrl={avatarUrl}
@@ -1004,7 +1233,7 @@ export default function TitleProgressTab({
 
         <div className="mt-3">
           <p className="text-[11px] text-gray-500">
-            Mobile-safe vertical map. Tap unlocked waypoints to run to that checkpoint.
+            Mobile-safe vertical map. Tap unlocked waypoints to run there, or tap the next locked waypoint to see AA clears needed.
             {isOwner ? ' Title unlocks are computed from imported best scores.' : ''}
           </p>
         </div>
@@ -1044,21 +1273,23 @@ export default function TitleProgressTab({
                       const unlocked = !!title.unlocked;
                       const isCurrent = title.index === currentIndex;
                       const canTravel = unlocked && title.index <= currentIndex;
+                      const isLockedNextTarget = !unlocked && !!nextTitle && nextTitle.id === title.id;
                       const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
                       const theme = getTitleTheme(title);
                       return (
                         <button
                           key={`checkpoint-${title.id}`}
                           type="button"
-                          onClick={() => {
-                            if (!canTravel) return;
-                            setTarget(title.index);
-                          }}
+                          onClick={() => handleTitleTap(title)}
                           className={`w-full text-left px-3 py-2 rounded-md border transition-colors ${
                             unlocked
                               ? `bg-gradient-to-r ${palette.bg} border-white/50 text-white`
                               : 'bg-slate-900/60 border-slate-600/50 text-slate-300'
-                          } ${isCurrent ? `ring-1 ${palette.ring}` : ''} ${canTravel ? 'cursor-pointer hover:border-white/90' : 'cursor-default'}`}
+                          } ${isCurrent ? `ring-1 ${palette.ring}` : ''} ${
+                            canTravel
+                              ? 'cursor-pointer hover:border-white/90'
+                              : (isLockedNextTarget ? 'cursor-pointer hover:border-amber-300/80' : 'cursor-default')
+                          }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-display font-bold inline-flex items-center gap-1.5">
