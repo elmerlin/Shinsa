@@ -1,4 +1,4 @@
-self.__APP_VERSION__ = '2026-02-17-pwa-v1';
+self.__APP_VERSION__ = '2026-02-21-webgl-v1';
 const STATIC_CACHE = `shinsa-static-${self.__APP_VERSION__}`;
 const RUNTIME_CACHE = `shinsa-runtime-${self.__APP_VERSION__}`;
 const OFFLINE_URL = '/offline.html';
@@ -63,6 +63,26 @@ self.addEventListener('fetch', (event) => {
         if (cachedPage) return cachedPage;
         const offlinePage = await caches.match(OFFLINE_URL);
         return offlinePage || Response.error();
+      }
+    })());
+    return;
+  }
+
+  // Network-first for app shell assets so production UI updates are immediate.
+  const isAppAsset = isSameOrigin
+    && (url.pathname.startsWith('/assets/') || url.pathname.endsWith('.js') || url.pathname.endsWith('.css'));
+  if (isAppAsset) {
+    event.respondWith((async () => {
+      try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && (networkResponse.status === 200 || networkResponse.type === 'opaque')) {
+          const cache = await caches.open(RUNTIME_CACHE);
+          cache.put(request, networkResponse.clone()).catch(() => {});
+        }
+        return networkResponse;
+      } catch {
+        const cached = await caches.match(request);
+        return cached || Response.error();
       }
     })());
     return;
