@@ -24,75 +24,6 @@ const TIER_PIP_COLOR = {
   default: '#94a3b8',
 };
 
-const ZONE_PROPS = {
-  child: [
-    { token: 'toy-bear', x: 14, y: 18 },
-    { token: 'puzzle-grid', x: 77, y: 31 },
-    { token: 'balloon-node', x: 28, y: 64 },
-    { token: 'tree-bloom', x: 83, y: 74 },
-  ],
-  adolescent: [
-    { token: 'skate-deck', x: 20, y: 20 },
-    { token: 'headset-core', x: 80, y: 34 },
-    { token: 'voltage-z', x: 27, y: 70 },
-    { token: 'stone-slab', x: 74, y: 78 },
-  ],
-  adult: [
-    { token: 'citadel-spire', x: 18, y: 14 },
-    { token: 'blade-cross', x: 75, y: 28 },
-    { token: 'compass-glyph', x: 26, y: 72 },
-    { token: 'aether-orb', x: 81, y: 77 },
-  ],
-};
-
-const LEVEL_BAND_PROPS = {
-  0: ['seed-sprout', 'leaf-clover', 'toy-bear', 'kite-flare'],
-  1: ['puzzle-grid', 'carousel-pin', 'candy-drop', 'flower-crown'],
-  2: ['skate-deck', 'headset-core', 'voltage-z', 'compass-glyph'],
-  3: ['peak-climb', 'blade-cross', 'academy-arch', 'map-fold'],
-  4: ['ember-core', 'shield-guard', 'crown-crest', 'citadel-spire'],
-  5: ['crystal-prism', 'starlight-gate', 'mythic-blade', 'void-pillar'],
-};
-
-const INTERMEDIATE_TITLE_THEMES = [
-  { sprite: 'seed-sprout', landmark: 'Dawn Meadow' },
-  { sprite: 'carousel-pin', landmark: 'Carousel Bend' },
-  { sprite: 'puzzle-grid', landmark: 'Puzzle Crossing' },
-  { sprite: 'kite-flare', landmark: 'Kite Ridge' },
-  { sprite: 'balloon-node', landmark: 'Balloon Rise' },
-  { sprite: 'toy-bear', landmark: 'Toy Bastion' },
-  { sprite: 'candy-drop', landmark: 'Candy Causeway' },
-  { sprite: 'sprout-arch', landmark: 'Sprout Terrace' },
-  { sprite: 'leaf-clover', landmark: 'Clover Loop' },
-  { sprite: 'paint-spark', landmark: 'Color Workshop' },
-];
-
-const ADVANCED_TITLE_THEMES = [
-  { sprite: 'skate-deck', landmark: 'Street Drift' },
-  { sprite: 'headset-core', landmark: 'Rhythm Alley' },
-  { sprite: 'voltage-z', landmark: 'Voltage Pier' },
-  { sprite: 'compass-glyph', landmark: 'Compass Gate' },
-  { sprite: 'fusion-vial', landmark: 'Fusion Lab' },
-  { sprite: 'sprint-flag', landmark: 'Sprint District' },
-  { sprite: 'arcade-grid', landmark: 'Arcade Terrace' },
-  { sprite: 'orbit-signal', landmark: 'Orbit Deck' },
-  { sprite: 'stone-slab', landmark: 'Stone Rampart' },
-  { sprite: 'champion-ring', landmark: 'Champion Grounds' },
-];
-
-const EXPERT_TITLE_THEMES = [
-  { sprite: 'blade-cross', landmark: 'Bladewalk' },
-  { sprite: 'ember-core', landmark: 'Ember Span' },
-  { sprite: 'shield-guard', landmark: 'Aegis Keep' },
-  { sprite: 'summit-peak', landmark: 'Summit Spiral' },
-  { sprite: 'crown-crest', landmark: 'Royal Vault' },
-  { sprite: 'citadel-spire', landmark: 'Citadel Rise' },
-  { sprite: 'ancient-idol', landmark: 'Ancient Pillar' },
-  { sprite: 'oracle-eye', landmark: 'Oracle Rift' },
-  { sprite: 'starlight-gate', landmark: 'Starlight Vault' },
-  { sprite: 'void-nexus', landmark: 'Void Nexus' },
-];
-
 const FAMILY_SPRITE_TOKEN = {
   Beginner: 'seed-sprout',
   Intermediate: 'puzzle-grid',
@@ -102,25 +33,10 @@ const FAMILY_SPRITE_TOKEN = {
 };
 
 const LEVEL_AA_CLEAR_POINTS = {
-  10: 100,
-  11: 110,
-  12: 130,
-  13: 160,
-  14: 200,
-  15: 250,
-  16: 310,
-  17: 380,
-  18: 460,
-  19: 550,
-  20: 650,
-  21: 760,
-  22: 880,
-  23: 1010,
-  24: 1150,
-  25: 1300,
-  26: 1460,
-  27: 1630,
-  28: 1810,
+  10: 100, 11: 110, 12: 130, 13: 160, 14: 200,
+  15: 250, 16: 310, 17: 380, 18: 460, 19: 550,
+  20: 650, 21: 760, 22: 880, 23: 1010, 24: 1150,
+  25: 1300, 26: 1460, 27: 1630, 28: 1810,
 };
 
 const FORWARD_START_LINES = [
@@ -200,144 +116,23 @@ function fillTemplate(line, values = {}) {
   return out;
 }
 
-const SPRITE_LIBRARY = {
-  default: { variant: 'star', bg: '#0f172a', edge: '#475569', main: '#cbd5e1', accent: '#94a3b8', light: '#e2e8f0' },
-
-  'seed-sprout': { variant: 'sprout', bg: '#052e16', edge: '#166534', main: '#4ade80', accent: '#22c55e', light: '#bbf7d0' },
-  'leaf-clover': { variant: 'clover', bg: '#052e16', edge: '#14532d', main: '#34d399', accent: '#10b981', light: '#a7f3d0' },
-  'toy-bear': { variant: 'totem', bg: '#422006', edge: '#78350f', main: '#f59e0b', accent: '#fbbf24', light: '#fde68a' },
-  'kite-flare': { variant: 'kite', bg: '#3f1d12', edge: '#7c2d12', main: '#fb923c', accent: '#f97316', light: '#fed7aa' },
-  'carousel-pin': { variant: 'pinwheel', bg: '#4a044e', edge: '#86198f', main: '#e879f9', accent: '#d946ef', light: '#f5d0fe' },
-  'puzzle-grid': { variant: 'grid', bg: '#312e81', edge: '#4338ca', main: '#818cf8', accent: '#6366f1', light: '#c7d2fe' },
-  'candy-drop': { variant: 'drop', bg: '#831843', edge: '#be185d', main: '#fb7185', accent: '#f43f5e', light: '#fecdd3' },
-  'balloon-node': { variant: 'orb', bg: '#0c4a6e', edge: '#0369a1', main: '#38bdf8', accent: '#0ea5e9', light: '#bae6fd' },
-  'sprout-arch': { variant: 'arch', bg: '#14532d', edge: '#15803d', main: '#4ade80', accent: '#22c55e', light: '#dcfce7' },
-  'paint-spark': { variant: 'spark', bg: '#4a044e', edge: '#7e22ce', main: '#c084fc', accent: '#a855f7', light: '#e9d5ff' },
-  'flower-crown': { variant: 'flower', bg: '#713f12', edge: '#92400e', main: '#fbbf24', accent: '#f59e0b', light: '#fef3c7' },
-
-  'skate-deck': { variant: 'deck', bg: '#1e293b', edge: '#334155', main: '#60a5fa', accent: '#3b82f6', light: '#bfdbfe' },
-  'headset-core': { variant: 'headset', bg: '#312e81', edge: '#4338ca', main: '#a5b4fc', accent: '#818cf8', light: '#e0e7ff' },
-  'voltage-z': { variant: 'bolt', bg: '#451a03', edge: '#92400e', main: '#fbbf24', accent: '#f59e0b', light: '#fde68a' },
-  'compass-glyph': { variant: 'compass', bg: '#0f172a', edge: '#334155', main: '#67e8f9', accent: '#06b6d4', light: '#cffafe' },
-  'fusion-vial': { variant: 'vial', bg: '#083344', edge: '#0e7490', main: '#22d3ee', accent: '#06b6d4', light: '#a5f3fc' },
-  'sprint-flag': { variant: 'flag', bg: '#172554', edge: '#1d4ed8', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
-  'arcade-grid': { variant: 'console', bg: '#111827', edge: '#374151', main: '#a78bfa', accent: '#8b5cf6', light: '#ddd6fe' },
-  'orbit-signal': { variant: 'orbit', bg: '#164e63', edge: '#0891b2', main: '#67e8f9', accent: '#22d3ee', light: '#cffafe' },
-  'stone-slab': { variant: 'monolith', bg: '#111827', edge: '#4b5563', main: '#9ca3af', accent: '#6b7280', light: '#d1d5db' },
-  'champion-ring': { variant: 'ring', bg: '#422006', edge: '#92400e', main: '#fbbf24', accent: '#f59e0b', light: '#fde68a' },
-
-  'peak-climb': { variant: 'peak', bg: '#1e1b4b', edge: '#312e81', main: '#a5b4fc', accent: '#818cf8', light: '#e0e7ff' },
-  'map-fold': { variant: 'map', bg: '#1f2937', edge: '#374151', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
-  'academy-arch': { variant: 'archway', bg: '#0f172a', edge: '#334155', main: '#cbd5e1', accent: '#94a3b8', light: '#e2e8f0' },
-
-  'ember-core': { variant: 'core', bg: '#431407', edge: '#9a3412', main: '#fb923c', accent: '#f97316', light: '#fed7aa' },
-  'shield-guard': { variant: 'shield', bg: '#172554', edge: '#1d4ed8', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
-  'crown-crest': { variant: 'crown', bg: '#422006', edge: '#92400e', main: '#fde047', accent: '#facc15', light: '#fef9c3' },
-  'citadel-spire': { variant: 'spire', bg: '#312e81', edge: '#5b21b6', main: '#c4b5fd', accent: '#a78bfa', light: '#ede9fe' },
-  'summit-peak': { variant: 'peak', bg: '#0f172a', edge: '#334155', main: '#94a3b8', accent: '#64748b', light: '#cbd5e1' },
-  'ancient-idol': { variant: 'idol', bg: '#292524', edge: '#57534e', main: '#d6d3d1', accent: '#a8a29e', light: '#f5f5f4' },
-  'oracle-eye': { variant: 'eye', bg: '#4c1d95', edge: '#7e22ce', main: '#c084fc', accent: '#a855f7', light: '#f3e8ff' },
-  'starlight-gate': { variant: 'gate', bg: '#0c4a6e', edge: '#0369a1', main: '#67e8f9', accent: '#06b6d4', light: '#cffafe' },
-  'void-nexus': { variant: 'nexus', bg: '#111827', edge: '#374151', main: '#c4b5fd', accent: '#8b5cf6', light: '#e9d5ff' },
-  'mythic-blade': { variant: 'blade', bg: '#3f3f46', edge: '#52525b', main: '#e4e4e7', accent: '#a1a1aa', light: '#fafafa' },
-  'void-pillar': { variant: 'pillar', bg: '#18181b', edge: '#3f3f46', main: '#a5f3fc', accent: '#22d3ee', light: '#ecfeff' },
-  'crystal-prism': { variant: 'prism', bg: '#1e1b4b', edge: '#4338ca', main: '#93c5fd', accent: '#60a5fa', light: '#dbeafe' },
-  'aether-orb': { variant: 'orb', bg: '#164e63', edge: '#0891b2', main: '#67e8f9', accent: '#22d3ee', light: '#cffafe' },
-  'blade-cross': { variant: 'blade', bg: '#172554', edge: '#1d4ed8', main: '#bfdbfe', accent: '#93c5fd', light: '#eff6ff' },
-  'aether-core': { variant: 'aether', bg: '#083344', edge: '#0e7490', main: '#67e8f9', accent: '#22d3ee', light: '#ecfeff' },
-  'tree-bloom': { variant: 'tree', bg: '#14532d', edge: '#166534', main: '#86efac', accent: '#4ade80', light: '#dcfce7' },
-};
-
 function familyName(title) {
   return String(title?.skill_family || '').trim() || 'Other';
 }
 
 function getTitleTheme(title) {
   const id = String(title?.id || '');
-  if (id === 'beginner') {
-    return { sprite: 'seed-sprout', landmark: 'Starter Camp' };
-  }
-  if (id === 'master') {
-    return { sprite: 'aether-core', landmark: 'Aether Citadel' };
-  }
-
+  if (id === 'beginner') return { landmark: 'Starter Camp' };
+  if (id === 'master') return { landmark: 'Aether Citadel' };
   const match = id.match(/^(intermediate|advanced|expert)-(\d+)$/);
-  if (!match) {
-    return { sprite: 'default', landmark: 'Unknown Outpost' };
-  }
-  const family = match[1];
+  if (!match) return { landmark: 'Unknown Outpost' };
+  const LANDMARKS = {
+    intermediate: ['Dawn Meadow','Carousel Bend','Puzzle Crossing','Kite Ridge','Balloon Rise','Toy Bastion','Candy Causeway','Sprout Terrace','Clover Loop','Color Workshop'],
+    advanced: ['Street Drift','Rhythm Alley','Voltage Pier','Compass Gate','Fusion Lab','Sprint District','Arcade Terrace','Orbit Deck','Stone Rampart','Champion Grounds'],
+    expert: ['Bladewalk','Ember Span','Aegis Keep','Summit Spiral','Royal Vault','Citadel Rise','Ancient Pillar','Oracle Rift','Starlight Vault','Void Nexus'],
+  };
   const index = clamp((parseInt(match[2], 10) || 1) - 1, 0, 9);
-
-  if (family === 'intermediate') {
-    return INTERMEDIATE_TITLE_THEMES[index];
-  }
-  if (family === 'advanced') {
-    return ADVANCED_TITLE_THEMES[index];
-  }
-  return EXPERT_TITLE_THEMES[index];
-}
-
-function getLevelBand(level) {
-  const lv = parseInt(level, 10) || 0;
-  if (lv <= 12) return 0;
-  if (lv <= 16) return 1;
-  if (lv <= 20) return 2;
-  if (lv <= 24) return 3;
-  if (lv <= 26) return 4;
-  return 5;
-}
-
-function buildWorldPoints(count) {
-  const safeCount = Math.max(1, count);
-  const width = 1000;
-  const laneMin = 130;
-  const laneMax = 870;
-  const stepY = 78;
-  const topPad = 120;
-  const bottomPad = 110;
-  const height = topPad + bottomPad + Math.max(0, safeCount - 1) * stepY;
-  const points = [];
-
-  for (let i = 0; i < safeCount; i++) {
-    const wave = Math.sin(i * 0.75) * 225 + Math.cos(i * 0.23) * 90;
-    const x = clamp(500 + wave, laneMin, laneMax);
-    const y = height - bottomPad - i * stepY;
-    points.push({ x, y });
-  }
-
-  return { points, width, height };
-}
-
-function interpolatePoint(points, floatIndex) {
-  if (!points.length) return { x: 0, y: 0 };
-  const maxIndex = points.length - 1;
-  const idx = clamp(floatIndex, 0, maxIndex);
-  const fromIdx = Math.floor(idx);
-  const toIdx = Math.min(maxIndex, fromIdx + 1);
-  const from = points[fromIdx];
-  const to = points[toIdx];
-  const t = idx - fromIdx;
-  return {
-    x: from.x + (to.x - from.x) * t,
-    y: from.y + (to.y - from.y) * t,
-  };
-}
-
-function getZone(points, titles, families, id, label, className) {
-  const indices = titles
-    .filter((title) => families.includes(familyName(title)))
-    .map((title) => title.index);
-  if (indices.length === 0) return null;
-  const ys = indices.map((idx) => points[idx].y);
-  const top = Math.max(0, Math.min(...ys) - 92);
-  const bottom = Math.max(...ys) + 92;
-  return {
-    id,
-    label,
-    className,
-    top,
-    height: Math.max(150, bottom - top),
-  };
+  return { landmark: (LANDMARKS[match[1]] || [])[index] || 'Outpost' };
 }
 
 function groupTitles(titles) {
@@ -348,431 +143,486 @@ function groupTitles(titles) {
     if (!map.has(family)) map.set(family, []);
     map.get(family).push(title);
   }
-
-  const known = GROUP_ORDER.filter((family) => map.has(family)).map((family) => ({
-    family,
-    titles: map.get(family),
-  }));
+  const known = GROUP_ORDER.filter((f) => map.has(f)).map((f) => ({ family: f, titles: map.get(f) }));
   const extra = Array.from(map.keys())
-    .filter((family) => !GROUP_ORDER.includes(family))
-    .map((family) => ({ family, titles: map.get(family) }));
+    .filter((f) => !GROUP_ORDER.includes(f))
+    .map((f) => ({ family: f, titles: map.get(f) }));
   return [...known, ...extra];
 }
 
-function buildBandProps(points, titles, width) {
-  const props = [];
-  for (const title of titles) {
-    const point = points[title.index];
-    if (!point) continue;
-    const band = getLevelBand(title.level);
-    const tokenSet = LEVEL_BAND_PROPS[band] || LEVEL_BAND_PROPS[0];
-    const token = tokenSet[title.index % tokenSet.length];
-    const xOffset = title.index % 2 === 0 ? -36 : 36;
-    const yOffset = title.index % 3 === 0 ? -18 : 18;
-    const pxX = clamp(point.x + xOffset, 22, width - 22);
-    const pxY = point.y + yOffset;
-    props.push({
-      id: `${title.id}-prop`,
-      token,
-      xPercent: (pxX / width) * 100,
-      y: pxY,
-      unlocked: !!title.unlocked,
+/* ── World Map Layout ─────────────────────────────────────────────── */
+const MAP_W = 1000;
+const LANE_MIN = 140;
+const LANE_MAX = 860;
+const STEP_Y = 110;
+const TOP_PAD = 180;
+const BOT_PAD = 160;
+
+function buildWorldPoints(count) {
+  const n = Math.max(1, count);
+  const h = TOP_PAD + BOT_PAD + Math.max(0, n - 1) * STEP_Y;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const wave = Math.sin(i * 0.68) * 240 + Math.cos(i * 0.21) * 100;
+    pts.push({
+      x: clamp(500 + wave, LANE_MIN, LANE_MAX),
+      y: h - BOT_PAD - i * STEP_Y,
     });
   }
-  return props;
+  return { points: pts, width: MAP_W, height: h };
 }
 
-function lockedSpritePalette() {
-  return {
-    bg: '#1f2937',
-    edge: '#475569',
-    main: '#94a3b8',
-    accent: '#64748b',
-    light: '#cbd5e1',
-  };
+function interpolatePoint(points, floatIndex) {
+  if (!points.length) return { x: 0, y: 0 };
+  const maxI = points.length - 1;
+  const idx = clamp(floatIndex, 0, maxI);
+  const a = points[Math.floor(idx)];
+  const b = points[Math.min(maxI, Math.floor(idx) + 1)];
+  const t = idx - Math.floor(idx);
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
-function spriteParts(variant, palette) {
-  const p = palette;
-  if (variant === 'sprout') {
-    return (
-      <>
-        <rect x="7" y="6" width="2" height="6" fill={p.main} />
-        <rect x="4" y="4" width="3" height="2" fill={p.accent} />
-        <rect x="9" y="3" width="3" height="2" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'clover') {
-    return (
-      <>
-        <rect x="5" y="4" width="2" height="2" fill={p.main} />
-        <rect x="8" y="4" width="2" height="2" fill={p.main} />
-        <rect x="5" y="7" width="2" height="2" fill={p.accent} />
-        <rect x="8" y="7" width="2" height="2" fill={p.accent} />
-        <rect x="7" y="9" width="2" height="3" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'kite') {
-    return (
-      <>
-        <polygon points="8,3 12,8 8,13 4,8" fill={p.main} />
-        <rect x="7" y="7" width="2" height="2" fill={p.light} />
-        <rect x="8" y="13" width="1" height="2" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'pinwheel') {
-    return (
-      <>
-        <polygon points="8,3 11,6 8,7" fill={p.main} />
-        <polygon points="13,8 10,11 9,8" fill={p.accent} />
-        <polygon points="8,13 5,10 8,9" fill={p.light} />
-        <polygon points="3,8 6,5 7,8" fill={p.main} />
-        <rect x="7" y="7" width="2" height="2" fill={p.edge} />
-      </>
-    );
-  }
-  if (variant === 'grid') {
-    return (
-      <>
-        <rect x="4" y="4" width="3" height="3" fill={p.main} />
-        <rect x="9" y="4" width="3" height="3" fill={p.accent} />
-        <rect x="4" y="9" width="3" height="3" fill={p.light} />
-        <rect x="9" y="9" width="3" height="3" fill={p.main} />
-      </>
-    );
-  }
-  if (variant === 'drop') {
-    return (
-      <>
-        <polygon points="8,3 11,8 8,13 5,8" fill={p.main} />
-        <rect x="7" y="8" width="2" height="3" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'totem') {
-    return (
-      <>
-        <rect x="5" y="4" width="6" height="8" fill={p.main} />
-        <rect x="6" y="5" width="1" height="1" fill={p.light} />
-        <rect x="9" y="5" width="1" height="1" fill={p.light} />
-        <rect x="7" y="9" width="2" height="2" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'flower') {
-    return (
-      <>
-        <rect x="7" y="3" width="2" height="2" fill={p.main} />
-        <rect x="4" y="6" width="2" height="2" fill={p.main} />
-        <rect x="10" y="6" width="2" height="2" fill={p.main} />
-        <rect x="7" y="9" width="2" height="2" fill={p.main} />
-        <rect x="7" y="6" width="2" height="2" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'deck') {
-    return (
-      <>
-        <rect x="4" y="7" width="8" height="2" rx="1" fill={p.main} />
-        <circle cx="5.5" cy="10.5" r="1.2" fill={p.accent} />
-        <circle cx="10.5" cy="10.5" r="1.2" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'headset') {
-    return (
-      <>
-        <path d="M4 8a4 4 0 0 1 8 0" fill="none" stroke={p.main} strokeWidth="2" />
-        <rect x="3.5" y="8" width="2" height="4" fill={p.accent} />
-        <rect x="10.5" y="8" width="2" height="4" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'bolt') {
-    return <polygon points="9,2 5,9 8,9 6,14 11,7 8,7" fill={p.main} />;
-  }
-  if (variant === 'compass') {
-    return (
-      <>
-        <polygon points="8,3 11,8 8,13 5,8" fill={p.main} />
-        <polygon points="8,5 10,8 8,11 6,8" fill={p.light} />
-        <rect x="7.5" y="2" width="1" height="1" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'vial') {
-    return (
-      <>
-        <rect x="6" y="3" width="4" height="2" fill={p.light} />
-        <path d="M6 5h4v2l2 4H4l2-4z" fill={p.main} />
-        <rect x="6" y="8" width="4" height="2" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'flag') {
-    return (
-      <>
-        <rect x="5" y="3" width="1.5" height="10" fill={p.light} />
-        <polygon points="7,3 12,5 7,7" fill={p.main} />
-        <rect x="7" y="5" width="2" height="1" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'console') {
-    return (
-      <>
-        <rect x="4" y="4" width="8" height="8" rx="2" fill={p.main} />
-        <rect x="6" y="6" width="4" height="2" fill={p.light} />
-        <rect x="6" y="9" width="1.5" height="1.5" fill={p.accent} />
-        <rect x="8.5" y="9" width="1.5" height="1.5" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'orbit') {
-    return (
-      <>
-        <circle cx="8" cy="8" r="2.4" fill={p.main} />
-        <ellipse cx="8" cy="8" rx="5.2" ry="2.2" fill="none" stroke={p.accent} strokeWidth="1.4" />
-        <circle cx="12.3" cy="8" r="1.1" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'monolith') {
-    return (
-      <>
-        <rect x="5" y="3" width="6" height="10" fill={p.main} />
-        <rect x="6" y="4" width="1" height="8" fill={p.light} />
-        <rect x="9" y="4" width="1" height="8" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'ring') {
-    return (
-      <>
-        <circle cx="8" cy="8" r="4.6" fill={p.main} />
-        <circle cx="8" cy="8" r="2.6" fill={p.bg} />
-        <rect x="7.2" y="3" width="1.6" height="2" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'map') {
-    return (
-      <>
-        <polygon points="4,4 7,5 10,4 12,5 12,12 10,11 7,12 4,11" fill={p.main} />
-        <rect x="6.8" y="5" width="0.9" height="6" fill={p.light} />
-        <rect x="9.7" y="5" width="0.9" height="6" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'archway') {
-    return (
-      <>
-        <rect x="4" y="4" width="8" height="8" fill={p.main} />
-        <rect x="6.5" y="6" width="3" height="6" fill={p.bg} />
-        <rect x="4" y="4" width="8" height="2" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'peak') {
-    return (
-      <>
-        <polygon points="3,12 8,4 13,12" fill={p.main} />
-        <polygon points="8,4 10,7 6,7" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'core') {
-    return (
-      <>
-        <circle cx="8" cy="8" r="4.2" fill={p.main} />
-        <circle cx="8" cy="8" r="2.2" fill={p.light} />
-        <rect x="7.2" y="2.8" width="1.6" height="2.2" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'shield') {
-    return <path d="M8 3l4 1.5v3.6c0 2.3-1.5 4.2-4 5.9-2.5-1.7-4-3.6-4-5.9V4.5L8 3z" fill={p.main} />;
-  }
-  if (variant === 'crown') {
-    return (
-      <>
-        <polygon points="3,10 5,5 8,8 11,5 13,10" fill={p.main} />
-        <rect x="3" y="10" width="10" height="2" fill={p.accent} />
-        <rect x="5" y="7" width="1" height="1" fill={p.light} />
-        <rect x="10" y="7" width="1" height="1" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'spire') {
-    return (
-      <>
-        <polygon points="8,2 12,7 11,13 5,13 4,7" fill={p.main} />
-        <rect x="7" y="6" width="2" height="7" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'idol') {
-    return (
-      <>
-        <rect x="5" y="3" width="6" height="10" fill={p.main} />
-        <rect x="6" y="5" width="1" height="1" fill={p.light} />
-        <rect x="9" y="5" width="1" height="1" fill={p.light} />
-        <rect x="7" y="9" width="2" height="2" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'eye') {
-    return (
-      <>
-        <ellipse cx="8" cy="8" rx="5.3" ry="3.2" fill={p.main} />
-        <circle cx="8" cy="8" r="2.1" fill={p.accent} />
-        <circle cx="8.8" cy="7.4" r="0.8" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'gate') {
-    return (
-      <>
-        <rect x="4" y="3" width="8" height="10" fill={p.main} />
-        <rect x="6.5" y="5.5" width="3" height="7.5" fill={p.bg} />
-        <rect x="4" y="3" width="8" height="2" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'nexus') {
-    return (
-      <>
-        <polygon points="8,2.5 10.5,5.2 13.2,8 10.5,10.8 8,13.5 5.5,10.8 2.8,8 5.5,5.2" fill={p.main} />
-        <polygon points="8,5 10,8 8,11 6,8" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'blade') {
-    return (
-      <>
-        <polygon points="8,2 10,6 8,12 6,6" fill={p.main} />
-        <rect x="6" y="11.5" width="4" height="1.5" fill={p.accent} />
-        <rect x="7.2" y="12.5" width="1.6" height="1.5" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'pillar') {
-    return (
-      <>
-        <rect x="6" y="2.5" width="4" height="11" fill={p.main} />
-        <rect x="5" y="2" width="6" height="2" fill={p.light} />
-        <rect x="5" y="12" width="6" height="2" fill={p.accent} />
-      </>
-    );
-  }
-  if (variant === 'prism') {
-    return (
-      <>
-        <polygon points="8,2.5 12.5,8 8,13.5 3.5,8" fill={p.main} />
-        <polygon points="8,4.7 10.4,8 8,11.3 5.6,8" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'aether') {
-    return (
-      <>
-        <circle cx="8" cy="8" r="4.2" fill={p.main} />
-        <rect x="7.2" y="1.8" width="1.6" height="3" fill={p.light} />
-        <rect x="11.2" y="7.2" width="3" height="1.6" fill={p.light} />
-        <rect x="7.2" y="11.2" width="1.6" height="3" fill={p.light} />
-        <rect x="1.8" y="7.2" width="3" height="1.6" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'tree') {
-    return (
-      <>
-        <rect x="7" y="9" width="2" height="4" fill={p.accent} />
-        <polygon points="8,3 12,9 4,9" fill={p.main} />
-        <polygon points="8,4.8 10.3,8 5.7,8" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'orb') {
-    return (
-      <>
-        <circle cx="8" cy="8" r="4" fill={p.main} />
-        <circle cx="8" cy="8" r="2" fill={p.light} />
-      </>
-    );
-  }
-  if (variant === 'spark') {
-    return (
-      <>
-        <polygon points="8,2.5 9.5,6.5 13.5,8 9.5,9.5 8,13.5 6.5,9.5 2.5,8 6.5,6.5" fill={p.main} />
-        <circle cx="8" cy="8" r="1.3" fill={p.light} />
-      </>
-    );
-  }
+function getZone(points, titles, families, id) {
+  const indices = titles.filter((t) => families.includes(familyName(t))).map((t) => t.index);
+  if (!indices.length) return null;
+  const ys = indices.map((i) => points[i].y);
+  const top = Math.max(0, Math.min(...ys) - 80);
+  const bottom = Math.max(...ys) + 80;
+  return { id, top, height: Math.max(180, bottom - top) };
+}
+
+/* ── Biome configurations for each zone ───────────────────────────── */
+const BIOMES = {
+  child: {
+    sky: ['#87CEEB', '#B0E0E6'],
+    ground: ['#7CCD7C', '#4A7C59'],
+    accent: '#FFD700',
+  },
+  adolescent: {
+    sky: ['#6B8BB2', '#4A6B8A'],
+    ground: ['#8B7355', '#6B5B45'],
+    accent: '#87CEEB',
+  },
+  adult: {
+    sky: ['#2C1E4A', '#1a0e2e'],
+    ground: ['#4A3060', '#2D1B4E'],
+    accent: '#C084FC',
+  },
+};
+
+/* ── 3D SVG Landscape Elements ────────────────────────────────────── */
+
+function Tree3D({ x, y, scale = 1, variant = 0 }) {
+  const s = scale;
+  const colors = [
+    { trunk: '#5D4037', canopy: ['#2E7D32', '#388E3C', '#43A047'], shadow: '#1B5E20' },
+    { trunk: '#6D4C41', canopy: ['#558B2F', '#689F38', '#7CB342'], shadow: '#33691E' },
+    { trunk: '#4E342E', canopy: ['#1B5E20', '#2E7D32', '#388E3C'], shadow: '#0D3311' },
+  ];
+  const c = colors[variant % colors.length];
   return (
-    <>
-      <polygon points="8,3 10,7 14,8 10,9 8,13 6,9 2,8 6,7" fill={p.main} />
-      <circle cx="8" cy="8" r="1.5" fill={p.light} />
-    </>
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="4" rx="8" ry="3" fill="rgba(0,0,0,0.2)" />
+      <rect x="-2" y="-18" width="4" height="22" fill={c.trunk} rx="1" />
+      <rect x="-1" y="-18" width="2" height="22" fill="#795548" rx="0.5" opacity="0.4" />
+      <ellipse cx="0" cy="-22" rx="12" ry="14" fill={c.canopy[0]} />
+      <ellipse cx="-4" cy="-26" rx="9" ry="10" fill={c.canopy[1]} />
+      <ellipse cx="4" cy="-24" rx="8" ry="9" fill={c.canopy[2]} />
+      <ellipse cx="-2" cy="-30" rx="6" ry="7" fill={c.canopy[2]} opacity="0.7" />
+      <ellipse cx="0" cy="-32" rx="4" ry="4" fill="#81C784" opacity="0.5" />
+    </g>
   );
 }
 
-function SpriteIcon({ token = 'default', size = 16, locked = false }) {
-  const cfg = SPRITE_LIBRARY[token] || SPRITE_LIBRARY.default;
-  const palette = locked ? lockedSpritePalette() : cfg;
+function PineTree3D({ x, y, scale = 1 }) {
+  const s = scale;
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      className="title-sprite"
-      shapeRendering="crispEdges"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <rect x="1" y="1" width="14" height="14" rx="2" fill={palette.bg} stroke={palette.edge} strokeWidth="1" />
-      <rect x="2" y="2" width="12" height="1.2" fill={palette.light} opacity="0.35" />
-      {spriteParts(cfg.variant, palette)}
-    </svg>
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="4" rx="6" ry="2.5" fill="rgba(0,0,0,0.18)" />
+      <rect x="-1.5" y="-14" width="3" height="18" fill="#5D4037" rx="1" />
+      <polygon points="-10,0 0,-28 10,0" fill="#1B5E20" />
+      <polygon points="-8,-6 0,-26 8,-6" fill="#2E7D32" />
+      <polygon points="-6,-12 0,-24 6,-12" fill="#388E3C" />
+      <polygon points="-1,-24 0,-28 1,-24" fill="#66BB6A" opacity="0.6" />
+    </g>
   );
 }
+
+function Mountain3D({ x, y, scale = 1, variant = 0 }) {
+  const s = scale;
+  const colors = [
+    { base: '#5D6D7E', mid: '#7F8C8D', snow: '#ECF0F1', shadow: '#34495E' },
+    { base: '#6B4E3D', mid: '#8D6E63', snow: '#EFEBE9', shadow: '#4E342E' },
+    { base: '#455A64', mid: '#607D8B', snow: '#ECEFF1', shadow: '#263238' },
+  ];
+  const c = colors[variant % colors.length];
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="8" rx="50" ry="10" fill="rgba(0,0,0,0.12)" />
+      <polygon points="-45,8 0,-55 45,8" fill={c.base} />
+      <polygon points="-20,8 0,-55 25,8" fill={c.mid} />
+      <polygon points="-10,-30 0,-55 10,-30 5,-32 -5,-32" fill={c.snow} />
+      <polygon points="-5,-38 0,-55 5,-38" fill="white" opacity="0.7" />
+      <polygon points="-45,8 -20,-10 0,-55" fill={c.shadow} opacity="0.25" />
+    </g>
+  );
+}
+
+function Castle3D({ x, y, scale = 1 }) {
+  const s = scale;
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="8" rx="30" ry="8" fill="rgba(0,0,0,0.15)" />
+      <rect x="-22" y="-40" width="44" height="48" fill="#78909C" rx="2" />
+      <rect x="-18" y="-35" width="36" height="43" fill="#90A4AE" rx="1" />
+      <rect x="-22" y="-48" width="10" height="12" fill="#607D8B" />
+      <rect x="12" y="-48" width="10" height="12" fill="#607D8B" />
+      <rect x="-22" y="-52" width="4" height="4" fill="#546E7A" />
+      <rect x="-14" y="-52" width="4" height="4" fill="#546E7A" />
+      <rect x="12" y="-52" width="4" height="4" fill="#546E7A" />
+      <rect x="18" y="-52" width="4" height="4" fill="#546E7A" />
+      <polygon points="-5,-55 0,-68 5,-55" fill="#B71C1C" />
+      <rect x="-1" y="-68" width="2" height="4" fill="#FFD600" />
+      <rect x="-6" y="-10" width="12" height="18" fill="#5D4037" rx="6 6 0 0" />
+      <rect x="-4" y="-5" width="8" height="13" fill="#4E342E" rx="4 4 0 0" />
+      <rect x="-12" y="-22" width="6" height="8" fill="#42A5F5" rx="1" opacity="0.6" />
+      <rect x="6" y="-22" width="6" height="8" fill="#42A5F5" rx="1" opacity="0.6" />
+      <rect x="-10" y="-20" width="2" height="6" fill="#78909C" />
+      <rect x="8" y="-20" width="2" height="6" fill="#78909C" />
+      <rect x="-18" y="-35" width="36" height="3" fill="white" opacity="0.15" />
+    </g>
+  );
+}
+
+function House3D({ x, y, scale = 1, variant = 0 }) {
+  const s = scale;
+  const roofColors = ['#C62828', '#F57F17', '#1565C0', '#2E7D32'];
+  const wallColors = ['#FFECB3', '#FFF3E0', '#E8EAF6', '#E8F5E9'];
+  const roof = roofColors[variant % roofColors.length];
+  const wall = wallColors[variant % wallColors.length];
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="4" rx="14" ry="4" fill="rgba(0,0,0,0.12)" />
+      <rect x="-10" y="-14" width="20" height="18" fill={wall} rx="1" />
+      <polygon points="-14,-14 0,-26 14,-14" fill={roof} />
+      <polygon points="-14,-14 0,-26 0,-14" fill="rgba(0,0,0,0.1)" />
+      <rect x="-3" y="-6" width="6" height="10" fill="#5D4037" rx="1" />
+      <circle cx="2" cy="-1" r="0.7" fill="#FFD600" />
+      <rect x="-8" y="-10" width="3" height="3" fill="#81D4FA" rx="0.5" opacity="0.7" />
+      <rect x="5" y="-10" width="3" height="3" fill="#81D4FA" rx="0.5" opacity="0.7" />
+      <polygon points="0,-26 0,-14 14,-14" fill="rgba(255,255,255,0.1)" />
+    </g>
+  );
+}
+
+function Rock3D({ x, y, scale = 1, variant = 0 }) {
+  const s = scale;
+  const colors = ['#78909C', '#8D6E63', '#607D8B'];
+  const c = colors[variant % colors.length];
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="3" rx="8" ry="3" fill="rgba(0,0,0,0.15)" />
+      <ellipse cx="0" cy="0" rx="7" ry="5" fill={c} />
+      <ellipse cx="-1" cy="-2" rx="4" ry="3" fill="rgba(255,255,255,0.12)" />
+    </g>
+  );
+}
+
+function Bush3D({ x, y, scale = 1 }) {
+  const s = scale;
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="3" rx="8" ry="3" fill="rgba(0,0,0,0.12)" />
+      <ellipse cx="-4" cy="0" rx="6" ry="5" fill="#388E3C" />
+      <ellipse cx="4" cy="-1" rx="5" ry="4.5" fill="#43A047" />
+      <ellipse cx="0" cy="-3" rx="5" ry="4" fill="#4CAF50" />
+      <ellipse cx="-2" cy="-4" rx="3" ry="2" fill="#66BB6A" opacity="0.5" />
+    </g>
+  );
+}
+
+function Crystal3D({ x, y, scale = 1 }) {
+  const s = scale;
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="4" rx="6" ry="2.5" fill="rgba(100,50,200,0.2)" />
+      <polygon points="-4,4 -2,-14 2,-16 4,4" fill="#7C4DFF" opacity="0.85" />
+      <polygon points="2,4 4,-10 6,-8 6,4" fill="#B388FF" opacity="0.75" />
+      <polygon points="-6,4 -5,-8 -3,-12 -2,4" fill="#651FFF" opacity="0.8" />
+      <polygon points="-2,-14 0,-16 2,-16 0,-14" fill="white" opacity="0.6" />
+      <line x1="-1" y1="-12" x2="1" y2="-4" stroke="white" strokeWidth="0.5" opacity="0.4" />
+    </g>
+  );
+}
+
+function Volcano3D({ x, y, scale = 1 }) {
+  const s = scale;
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <ellipse cx="0" cy="8" rx="40" ry="10" fill="rgba(0,0,0,0.15)" />
+      <polygon points="-38,8 -8,-40 8,-40 38,8" fill="#4E342E" />
+      <polygon points="-30,8 -8,-40 8,-40 0,8" fill="#5D4037" />
+      <polygon points="-8,-40 8,-40 5,-36 -5,-36" fill="#BF360C" />
+      <ellipse cx="0" cy="-38" rx="6" ry="3" fill="#E65100" />
+      <ellipse cx="0" cy="-39" rx="4" ry="2" fill="#FF6D00" opacity="0.8" />
+      <circle cx="-2" cy="-42" r="2" fill="#FF9100" opacity="0.5" />
+      <circle cx="1" cy="-44" r="1.5" fill="#FFAB40" opacity="0.4" />
+    </g>
+  );
+}
+
+function Bridge3D({ x, y, width: bw = 60 }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <rect x={-bw / 2} y="-4" width={bw} height="8" fill="#8D6E63" rx="2" />
+      <rect x={-bw / 2} y="-3" width={bw} height="2" fill="#A1887F" rx="1" opacity="0.5" />
+      <rect x={-bw / 2 - 3} y="-12" width="4" height="16" fill="#6D4C41" rx="1" />
+      <rect x={bw / 2 - 1} y="-12" width="4" height="16" fill="#6D4C41" rx="1" />
+      <line x1={-bw / 2 - 1} y1="-12" x2={bw / 2 + 1} y2="-12" stroke="#795548" strokeWidth="2" />
+    </g>
+  );
+}
+
+function Cloud3D({ x, y, scale = 1, opacity = 0.7 }) {
+  const s = scale;
+  return (
+    <g transform={`translate(${x},${y}) scale(${s})`} opacity={opacity}>
+      <ellipse cx="0" cy="0" rx="22" ry="8" fill="white" />
+      <ellipse cx="-12" cy="-3" rx="14" ry="9" fill="white" />
+      <ellipse cx="10" cy="-2" rx="16" ry="10" fill="white" />
+      <ellipse cx="0" cy="-7" rx="12" ry="8" fill="white" />
+      <ellipse cx="0" cy="3" rx="20" ry="5" fill="white" opacity="0.5" />
+    </g>
+  );
+}
+
+function WaterBody({ x, y, w, h }) {
+  return (
+    <g>
+      <ellipse cx={x} cy={y} rx={w / 2} ry={h / 2} fill="url(#waterGradient)" opacity="0.7" />
+      <ellipse cx={x} cy={y - 2} rx={w / 2 - 4} ry={h / 2 - 3} fill="white" opacity="0.1" />
+      <line x1={x - w / 4} y1={y - 1} x2={x + w / 4} y2={y - 1} stroke="white" strokeWidth="0.8" opacity="0.25" />
+      <line x1={x - w / 5} y1={y + 3} x2={x + w / 6} y2={y + 3} stroke="white" strokeWidth="0.6" opacity="0.2" />
+    </g>
+  );
+}
+
+function Flower3D({ x, y, color = '#E91E63' }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#388E3C" strokeWidth="1" />
+      <circle cx="-2" cy="-1" r="1.5" fill={color} opacity="0.8" />
+      <circle cx="2" cy="-1" r="1.5" fill={color} opacity="0.8" />
+      <circle cx="0" cy="-2.5" r="1.5" fill={color} opacity="0.8" />
+      <circle cx="0" cy="0" r="1" fill="#FFF176" />
+    </g>
+  );
+}
+
+function Torch3D({ x, y }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <rect x="-1.5" y="-10" width="3" height="14" fill="#5D4037" rx="0.5" />
+      <rect x="-3" y="-10" width="6" height="3" fill="#795548" rx="1" />
+      <ellipse cx="0" cy="-14" rx="3.5" ry="5" fill="#FF6D00" opacity="0.7" />
+      <ellipse cx="0" cy="-15" rx="2.5" ry="4" fill="#FFAB00" opacity="0.6" />
+      <ellipse cx="0" cy="-16" rx="1.5" ry="2.5" fill="#FFD600" opacity="0.7" />
+    </g>
+  );
+}
+
+function GrassClump({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale})`}>
+      <line x1="-3" y1="0" x2="-4" y2="-6" stroke="#4CAF50" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="0" y1="0" x2="0" y2="-7" stroke="#66BB6A" strokeWidth="1.2" strokeLinecap="round" />
+      <line x1="3" y1="0" x2="4" y2="-5" stroke="#43A047" strokeWidth="1.2" strokeLinecap="round" />
+    </g>
+  );
+}
+
+/* ── Biome scene generators ───────────────────────────────────────── */
+
+function generateChildScenery(points, mapH) {
+  const items = [];
+  const seed = (i) => ((i * 7919 + 104729) % 100) / 100;
+
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const s = seed(i);
+    const side = p.x > 500 ? -1 : 1;
+    const ox = side * (80 + s * 120);
+
+    if (i % 3 === 0) {
+      items.push(<Tree3D key={`ct-${i}`} x={p.x + ox} y={p.y + 10} scale={0.7 + s * 0.4} variant={i % 3} />);
+    }
+    if (i % 4 === 1) {
+      items.push(<Bush3D key={`cb-${i}`} x={p.x - ox * 0.6} y={p.y + 15} scale={0.6 + s * 0.3} />);
+    }
+    if (i % 5 === 0) {
+      items.push(<House3D key={`ch-${i}`} x={p.x + ox * 1.2} y={p.y - 5} scale={0.55 + s * 0.2} variant={i} />);
+    }
+    if (i % 6 === 2) {
+      items.push(<Flower3D key={`cf-${i}`} x={p.x + side * 45} y={p.y + 20} color={['#E91E63', '#FF9800', '#9C27B0', '#2196F3'][i % 4]} />);
+      items.push(<Flower3D key={`cf2-${i}`} x={p.x + side * 55} y={p.y + 18} color={['#F44336', '#FFEB3B', '#4CAF50'][i % 3]} />);
+    }
+    if (i % 7 === 0) {
+      items.push(<GrassClump key={`cg-${i}`} x={p.x - ox * 0.3} y={p.y + 22} scale={0.8} />);
+    }
+  }
+  return items;
+}
+
+function generateAdolescentScenery(points) {
+  const items = [];
+  const seed = (i) => ((i * 6271 + 81239) % 100) / 100;
+
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const s = seed(i);
+    const side = p.x > 500 ? -1 : 1;
+    const ox = side * (90 + s * 100);
+
+    if (i % 3 === 0) {
+      items.push(<PineTree3D key={`at-${i}`} x={p.x + ox} y={p.y + 8} scale={0.65 + s * 0.35} />);
+    }
+    if (i % 4 === 1) {
+      items.push(<Rock3D key={`ar-${i}`} x={p.x - ox * 0.5} y={p.y + 16} scale={0.7 + s * 0.5} variant={i % 3} />);
+    }
+    if (i % 5 === 2) {
+      items.push(<Bridge3D key={`abr-${i}`} x={p.x + ox * 0.3} y={p.y + 6} width={40 + s * 20} />);
+    }
+    if (i % 6 === 0) {
+      items.push(<Mountain3D key={`am-${i}`} x={p.x + ox * 1.5} y={p.y - 20} scale={0.4 + s * 0.2} variant={i % 3} />);
+    }
+  }
+  return items;
+}
+
+function generateAdultScenery(points) {
+  const items = [];
+  const seed = (i) => ((i * 5381 + 52711) % 100) / 100;
+
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const s = seed(i);
+    const side = p.x > 500 ? -1 : 1;
+    const ox = side * (85 + s * 110);
+
+    if (i % 3 === 0) {
+      items.push(<Crystal3D key={`ec-${i}`} x={p.x + ox} y={p.y + 5} scale={0.7 + s * 0.4} />);
+    }
+    if (i % 4 === 1) {
+      items.push(<Torch3D key={`et-${i}`} x={p.x - ox * 0.4} y={p.y + 10} />);
+    }
+    if (i % 5 === 2) {
+      items.push(<Volcano3D key={`ev-${i}`} x={p.x + ox * 1.5} y={p.y - 10} scale={0.35 + s * 0.15} />);
+    }
+    if (i === 0 || i === points.length - 1) {
+      items.push(<Castle3D key={`eca-${i}`} x={p.x + ox * 1.1} y={p.y - 15} scale={0.5 + s * 0.2} />);
+    }
+  }
+  return items;
+}
+
+/* ── Road path generation using smooth curves ─────────────────────── */
+
+function buildRoadPath(points) {
+  if (points.length < 2) return '';
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+/* ── Journey Character (3D styled) ────────────────────────────────── */
 
 function JourneyCharacter({ running, avatarUrl, username, gender }) {
   const isFemale = gender === 'female';
-  const bodyGradient = isFemale ? 'from-pink-300 to-fuchsia-700' : 'from-cyan-300 to-blue-700';
-  const accentColor = isFemale ? 'bg-rose-300' : 'bg-sky-200';
-
   return (
-    <div className={`relative w-14 h-16 title-pixel ${running ? 'title-run' : 'title-idle'}`}>
-      <span className="absolute left-1/2 -translate-x-1/2 bottom-0 w-8 h-2 rounded-full bg-black/60 blur-[1px]" />
-      <div className={`absolute left-1/2 top-7 -translate-x-1/2 w-9 h-7 rounded-md border-2 border-black/60 bg-gradient-to-b ${bodyGradient} shadow-[inset_0_2px_0_rgba(255,255,255,0.45)]`} />
-      <div className={`absolute left-1/2 top-4 -translate-x-1/2 w-4 h-3 rounded-sm border-2 border-black/60 ${accentColor}`} />
-      <div className="absolute left-[34%] top-[76%] w-3 h-5 rounded-b border-2 border-black/60 bg-slate-700" />
-      <div className="absolute left-[57%] top-[76%] w-3 h-5 rounded-b border-2 border-black/60 bg-slate-700" />
-      <div className="absolute left-[22%] top-[42%] w-3 h-2 rounded-sm border border-black/60 bg-slate-700/80" />
-      <div className="absolute left-[72%] top-[42%] w-3 h-2 rounded-sm border border-black/60 bg-slate-700/80" />
-
-      <div className="absolute left-1/2 top-0 -translate-x-1/2 w-8 h-8 rounded-full border-2 border-black/60 overflow-hidden bg-gradient-to-br from-slate-100 to-slate-500">
+    <div className={`relative w-14 h-16 ${running ? 'title-run' : 'title-idle'}`}>
+      <span className="absolute left-1/2 -translate-x-1/2 bottom-0 w-10 h-3 rounded-full bg-black/40 blur-[2px]" />
+      <div className="absolute left-1/2 top-0 -translate-x-1/2 w-10 h-10 rounded-full border-[3px] border-white/90 overflow-hidden bg-gradient-to-br from-slate-200 to-slate-500"
+        style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.3)' }}>
         {avatarUrl ? (
           <img src={avatarUrl} alt={username || 'avatar'} className="w-full h-full object-cover" draggable={false} />
         ) : (
-          <div className="w-full h-full flex items-center justify-center font-display font-bold text-[10px] text-black">
+          <div className="w-full h-full flex items-center justify-center font-display font-bold text-sm text-black">
             {(username || '?')[0].toUpperCase()}
           </div>
         )}
       </div>
-
-      {isFemale ? (
-        <div className="absolute left-1/2 top-[2px] -translate-x-1/2 w-10 h-2 rounded-full bg-fuchsia-800/80" />
-      ) : (
-        <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 w-4 h-2 rounded-sm bg-sky-900/80" />
-      )}
+      <div className={`absolute left-1/2 -translate-x-1/2 top-[38px] w-8 h-7 rounded-md ${
+        isFemale ? 'bg-gradient-to-b from-pink-400 to-fuchsia-700' : 'bg-gradient-to-b from-cyan-400 to-blue-700'
+      }`} style={{ boxShadow: 'inset 0 2px 0 rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.3)' }} />
+      <div className="absolute left-[30%] top-[72%] w-3 h-4 rounded-b bg-slate-700" style={{ boxShadow: '0 2px 3px rgba(0,0,0,0.3)' }} />
+      <div className="absolute left-[55%] top-[72%] w-3 h-4 rounded-b bg-slate-700" style={{ boxShadow: '0 2px 3px rgba(0,0,0,0.3)' }} />
     </div>
   );
 }
+
+/* ── Waypoint Node (3D styled) ────────────────────────────────────── */
+
+function WaypointNode({ title, point, width, isCurrent, isTarget, onClick }) {
+  const unlocked = !!title.unlocked;
+  const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
+  const pipColor = TIER_PIP_COLOR[title.tier] || TIER_PIP_COLOR.default;
+  const theme = getTitleTheme(title);
+  const numLabel = title.index + 1;
+
+  return (
+    <div
+      className="absolute -translate-x-1/2 -translate-y-1/2"
+      style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        className={`title-node-3d relative w-12 h-12 rounded-full border-[3px] transition-all ${
+          unlocked
+            ? `bg-gradient-to-b ${palette.bg} border-white/90 text-white title-waypoint-glow-3d`
+            : 'bg-gradient-to-b from-slate-700 to-slate-900 border-slate-500/70 text-slate-400'
+        } ${isCurrent ? `ring-[3px] ${palette.ring} scale-110` : ''} ${
+          isTarget ? 'ring-[3px] ring-cyan-300/90' : ''
+        } cursor-pointer hover:scale-115`}
+        title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
+      >
+        <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none" style={{ height: '50%' }} />
+        <span className="flex items-center justify-center relative z-10 font-display font-bold text-sm"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
+          {numLabel}
+        </span>
+        {unlocked ? (
+          <span className="absolute -right-1 -bottom-1 w-5 h-5 rounded-full border-2 border-white bg-gradient-to-b from-amber-300 to-amber-600 flex items-center justify-center z-20"
+            style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.4)' }}>
+            <span className="text-[9px] text-amber-900 font-bold">★</span>
+          </span>
+        ) : (
+          <span className="absolute -right-1 -bottom-1 w-5 h-5 rounded-full border-2 border-slate-400 bg-slate-700 flex items-center justify-center z-20"
+            style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+            <span className="text-[8px]">🔒</span>
+          </span>
+        )}
+      </button>
+      <div className={`absolute left-1/2 -translate-x-1/2 top-[54px] px-2 py-0.5 rounded-md text-[9px] font-display font-bold whitespace-nowrap ${
+        unlocked ? 'bg-black/70 text-white border border-white/30' : 'bg-black/50 text-slate-400 border border-slate-600/40'
+      }`} style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+        {theme.landmark}
+      </div>
+    </div>
+  );
+}
+
+/* ── Main Component ───────────────────────────────────────────────── */
 
 export default function TitleProgressTab({
   data,
@@ -823,9 +673,7 @@ export default function TitleProgressTab({
     try {
       if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
       const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -877,14 +725,12 @@ export default function TitleProgressTab({
       }
       return undefined;
     }
-
     const lines = journeyMode === 'forward'
       ? FORWARD_TRAVEL_LINES
       : (journeyMode === 'scout' ? LOCKED_TRAVEL_LINES : INSPECT_TRAVEL_LINES);
     chatterIntervalRef.current = setInterval(() => {
       say(pickRandomLine(lines, 'On the move...'), 1200);
     }, 1400);
-
     return () => {
       if (chatterIntervalRef.current) {
         clearInterval(chatterIntervalRef.current);
@@ -892,6 +738,13 @@ export default function TitleProgressTab({
       }
     };
   }, [target, journeyMode]);
+
+  const levels = Array.isArray(data?.levels) ? data.levels : [];
+  const levelMap = useMemo(() => {
+    const map = {};
+    for (const level of levels) map[level.level] = level;
+    return map;
+  }, [levels]);
 
   useEffect(() => {
     if (target !== null || !activeJourneyTitle) return;
@@ -950,14 +803,6 @@ export default function TitleProgressTab({
   const { points, width, height } = useMemo(() => buildWorldPoints(titles.length || 1), [titles.length]);
   const avatarPos = useMemo(() => interpolatePoint(points, cursor), [points, cursor]);
   const avatarLeftPercent = (avatarPos.x / width) * 100;
-  const bandProps = useMemo(() => buildBandProps(points, titles, width), [points, titles, width]);
-
-  const levels = Array.isArray(data?.levels) ? data.levels : [];
-  const levelMap = useMemo(() => {
-    const map = {};
-    for (const level of levels) map[level.level] = level;
-    return map;
-  }, [levels]);
 
   const nextLevelPoints = nextTitle ? (levelMap[nextTitle.level]?.points || 0) : 0;
   const sameLevelSegment = nextTitle && summary?.current_title?.level === nextTitle.level;
@@ -967,13 +812,46 @@ export default function TitleProgressTab({
   const displayedProgress = nextTitle ? clamp(Number(summary?.segment_progress_percent) || 0, 0, 100) : 100;
   const isRunning = target !== null;
 
+  const roadPath = useMemo(() => buildRoadPath(points), [points]);
+
+  const zones = useMemo(() => {
+    const child = getZone(points, titles, ['Beginner', 'Intermediate'], 'child');
+    const adolescent = getZone(points, titles, ['Advanced'], 'adolescent');
+    const adult = getZone(points, titles, ['Expert', 'Master'], 'adult');
+    return [adult, adolescent, child].filter(Boolean);
+  }, [points, titles]);
+
+  /* Split titles into zone groups for scenery generation */
+  const zoneScenery = useMemo(() => {
+    const childTitles = titles.filter((t) => ['Beginner', 'Intermediate'].includes(familyName(t)));
+    const adolTitles = titles.filter((t) => familyName(t) === 'Advanced');
+    const adultTitles = titles.filter((t) => ['Expert', 'Master'].includes(familyName(t)));
+
+    const childPts = childTitles.map((t) => points[t.index]).filter(Boolean);
+    const adolPts = adolTitles.map((t) => points[t.index]).filter(Boolean);
+    const adultPts = adultTitles.map((t) => points[t.index]).filter(Boolean);
+
+    return {
+      child: generateChildScenery(childPts, height),
+      adolescent: generateAdolescentScenery(adolPts),
+      adult: generateAdultScenery(adultPts),
+    };
+  }, [titles, points, height]);
+
+  /* Cloud positions */
+  const clouds = useMemo(() => {
+    const c = [];
+    for (let i = 0; i < Math.ceil(height / 350); i++) {
+      c.push({ x: 80 + (i * 317) % 840, y: 50 + i * 320, scale: 0.6 + (i % 3) * 0.25, opacity: 0.3 + (i % 2) * 0.15 });
+    }
+    return c;
+  }, [height]);
+
   function handleTitleTap(title) {
     if (!title) return;
     const unlocked = !!title.unlocked;
     const movingForward = title.index > (cursor + 0.08);
-    const mode = unlocked
-      ? (movingForward ? 'forward' : 'inspect')
-      : 'scout';
+    const mode = unlocked ? (movingForward ? 'forward' : 'inspect') : 'scout';
     setJourneyMode(mode);
     setActiveJourneyTitle({ ...title });
     setTarget(title.index);
@@ -987,13 +865,6 @@ export default function TitleProgressTab({
       1400
     );
   }
-
-  const zones = useMemo(() => {
-    const child = getZone(points, titles, ['Beginner', 'Intermediate'], 'child', 'Child Realm (Intermediate)', 'title-zone-child');
-    const adolescent = getZone(points, titles, ['Advanced'], 'adolescent', 'Adolescent Realm (Advanced)', 'title-zone-adolescent');
-    const adult = getZone(points, titles, ['Expert', 'Master'], 'adult', 'Grown Realm (Expert)', 'title-zone-adult');
-    return [adult, adolescent, child].filter(Boolean);
-  }, [points, titles]);
 
   useEffect(() => {
     const el = mapScrollRef.current;
@@ -1038,13 +909,14 @@ export default function TitleProgressTab({
 
   return (
     <div className="space-y-4">
+      {/* Progress Summary Card */}
       <div className="card">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="font-display font-bold text-base text-piu-accent">TITLE PROGRESSION</h3>
             <p className="text-xs text-gray-500 mt-1">
               {summary.current_title?.name || 'Beginner'}
-              {nextTitle ? ` -> ${nextTitle.name}` : ' -> Completed'}
+              {nextTitle ? ` → ${nextTitle.name}` : ' → Completed'}
             </p>
           </div>
           <div className="text-right">
@@ -1072,161 +944,232 @@ export default function TitleProgressTab({
           </div>
         )}
 
-        <div className="mt-4 title-map-frame rounded-xl border border-piu-border/50 overflow-hidden">
-          <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden">
-            <div className="relative w-full title-world-canvas" style={{ height: `${height}px` }}>
-              <div className="absolute left-1/2 -translate-x-1/2 top-0 w-[80%] h-16 rounded-b-[999px] title-world-cap pointer-events-none" />
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[92%] h-24 rounded-t-[999px] title-world-floor pointer-events-none" />
+        {/* ── 3D World Map ──────────────────────────────────────── */}
+        <div className="mt-4 title-map-3d rounded-xl border-2 border-white/20 overflow-hidden"
+          style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+          <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden title-map-scroll">
+            <div className="relative w-full" style={{ height: `${height}px` }}>
+
+              {/* Sky + atmosphere SVG layer */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
                 <defs>
-                  <linearGradient id="mapRoadFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fff7cc" />
-                    <stop offset="58%" stopColor="#fbbf5d" />
-                    <stop offset="100%" stopColor="#ea8c3d" />
+                  {/* Sky gradient */}
+                  <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#1a0e2e" />
+                    <stop offset="20%" stopColor="#2C1E4A" />
+                    <stop offset="40%" stopColor="#4A6B8A" />
+                    <stop offset="60%" stopColor="#6B8BB2" />
+                    <stop offset="80%" stopColor="#87CEEB" />
+                    <stop offset="100%" stopColor="#B0E0E6" />
                   </linearGradient>
-                  <linearGradient id="mapRoadRim" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fff9e5" />
-                    <stop offset="100%" stopColor="#fde7a2" />
+                  {/* Ground overlays per zone */}
+                  <linearGradient id="groundChild" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#7CCD7C" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#4A7C59" stopOpacity="0.5" />
                   </linearGradient>
+                  <linearGradient id="groundAdol" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8B7355" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#6B5B45" stopOpacity="0.5" />
+                  </linearGradient>
+                  <linearGradient id="groundAdult" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#4A3060" stopOpacity="0.3" />
+                    <stop offset="100%" stopColor="#2D1B4E" stopOpacity="0.5" />
+                  </linearGradient>
+                  {/* Road surface */}
+                  <linearGradient id="roadFill3d" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#D2A679" />
+                    <stop offset="30%" stopColor="#E8C99B" />
+                    <stop offset="70%" stopColor="#E8C99B" />
+                    <stop offset="100%" stopColor="#B8935A" />
+                  </linearGradient>
+                  <linearGradient id="roadEdge3d" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8B7355" />
+                    <stop offset="100%" stopColor="#6B5340" />
+                  </linearGradient>
+                  {/* Water */}
+                  <radialGradient id="waterGradient">
+                    <stop offset="0%" stopColor="#4FC3F7" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="#0288D1" stopOpacity="0.4" />
+                  </radialGradient>
+                  {/* Glow for unlocked paths */}
+                  <filter id="roadGlow">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                      <feMergeNode in="blur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
                 </defs>
-                {points.slice(0, -1).map((point, idx) => {
-                  const next = points[idx + 1];
+
+                {/* Full sky background */}
+                <rect x="0" y="0" width={width} height={height} fill="url(#skyGrad)" />
+
+                {/* Zone ground overlays */}
+                {zones.map((z) => (
+                  <rect
+                    key={`zone-bg-${z.id}`}
+                    x="0"
+                    y={z.top}
+                    width={width}
+                    height={z.height}
+                    fill={z.id === 'child' ? 'url(#groundChild)' : z.id === 'adolescent' ? 'url(#groundAdol)' : 'url(#groundAdult)'}
+                  />
+                ))}
+
+                {/* Rolling hills for child zone */}
+                {zones.filter((z) => z.id === 'child').map((z) => (
+                  <g key="child-terrain">
+                    <ellipse cx="200" cy={z.top + z.height - 20} rx="250" ry="50" fill="#5B9A5B" opacity="0.35" />
+                    <ellipse cx="650" cy={z.top + z.height - 40} rx="300" ry="60" fill="#4A8A4A" opacity="0.3" />
+                    <ellipse cx="450" cy={z.top + z.height - 10} rx="400" ry="30" fill="#6BAA6B" opacity="0.25" />
+                  </g>
+                ))}
+
+                {/* Rocky terrain for adolescent zone */}
+                {zones.filter((z) => z.id === 'adolescent').map((z) => (
+                  <g key="adol-terrain">
+                    <polygon points={`100,${z.top + z.height} 200,${z.top + z.height - 60} 300,${z.top + z.height - 20} 400,${z.top + z.height}`} fill="#7B6B55" opacity="0.3" />
+                    <polygon points={`600,${z.top + z.height} 700,${z.top + z.height - 50} 850,${z.top + z.height - 10} 900,${z.top + z.height}`} fill="#6B5B45" opacity="0.25" />
+                  </g>
+                ))}
+
+                {/* Clouds */}
+                {clouds.map((c, i) => (
+                  <Cloud3D key={`cloud-${i}`} x={c.x} y={c.y} scale={c.scale} opacity={c.opacity} />
+                ))}
+
+                {/* Water bodies */}
+                {zones.filter((z) => z.id === 'child').map((z) => (
+                  <WaterBody key="water-child" x={800} y={z.top + z.height * 0.6} w={100} h={40} />
+                ))}
+                {zones.filter((z) => z.id === 'adolescent').map((z) => (
+                  <WaterBody key="water-adol" x={150} y={z.top + z.height * 0.5} w={80} h={30} />
+                ))}
+
+                {/* Scenery - behind road */}
+                {zoneScenery.child}
+                {zoneScenery.adolescent}
+                {zoneScenery.adult}
+
+                {/* Road shadow */}
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="rgba(0,0,0,0.35)"
+                  strokeWidth="28"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  transform="translate(3,5)"
+                />
+
+                {/* Road edge (darker) */}
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="url(#roadEdge3d)"
+                  strokeWidth="26"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Road surface */}
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="url(#roadFill3d)"
+                  strokeWidth="20"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Road center dashes */}
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.25)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeDasharray="12 18"
+                />
+
+                {/* Road highlight */}
+                <path
+                  d={roadPath}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.15)"
+                  strokeWidth="14"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ filter: 'blur(2px)' }}
+                  transform="translate(-2,-2)"
+                />
+
+                {/* Grass lines along edges of the road */}
+                {points.map((p, i) => {
+                  if (i % 3 !== 0) return null;
                   return (
-                    <g key={`path-${idx}`}>
-                      <line
-                        x1={point.x}
-                        y1={point.y + 5}
-                        x2={next.x}
-                        y2={next.y + 5}
-                        stroke="#0f172a"
-                        strokeWidth="14"
-                        strokeLinecap="round"
-                        opacity="0.26"
-                      />
-                      <line
-                        x1={point.x}
-                        y1={point.y}
-                        x2={next.x}
-                        y2={next.y}
-                        stroke="url(#mapRoadFill)"
-                        strokeWidth="11"
-                        strokeLinecap="round"
-                      />
-                      <line
-                        x1={point.x}
-                        y1={point.y - 1}
-                        x2={next.x}
-                        y2={next.y - 1}
-                        stroke="url(#mapRoadRim)"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        opacity="0.9"
-                      />
+                    <g key={`grass-${i}`}>
+                      <GrassClump x={p.x - 18} y={p.y + 5} scale={0.7} />
+                      <GrassClump x={p.x + 18} y={p.y + 3} scale={0.6} />
                     </g>
                   );
                 })}
               </svg>
 
-              {zones.map((zone) => (
-                <div
-                  key={zone.id}
-                  className={`absolute left-2 right-2 rounded-3xl title-zone-shell ${zone.className}`}
-                  style={{ top: `${zone.top}px`, height: `${zone.height}px` }}
-                >
-                  <div className="absolute left-3 top-2 px-2 py-1 rounded-md title-zone-label text-[10px] font-display font-bold tracking-wide text-white/90">
-                    {zone.label}
-                  </div>
-                  {(ZONE_PROPS[zone.id] || []).map((prop, idx) => (
-                    <span
-                      key={`${zone.id}-prop-${idx}`}
-                      className="absolute w-9 h-9 rounded-full title-prop-pod flex items-center justify-center backdrop-blur-[1px]"
-                      style={{
-                        left: `${prop.x}%`,
-                        top: `${prop.y}%`,
-                        transform: 'translate(-50%, -50%)',
-                      }}
-                    >
-                      <SpriteIcon token={prop.token} size={17} />
-                    </span>
-                  ))}
-                </div>
-              ))}
-
-              {bandProps.map((prop) => (
-                <span
-                  key={prop.id}
-                  className={`absolute w-8 h-8 rounded-full border flex items-center justify-center title-prop title-badge-pod ${
-                    prop.unlocked
-                      ? 'bg-black/30 border-white/55 text-white'
-                      : 'bg-black/20 border-slate-500/60 text-slate-300'
-                  }`}
-                  style={{
-                    left: `${prop.xPercent}%`,
-                    top: `${prop.y}px`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                >
-                  <SpriteIcon token={prop.token} size={15} locked={!prop.unlocked} />
-                </span>
-              ))}
-
-              {titles.map((title) => {
-                const point = points[title.index];
-                const unlocked = !!title.unlocked;
-                const isCurrent = title.index === currentIndex;
-                const isTarget = target !== null && title.index === target;
-                const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
-                const pipColor = TIER_PIP_COLOR[title.tier] || TIER_PIP_COLOR.default;
-                const theme = getTitleTheme(title);
+              {/* Zone labels */}
+              {zones.map((zone) => {
+                const labels = {
+                  child: { text: 'Meadow Realm', sub: 'Beginner · Intermediate', color: '#4CAF50' },
+                  adolescent: { text: 'Mountain Realm', sub: 'Advanced', color: '#2196F3' },
+                  adult: { text: 'Shadow Realm', sub: 'Expert · Master', color: '#9C27B0' },
+                };
+                const label = labels[zone.id];
                 return (
                   <div
-                    key={title.id}
-                    className="absolute -translate-x-1/2 -translate-y-1/2"
-                    style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
+                    key={`label-${zone.id}`}
+                    className="absolute left-3 z-10"
+                    style={{ top: `${zone.top + 10}px` }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleTitleTap(title)}
-                      className={`relative w-10 h-10 rounded-full border-2 transition-all title-waypoint-node ${
-                        unlocked
-                          ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked title-waypoint-spark ${palette.glow}`
-                          : 'bg-slate-800/80 border-slate-500/80 text-slate-300'
-                      } ${
-                        isCurrent ? `ring-2 ${palette.ring} scale-110` : ''
-                      } ${
-                        isTarget ? 'ring-2 ring-cyan-300/90' : ''
-                      } cursor-pointer hover:scale-110`}
-                      title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
-                    >
-                      <span className="absolute inset-x-1 -bottom-[5px] h-2 rounded-full bg-black/40 blur-[1px]" />
-                      <span className="absolute inset-[2px] rounded-full border border-white/35 bg-white/10" />
-                      <span
-                        className="absolute left-[3px] top-[3px] w-1.5 h-1.5 rounded-full border border-white/70 z-20"
-                        style={{ backgroundColor: pipColor }}
-                      />
-                      <span className="inline-flex items-center justify-center relative z-10">
-                        <SpriteIcon token={theme.sprite} size={17} locked={!unlocked} />
-                      </span>
-                      {unlocked ? (
-                        <span className="absolute right-[-5px] bottom-[-6px] w-4 h-4 rounded-full border border-amber-200/85 bg-amber-400 text-[9px] font-bold leading-[14px] text-amber-950 shadow-[0_3px_6px_rgba(15,23,42,0.45)] z-20">
-                          ★
-                        </span>
-                      ) : (
-                        <span className="absolute right-[-4px] bottom-[-5px] text-[10px] leading-none z-20">🔒</span>
-                      )}
-                    </button>
+                    <div className="title-zone-banner px-3 py-1.5 rounded-lg"
+                      style={{
+                        background: `linear-gradient(135deg, ${label.color}dd, ${label.color}88)`,
+                        boxShadow: `0 4px 12px ${label.color}44, inset 0 1px 0 rgba(255,255,255,0.3)`,
+                        border: '1px solid rgba(255,255,255,0.3)',
+                      }}>
+                      <p className="text-[11px] font-display font-bold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                        {label.text}
+                      </p>
+                      <p className="text-[9px] text-white/80">{label.sub}</p>
+                    </div>
                   </div>
                 );
               })}
 
+              {/* Waypoint nodes */}
+              {titles.map((title) => {
+                const point = points[title.index];
+                return (
+                  <WaypointNode
+                    key={title.id}
+                    title={title}
+                    point={point}
+                    width={width}
+                    isCurrent={title.index === currentIndex}
+                    isTarget={target !== null && title.index === target}
+                    onClick={() => handleTitleTap(title)}
+                  />
+                );
+              })}
+
+              {/* Avatar + speech */}
               <div
-                className="absolute pointer-events-none -translate-x-1/2 -translate-y-[86%]"
+                className="absolute pointer-events-none -translate-x-1/2 -translate-y-[86%] z-30"
                 style={{ left: `${avatarLeftPercent}%`, top: `${avatarPos.y}px` }}
               >
                 {speech && (
-                  <div key={speech.key} className="absolute left-1/2 -translate-x-1/2 -top-14 max-w-[160px] px-2 py-1.5 rounded-lg border border-white/60 bg-black/75 text-[10px] leading-tight text-center text-white title-journey-bubble">
+                  <div key={speech.key} className="absolute left-1/2 -translate-x-1/2 -top-16 max-w-[180px] px-3 py-2 rounded-xl text-[11px] leading-tight text-center text-white title-speech-3d">
                     {speech.text}
-                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[5px] w-3 h-3 rotate-45 border-r border-b border-white/60 bg-black/75" />
+                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[6px] w-3 h-3 rotate-45 title-speech-3d-tail" />
                   </div>
                 )}
                 <JourneyCharacter
@@ -1242,17 +1185,18 @@ export default function TitleProgressTab({
 
         <div className="mt-3">
           <p className="text-[11px] text-gray-500">
-            Mobile-safe vertical map. Tap any waypoint to travel, then read the reflection bubble for that title.
+            Tap any checkpoint to travel there and read the reflection.
             {isOwner ? ' Title unlocks are computed from imported best scores.' : ''}
           </p>
         </div>
       </div>
 
+      {/* Title Checkpoints List */}
       <div className="card">
         <h4 className="text-xs font-display font-bold text-piu-accent mb-2">TITLE CHECKPOINTS</h4>
         <div className="space-y-2">
           {groups.map((group) => {
-            const lockedCount = group.titles.filter((title) => !title.unlocked).length;
+            const lockedCount = group.titles.filter((t) => !t.unlocked).length;
             const collapsed = collapsedGroups[group.family] !== undefined
               ? collapsedGroups[group.family]
               : group.family !== (summary?.current_title?.skill_family || '');
@@ -1264,12 +1208,7 @@ export default function TitleProgressTab({
                   className="w-full px-3 py-2 flex items-center justify-between gap-2 text-left"
                 >
                   <div>
-                    <p className="text-sm font-display font-bold text-gray-100">
-                      {group.family}
-                      <span className="ml-1.5 inline-flex align-middle">
-                        <SpriteIcon token={FAMILY_SPRITE_TOKEN[group.family] || 'default'} size={14} />
-                      </span>
-                    </p>
+                    <p className="text-sm font-display font-bold text-gray-100">{group.family}</p>
                     <p className="text-[10px] text-gray-500">
                       {group.titles.length - lockedCount}/{group.titles.length} unlocked
                     </p>
@@ -1295,12 +1234,7 @@ export default function TitleProgressTab({
                           } ${isCurrent ? `ring-1 ${palette.ring}` : ''} cursor-pointer hover:border-white/90`}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-display font-bold inline-flex items-center gap-1.5">
-                              <span className="inline-flex">
-                                <SpriteIcon token={theme.sprite} size={14} locked={!unlocked} />
-                              </span>
-                              <span>{title.name}</span>
-                            </p>
+                            <p className="text-xs font-display font-bold">{title.name}</p>
                             <span className="text-[10px] font-mono">
                               {unlocked ? 'UNLOCKED' : `${title.progress_percent.toFixed(1)}%`}
                             </span>

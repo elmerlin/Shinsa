@@ -78,70 +78,144 @@
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   3D PROGRESS MAP STYLES
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Character animations ─────────────────────────────────────────── */
+
 @keyframes title-idle-bob {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
+  50% { transform: translateY(-4px); }
 }
 
 @keyframes title-run-bob {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+  50% { transform: translateY(-6px); }
 }
 
 .title-idle {
-  animation: title-idle-bob 0.75s steps(2, end) infinite;
+  animation: title-idle-bob 1s ease-in-out infinite;
 }
 
 .title-run {
-  animation: title-run-bob 0.32s steps(2, end) infinite;
+  animation: title-run-bob 0.35s ease-in-out infinite;
 }
 
-.title-pixel {
-  image-rendering: pixelated;
+/* ── 3D Map container ─────────────────────────────────────────────── */
+
+.title-map-3d {
+  background:
+    linear-gradient(180deg,
+      #1a0e2e 0%,
+      #2C1E4A 15%,
+      #4A6B8A 35%,
+      #6B8BB2 50%,
+      #87CEEB 70%,
+      #B0E0E6 100%
+    );
+  position: relative;
 }
 
-.title-map-grid {
-  background-color: #061127;
-  background-image:
-    linear-gradient(0deg, rgba(8, 47, 73, 0.45), rgba(8, 47, 73, 0.45)),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.65) 1px, transparent 1px),
-    linear-gradient(rgba(15, 23, 42, 0.65) 1px, transparent 1px),
-    radial-gradient(circle at 12% 18%, rgba(34, 197, 94, 0.18), transparent 26%),
-    radial-gradient(circle at 83% 72%, rgba(56, 189, 248, 0.18), transparent 30%);
-  background-size: auto, 22px 22px, 22px 22px, auto, auto;
+.title-map-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
 }
 
-@keyframes title-waypoint-glow {
+.title-map-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.title-map-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.title-map-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+}
+
+/* ── 3D Waypoint Nodes ────────────────────────────────────────────── */
+
+.title-node-3d {
+  isolation: isolate;
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.4),
+    0 8px 16px rgba(0, 0, 0, 0.2),
+    inset 0 2px 4px rgba(255, 255, 255, 0.3),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.title-node-3d:hover {
+  transform: scale(1.15) translateY(-2px);
+  box-shadow:
+    0 6px 12px rgba(0, 0, 0, 0.5),
+    0 12px 24px rgba(0, 0, 0, 0.3),
+    inset 0 2px 4px rgba(255, 255, 255, 0.4),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes waypoint-glow-3d {
   0%, 100% {
     box-shadow:
-      inset 0 2px 0 rgba(255, 255, 255, 0.4),
-      inset 0 -6px 0 rgba(15, 23, 42, 0.22),
-      0 10px 16px rgba(15, 23, 42, 0.42),
-      0 0 14px rgba(125, 211, 252, 0.25);
+      0 4px 8px rgba(0, 0, 0, 0.4),
+      0 8px 16px rgba(0, 0, 0, 0.2),
+      inset 0 2px 4px rgba(255, 255, 255, 0.3),
+      inset 0 -4px 8px rgba(0, 0, 0, 0.2),
+      0 0 12px rgba(255, 215, 0, 0.2);
   }
   50% {
     box-shadow:
-      inset 0 2px 0 rgba(255, 255, 255, 0.56),
-      inset 0 -7px 0 rgba(15, 23, 42, 0.26),
-      0 11px 19px rgba(15, 23, 42, 0.5),
-      0 0 18px rgba(253, 224, 71, 0.42);
+      0 4px 8px rgba(0, 0, 0, 0.4),
+      0 8px 16px rgba(0, 0, 0, 0.2),
+      inset 0 2px 4px rgba(255, 255, 255, 0.4),
+      inset 0 -4px 8px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(255, 215, 0, 0.45),
+      0 0 40px rgba(255, 215, 0, 0.15);
   }
 }
 
-.title-waypoint-unlocked {
-  animation: title-waypoint-glow 2.3s ease-in-out infinite;
+.title-waypoint-glow-3d {
+  animation: waypoint-glow-3d 2.5s ease-in-out infinite;
 }
 
-@keyframes title-waypoint-spark {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  25% { transform: scale(1.06) rotate(2deg); }
-  50% { transform: scale(1.1) rotate(-2deg); }
-  75% { transform: scale(1.05) rotate(1deg); }
+/* ── Speech bubble (3D) ───────────────────────────────────────────── */
+
+@keyframes speech-pop-3d {
+  0% { transform: translateY(8px) scale(0.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-.title-waypoint-spark {
-  animation: title-waypoint-spark 2.4s ease-in-out infinite;
+@keyframes speech-float-3d {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
 }
+
+.title-speech-3d {
+  animation: speech-pop-3d 200ms ease-out, speech-float-3d 2.4s ease-in-out infinite;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.92));
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.title-speech-3d-tail {
+  background: linear-gradient(135deg, transparent 50%, rgba(25, 35, 55, 0.9) 50%);
+  border-right: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.4);
+}
+
+/* ── Zone banners ─────────────────────────────────────────────────── */
+
+.title-zone-banner {
+  backdrop-filter: blur(6px);
+  transition: transform 0.2s ease;
+}
+
+/* ── Legacy classes kept for backwards compat with checkpoint list ── */
 
 .title-waypoint-node {
   isolation: isolate;
@@ -151,148 +225,17 @@
     0 9px 16px rgba(15, 23, 42, 0.42);
 }
 
-.title-waypoint-node::after {
-  content: '';
-  position: absolute;
-  inset: 2px;
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  pointer-events: none;
-}
-
-@keyframes title-bubble-pop {
-  0% { transform: translateY(6px) scale(0.92); opacity: 0; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-@keyframes title-bubble-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
-}
-
-.title-journey-bubble {
-  animation: title-bubble-pop 160ms ease-out, title-bubble-float 2.2s ease-in-out infinite;
-  box-shadow:
-    0 8px 16px rgba(15, 23, 42, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.42);
-}
-
 .title-node-reply {
-  animation: title-bubble-pop 180ms ease-out;
+  animation: speech-pop-3d 180ms ease-out;
   box-shadow:
     0 10px 18px rgba(15, 23, 42, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
-.title-map-frame {
-  background:
-    radial-gradient(circle at 18% 7%, rgba(255, 255, 255, 0.34), transparent 27%),
-    radial-gradient(circle at 84% 11%, rgba(253, 224, 71, 0.3), transparent 28%),
-    radial-gradient(circle at 74% 90%, rgba(16, 185, 129, 0.18), transparent 32%),
-    linear-gradient(180deg, #8ed5ff 0%, #69b4ff 18%, #4f8de8 50%, #3559a4 100%);
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -38px 70px rgba(15, 23, 42, 0.3);
-}
+/* ── Old classes retained (still referenced elsewhere) ────────────── */
 
-.title-world-canvas {
-  transform: perspective(1400px) rotateX(5deg);
-  transform-origin: top center;
-}
-
-@media (max-width: 640px) {
-  .title-world-canvas {
-    transform: perspective(950px) rotateX(3.5deg);
-  }
-}
-
-.title-zone-shell {
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow:
-    0 14px 24px rgba(15, 23, 42, 0.38),
-    inset 0 2px 0 rgba(255, 255, 255, 0.45),
-    inset 0 -12px 18px rgba(15, 23, 42, 0.26);
-  overflow: hidden;
-}
-
-.title-zone-shell::after {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  pointer-events: none;
-}
-
-.title-zone-label {
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background:
-    linear-gradient(180deg, rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.7));
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.35);
-}
-
-.title-zone-child {
-  background:
-    radial-gradient(circle at 22% 28%, rgba(251, 191, 36, 0.58), transparent 33%),
-    radial-gradient(circle at 78% 66%, rgba(34, 197, 94, 0.48), transparent 35%),
-    radial-gradient(circle at 58% 38%, rgba(254, 240, 138, 0.52), transparent 30%),
-    linear-gradient(180deg, rgba(255, 237, 162, 0.9), rgba(251, 191, 36, 0.58));
-}
-
-.title-zone-adolescent {
-  background:
-    radial-gradient(circle at 24% 22%, rgba(125, 211, 252, 0.52), transparent 34%),
-    radial-gradient(circle at 72% 70%, rgba(59, 130, 246, 0.4), transparent 36%),
-    radial-gradient(circle at 78% 36%, rgba(186, 230, 253, 0.44), transparent 30%),
-    linear-gradient(180deg, rgba(103, 232, 249, 0.8), rgba(59, 130, 246, 0.52));
-}
-
-.title-zone-adult {
-  background:
-    radial-gradient(circle at 30% 22%, rgba(244, 114, 182, 0.5), transparent 34%),
-    radial-gradient(circle at 70% 78%, rgba(192, 132, 252, 0.46), transparent 38%),
-    radial-gradient(circle at 75% 35%, rgba(254, 205, 211, 0.4), transparent 30%),
-    linear-gradient(180deg, rgba(244, 114, 182, 0.78), rgba(168, 85, 247, 0.5));
-}
-
-.title-world-cap {
-  background:
-    radial-gradient(circle at 22% 30%, rgba(255, 255, 255, 0.72), transparent 54%),
-    radial-gradient(circle at 72% 35%, rgba(191, 219, 254, 0.72), transparent 50%),
-    linear-gradient(180deg, rgba(219, 234, 254, 0.7), rgba(125, 211, 252, 0.14));
-}
-
-.title-world-floor {
-  background:
-    radial-gradient(circle at 38% 40%, rgba(34, 197, 94, 0.34), transparent 48%),
-    radial-gradient(circle at 67% 55%, rgba(251, 191, 36, 0.3), transparent 44%),
-    linear-gradient(180deg, rgba(110, 231, 183, 0.28), rgba(22, 101, 52, 0.24));
-}
-
-@keyframes title-prop-float {
-  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
-  50% { transform: translate(-50%, -50%) translateY(-4px); }
-}
-
-.title-prop {
-  animation: title-prop-float 3.4s ease-in-out infinite;
-  backdrop-filter: blur(1px);
-  box-shadow:
-    0 6px 10px rgba(15, 23, 42, 0.3),
-    inset 0 2px 0 rgba(255, 255, 255, 0.4);
-}
-
-.title-prop-pod {
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  background:
-    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.45), transparent 45%),
-    linear-gradient(180deg, rgba(2, 132, 199, 0.34), rgba(30, 41, 59, 0.45));
-}
-
-.title-badge-pod {
-  box-shadow:
-    0 4px 8px rgba(15, 23, 42, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+.title-map-grid {
+  background-color: #061127;
 }
 
 .title-landmark-beginner {
