@@ -15,23 +15,6 @@ const TIER_PALETTE = {
   default: { bg: 'from-slate-400 to-slate-800', ring: 'ring-slate-200/70', glow: 'shadow-slate-900/70' },
 };
 
-const TIER_PIP_COLOR = {
-  beginner: '#86efac',
-  bronze: '#f59e0b',
-  silver: '#cbd5e1',
-  gold: '#facc15',
-  blue: '#38bdf8',
-  default: '#94a3b8',
-};
-
-const FAMILY_SPRITE_TOKEN = {
-  Beginner: 'seed-sprout',
-  Intermediate: 'puzzle-grid',
-  Advanced: 'arcade-grid',
-  Expert: 'citadel-spire',
-  Master: 'aether-core',
-};
-
 const LEVEL_AA_CLEAR_POINTS = {
   10: 100, 11: 110, 12: 130, 13: 160, 14: 200,
   15: 250, 16: 310, 17: 380, 18: 460, 19: 550,
@@ -40,57 +23,57 @@ const LEVEL_AA_CLEAR_POINTS = {
 };
 
 const FORWARD_START_LINES = [
-  'Onwards and upwards!',
-  'To infinity and beyond!',
-  "Let's push higher!",
-  'Full speed to the next one!',
+  'The crystal road climbs. Forward.',
+  'Another ridge awaits. Let us ascend.',
+  'Our next title lies higher.',
+  'Onward, warrior of rhythm.',
 ];
 
 const INSPECT_START_LINES = [
-  "Let's inspect this checkpoint.",
-  'Taking a look back.',
-  'Revisiting this title.',
-  'Quick checkpoint review.',
+  'Returning to this waypoint.',
+  'Let us revisit this chapter.',
+  'Backtracking for a closer look.',
+  'We can rest here for a moment.',
 ];
 
 const FORWARD_TRAVEL_LINES = [
-  'Keep climbing!',
-  'One step at a time.',
-  'Steady pace, strong finish.',
-  'Momentum up!',
+  'Step by step, we rise.',
+  'Keep your tempo. The summit listens.',
+  'The trail bends, but we continue.',
+  'Higher ground is within reach.',
 ];
 
 const INSPECT_TRAVEL_LINES = [
-  'Backtracking to inspect.',
-  'Checking the route.',
-  'Taking a closer look.',
-  'Surveying old ground.',
+  'Tracing old footsteps.',
+  'Surveying the path behind us.',
+  'These stones remember the grind.',
+  'A quiet return to known ground.',
 ];
 
 const LOCKED_TRAVEL_LINES = [
-  'Scouting this route.',
-  'Planning the next breakthrough.',
-  'Peeking at what is ahead.',
-  'This one is on my radar.',
+  'A sealed route. We scout ahead.',
+  'This gate is closed, for now.',
+  'The next ascent demands more power.',
+  'Mark this node. We return stronger.',
 ];
 
 const ACHIEVED_REMINISCE_LINES = [
-  "I'm {title}, remember me? That climb hurt.",
-  "{title} was rough. You fought for this one.",
-  "Hey, {title} here. That grind was serious.",
-  "{title} checked your patience and your stamina.",
+  'This is {title}. You conquered this ascent.',
+  '{title} was no mercy route, yet you cleared it.',
+  '{title} still echoes with that hard-fought climb.',
+  '{title} demanded resolve. You answered.',
 ];
 
 const ACHIEVED_GRATITUDE_LINES = [
-  'Wow! I needed {passes} passes at Level {level} to get this.',
-  'Grateful for this one. {passes} passes at Level {level}.',
-  'This took {passes} passes at Level {level}, but we got there.',
+  'It took around {passes} passes at Level {level} to secure it.',
+  'We earned this with roughly {passes} passes at Level {level}.',
+  '{passes} passes at Level {level}. A worthy victory.',
 ];
 
 const LOCKED_REFLECTION_LINES = [
-  'This still needs around {passes} passes at Level {level}.',
-  'Not there yet: about {passes} passes at Level {level}.',
-  'Future target: {passes} passes at Level {level}.',
+  'This route still asks for roughly {passes} passes at Level {level}.',
+  'Not yet cleared. Estimate: {passes} passes at Level {level}.',
+  'Future target set: about {passes} passes at Level {level}.',
 ];
 
 function pickRandomLine(lines, fallback = '') {
@@ -154,16 +137,16 @@ function groupTitles(titles) {
 const MAP_W = 1000;
 const LANE_MIN = 140;
 const LANE_MAX = 860;
-const STEP_Y = 110;
-const TOP_PAD = 180;
-const BOT_PAD = 160;
+const STEP_Y = 130;
+const TOP_PAD = 230;
+const BOT_PAD = 210;
 
 function buildWorldPoints(count) {
   const n = Math.max(1, count);
   const h = TOP_PAD + BOT_PAD + Math.max(0, n - 1) * STEP_Y;
   const pts = [];
   for (let i = 0; i < n; i++) {
-    const wave = Math.sin(i * 0.68) * 240 + Math.cos(i * 0.21) * 100;
+    const wave = Math.sin(i * 0.62) * 260 + Math.cos(i * 0.27) * 140 + Math.sin(i * 0.16) * 80;
     pts.push({
       x: clamp(500 + wave, LANE_MIN, LANE_MAX),
       y: h - BOT_PAD - i * STEP_Y,
@@ -191,24 +174,146 @@ function getZone(points, titles, families, id) {
   return { id, top, height: Math.max(180, bottom - top) };
 }
 
-/* ── Biome configurations for each zone ───────────────────────────── */
-const BIOMES = {
-  child: {
-    sky: ['#87CEEB', '#B0E0E6'],
-    ground: ['#7CCD7C', '#4A7C59'],
-    accent: '#FFD700',
+const TERRACE_THEMES = [
+  {
+    topA: '#A94133',
+    topB: '#DB6C46',
+    rim: '#FFE2C5',
+    faceA: '#60261C',
+    faceB: '#2F120D',
+    texture: 'url(#terrain-speck-ember)',
+    haze: 'rgba(255, 154, 88, 0.15)',
   },
-  adolescent: {
-    sky: ['#6B8BB2', '#4A6B8A'],
-    ground: ['#8B7355', '#6B5B45'],
-    accent: '#87CEEB',
+  {
+    topA: '#99613D',
+    topB: '#D49760',
+    rim: '#FFE6C7',
+    faceA: '#5A361F',
+    faceB: '#2E1B11',
+    texture: 'url(#terrain-speck-rust)',
+    haze: 'rgba(255, 205, 150, 0.14)',
   },
-  adult: {
-    sky: ['#2C1E4A', '#1a0e2e'],
-    ground: ['#4A3060', '#2D1B4E'],
-    accent: '#C084FC',
+  {
+    topA: '#627A4A',
+    topB: '#99B56B',
+    rim: '#F3F9E3',
+    faceA: '#3B4B2D',
+    faceB: '#1F281A',
+    texture: 'url(#terrain-speck-moss)',
+    haze: 'rgba(195, 226, 154, 0.14)',
   },
-};
+  {
+    topA: '#566E84',
+    topB: '#8EA3BB',
+    rim: '#EFF5FF',
+    faceA: '#2E3D50',
+    faceB: '#172331',
+    texture: 'url(#terrain-speck-rock)',
+    haze: 'rgba(172, 203, 237, 0.16)',
+  },
+  {
+    topA: '#696092',
+    topB: '#A79FCE',
+    rim: '#F8F3FF',
+    faceA: '#3C315A',
+    faceB: '#1E1A32',
+    texture: 'url(#terrain-speck-crystal)',
+    haze: 'rgba(210, 190, 255, 0.18)',
+  },
+];
+
+function toSvgPoints(points) {
+  return points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+}
+
+function buildTerrainTerraces(points, width, height) {
+  if (!Array.isArray(points) || points.length === 0) return [];
+  const terraceCount = Math.min(6, Math.max(4, Math.ceil(points.length / 6)));
+  const terraces = [];
+
+  for (let i = 0; i < terraceCount; i++) {
+    const startIndex = Math.floor((i * points.length) / terraceCount);
+    const rawEnd = Math.floor(((i + 1) * points.length) / terraceCount) - 1;
+    const endIndex = clamp(Math.max(startIndex, rawEnd), startIndex, points.length - 1);
+    const slice = points.slice(startIndex, endIndex + 1);
+    if (!slice.length) continue;
+
+    const ys = slice.map((p) => p.y);
+    const xs = slice.map((p) => p.x);
+    const centerX = xs.reduce((sum, x) => sum + x, 0) / xs.length;
+
+    const topY = clamp(Math.min(...ys) - (126 + i * 12), 24, height - 260);
+    const bottomY = clamp(Math.max(...ys) + (102 + i * 14), topY + 150, height - 26);
+    const spread = clamp(240 + i * 30 + Math.abs(Math.sin(i * 1.17)) * 84, 210, 408);
+    const taper = 72 + i * 14;
+    const leftTop = clamp(centerX - spread, 14, width - 426);
+    const rightTop = clamp(centerX + spread, 426, width - 14);
+    const leftBottom = clamp(centerX - spread - taper, 6, width - 438);
+    const rightBottom = clamp(centerX + spread + taper, 438, width - 6);
+    const ridgeX = clamp(centerX + Math.sin(i * 0.82) * 92, leftTop + 110, rightTop - 110);
+
+    const topSurface = [
+      { x: leftTop + 82, y: topY + 8 },
+      { x: ridgeX - 136, y: topY },
+      { x: rightTop - 112, y: topY + 14 },
+      { x: rightTop, y: topY + 92 },
+      { x: rightBottom - 22, y: bottomY - 38 },
+      { x: ridgeX + 152, y: bottomY + 6 },
+      { x: leftBottom + 124, y: bottomY + 16 },
+      { x: leftBottom, y: bottomY - 64 },
+      { x: leftTop + 10, y: topY + 102 },
+    ];
+
+    const depth = 46 + i * 15;
+    const depthX = depth * 0.26;
+    const shifted = topSurface.map((pt) => ({ x: pt.x + depthX, y: pt.y + depth }));
+
+    const rightFace = [topSurface[3], topSurface[4], topSurface[5], shifted[5], shifted[4], shifted[3]];
+    const frontFace = [topSurface[5], topSurface[6], topSurface[7], shifted[7], shifted[6], shifted[5]];
+    const leftFace = [topSurface[8], topSurface[0], topSurface[7], shifted[7], shifted[0], shifted[8]];
+
+    const themeIndex = terraceCount === 1
+      ? TERRACE_THEMES.length - 1
+      : Math.round((i / (terraceCount - 1)) * (TERRACE_THEMES.length - 1));
+
+    terraces.push({
+      id: `terrace-${i}`,
+      index: i,
+      startIndex,
+      endIndex,
+      centerX,
+      labelY: topY + 20,
+      topSurface,
+      shadowSurface: shifted,
+      rightFace,
+      frontFace,
+      leftFace,
+      theme: TERRACE_THEMES[themeIndex] || TERRACE_THEMES[TERRACE_THEMES.length - 1],
+    });
+  }
+
+  return terraces;
+}
+
+function buildTerraceStairs(points, terraces) {
+  if (!Array.isArray(points) || !Array.isArray(terraces)) return [];
+  const stairs = [];
+  for (let i = 0; i < terraces.length - 1; i++) {
+    const anchor = terraces[i];
+    const a = points[anchor.endIndex];
+    const b = points[Math.min(points.length - 1, anchor.endIndex + 1)];
+    if (!a || !b) continue;
+    stairs.push({
+      id: `stairs-${i}`,
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2 - 10,
+      angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
+      width: 56 + i * 5,
+      drop: 24 + i * 5,
+    });
+  }
+  return stairs;
+}
 
 /* ── 3D SVG Landscape Elements ────────────────────────────────────── */
 
@@ -383,6 +488,28 @@ function Bridge3D({ x, y, width: bw = 60 }) {
   );
 }
 
+function StairBridge3D({ x, y, angle = 0, width = 60, drop = 24 }) {
+  const stepCount = 6;
+  return (
+    <g transform={`translate(${x},${y}) rotate(${angle})`}>
+      <ellipse cx="0" cy={drop * 0.45 + 3} rx={width * 0.55} ry="8" fill="rgba(0,0,0,0.28)" />
+      {Array.from({ length: stepCount }).map((_, idx) => {
+        const t = idx / Math.max(1, stepCount - 1);
+        const stepWidth = width * (1 - t * 0.34);
+        const stepY = t * drop;
+        return (
+          <g key={`stair-step-${idx}`}>
+            <rect x={-stepWidth / 2} y={stepY - 2} width={stepWidth} height="6" rx="1.5" fill={idx % 2 === 0 ? '#D8CBB2' : '#B7A488'} />
+            <rect x={-stepWidth / 2} y={stepY + 3} width={stepWidth} height="4" rx="1.2" fill="#786650" opacity="0.88" />
+          </g>
+        );
+      })}
+      <path d={`M ${-width / 2 - 4} -2 Q ${-width / 2 - 8} ${drop * 0.5} ${-width * 0.35} ${drop + 6}`} stroke="#6B5B46" strokeWidth="2.5" fill="none" />
+      <path d={`M ${width / 2 + 4} -2 Q ${width / 2 + 8} ${drop * 0.5} ${width * 0.35} ${drop + 6}`} stroke="#6B5B46" strokeWidth="2.5" fill="none" />
+    </g>
+  );
+}
+
 function Cloud3D({ x, y, scale = 1, opacity = 0.7 }) {
   const s = scale;
   return (
@@ -443,7 +570,7 @@ function GrassClump({ x, y, scale = 1 }) {
 
 /* ── Biome scene generators ───────────────────────────────────────── */
 
-function generateChildScenery(points, mapH) {
+function generateChildScenery(points) {
   const items = [];
   const seed = (i) => ((i * 7919 + 104729) % 100) / 100;
 
@@ -572,12 +699,10 @@ function JourneyCharacter({ running, avatarUrl, username, gender }) {
 
 /* ── Waypoint Node (3D styled) ────────────────────────────────────── */
 
-function WaypointNode({ title, point, width, isCurrent, isTarget, onClick }) {
+function WaypointNode({ title, point, width, isCurrent, isProgressNode, isTarget, onClick }) {
   const unlocked = !!title.unlocked;
   const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
-  const pipColor = TIER_PIP_COLOR[title.tier] || TIER_PIP_COLOR.default;
   const theme = getTitleTheme(title);
-  const numLabel = title.index + 1;
 
   return (
     <div
@@ -591,22 +716,28 @@ function WaypointNode({ title, point, width, isCurrent, isTarget, onClick }) {
           unlocked
             ? `bg-gradient-to-b ${palette.bg} border-white/90 text-white title-waypoint-glow-3d`
             : 'bg-gradient-to-b from-slate-700 to-slate-900 border-slate-500/70 text-slate-400'
-        } ${isCurrent ? `ring-[3px] ${palette.ring} scale-110` : ''} ${
+        } ${isCurrent ? `ring-[3px] ring-cyan-200/90 scale-110` : ''} ${
           isTarget ? 'ring-[3px] ring-cyan-300/90' : ''
         } cursor-pointer hover:scale-115`}
         title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
       >
         <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none" style={{ height: '50%' }} />
-        <span className="flex items-center justify-center relative z-10 font-display font-bold text-sm"
-          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
-          {numLabel}
-        </span>
-        {unlocked ? (
-          <span className="absolute -right-1 -bottom-1 w-5 h-5 rounded-full border-2 border-white bg-gradient-to-b from-amber-300 to-amber-600 flex items-center justify-center z-20"
-            style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.4)' }}>
-            <span className="text-[9px] text-amber-900 font-bold">★</span>
+        <span className="absolute inset-0 rounded-full pointer-events-none bg-[radial-gradient(circle_at_40%_35%,rgba(255,255,255,0.45),rgba(255,255,255,0)_58%)]" />
+        <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rotate-45 rounded-[3px] border ${
+          unlocked ? 'bg-white/90 border-white/95' : 'bg-slate-400/60 border-slate-300/80'
+        }`} style={{ boxShadow: '0 0 8px rgba(255,255,255,0.35)' }} />
+        <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${
+          unlocked ? 'bg-amber-300' : 'bg-slate-200/60'
+        }`} />
+        {isProgressNode && (
+          <span className="absolute -left-1 -top-1 w-4 h-4 rounded-full border border-white/70 bg-gradient-to-b from-amber-300 to-amber-600 flex items-center justify-center text-[8px] text-amber-950 font-bold">
+            ★
           </span>
-        ) : (
+        )}
+        <span className="sr-only">
+          {title.name}
+        </span>
+        {!unlocked && (
           <span className="absolute -right-1 -bottom-1 w-5 h-5 rounded-full border-2 border-slate-400 bg-slate-700 flex items-center justify-center z-20"
             style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
             <span className="text-[8px]">🔒</span>
@@ -640,6 +771,7 @@ export default function TitleProgressTab({
   const segmentProgress = clamp((Number(summary?.segment_progress_percent) || 0) / 100, 0, 1);
   const currentFloat = currentIndex + (nextTitle ? segmentProgress : 0);
   const [cursor, setCursor] = useState(currentFloat);
+  const [anchoredIndex, setAnchoredIndex] = useState(null);
   const [target, setTarget] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [speech, setSpeech] = useState(null);
@@ -691,8 +823,13 @@ export default function TitleProgressTab({
   }
 
   useEffect(() => {
-    if (target === null) setCursor(currentFloat);
-  }, [currentFloat, target]);
+    if (target !== null) return;
+    if (anchoredIndex !== null) {
+      setCursor(anchoredIndex);
+      return;
+    }
+    setCursor(currentFloat);
+  }, [anchoredIndex, currentFloat, target]);
 
   useEffect(() => {
     if (target === null) return undefined;
@@ -800,6 +937,15 @@ export default function TitleProgressTab({
     setCollapsedGroups(initial);
   }, [groups, collapsedGroups, summary]);
 
+  useEffect(() => {
+    if (titles.length === 0) return;
+    setAnchoredIndex((prev) => {
+      if (prev === null) return null;
+      const bounded = clamp(prev, 0, titles.length - 1);
+      return bounded === prev ? prev : bounded;
+    });
+  }, [titles.length]);
+
   const { points, width, height } = useMemo(() => buildWorldPoints(titles.length || 1), [titles.length]);
   const avatarPos = useMemo(() => interpolatePoint(points, cursor), [points, cursor]);
   const avatarLeftPercent = (avatarPos.x / width) * 100;
@@ -813,6 +959,9 @@ export default function TitleProgressTab({
   const isRunning = target !== null;
 
   const roadPath = useMemo(() => buildRoadPath(points), [points]);
+  const terraces = useMemo(() => buildTerrainTerraces(points, width, height), [points, width, height]);
+  const terraceStairs = useMemo(() => buildTerraceStairs(points, terraces), [points, terraces]);
+  const avatarNodeIndex = titles.length > 0 ? clamp(Math.round(cursor), 0, titles.length - 1) : 0;
 
   const zones = useMemo(() => {
     const child = getZone(points, titles, ['Beginner', 'Intermediate'], 'child');
@@ -832,7 +981,7 @@ export default function TitleProgressTab({
     const adultPts = adultTitles.map((t) => points[t.index]).filter(Boolean);
 
     return {
-      child: generateChildScenery(childPts, height),
+      child: generateChildScenery(childPts),
       adolescent: generateAdolescentScenery(adolPts),
       adult: generateAdultScenery(adultPts),
     };
@@ -854,6 +1003,7 @@ export default function TitleProgressTab({
     const mode = unlocked ? (movingForward ? 'forward' : 'inspect') : 'scout';
     setJourneyMode(mode);
     setActiveJourneyTitle({ ...title });
+    setAnchoredIndex(title.index);
     setTarget(title.index);
     playNodeTouchSound(unlocked);
     say(
@@ -864,6 +1014,13 @@ export default function TitleProgressTab({
           : pickRandomLine(INSPECT_START_LINES, 'Let us inspect this one.')),
       1400
     );
+  }
+
+  function returnToLiveCheckpoint() {
+    setAnchoredIndex(null);
+    setJourneyMode('forward');
+    setTarget(currentFloat);
+    say('Returning to your live checkpoint.', 1500);
   }
 
   useEffect(() => {
@@ -946,99 +1103,129 @@ export default function TitleProgressTab({
 
         {/* ── 3D World Map ──────────────────────────────────────── */}
         <div className="mt-4 title-map-3d rounded-xl border-2 border-white/20 overflow-hidden"
-          style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-          <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden title-map-scroll">
+          style={{ boxShadow: '0 10px 32px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+          <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[74vh] overflow-y-auto overflow-x-hidden title-map-scroll">
             <div className="relative w-full" style={{ height: `${height}px` }}>
-
-              {/* Sky + atmosphere SVG layer */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
                 <defs>
-                  {/* Sky gradient */}
                   <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1a0e2e" />
-                    <stop offset="20%" stopColor="#2C1E4A" />
-                    <stop offset="40%" stopColor="#4A6B8A" />
-                    <stop offset="60%" stopColor="#6B8BB2" />
-                    <stop offset="80%" stopColor="#87CEEB" />
-                    <stop offset="100%" stopColor="#B0E0E6" />
+                    <stop offset="0%" stopColor="#120D24" />
+                    <stop offset="18%" stopColor="#2D2454" />
+                    <stop offset="44%" stopColor="#4C5F8D" />
+                    <stop offset="68%" stopColor="#6F93B4" />
+                    <stop offset="100%" stopColor="#B2D4E7" />
                   </linearGradient>
-                  {/* Ground overlays per zone */}
-                  <linearGradient id="groundChild" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#7CCD7C" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#4A7C59" stopOpacity="0.5" />
+                  <linearGradient id="mistGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
+                    <stop offset="60%" stopColor="rgba(255,255,255,0)" />
+                    <stop offset="100%" stopColor="rgba(0,0,0,0.18)" />
                   </linearGradient>
-                  <linearGradient id="groundAdol" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B7355" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#6B5B45" stopOpacity="0.5" />
-                  </linearGradient>
-                  <linearGradient id="groundAdult" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4A3060" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#2D1B4E" stopOpacity="0.5" />
-                  </linearGradient>
-                  {/* Road surface */}
-                  <linearGradient id="roadFill3d" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#D2A679" />
-                    <stop offset="30%" stopColor="#E8C99B" />
-                    <stop offset="70%" stopColor="#E8C99B" />
-                    <stop offset="100%" stopColor="#B8935A" />
+                  <pattern id="terrain-speck-ember" width="22" height="22" patternUnits="userSpaceOnUse">
+                    <circle cx="5" cy="6" r="1.3" fill="rgba(255,214,163,0.35)" />
+                    <circle cx="14" cy="9" r="1.1" fill="rgba(106,36,26,0.33)" />
+                    <circle cx="17" cy="17" r="1.4" fill="rgba(255,245,220,0.24)" />
+                  </pattern>
+                  <pattern id="terrain-speck-rust" width="24" height="24" patternUnits="userSpaceOnUse">
+                    <circle cx="6" cy="5" r="1.2" fill="rgba(255,226,190,0.32)" />
+                    <circle cx="12" cy="14" r="1.4" fill="rgba(98,58,34,0.3)" />
+                    <circle cx="20" cy="8" r="1.3" fill="rgba(255,244,220,0.24)" />
+                  </pattern>
+                  <pattern id="terrain-speck-moss" width="26" height="26" patternUnits="userSpaceOnUse">
+                    <circle cx="5" cy="11" r="1.4" fill="rgba(228,248,198,0.3)" />
+                    <circle cx="12" cy="6" r="1.5" fill="rgba(56,72,41,0.28)" />
+                    <circle cx="20" cy="18" r="1.2" fill="rgba(243,255,233,0.28)" />
+                  </pattern>
+                  <pattern id="terrain-speck-rock" width="24" height="24" patternUnits="userSpaceOnUse">
+                    <circle cx="6" cy="7" r="1.3" fill="rgba(225,240,255,0.3)" />
+                    <circle cx="14" cy="13" r="1.4" fill="rgba(43,59,77,0.32)" />
+                    <circle cx="20" cy="5" r="1.1" fill="rgba(208,220,237,0.3)" />
+                  </pattern>
+                  <pattern id="terrain-speck-crystal" width="26" height="26" patternUnits="userSpaceOnUse">
+                    <circle cx="6" cy="8" r="1.2" fill="rgba(250,243,255,0.34)" />
+                    <circle cx="13" cy="15" r="1.5" fill="rgba(56,44,89,0.34)" />
+                    <circle cx="20" cy="6" r="1.1" fill="rgba(232,219,255,0.3)" />
+                  </pattern>
+                  <linearGradient id="roadFill3d" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stopColor="#F59F67" />
+                    <stop offset="38%" stopColor="#F6C987" />
+                    <stop offset="100%" stopColor="#FFF3CC" />
                   </linearGradient>
                   <linearGradient id="roadEdge3d" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B7355" />
-                    <stop offset="100%" stopColor="#6B5340" />
+                    <stop offset="0%" stopColor="#9A6840" />
+                    <stop offset="100%" stopColor="#5E3C24" />
                   </linearGradient>
-                  {/* Water */}
                   <radialGradient id="waterGradient">
-                    <stop offset="0%" stopColor="#4FC3F7" stopOpacity="0.6" />
+                    <stop offset="0%" stopColor="#4FC3F7" stopOpacity="0.62" />
                     <stop offset="100%" stopColor="#0288D1" stopOpacity="0.4" />
                   </radialGradient>
-                  {/* Glow for unlocked paths */}
-                  <filter id="roadGlow">
+                  <filter id="terrainGlow">
                     <feGaussianBlur stdDeviation="3" result="blur" />
                     <feMerge>
                       <feMergeNode in="blur" />
                       <feMergeNode in="SourceGraphic" />
                     </feMerge>
                   </filter>
+                  {terraces.map((terrace) => (
+                    <React.Fragment key={`terrain-grad-${terrace.id}`}>
+                      <linearGradient id={`terrace-top-${terrace.id}`} x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor={terrace.theme.topA} />
+                        <stop offset="100%" stopColor={terrace.theme.topB} />
+                      </linearGradient>
+                      <linearGradient id={`terrace-front-${terrace.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={terrace.theme.faceA} />
+                        <stop offset="100%" stopColor={terrace.theme.faceB} />
+                      </linearGradient>
+                      <linearGradient id={`terrace-right-${terrace.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={terrace.theme.faceA} />
+                        <stop offset="100%" stopColor={terrace.theme.faceB} />
+                      </linearGradient>
+                      <linearGradient id={`terrace-left-${terrace.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={terrace.theme.faceA} />
+                        <stop offset="100%" stopColor={terrace.theme.faceB} />
+                      </linearGradient>
+                    </React.Fragment>
+                  ))}
                 </defs>
 
-                {/* Full sky background */}
                 <rect x="0" y="0" width={width} height={height} fill="url(#skyGrad)" />
+                <rect x="0" y="0" width={width} height={height} fill="url(#mistGrad)" />
+                <path d={`M 0 0 L ${width * 0.38} 0 L ${width * 0.07} ${height} L 0 ${height} Z`} fill="rgba(255,255,255,0.045)" />
+                <path d={`M ${width * 0.58} 0 L ${width} 0 L ${width} ${height} L ${width * 0.76} ${height} Z`} fill="rgba(255,255,255,0.028)" />
 
-                {/* Zone ground overlays */}
-                {zones.map((z) => (
-                  <rect
-                    key={`zone-bg-${z.id}`}
-                    x="0"
-                    y={z.top}
-                    width={width}
-                    height={z.height}
-                    fill={z.id === 'child' ? 'url(#groundChild)' : z.id === 'adolescent' ? 'url(#groundAdol)' : 'url(#groundAdult)'}
-                  />
-                ))}
-
-                {/* Rolling hills for child zone */}
-                {zones.filter((z) => z.id === 'child').map((z) => (
-                  <g key="child-terrain">
-                    <ellipse cx="200" cy={z.top + z.height - 20} rx="250" ry="50" fill="#5B9A5B" opacity="0.35" />
-                    <ellipse cx="650" cy={z.top + z.height - 40} rx="300" ry="60" fill="#4A8A4A" opacity="0.3" />
-                    <ellipse cx="450" cy={z.top + z.height - 10} rx="400" ry="30" fill="#6BAA6B" opacity="0.25" />
-                  </g>
-                ))}
-
-                {/* Rocky terrain for adolescent zone */}
-                {zones.filter((z) => z.id === 'adolescent').map((z) => (
-                  <g key="adol-terrain">
-                    <polygon points={`100,${z.top + z.height} 200,${z.top + z.height - 60} 300,${z.top + z.height - 20} 400,${z.top + z.height}`} fill="#7B6B55" opacity="0.3" />
-                    <polygon points={`600,${z.top + z.height} 700,${z.top + z.height - 50} 850,${z.top + z.height - 10} 900,${z.top + z.height}`} fill="#6B5B45" opacity="0.25" />
-                  </g>
-                ))}
-
-                {/* Clouds */}
                 {clouds.map((c, i) => (
                   <Cloud3D key={`cloud-${i}`} x={c.x} y={c.y} scale={c.scale} opacity={c.opacity} />
                 ))}
 
-                {/* Water bodies */}
+                {[...terraces].reverse().map((terrace) => (
+                  <g key={`terrain-${terrace.id}`}>
+                    <polygon points={toSvgPoints(terrace.shadowSurface)} fill="rgba(0,0,0,0.24)" />
+                    <polygon points={toSvgPoints(terrace.rightFace)} fill={`url(#terrace-right-${terrace.id})`} />
+                    <polygon points={toSvgPoints(terrace.leftFace)} fill={`url(#terrace-left-${terrace.id})`} />
+                    <polygon points={toSvgPoints(terrace.frontFace)} fill={`url(#terrace-front-${terrace.id})`} />
+                    <polygon points={toSvgPoints(terrace.topSurface)} fill={`url(#terrace-top-${terrace.id})`} />
+                    <polygon points={toSvgPoints(terrace.topSurface)} fill={terrace.theme.texture} opacity="0.28" />
+                    <polyline
+                      points={toSvgPoints([terrace.topSurface[0], terrace.topSurface[1], terrace.topSurface[2], terrace.topSurface[3]])}
+                      fill="none"
+                      stroke={terrace.theme.rim}
+                      strokeWidth="2.2"
+                      strokeOpacity="0.72"
+                    />
+                    <ellipse cx={terrace.centerX + 44} cy={terrace.labelY + 44} rx="210" ry="60" fill={terrace.theme.haze} />
+                  </g>
+                ))}
+
+                {terraceStairs.map((stairs) => (
+                  <StairBridge3D
+                    key={stairs.id}
+                    x={stairs.x}
+                    y={stairs.y}
+                    angle={stairs.angle}
+                    width={stairs.width}
+                    drop={stairs.drop}
+                  />
+                ))}
+
                 {zones.filter((z) => z.id === 'child').map((z) => (
                   <WaterBody key="water-child" x={800} y={z.top + z.height * 0.6} w={100} h={40} />
                 ))}
@@ -1046,106 +1233,83 @@ export default function TitleProgressTab({
                   <WaterBody key="water-adol" x={150} y={z.top + z.height * 0.5} w={80} h={30} />
                 ))}
 
-                {/* Scenery - behind road */}
                 {zoneScenery.child}
                 {zoneScenery.adolescent}
                 {zoneScenery.adult}
 
-                {/* Road shadow */}
                 <path
                   d={roadPath}
                   fill="none"
-                  stroke="rgba(0,0,0,0.35)"
-                  strokeWidth="28"
+                  stroke="rgba(0,0,0,0.46)"
+                  strokeWidth="34"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  transform="translate(3,5)"
+                  transform="translate(4,7)"
                 />
-
-                {/* Road edge (darker) */}
                 <path
                   d={roadPath}
                   fill="none"
                   stroke="url(#roadEdge3d)"
-                  strokeWidth="26"
+                  strokeWidth="32"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-
-                {/* Road surface */}
                 <path
                   d={roadPath}
                   fill="none"
                   stroke="url(#roadFill3d)"
-                  strokeWidth="20"
+                  strokeWidth="24"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  filter="url(#terrainGlow)"
                 />
-
-                {/* Road center dashes */}
                 <path
                   d={roadPath}
                   fill="none"
-                  stroke="rgba(255,255,255,0.25)"
-                  strokeWidth="2"
+                  stroke="rgba(255,255,255,0.37)"
+                  strokeWidth="3"
                   strokeLinecap="round"
-                  strokeDasharray="12 18"
+                  strokeDasharray="11 14"
                 />
-
-                {/* Road highlight */}
                 <path
                   d={roadPath}
                   fill="none"
-                  stroke="rgba(255,255,255,0.15)"
-                  strokeWidth="14"
+                  stroke="rgba(255,255,255,0.2)"
+                  strokeWidth="15"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  style={{ filter: 'blur(2px)' }}
                   transform="translate(-2,-2)"
                 />
-
-                {/* Grass lines along edges of the road */}
-                {points.map((p, i) => {
-                  if (i % 3 !== 0) return null;
-                  return (
-                    <g key={`grass-${i}`}>
-                      <GrassClump x={p.x - 18} y={p.y + 5} scale={0.7} />
-                      <GrassClump x={p.x + 18} y={p.y + 3} scale={0.6} />
-                    </g>
-                  );
-                })}
               </svg>
 
-              {/* Zone labels */}
               {zones.map((zone) => {
                 const labels = {
-                  child: { text: 'Meadow Realm', sub: 'Beginner · Intermediate', color: '#4CAF50' },
-                  adolescent: { text: 'Mountain Realm', sub: 'Advanced', color: '#2196F3' },
-                  adult: { text: 'Shadow Realm', sub: 'Expert · Master', color: '#9C27B0' },
+                  child: { text: 'Foothill Basin', sub: 'Beginner · Intermediate', color: '#5DAF6A' },
+                  adolescent: { text: 'Rifted Highlands', sub: 'Advanced', color: '#4F89D9' },
+                  adult: { text: 'Aether Summit', sub: 'Expert · Master', color: '#8764D9' },
                 };
                 const label = labels[zone.id];
                 return (
                   <div
                     key={`label-${zone.id}`}
                     className="absolute left-3 z-10"
-                    style={{ top: `${zone.top + 10}px` }}
+                    style={{ top: `${zone.top + 8}px` }}
                   >
                     <div className="title-zone-banner px-3 py-1.5 rounded-lg"
                       style={{
-                        background: `linear-gradient(135deg, ${label.color}dd, ${label.color}88)`,
-                        boxShadow: `0 4px 12px ${label.color}44, inset 0 1px 0 rgba(255,255,255,0.3)`,
-                        border: '1px solid rgba(255,255,255,0.3)',
+                        background: `linear-gradient(140deg, ${label.color}de, ${label.color}8a)`,
+                        boxShadow: `0 5px 16px ${label.color}44, inset 0 1px 0 rgba(255,255,255,0.3)`,
+                        border: '1px solid rgba(255,255,255,0.36)',
                       }}>
-                      <p className="text-[11px] font-display font-bold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                      <p className="text-[11px] font-display font-bold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.46)' }}>
                         {label.text}
                       </p>
-                      <p className="text-[9px] text-white/80">{label.sub}</p>
+                      <p className="text-[9px] text-white/84">{label.sub}</p>
                     </div>
                   </div>
                 );
               })}
 
-              {/* Waypoint nodes */}
               {titles.map((title) => {
                 const point = points[title.index];
                 return (
@@ -1154,22 +1318,22 @@ export default function TitleProgressTab({
                     title={title}
                     point={point}
                     width={width}
-                    isCurrent={title.index === currentIndex}
-                    isTarget={target !== null && title.index === target}
+                    isCurrent={title.index === avatarNodeIndex}
+                    isProgressNode={title.index === currentIndex}
+                    isTarget={target !== null && Math.abs(title.index - target) < 0.2}
                     onClick={() => handleTitleTap(title)}
                   />
                 );
               })}
 
-              {/* Avatar + speech */}
               <div
-                className="absolute pointer-events-none -translate-x-1/2 -translate-y-[86%] z-30"
+                className="absolute pointer-events-none -translate-x-1/2 -translate-y-[88%] z-30"
                 style={{ left: `${avatarLeftPercent}%`, top: `${avatarPos.y}px` }}
               >
                 {speech && (
-                  <div key={speech.key} className="absolute left-1/2 -translate-x-1/2 -top-16 max-w-[180px] px-3 py-2 rounded-xl text-[11px] leading-tight text-center text-white title-speech-3d">
+                  <div key={speech.key} className="absolute left-1/2 -translate-x-1/2 -top-24 min-w-[220px] max-w-[320px] sm:max-w-[420px] px-4 py-3 rounded-2xl text-[12px] leading-relaxed text-left text-white title-speech-3d">
                     {speech.text}
-                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[6px] w-3 h-3 rotate-45 title-speech-3d-tail" />
+                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[8px] w-4 h-4 rotate-45 title-speech-3d-tail" />
                   </div>
                 )}
                 <JourneyCharacter
@@ -1181,11 +1345,22 @@ export default function TitleProgressTab({
               </div>
             </div>
           </div>
+          {anchoredIndex !== null && (
+            <div className="px-3 py-2 flex items-center justify-end border-t border-white/15 bg-black/25">
+              <button
+                type="button"
+                onClick={returnToLiveCheckpoint}
+                className="text-[10px] font-display font-bold px-2.5 py-1 rounded-md border border-white/40 text-white bg-slate-900/45 hover:bg-slate-800/70"
+              >
+                Return to Live Checkpoint
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mt-3">
           <p className="text-[11px] text-gray-500">
-            Tap any checkpoint to travel there and read the reflection.
+            Tap any checkpoint to travel there, stay parked there, and read the reflection.
             {isOwner ? ' Title unlocks are computed from imported best scores.' : ''}
           </p>
         </div>

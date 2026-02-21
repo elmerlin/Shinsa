@@ -106,15 +106,44 @@
 
 .title-map-3d {
   background:
-    linear-gradient(180deg,
-      #1a0e2e 0%,
-      #2C1E4A 15%,
-      #4A6B8A 35%,
-      #6B8BB2 50%,
-      #87CEEB 70%,
-      #B0E0E6 100%
-    );
+    radial-gradient(180% 85% at 50% -10%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 52%),
+    linear-gradient(180deg, #130d24 0%, #2b2152 24%, #485f8d 52%, #688db2 76%, #b2d4e7 100%);
   position: relative;
+  isolation: isolate;
+}
+
+.title-map-3d > * {
+  position: relative;
+  z-index: 2;
+}
+
+.title-map-3d::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 85% at 20% 0%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(120% 90% at 90% 4%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 63%);
+  mix-blend-mode: screen;
+  opacity: 0.34;
+  z-index: 0;
+}
+
+.title-map-3d::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.05) 0,
+    rgba(255, 255, 255, 0.05) 2px,
+    transparent 2px,
+    transparent 16px
+  );
+  opacity: 0.16;
+  z-index: 0;
 }
 
 .title-map-scroll {
@@ -140,37 +169,37 @@
 .title-node-3d {
   isolation: isolate;
   box-shadow:
-    0 4px 8px rgba(0, 0, 0, 0.4),
-    0 8px 16px rgba(0, 0, 0, 0.2),
-    inset 0 2px 4px rgba(255, 255, 255, 0.3),
-    inset 0 -4px 8px rgba(0, 0, 0, 0.2);
+    0 5px 10px rgba(0, 0, 0, 0.5),
+    0 14px 20px rgba(0, 0, 0, 0.24),
+    inset 0 2px 4px rgba(255, 255, 255, 0.34),
+    inset 0 -6px 10px rgba(0, 0, 0, 0.34);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .title-node-3d:hover {
-  transform: scale(1.15) translateY(-2px);
+  transform: scale(1.16) translateY(-2px);
   box-shadow:
-    0 6px 12px rgba(0, 0, 0, 0.5),
-    0 12px 24px rgba(0, 0, 0, 0.3),
+    0 8px 15px rgba(0, 0, 0, 0.58),
+    0 16px 28px rgba(0, 0, 0, 0.3),
     inset 0 2px 4px rgba(255, 255, 255, 0.4),
-    inset 0 -4px 8px rgba(0, 0, 0, 0.2);
+    inset 0 -6px 10px rgba(0, 0, 0, 0.34);
 }
 
 @keyframes waypoint-glow-3d {
   0%, 100% {
     box-shadow:
-      0 4px 8px rgba(0, 0, 0, 0.4),
-      0 8px 16px rgba(0, 0, 0, 0.2),
-      inset 0 2px 4px rgba(255, 255, 255, 0.3),
-      inset 0 -4px 8px rgba(0, 0, 0, 0.2),
-      0 0 12px rgba(255, 215, 0, 0.2);
+      0 5px 10px rgba(0, 0, 0, 0.5),
+      0 14px 20px rgba(0, 0, 0, 0.24),
+      inset 0 2px 4px rgba(255, 255, 255, 0.34),
+      inset 0 -6px 10px rgba(0, 0, 0, 0.34),
+      0 0 14px rgba(255, 215, 0, 0.24);
   }
   50% {
     box-shadow:
-      0 4px 8px rgba(0, 0, 0, 0.4),
-      0 8px 16px rgba(0, 0, 0, 0.2),
+      0 5px 10px rgba(0, 0, 0, 0.5),
+      0 14px 20px rgba(0, 0, 0, 0.24),
       inset 0 2px 4px rgba(255, 255, 255, 0.4),
-      inset 0 -4px 8px rgba(0, 0, 0, 0.2),
+      inset 0 -6px 10px rgba(0, 0, 0, 0.34),
       0 0 20px rgba(255, 215, 0, 0.45),
       0 0 40px rgba(255, 215, 0, 0.15);
   }
@@ -183,7 +212,7 @@
 /* ── Speech bubble (3D) ───────────────────────────────────────────── */
 
 @keyframes speech-pop-3d {
-  0% { transform: translateY(8px) scale(0.9); opacity: 0; }
+  0% { transform: translateY(8px) scale(0.94); opacity: 0; }
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
@@ -193,19 +222,27 @@
 }
 
 .title-speech-3d {
-  animation: speech-pop-3d 200ms ease-out, speech-float-3d 2.4s ease-in-out infinite;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(30, 41, 59, 0.92));
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(8px);
+  animation: speech-pop-3d 240ms ease-out, speech-float-3d 2.8s ease-in-out infinite;
+  background:
+    linear-gradient(180deg, rgba(22, 30, 74, 0.96), rgba(14, 20, 50, 0.96));
+  border: 2px solid rgba(221, 229, 255, 0.8);
+  outline: 1px solid rgba(255, 211, 137, 0.65);
+  outline-offset: -4px;
+  backdrop-filter: blur(6px);
+  font-family: "Cinzel", "Trebuchet MS", serif;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
   box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    0 12px 26px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -8px 18px rgba(0, 0, 0, 0.25);
 }
 
 .title-speech-3d-tail {
-  background: linear-gradient(135deg, transparent 50%, rgba(25, 35, 55, 0.9) 50%);
-  border-right: 1.5px solid rgba(255, 255, 255, 0.4);
-  border-bottom: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: linear-gradient(135deg, rgba(14, 20, 50, 0.98) 52%, rgba(25, 32, 76, 0.98) 52%);
+  border-right: 2px solid rgba(221, 229, 255, 0.75);
+  border-bottom: 2px solid rgba(221, 229, 255, 0.75);
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 /* ── Zone banners ─────────────────────────────────────────────────── */
