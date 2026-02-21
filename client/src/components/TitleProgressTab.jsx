@@ -82,6 +82,40 @@ const LOCKED_REFLECTION_LINES = [
   'Future target set: about {passes} passes at Level {level}.',
 ];
 
+const LEVEL_COORDINATES = [
+  { left: 36.33, top: 84.65 },
+  { left: 50.83, top: 81.43 },
+  { left: 59.83, top: 79.55 },
+  { left: 54.33, top: 76.34 },
+  { left: 44.17, top: 76.41 },
+  { left: 35.17, top: 74.66 },
+  { left: 41.67, top: 72.86 },
+  { left: 55.33, top: 72.05 },
+  { left: 59.17, top: 69.1 },
+  { left: 49.17, top: 66.89 },
+  { left: 49.33, top: 64.41 },
+  { left: 56.83, top: 61.2 },
+  { left: 61.83, top: 57.38 },
+  { left: 63.67, top: 49.47 },
+  { left: 57, top: 46.46 },
+  { left: 43.17, top: 45.46 },
+  { left: 35.33, top: 41.57 },
+  { left: 40.17, top: 38.02 },
+  { left: 52.33, top: 36.01 },
+  { left: 58.33, top: 32.93 },
+  { left: 46.17, top: 29.51 },
+  { left: 53.33, top: 27.07 },
+  { left: 62.5, top: 24.05 },
+  { left: 59.83, top: 20.7 },
+  { left: 47.5, top: 20.3 },
+  { left: 48.33, top: 17.75 },
+  { left: 57.5, top: 15.74 },
+  { left: 51.67, top: 13.67 },
+  { left: 44.67, top: 11.66 },
+  { left: 52.67, top: 9.04 },
+  { left: 57.83, top: 4.56 },
+];
+
 function pickRandomLine(lines, fallback = '') {
   if (!Array.isArray(lines) || lines.length === 0) return fallback;
   return lines[Math.floor(Math.random() * lines.length)] || fallback;
@@ -2140,22 +2174,14 @@ export default function TitleProgressTab({
   const summary = data?.summary || null;
   const currentIndex = Math.max(0, parseInt(summary?.current_index, 10) || 0);
   const nextTitle = summary?.next_title || null;
-  const segmentProgress = clamp((Number(summary?.segment_progress_percent) || 0) / 100, 0, 1);
-  const currentFloat = currentIndex + (nextTitle ? segmentProgress : 0);
-  const [cursor, setCursor] = useState(currentFloat);
   const [anchoredIndex, setAnchoredIndex] = useState(null);
-  const [target, setTarget] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState({});
   const [speech, setSpeech] = useState(null);
   const [journeyMode, setJourneyMode] = useState('inspect');
   const [activeJourneyTitle, setActiveJourneyTitle] = useState(null);
   const mapScrollRef = useRef(null);
-  const scrollRafRef = useRef(null);
   const speechTimeoutRef = useRef(null);
-  const chatterIntervalRef = useRef(null);
   const audioCtxRef = useRef(null);
-  const [mapScrollTop, setMapScrollTop] = useState(0);
-  const [mapViewportHeight, setMapViewportHeight] = useState(0);
 
   function clearSpeechTimer() {
     if (!speechTimeoutRef.current) return;
@@ -2197,60 +2223,6 @@ export default function TitleProgressTab({
     } catch {}
   }
 
-  useEffect(() => {
-    if (target !== null) return;
-    if (anchoredIndex !== null) {
-      setCursor(anchoredIndex);
-      return;
-    }
-    setCursor(currentFloat);
-  }, [anchoredIndex, currentFloat, target]);
-
-  useEffect(() => {
-    if (target === null) return undefined;
-    let raf = null;
-    let active = true;
-    const animate = () => {
-      setCursor((prev) => {
-        const diff = target - prev;
-        if (Math.abs(diff) < 0.015) {
-          if (active) setTarget(null);
-          return target;
-        }
-        const step = Math.min(0.11, Math.max(0.03, Math.abs(diff) * 0.18));
-        return prev + Math.sign(diff) * step;
-      });
-      if (active) raf = requestAnimationFrame(animate);
-    };
-    raf = requestAnimationFrame(animate);
-    return () => {
-      active = false;
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [target]);
-
-  useEffect(() => {
-    if (target === null) {
-      if (chatterIntervalRef.current) {
-        clearInterval(chatterIntervalRef.current);
-        chatterIntervalRef.current = null;
-      }
-      return undefined;
-    }
-    const lines = journeyMode === 'forward'
-      ? FORWARD_TRAVEL_LINES
-      : (journeyMode === 'scout' ? LOCKED_TRAVEL_LINES : INSPECT_TRAVEL_LINES);
-    chatterIntervalRef.current = setInterval(() => {
-      say(pickRandomLine(lines, 'On the move...'), 1200);
-    }, 1400);
-    return () => {
-      if (chatterIntervalRef.current) {
-        clearInterval(chatterIntervalRef.current);
-        chatterIntervalRef.current = null;
-      }
-    };
-  }, [target, journeyMode]);
-
   const levels = Array.isArray(data?.levels) ? data.levels : [];
   const levelMap = useMemo(() => {
     const map = {};
@@ -2259,7 +2231,7 @@ export default function TitleProgressTab({
   }, [levels]);
 
   useEffect(() => {
-    if (target !== null || !activeJourneyTitle) return;
+    if (!activeJourneyTitle) return;
     const title = activeJourneyTitle;
     const level = parseInt(title?.level, 10) || 0;
     const requiredPoints = parseInt(title?.required_points, 10) || 0;
@@ -2293,34 +2265,35 @@ export default function TitleProgressTab({
     );
     say(`${shortTitle} is still ahead. ${lockedLine}`, 3000);
     setActiveJourneyTitle(null);
-  }, [target, activeJourneyTitle, levelMap]);
+  }, [activeJourneyTitle, levelMap]);
 
   useEffect(() => () => {
     clearSpeechTimer();
-    if (chatterIntervalRef.current) clearInterval(chatterIntervalRef.current);
-    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
     }
   }, []);
 
+  const scrollToCurrentLevel = () => {
+    const scrollWrapper = mapScrollRef.current || document.getElementById('scroll-wrapper');
+    if (!scrollWrapper) return;
+    const currentNode = scrollWrapper.querySelector('.level-node.current');
+    if (!currentNode) return;
+    const nodeTop = currentNode.offsetTop + (currentNode.offsetHeight / 2);
+    const wrapperHalfHeight = scrollWrapper.clientHeight / 2;
+    const nextTop = Math.max(0, nodeTop - wrapperHalfHeight);
+    scrollWrapper.scrollTo({ top: nextTop, behavior: 'smooth' });
+  };
+
   useEffect(() => {
-    const el = mapScrollRef.current;
-    if (!el) return undefined;
-    const update = () => setMapViewportHeight(el.clientHeight || 0);
-    update();
-    let observer = null;
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(update);
-      observer.observe(el);
-    }
-    window.addEventListener('resize', update);
+    const timerA = setTimeout(scrollToCurrentLevel, 100);
+    const timerB = setTimeout(scrollToCurrentLevel, 260);
     return () => {
-      if (observer) observer.disconnect();
-      window.removeEventListener('resize', update);
+      clearTimeout(timerA);
+      clearTimeout(timerB);
     };
-  }, [titles.length]);
+  }, [currentIndex, anchoredIndex, titles.length]);
 
   useEffect(() => {
     if (!groups.length || Object.keys(collapsedGroups).length > 0) return;
@@ -2339,8 +2312,10 @@ export default function TitleProgressTab({
     });
   }, [titles.length]);
 
-  const { points, width, height } = useMemo(() => buildWorldPoints(titles.length || 1), [titles.length]);
-  const avatarPos = useMemo(() => interpolatePoint(points, cursor), [points, cursor]);
+  const orderedTitles = useMemo(
+    () => [...titles].sort((a, b) => a.index - b.index),
+    [titles]
+  );
 
   const nextLevelPoints = nextTitle ? (levelMap[nextTitle.level]?.points || 0) : 0;
   const sameLevelSegment = nextTitle && summary?.current_title?.level === nextTitle.level;
@@ -2349,20 +2324,38 @@ export default function TitleProgressTab({
   const segmentNeeded = nextTitle ? Math.max(1, nextTitle.required_points - segmentStart) : 0;
   const displayedProgress = nextTitle ? clamp(Number(summary?.segment_progress_percent) || 0, 0, 100) : 100;
 
-  const biomeZones = useMemo(() => buildBiomeZones(points), [points]);
-  const avatarNodeIndex = titles.length > 0 ? clamp(Math.round(cursor), 0, titles.length - 1) : 0;
+  const progressLevel = clamp((currentIndex || 0) + 1, 1, LEVEL_COORDINATES.length);
+  const activeLevel = progressLevel;
+
+  const sagaNodes = useMemo(() => {
+    return LEVEL_COORDINATES.map((coordinate, index) => {
+      const title = orderedTitles[index] || null;
+      return {
+        id: `level-${index + 1}`,
+        index,
+        nodeNumber: index + 1,
+        left: coordinate.left,
+        top: coordinate.top,
+        title,
+        label: title ? titleLevelLabel(title) : `Title Lv.${index + 1}`,
+        isCompleted: (index + 1) < progressLevel,
+        isCurrent: (index + 1) === progressLevel,
+        isLocked: (index + 1) > progressLevel,
+        isBoss: (index + 1) === 31,
+      };
+    });
+  }, [orderedTitles, progressLevel]);
+
+  const activeNodeCoordinate = useMemo(() => {
+    const idx = clamp(activeLevel - 1, 0, LEVEL_COORDINATES.length - 1);
+    return LEVEL_COORDINATES[idx];
+  }, [activeLevel]);
 
   const activeNodeTitle = useMemo(() => {
     if (!titles.length) return null;
-    if (anchoredIndex !== null) {
-      return titles.find((title) => title.index === anchoredIndex) || null;
-    }
-    if (target !== null) {
-      const index = clamp(Math.round(target), 0, titles.length - 1);
-      return titles[index] || null;
-    }
-    return titles[avatarNodeIndex] || null;
-  }, [titles, anchoredIndex, target, avatarNodeIndex]);
+    const mapped = orderedTitles[clamp(activeLevel - 1, 0, Math.max(0, orderedTitles.length - 1))];
+    return mapped || titles.find((title) => title.index === currentIndex) || summary?.current_title || titles[0] || null;
+  }, [titles, orderedTitles, currentIndex, summary, activeLevel]);
 
   const nodeBubbleText = useMemo(() => {
     if (!activeNodeTitle) return '';
@@ -2377,7 +2370,6 @@ export default function TitleProgressTab({
       const safeCurrent = titles[clamp(currentIndex, 0, Math.max(0, titles.length - 1))] || summary?.current_title || null;
       playNodeTouchSound(false);
       setAnchoredIndex(currentIndex);
-      setTarget(currentIndex);
       setJourneyMode('inspect');
       setActiveJourneyTitle(safeCurrent);
       say(
@@ -2387,12 +2379,12 @@ export default function TitleProgressTab({
       return;
     }
     const unlocked = !!title.unlocked;
-    const movingForward = title.index > (cursor + 0.08);
+    const referenceIndex = anchoredIndex ?? currentIndex;
+    const movingForward = title.index > referenceIndex;
     const mode = unlocked ? (movingForward ? 'forward' : 'inspect') : 'scout';
     setJourneyMode(mode);
     setActiveJourneyTitle({ ...title });
     setAnchoredIndex(title.index);
-    setTarget(title.index);
     playNodeTouchSound(unlocked);
     say(
       mode === 'forward'
@@ -2407,32 +2399,8 @@ export default function TitleProgressTab({
   function returnToLiveCheckpoint() {
     setAnchoredIndex(null);
     setJourneyMode('forward');
-    setTarget(currentFloat);
     say('Returning to your live checkpoint.', 1500);
   }
-
-  function handleMapScroll(event) {
-    const nextTop = event.currentTarget.scrollTop;
-    const nextViewHeight = event.currentTarget.clientHeight || 0;
-    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
-    scrollRafRef.current = requestAnimationFrame(() => {
-      setMapScrollTop(nextTop);
-      setMapViewportHeight(nextViewHeight);
-      scrollRafRef.current = null;
-    });
-  }
-
-  useEffect(() => {
-    const el = mapScrollRef.current;
-    if (!el || !height) return;
-    const viewHeight = el.clientHeight;
-    const contentHeight = el.scrollHeight;
-    const wanted = clamp(avatarPos.y - viewHeight * 0.52, 0, Math.max(0, contentHeight - viewHeight));
-    const behavior = target !== null ? 'smooth' : 'auto';
-    if (Math.abs(el.scrollTop - wanted) > 8) {
-      el.scrollTo({ top: wanted, behavior });
-    }
-  }, [avatarPos.y, target, height]);
 
   if (!data) {
     return (
@@ -2500,69 +2468,78 @@ export default function TitleProgressTab({
           </div>
         )}
 
-        {/* ── 3D World Map ──────────────────────────────────────── */}
-        <div className="mt-4 title-map-3d relative rounded-xl border-2 border-white/20 overflow-hidden"
+        {/* ── 2D Saga Map ────────────────────────────────────────── */}
+        <div className="mt-4 title-saga-shell relative rounded-xl border-2 border-white/20 overflow-hidden"
           style={{ boxShadow: '0 10px 32px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-          <div
-            ref={mapScrollRef}
-            onScroll={handleMapScroll}
-            className="max-h-[68vh] sm:max-h-[74vh] overflow-y-auto overflow-x-hidden title-map-scroll"
-          >
-            <div className="relative w-full title-map-world" style={{ height: `${height}px` }}>
-              <ThreeProgressMap
-                width={width}
-                height={height}
-                points={points}
-                titles={titles}
-                biomeZones={biomeZones}
-                cursor={cursor}
-                mapScrollTop={mapScrollTop}
-                mapViewportHeight={mapViewportHeight}
-                currentIndex={currentIndex}
-                onNodeSelect={handleTitleTap}
+          <div id="scroll-wrapper" ref={mapScrollRef} className="title-saga-scroll-wrapper">
+            <div id="map-container" className="title-saga-map-container">
+              <img
+                src="/progress-map.jpg"
+                alt="Full Map"
+                className="title-saga-biome-image"
+                onLoad={() => setTimeout(scrollToCurrentLevel, 100)}
               />
-            </div>
-          </div>
 
-          <div
-            className="title-fixed-bubble title-fixed-bubble-node pointer-events-none z-[45]"
-            style={{
-              position: 'fixed',
-              top: 'max(14px, env(safe-area-inset-top))',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '90%',
-              maxWidth: '400px',
-              boxSizing: 'border-box',
-              wordWrap: 'break-word',
-            }}
-          >
-            <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-white min-h-[82px]">
-              <p className="text-[clamp(0.56rem,1.9vw,0.66rem)] uppercase tracking-[0.14em] text-amber-200/80 font-display mb-1">Node Speech</p>
-              <p className="text-[clamp(0.76rem,2.6vw,0.92rem)] leading-[1.45]">
-                {activeNodeTitle ? nodeBubbleText : 'Node status appears here and always stays in frame.'}
-              </p>
-            </div>
-          </div>
+              <svg
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}
+                aria-hidden="true"
+              >
+                <path
+                  d="M 36.33 84.65 L 39.33 83.44 L 42.50 82.57 L 46.67 82.03 L 48.33 81.83 L 50.83 81.43 L 53.33 80.96 L 56.17 80.49 L 58.50 80.09 L 59.83 79.55 L 60.50 78.62 L 59.83 77.48 L 57.83 77.08 L 56.17 76.74 L 54.33 76.34 L 51.33 76.21 L 48.50 76.41 L 46.33 76.27 L 44.17 76.41 L 41.67 76.41 L 40.00 76.07 L 38.00 75.80 L 36.33 75.33 L 35.17 74.66 L 35.33 74.13 L 37.00 73.53 L 39.50 73.12 L 41.67 72.86 L 43.83 72.92 L 46.67 72.65 L 50.33 72.65 L 53.17 72.32 L 55.33 72.05 L 57.50 71.65 L 59.50 71.11 L 60.67 70.18 L 59.17 69.10 L 57.83 68.57 L 56.17 68.10 L 54.50 67.97 L 51.67 67.50 L 49.17 66.89 L 47.50 66.36 L 47.33 65.69 L 47.83 65.08 L 49.33 64.41 L 51.33 63.88 L 53.33 62.87 L 55.00 62.34 L 56.17 61.87 L 56.83 61.20 L 58.50 60.39 L 60.00 59.46 L 61.17 58.52 L 61.83 57.38 L 61.67 55.91 L 61.33 54.03 L 62.17 52.69 L 63.50 50.55 L 63.67 49.47 L 62.83 48.20 L 61.17 47.53 L 60.00 46.93 L 57.00 46.46 L 53.67 45.92 L 51.00 45.99 L 49.00 45.86 L 46.00 45.59 L 43.17 45.46 L 40.00 44.92 L 38.50 44.45 L 36.67 43.51 L 35.83 42.51 L 35.33 41.57 L 35.83 40.50 L 37.17 39.36 L 38.17 38.55 L 40.17 38.02 L 43.17 37.62 L 44.67 37.42 L 46.67 37.08 L 49.33 36.61 L 52.33 36.01 L 54.50 35.47 L 57.00 34.60 L 58.50 33.60 L 58.33 32.93 L 56.00 31.86 L 53.00 31.39 L 50.67 30.92 L 47.33 30.38 L 46.17 29.51 L 47.50 28.97 L 49.00 28.37 L 51.00 27.77 L 53.33 27.07 L 54.50 26.66 L 56.17 26.13 L 58.17 25.52 L 60.50 24.79 L 62.50 24.05 L 64.00 23.38 L 64.50 22.44 L 62.50 21.50 L 59.83 20.70 L 57.17 20.63 L 54.83 20.63 L 52.00 20.43 L 49.17 20.50 L 47.50 20.30 L 45.83 19.83 L 44.17 18.83 L 46.17 18.22 L 48.33 17.75 L 50.00 17.62 L 51.67 17.22 L 53.67 16.88 L 55.50 16.41 L 57.50 15.74 L 57.67 14.94 L 57.00 14.34 L 54.50 13.80 L 51.67 13.67 L 50.00 13.53 L 47.50 13.26 L 45.33 13.06 L 44.50 12.39 L 44.67 11.66 L 47.17 11.05 L 48.50 10.79 L 50.67 10.18 L 52.67 9.04 L 53.83 8.11 L 53.83 7.70 L 56.17 6.43 L 56.50 5.69 L 57.83 4.56 "
+                  fill="none"
+                  stroke="#ffcc00"
+                  strokeWidth="0.5"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  filter="drop-shadow(0px 0px 2px rgba(255,100,0,0.8))"
+                />
+              </svg>
 
-          <div
-            className="title-fixed-bubble title-fixed-bubble-character pointer-events-none z-[46]"
-            style={{
-              position: 'fixed',
-              bottom: 'max(20px, env(safe-area-inset-bottom))',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: '90%',
-              maxWidth: '400px',
-              boxSizing: 'border-box',
-              wordWrap: 'break-word',
-            }}
-          >
-            <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-white min-h-[86px]">
-              <p className="text-[clamp(0.56rem,1.9vw,0.66rem)] uppercase tracking-[0.14em] text-sky-200/80 font-display mb-1">Character Speech</p>
-              <p className="text-[clamp(0.76rem,2.6vw,0.92rem)] leading-[1.45]">
-                {speech?.text || 'Tap a title node to travel and hear your journey reflection.'}
-              </p>
+              {sagaNodes.map((node) => {
+                const classList = ['level-node'];
+                if (node.isCurrent) {
+                  classList.push('current');
+                } else if (node.isLocked) {
+                  classList.push('locked');
+                }
+                if (node.isBoss) classList.push('boss');
+                const className = classList.join(' ');
+                return (
+                  <button
+                    key={node.id}
+                    type="button"
+                    disabled={node.isLocked}
+                    onClick={() => node.title && handleTitleTap(node.title)}
+                    className={className}
+                    style={{ position: 'absolute', left: `${node.left}%`, top: `${node.top}%`, transform: 'translate(-50%, -50%)' }}
+                    title={node.label}
+                  >
+                    {node.nodeNumber}
+                  </button>
+                );
+              })}
+
+              <div
+                className="title-saga-avatar"
+                style={{ left: `${activeNodeCoordinate.left}%`, top: `${activeNodeCoordinate.top}%` }}
+                aria-hidden="true"
+              >
+                <div className="title-saga-avatar-head" />
+                <div className="title-saga-avatar-body" />
+              </div>
+
+              <div
+                className="title-saga-node-speech title-speech-3d"
+                style={{
+                  left: `${clamp(activeNodeCoordinate.left, 18, 82)}%`,
+                  top: `${clamp(activeNodeCoordinate.top - 7, 4, 93)}%`,
+                }}
+              >
+                <p className="text-[10px] uppercase tracking-[0.12em] text-amber-200/80 font-display mb-1">Active Node</p>
+                <p className="text-[12px] leading-[1.35]">{activeNodeTitle ? nodeBubbleText : `Level ${activeLevel}`}</p>
+              </div>
             </div>
           </div>
 
@@ -2577,6 +2554,15 @@ export default function TitleProgressTab({
               </button>
             </div>
           )}
+        </div>
+
+        <div className="title-saga-fixed-ui title-saga-fixed-character pointer-events-none">
+          <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-white min-h-[84px]">
+            <p className="text-[clamp(0.56rem,1.9vw,0.66rem)] uppercase tracking-[0.14em] text-sky-200/80 font-display mb-1">Character Speech</p>
+            <p className="text-[clamp(0.76rem,2.6vw,0.92rem)] leading-[1.45]">
+              {speech?.text || 'Tap a title node to travel and hear your journey reflection.'}
+            </p>
+          </div>
         </div>
 
         <div className="mt-3">
