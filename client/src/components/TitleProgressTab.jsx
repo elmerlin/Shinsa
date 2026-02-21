@@ -151,10 +151,30 @@ const INSPECT_TRAVEL_LINES = [
   'Surveying old ground.',
 ];
 
-const BLOCKED_ATTEMPT_LINES = [
-  'Almost there!',
-  'Let me try anyway...',
-  'One more push!',
+const LOCKED_TRAVEL_LINES = [
+  'Scouting this route.',
+  'Planning the next breakthrough.',
+  'Peeking at what is ahead.',
+  'This one is on my radar.',
+];
+
+const ACHIEVED_REMINISCE_LINES = [
+  "I'm {title}, remember me? That climb hurt.",
+  "{title} was rough. You fought for this one.",
+  "Hey, {title} here. That grind was serious.",
+  "{title} checked your patience and your stamina.",
+];
+
+const ACHIEVED_GRATITUDE_LINES = [
+  'Wow! I needed {passes} passes at Level {level} to get this.',
+  'Grateful for this one. {passes} passes at Level {level}.',
+  'This took {passes} passes at Level {level}, but we got there.',
+];
+
+const LOCKED_REFLECTION_LINES = [
+  'This still needs around {passes} passes at Level {level}.',
+  'Not there yet: about {passes} passes at Level {level}.',
+  'Future target: {passes} passes at Level {level}.',
 ];
 
 function pickRandomLine(lines, fallback = '') {
@@ -170,6 +190,14 @@ function compactTitleName(name) {
     .replace(/\blvl\.\s*/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+}
+
+function fillTemplate(line, values = {}) {
+  let out = String(line || '');
+  for (const [key, value] of Object.entries(values)) {
+    out = out.replace(new RegExp(`\\{${key}\\}`, 'g'), String(value));
+  }
+  return out;
 }
 
 const SPRITE_LIBRARY = {
@@ -767,30 +795,15 @@ export default function TitleProgressTab({
   const [speech, setSpeech] = useState(null);
   const [journeyMode, setJourneyMode] = useState('inspect');
   const [activeJourneyTitle, setActiveJourneyTitle] = useState(null);
-  const [nodeMessage, setNodeMessage] = useState(null);
-  const [attemptingRun, setAttemptingRun] = useState(false);
   const mapScrollRef = useRef(null);
   const speechTimeoutRef = useRef(null);
   const chatterIntervalRef = useRef(null);
-  const nodeMessageTimeoutRef = useRef(null);
-  const runAttemptTimeoutRef = useRef(null);
+  const audioCtxRef = useRef(null);
 
   function clearSpeechTimer() {
     if (!speechTimeoutRef.current) return;
     clearTimeout(speechTimeoutRef.current);
     speechTimeoutRef.current = null;
-  }
-
-  function clearNodeMessageTimer() {
-    if (!nodeMessageTimeoutRef.current) return;
-    clearTimeout(nodeMessageTimeoutRef.current);
-    nodeMessageTimeoutRef.current = null;
-  }
-
-  function clearRunAttemptTimer() {
-    if (!runAttemptTimeoutRef.current) return;
-    clearTimeout(runAttemptTimeoutRef.current);
-    runAttemptTimeoutRef.current = null;
   }
 
   function say(text, duration = 1700) {
@@ -803,18 +816,30 @@ export default function TitleProgressTab({
     }
   }
 
-  function showNodeReply(index, text, duration = 3000) {
-    const line = String(text || '').trim();
-    if (!line) return;
-    setNodeMessage({ key: `${Date.now()}-${Math.random()}`, index, text: line });
-    clearNodeMessageTimer();
-    nodeMessageTimeoutRef.current = setTimeout(() => setNodeMessage(null), duration);
-  }
-
-  function startRunAttempt(duration = 900) {
-    setAttemptingRun(true);
-    clearRunAttemptTimer();
-    runAttemptTimeoutRef.current = setTimeout(() => setAttemptingRun(false), duration);
+  function playNodeTouchSound(unlocked) {
+    if (typeof window === 'undefined') return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = unlocked ? 'triangle' : 'square';
+      osc.frequency.setValueAtTime(unlocked ? 620 : 390, now);
+      osc.frequency.exponentialRampToValueAtTime(unlocked ? 920 : 520, now + 0.08);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.08, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } catch {}
   }
 
   useEffect(() => {
@@ -853,7 +878,9 @@ export default function TitleProgressTab({
       return undefined;
     }
 
-    const lines = journeyMode === 'forward' ? FORWARD_TRAVEL_LINES : INSPECT_TRAVEL_LINES;
+    const lines = journeyMode === 'forward'
+      ? FORWARD_TRAVEL_LINES
+      : (journeyMode === 'scout' ? LOCKED_TRAVEL_LINES : INSPECT_TRAVEL_LINES);
     chatterIntervalRef.current = setInterval(() => {
       say(pickRandomLine(lines, 'On the move...'), 1200);
     }, 1400);
@@ -868,15 +895,48 @@ export default function TitleProgressTab({
 
   useEffect(() => {
     if (target !== null || !activeJourneyTitle) return;
-    say(`Yeah ${compactTitleName(activeJourneyTitle.name)}!`, 1800);
+    const title = activeJourneyTitle;
+    const level = parseInt(title?.level, 10) || 0;
+    const requiredPoints = parseInt(title?.required_points, 10) || 0;
+    const aaPerClear = (parseInt(levelMap[level]?.aa_points_per_clear, 10) || LEVEL_AA_CLEAR_POINTS[level] || 0);
+    const passes = level > 0 && requiredPoints > 0 && aaPerClear > 0 ? Math.ceil(requiredPoints / aaPerClear) : 0;
+    const shortTitle = compactTitleName(title?.name);
+
+    if (level <= 0 || requiredPoints <= 0) {
+      say(`I'm ${shortTitle}. Remember where the journey began?`, 2500);
+      setActiveJourneyTitle(null);
+      return;
+    }
+
+    if (title.unlocked) {
+      const remind = fillTemplate(
+        pickRandomLine(ACHIEVED_REMINISCE_LINES, "I'm {title}, remember me?"),
+        { title: shortTitle }
+      );
+      const reflection = fillTemplate(
+        pickRandomLine(ACHIEVED_GRATITUDE_LINES, 'Wow! I needed {passes} passes at Level {level} to get this.'),
+        { passes: Math.max(1, passes).toLocaleString(), level }
+      );
+      say(`${remind} ${reflection}`, 3200);
+      setActiveJourneyTitle(null);
+      return;
+    }
+
+    const lockedLine = fillTemplate(
+      pickRandomLine(LOCKED_REFLECTION_LINES, 'Future target: {passes} passes at Level {level}.'),
+      { passes: Math.max(1, passes).toLocaleString(), level }
+    );
+    say(`${shortTitle} is still ahead. ${lockedLine}`, 3000);
     setActiveJourneyTitle(null);
-  }, [target, activeJourneyTitle]);
+  }, [target, activeJourneyTitle, levelMap]);
 
   useEffect(() => () => {
     clearSpeechTimer();
-    clearNodeMessageTimer();
-    clearRunAttemptTimer();
     if (chatterIntervalRef.current) clearInterval(chatterIntervalRef.current);
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -900,70 +960,32 @@ export default function TitleProgressTab({
   }, [levels]);
 
   const nextLevelPoints = nextTitle ? (levelMap[nextTitle.level]?.points || 0) : 0;
-  const nextLevelAaPoints = nextTitle
-    ? (
-      parseInt(summary?.aa_points_per_clear_for_next_level, 10)
-      || parseInt(levelMap[nextTitle.level]?.aa_points_per_clear, 10)
-      || LEVEL_AA_CLEAR_POINTS[nextTitle.level]
-      || 0
-    )
-    : 0;
-  const remainingPointsToNextTitle = nextTitle
-    ? Math.max(
-      0,
-      parseInt(summary?.remaining_points_to_next_title, 10) || (nextTitle.required_points - nextLevelPoints)
-    )
-    : 0;
-  const remainingAaClearsToNextTitle = nextTitle
-    ? Math.max(
-      0,
-      parseInt(summary?.remaining_aa_clears_to_next_title, 10)
-      || (nextLevelAaPoints > 0 ? Math.ceil(remainingPointsToNextTitle / nextLevelAaPoints) : 0)
-    )
-    : 0;
   const sameLevelSegment = nextTitle && summary?.current_title?.level === nextTitle.level;
   const segmentStart = sameLevelSegment ? (summary?.current_title?.required_points || 0) : 0;
   const segmentEarned = Math.max(0, nextLevelPoints - segmentStart);
   const segmentNeeded = nextTitle ? Math.max(1, nextTitle.required_points - segmentStart) : 0;
   const displayedProgress = nextTitle ? clamp(Number(summary?.segment_progress_percent) || 0, 0, 100) : 100;
-  const isRunning = target !== null || attemptingRun;
+  const isRunning = target !== null;
 
   function handleTitleTap(title) {
     if (!title) return;
     const unlocked = !!title.unlocked;
-    const canTravel = unlocked && title.index <= currentIndex;
-    const isLockedNextTarget = !unlocked && !!nextTitle && nextTitle.id === title.id;
-
-    if (canTravel) {
-      const movingForward = title.index > (cursor + 0.08);
-      setJourneyMode(movingForward ? 'forward' : 'inspect');
-      setActiveJourneyTitle({ id: title.id, name: title.name });
-      setNodeMessage(null);
-      setTarget(title.index);
-      say(
-        movingForward
-          ? pickRandomLine(FORWARD_START_LINES, 'Onwards!')
-          : pickRandomLine(INSPECT_START_LINES, 'Let us inspect this one.'),
-        1500
-      );
-      return;
-    }
-
-    if (isLockedNextTarget) {
-      startRunAttempt(1100);
-      say(pickRandomLine(BLOCKED_ATTEMPT_LINES, 'Almost there!'), 1250);
-      const neededClears = Math.max(1, remainingAaClearsToNextTitle || 0);
-      showNodeReply(
-        title.index,
-        `Not so fast, you need at least ${neededClears.toLocaleString()} more Level ${nextTitle.level} AA clears.`,
-        3600
-      );
-      return;
-    }
-
-    if (!unlocked) {
-      showNodeReply(title.index, 'This checkpoint is still locked.', 2200);
-    }
+    const movingForward = title.index > (cursor + 0.08);
+    const mode = unlocked
+      ? (movingForward ? 'forward' : 'inspect')
+      : 'scout';
+    setJourneyMode(mode);
+    setActiveJourneyTitle({ ...title });
+    setTarget(title.index);
+    playNodeTouchSound(unlocked);
+    say(
+      mode === 'forward'
+        ? pickRandomLine(FORWARD_START_LINES, 'Onwards!')
+        : (mode === 'scout'
+          ? pickRandomLine(LOCKED_TRAVEL_LINES, 'Scouting ahead.')
+          : pickRandomLine(INSPECT_START_LINES, 'Let us inspect this one.')),
+      1400
+    );
   }
 
   const zones = useMemo(() => {
@@ -1152,25 +1174,16 @@ export default function TitleProgressTab({
                 const point = points[title.index];
                 const unlocked = !!title.unlocked;
                 const isCurrent = title.index === currentIndex;
-                const canTravel = unlocked && title.index <= currentIndex;
-                const isLockedNextTarget = !unlocked && !!nextTitle && nextTitle.id === title.id;
                 const isTarget = target !== null && title.index === target;
                 const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
                 const pipColor = TIER_PIP_COLOR[title.tier] || TIER_PIP_COLOR.default;
                 const theme = getTitleTheme(title);
-                const hasNodeReply = nodeMessage && nodeMessage.index === title.index;
                 return (
                   <div
                     key={title.id}
                     className="absolute -translate-x-1/2 -translate-y-1/2"
                     style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
                   >
-                    {hasNodeReply && (
-                      <div className="absolute left-1/2 -translate-x-1/2 -top-[62px] w-44 px-2 py-1.5 rounded-lg border border-white/60 bg-black/75 text-[10px] text-white leading-tight text-center pointer-events-none title-node-reply">
-                        {nodeMessage.text}
-                        <span className="absolute left-1/2 -translate-x-1/2 -bottom-[5px] w-3 h-3 rotate-45 border-r border-b border-white/60 bg-black/75" />
-                      </div>
-                    )}
                     <button
                       type="button"
                       onClick={() => handleTitleTap(title)}
@@ -1182,11 +1195,7 @@ export default function TitleProgressTab({
                         isCurrent ? `ring-2 ${palette.ring} scale-110` : ''
                       } ${
                         isTarget ? 'ring-2 ring-cyan-300/90' : ''
-                      } ${
-                        canTravel
-                          ? 'cursor-pointer hover:scale-110'
-                          : (isLockedNextTarget ? 'cursor-pointer hover:scale-105 ring-1 ring-amber-300/75' : 'cursor-default')
-                      }`}
+                      } cursor-pointer hover:scale-110`}
                       title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
                     >
                       <span className="absolute inset-x-1 -bottom-[5px] h-2 rounded-full bg-black/40 blur-[1px]" />
@@ -1233,7 +1242,7 @@ export default function TitleProgressTab({
 
         <div className="mt-3">
           <p className="text-[11px] text-gray-500">
-            Mobile-safe vertical map. Tap unlocked waypoints to run there, or tap the next locked waypoint to see AA clears needed.
+            Mobile-safe vertical map. Tap any waypoint to travel, then read the reflection bubble for that title.
             {isOwner ? ' Title unlocks are computed from imported best scores.' : ''}
           </p>
         </div>
@@ -1272,8 +1281,6 @@ export default function TitleProgressTab({
                     {group.titles.map((title) => {
                       const unlocked = !!title.unlocked;
                       const isCurrent = title.index === currentIndex;
-                      const canTravel = unlocked && title.index <= currentIndex;
-                      const isLockedNextTarget = !unlocked && !!nextTitle && nextTitle.id === title.id;
                       const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
                       const theme = getTitleTheme(title);
                       return (
@@ -1285,11 +1292,7 @@ export default function TitleProgressTab({
                             unlocked
                               ? `bg-gradient-to-r ${palette.bg} border-white/50 text-white`
                               : 'bg-slate-900/60 border-slate-600/50 text-slate-300'
-                          } ${isCurrent ? `ring-1 ${palette.ring}` : ''} ${
-                            canTravel
-                              ? 'cursor-pointer hover:border-white/90'
-                              : (isLockedNextTarget ? 'cursor-pointer hover:border-amber-300/80' : 'cursor-default')
-                          }`}
+                          } ${isCurrent ? `ring-1 ${palette.ring}` : ''} cursor-pointer hover:border-white/90`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-display font-bold inline-flex items-center gap-1.5">
