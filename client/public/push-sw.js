@@ -1,4 +1,4 @@
-self.__APP_VERSION__ = '2026-02-21-webgl-v1';
+self.__APP_VERSION__ = '2026-02-21-map-image-fix-v2';
 const STATIC_CACHE = `shinsa-static-${self.__APP_VERSION__}`;
 const RUNTIME_CACHE = `shinsa-runtime-${self.__APP_VERSION__}`;
 const OFFLINE_URL = '/offline.html';
