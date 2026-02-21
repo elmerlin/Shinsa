@@ -184,9 +184,10 @@
 /* ── 2D Saga map architecture ────────────────────────────────────── */
 
 #scroll-wrapper {
-  width: 100vw;
+  width: 100%;
   max-width: 100%;
-  height: 100vh;
+  height: 66vh;
+  height: 66svh;
   overflow-y: scroll;
   overflow-x: hidden;
   scroll-behavior: smooth;
@@ -229,26 +230,51 @@
 }
 
 .level-node {
-  width: 48px;
-  height: 48px;
+  --node-glow-color: rgba(255, 214, 120, 0.6);
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: 'Arial', sans-serif;
   font-weight: 900;
-  font-size: 14px;
+  font-size: 8.5px;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  text-align: center;
+  padding: 2px;
   text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8);
-  background: linear-gradient(180deg, #6dd5ed, #2193b0);
+  background: linear-gradient(180deg, #8ed8ff, #3288b4);
   color: white;
-  border: 3px solid #ffffff;
+  border: 2px solid #ffffff;
   box-shadow:
-    0px 6px 10px rgba(0, 0, 0, 0.4),
-    inset 0px -4px 4px rgba(0, 0, 0, 0.2),
-    inset 0px 2px 4px rgba(255, 255, 255, 0.6);
+    0px 4px 8px rgba(0, 0, 0, 0.42),
+    inset 0px -2px 3px rgba(0, 0, 0, 0.22),
+    inset 0px 1px 3px rgba(255, 255, 255, 0.65);
   cursor: pointer;
   transition: filter 0.2s ease, transform 0.1s ease;
   z-index: 10;
+}
+
+.level-node.tier-intermediate {
+  --node-glow-color: rgba(114, 240, 159, 0.62);
+  background: linear-gradient(180deg, #8dffb8, #2d9d66);
+}
+
+.level-node.tier-advanced {
+  --node-glow-color: rgba(132, 236, 255, 0.62);
+  background: linear-gradient(180deg, #8be8ff, #2780b6);
+}
+
+.level-node.tier-expert {
+  --node-glow-color: rgba(255, 178, 110, 0.62);
+  background: linear-gradient(180deg, #ffc77d, #cf5f1f);
+}
+
+.level-node.tier-master {
+  --node-glow-color: rgba(255, 136, 192, 0.65);
+  background: linear-gradient(180deg, #ff7bc0, #a839b5);
 }
 
 .level-node:hover {
@@ -268,34 +294,49 @@
 }
 
 .level-node.current {
-  background: linear-gradient(180deg, #ffde59, #ff914d);
-  border-color: #fff3cd;
-  width: 56px;
-  height: 56px;
-  font-size: 16px;
-  z-index: 15 !important;
+  width: 40px;
+  height: 40px;
+  font-size: 9.5px;
+  border-color: #fff4c7;
+  z-index: 22 !important;
   animation: pulseGlow 2s infinite;
 }
 
 .level-node.boss {
-  background: linear-gradient(180deg, #ff416c, #ff4b2b);
-  border-color: #ffd700;
-  width: 64px;
-  height: 64px;
-  font-size: 18px;
-  z-index: 20 !important;
-  border-width: 4px;
+  width: 44px;
+  height: 44px;
+  font-size: 9.8px;
+  z-index: 24 !important;
+  border-width: 3px;
 }
 
 @keyframes pulseGlow {
-  0% { box-shadow: 0 0 0 0 rgba(255, 222, 89, 0.7); }
-  70% { box-shadow: 0 0 0 15px rgba(255, 222, 89, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 222, 89, 0); }
+  0% {
+    box-shadow:
+      0 0 0 0 var(--node-glow-color),
+      0px 4px 8px rgba(0, 0, 0, 0.42),
+      inset 0px -2px 3px rgba(0, 0, 0, 0.22),
+      inset 0px 1px 3px rgba(255, 255, 255, 0.65);
+  }
+  70% {
+    box-shadow:
+      0 0 0 12px rgba(255, 255, 255, 0),
+      0px 4px 8px rgba(0, 0, 0, 0.42),
+      inset 0px -2px 3px rgba(0, 0, 0, 0.22),
+      inset 0px 1px 3px rgba(255, 255, 255, 0.65);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(255, 255, 255, 0),
+      0px 4px 8px rgba(0, 0, 0, 0.42),
+      inset 0px -2px 3px rgba(0, 0, 0, 0.22),
+      inset 0px 1px 3px rgba(255, 255, 255, 0.65);
+  }
 }
 
 .title-saga-avatar {
   position: absolute;
-  z-index: 13;
+  z-index: 30;
   transform: translate(-50%, -85%);
   display: flex;
   flex-direction: column;
@@ -322,7 +363,7 @@
 
 .title-saga-node-speech {
   position: absolute;
-  z-index: 14;
+  z-index: 40;
   width: min(62vw, 330px);
   transform: translate(-50%, -100%);
   padding: 10px 12px;

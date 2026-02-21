@@ -2327,21 +2327,40 @@ export default function TitleProgressTab({
   const progressLevel = clamp((currentIndex || 0) + 1, 1, LEVEL_COORDINATES.length);
   const activeLevel = progressLevel;
 
+  const buildNodeTierMeta = (ordinal) => {
+    if (ordinal <= 10) {
+      return { tier: 'intermediate', short: 'Int.', tierLevel: ordinal };
+    }
+    if (ordinal <= 20) {
+      return { tier: 'advanced', short: 'Adv.', tierLevel: ordinal - 10 };
+    }
+    if (ordinal <= 30) {
+      return { tier: 'expert', short: 'Ex.', tierLevel: ordinal - 20 };
+    }
+    return { tier: 'master', short: 'Mst.', tierLevel: 1 };
+  };
+
   const sagaNodes = useMemo(() => {
     return LEVEL_COORDINATES.map((coordinate, index) => {
+      const ordinal = index + 1;
       const title = orderedTitles[index] || null;
+      const tierMeta = buildNodeTierMeta(ordinal);
+      const shortLabel = `${tierMeta.short} ${tierMeta.tierLevel}`;
       return {
-        id: `level-${index + 1}`,
+        id: `level-${ordinal}`,
         index,
-        nodeNumber: index + 1,
+        ordinal,
         left: coordinate.left,
         top: coordinate.top,
+        tier: tierMeta.tier,
+        tierLevel: tierMeta.tierLevel,
+        shortLabel,
         title,
-        label: title ? titleLevelLabel(title) : `Title Lv.${index + 1}`,
-        isCompleted: (index + 1) < progressLevel,
-        isCurrent: (index + 1) === progressLevel,
-        isLocked: (index + 1) > progressLevel,
-        isBoss: (index + 1) === 31,
+        label: title ? `${shortLabel} • ${titleLevelLabel(title)}` : shortLabel,
+        isCompleted: ordinal < progressLevel,
+        isCurrent: ordinal === progressLevel,
+        isLocked: ordinal > progressLevel,
+        isBoss: ordinal === 31,
       };
     });
   }, [orderedTitles, progressLevel]);
@@ -2363,6 +2382,7 @@ export default function TitleProgressTab({
     const status = activeNodeTitle.unlocked ? 'cleared' : 'locked';
     return `${titleLevelLabel(activeNodeTitle)} ${status}. ${activeNodeTitle.earned_points.toLocaleString()} / ${activeNodeTitle.required_points.toLocaleString()} pts (${progressPct.toFixed(1)}%).`;
   }, [activeNodeTitle]);
+  const activeNodeShortLabel = sagaNodes[clamp(activeLevel - 1, 0, sagaNodes.length - 1)]?.shortLabel || `Int. 1`;
 
   function handleTitleTap(title) {
     if (!title) return;
@@ -2499,6 +2519,7 @@ export default function TitleProgressTab({
 
               {sagaNodes.map((node) => {
                 const classList = ['level-node'];
+                classList.push(`tier-${node.tier}`);
                 if (node.isCurrent) {
                   classList.push('current');
                 } else if (node.isLocked) {
@@ -2516,7 +2537,7 @@ export default function TitleProgressTab({
                     style={{ position: 'absolute', left: `${node.left}%`, top: `${node.top}%`, transform: 'translate(-50%, -50%)' }}
                     title={node.label}
                   >
-                    {node.nodeNumber}
+                    {node.shortLabel}
                   </button>
                 );
               })}
@@ -2538,7 +2559,7 @@ export default function TitleProgressTab({
                 }}
               >
                 <p className="text-[10px] uppercase tracking-[0.12em] text-amber-200/80 font-display mb-1">Active Node</p>
-                <p className="text-[12px] leading-[1.35]">{activeNodeTitle ? nodeBubbleText : `Level ${activeLevel}`}</p>
+                <p className="text-[12px] leading-[1.35]">{activeNodeTitle ? `${activeNodeShortLabel} • ${nodeBubbleText}` : activeNodeShortLabel}</p>
               </div>
             </div>
           </div>
