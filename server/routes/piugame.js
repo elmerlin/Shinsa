@@ -6,6 +6,7 @@ const { getDb } = require('../db/schema');
 const { login, scrapePumbility, scrapeBestScores, scrapeRecentlyPlayed } = require('../lib/piugameScraper');
 const { createUserNotification } = require('../lib/notifications');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
+const { getUserTitleProgress, updateUserSkillTitleFromBestScores } = require('../lib/titleProgress');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
@@ -300,6 +301,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         `).run(userId);
       });
       txn();
+      updateUserSkillTitleFromBestScores(db, userId);
 
       // Create notification
       const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
@@ -467,6 +469,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       newClearPostId = insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent);
     });
     txn();
+    updateUserSkillTitleFromBestScores(db, req.user.id);
 
     const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
     const actorUsername = profile?.username || 'Someone';
@@ -552,6 +555,13 @@ router.get('/recently-played/:userId', (req, res) => {
     last_sync: sync?.last_recently_played_sync || null,
     plays,
   });
+});
+
+// GET /api/piugame/titles/:userId
+router.get('/titles/:userId', (req, res) => {
+  const db = getDb();
+  const progress = getUserTitleProgress(db, req.params.userId);
+  res.json(progress);
 });
 
 // GET /api/piugame/sync-status/:userId

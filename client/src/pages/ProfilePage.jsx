@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap, getChartKeyMap,
   getSongAnalytics,
-  getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
+  getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
@@ -17,6 +17,7 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import PostCard, { timeAgo } from '../components/PostCard';
 import SongAnalyticsPanel from '../components/SongAnalyticsPanel';
+import TitleProgressTab from '../components/TitleProgressTab';
 import { getProfilePath } from '../utils/profile';
 
 function getAge(dateStr) {
@@ -694,6 +695,7 @@ export default function ProfilePage() {
   const [piuPumbility, setPiuPumbility] = useState(null);
   const [piuBestScores, setPiuBestScores] = useState(null);
   const [piuRecentlyPlayed, setPiuRecentlyPlayed] = useState(null);
+  const [piuTitles, setPiuTitles] = useState(null);
   const [piuScoreMode, setPiuScoreMode] = useState('');  // '' = All
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
@@ -744,6 +746,7 @@ export default function ProfilePage() {
     setPiuPumbility(null);
     setPiuBestScores(null);
     setPiuRecentlyPlayed(null);
+    setPiuTitles(null);
     setPiuDataLoaded(false);
     setSyncProgress({ in_progress: '', progress: 0, total: 0 });
     setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
@@ -786,11 +789,12 @@ export default function ProfilePage() {
         }
 
         const uid = userProfile.id;
-        const [statsData, piuStatusData, socialData, activityData] = await Promise.all([
+        const [statsData, piuStatusData, socialData, activityData, titleData] = await Promise.all([
           getUserStats(uid).catch(() => null),
           getPiugameSyncStatus(uid).catch(() => null),
           getSocialCounts(uid).catch(() => null),
           getUserActivity(uid).catch(() => []),
+          getPiugameTitles(uid).catch(() => null),
         ]);
 
         if (cancelled) return;
@@ -798,6 +802,7 @@ export default function ProfilePage() {
         if (piuStatusData) setPiuStatus(piuStatusData);
         if (socialData) setSocialCounts(socialData);
         if (Array.isArray(activityData)) setActivityItems(activityData);
+        if (titleData) setPiuTitles(titleData);
 
         if (authUser) {
           const status = await getFollowStatus(uid).catch(() => null);
@@ -916,7 +921,7 @@ export default function ProfilePage() {
   }, [notifyMenuOpen]);
 
   // Load PIUGame data + jacket lookup when any PIU tab is active
-  const piuTabs = ['pumbility', 'best-scores', 'recently-played'];
+  const piuTabs = ['pumbility', 'best-scores', 'titles', 'recently-played'];
   const isPiuTab = piuTabs.includes(tab);
   const hasJacketLookup = Object.keys(jacketLookup).length > 0;
 
@@ -926,6 +931,7 @@ export default function ProfilePage() {
       getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
       getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
       getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
+      getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
       getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
     }
@@ -956,6 +962,7 @@ export default function ProfilePage() {
         getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
         getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
         getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+        getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
         getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
       }).finally(() => setPiuSyncing(''));
     }
@@ -974,6 +981,7 @@ export default function ProfilePage() {
           // Refresh data after sync completes
           if (profileId) {
             getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+            getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
             getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
           }
         }
@@ -1429,6 +1437,8 @@ export default function ProfilePage() {
   const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
   const locationLabel = [profile.location_city, profile.location_country].filter(Boolean).join(', ');
   const locationFlag = getCountryFlag(profile.location_country_code || profile.nationality, "inline-block h-3.5 align-middle");
+  const computedSkillTitle = piuTitles?.imported ? (piuTitles?.summary?.current_title?.name || '') : '';
+  const displaySkillTitle = computedSkillTitle || profile.skill_title;
 
   const tabs = ['overview', 'posts', 'competitions'];
   if (hasPiuData) {
@@ -1438,7 +1448,7 @@ export default function ProfilePage() {
 
   const tabLabels = {
     overview: 'Overview', posts: 'Posts', competitions: 'Competitions', activity: 'Activity',
-    pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
+    pumbility: 'Pumbility', 'best-scores': 'Best Scores', titles: 'Titles', 'recently-played': 'Recently Played',
   };
 
   const competitionsCount = aggregated ? aggregated.duelCount + aggregated.tournamentCount : 0;
@@ -1466,9 +1476,9 @@ export default function ProfilePage() {
               )}
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
-              {profile.skill_title && (
-                <span className={`badge border ${getSkillColor(profile.skill_title)}`}>
-                  {profile.skill_title}
+              {displaySkillTitle && (
+                <span className={`badge border ${getSkillColor(displaySkillTitle)}`}>
+                  {displaySkillTitle}
                 </span>
               )}
               {age !== null && (
@@ -2481,6 +2491,16 @@ export default function ProfilePage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ────── TITLES TAB ────── */}
+      {tab === 'titles' && (
+        <TitleProgressTab
+          data={piuTitles}
+          avatarUrl={profile.avatar ? getAvatarUrl(profile.avatar) : ''}
+          username={profile.username}
+          isOwner={isOwner}
+        />
       )}
 
       {/* ────── RECENTLY PLAYED TAB ────── */}

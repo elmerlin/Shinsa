@@ -180,6 +180,7 @@ export const syncRecentlyPlayed = () => longRequest('/piugame/sync/recently-play
 export const getPiugamePumbility = (userId) => request(`/piugame/pumbility/${userId}`);
 export const getPiugameBestScores = (userId, mode) => request(`/piugame/best-scores/${userId}${mode ? `?mode=${mode}` : ''}`);
 export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-played/${userId}`);
+export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
 export const getSyncProgress = () => request('/piugame/sync/progress');
 
