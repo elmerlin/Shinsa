@@ -15,6 +15,15 @@ const TIER_PALETTE = {
   default: { bg: 'from-slate-200 to-slate-600', ring: 'ring-slate-200/70', glow: 'shadow-slate-300/60' },
 };
 
+const TIER_WAYPOINT_ICON = {
+  beginner: '🌱',
+  bronze: '🥉',
+  silver: '🥈',
+  gold: '🥇',
+  blue: '💠',
+  default: '✦',
+};
+
 const ZONE_PROPS = {
   child: [
     { icon: '🧸', x: 14, y: 18 },
@@ -36,8 +45,27 @@ const ZONE_PROPS = {
   ],
 };
 
+const LEVEL_BAND_PROPS = {
+  0: ['🌱', '🍀', '🧸', '🪁'],
+  1: ['🧩', '🎠', '🍭', '🌼'],
+  2: ['🛹', '🎧', '⚡', '🧭'],
+  3: ['🧗', '⚔️', '🏛️', '🗺️'],
+  4: ['🔥', '🛡️', '👑', '🏰'],
+  5: ['💎', '🌌', '🗡️', '🏯'],
+};
+
 function familyName(title) {
   return String(title?.skill_family || '').trim() || 'Other';
+}
+
+function getLevelBand(level) {
+  const lv = parseInt(level, 10) || 0;
+  if (lv <= 12) return 0;
+  if (lv <= 16) return 1;
+  if (lv <= 20) return 2;
+  if (lv <= 24) return 3;
+  if (lv <= 26) return 4;
+  return 5;
 }
 
 function buildWorldPoints(count) {
@@ -110,6 +138,29 @@ function groupTitles(titles) {
     .filter((family) => !GROUP_ORDER.includes(family))
     .map((family) => ({ family, titles: map.get(family) }));
   return [...known, ...extra];
+}
+
+function buildBandProps(points, titles, width) {
+  const props = [];
+  for (const title of titles) {
+    const point = points[title.index];
+    if (!point) continue;
+    const band = getLevelBand(title.level);
+    const iconSet = LEVEL_BAND_PROPS[band] || LEVEL_BAND_PROPS[0];
+    const icon = iconSet[title.index % iconSet.length];
+    const xOffset = title.index % 2 === 0 ? -36 : 36;
+    const yOffset = title.index % 3 === 0 ? -18 : 18;
+    const pxX = clamp(point.x + xOffset, 22, width - 22);
+    const pxY = point.y + yOffset;
+    props.push({
+      id: `${title.id}-prop`,
+      icon,
+      xPercent: (pxX / width) * 100,
+      y: pxY,
+      unlocked: !!title.unlocked,
+    });
+  }
+  return props;
 }
 
 function JourneyCharacter({ running, avatarUrl, username, gender }) {
@@ -204,6 +255,7 @@ export default function TitleProgressTab({
   const { points, width, height } = useMemo(() => buildWorldPoints(titles.length || 1), [titles.length]);
   const avatarPos = useMemo(() => interpolatePoint(points, cursor), [points, cursor]);
   const avatarLeftPercent = (avatarPos.x / width) * 100;
+  const bandProps = useMemo(() => buildBandProps(points, titles, width), [points, titles, width]);
 
   const levels = Array.isArray(data?.levels) ? data.levels : [];
   const levelMap = useMemo(() => {
@@ -307,6 +359,8 @@ export default function TitleProgressTab({
         <div className="mt-4 title-map-frame rounded-xl border border-piu-border/50 overflow-hidden">
           <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden">
             <div className="relative w-full" style={{ height: `${height}px` }}>
+              <div className="absolute left-1/2 -translate-x-1/2 top-0 w-[80%] h-16 rounded-b-[999px] title-world-cap pointer-events-none" />
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[92%] h-24 rounded-t-[999px] title-world-floor pointer-events-none" />
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="mapPathGlow" x1="0" y1="0" x2="0" y2="1">
@@ -359,6 +413,24 @@ export default function TitleProgressTab({
                 </div>
               ))}
 
+              {bandProps.map((prop) => (
+                <span
+                  key={prop.id}
+                  className={`absolute w-8 h-8 rounded-full border flex items-center justify-center text-[13px] title-prop ${
+                    prop.unlocked
+                      ? 'bg-black/30 border-white/55 text-white'
+                      : 'bg-black/20 border-slate-500/60 text-slate-300'
+                  }`}
+                  style={{
+                    left: `${prop.xPercent}%`,
+                    top: `${prop.y}px`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                >
+                  {prop.icon}
+                </span>
+              ))}
+
               {titles.map((title) => {
                 const point = points[title.index];
                 const unlocked = !!title.unlocked;
@@ -366,6 +438,7 @@ export default function TitleProgressTab({
                 const canTravel = unlocked && title.index <= currentIndex;
                 const isTarget = target !== null && title.index === target;
                 const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
+                const tierIcon = TIER_WAYPOINT_ICON[title.tier] || TIER_WAYPOINT_ICON.default;
                 return (
                   <button
                     key={title.id}
@@ -376,7 +449,7 @@ export default function TitleProgressTab({
                     }}
                     className={`absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-xl border-2 transition-all ${
                       unlocked
-                        ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked ${palette.glow}`
+                        ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked title-waypoint-spark ${palette.glow}`
                         : 'bg-slate-800/80 border-slate-500/80 text-slate-300'
                     } ${
                       isCurrent ? `ring-2 ${palette.ring} scale-110` : ''
@@ -388,7 +461,10 @@ export default function TitleProgressTab({
                     style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
                     title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
                   >
-                    <span className="text-[13px] leading-none">{unlocked ? '✦' : '🔒'}</span>
+                    <span className="text-[12px] leading-none">{tierIcon}</span>
+                    {!unlocked && (
+                      <span className="absolute right-[-4px] bottom-[-5px] text-[10px] leading-none">🔒</span>
+                    )}
                   </button>
                 );
               })}
@@ -432,7 +508,12 @@ export default function TitleProgressTab({
                   className="w-full px-3 py-2 flex items-center justify-between gap-2 text-left"
                 >
                   <div>
-                    <p className="text-sm font-display font-bold text-gray-100">{group.family}</p>
+                    <p className="text-sm font-display font-bold text-gray-100">
+                      {group.family}
+                      <span className="ml-1.5 text-[12px] align-middle">
+                        {group.family === 'Master' ? '💠' : group.family === 'Expert' ? '🥇' : group.family === 'Advanced' ? '🥈' : group.family === 'Intermediate' ? '🥉' : '🌱'}
+                      </span>
+                    </p>
                     <p className="text-[10px] text-gray-500">
                       {group.titles.length - lockedCount}/{group.titles.length} unlocked
                     </p>

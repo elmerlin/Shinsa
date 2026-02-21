@@ -124,6 +124,17 @@
   animation: title-waypoint-glow 2.3s ease-in-out infinite;
 }
 
+@keyframes title-waypoint-spark {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.06) rotate(2deg); }
+  50% { transform: scale(1.1) rotate(-2deg); }
+  75% { transform: scale(1.05) rotate(1deg); }
+}
+
+.title-waypoint-spark {
+  animation: title-waypoint-spark 2.4s ease-in-out infinite;
+}
+
 .title-map-frame {
   background:
     radial-gradient(circle at 15% 8%, rgba(56, 189, 248, 0.22), transparent 32%),
@@ -150,4 +161,28 @@
     radial-gradient(circle at 30% 22%, rgba(244, 114, 182, 0.22), transparent 38%),
     radial-gradient(circle at 70% 78%, rgba(56, 189, 248, 0.24), transparent 42%),
     linear-gradient(180deg, rgba(49, 46, 129, 0.25), rgba(15, 23, 42, 0.22));
+}
+
+.title-world-cap {
+  background:
+    radial-gradient(circle at 25% 30%, rgba(255, 255, 255, 0.6), transparent 55%),
+    radial-gradient(circle at 70% 35%, rgba(186, 230, 253, 0.55), transparent 52%),
+    linear-gradient(180deg, rgba(125, 211, 252, 0.45), rgba(125, 211, 252, 0.08));
+}
+
+.title-world-floor {
+  background:
+    radial-gradient(circle at 40% 40%, rgba(34, 197, 94, 0.28), transparent 50%),
+    radial-gradient(circle at 65% 55%, rgba(234, 179, 8, 0.24), transparent 45%),
+    linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(22, 101, 52, 0.2));
+}
+
+@keyframes title-prop-float {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50% { transform: translate(-50%, -50%) translateY(-4px); }
+}
+
+.title-prop {
+  animation: title-prop-float 3.4s ease-in-out infinite;
+  backdrop-filter: blur(1px);
 }
