@@ -3,6 +3,16 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
+const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+
+function normalizeOnlineDuelAvatars(duel, size = 64) {
+  if (!duel) return duel;
+  return {
+    ...duel,
+    player1_avatar: normalizeUserAvatarForList(duel.player1_avatar, duel.creator_user_id, size),
+    player2_avatar: normalizeUserAvatarForList(duel.player2_avatar, duel.opponent_user_id, size),
+  };
+}
 
 // GET /api/online-duels - list all online duels
 router.get('/', (req, res) => {
@@ -17,7 +27,7 @@ router.get('/', (req, res) => {
     LEFT JOIN users u2 ON od.opponent_user_id = u2.id
     ORDER BY od.created_at DESC
   `).all();
-  res.json(duels);
+  res.json(duels.map(d => normalizeOnlineDuelAvatars(d, 64)));
 });
 
 // GET /api/online-duels/:id - get full duel state (for polling)
@@ -41,7 +51,7 @@ router.get('/:id', (req, res) => {
   const songs = db.prepare('SELECT * FROM online_duel_songs WHERE duel_id = ? ORDER BY played_order ASC').all(duel.id);
   const p1Pumps = db.prepare("SELECT COUNT(*) as count FROM duel_pumps WHERE duel_id = ? AND player = 'player1'").get(duel.id).count;
   const p2Pumps = db.prepare("SELECT COUNT(*) as count FROM duel_pumps WHERE duel_id = ? AND player = 'player2'").get(duel.id).count;
-  res.json({ ...duel, songs, p1Pumps, p2Pumps });
+  res.json({ ...normalizeOnlineDuelAvatars(duel, 96), songs, p1Pumps, p2Pumps });
 });
 
 // GET /api/online-duels/:id/chat - get chat messages (for polling)
@@ -119,6 +129,7 @@ router.post('/:id/chat', optionalAuth, (req, res) => {
   const db = getDb();
   const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
   if (!duel) return res.status(404).json({ error: 'Duel not found' });
+  if (duel.status === 'COMPLETED') return res.status(400).json({ error: 'Chat is closed for completed duels' });
 
   const { message, guest_name } = req.body;
   if (!message || !message.trim()) return res.status(400).json({ error: 'Message is required' });

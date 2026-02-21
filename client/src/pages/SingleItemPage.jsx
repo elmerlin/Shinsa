@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getPost, getUpscore, getNewClear, getJacketMap } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
@@ -11,6 +11,7 @@ import {
   pumpComment,
 } from '../utils/api';
 import { renderFormattedText } from '../utils/formatText';
+import { getProfilePath } from '../utils/profile';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -46,6 +47,35 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString();
 }
 
+function getClearItems(item) {
+  const fallback = [{
+    song_title: item.song_title || '',
+    mode: item.mode || 'Single',
+    level: parseInt(item.level) || 0,
+    score: parseInt(item.score) || 0,
+    grade: item.grade || '',
+    plate: item.plate || '',
+    background_url: item.background_url || '',
+  }];
+
+  try {
+    const parsed = JSON.parse(item.clears_json || '[]');
+    if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
+
+    return parsed.map(c => ({
+      song_title: c.song_title || fallback[0].song_title,
+      mode: c.mode || fallback[0].mode,
+      level: parseInt(c.level) || fallback[0].level,
+      score: parseInt(c.score) || 0,
+      grade: c.grade || '',
+      plate: c.plate || '',
+      background_url: c.background_url || '',
+    }));
+  } catch {
+    return fallback;
+  }
+}
+
 // Reusable pump button for upscores/clears on single view
 function ItemPumpButton({ itemId, initialCount, initialPumped, pumpFn }) {
   const { user } = useAuth();
@@ -65,13 +95,13 @@ function ItemPumpButton({ itemId, initialCount, initialPumped, pumpFn }) {
 
   return (
     <button onClick={toggle} disabled={!user}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold transition-all ${
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
         pumped ? 'text-piu-gold bg-piu-gold/10' : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
       } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
       title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
     >
       <img src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt=""
-        className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`} />
+        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`} />
       <span>{count > 0 ? count : ''}</span>
     </button>
   );
@@ -106,7 +136,7 @@ function SingleCommentPumpButton({ commentId, type, initialCount, initialPumped 
 }
 
 // Reusable comment section for upscores/clears on single view
-function ItemCommentSection({ itemId, commentCount: initialCount, commentType, getCommentsFn, addCommentFn, deleteCommentFn }) {
+function ItemCommentSection({ itemId, commentCount: initialCount, commentType, getCommentsFn, addCommentFn, deleteCommentFn, focusCommentId }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(true);
   const [comments, setComments] = useState([]);
@@ -114,8 +144,52 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
   const [replyTo, setReplyTo] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [count, setCount] = useState(initialCount || 0);
+  const [highlightedCommentId, setHighlightedCommentId] = useState(null);
+  const commentNodeRefs = useRef(new Map());
+  const focusedTargetRef = useRef('');
 
-  useEffect(() => { getCommentsFn(itemId).then(setComments).catch(() => {}); }, [itemId]);
+  const loadComments = () => {
+    getCommentsFn(itemId).then(setComments).catch(() => {});
+  };
+
+  useEffect(() => { loadComments(); }, [itemId]);
+
+  useEffect(() => {
+    if (!focusCommentId) return;
+    setOpen(true);
+    loadComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCommentId, itemId]);
+
+  useEffect(() => {
+    if (!focusCommentId || !open || comments.length === 0) return;
+    const targetId = String(focusCommentId);
+    if (focusedTargetRef.current === targetId) return;
+
+    const exists = comments.some(c =>
+      String(c.id) === targetId || (c.replies || []).some(r => String(r.id) === targetId)
+    );
+    if (!exists) return;
+
+    const node = commentNodeRefs.current.get(targetId);
+    if (!node) return;
+
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    node.focus({ preventScroll: true });
+    setHighlightedCommentId(targetId);
+    focusedTargetRef.current = targetId;
+
+    const timeout = setTimeout(() => {
+      setHighlightedCommentId(prev => (prev === targetId ? null : prev));
+    }, 2200);
+    return () => clearTimeout(timeout);
+  }, [focusCommentId, open, comments]);
+
+  const setCommentNodeRef = (commentId) => (node) => {
+    const key = String(commentId);
+    if (node) commentNodeRefs.current.set(key, node);
+    else commentNodeRefs.current.delete(key);
+  };
 
   const submit = async () => {
     if (!newComment.trim()) return;
@@ -153,9 +227,9 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
   return (
     <>
       <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
         <span>{count > 0 ? count : ''}</span>
@@ -163,9 +237,16 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
       {open && (
         <div className="w-full order-last mt-2 border-l-2 border-piu-border/30 pl-3 space-y-2">
           {comments.map(c => (
-            <div key={c.id}>
+            <div
+              key={c.id}
+              ref={setCommentNodeRef(c.id)}
+              tabIndex={-1}
+              className={`rounded-lg p-1 -mx-1 outline-none transition-all ${
+                highlightedCommentId === String(c.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+              }`}
+            >
               <div className="flex items-start gap-2">
-                <Link to={`/profile/${c.user_id}`}>
+                <Link to={getProfilePath(c.user_id, c.username)}>
                   {c.avatar ? (
                     <img src={getAvatarUrl(c.avatar)} className="w-6 h-6 rounded-full object-cover" alt="" />
                   ) : (
@@ -174,7 +255,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
+                    <Link to={getProfilePath(c.user_id, c.username)} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
                     <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
@@ -186,8 +267,15 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                 </div>
               </div>
               {(c.replies || []).map(r => (
-                <div key={r.id} className="flex items-start gap-2 ml-6 mt-1">
-                  <Link to={`/profile/${r.user_id}`}>
+                <div
+                  key={r.id}
+                  ref={setCommentNodeRef(r.id)}
+                  tabIndex={-1}
+                  className={`flex items-start gap-2 ml-6 mt-1 rounded-lg p-1 -mx-1 outline-none transition-all ${
+                    highlightedCommentId === String(r.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+                  }`}
+                >
+                  <Link to={getProfilePath(r.user_id, r.username)}>
                     {r.avatar ? (
                       <img src={getAvatarUrl(r.avatar)} className="w-5 h-5 rounded-full object-cover" alt="" />
                     ) : (
@@ -196,12 +284,13 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
+                      <Link to={getProfilePath(r.user_id, r.username)} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <SingleCommentPumpButton commentId={r.id} type={commentType} initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                      {user && <button onClick={() => { setReplyTo(c.id); setReplyText(`@${r.username} `); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
                       {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
                     </div>
                   </div>
@@ -212,6 +301,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                   <input className="input-field text-[11px] py-1 flex-1" placeholder="Reply..." value={replyText}
                     onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitReply(c.id)} autoFocus />
                   <button onClick={() => submitReply(c.id)} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
+                  <button onClick={() => { setReplyTo(null); setReplyText(''); }} className="text-[10px] text-gray-600 hover:text-gray-400 font-display px-1">&#10005;</button>
                 </div>
               )}
             </div>
@@ -231,8 +321,10 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
 
 export function SinglePostPage() {
   const { id } = useParams();
+  const location = useLocation();
   const [post, setPost] = useState(null);
   const [loading, setLoading] = useState(true);
+  const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
     getPost(id).then(setPost).catch(() => {}).finally(() => setLoading(false));
@@ -244,16 +336,18 @@ export function SinglePostPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <Link to="/feed" className="text-xs text-gray-500 hover:text-piu-accent font-display mb-4 inline-block">&larr; Back to Feed</Link>
-      <PostCard post={post} showAuthor={true} />
+      <PostCard post={post} showAuthor={true} focusCommentId={focusCommentId} />
     </div>
   );
 }
 
 export function SingleUpscorePage() {
   const { id } = useParams();
+  const location = useLocation();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [jacketLookup, setJacketLookup] = useState({});
+  const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
     getUpscore(id).then(setItem).catch(() => {}).finally(() => setLoading(false));
@@ -271,7 +365,7 @@ export function SingleUpscorePage() {
       <Link to="/feed" className="text-xs text-gray-500 hover:text-piu-accent font-display mb-4 inline-block">&larr; Back to Feed</Link>
       <div className="card">
         <div className="flex items-center gap-3 mb-3">
-          <Link to={`/profile/${item.user_id}`}>
+          <Link to={getProfilePath(item.user_id, item.username)}>
             {item.avatar ? (
               <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
             ) : (
@@ -282,7 +376,7 @@ export function SingleUpscorePage() {
           </Link>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(item.user_id, item.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                 {flag && <span className="mr-1">{flag}</span>}
                 {item.username}
               </Link>
@@ -330,7 +424,8 @@ export function SingleUpscorePage() {
           <div className="flex items-center gap-2 flex-wrap">
             <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpUpscore} />
             <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="upscore"
-              getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment} />
+              getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment}
+              focusCommentId={focusCommentId} />
             <ShareButton path={`/upscore/${item.id}`} />
           </div>
         </div>
@@ -341,9 +436,11 @@ export function SingleUpscorePage() {
 
 export function SingleClearPage() {
   const { id } = useParams();
+  const location = useLocation();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [jacketLookup, setJacketLookup] = useState({});
+  const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
     getNewClear(id).then(setItem).catch(() => {}).finally(() => setLoading(false));
@@ -353,20 +450,16 @@ export function SingleClearPage() {
   if (loading) return <div className="max-w-2xl mx-auto px-4 py-12 text-center text-gray-500">Loading...</div>;
   if (!item) return <div className="max-w-2xl mx-auto px-4 py-12 text-center text-gray-500">Clear not found</div>;
 
-  const rank = getRank(item.score);
+  const clears = getClearItems(item);
+  const isGrouped = clears.length > 1;
   const flag = getCountryFlag(item.nationality);
-  const isSingle = item.mode === 'Single';
-  const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : item.mode === 'Double' ? 'bg-green-600/20 text-green-400' : 'bg-blue-600/20 text-blue-400';
-  const norm = (item.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const exactKey = `${norm}|${item.mode}|${item.level}`;
-  const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <Link to="/feed" className="text-xs text-gray-500 hover:text-piu-accent font-display mb-4 inline-block">&larr; Back to Feed</Link>
       <div className="card">
         <div className="flex items-center gap-3 mb-3">
-          <Link to={`/profile/${item.user_id}`}>
+          <Link to={getProfilePath(item.user_id, item.username)}>
             {item.avatar ? (
               <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
             ) : (
@@ -377,42 +470,60 @@ export function SingleClearPage() {
           </Link>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(item.user_id, item.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                 {flag && <span className="mr-1">{flag}</span>}
                 {item.username}
               </Link>
-              <span className="text-sky-400 font-display font-bold text-xs">new clear!</span>
+              <span className="text-sky-400 font-display font-bold text-xs">{isGrouped ? 'new clears!' : 'new clear!'}</span>
             </div>
             <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 py-1.5">
-          {jacketUrl ? (
-            <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
-          ) : (
-            <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 shrink-0">
-              {(item.song_title || '?')[0]}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-display font-bold truncate">{item.song_title}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
-                {isSingle ? 'S' : item.mode === 'Double' ? 'D' : 'C'}{item.level}
-              </span>
-              {item.plate && <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{item.plate}</span>}
-            </div>
-          </div>
-          <div className="text-right shrink-0">
-            <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
-            <p className="font-mono text-xs font-bold">{item.score.toLocaleString()}</p>
-          </div>
+        <div className="space-y-2">
+          {clears.map((clear, i) => {
+            const rank = getRank(clear.score);
+            const isSingle = clear.mode === 'Single';
+            const badgeColor = isSingle
+              ? 'bg-red-600/20 text-red-400'
+              : clear.mode === 'Double'
+                ? 'bg-green-600/20 text-green-400'
+                : 'bg-blue-600/20 text-blue-400';
+            const norm = (clear.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+            const exactKey = `${norm}|${clear.mode}|${clear.level}`;
+            const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
+
+            return (
+              <div key={`${clear.song_title}-${clear.mode}-${clear.level}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
+                {jacketUrl ? (
+                  <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
+                ) : (
+                  <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 shrink-0">
+                    {(clear.song_title || '?')[0]}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-display font-bold truncate">{clear.song_title}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
+                      {isSingle ? 'S' : clear.mode === 'Double' ? 'D' : 'C'}{clear.level}
+                    </span>
+                    {clear.plate && <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
+                  <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
         <div className="border-t border-piu-border/20 pt-2 mt-1">
           <div className="flex items-center gap-2 flex-wrap">
             <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpNewClear} />
             <ItemCommentSection itemId={item.id} commentCount={item.comment_count || 0} commentType="clear"
-              getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment} />
+              getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment}
+              focusCommentId={focusCommentId} />
             <ShareButton path={`/clear/${item.id}`} />
           </div>
         </div>

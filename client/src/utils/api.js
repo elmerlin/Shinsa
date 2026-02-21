@@ -88,6 +88,45 @@ export const getSongs = (params = {}) => {
   return request(`/songs${qs ? `?${qs}` : ''}`);
 };
 export const getJacketMap = () => request('/songs/jacket-map');
+export const getChartKeyMap = () => request('/songs/chart-key-map');
+export const getSongLibrary = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/library${qs ? `?${qs}` : ''}`);
+};
+export const getSongChartDetail = (chartId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/chart/${chartId}${qs ? `?${qs}` : ''}`);
+};
+export const getSongChartHistory = (chartId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/chart/${chartId}/history${qs ? `?${qs}` : ''}`);
+};
+export const getSongAnalytics = (userId) => request(`/songs/analytics/user/${userId}`);
+export const getSongHeadToHead = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/head-to-head${qs ? `?${qs}` : ''}`);
+};
+export const getSongTierMeta = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/tiers/meta${qs ? `?${qs}` : ''}`);
+};
+export const getSongTiers = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/tiers${qs ? `?${qs}` : ''}`);
+};
+export const getSongSkillsMeta = () => request('/songs/skills/meta');
+export const getSongMissingSkills = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/skills/missing${qs ? `?${qs}` : ''}`);
+};
+export const getSongSkillCharts = (skillSlug, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/skill/${encodeURIComponent(skillSlug)}${qs ? `?${qs}` : ''}`);
+};
+export const updateSongChartSkills = (chartId, skills = []) => request(`/songs/chart/${chartId}/skills`, {
+  method: 'PUT',
+  body: JSON.stringify({ skills }),
+});
 
 // Duels
 export const getDuels = () => request('/duels');
@@ -107,7 +146,9 @@ export const updateMe = (data) => request('/auth/me', { method: 'PUT', body: JSO
 export const changePassword = (data) => request('/auth/password', { method: 'PUT', body: JSON.stringify(data) });
 export const searchUsers = (q) => request(`/auth/search?q=${encodeURIComponent(q)}`);
 export const getUserProfile = (id) => request(`/auth/user/${id}`);
+export const getUserProfileByUsername = (username) => request(`/auth/user/username/${encodeURIComponent(username)}`);
 export const getUserStats = (id) => request(`/auth/user/${id}/stats`);
+export const getUserActivity = (id) => request(`/auth/user/${id}/activity`);
 export const getInvitations = () => request('/auth/invitations');
 export const respondInvitation = (id, status) => request(`/auth/invitations/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
 export const sendInvitation = (data) => request('/auth/invite', { method: 'POST', body: JSON.stringify(data) });
@@ -147,6 +188,12 @@ export const getNotifications = () => request('/auth/notifications');
 export const markNotificationRead = (id) => request(`/auth/notifications/${id}/read`, { method: 'PUT' });
 export const markAllNotificationsRead = () => request('/auth/notifications/read-all', { method: 'PUT' });
 export const deleteNotification = (id) => request(`/auth/notifications/${id}`, { method: 'DELETE' });
+export const getPushPublicKey = () => request(`/auth/push/public-key?_=${Date.now()}`, {
+  cache: 'no-store',
+  headers: { 'Cache-Control': 'no-cache' },
+});
+export const savePushSubscription = (subscription) => request('/auth/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription }) });
+export const removePushSubscription = (endpoint) => request('/auth/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
 
 // Social — Follows
 export const followUser = (userId) => request(`/social/follow/${userId}`, { method: 'POST' });
@@ -158,6 +205,8 @@ export const getFollowingIds = async (userId) => {
 };
 export const getFollowers = (userId) => request(`/social/followers/${userId}`);
 export const getFollowStatus = (userId) => request(`/social/follow-status/${userId}`);
+export const getActivityNotificationPreferences = (userId) => request(`/social/activity-notifications/${userId}`);
+export const updateActivityNotificationPreferences = (userId, data) => request(`/social/activity-notifications/${userId}`, { method: 'PUT', body: JSON.stringify(data) });
 export const getSocialCounts = (userId) => request(`/social/counts/${userId}`);
 
 // Social — Posts
@@ -261,6 +310,7 @@ export const deleteCommunity = (id) => request(`/communities/${id}`, { method: '
 export const joinCommunity = (id) => request(`/communities/${id}/join`, { method: 'POST' });
 export const leaveCommunity = (id) => request(`/communities/${id}/leave`, { method: 'DELETE' });
 export const getCommunityMembers = (id, sort) => request(`/communities/${id}/members${sort ? `?sort=${sort}` : ''}`);
+export const searchCommunityMentions = (id, q) => request(`/communities/${id}/mentions?q=${encodeURIComponent(q)}`);
 export const updateMemberRole = (communityId, userId, role) => request(`/communities/${communityId}/members/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
 export const removeCommunityMember = (communityId, userId) => request(`/communities/${communityId}/members/${userId}`, { method: 'DELETE' });
 export const getJoinRequests = (id) => request(`/communities/${id}/requests`);
@@ -299,6 +349,85 @@ export const getCommunityPostComments = (communityId, postId) => request(`/commu
 export const addCommunityPostComment = (communityId, postId, content, parentId) => request(`/communities/${communityId}/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteCommunityPostComment = (communityId, postId, commentId) => request(`/communities/${communityId}/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
 export const pumpCommunityComment = (communityId, commentId) => request(`/communities/${communityId}/comments/${commentId}/pump`, { method: 'POST' });
+
+// World Max
+export const getWorldMaxMeta = () => request('/world-max/meta');
+export const getWorldMaxPins = () => request('/world-max/pins');
+export const getWorldMaxCitySuggestions = (q, country = '') => {
+  const qs = new URLSearchParams();
+  qs.set('q', String(q || ''));
+  if (country) qs.set('country', String(country));
+  return request(`/world-max/city-suggestions?${qs.toString()}`);
+};
+export const saveWorldMaxLocation = (data) => request('/world-max/location', { method: 'PUT', body: JSON.stringify(data) });
+export const addWorldMaxMachine = (data) => request('/world-max/machines', { method: 'POST', body: JSON.stringify(data) });
+export const getWorldMaxMachine = (machineId) => request(`/world-max/machines/${machineId}`);
+export const addWorldMaxMachineReview = (machineId, data) => request(`/world-max/machines/${machineId}/reviews`, { method: 'POST', body: JSON.stringify(data) });
+
+export async function addWorldMaxMachinePhoto(machineId, photoFile, caption = '') {
+  const formData = new FormData();
+  formData.append('photo', photoFile);
+  if (caption) formData.append('caption', caption);
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/world-max/machines/${machineId}/photos`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to upload machine photo');
+  }
+  return res.json();
+}
+
+// Chatbot — streaming SSE
+export async function streamChatbotAsk(message, history, onEvent) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/chatbot/ask`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ message, history }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Request failed');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE lines
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // Keep incomplete line in buffer
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const event = JSON.parse(line.slice(6));
+          onEvent(event);
+        } catch { /* ignore parse errors */ }
+      }
+    }
+  }
+
+  // Process any remaining buffer
+  if (buffer.startsWith('data: ')) {
+    try {
+      const event = JSON.parse(buffer.slice(6));
+      onEvent(event);
+    } catch { /* ignore */ }
+  }
+}
 
 // Parser
 export async function parseScorePhoto(file) {

@@ -1,12 +1,31 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { register } from '../utils/api';
+import { register, saveWorldMaxLocation } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import AvatarPicker from '../components/AvatarPicker';
 import {
   SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
   COUNTRIES, getCountryFlag, getSkillColor,
 } from '../components/PlayerRegistration';
+
+function normalizeCountryString(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function resolveCountryCode(input) {
+  const normalized = normalizeCountryString(input);
+  if (!normalized) return '';
+  for (const country of COUNTRIES) {
+    if (!country.code) continue;
+    if (normalizeCountryString(country.name) === normalized) return country.code;
+    if (String(country.code).toLowerCase() === normalized) return country.code;
+  }
+  return '';
+}
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -15,6 +34,7 @@ export default function RegisterPage() {
     username: '', password: '', confirmPassword: '', email: '',
     avatar: '', pumbility: '', skill_title: 'Beginner', skill_level: 1,
     gender: '', nationality: '', date_of_birth: '', show_age: false, description: '',
+    location_country: '', location_city: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,9 +64,19 @@ export default function RegisterPage() {
         date_of_birth: form.date_of_birth,
         show_age: form.show_age,
         description: form.description,
+        location_country: form.location_country,
+        location_country_code: resolveCountryCode(form.location_country),
+        location_city: form.location_city,
       };
       const { user, token } = await register(payload);
       loginUser(user, token);
+      if (form.location_country.trim() && form.location_city.trim()) {
+        await saveWorldMaxLocation({
+          country: form.location_country,
+          city: form.location_city,
+          country_code: resolveCountryCode(form.location_country),
+        }).catch(() => {});
+      }
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -220,6 +250,29 @@ export default function RegisterPage() {
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Location Country</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Japan"
+                  value={form.location_country}
+                  onChange={e => setForm(f => ({ ...f, location_country: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Location City / Town</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Tokyo"
+                  value={form.location_city}
+                  onChange={e => setForm(f => ({ ...f, location_city: e.target.value }))}
+                />
+              </div>
             </div>
 
             {/* Preview */}

@@ -4,13 +4,59 @@ const multer = require('multer');
 const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
+const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
+const { createUserNotification } = require('../lib/notifications');
+const {
+  getActivitySubscription,
+  setActivitySubscription,
+  notifyActivitySubscribers,
+  buildProfilePath,
+} = require('../lib/activitySubscriptions');
+const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
-  if (!userId) return;
-  db.prepare(
-    'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
-  ).run(userId, type, title, message || '', link || '');
+  if (!userId) return null;
+  return createUserNotification(db, userId, type, title, message || '', link || '');
+}
+
+function parseBooleanInput(value) {
+  if (value === true || value === 1 || value === '1' || value === 'true') return true;
+  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
+
+function stripSessionSummaryMarkers(text) {
+  return String(text || '').replace(/\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '').trim();
+}
+
+function textSnippet(text, max = 80) {
+  const compact = stripSessionSummaryMarkers(text).replace(/\s+/g, ' ').trim();
+  if (!compact) return '';
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+}
+
+const RECENT_ACTIVITY_TTL_MS = 30 * 1000;
+let recentActivityCache = { data: null, expiresAt: 0 };
+
+function readRecentActivityCache() {
+  if (!recentActivityCache.data) return null;
+  if (Date.now() >= recentActivityCache.expiresAt) {
+    recentActivityCache = { data: null, expiresAt: 0 };
+    return null;
+  }
+  return recentActivityCache.data;
+}
+
+function writeRecentActivityCache(data) {
+  recentActivityCache = {
+    data,
+    expiresAt: Date.now() + RECENT_ACTIVITY_TTL_MS,
+  };
+}
+
+function invalidateRecentActivityCache() {
+  recentActivityCache = { data: null, expiresAt: 0 };
 }
 
 // Multer config for image uploads (memory-only, images stored as base64 in DB)
@@ -42,14 +88,13 @@ router.post('/follow/:userId', requireAuth, (req, res) => {
     // Send notification only if this is a new follow (not a duplicate)
     if (result.changes > 0) {
       const follower = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
-      db.prepare(
-        'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
-      ).run(
+      createNotification(
+        db,
         followingId,
         'new_follower',
         'New Follower',
         `${follower?.username || 'Someone'} started following you`,
-        `/profile/${req.user.id}`
+        buildProfilePath(follower?.username) || `/profile/${req.user.id}`
       );
     }
     res.json({ success: true });
@@ -109,6 +154,67 @@ router.get('/follow-status/:userId', optionalAuth, (req, res) => {
   ).get(req.params.userId).count;
 
   res.json({ following: isFollowing, followers_count: followersCount, following_count: followingCount });
+});
+
+// GET /api/social/activity-notifications/:userId — get current user's activity notif prefs for target user
+router.get('/activity-notifications/:userId', requireAuth, (req, res) => {
+  const db = getDb();
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) return res.status(400).json({ error: 'User ID is required' });
+  if (targetUserId === req.user.id) {
+    return res.json({
+      subscribed: false,
+      notify_posts: false,
+      notify_upscores: false,
+      notify_new_clears: false,
+    });
+  }
+
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetUserId);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  res.json(getActivitySubscription(db, req.user.id, targetUserId));
+});
+
+// PUT /api/social/activity-notifications/:userId — set current user's activity notif prefs for target user
+router.put('/activity-notifications/:userId', requireAuth, (req, res) => {
+  const db = getDb();
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) return res.status(400).json({ error: 'User ID is required' });
+  if (targetUserId === req.user.id) {
+    return res.status(400).json({ error: 'You cannot subscribe to your own activity notifications' });
+  }
+
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetUserId);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  const current = getActivitySubscription(db, req.user.id, targetUserId);
+  const next = {
+    notify_posts: current.notify_posts,
+    notify_upscores: current.notify_upscores,
+    notify_new_clears: current.notify_new_clears,
+  };
+
+  let changedFields = 0;
+  const fields = ['notify_posts', 'notify_upscores', 'notify_new_clears'];
+  for (const field of fields) {
+    if (!(field in (req.body || {}))) continue;
+    const parsed = parseBooleanInput(req.body[field]);
+    if (parsed === null) {
+      return res.status(400).json({ error: `${field} must be a boolean` });
+    }
+    next[field] = parsed;
+    changedFields += 1;
+  }
+
+  if (changedFields === 0) {
+    return res.status(400).json({ error: 'At least one notification field must be provided' });
+  }
+
+  const saved = setActivitySubscription(db, req.user.id, targetUserId, next);
+  res.json(saved);
 });
 
 // GET /api/social/counts/:userId — follower/following/post counts + pumps + trend (public)
@@ -211,6 +317,22 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
     FROM user_posts p JOIN users u ON p.user_id = u.id
     WHERE p.id = ?
   `).get(result.lastInsertRowid);
+
+  const actor = post?.username || req.user.username || 'Someone';
+  const contentSnippet = textSnippet(post?.content || '');
+  const postMessage = contentSnippet
+    ? `${actor} posted: ${contentSnippet}`
+    : `${actor} made a new post`;
+  notifyActivitySubscribers(db, {
+    actorUserId: req.user.id,
+    actorUsername: actor,
+    activityType: 'posts',
+    notificationType: 'followed_user_post',
+    title: 'New Post',
+    message: postMessage,
+    link: `/post/${post.id}`,
+  });
+  invalidateRecentActivityCache();
 
   res.status(201).json({ ...post, pump_count: 0, comment_count: 0 });
 });
@@ -327,36 +449,63 @@ router.get('/posts/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const postId = parseInt(req.params.id);
 
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar,
-           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'post' AND comment_id = c.id) as pump_count
+  // Fetch all comments (parents + replies) in a single query
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
     FROM post_comments c
     JOIN users u ON c.user_id = u.id
-    WHERE c.post_id = ? AND c.parent_id IS NULL
+    WHERE c.post_id = ?
     ORDER BY c.created_at ASC
   `).all(postId);
 
-  // Attach replies and pump status
-  for (const comment of comments) {
-    if (req.user) {
-      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('post', comment.id, req.user.id);
+  if (allComments.length === 0) return res.json([]);
+
+  const commentIds = allComments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  // Batch pump counts
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt
+    FROM comment_pumps
+    WHERE comment_type = 'post' AND comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  // Batch user pump status
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id
+      FROM comment_pumps
+      WHERE comment_type = 'post' AND user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
+  }
+
+  // Assemble: attach pump data and group into parent/replies
+  for (const c of allComments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+  }
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of allComments) {
+    if (!c.parent_id) {
+      c.replies = [];
+      topLevel.push(c);
+      replyMap[c.id] = c.replies;
     }
-    comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar,
-             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'post' AND comment_id = c.id) as pump_count
-      FROM post_comments c
-      JOIN users u ON c.user_id = u.id
-      WHERE c.parent_id = ?
-      ORDER BY c.created_at ASC
-    `).all(comment.id);
-    if (req.user) {
-      for (const reply of comment.replies) {
-        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('post', reply.id, req.user.id);
-      }
+  }
+  for (const c of allComments) {
+    if (c.parent_id && replyMap[c.parent_id]) {
+      replyMap[c.parent_id].push(c);
     }
   }
 
-  res.json(comments);
+  res.json(topLevel);
 });
 
 // POST /api/social/posts/:id/comments — add a comment
@@ -364,8 +513,9 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
   const db = getDb();
   const postId = parseInt(req.params.id);
   const { content, parent_id } = req.body;
+  const trimmedContent = String(content || '').trim();
 
-  if (!content || !content.trim()) {
+  if (!trimmedContent) {
     return res.status(400).json({ error: 'Comment cannot be empty' });
   }
 
@@ -381,7 +531,7 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
 
   const result = db.prepare(
     'INSERT INTO post_comments (post_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
-  ).run(postId, req.user.id, parent_id || null, content.trim());
+  ).run(postId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
     SELECT c.*, u.username, u.avatar
@@ -390,6 +540,7 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
   `).get(result.lastInsertRowid);
 
   comment.replies = [];
+  const commentLink = `/post/${postId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   // Notifications
   const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
@@ -397,12 +548,23 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
     // Reply: notify parent comment author
     const parentComment = db.prepare('SELECT user_id FROM post_comments WHERE id = ?').get(parent_id);
     if (parentComment && parentComment.user_id !== req.user.id) {
-      createNotification(db, parentComment.user_id, 'post_reply', 'New Reply', `${me.username} replied to your comment`, `/post/${postId}`);
+      createNotification(db, parentComment.user_id, 'post_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
     }
   }
   if (post.user_id !== req.user.id) {
-    createNotification(db, post.user_id, 'post_comment', 'New Comment', `${me.username} commented on your post`, `/post/${postId}`);
+    createNotification(db, post.user_id, 'post_comment', 'New Comment', `${me.username} commented on your post`, commentLink);
   }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'post_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in a post comment`,
+    link: commentLink,
+  });
 
   res.status(201).json(comment);
 });
@@ -527,20 +689,18 @@ router.get('/feed', requireAuth, (req, res) => {
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
            (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count,
+           CASE WHEN pp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
            'post' as type
     FROM user_posts p
     JOIN users u ON p.user_id = u.id
+    LEFT JOIN post_pumps pp_me ON pp_me.post_id = p.id AND pp_me.user_id = ?
     WHERE p.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
        OR p.user_id = ?
     ORDER BY p.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, limit, offset);
-
-  // Attach user's pump status
+  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
   for (const post of posts) {
-    post.user_pumped = !!db.prepare(
-      'SELECT 1 FROM post_pumps WHERE post_id = ? AND user_id = ?'
-    ).get(post.id, req.user.id);
+    post.avatar = normalizeUserAvatarForList(post.avatar, post.user_id, 64);
   }
 
   // Get upscores from followed users with pump/comment counts
@@ -549,42 +709,38 @@ router.get('/feed', requireAuth, (req, res) => {
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM upscore_pumps WHERE upscore_id = us.id) as pump_count,
            (SELECT COUNT(*) FROM upscore_comments WHERE upscore_id = us.id) as comment_count,
+           CASE WHEN usp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
            'upscore' as type
     FROM user_upscores us
     JOIN users u ON us.user_id = u.id
+    LEFT JOIN upscore_pumps usp_me ON usp_me.upscore_id = us.id AND usp_me.user_id = ?
     WHERE us.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
        OR us.user_id = ?
     ORDER BY us.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, limit, offset);
-
-  // Attach user's pump status for upscores
+  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
   for (const us of upscores) {
-    us.user_pumped = !!db.prepare(
-      'SELECT 1 FROM upscore_pumps WHERE upscore_id = ? AND user_id = ?'
-    ).get(us.id, req.user.id);
+    us.avatar = normalizeUserAvatarForList(us.avatar, us.user_id, 64);
   }
 
   // Get new clears from followed users with pump/comment counts
   const clears = db.prepare(`
-    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.created_at,
+    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.clears_json, nc.created_at,
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM new_clear_pumps WHERE clear_id = nc.id) as pump_count,
            (SELECT COUNT(*) FROM new_clear_comments WHERE clear_id = nc.id) as comment_count,
+           CASE WHEN ncp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
            'clear' as type
     FROM user_new_clears nc
     JOIN users u ON nc.user_id = u.id
+    LEFT JOIN new_clear_pumps ncp_me ON ncp_me.clear_id = nc.id AND ncp_me.user_id = ?
     WHERE nc.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
        OR nc.user_id = ?
     ORDER BY nc.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, limit, offset);
-
-  // Attach user's pump status for clears
+  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
   for (const c of clears) {
-    c.user_pumped = !!db.prepare(
-      'SELECT 1 FROM new_clear_pumps WHERE clear_id = ? AND user_id = ?'
-    ).get(c.id, req.user.id);
+    c.avatar = normalizeUserAvatarForList(c.avatar, c.user_id, 64);
   }
 
   // Merge and sort by created_at
@@ -632,33 +788,51 @@ router.post('/upscores/:id/pump', requireAuth, (req, res) => {
 router.get('/upscores/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const upscoreId = parseInt(req.params.id);
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar,
-           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'upscore' AND comment_id = c.id) as pump_count
+
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
     FROM upscore_comments c JOIN users u ON c.user_id = u.id
-    WHERE c.upscore_id = ? AND c.parent_id IS NULL
+    WHERE c.upscore_id = ?
     ORDER BY c.created_at ASC
   `).all(upscoreId);
 
-  for (const comment of comments) {
-    if (req.user) {
-      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('upscore', comment.id, req.user.id);
-    }
-    comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar,
-             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'upscore' AND comment_id = c.id) as pump_count
-      FROM upscore_comments c JOIN users u ON c.user_id = u.id
-      WHERE c.parent_id = ?
-      ORDER BY c.created_at ASC
-    `).all(comment.id);
-    if (req.user) {
-      for (const reply of comment.replies) {
-        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('upscore', reply.id, req.user.id);
-      }
-    }
+  if (allComments.length === 0) return res.json([]);
+
+  const commentIds = allComments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt FROM comment_pumps
+    WHERE comment_type = 'upscore' AND comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id FROM comment_pumps
+      WHERE comment_type = 'upscore' AND user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
   }
 
-  res.json(comments);
+  for (const c of allComments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+  }
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of allComments) {
+    if (!c.parent_id) { c.replies = []; topLevel.push(c); replyMap[c.id] = c.replies; }
+  }
+  for (const c of allComments) {
+    if (c.parent_id && replyMap[c.parent_id]) replyMap[c.parent_id].push(c);
+  }
+
+  res.json(topLevel);
 });
 
 // POST /api/social/upscores/:id/comments
@@ -666,7 +840,8 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
   const db = getDb();
   const upscoreId = parseInt(req.params.id);
   const { content, parent_id } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return res.status(400).json({ error: 'Comment cannot be empty' });
 
   const upscore = db.prepare('SELECT id, user_id FROM user_upscores WHERE id = ?').get(upscoreId);
   if (!upscore) return res.status(404).json({ error: 'Upscore not found' });
@@ -678,7 +853,7 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
 
   const result = db.prepare(
     'INSERT INTO upscore_comments (upscore_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
-  ).run(upscoreId, req.user.id, parent_id || null, content.trim());
+  ).run(upscoreId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
     SELECT c.*, u.username, u.avatar
@@ -686,6 +861,7 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
     WHERE c.id = ?
   `).get(result.lastInsertRowid);
   comment.replies = [];
+  const commentLink = `/upscore/${upscoreId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   // Notify upscore owner
   const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
@@ -693,12 +869,23 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
     // Reply notification to parent comment author
     const parentComment = db.prepare('SELECT user_id FROM upscore_comments WHERE id = ?').get(parent_id);
     if (parentComment && parentComment.user_id !== req.user.id) {
-      createNotification(db, parentComment.user_id, 'upscore_reply', 'New Reply', `${me.username} replied to your comment`, `/upscore/${upscoreId}`);
+      createNotification(db, parentComment.user_id, 'upscore_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
     }
   }
   if (upscore.user_id !== req.user.id) {
-    createNotification(db, upscore.user_id, 'upscore_comment', 'New Comment', `${me.username} commented on your upscore`, `/upscore/${upscoreId}`);
+    createNotification(db, upscore.user_id, 'upscore_comment', 'New Comment', `${me.username} commented on your upscore`, commentLink);
   }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'upscore_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in an upscore comment`,
+    link: commentLink,
+  });
 
   res.status(201).json(comment);
 });
@@ -757,33 +944,51 @@ router.post('/clears/:id/pump', requireAuth, (req, res) => {
 router.get('/clears/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();
   const clearId = parseInt(req.params.id);
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar,
-           (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'clear' AND comment_id = c.id) as pump_count
+
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar
     FROM new_clear_comments c JOIN users u ON c.user_id = u.id
-    WHERE c.clear_id = ? AND c.parent_id IS NULL
+    WHERE c.clear_id = ?
     ORDER BY c.created_at ASC
   `).all(clearId);
 
-  for (const comment of comments) {
-    if (req.user) {
-      comment.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('clear', comment.id, req.user.id);
-    }
-    comment.replies = db.prepare(`
-      SELECT c.*, u.username, u.avatar,
-             (SELECT COUNT(*) FROM comment_pumps WHERE comment_type = 'clear' AND comment_id = c.id) as pump_count
-      FROM new_clear_comments c JOIN users u ON c.user_id = u.id
-      WHERE c.parent_id = ?
-      ORDER BY c.created_at ASC
-    `).all(comment.id);
-    if (req.user) {
-      for (const reply of comment.replies) {
-        reply.user_pumped = !!db.prepare('SELECT 1 FROM comment_pumps WHERE comment_type = ? AND comment_id = ? AND user_id = ?').get('clear', reply.id, req.user.id);
-      }
-    }
+  if (allComments.length === 0) return res.json([]);
+
+  const commentIds = allComments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt FROM comment_pumps
+    WHERE comment_type = 'clear' AND comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id FROM comment_pumps
+      WHERE comment_type = 'clear' AND user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
   }
 
-  res.json(comments);
+  for (const c of allComments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+  }
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of allComments) {
+    if (!c.parent_id) { c.replies = []; topLevel.push(c); replyMap[c.id] = c.replies; }
+  }
+  for (const c of allComments) {
+    if (c.parent_id && replyMap[c.parent_id]) replyMap[c.parent_id].push(c);
+  }
+
+  res.json(topLevel);
 });
 
 // POST /api/social/clears/:id/comments
@@ -791,7 +996,8 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
   const db = getDb();
   const clearId = parseInt(req.params.id);
   const { content, parent_id } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return res.status(400).json({ error: 'Comment cannot be empty' });
 
   const clear = db.prepare('SELECT id, user_id FROM user_new_clears WHERE id = ?').get(clearId);
   if (!clear) return res.status(404).json({ error: 'Clear not found' });
@@ -803,7 +1009,7 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
 
   const result = db.prepare(
     'INSERT INTO new_clear_comments (clear_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
-  ).run(clearId, req.user.id, parent_id || null, content.trim());
+  ).run(clearId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
     SELECT c.*, u.username, u.avatar
@@ -811,17 +1017,29 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
     WHERE c.id = ?
   `).get(result.lastInsertRowid);
   comment.replies = [];
+  const commentLink = `/clear/${clearId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
   if (parent_id) {
     const parentComment = db.prepare('SELECT user_id FROM new_clear_comments WHERE id = ?').get(parent_id);
     if (parentComment && parentComment.user_id !== req.user.id) {
-      createNotification(db, parentComment.user_id, 'clear_reply', 'New Reply', `${me.username} replied to your comment`, `/clear/${clearId}`);
+      createNotification(db, parentComment.user_id, 'clear_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
     }
   }
   if (clear.user_id !== req.user.id) {
-    createNotification(db, clear.user_id, 'clear_comment', 'New Comment', `${me.username} commented on your new clear`, `/clear/${clearId}`);
+    createNotification(db, clear.user_id, 'clear_comment', 'New Comment', `${me.username} commented on your new clear`, commentLink);
   }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'clear_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in a clear comment`,
+    link: commentLink,
+  });
 
   res.status(201).json(comment);
 });
@@ -856,11 +1074,11 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
   // Verify comment exists and get author
   let comment;
   if (type === 'post') {
-    comment = db.prepare('SELECT id, user_id FROM post_comments WHERE id = ?').get(cid);
+    comment = db.prepare('SELECT id, user_id, post_id as parent_item_id FROM post_comments WHERE id = ?').get(cid);
   } else if (type === 'upscore') {
-    comment = db.prepare('SELECT id, user_id FROM upscore_comments WHERE id = ?').get(cid);
+    comment = db.prepare('SELECT id, user_id, upscore_id as parent_item_id FROM upscore_comments WHERE id = ?').get(cid);
   } else {
-    comment = db.prepare('SELECT id, user_id FROM new_clear_comments WHERE id = ?').get(cid);
+    comment = db.prepare('SELECT id, user_id, clear_id as parent_item_id FROM new_clear_comments WHERE id = ?').get(cid);
   }
   if (!comment) return res.status(404).json({ error: 'Comment not found' });
 
@@ -880,7 +1098,14 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
   // Notify comment author
   if (comment.user_id !== req.user.id) {
     const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
-    createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, '');
+    const parentItemId = encodeURIComponent(String(comment.parent_item_id));
+    const commentParam = encodeURIComponent(String(cid));
+    const link = type === 'post'
+      ? `/post/${parentItemId}?comment=${commentParam}`
+      : type === 'upscore'
+        ? `/upscore/${parentItemId}?comment=${commentParam}`
+        : `/clear/${parentItemId}?comment=${commentParam}`;
+    createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, link);
   }
 
   res.json({ pumped: true, pump_count: count });
@@ -890,6 +1115,10 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
 
 // GET /api/social/recent-activity — aggregated activity feed for dashboard
 router.get('/recent-activity', (req, res) => {
+  res.set('Cache-Control', `public, max-age=${Math.floor(RECENT_ACTIVITY_TTL_MS / 1000)}`);
+  const cached = readRecentActivityCache();
+  if (cached) return res.json(cached);
+
   const db = getDb();
   const activities = [];
 
@@ -901,8 +1130,8 @@ router.get('/recent-activity', (req, res) => {
     activities.push({
       type: 'new_user', created_at: u.created_at,
       message: `${u.username} joined Pump **Shinsa**`,
-      link: `/profile/${u.id}`,
-      avatar: u.avatar, username: u.username, nationality: u.nationality,
+      link: buildProfilePath(u.username) || `/profile/${u.id}`,
+      avatar: normalizeUserAvatarForList(u.avatar, u.id, 40), username: u.username, nationality: u.nationality,
     });
   }
 
@@ -919,22 +1148,33 @@ router.get('/recent-activity', (req, res) => {
       type: 'upscore', created_at: us.created_at,
       message: `${us.username} improved ${songCount} score${songCount !== 1 ? 's' : ''}`,
       link: `/upscore/${us.id}`,
-      avatar: us.avatar, username: us.username, nationality: us.nationality,
+      avatar: normalizeUserAvatarForList(us.avatar, us.user_id, 40), username: us.username, nationality: us.nationality,
     });
   }
 
   // New clear posts
   const clears = db.prepare(`
-    SELECT nc.id, nc.song_title, nc.mode, nc.level, nc.created_at, u.id as user_id, u.username, u.avatar, u.nationality
+    SELECT nc.id, nc.song_title, nc.mode, nc.level, nc.clears_json, nc.created_at, u.id as user_id, u.username, u.avatar, u.nationality
     FROM user_new_clears nc JOIN users u ON nc.user_id = u.id
     ORDER BY nc.created_at DESC LIMIT 10
   `).all();
   for (const c of clears) {
+    let clearItems = [];
+    try {
+      const parsed = JSON.parse(c.clears_json || '[]');
+      if (Array.isArray(parsed)) clearItems = parsed;
+    } catch {}
+    const clearCount = clearItems.length > 0 ? clearItems.length : 1;
+    const firstClear = clearItems[0] || c;
+    const mode = firstClear.mode === 'Single' ? 'S' : firstClear.mode === 'Double' ? 'D' : 'C';
+    const message = clearCount > 1
+      ? `${c.username} cleared ${clearCount} new songs`
+      : `${c.username} cleared ${firstClear.song_title} (${mode}${firstClear.level})`;
     activities.push({
       type: 'new_clear', created_at: c.created_at,
-      message: `${c.username} cleared ${c.song_title} (${c.mode === 'Single' ? 'S' : c.mode === 'Double' ? 'D' : 'C'}${c.level})`,
+      message,
       link: `/clear/${c.id}`,
-      avatar: c.avatar, username: c.username, nationality: c.nationality,
+      avatar: normalizeUserAvatarForList(c.avatar, c.user_id, 40), username: c.username, nationality: c.nationality,
     });
   }
 
@@ -945,12 +1185,12 @@ router.get('/recent-activity', (req, res) => {
     ORDER BY p.created_at DESC LIMIT 10
   `).all();
   for (const p of posts) {
-    const snippet = (p.content || '').slice(0, 60) + ((p.content || '').length > 60 ? '...' : '');
+    const snippet = textSnippet(p.content || '', 60);
     activities.push({
       type: 'new_post', created_at: p.created_at,
       message: `${p.username} posted${snippet ? `: "${snippet}"` : ''}`,
       link: `/post/${p.id}`,
-      avatar: p.avatar, username: p.username, nationality: p.nationality,
+      avatar: normalizeUserAvatarForList(p.avatar, p.user_id, 40), username: p.username, nationality: p.nationality,
     });
   }
 
@@ -1037,7 +1277,9 @@ router.get('/recent-activity', (req, res) => {
 
   // Sort all by created_at and return latest 30
   activities.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  res.json(activities.slice(0, 30));
+  const latestActivities = activities.slice(0, 30);
+  writeRecentActivityCache(latestActivities);
+  res.json(latestActivities);
 });
 
 module.exports = router;

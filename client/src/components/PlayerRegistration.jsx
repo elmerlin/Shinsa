@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { createPlayer, updatePlayer, deletePlayer, searchUsers, sendInvitation } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
 import { Link } from 'react-router-dom';
+import { getProfilePath } from '../utils/profile';
 
 export const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 export const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -622,7 +623,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                 <div className="flex items-center gap-2 flex-wrap">
                   {flag && <span className="text-base shrink-0">{flag}</span>}
                   {player.user_id ? (
-                    <Link to={`/profile/${player.user_id}`} className="font-display font-bold text-piu-accent hover:underline">
+                    <Link to={getProfilePath(player.user_id, player.name)} className="font-display font-bold text-piu-accent hover:underline">
                       {player.name}
                     </Link>
                   ) : (

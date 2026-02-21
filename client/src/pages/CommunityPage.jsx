@@ -1,17 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
+import { getProfilePath } from '../utils/profile';
 import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
+import SessionSummaryCard from '../components/SessionSummaryCard';
 import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
-  getCommunityMembers,
+  getCommunityMembers, searchCommunityMentions, getPiugameRecentlyPlayed, getJacketMap,
 } from '../utils/api';
+import { calculateClearRating } from '../utils/clearRating';
+import { serializeSessionSummaryMarker, splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -25,6 +29,498 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function getActiveMentionQuery(text, cursor) {
+  const value = String(text || '');
+  const pos = Number.isFinite(cursor) ? cursor : value.length;
+  const before = value.slice(0, pos);
+  const match = before.match(/(^|[\s(])@([A-Za-z0-9_]{1,30})$/);
+  if (!match) return null;
+  return {
+    query: match[2],
+    start: pos - match[2].length - 1,
+    end: pos,
+  };
+}
+
+const SLASH_COMMANDS = {
+  summary: {
+    trigger: '/summary',
+    buttonLabel: 'Generate session summary',
+  },
+};
+
+const SUMMARY_SESSION_GAP_MS = 90 * 60 * 1000;
+const SUMMARY_KCAL_PER_SONG = 18;
+const SUMMARY_TOP_SONGS = 3;
+
+function getRankLabel(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return 'SSS+';
+  if (s >= 990000) return 'SSS';
+  if (s >= 985000) return 'SS+';
+  if (s >= 980000) return 'SS';
+  if (s >= 975000) return 'S+';
+  if (s >= 970000) return 'S';
+  if (s >= 960000) return 'AAA+';
+  if (s >= 950000) return 'AAA';
+  if (s >= 925000) return 'AA+';
+  if (s >= 900000) return 'AA';
+  if (s >= 825000) return 'A+';
+  if (s >= 750000) return 'A';
+  if (s >= 650000) return 'B';
+  if (s >= 550000) return 'C';
+  if (s >= 450000) return 'D';
+  return 'F';
+}
+
+function getGradeColorClass(grade) {
+  const normalized = String(grade || '').toUpperCase();
+  if (normalized.includes('SSS')) return 'text-sky-300';
+  if (normalized.includes('SS')) return 'text-piu-gold';
+  if (normalized.includes('S')) return 'text-amber-400';
+  if (normalized.includes('AAA')) return 'text-piu-silver';
+  if (normalized.includes('AA')) return 'text-piu-bronze';
+  if (normalized === 'A+' || normalized === 'A') return 'text-amber-500';
+  if (normalized === 'B') return 'text-gray-300';
+  if (normalized === 'C') return 'text-gray-400';
+  if (normalized === 'D' || normalized === 'F') return 'text-gray-500';
+  return 'text-gray-300';
+}
+
+function parsePlayedAt(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/[./]/g, '-');
+  const ymd = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
+  );
+  if (ymd) {
+    const y = parseInt(ymd[1], 10);
+    const m = parseInt(ymd[2], 10) - 1;
+    const d = parseInt(ymd[3], 10);
+    const hh = parseInt(ymd[4] || '0', 10);
+    const mm = parseInt(ymd[5] || '0', 10);
+    const ss = parseInt(ymd[6] || '0', 10);
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const ymdLoose = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdLoose) {
+    const y = parseInt(ymdLoose[1], 10);
+    const m = parseInt(ymdLoose[2], 10) - 1;
+    const d = parseInt(ymdLoose[3], 10);
+    const timeMatch = normalized.match(/(\d{1,2})(?::(\d{2}))(?::(\d{2}))?\s*([APap][Mm])?/);
+    let hh = parseInt(timeMatch?.[1] || '0', 10);
+    const mm = parseInt(timeMatch?.[2] || '0', 10);
+    const ss = parseInt(timeMatch?.[3] || '0', 10);
+    const meridiem = String(timeMatch?.[4] || '').toUpperCase();
+    if (meridiem === 'PM' && hh < 12) hh += 12;
+    if (meridiem === 'AM' && hh === 12) hh = 0;
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const md = normalized.match(/^(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (md) {
+    const year = new Date().getFullYear();
+    const m = parseInt(md[1], 10) - 1;
+    const d = parseInt(md[2], 10);
+    const hh = parseInt(md[3] || '0', 10);
+    const mm = parseInt(md[4] || '0', 10);
+    return new Date(year, m, d, hh, mm, 0);
+  }
+
+  const direct = new Date(normalized);
+  if (!Number.isNaN(direct.getTime())) return direct;
+  return null;
+}
+
+function toDayKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parsePlayDayKey(value) {
+  const parsed = parsePlayedAt(value);
+  if (parsed) return toDayKey(parsed);
+
+  const fallback = String(value || '').trim().replace(/[./]/g, '-');
+  const m = fallback.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasSlashCommand(text, trigger) {
+  const pattern = new RegExp(`(^|\\s)${escapeRegExp(trigger)}\\b`, 'i');
+  return pattern.test(String(text || ''));
+}
+
+function stripSlashCommand(text, trigger) {
+  const pattern = new RegExp(`(^|\\s)${escapeRegExp(trigger)}\\b`, 'gi');
+  return String(text || '')
+    .replace(pattern, '$1')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function sortRecentPlays(plays) {
+  const rows = Array.isArray(plays) ? plays : [];
+  return rows
+    .map((play, index) => {
+      const parsedAt = parsePlayedAt(play?.date_played);
+      return {
+        ...play,
+        _index: index,
+        _playedAt: parsedAt,
+        _playedAtMs: parsedAt ? parsedAt.getTime() : null,
+        _dayKey: parsedAt ? toDayKey(parsedAt) : parsePlayDayKey(play?.date_played),
+      };
+    })
+    .sort((a, b) => {
+      if (a._playedAtMs !== null && b._playedAtMs !== null && a._playedAtMs !== b._playedAtMs) {
+        return b._playedAtMs - a._playedAtMs;
+      }
+      if (a._playedAtMs !== null) return -1;
+      if (b._playedAtMs !== null) return 1;
+      return b._index - a._index;
+    });
+}
+
+function getMostRecentSession(sortedRows) {
+  if (!Array.isArray(sortedRows) || sortedRows.length === 0) return [];
+  const session = [sortedRows[0]];
+  const sessionDayKey = sortedRows[0]._dayKey;
+
+  for (let i = 1; i < sortedRows.length; i++) {
+    const prev = session[session.length - 1];
+    const current = sortedRows[i];
+
+    if (prev._playedAtMs !== null && current._playedAtMs !== null) {
+      const gap = prev._playedAtMs - current._playedAtMs;
+      if (gap <= SUMMARY_SESSION_GAP_MS) {
+        session.push(current);
+        continue;
+      }
+      break;
+    }
+
+    if (sessionDayKey && current._dayKey === sessionDayKey) {
+      session.push(current);
+      continue;
+    }
+    break;
+  }
+
+  return session;
+}
+
+function formatNumber(value) {
+  return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function formatDurationLabel(totalMinutes) {
+  const minutes = Math.max(0, parseInt(totalMinutes, 10) || 0);
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours > 0 && remainder > 0) return `${hours}h ${remainder}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainder}m`;
+}
+
+function modeShort(mode) {
+  if (mode === 'Single') return 'S';
+  if (mode === 'Double') return 'D';
+  return 'X';
+}
+
+function normalizeSongKey(title) {
+  return String(title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function getJacketForPlay(play, jacketLookup) {
+  const norm = normalizeSongKey(play?.song_title);
+  const exactKey = `${norm}|${play?.mode || ''}|${play?.level || ''}`;
+  return jacketLookup?.[exactKey] || jacketLookup?.[norm] || '';
+}
+
+function toScore(play) {
+  return parseInt(play?.score, 10) || 0;
+}
+
+function toLevel(play) {
+  return parseInt(play?.level, 10) || 0;
+}
+
+function getPlayRating(play) {
+  return calculateClearRating(play?.level, play?.grade, play?.score);
+}
+
+function buildSessionSummary(sessionRows, jacketLookup = {}) {
+  if (!Array.isArray(sessionRows) || sessionRows.length === 0) return null;
+
+  const enrichedRows = sessionRows.map((play) => {
+    const score = toScore(play);
+    const level = toLevel(play);
+    const rating = getPlayRating(play);
+    return {
+      ...play,
+      _score: score,
+      _level: level,
+      _rating: rating,
+      _jacketUrl: getJacketForPlay(play, jacketLookup),
+      _grade: play?.grade || getRankLabel(score),
+    };
+  });
+
+  let singleCount = 0;
+  let doubleCount = 0;
+  let otherCount = 0;
+  let stageBreakCount = 0;
+  let scoredCount = 0;
+  let scoreTotal = 0;
+  let levelCount = 0;
+  let levelTotal = 0;
+  let totalSteps = 0;
+  let judgedSongCount = 0;
+
+  const judgmentTotals = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
+
+  for (const play of enrichedRows) {
+    if (play.mode === 'Single') singleCount += 1;
+    else if (play.mode === 'Double') doubleCount += 1;
+    else otherCount += 1;
+
+    const score = play._score;
+    if (score > 0) {
+      scoredCount += 1;
+      scoreTotal += score;
+    } else {
+      stageBreakCount += 1;
+    }
+
+    const level = play._level;
+    if (level > 0) {
+      levelCount += 1;
+      levelTotal += level;
+    }
+
+    const perfect = parseInt(play.perfect, 10) || 0;
+    const great = parseInt(play.great, 10) || 0;
+    const good = parseInt(play.good, 10) || 0;
+    const bad = parseInt(play.bad, 10) || 0;
+    const miss = parseInt(play.miss, 10) || 0;
+    const steps = perfect + great + good + bad + miss;
+    if (steps > 0) judgedSongCount += 1;
+    totalSteps += steps;
+    judgmentTotals.perfect += perfect;
+    judgmentTotals.great += great;
+    judgmentTotals.good += good;
+    judgmentTotals.bad += bad;
+    judgmentTotals.miss += miss;
+  }
+
+  const songCount = enrichedRows.length;
+  const clearCount = songCount - stageBreakCount;
+  const clearRate = songCount > 0 ? Math.round((clearCount / songCount) * 100) : 0;
+  const averageScore = scoredCount > 0 ? Math.round(scoreTotal / scoredCount) : 0;
+  const averageLevel = levelCount > 0 ? (levelTotal / levelCount) : 0;
+  const estimatedKcal = songCount * SUMMARY_KCAL_PER_SONG;
+  const perfectRate = totalSteps > 0 ? Math.round((judgmentTotals.perfect / totalSteps) * 100) : 0;
+
+  const sortedByScore = [...enrichedRows]
+    .sort((a, b) => b._score - a._score);
+  const topSongsByScore = sortedByScore.filter(play => play._score > 0).slice(0, SUMMARY_TOP_SONGS);
+  const topSongsByRating = [...enrichedRows]
+    .filter(play => play._score > 0)
+    .sort((a, b) => {
+      if (b._rating !== a._rating) return b._rating - a._rating;
+      return b._score - a._score;
+    })
+    .slice(0, SUMMARY_TOP_SONGS);
+  const bestPlay = topSongsByScore[0] || null;
+
+  const newest = enrichedRows[0]?._playedAt || parsePlayedAt(enrichedRows[0]?.date_played);
+  const oldest = enrichedRows[enrichedRows.length - 1]?._playedAt || parsePlayedAt(enrichedRows[enrichedRows.length - 1]?.date_played);
+  const sessionDateLabel = newest
+    ? newest.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    : 'Recent session';
+  const sessionTimeRange = newest && oldest
+    ? `${oldest.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - ${newest.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+    : '';
+  const sessionDurationMinutes = newest && oldest
+    ? Math.max(0, Math.round((newest.getTime() - oldest.getTime()) / 60000))
+    : 0;
+  const sessionDurationLabel = formatDurationLabel(sessionDurationMinutes);
+  const sessionMachineName = enrichedRows
+    .map((play) => String(play?.machine_name || '').trim())
+    .find(Boolean) || '';
+
+  const modeTotal = Math.max(1, singleCount + doubleCount + otherCount);
+  const singlePct = Math.round((singleCount / modeTotal) * 100);
+  const doublePct = Math.round((doubleCount / modeTotal) * 100);
+  const otherPct = Math.max(0, 100 - singlePct - doublePct);
+  const judgmentCoverageLabel = judgedSongCount < songCount
+    ? ` (${judgedSongCount}/${songCount} songs with data)`
+    : '';
+
+  const postLines = [
+    '📊 **Session Summary**',
+    `🗓️ ${sessionDateLabel}${sessionTimeRange ? ` • ${sessionTimeRange}` : ''}${sessionDurationLabel ? ` • ${sessionDurationLabel}` : ''}`,
+    sessionMachineName ? `🕹️ Machine: **${sessionMachineName}**` : '',
+    `🎵 **${songCount} songs** | 🏁 Clears: **${clearCount}/${songCount}** (${clearRate}%)`,
+    `🦶 Judged steps: **${totalSteps.toLocaleString()}**${judgmentCoverageLabel}`,
+    `🔥 Estimated calories: **~${estimatedKcal.toLocaleString()} kcal**`,
+    '',
+    `🎛️ Mode split: S ${singleCount} | D ${doubleCount}${otherCount > 0 ? ` | X ${otherCount}` : ''}`,
+    averageLevel > 0 ? `📈 Avg level: **Lv.${averageLevel.toFixed(1)}**` : '',
+    averageScore > 0 ? `🎯 Avg score: **${averageScore.toLocaleString()}**` : '',
+    bestPlay
+      ? `🏆 Best chart: **${bestPlay.song_title}** (${modeShort(bestPlay.mode)}${bestPlay.level || '?'}) • ${(bestPlay.grade || getRankLabel(bestPlay._score))} ${formatNumber(bestPlay._score)}`
+      : '',
+    '',
+    `🧮 Judgment totals: P ${judgmentTotals.perfect.toLocaleString()} | G ${judgmentTotals.great.toLocaleString()} | Good ${judgmentTotals.good.toLocaleString()} | Bad ${judgmentTotals.bad.toLocaleString()} | Miss ${judgmentTotals.miss.toLocaleString()} | ${perfectRate}% Perfects!`,
+    '',
+    '🏆 Top 3 by score:',
+    ...(topSongsByScore.length > 0
+      ? topSongsByScore.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | ${play._grade} ${formatNumber(play._score)}`)
+      : ['No scored songs in this session']),
+    '',
+    '⭐ Top 3 by rating:',
+    ...(topSongsByRating.length > 0
+      ? topSongsByRating.map((play, idx) => `${idx + 1}. ${play.song_title} | ${modeShort(play.mode)}${play.level || '?'} | Rating ${formatNumber(play._rating)}`)
+      : ['No rated songs in this session']),
+  ].filter(Boolean);
+
+  return {
+    songCount,
+    clearCount,
+    clearRate,
+    totalSteps,
+    estimatedKcal,
+    singleCount,
+    doubleCount,
+    otherCount,
+    singlePct,
+    doublePct,
+    otherPct,
+    averageScore,
+    averageLevel,
+    judgedSongCount,
+    judgmentTotals,
+    perfectRate,
+    topSongsByScore,
+    topSongsByRating,
+    sessionDateLabel,
+    sessionTimeRange,
+    sessionDurationMinutes,
+    sessionDurationLabel,
+    sessionMachineName,
+    postText: postLines.join('\n'),
+  };
+}
+
+function SummaryStat({ label, value, subvalue = '' }) {
+  return (
+    <div className="rounded-lg border border-piu-border/30 bg-piu-dark/50 px-2.5 py-2">
+      <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{label}</p>
+      <p className="text-sm font-display font-bold text-gray-100">{value}</p>
+      {subvalue ? (
+        <p className="text-[10px] text-gray-500 mt-0.5">{subvalue}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function SummarySongJacket({ play }) {
+  const isSingle = play?.mode === 'Single';
+  const isDouble = play?.mode === 'Double';
+  const badgeColor = isSingle ? 'bg-red-600' : isDouble ? 'bg-green-600' : 'bg-blue-600';
+  const level = play?._level || play?.level || '?';
+
+  return (
+    <div className="relative shrink-0">
+      {play?._jacketUrl ? (
+        <img src={play._jacketUrl} alt="" className="w-12 h-12 rounded object-cover border border-piu-border/50" />
+      ) : (
+        <div className="w-12 h-12 rounded bg-piu-dark border border-piu-border/50 flex items-center justify-center font-display font-bold text-sm text-gray-500">
+          {(play?.song_title || '?')[0]}
+        </div>
+      )}
+      <span className={`absolute -bottom-1 -right-1 min-w-[18px] h-[16px] px-1 rounded text-[9px] flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
+        {level}
+      </span>
+    </div>
+  );
+}
+
+function SummarySongTable({ title, rows, type }) {
+  return (
+    <div className="rounded-lg border border-piu-border/40 bg-piu-dark/35 overflow-hidden">
+      <div className="px-3 py-2 border-b border-piu-border/30 bg-piu-dark/40">
+        <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">{title}</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-gray-500">No scored songs in this session.</p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
+              <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
+              <th className="text-left px-2 py-1 font-display font-bold">Song</th>
+              {type === 'score' ? (
+                <>
+                  <th className="text-right px-2 py-1 font-display font-bold">Score</th>
+                  <th className="text-right px-2 py-1 font-display font-bold">Grade</th>
+                </>
+              ) : (
+                <>
+                  <th className="text-right px-2 py-1 font-display font-bold">Rating</th>
+                  <th className="text-right px-2 py-1 font-display font-bold">Score</th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((play, idx) => (
+              <tr key={`${type}-${idx}-${play.song_title}-${play.mode}-${play.level}`} className="border-b border-piu-border/20 last:border-0">
+                <td className="px-2 py-1.5 text-gray-400 font-mono align-top">{idx + 1}</td>
+                <td className="px-2 py-1.5">
+                  <div className="flex items-start gap-2">
+                    <SummarySongJacket play={play} />
+                    <div className="min-w-0">
+                      <p className="text-gray-200 font-display font-bold truncate max-w-[170px]">{play.song_title}</p>
+                      <p className="text-[10px] text-gray-500">{modeShort(play.mode)}{play._level || play.level || '?'}</p>
+                    </div>
+                  </div>
+                </td>
+                {type === 'score' ? (
+                  <>
+                    <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(play._score)}</td>
+                    <td className={`px-2 py-1.5 text-right font-display font-bold ${getGradeColorClass(play._grade)}`}>{play._grade}</td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-2 py-1.5 text-right font-mono text-cyan-300">{play._rating.toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(play._score)}</td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
 export default function CommunityPage() {
@@ -48,6 +544,9 @@ export default function CommunityPage() {
   const [newPostImages, setNewPostImages] = useState([]);
   const [newPostYoutube, setNewPostYoutube] = useState('');
   const [posting, setPosting] = useState(false);
+  const [postSummaryPreview, setPostSummaryPreview] = useState(null);
+  const [postSummaryLoading, setPostSummaryLoading] = useState(false);
+  const [postSummaryError, setPostSummaryError] = useState('');
 
   // Comment state
   const [expandedComments, setExpandedComments] = useState({});
@@ -55,6 +554,10 @@ export default function CommunityPage() {
   const [replyTo, setReplyTo] = useState({});
 
   const loadCommunity = useCallback(async () => {
+    setPosts([]);
+    setMembers([]);
+    setExpandedComments({});
+    setLoading(true);
     try {
       const data = await getCommunityByName(communityName);
       setCommunity(data);
@@ -71,7 +574,10 @@ export default function CommunityPage() {
     try {
       const data = await getCommunityPosts(community.id, { sort: postSort });
       setPosts(data);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setPosts([]);
+    }
     finally { setPostsLoading(false); }
   }, [community, postSort]);
 
@@ -81,7 +587,10 @@ export default function CommunityPage() {
     try {
       const data = await getCommunityMembers(community.id, memberSort);
       setMembers(data);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      setMembers([]);
+    }
     finally { setMembersLoading(false); }
   }, [community, memberSort]);
 
@@ -111,13 +620,43 @@ export default function CommunityPage() {
     } catch (err) { setError(err.message); }
   };
 
+  const handleGeneratePostSummary = async () => {
+    if (!user?.id || postSummaryLoading) return;
+    setPostSummaryError('');
+    setPostSummaryLoading(true);
+    try {
+      const [data, jacketLookup] = await Promise.all([
+        getPiugameRecentlyPlayed(user.id),
+        getJacketMap().catch(() => ({})),
+      ]);
+      const sortedRows = sortRecentPlays(data?.plays || []);
+      const sessionRows = getMostRecentSession(sortedRows);
+      if (sessionRows.length === 0) {
+        throw new Error('No recently played data found. Sync recently played first.');
+      }
+      const summary = buildSessionSummary(sessionRows, jacketLookup || {});
+      if (!summary) {
+        throw new Error('Failed to build session summary from recently played data.');
+      }
+      setPostSummaryPreview(summary);
+      setNewPostContent(prev => stripSlashCommand(prev, SLASH_COMMANDS.summary.trigger));
+    } catch (err) {
+      setPostSummaryError(err.message || 'Failed to generate session summary.');
+    } finally {
+      setPostSummaryLoading(false);
+    }
+  };
+
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    if (!newPostContent.trim() && newPostImages.length === 0 && !newPostYoutube) return;
+    const sanitizedContent = stripSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
+    const summaryMarker = postSummaryPreview ? serializeSessionSummaryMarker(postSummaryPreview) : '';
+    const finalContent = [sanitizedContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
+    if (!finalContent && newPostImages.length === 0 && !newPostYoutube) return;
     setPosting(true);
     try {
       const formData = new FormData();
-      formData.append('content', newPostContent);
+      formData.append('content', finalContent);
       if (newPostYoutube) formData.append('youtube_url', newPostYoutube);
       for (const f of newPostImages) formData.append('images', f);
       const post = await createCommunityPost(community.id, formData);
@@ -125,6 +664,8 @@ export default function CommunityPage() {
       setNewPostContent('');
       setNewPostImages([]);
       setNewPostYoutube('');
+      setPostSummaryPreview(null);
+      setPostSummaryError('');
     } catch (err) { setError(err.message); }
     finally { setPosting(false); }
   };
@@ -243,7 +784,7 @@ export default function CommunityPage() {
             <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
               <span>{community.member_count} member{community.member_count !== 1 ? 's' : ''}</span>
               <span className="text-gray-600">by</span>
-              <Link to={`/profile/${community.owner_id}`} className="text-piu-accent hover:underline">
+              <Link to={getProfilePath(community.owner_id, community.owner_username)} className="text-piu-accent hover:underline">
                 {community.owner_username}
               </Link>
             </div>
@@ -339,6 +880,11 @@ export default function CommunityPage() {
             newPostYoutube={newPostYoutube}
             setNewPostYoutube={setNewPostYoutube}
             posting={posting}
+            postSummaryPreview={postSummaryPreview}
+            postSummaryLoading={postSummaryLoading}
+            postSummaryError={postSummaryError}
+            onGeneratePostSummary={handleGeneratePostSummary}
+            onClearPostSummary={() => { setPostSummaryPreview(null); setPostSummaryError(''); }}
             onCreatePost={handleCreatePost}
             onDeletePost={handleDeletePost}
             onPinPost={handlePinPost}
@@ -373,11 +919,17 @@ function PostsTab({
   community, posts, loading, isMember, isModOrOwner, user,
   postSort, setPostSort,
   newPostContent, setNewPostContent, newPostImages, setNewPostImages,
-  newPostYoutube, setNewPostYoutube, posting, onCreatePost,
+  newPostYoutube, setNewPostYoutube, posting,
+  postSummaryPreview, postSummaryLoading, postSummaryError,
+  onGeneratePostSummary, onClearPostSummary, onCreatePost,
   onDeletePost, onPinPost, onPumpPost,
   expandedComments, toggleComments, commentTexts, setCommentTexts,
   replyTo, setReplyTo, onAddComment, onDeleteComment,
 }) {
+  const hasSummaryCommand = hasSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
+  const sanitizedContent = stripSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
+  const canSubmit = !!(sanitizedContent.trim() || newPostImages.length > 0 || newPostYoutube || postSummaryPreview);
+
   return (
     <div>
       {/* Sort toggle */}
@@ -408,9 +960,58 @@ function PostsTab({
             onChange={(e) => setNewPostContent(e.target.value)}
             className="w-full bg-transparent border-none text-white text-sm resize-none focus:outline-none placeholder-gray-600"
             rows={3}
-            placeholder="Share something with the community..."
+            placeholder="Share something with the community... Try /summary"
             maxLength={5000}
           />
+
+          {hasSummaryCommand && !postSummaryPreview && (
+            <div className="mt-2 rounded-lg border border-piu-accent/30 bg-piu-accent/10 p-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-display font-bold text-piu-accent">{SLASH_COMMANDS.summary.trigger} command detected</p>
+                <p className="text-[11px] text-gray-400">Build a recap from your latest recently-played session.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onGeneratePostSummary}
+                disabled={postSummaryLoading}
+                className="px-3 py-1.5 bg-piu-accent rounded-lg text-[11px] font-display font-bold hover:bg-piu-accent/80 transition-colors disabled:opacity-50"
+              >
+                {postSummaryLoading ? 'Generating...' : SLASH_COMMANDS.summary.buttonLabel}
+              </button>
+            </div>
+          )}
+
+          {postSummaryPreview && (
+            <SessionSummaryCard
+              summary={postSummaryPreview}
+              title="Session Summary Preview"
+              className="mt-2"
+              actions={(
+                <>
+                  <button
+                    type="button"
+                    onClick={onGeneratePostSummary}
+                    disabled={postSummaryLoading}
+                    className="px-2 py-1 rounded border border-cyan-400/40 text-cyan-300 hover:bg-cyan-400/10 text-[10px] font-display font-bold disabled:opacity-50"
+                  >
+                    {postSummaryLoading ? 'Generating...' : 'Regenerate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClearPostSummary}
+                    className="px-2 py-1 rounded border border-red-400/40 text-red-300 hover:bg-red-400/10 text-[10px] font-display font-bold"
+                  >
+                    Remove
+                  </button>
+                </>
+              )}
+            />
+          )}
+
+          {postSummaryError && (
+            <p className="mt-2 text-xs text-red-400">{postSummaryError}</p>
+          )}
+
           {/* Image previews */}
           {newPostImages.length > 0 && (
             <div className="flex gap-2 mt-2 flex-wrap">
@@ -450,7 +1051,7 @@ function PostsTab({
             </div>
             <button
               type="submit"
-              disabled={posting || (!newPostContent.trim() && newPostImages.length === 0 && !newPostYoutube)}
+              disabled={posting || !canSubmit}
               className="px-4 py-1.5 bg-piu-accent rounded-lg text-xs font-display font-bold hover:bg-piu-accent/80 transition-colors disabled:opacity-40"
             >
               {posting ? 'Posting...' : 'Post'}
@@ -523,6 +1124,7 @@ function CommunityPostCard({
   const isAuthor = user?.id === post.user_id;
   const canDelete = isAuthor || isModOrOwner;
   const youtubeId = post.youtube_url ? extractYoutubeId(post.youtube_url) : null;
+  const { text: postText, summary: postSummary } = splitSessionSummaryContent(post.content || '');
 
   return (
     <div className="bg-piu-card border border-piu-border rounded-xl overflow-hidden">
@@ -540,7 +1142,7 @@ function CommunityPostCard({
         {/* Author header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-2.5">
-            <Link to={`/profile/${post.user_id}`}>
+            <Link to={getProfilePath(post.user_id, post.username)}>
               {post.user_avatar ? (
                 <img src={post.user_avatar.startsWith('data:') ? post.user_avatar : getAvatarUrl(post.user_avatar)} alt="" className="w-9 h-9 rounded-full object-cover" />
               ) : (
@@ -551,7 +1153,7 @@ function CommunityPostCard({
             </Link>
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <Link to={`/profile/${post.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                <Link to={getProfilePath(post.user_id, post.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                   {post.username}
                 </Link>
                 <CommunityTagList tags={post.author_tags} />
@@ -591,10 +1193,14 @@ function CommunityPostCard({
         </div>
 
         {/* Content */}
-        {post.content && (
+        {postText && (
           <div className="text-sm text-gray-300 mb-3 whitespace-pre-wrap break-words leading-relaxed">
-            {renderFormattedText(post.content)}
+            {renderFormattedText(postText)}
           </div>
+        )}
+
+        {postSummary && (
+          <SessionSummaryCard summary={postSummary} title="Session Summary" className="mb-3" />
         )}
 
         {/* Images */}
@@ -670,13 +1276,13 @@ function CommunityPostCard({
             {/* Add comment */}
             {isMember && !replyTo && (
               <div className="flex items-center gap-2 mt-2">
-                <input
-                  type="text"
+                <MentionCommentInput
+                  communityId={community.id}
                   value={commentTexts[post.id] || ''}
-                  onChange={(e) => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))}
-                  onKeyDown={(e) => e.key === 'Enter' && onAddComment(post.id, null)}
-                  className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-piu-accent"
+                  onChange={(value) => setCommentTexts(prev => ({ ...prev, [post.id]: value }))}
+                  onSubmit={() => onAddComment(post.id, null)}
                   placeholder="Write a comment..."
+                  inputClassName="w-full bg-piu-dark border border-piu-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-piu-accent"
                 />
                 <button
                   onClick={() => onAddComment(post.id, null)}
@@ -702,7 +1308,7 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
   return (
     <div>
       <div className="flex items-start gap-2">
-        <Link to={`/profile/${comment.user_id}`}>
+        <Link to={getProfilePath(comment.user_id, comment.username)}>
           {comment.user_avatar ? (
             <img src={comment.user_avatar.startsWith('data:') ? comment.user_avatar : getAvatarUrl(comment.user_avatar)} alt="" className="w-6 h-6 rounded-full object-cover mt-0.5" />
           ) : (
@@ -714,12 +1320,12 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
         <div className="flex-1 min-w-0">
           <div className="bg-piu-dark/50 rounded-lg px-3 py-1.5">
             <div className="flex items-center gap-1.5">
-              <Link to={`/profile/${comment.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(comment.user_id, comment.username)} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors">
                 {comment.username}
               </Link>
               <CommunityTagList tags={comment.author_tags} />
             </div>
-            <p className="text-xs text-gray-300 mt-0.5 break-words">{comment.content}</p>
+            <div className="text-xs text-gray-300 mt-0.5 break-words">{renderFormattedText(comment.content)}</div>
           </div>
           <div className="flex items-center gap-3 mt-0.5 ml-3">
             <span className="text-[9px] text-gray-600">{timeAgo(comment.created_at)}</span>
@@ -748,7 +1354,7 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
         <div className="ml-8 mt-1 space-y-1.5">
           {replies.map(reply => (
             <div key={reply.id} className="flex items-start gap-2">
-              <Link to={`/profile/${reply.user_id}`}>
+              <Link to={getProfilePath(reply.user_id, reply.username)}>
                 {reply.user_avatar ? (
                   <img src={reply.user_avatar.startsWith('data:') ? reply.user_avatar : getAvatarUrl(reply.user_avatar)} alt="" className="w-5 h-5 rounded-full object-cover mt-0.5" />
                 ) : (
@@ -760,15 +1366,26 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
               <div className="flex-1 min-w-0">
                 <div className="bg-piu-dark/30 rounded-lg px-2.5 py-1">
                   <div className="flex items-center gap-1.5">
-                    <Link to={`/profile/${reply.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors">
+                    <Link to={getProfilePath(reply.user_id, reply.username)} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors">
                       {reply.username}
                     </Link>
                     <CommunityTagList tags={reply.author_tags} />
                   </div>
-                  <p className="text-[11px] text-gray-300 mt-0.5 break-words">{reply.content}</p>
+                  <div className="text-[11px] text-gray-300 mt-0.5 break-words">{renderFormattedText(reply.content)}</div>
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 ml-2.5">
                   <span className="text-[9px] text-gray-600">{timeAgo(reply.created_at)}</span>
+                  {isMember && (
+                    <button
+                      onClick={() => {
+                        setReplyTo(comment.id);
+                        setCommentTexts(prev => ({ ...prev, [comment.id]: `@${reply.username} ` }));
+                      }}
+                      className="text-[9px] text-gray-500 hover:text-piu-accent font-display font-bold"
+                    >
+                      Reply
+                    </button>
+                  )}
                   {(user?.id === reply.user_id || isModOrOwner) && (
                     <button onClick={() => onDelete(postId, reply.id)} className="text-[9px] text-gray-600 hover:text-red-400">Delete</button>
                   )}
@@ -782,17 +1399,166 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
       {/* Reply input */}
       {replyTo === comment.id && isMember && (
         <div className="ml-8 mt-1.5 flex items-center gap-2">
-          <input
-            type="text"
+          <MentionCommentInput
+            communityId={community.id}
             value={commentTexts[comment.id] || ''}
-            onChange={(e) => setCommentTexts(prev => ({ ...prev, [comment.id]: e.target.value }))}
-            onKeyDown={(e) => e.key === 'Enter' && onAddComment(postId, comment.id)}
-            className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-3 py-1 text-[11px] text-white focus:outline-none focus:border-piu-accent"
+            onChange={(value) => setCommentTexts(prev => ({ ...prev, [comment.id]: value }))}
+            onSubmit={() => onAddComment(postId, comment.id)}
             placeholder={`Reply to ${comment.username}...`}
             autoFocus
+            inputClassName="w-full bg-piu-dark border border-piu-border rounded-lg px-3 py-1 text-[11px] text-white focus:outline-none focus:border-piu-accent"
           />
           <button onClick={() => onAddComment(postId, comment.id)} className="text-[10px] text-piu-accent font-display font-bold">Send</button>
           <button onClick={() => setReplyTo(null)} className="text-[10px] text-gray-600 hover:text-gray-400">Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MentionCommentInput({
+  communityId,
+  value,
+  onChange,
+  onSubmit,
+  placeholder,
+  autoFocus = false,
+  disabled = false,
+  inputClassName = '',
+}) {
+  const inputRef = useRef(null);
+  const [mentionToken, setMentionToken] = useState(null);
+  const [mentionUsers, setMentionUsers] = useState([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [showMentions, setShowMentions] = useState(false);
+  const requestRef = useRef(0);
+
+  useEffect(() => {
+    if (!communityId || disabled || !mentionToken?.query) {
+      setMentionUsers([]);
+      setMentionLoading(false);
+      setShowMentions(false);
+      return;
+    }
+
+    const requestId = ++requestRef.current;
+    setMentionLoading(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const found = await searchCommunityMentions(communityId, mentionToken.query);
+        if (requestId !== requestRef.current) return;
+        const filtered = (found || []).filter(u => u?.username).slice(0, 6);
+        setMentionUsers(filtered);
+        setShowMentions(filtered.length > 0);
+      } catch {
+        if (requestId === requestRef.current) {
+          setMentionUsers([]);
+          setShowMentions(false);
+        }
+      } finally {
+        if (requestId === requestRef.current) setMentionLoading(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timeout);
+  }, [communityId, mentionToken?.query, disabled]);
+
+  const updateMentionState = (nextValue, cursorOverride) => {
+    const cursor = Number.isFinite(cursorOverride)
+      ? cursorOverride
+      : (inputRef.current?.selectionStart ?? String(nextValue || '').length);
+    const token = getActiveMentionQuery(nextValue, cursor);
+    setMentionToken(token);
+    if (!token) {
+      setMentionUsers([]);
+      setMentionLoading(false);
+      setShowMentions(false);
+    }
+  };
+
+  const handleChange = (nextValue) => {
+    onChange(nextValue);
+    updateMentionState(nextValue);
+  };
+
+  const applyMention = (username) => {
+    const current = String(value || '');
+    const cursor = inputRef.current?.selectionStart ?? current.length;
+    const token = getActiveMentionQuery(current, cursor) || mentionToken;
+    if (!token) return;
+
+    const next = `${current.slice(0, token.start)}@${username} ${current.slice(token.end)}`;
+    const nextCursor = token.start + username.length + 2;
+    onChange(next);
+    setMentionToken(null);
+    setMentionUsers([]);
+    setMentionLoading(false);
+    setShowMentions(false);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      if (showMentions && mentionUsers.length > 0) {
+        e.preventDefault();
+        applyMention(mentionUsers[0].username);
+        return;
+      }
+      e.preventDefault();
+      onSubmit?.();
+      return;
+    }
+    if (e.key === 'Escape' && showMentions) {
+      e.preventDefault();
+      setShowMentions(false);
+    }
+  };
+
+  const classes = inputClassName || 'w-full bg-piu-dark border border-piu-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-piu-accent';
+
+  return (
+    <div className="relative flex-1">
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => handleChange(e.target.value)}
+        onClick={() => updateMentionState(value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        disabled={disabled}
+        className={classes}
+      />
+      {(showMentions || mentionLoading) && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-40 rounded-lg border border-piu-border bg-piu-card shadow-xl max-h-48 overflow-y-auto">
+          {mentionLoading && mentionUsers.length === 0 ? (
+            <p className="px-3 py-2 text-[11px] text-gray-500">Searching...</p>
+          ) : mentionUsers.length === 0 ? (
+            <p className="px-3 py-2 text-[11px] text-gray-500">No users found</p>
+          ) : (
+            mentionUsers.map(u => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => applyMention(u.username)}
+                className="w-full px-3 py-2 text-left hover:bg-piu-dark/60 transition-colors flex items-center gap-2"
+              >
+                {u.avatar ? (
+                  <img src={u.avatar.startsWith('data:') ? u.avatar : getAvatarUrl(u.avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[9px]">
+                    {(u.username || '?')[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="text-xs font-display font-bold">@{u.username}</span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -835,7 +1601,7 @@ function MembersTab({ members, loading, memberSort, setMemberSort, community }) 
           {members.map(member => (
             <Link
               key={member.id}
-              to={`/profile/${member.id}`}
+              to={getProfilePath(member.id, member.username)}
               className="flex items-center gap-3 p-3 rounded-lg hover:bg-piu-dark/50 transition-colors"
             >
               {member.avatar ? (

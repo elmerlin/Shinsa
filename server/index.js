@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { initializeDb, getDb } = require('./db/schema');
+const { registerSharePreviewRoutes } = require('./sharePreviews');
 
 const tournamentRoutes = require('./routes/tournaments');
 const playerRoutes = require('./routes/players');
@@ -15,12 +16,17 @@ const parserRoutes = require('./routes/parser');
 const piugameRoutes = require('./routes/piugame');
 const socialRoutes = require('./routes/social');
 const communityRoutes = require('./routes/communities');
+const worldMaxRoutes = require('./routes/worldMax');
+const chatbotRoutes = require('./routes/chatbot');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Initialize database
 initializeDb();
+
+// Respect proxy headers (needed for correct absolute URLs in social previews).
+app.set('trust proxy', true);
 
 // Middleware
 app.use(cors());
@@ -49,6 +55,8 @@ app.use('/api/parser', parserRoutes);
 app.use('/api/piugame', piugameRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/communities', communityRoutes);
+app.use('/api/world-max', worldMaxRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
@@ -60,6 +68,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
+registerSharePreviewRoutes(app, { clientBuildDir: clientBuild });
 app.use(express.static(clientBuild));
 app.use((req, res) => {
   res.sendFile(path.join(clientBuild, 'index.html'));

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createDuel, searchUsers, sendInvitation } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
   SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
@@ -206,6 +207,7 @@ function PlayerFields({ player, setPlayer, label, prefix, color, isExpanded, onT
 
 export default function DuelSetup() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const now = new Date();
   const [form, setForm] = useState({
     name: '',
@@ -219,6 +221,16 @@ export default function DuelSetup() {
   const [activeAvatar, setActiveAvatar] = useState(null);
   const [expandedPlayer, setExpandedPlayer] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  if (!user) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-12 text-center">
+        <h1 className="section-title mb-4">OFFLINE DUEL</h1>
+        <p className="text-gray-400 mb-4">You need to be logged in to create an Offline Duel.</p>
+        <button onClick={() => navigate('/login')} className="btn-primary">Login</button>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();

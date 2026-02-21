@@ -4,13 +4,33 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   updateMe, changePassword, getInvitations, respondInvitation,
   getPiugameCredentialStatus, savePiugameCredentials, deletePiugameCredentials,
-  syncPumbility, syncBestScores, syncRecentlyPlayed,
+  syncPumbility, syncBestScores, syncRecentlyPlayed, saveWorldMaxLocation,
 } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
   SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
   COUNTRIES, getCountryFlag, getSkillColor,
 } from '../components/PlayerRegistration';
+import { getProfilePath } from '../utils/profile';
+
+function normalizeCountryString(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function resolveCountryCode(input) {
+  const normalized = normalizeCountryString(input);
+  if (!normalized) return '';
+  for (const country of COUNTRIES) {
+    if (!country.code) continue;
+    if (normalizeCountryString(country.name) === normalized) return country.code;
+    if (String(country.code).toLowerCase() === normalized) return country.code;
+  }
+  return '';
+}
 
 export default function MyAccountPage() {
   const navigate = useNavigate();
@@ -24,7 +44,9 @@ export default function MyAccountPage() {
   const [form, setForm] = useState({
     email: '', avatar: '', pumbility: '', skill_title: 'Beginner', skill_level: 1,
     gender: '', nationality: '', date_of_birth: '', show_age: false, description: '',
+    location_country: '', location_city: '',
   });
+  const [avatarDirty, setAvatarDirty] = useState(false);
 
   // Password form
   const [passForm, setPassForm] = useState({ current_password: '', new_password: '', confirm: '' });
@@ -49,7 +71,10 @@ export default function MyAccountPage() {
       date_of_birth: user.date_of_birth || '',
       show_age: !!user.show_age,
       description: user.description || '',
+      location_country: user.location_country || '',
+      location_city: user.location_city || '',
     });
+    setAvatarDirty(false);
     getInvitations().then(setInvitations).catch(() => {});
     getPiugameCredentialStatus().then(r => setPiuLinked(r.linked)).catch(() => {});
   }, [user]);
@@ -61,9 +86,8 @@ export default function MyAccountPage() {
     setSaving(true);
     setMessage('');
     try {
-      await updateMe({
+      const payload = {
         email: form.email,
-        avatar: form.avatar,
         pumbility: parseInt(form.pumbility) || 0,
         skill_title: `${form.skill_title} lvl. ${form.skill_level}`,
         skill_level: parseInt(form.skill_level) || 1,
@@ -72,8 +96,22 @@ export default function MyAccountPage() {
         date_of_birth: form.date_of_birth,
         show_age: form.show_age,
         description: form.description,
-      });
+      };
+      if (avatarDirty) payload.avatar = form.avatar;
+      await updateMe(payload);
+      const nextCountry = String(form.location_country || '').trim();
+      const nextCity = String(form.location_city || '').trim();
+      const prevCountry = String(user.location_country || '').trim();
+      const prevCity = String(user.location_city || '').trim();
+      if (nextCountry !== prevCountry || nextCity !== prevCity) {
+        await saveWorldMaxLocation({
+          country: nextCountry,
+          city: nextCity,
+          country_code: resolveCountryCode(nextCountry),
+        });
+      }
       await refreshUser();
+      setAvatarDirty(false);
       setMessage('Profile updated!');
     } catch (err) {
       setMessage(err.message);
@@ -172,7 +210,7 @@ export default function MyAccountPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-display font-bold tracking-wider">MY ACCOUNT</h1>
-        <Link to={`/profile/${user.id}`} className="text-sm text-piu-accent hover:underline font-display">
+        <Link to={getProfilePath(user.id, user.username)} className="text-sm text-piu-accent hover:underline font-display">
           View public profile
         </Link>
       </div>
@@ -246,7 +284,10 @@ export default function MyAccountPage() {
         <form onSubmit={handleSaveProfile} className="card space-y-4">
           <AvatarPicker
             value={form.avatar}
-            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
+            onChange={(avatar) => {
+              setForm(f => ({ ...f, avatar }));
+              setAvatarDirty(true);
+            }}
             shape="circle"
             size="md"
           />
@@ -339,6 +380,29 @@ export default function MyAccountPage() {
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Location Country</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Japan"
+                value={form.location_country}
+                onChange={e => setForm(f => ({ ...f, location_country: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Location City / Town</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Tokyo"
+                value={form.location_city}
+                onChange={e => setForm(f => ({ ...f, location_city: e.target.value }))}
+              />
+            </div>
           </div>
 
           {/* Preview */}

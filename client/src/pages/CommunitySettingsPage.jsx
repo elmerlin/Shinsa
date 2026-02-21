@@ -11,6 +11,7 @@ import {
   getCommunityTags, createCommunityTag, updateCommunityTag, deleteCommunityTag,
   assignCommunityTag, removeCommunityTag,
 } from '../utils/api';
+import { getProfilePath } from '../utils/profile';
 
 export default function CommunitySettingsPage() {
   const { communityName } = useParams();
@@ -316,7 +317,7 @@ function MembersTab({ community, isOwner, user, setError, setSuccess }) {
           <div className="space-y-2">
             {requests.map(req => (
               <div key={req.id} className="flex items-center gap-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-3">
-                <Link to={`/profile/${req.user_id}`} className="flex items-center gap-2 flex-1 min-w-0">
+                <Link to={getProfilePath(req.user_id, req.username)} className="flex items-center gap-2 flex-1 min-w-0">
                   {req.avatar ? (
                     <img src={req.avatar.startsWith('data:') ? req.avatar : getAvatarUrl(req.avatar)} alt="" className="w-8 h-8 rounded-full object-cover" />
                   ) : (
@@ -342,7 +343,7 @@ function MembersTab({ community, isOwner, user, setError, setSuccess }) {
       <div className="space-y-1">
         {members.map(member => (
           <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-piu-dark/30">
-            <Link to={`/profile/${member.id}`} className="flex items-center gap-2 flex-1 min-w-0">
+            <Link to={getProfilePath(member.id, member.username)} className="flex items-center gap-2 flex-1 min-w-0">
               {member.avatar ? (
                 <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-9 h-9 rounded-full object-cover" />
               ) : (

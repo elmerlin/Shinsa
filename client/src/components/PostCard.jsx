@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from './PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
-import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment } from '../utils/api';
+import { getProfilePath } from '../utils/profile';
+import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment, searchUsers } from '../utils/api';
+import SessionSummaryCard from './SessionSummaryCard';
+import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -18,6 +21,19 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function getActiveMentionQuery(text, cursor) {
+  const value = String(text || '');
+  const pos = Number.isFinite(cursor) ? cursor : value.length;
+  const before = value.slice(0, pos);
+  const match = before.match(/(^|[\s(])@([A-Za-z0-9_]{1,30})$/);
+  if (!match) return null;
+  return {
+    query: match[2],
+    start: pos - match[2].length - 1,
+    end: pos,
+  };
 }
 
 // Extract YouTube video ID from various URL formats
@@ -53,7 +69,9 @@ function YouTubeEmbed({ url }) {
 }
 
 // Single image cell with error fallback
-function GridImage({ src, className, onClick }) {
+// Uses object-position to bias crop towards the upper portion of images
+// so faces (which are usually near the top) are visible in thumbnails.
+function GridImage({ src, className, onClick, isSingle }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
@@ -67,6 +85,7 @@ function GridImage({ src, className, onClick }) {
       src={src}
       alt=""
       className={className}
+      style={isSingle ? undefined : { objectPosition: 'center 20%' }}
       onClick={onClick}
       onError={() => setFailed(true)}
     />
@@ -100,6 +119,7 @@ function ImageGrid({ images, onImageClick }) {
           src={img}
           className={`w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity ${imgHeight}`}
           onClick={() => onImageClick(i)}
+          isSingle={count === 1}
         />
       ))}
     </div>
@@ -246,12 +266,27 @@ function Lightbox({ images, index, onClose }) {
   );
 }
 
-// Share Button - copies link to clipboard
+// Share Button
+// - On mobile browsers that support Web Share API: opens native share sheet (WhatsApp, IG, etc.)
+// - Otherwise: falls back to copying the link
 function ShareButton({ path }) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = async () => {
     const url = `${window.location.origin}${path}`;
+
+    // Native share sheet (mostly mobile; some desktop browsers also support it).
+    if (navigator.share) {
+      try {
+        await navigator.share({ url });
+        return;
+      } catch (err) {
+        // User cancelled or denied; don't force a copy-to-clipboard fallback.
+        if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+        // Otherwise, fall back to clipboard copy below.
+      }
+    }
+
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -272,10 +307,10 @@ function ShareButton({ path }) {
   return (
     <button
       onClick={handleShare}
-      className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
-      title="Copy link"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+      title={navigator.share ? 'Share' : 'Copy link'}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
       </svg>
       <span>{copied ? 'Copied!' : ''}</span>
@@ -309,7 +344,7 @@ function PumpButton({ postId, initialCount, initialPumped }) {
     <button
       onClick={handlePump}
       disabled={!user}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold transition-all ${
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
         pumped
           ? 'text-piu-gold bg-piu-gold/10'
           : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
@@ -319,7 +354,7 @@ function PumpButton({ postId, initialCount, initialPumped }) {
       <img
         src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
         alt=""
-        className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`}
+        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
       />
       <span>{count > 0 ? count : ''}</span>
     </button>
@@ -357,7 +392,7 @@ function CommentPumpButton({ commentId, type, initialCount, initialPumped }) {
 }
 
 // Comment Section
-function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, isOwner }) {
+function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, isOwner, focusCommentId }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [comments, setComments] = useState([]);
@@ -366,7 +401,47 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
   const [replyTo, setReplyTo] = useState(null);
   const [disabled, setDisabled] = useState(!!commentsDisabled);
   const [count, setCount] = useState(commentCount || 0);
+  const [mentionToken, setMentionToken] = useState(null);
+  const [mentionUsers, setMentionUsers] = useState([]);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [highlightedCommentId, setHighlightedCommentId] = useState(null);
   const inputRef = useRef(null);
+  const mentionRequestRef = useRef(0);
+  const commentNodeRefs = useRef(new Map());
+  const focusedTargetRef = useRef('');
+
+  useEffect(() => {
+    if (!user || disabled || !mentionToken?.query) {
+      setMentionUsers([]);
+      setShowMentions(false);
+      setMentionLoading(false);
+      return;
+    }
+
+    const requestId = ++mentionRequestRef.current;
+    setMentionLoading(true);
+    const timeout = setTimeout(async () => {
+      try {
+        const found = await searchUsers(mentionToken.query);
+        if (requestId !== mentionRequestRef.current) return;
+        const filtered = (found || [])
+          .filter(u => u?.username && u.id !== user.id)
+          .slice(0, 6);
+        setMentionUsers(filtered);
+        setShowMentions(filtered.length > 0);
+      } catch {
+        if (requestId === mentionRequestRef.current) {
+          setMentionUsers([]);
+          setShowMentions(false);
+        }
+      } finally {
+        if (requestId === mentionRequestRef.current) setMentionLoading(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timeout);
+  }, [mentionToken?.query, user, disabled]);
 
   const loadComments = async () => {
     setLoading(true);
@@ -377,6 +452,98 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!focusCommentId) return;
+    if (!open) setOpen(true);
+    loadComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusCommentId, postId]);
+
+  useEffect(() => {
+    if (!focusCommentId || !open || comments.length === 0) return;
+    const targetId = String(focusCommentId);
+    if (focusedTargetRef.current === targetId) return;
+
+    const exists = comments.some(c =>
+      String(c.id) === targetId || (c.replies || []).some(r => String(r.id) === targetId)
+    );
+    if (!exists) return;
+
+    const node = commentNodeRefs.current.get(targetId);
+    if (!node) return;
+
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    node.focus({ preventScroll: true });
+    setHighlightedCommentId(targetId);
+    focusedTargetRef.current = targetId;
+
+    const timeout = setTimeout(() => {
+      setHighlightedCommentId(prev => (prev === targetId ? null : prev));
+    }, 2200);
+    return () => clearTimeout(timeout);
+  }, [focusCommentId, open, comments]);
+
+  const setCommentNodeRef = (commentId) => (node) => {
+    const key = String(commentId);
+    if (node) commentNodeRefs.current.set(key, node);
+    else commentNodeRefs.current.delete(key);
+  };
+
+  const updateMentionState = (value, cursorOverride) => {
+    const cursor = Number.isFinite(cursorOverride)
+      ? cursorOverride
+      : (inputRef.current?.selectionStart ?? String(value || '').length);
+    const token = getActiveMentionQuery(value, cursor);
+    setMentionToken(token);
+    if (!token) {
+      setShowMentions(false);
+      setMentionUsers([]);
+      setMentionLoading(false);
+    }
+  };
+
+  const handleInputChange = (value) => {
+    setNewComment(value);
+    updateMentionState(value);
+  };
+
+  const applyMention = (selectedUsername) => {
+    const current = String(newComment || '');
+    const cursor = inputRef.current?.selectionStart ?? current.length;
+    const token = getActiveMentionQuery(current, cursor) || mentionToken;
+    if (!token) return;
+
+    const next = `${current.slice(0, token.start)}@${selectedUsername} ${current.slice(token.end)}`;
+    const nextCursor = token.start + selectedUsername.length + 2;
+    setNewComment(next);
+    setMentionToken(null);
+    setMentionUsers([]);
+    setShowMentions(false);
+    setMentionLoading(false);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const handleInputKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      if (showMentions && mentionUsers.length > 0) {
+        e.preventDefault();
+        applyMention(mentionUsers[0].username);
+        return;
+      }
+      e.preventDefault();
+      handleSubmit();
+      return;
+    }
+    if (e.key === 'Escape' && showMentions) {
+      e.preventDefault();
+      setShowMentions(false);
     }
   };
 
@@ -399,6 +566,10 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
       setNewComment('');
       setReplyTo(null);
       setCount(c => c + 1);
+      setMentionToken(null);
+      setMentionUsers([]);
+      setShowMentions(false);
+      setMentionLoading(false);
     } catch (err) {
       alert(err.message);
     }
@@ -434,7 +605,9 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 
   const startReply = (commentId, username) => {
     setReplyTo(commentId);
-    setNewComment(`@${username} `);
+    const value = `@${username} `;
+    setNewComment(value);
+    updateMentionState(value, value.length);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
@@ -442,9 +615,9 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
     <>
       <button
         onClick={handleToggle}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
         <span>{count > 0 ? count : ''}</span>
@@ -468,11 +641,18 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
           {loading ? (
             <p className="text-xs text-gray-500 py-2">Loading comments...</p>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 max-h-64 overflow-y-auto overflow-x-hidden">
               {comments.map(c => (
-                <div key={c.id}>
+                <div
+                  key={c.id}
+                  ref={setCommentNodeRef(c.id)}
+                  tabIndex={-1}
+                  className={`rounded-lg p-1 outline-none transition-all ${
+                    highlightedCommentId === String(c.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+                  }`}
+                >
                   <div className="flex items-start gap-2">
-                    <Link to={`/profile/${c.user_id}`}>
+                    <Link to={getProfilePath(c.user_id, c.username)}>
                       {c.avatar ? (
                         <img src={getAvatarUrl(c.avatar)} alt="" className="w-6 h-6 rounded-full object-cover border border-piu-border shrink-0" />
                       ) : (
@@ -482,11 +662,11 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                       )}
                     </Link>
                     <div className="flex-1 min-w-0">
-                      <div className="bg-piu-dark/50 rounded-lg px-2.5 py-1.5">
-                        <Link to={`/profile/${c.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors leading-none">
+                      <div className="bg-piu-dark/50 rounded-lg px-2.5 pt-0.5 pb-1.5">
+                        <Link to={getProfilePath(c.user_id, c.username)} className="block font-display font-semibold text-xs text-gray-100 hover:text-piu-accent transition-colors leading-none">
                           {c.username}
                         </Link>
-                        <p className="text-xs text-gray-200 break-words mt-0.5">{c.content}</p>
+                        <div className="text-[13px] text-gray-200 break-words leading-snug mt-1">{renderFormattedText(c.content)}</div>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 px-1">
                         <span className="text-[10px] text-gray-600">{timeAgo(c.created_at)}</span>
@@ -509,8 +689,15 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                   {c.replies && c.replies.length > 0 && (
                     <div className="ml-8 mt-1 space-y-1">
                       {c.replies.map(r => (
-                        <div key={r.id} className="flex items-start gap-2">
-                          <Link to={`/profile/${r.user_id}`}>
+                        <div
+                          key={r.id}
+                          ref={setCommentNodeRef(r.id)}
+                          tabIndex={-1}
+                          className={`flex items-start gap-2 rounded-lg p-1 outline-none transition-all ${
+                            highlightedCommentId === String(r.id) ? 'ring-1 ring-piu-accent/60 bg-piu-accent/10' : ''
+                          }`}
+                        >
+                          <Link to={getProfilePath(r.user_id, r.username)}>
                             {r.avatar ? (
                               <img src={getAvatarUrl(r.avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border shrink-0" />
                             ) : (
@@ -520,15 +707,20 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                             )}
                           </Link>
                           <div className="flex-1 min-w-0">
-                            <div className="bg-piu-dark/30 rounded-lg px-2 py-1">
-                              <Link to={`/profile/${r.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors leading-none">
+                            <div className="bg-piu-dark/30 rounded-lg px-2 pt-0.5 pb-1">
+                              <Link to={getProfilePath(r.user_id, r.username)} className="block font-display font-semibold text-[11px] text-gray-100 hover:text-piu-accent transition-colors leading-none">
                                 {r.username}
                               </Link>
-                              <p className="text-[11px] text-gray-200 break-words mt-0.5">{r.content}</p>
+                              <div className="text-xs text-gray-200 break-words leading-snug mt-1">{renderFormattedText(r.content)}</div>
                             </div>
                             <div className="flex items-center gap-3 mt-0.5 px-1">
                               <span className="text-[9px] text-gray-600">{timeAgo(r.created_at)}</span>
                               <CommentPumpButton commentId={r.id} type="post" initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                              {user && !disabled && (
+                                <button onClick={() => startReply(c.id, r.username)} className="text-[9px] text-gray-500 hover:text-piu-accent">
+                                  Reply
+                                </button>
+                              )}
                               {user && (r.user_id === user.id || user.id === postAuthorId) && (
                                 <button onClick={() => handleDelete(r.id, true, c.id)} className="text-[9px] text-gray-600 hover:text-red-400">
                                   Delete
@@ -549,19 +741,56 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
           {user && !disabled && (
             <div className="flex items-center gap-2 mt-2">
               {replyTo && (
-                <button onClick={() => { setReplyTo(null); setNewComment(''); }} className="text-[10px] text-gray-500 hover:text-red-400 shrink-0">
+                <button onClick={() => {
+                  setReplyTo(null);
+                  setNewComment('');
+                  setMentionToken(null);
+                  setMentionUsers([]);
+                  setShowMentions(false);
+                  setMentionLoading(false);
+                }} className="text-[10px] text-gray-500 hover:text-red-400 shrink-0">
                   &#10005;
                 </button>
               )}
-              <input
-                ref={inputRef}
-                type="text"
-                className="input-field text-xs py-1.5 flex-1"
-                placeholder={replyTo ? 'Write a reply...' : 'Write a comment...'}
-                value={newComment}
-                onChange={e => setNewComment(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              />
+              <div className="relative flex-1">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="input-field text-xs py-1.5 w-full"
+                  placeholder={replyTo ? 'Write a reply...' : 'Write a comment...'}
+                  value={newComment}
+                  onChange={e => handleInputChange(e.target.value)}
+                  onClick={() => updateMentionState(newComment)}
+                  onKeyDown={handleInputKeyDown}
+                />
+                {(showMentions || mentionLoading) && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-piu-border bg-piu-card shadow-xl max-h-48 overflow-y-auto">
+                    {mentionLoading && mentionUsers.length === 0 ? (
+                      <p className="px-3 py-2 text-[11px] text-gray-500">Searching...</p>
+                    ) : mentionUsers.length === 0 ? (
+                      <p className="px-3 py-2 text-[11px] text-gray-500">No users found</p>
+                    ) : (
+                      mentionUsers.map(u => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => applyMention(u.username)}
+                          className="w-full px-3 py-2 text-left hover:bg-piu-dark/60 transition-colors flex items-center gap-2"
+                        >
+                          {u.avatar ? (
+                            <img src={getAvatarUrl(u.avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[9px]">
+                              {(u.username || '?')[0].toUpperCase()}
+                            </div>
+                          )}
+                          <span className="text-xs font-display font-bold">@{u.username}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}
@@ -578,16 +807,20 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 }
 
 // Full Post Card used in Feed and Profile
-export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false }) {
+export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false, focusCommentId = null }) {
   const { user } = useAuth();
+  const initialSplit = useMemo(() => splitSessionSummaryContent(post.content || ''), [post.content]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(post.content || '');
+  const [editContent, setEditContent] = useState(initialSplit.text || '');
   const [editYoutubeUrl, setEditYoutubeUrl] = useState(post.youtube_url || '');
   const [saving, setSaving] = useState(false);
   const [currentContent, setCurrentContent] = useState(post.content || '');
   const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
+  const parsedCurrent = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
+  const visibleContent = parsedCurrent.text || '';
+  const currentSummary = parsedCurrent.summary;
 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }
@@ -597,7 +830,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const canEdit = user && user.id === post.user_id;
 
   const handleEdit = () => {
-    setEditContent(currentContent);
+    setEditContent(visibleContent);
     setEditYoutubeUrl(currentYoutubeUrl);
     setEditing(true);
   };
@@ -605,7 +838,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await editPost(post.id, { content: editContent, youtube_url: editYoutubeUrl });
+      const summaryMarker = currentSummary ? serializeSessionSummaryMarker(currentSummary) : '';
+      const contentToSave = [editContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
+      const updated = await editPost(post.id, { content: contentToSave, youtube_url: editYoutubeUrl });
       setCurrentContent(updated.content || '');
       setCurrentYoutubeUrl(updated.youtube_url || '');
       setWasEdited(true);
@@ -619,7 +854,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   };
 
   const handleCancel = () => {
-    setEditContent(currentContent);
+    setEditContent(visibleContent);
     setEditYoutubeUrl(currentYoutubeUrl);
     setEditing(false);
   };
@@ -630,7 +865,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           {showAuthor && (
-            <Link to={`/profile/${post.user_id}`}>
+            <Link to={getProfilePath(post.user_id, post.username)}>
               {post.avatar ? (
                 <img src={getAvatarUrl(post.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
               ) : (
@@ -642,7 +877,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           )}
           <div>
             {showAuthor && (
-              <Link to={`/profile/${post.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+              <Link to={getProfilePath(post.user_id, post.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
                 {flag && <span className="mr-1">{flag}</span>}
                 {post.username}
               </Link>
@@ -657,10 +892,10 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           {canEdit && !editing && (
             <button
               onClick={handleEdit}
-              className="text-gray-600 hover:text-piu-accent text-xs transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:text-piu-accent hover:bg-piu-dark/50 transition-colors"
               title="Edit post"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
@@ -668,10 +903,12 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           {onDelete && isOwner && (
             <button
               onClick={() => onDelete(post.id)}
-              className="text-gray-600 hover:text-red-400 text-xs transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-piu-dark/50 transition-colors"
               title="Delete post"
             >
-              &#10005;
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           )}
         </div>
@@ -713,10 +950,13 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
         </div>
       ) : (
         <>
-          {currentContent && (
+          {visibleContent && (
             <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
-              {renderFormattedText(currentContent)}
+              {renderFormattedText(visibleContent)}
             </div>
+          )}
+          {currentSummary && (
+            <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
           )}
         </>
       )}
@@ -746,6 +986,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
             commentsDisabled={post.comments_disabled}
             commentCount={post.comment_count || 0}
             isOwner={user && user.id === post.user_id}
+            focusCommentId={focusCommentId}
           />
           <ShareButton path={`/post/${post.id}`} />
         </div>

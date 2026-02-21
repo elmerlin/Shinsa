@@ -5,6 +5,8 @@ const multer = require('multer');
 const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
+const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
+const { createUserNotification } = require('../lib/notifications');
 
 // Multer config for image uploads
 const upload = multer({
@@ -57,10 +59,8 @@ function slugify(str) {
 
 // Helper: create notification
 function createNotification(db, userId, type, title, message, link) {
-  if (!userId) return;
-  db.prepare(
-    'INSERT INTO user_notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)'
-  ).run(userId, type, title, message || '', link || '');
+  if (!userId) return null;
+  return createUserNotification(db, userId, type, title, message || '', link || '');
 }
 
 // Helper: get member role in a community
@@ -70,6 +70,15 @@ function getMemberRole(db, communityId, userId) {
     'SELECT role FROM community_members WHERE community_id = ? AND user_id = ?'
   ).get(communityId, userId);
   return member ? member.role : null;
+}
+
+function canAccessPrivateContent(db, communityId, userId) {
+  const community = db.prepare('SELECT id, is_invite_only FROM communities WHERE id = ?').get(communityId);
+  if (!community) return { ok: false, status: 404, error: 'Community not found' };
+  if (!community.is_invite_only) return { ok: true, community };
+  const role = getMemberRole(db, communityId, userId);
+  if (!role) return { ok: false, status: 403, error: 'This community is private' };
+  return { ok: true, community };
 }
 
 // Helper: check if user is moderator or owner
@@ -368,6 +377,52 @@ router.get('/:id/members', (req, res) => {
   res.json(members);
 });
 
+// GET /api/communities/:id/mentions?q=... — mention suggestions for comments
+router.get('/:id/mentions', requireAuth, (req, res) => {
+  const db = getDb();
+  const community = db.prepare('SELECT id, is_invite_only FROM communities WHERE id = ?').get(req.params.id);
+  if (!community) return res.status(404).json({ error: 'Community not found' });
+
+  const role = getMemberRole(db, community.id, req.user.id);
+  if (!role) return res.status(403).json({ error: 'You must be a member to mention users in this community' });
+
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.json([]);
+
+  if (community.is_invite_only) {
+    const members = db.prepare(`
+      SELECT u.id, u.username, u.avatar, u.pumbility, u.skill_title, u.skill_level, u.gender, u.nationality, u.description
+      FROM community_members cm
+      JOIN users u ON cm.user_id = u.id
+      WHERE cm.community_id = ? AND u.username LIKE ?
+      ORDER BY
+        CASE
+          WHEN LOWER(u.username) = LOWER(?) THEN 0
+          WHEN LOWER(u.username) LIKE LOWER(?) THEN 1
+          ELSE 2
+        END,
+        u.username COLLATE NOCASE ASC
+      LIMIT 10
+    `).all(community.id, `%${q}%`, q, `${q}%`);
+    return res.json(members);
+  }
+
+  const users = db.prepare(`
+    SELECT id, username, avatar, pumbility, skill_title, skill_level, gender, nationality, description
+    FROM users
+    WHERE username LIKE ?
+    ORDER BY
+      CASE
+        WHEN LOWER(username) = LOWER(?) THEN 0
+        WHEN LOWER(username) LIKE LOWER(?) THEN 1
+        ELSE 2
+      END,
+      username COLLATE NOCASE ASC
+    LIMIT 10
+  `).all(`%${q}%`, q, `${q}%`);
+  res.json(users);
+});
+
 // PUT /api/communities/:id/members/:userId/role — change member role
 router.put('/:id/members/:userId/role', requireAuth, (req, res) => {
   const db = getDb();
@@ -402,7 +457,10 @@ router.put('/:id/members/:userId/role', requireAuth, (req, res) => {
   db.prepare('UPDATE community_members SET role = ? WHERE community_id = ? AND user_id = ?')
     .run(role, community.id, req.params.userId);
 
-  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.params.userId);
+  db.prepare(
+    'INSERT INTO community_role_events (community_id, user_id, role, changed_by) VALUES (?, ?, ?, ?)'
+  ).run(community.id, req.params.userId, role, req.user.id);
+
   createNotification(db, req.params.userId, 'community_role_change', 'Role Updated',
     `You are now a ${role} in ${community.display_name}`,
     `/c/${community.name}`);
@@ -648,6 +706,9 @@ router.post('/:id/posts', requireAuth, upload.array('images', 9), async (req, re
 // GET /api/communities/:id/posts — list posts
 router.get('/:id/posts', optionalAuth, (req, res) => {
   const db = getDb();
+  const access = canAccessPrivateContent(db, req.params.id, req.user?.id);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
   const sort = req.query.sort || 'new';
   const page = parseInt(req.query.page) || 1;
   const limit = 20;
@@ -765,29 +826,60 @@ router.post('/:id/posts/:postId/pump', requireAuth, (req, res) => {
 // GET /api/communities/:id/posts/:postId/comments — get comments
 router.get('/:id/posts/:postId/comments', optionalAuth, (req, res) => {
   const db = getDb();
+  const access = canAccessPrivateContent(db, req.params.id, req.user?.id);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
   const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar as user_avatar,
-           (SELECT COUNT(*) FROM community_comment_pumps WHERE comment_id = c.id) as pump_count
+    SELECT c.*, u.username, u.avatar as user_avatar
     FROM community_post_comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.post_id = ?
     ORDER BY c.created_at ASC
   `).all(req.params.postId);
 
-  // Attach author tags and user pump status
-  for (const comment of comments) {
-    comment.author_tags = db.prepare(`
-      SELECT ct.id, ct.name, ct.color, ct.text_color
-      FROM community_member_tags cmt
-      JOIN community_tags ct ON cmt.tag_id = ct.id
-      WHERE cmt.community_id = ? AND cmt.user_id = ?
-    `).all(req.params.id, comment.user_id);
+  if (comments.length === 0) return res.json([]);
 
-    if (req.user) {
-      comment.user_pumped = !!db.prepare(
-        'SELECT 1 FROM community_comment_pumps WHERE comment_id = ? AND user_id = ?'
-      ).get(comment.id, req.user.id);
-    }
+  const commentIds = comments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  // Batch pump counts
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt FROM community_comment_pumps
+    WHERE comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  // Batch user pump status
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id FROM community_comment_pumps
+      WHERE user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
+  }
+
+  // Batch author tags — get all tags for distinct user_ids in this community
+  const uniqueUserIds = [...new Set(comments.map(c => c.user_id))];
+  const userPlaceholders = uniqueUserIds.map(() => '?').join(',');
+  const allTags = db.prepare(`
+    SELECT cmt.user_id, ct.id, ct.name, ct.color, ct.text_color
+    FROM community_member_tags cmt
+    JOIN community_tags ct ON cmt.tag_id = ct.id
+    WHERE cmt.community_id = ? AND cmt.user_id IN (${userPlaceholders})
+  `).all(req.params.id, ...uniqueUserIds);
+  const tagMap = {};
+  for (const tag of allTags) {
+    if (!tagMap[tag.user_id]) tagMap[tag.user_id] = [];
+    tagMap[tag.user_id].push({ id: tag.id, name: tag.name, color: tag.color, text_color: tag.text_color });
+  }
+
+  for (const c of comments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+    c.author_tags = tagMap[c.user_id] || [];
   }
 
   res.json(comments);
@@ -804,12 +896,20 @@ router.post('/:id/posts/:postId/comments', requireAuth, (req, res) => {
   if (post.comments_disabled) return res.status(403).json({ error: 'Comments are disabled on this post' });
 
   const { content, parent_id } = req.body;
-  if (!content || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return res.status(400).json({ error: 'Comment cannot be empty' });
+
+  if (parent_id) {
+    const parent = db.prepare(
+      'SELECT id, user_id FROM community_post_comments WHERE id = ? AND post_id = ?'
+    ).get(parent_id, req.params.postId);
+    if (!parent) return res.status(404).json({ error: 'Parent comment not found' });
+  }
 
   const id = uuidv4();
   db.prepare(
     'INSERT INTO community_post_comments (id, post_id, user_id, parent_id, content) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, req.params.postId, req.user.id, parent_id || null, content.trim());
+  ).run(id, req.params.postId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
     SELECT c.*, u.username, u.avatar as user_avatar
@@ -824,14 +924,40 @@ router.post('/:id/posts/:postId/comments', requireAuth, (req, res) => {
     WHERE cmt.community_id = ? AND cmt.user_id = ?
   `).all(req.params.id, req.user.id);
 
+  const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+  const community = db.prepare(
+    'SELECT name, display_name, is_invite_only FROM communities WHERE id = ?'
+  ).get(req.params.id);
+
   // Notify post author
   if (post.user_id !== req.user.id) {
-    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
-    const community = db.prepare('SELECT name FROM communities WHERE id = ?').get(req.params.id);
     createNotification(db, post.user_id, 'community_comment', 'New Comment',
-      `${user?.username || 'Someone'} commented on your post`,
+      `${actor?.username || 'Someone'} commented on your post`,
       `/c/${community?.name}`);
   }
+
+  if (parent_id) {
+    const parentComment = db.prepare('SELECT user_id FROM community_post_comments WHERE id = ?').get(parent_id);
+    if (parentComment?.user_id && parentComment.user_id !== req.user.id) {
+      createNotification(db, parentComment.user_id, 'community_reply', 'New Reply',
+        `${actor?.username || 'Someone'} replied to your comment`,
+        `/c/${community?.name}`);
+    }
+  }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent, {
+    restrictToCommunityMembers: !!community?.is_invite_only,
+    communityId: req.params.id,
+  });
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: actor?.username || 'Someone',
+    type: 'community_mention',
+    title: 'Mentioned in Community Comment',
+    message: `${actor?.username || 'Someone'} mentioned you in ${community?.display_name || 'a community'}`,
+    link: `/c/${community?.name}?post=${encodeURIComponent(req.params.postId)}&comment=${encodeURIComponent(id)}`,
+  });
 
   res.status(201).json({ ...comment, pump_count: 0 });
 });

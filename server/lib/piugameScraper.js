@@ -35,6 +35,10 @@ const PLATE_MAP = {
 const MODE_MAP = { s: 'Single', d: 'Double', c: 'Co-op', u: 'UCS' };
 const JUDGMENT_ORDER = ['perfect', 'great', 'good', 'bad', 'miss'];
 
+function collapseWhitespace(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
 function normalizeSetCookieHeaders(setCookieHeader) {
   if (!setCookieHeader) return [];
   return Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
@@ -127,6 +131,37 @@ function createClient() {
   };
 
   return client;
+}
+
+async function setLanguage(client, lang = 'en') {
+  const normalizedLang = String(lang || '').toLowerCase() === 'kr' ? 'kr' : 'en';
+  const params = new URLSearchParams();
+  params.append('lang', normalizedLang);
+
+  const res = await client.post(
+    `${PIU_BASE}/ajax/language_update.php`,
+    params.toString(),
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        Referer: `${PIU_BASE}/leaderboard/top_songs.php`,
+      },
+    }
+  );
+
+  let payload = res.data;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch (_) {
+      payload = null;
+    }
+  }
+
+  if (!payload || Number(payload.status) !== 200) {
+    throw new Error(`Failed to switch PIUGame language to ${normalizedLang}`);
+  }
 }
 
 function isLoggedInPiugameHtml(html) {
@@ -274,6 +309,32 @@ function parseJudgmentsFromRecentlyPlayedItem($, $li) {
   });
 
   return judgments;
+}
+
+function parseRecentlyAccessGame($) {
+  const LABEL_RE = /^Recently\s*Access\s*Games\s*:\s*/i;
+  const ALT_LABEL_RE = /^최근\s*접속\s*게임장\s*:\s*/i;
+  let value = '';
+
+  $('i.tt, p.tt, span.tt, div.tt').each((_, el) => {
+    if (value) return;
+    const text = collapseWhitespace($(el).text());
+    if (!text) return;
+    if (LABEL_RE.test(text)) {
+      value = collapseWhitespace(text.replace(LABEL_RE, ''));
+      return;
+    }
+    if (ALT_LABEL_RE.test(text)) {
+      value = collapseWhitespace(text.replace(ALT_LABEL_RE, ''));
+    }
+  });
+
+  if (value) return value;
+
+  const fullText = collapseWhitespace($('body').text());
+  const inlineMatch = fullText.match(/Recently\s*Access\s*Games\s*:\s*(.+?)(?=\s+(?:Last\s*Access\s*Date|Switch\s*Account|More)\b|$)/i);
+  if (inlineMatch?.[1]) return collapseWhitespace(inlineMatch[1]);
+  return '';
 }
 
 /**
@@ -479,6 +540,93 @@ async function scrapeBestScores(client, onProgress) {
 
   console.log(`Best scores: completed with ${allScores.length} total scores`);
   return allScores;
+}
+
+/**
+ * Scrape leaderboard top songs using the same AJAX pagination as piugame.com.
+ * Returns songs in rank order.
+ */
+async function scrapeTopSongs(
+  client,
+  {
+    date,
+    mode = 'total',
+    lang = 'en',
+    pageSize = 50,
+    maxPages = 100,
+    delayMs = 150,
+  } = {}
+) {
+  if (!date) throw new Error('Top songs scrape requires a YYYYMM date');
+
+  const encodedDate = encodeURIComponent(String(date));
+  const encodedMode = encodeURIComponent(String(mode));
+  const pageUrl = `${PIU_BASE}/leaderboard/top_songs.php?mode=${encodedMode}&date=${encodedDate}`;
+
+  await client.get(pageUrl);
+  if (lang) {
+    await setLanguage(client, lang);
+  }
+
+  const rows = [];
+
+  for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
+    const pageOffset = pageIndex * pageSize;
+    const params = new URLSearchParams();
+    params.append('page', String(pageOffset));
+    params.append('date', String(date));
+    params.append('mode', String(mode));
+
+    if (pageIndex > 0 && delayMs > 0) {
+      await delay(delayMs);
+    }
+
+    const res = await client.post(
+      `${PIU_BASE}/ajax/top_songs.php`,
+      params.toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest',
+          Referer: pageUrl,
+        },
+      }
+    );
+
+    const html = typeof res.data === 'string' ? res.data : '';
+    const $ = cheerio.load(html);
+    const items = $('li');
+    if (!items.length) break;
+
+    items.each((idx, li) => {
+      const $li = $(li);
+      const title = collapseWhitespace($li.find('.profile_name .t1').first().text());
+      if (!title) return;
+
+      const artist = collapseWhitespace($li.find('.profile_name .t2').first().text());
+
+      let bgUrl = '';
+      const bgStyle = $li.find('.profile_img .re.bgfix').first().attr('style') || '';
+      const bgMatch = bgStyle.match(/url\(['"]?([^'"]+)['"]?\)/);
+      if (bgMatch) bgUrl = bgMatch[1];
+
+      const rankText = collapseWhitespace($li.find('.num > i.tt').first().text());
+      const parsedRank = parseInt(rankText, 10);
+      const rank = Number.isFinite(parsedRank) ? parsedRank : pageOffset + idx + 1;
+
+      rows.push({
+        rank,
+        song_title: title,
+        artist,
+        background_url: bgUrl,
+      });
+    });
+
+    if (items.length < pageSize) break;
+  }
+
+  rows.sort((a, b) => a.rank - b.rank);
+  return rows;
 }
 
 /**
@@ -751,6 +899,7 @@ async function scrapeRecentlyPlayed(client) {
   const res = await client.get(`${PIU_BASE}/my_page/recently_played.php`);
   const $ = cheerio.load(res.data);
   const plays = [];
+  const machineName = parseRecentlyAccessGame($);
 
   // Note: class is "recently_playeList" (typo in actual site)
   $('ul.recently_playeList > li, ul.recently_playedList > li').each((_, li) => {
@@ -804,6 +953,7 @@ async function scrapeRecentlyPlayed(client) {
       level,
       score,
       grade,
+      machine_name: machineName,
       plate,
       background_url: bgUrl,
       date_played: datePlayed,
@@ -822,7 +972,10 @@ async function scrapeRecentlyPlayed(client) {
 
 module.exports = {
   login,
+  createClient,
+  setLanguage,
   scrapePumbility,
   scrapeBestScores,
+  scrapeTopSongs,
   scrapeRecentlyPlayed,
 };

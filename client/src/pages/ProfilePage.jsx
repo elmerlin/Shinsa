@@ -1,16 +1,23 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import {
+  ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine,
+} from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getUserProfile, getUserStats, getJacketMap,
+  getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap, getChartKeyMap,
+  getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
+  getActivityNotificationPreferences, updateActivityNotificationPreferences,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import PostCard, { timeAgo } from '../components/PostCard';
+import SongAnalyticsPanel from '../components/SongAnalyticsPanel';
+import { getProfilePath } from '../utils/profile';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -72,6 +79,281 @@ const RANK_RANGES = [
   { label: 'D',    min: 450000, bg: 'bg-gray-600' },
   { label: 'F',    min: 0,      bg: 'bg-gray-700' },
 ];
+
+const GRADE_BARS = [
+  { key: 'SSS+', color: '#7dd3fc' },
+  { key: 'SSS', color: '#38bdf8' },
+  { key: 'SS+', color: '#fde047' },
+  { key: 'SS', color: '#facc15' },
+  { key: 'S+', color: '#f59e0b' },
+  { key: 'S', color: '#d97706' },
+  { key: 'AAA+', color: '#cbd5e1' },
+  { key: 'AAA', color: '#94a3b8' },
+  { key: 'AA+', color: '#a78bfa' },
+  { key: 'AA', color: '#8b5cf6' },
+  { key: 'A+', color: '#34d399' },
+  { key: 'A', color: '#10b981' },
+  { key: 'B', color: '#9ca3af' },
+];
+
+const SINGLE_MAX_LEVEL = 26;
+const DOUBLE_MAX_LEVEL = 28;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function toDayKey(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function startOfWeek(date) {
+  const d = startOfDay(date);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+function parseDayKey(key) {
+  const m = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+}
+
+function diffDays(startDate, endDate) {
+  return Math.round((startOfDay(endDate).getTime() - startOfDay(startDate).getTime()) / DAY_MS);
+}
+
+function parsePlayedAt(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/[./]/g, '-');
+  const ymd = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
+  );
+  if (ymd) {
+    const y = parseInt(ymd[1], 10);
+    const m = parseInt(ymd[2], 10) - 1;
+    const d = parseInt(ymd[3], 10);
+    const hh = parseInt(ymd[4] || '0', 10);
+    const mm = parseInt(ymd[5] || '0', 10);
+    const ss = parseInt(ymd[6] || '0', 10);
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const ymdLoose = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdLoose) {
+    const y = parseInt(ymdLoose[1], 10);
+    const m = parseInt(ymdLoose[2], 10) - 1;
+    const d = parseInt(ymdLoose[3], 10);
+    const timeMatch = normalized.match(/(\d{1,2})(?::(\d{2}))(?::(\d{2}))?\s*([APap][Mm])?/);
+    let hh = parseInt(timeMatch?.[1] || '0', 10);
+    const mm = parseInt(timeMatch?.[2] || '0', 10);
+    const ss = parseInt(timeMatch?.[3] || '0', 10);
+    const meridiem = String(timeMatch?.[4] || '').toUpperCase();
+    if (meridiem === 'PM' && hh < 12) hh += 12;
+    if (meridiem === 'AM' && hh === 12) hh = 0;
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const md = normalized.match(/^(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (md) {
+    const year = new Date().getFullYear();
+    const m = parseInt(md[1], 10) - 1;
+    const d = parseInt(md[2], 10);
+    const hh = parseInt(md[3] || '0', 10);
+    const mm = parseInt(md[4] || '0', 10);
+    return new Date(year, m, d, hh, mm, 0);
+  }
+
+  const direct = new Date(normalized);
+  if (!Number.isNaN(direct.getTime())) return direct;
+
+  return null;
+}
+
+function parsePlayDayKey(value) {
+  const parsed = parsePlayedAt(value);
+  if (parsed) return toDayKey(parsed);
+
+  const fallback = String(value || '').trim().replace(/[./]/g, '-');
+  const m = fallback.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+}
+
+function hexToRgb(hex) {
+  const cleaned = String(hex || '').replace('#', '');
+  if (cleaned.length !== 6) return null;
+  return {
+    r: parseInt(cleaned.slice(0, 2), 16),
+    g: parseInt(cleaned.slice(2, 4), 16),
+    b: parseInt(cleaned.slice(4, 6), 16),
+  };
+}
+
+function toHex(v) {
+  return clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0');
+}
+
+function interpolateHex(fromHex, targetHex, t) {
+  const from = hexToRgb(fromHex);
+  const to = hexToRgb(targetHex);
+  if (!from || !to) return fromHex;
+  const ratio = clamp(t, 0, 1);
+  const r = from.r + (to.r - from.r) * ratio;
+  const g = from.g + (to.g - from.g) * ratio;
+  const b = from.b + (to.b - from.b) * ratio;
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function getSingleLevelColor(level) {
+  const lv = clamp(Number(level) || 0, 1, SINGLE_MAX_LEVEL);
+  const ratio = lv / SINGLE_MAX_LEVEL;
+  return interpolateHex('#fca5a5', '#7f1d1d', ratio);
+}
+
+function getDoubleLevelColor(level) {
+  const lv = clamp(Number(level) || 0, 1, DOUBLE_MAX_LEVEL);
+  const ratio = lv / DOUBLE_MAX_LEVEL;
+  return interpolateHex('#86efac', '#14532d', ratio);
+}
+
+function isStageBreakPlay(play) {
+  return (parseInt(play?.score, 10) || 0) <= 0;
+}
+
+function getChartGradeFromScore(score) {
+  const label = getRank(parseInt(score, 10) || 0).label;
+  // Keep chart compact: fold C/D/F into the B bucket.
+  if (label === 'C' || label === 'D' || label === 'F') return 'B';
+  return label;
+}
+
+function DailyLevelGradeChart({ plays }) {
+  const chartData = useMemo(() => {
+    const levelMap = {};
+    const rows = Array.isArray(plays) ? plays : [];
+
+    for (const play of rows) {
+      const level = parseInt(play?.level, 10);
+      if (!Number.isFinite(level) || level <= 0) continue;
+      if (!levelMap[level]) {
+        const seed = { levelLabel: `Lv.${level}`, levelValue: level, stage_break: 0 };
+        for (const g of GRADE_BARS) seed[g.key] = 0;
+        levelMap[level] = seed;
+      }
+
+      if (isStageBreakPlay(play)) {
+        levelMap[level].stage_break -= 1;
+        continue;
+      }
+
+      const grade = getChartGradeFromScore(play.score);
+      if (levelMap[level][grade] !== undefined) {
+        levelMap[level][grade] += 1;
+      }
+    }
+
+    return Object.values(levelMap).sort((a, b) => a.levelValue - b.levelValue);
+  }, [plays]);
+
+  if (chartData.length === 0) return null;
+
+  const maxMagnitude = Math.max(
+    1,
+    ...chartData.map((d) => {
+      const positives = GRADE_BARS.reduce((sum, g) => sum + (d[g.key] || 0), 0);
+      return Math.max(positives, Math.abs(d.stage_break || 0));
+    })
+  );
+
+  const tooltipContent = ({ active, label, payload }) => {
+    if (!active || !Array.isArray(payload)) return null;
+    const rows = payload.filter((item) => (parseInt(item?.value, 10) || 0) !== 0);
+    if (rows.length === 0) return null;
+
+    return (
+      <div className="rounded-lg border border-slate-700 bg-[#0b1220] px-2.5 py-2 shadow-lg">
+        <p className="text-[10px] font-display font-bold text-slate-200 mb-1">{label}</p>
+        <div className="space-y-0.5">
+          {rows.map((item, idx) => {
+            const key = String(item?.dataKey || item?.name || '');
+            const value = Math.abs(parseInt(item?.value, 10) || 0);
+            const text = key === 'stage_break' ? 'Stage Break' : key;
+            return (
+              <div key={`${key}-${idx}`} className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="inline-flex items-center gap-1 text-slate-300">
+                  <span
+                    className="w-2 h-2 rounded-sm"
+                    style={{ backgroundColor: item?.fill || item?.color || '#64748b' }}
+                  />
+                  {text}
+                </span>
+                <span className="font-mono font-bold text-slate-200">{value}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="mt-4">
+      <h4 className="text-[10px] font-display font-bold text-gray-500 mb-2 uppercase tracking-wide">
+        Grade Count by Level (Stage Break below zero)
+      </h4>
+      <div className="h-52 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="2 2" stroke="rgba(148,163,184,0.2)" vertical={false} />
+            <XAxis dataKey="levelLabel" tick={{ fill: '#9ca3af', fontSize: 10 }} />
+            <YAxis
+              domain={[-maxMagnitude, maxMagnitude]}
+              allowDecimals={false}
+              tick={{ fill: '#9ca3af', fontSize: 10 }}
+            />
+            <ReferenceLine y={0} stroke="rgba(148,163,184,0.45)" />
+            <Tooltip content={tooltipContent} />
+            {GRADE_BARS.map((grade) => (
+              <Bar key={grade.key} dataKey={grade.key} stackId="grades" fill={grade.color} />
+            ))}
+            <Bar dataKey="stage_break" fill="#dc2626" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {GRADE_BARS.map((g) => (
+          <span key={g.key} className="inline-flex items-center gap-1 text-[9px] text-gray-400">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: g.color }} />
+            {g.key}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1 text-[9px] text-gray-400">
+          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#dc2626' }} />
+          Stage Break
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function getRankIndex(score) {
   for (let i = 0; i < RANK_RANGES.length; i++) {
@@ -243,12 +525,169 @@ function SyncProgressBar({ progress, total, label }) {
   );
 }
 
+function ActivityIconGlyph({ icon, className = 'w-4 h-4' }) {
+  if (icon === 'post') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+        <path d="M8.5 9.5h7M8.5 12h7M8.5 14.5h4.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (icon === 'comment') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M6 7.5a2.5 2.5 0 0 1 2.5-2.5h7A2.5 2.5 0 0 1 18 7.5v5A2.5 2.5 0 0 1 15.5 15H11l-4.2 3.2c-.4.3-.8 0-.8-.4V15A2.5 2.5 0 0 1 3.5 12.5v-5A2.5 2.5 0 0 1 6 5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'score-up') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <path d="M5 18h14" strokeLinecap="round" />
+        <path d="m7 14 3-3 2.5 2.5L17 9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14.5 9H17v2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'score-clear') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <circle cx="12" cy="12" r="7" />
+        <path d="m9 12 2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'trophy') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M8 5h8v3a4 4 0 0 1-8 0V5Z" />
+        <path d="M10 13h4v2a2 2 0 0 1-4 0v-2Z" />
+        <path d="M9 18h6M6 6h2v1a3 3 0 0 1-3 3H4V8a2 2 0 0 1 2-2Zm12 0h-2v1a3 3 0 0 0 3 3h1V8a2 2 0 0 0-2-2Z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'duel') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <path d="m13.5 3.5-7 9h4L9.5 20l7-9h-4l1-7.5Z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-created') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M9 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM16.5 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+        <path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 19a3.5 3.5 0 0 1 7 0M19 4v4M17 6h4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-joined') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M10 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+        <path d="M3 20a7 7 0 0 1 14 0M18.5 9v6M15.5 12h6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-mod') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="m12 4 6 2.5V12c0 3.8-2.5 6.6-6 8-3.5-1.4-6-4.2-6-8V6.5L12 4Z" />
+        <path d="m9.5 12.5 1.8 1.8 3.4-3.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 8v4l2.5 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function getActivityVisual(item) {
+  const type = item?.type || '';
+  const category = item?.category || '';
+
+  if (type === 'post_created') {
+    return { icon: 'post', tone: 'text-sky-300 border-sky-400/30 bg-sky-500/10' };
+  }
+  if (type.includes('comment') || type.includes('reply')) {
+    return { icon: 'comment', tone: 'text-violet-300 border-violet-400/30 bg-violet-500/10' };
+  }
+  if (type === 'upscore') {
+    return { icon: 'score-up', tone: 'text-amber-300 border-amber-400/30 bg-amber-500/10' };
+  }
+  if (type === 'new_clear') {
+    return { icon: 'score-clear', tone: 'text-emerald-300 border-emerald-400/30 bg-emerald-500/10' };
+  }
+  if (type.includes('tournament')) {
+    return { icon: 'trophy', tone: 'text-pink-300 border-pink-400/30 bg-pink-500/10' };
+  }
+  if (type.includes('duel')) {
+    return { icon: 'duel', tone: 'text-orange-300 border-orange-400/30 bg-orange-500/10' };
+  }
+  if (type === 'community_created') {
+    return { icon: 'community-created', tone: 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10' };
+  }
+  if (type === 'community_joined') {
+    return { icon: 'community-joined', tone: 'text-teal-300 border-teal-400/30 bg-teal-500/10' };
+  }
+  if (type === 'community_moderator') {
+    return { icon: 'community-mod', tone: 'text-lime-300 border-lime-400/30 bg-lime-500/10' };
+  }
+
+  if (category === 'posts') {
+    return { icon: 'post', tone: 'text-sky-300 border-sky-400/30 bg-sky-500/10' };
+  }
+  if (category === 'comments') {
+    return { icon: 'comment', tone: 'text-violet-300 border-violet-400/30 bg-violet-500/10' };
+  }
+  if (category === 'scores') {
+    return { icon: 'score-up', tone: 'text-amber-300 border-amber-400/30 bg-amber-500/10' };
+  }
+  if (category === 'competitions') {
+    return { icon: 'trophy', tone: 'text-pink-300 border-pink-400/30 bg-pink-500/10' };
+  }
+  if (category === 'community') {
+    return { icon: 'community-joined', tone: 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10' };
+  }
+
+  return { icon: 'default', tone: 'text-gray-300 border-gray-400/25 bg-gray-500/10' };
+}
+
+function getActivityCategoryLabel(category) {
+  if (category === 'posts') return 'Post';
+  if (category === 'comments') return 'Comment';
+  if (category === 'scores') return 'Score';
+  if (category === 'competitions') return 'Competition';
+  if (category === 'community') return 'Community';
+  return 'Activity';
+}
+
 export default function ProfilePage() {
-  const { id } = useParams();
+  const { id, username } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user: authUser } = useAuth();
   const [profile, setProfile] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [stats, setStats] = useState(null);
   const [tab, setTab] = useState('overview');
+  const [activityItems, setActivityItems] = useState([]);
+  const [activitySubTab, setActivitySubTab] = useState('all');
+  const usernameHandle = (() => {
+    if (!username) return '';
+    try {
+      return decodeURIComponent(String(username));
+    } catch {
+      return String(username);
+    }
+  })();
+  const isUsernameRoute = Boolean(username);
+  const isAtUsernameRoute = isUsernameRoute && usernameHandle.startsWith('@');
+  const normalizedUsername = isAtUsernameRoute ? usernameHandle.slice(1) : '';
 
   // PIUGame state
   const [piuStatus, setPiuStatus] = useState(null);
@@ -259,8 +698,10 @@ export default function ProfilePage() {
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
+  const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
+  const [chartKeyMap, setChartKeyMap] = useState({});
   const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
   const [bestScoreSearch, setBestScoreSearch] = useState('');
   const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
@@ -270,77 +711,255 @@ export default function ProfilePage() {
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
   const [socialCounts, setSocialCounts] = useState({ followers_count: 0, following_count: 0, posts_count: 0 });
   const [followLoading, setFollowLoading] = useState(false);
+  const [notifyMenuOpen, setNotifyMenuOpen] = useState(false);
+  const notifyMenuRef = useRef(null);
+  const [activityNotifyPrefs, setActivityNotifyPrefs] = useState({
+    loading: false,
+    saving: false,
+    subscribed: false,
+    notify_posts: false,
+    notify_upscores: false,
+    notify_new_clears: false,
+  });
+  const [activityNotifyError, setActivityNotifyError] = useState('');
   const [followersList, setFollowersList] = useState([]);
   const [followingList, setFollowingList] = useState([]);
   const [followersLoaded, setFollowersLoaded] = useState(false);
   const [myFollowingIds, setMyFollowingIds] = useState(new Set());
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
+  const [songAnalytics, setSongAnalytics] = useState(null);
 
-  const isOwner = authUser && authUser.id === id;
+  const profileId = profile?.id || null;
+  const isOwner = authUser && profileId && authUser.id === profileId;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
 
   useEffect(() => {
-    getUserProfile(id).then(setProfile).catch(() => {});
-    getUserStats(id).then(setStats).catch(() => {});
-    getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
-    getSocialCounts(id).then(setSocialCounts).catch(() => {});
+    let cancelled = false;
+
+    setProfile(null);
+    setLoadError('');
+    setStats(null);
+    setPiuStatus(null);
+    setPiuPumbility(null);
+    setPiuBestScores(null);
+    setPiuRecentlyPlayed(null);
+    setPiuDataLoaded(false);
+    setSyncProgress({ in_progress: '', progress: 0, total: 0 });
+    setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
+    setActivityItems([]);
+    setSongAnalytics(null);
     setFollowersLoaded(false);
-    if (authUser) {
-      getFollowStatus(id).then(setFollowStatus).catch(() => {});
-    }
-  }, [id, authUser]);
+    setTab('overview');
+    setSelectedOverviewDateKey('');
+    setActivitySubTab('all');
+    setActivityNotifyPrefs({
+      loading: false,
+      saving: false,
+      subscribed: false,
+      notify_posts: false,
+      notify_upscores: false,
+      notify_new_clears: false,
+    });
+    setActivityNotifyError('');
+    setNotifyMenuOpen(false);
+
+    const load = async () => {
+      try {
+        if (isUsernameRoute && !isAtUsernameRoute) {
+          if (!cancelled) {
+            setProfile(null);
+            setLoadError('Page not found');
+          }
+          return;
+        }
+
+        const userProfile = username
+          ? await getUserProfileByUsername(normalizedUsername)
+          : await getUserProfile(id);
+        if (cancelled) return;
+
+        setProfile(userProfile);
+
+        if (!username && userProfile?.username && location.pathname.startsWith('/profile/')) {
+          navigate(getProfilePath(userProfile.id, userProfile.username), { replace: true });
+        }
+
+        const uid = userProfile.id;
+        const [statsData, piuStatusData, socialData, activityData] = await Promise.all([
+          getUserStats(uid).catch(() => null),
+          getPiugameSyncStatus(uid).catch(() => null),
+          getSocialCounts(uid).catch(() => null),
+          getUserActivity(uid).catch(() => []),
+        ]);
+
+        if (cancelled) return;
+        if (statsData) setStats(statsData);
+        if (piuStatusData) setPiuStatus(piuStatusData);
+        if (socialData) setSocialCounts(socialData);
+        if (Array.isArray(activityData)) setActivityItems(activityData);
+
+        if (authUser) {
+          const status = await getFollowStatus(uid).catch(() => null);
+          if (!cancelled && status) setFollowStatus(status);
+        } else {
+          setFollowStatus({ following: false, followers_count: 0, following_count: 0 });
+        }
+      } catch {
+        if (!cancelled) {
+          setProfile(null);
+          setLoadError('Profile not found');
+        }
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [id, username, normalizedUsername, isUsernameRoute, isAtUsernameRoute, authUser, navigate, location.pathname]);
 
   // Load posts when posts tab is active
   useEffect(() => {
-    if (tab === 'posts') {
-      getUserPosts(id, 1).then(setProfilePosts).catch(() => {});
+    if (tab === 'posts' && profileId) {
+      getUserPosts(profileId, 1).then(setProfilePosts).catch(() => {});
     }
-  }, [tab, id]);
+  }, [tab, profileId]);
 
   // Load followers/following when followers tab is active
   useEffect(() => {
-    if (tab === 'followers' && !followersLoaded) {
+    if (tab === 'followers' && profileId && !followersLoaded) {
       setFollowersLoaded(true);
-      getFollowers(id).then(setFollowersList).catch(() => {});
-      getFollowing(id).then(setFollowingList).catch(() => {});
+      getFollowers(profileId).then(setFollowersList).catch(() => {});
+      getFollowing(profileId).then(setFollowingList).catch(() => {});
       if (authUser) {
         getFollowing(authUser.id).then(list => {
           setMyFollowingIds(new Set(list.map(u => u.id)));
         }).catch(() => {});
       }
     }
-  }, [tab, id, followersLoaded, authUser]);
+  }, [tab, profileId, followersLoaded, authUser]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!profileId) {
+      setSongAnalytics(null);
+      return () => { cancelled = true; };
+    }
+
+    getSongAnalytics(profileId)
+      .then((data) => {
+        if (cancelled) return;
+        setSongAnalytics(data || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSongAnalytics(null);
+      });
+
+    return () => { cancelled = true; };
+  }, [profileId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!authUser || !profileId || isOwner) {
+      setNotifyMenuOpen(false);
+      setActivityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: false,
+        notify_posts: false,
+        notify_upscores: false,
+        notify_new_clears: false,
+      });
+      return () => { cancelled = true; };
+    }
+
+    setActivityNotifyPrefs(prev => ({ ...prev, loading: true, saving: false }));
+    getActivityNotificationPreferences(profileId)
+      .then((prefs) => {
+        if (cancelled) return;
+        setActivityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: !!prefs?.subscribed,
+          notify_posts: !!prefs?.notify_posts,
+          notify_upscores: !!prefs?.notify_upscores,
+          notify_new_clears: !!prefs?.notify_new_clears,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActivityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: false,
+          notify_posts: false,
+          notify_upscores: false,
+          notify_new_clears: false,
+        });
+      });
+
+    return () => { cancelled = true; };
+  }, [authUser, profileId, isOwner]);
+
+  useEffect(() => {
+    if (!notifyMenuOpen) return undefined;
+
+    function handleDocumentClick(e) {
+      if (notifyMenuRef.current && !notifyMenuRef.current.contains(e.target)) {
+        setNotifyMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, [notifyMenuOpen]);
 
   // Load PIUGame data + jacket lookup when any PIU tab is active
   const piuTabs = ['pumbility', 'best-scores', 'recently-played'];
   const isPiuTab = piuTabs.includes(tab);
+  const hasJacketLookup = Object.keys(jacketLookup).length > 0;
 
   useEffect(() => {
-    if (isPiuTab && !piuDataLoaded) {
+    if (isPiuTab && profileId && !piuDataLoaded) {
       setPiuDataLoaded(true);
-      getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
-      getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
-      getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
+      getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
+      getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+      getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
+      getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
+      getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
+    }
+  }, [isPiuTab, profileId, piuDataLoaded]);
+
+  const hasChartKeyMap = Object.keys(chartKeyMap).length > 0;
+  useEffect(() => {
+    if (tab !== 'overview' || !profileId || !hasPiuData) return;
+    if (!piuRecentlyPlayed) {
+      getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
+    }
+    if (!hasJacketLookup) {
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
     }
-  }, [isPiuTab, id, piuDataLoaded]);
+    if (!hasChartKeyMap) {
+      getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
+    }
+  }, [tab, profileId, hasPiuData, piuRecentlyPlayed, hasJacketLookup, hasChartKeyMap]);
 
   // Auto-sync pumbility + recently played (NOT best scores) for profile owner
   useEffect(() => {
-    if (isPiuTab && isOwner && piuStatus?.linked && piuSyncing !== 'auto') {
+    if (isPiuTab && profileId && isOwner && piuStatus?.linked && piuSyncing !== 'auto') {
       setPiuSyncing('auto');
       Promise.all([
         syncPumbility().catch(() => null),
         syncRecentlyPlayed().catch(() => null),
       ]).then(() => {
-        getPiugamePumbility(id).then(setPiuPumbility).catch(() => {});
-        getPiugameRecentlyPlayed(id).then(setPiuRecentlyPlayed).catch(() => {});
-        getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
-        getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
+        getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
+        getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
+        getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+        getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
       }).finally(() => setPiuSyncing(''));
     }
-  }, [isPiuTab, isOwner, piuStatus?.linked]);
+  }, [isPiuTab, profileId, isOwner, piuStatus?.linked]);
 
   // Poll sync progress when a background sync is running
   useEffect(() => {
@@ -353,25 +972,27 @@ export default function ProfilePage() {
         if (!data.in_progress) {
           clearInterval(interval);
           // Refresh data after sync completes
-          getPiugameBestScores(id).then(setPiuBestScores).catch(() => {});
-          getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
+          if (profileId) {
+            getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+            getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
+          }
         }
       }).catch(() => {});
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isOwner, piuStatus?.sync_in_progress]);
+  }, [isOwner, profileId, piuStatus?.sync_in_progress]);
 
   const handleFollow = async () => {
-    if (!authUser || followLoading) return;
+    if (!authUser || followLoading || !profileId) return;
     setFollowLoading(true);
     try {
       if (followStatus.following) {
-        await unfollowUser(id);
+        await unfollowUser(profileId);
         setFollowStatus(s => ({ ...s, following: false, followers_count: s.followers_count - 1 }));
         setSocialCounts(c => ({ ...c, followers_count: Math.max(0, c.followers_count - 1) }));
       } else {
-        await followUser(id);
+        await followUser(profileId);
         setFollowStatus(s => ({ ...s, following: true, followers_count: s.followers_count + 1 }));
         setSocialCounts(c => ({ ...c, followers_count: c.followers_count + 1 }));
       }
@@ -382,6 +1003,60 @@ export default function ProfilePage() {
     }
   };
 
+  const updateActivityPrefs = async (nextPrefs) => {
+    if (!authUser || !profileId || isOwner || activityNotifyPrefs.saving) return;
+
+    const previous = activityNotifyPrefs;
+    const optimistic = {
+      loading: false,
+      saving: true,
+      subscribed: !!(nextPrefs.notify_posts || nextPrefs.notify_upscores || nextPrefs.notify_new_clears),
+      notify_posts: !!nextPrefs.notify_posts,
+      notify_upscores: !!nextPrefs.notify_upscores,
+      notify_new_clears: !!nextPrefs.notify_new_clears,
+    };
+
+    setActivityNotifyError('');
+    setActivityNotifyPrefs(optimistic);
+
+    try {
+      const saved = await updateActivityNotificationPreferences(profileId, {
+        notify_posts: optimistic.notify_posts,
+        notify_upscores: optimistic.notify_upscores,
+        notify_new_clears: optimistic.notify_new_clears,
+      });
+      setActivityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: !!saved?.subscribed,
+        notify_posts: !!saved?.notify_posts,
+        notify_upscores: !!saved?.notify_upscores,
+        notify_new_clears: !!saved?.notify_new_clears,
+      });
+    } catch (err) {
+      setActivityNotifyPrefs({ ...previous, saving: false, loading: false });
+      setActivityNotifyError(err?.message || 'Failed to update activity notification settings');
+    }
+  };
+
+  const handleToggleActivityPref = (field) => {
+    if (activityNotifyPrefs.loading || activityNotifyPrefs.saving) return;
+    updateActivityPrefs({
+      notify_posts: field === 'notify_posts' ? !activityNotifyPrefs.notify_posts : activityNotifyPrefs.notify_posts,
+      notify_upscores: field === 'notify_upscores' ? !activityNotifyPrefs.notify_upscores : activityNotifyPrefs.notify_upscores,
+      notify_new_clears: field === 'notify_new_clears' ? !activityNotifyPrefs.notify_new_clears : activityNotifyPrefs.notify_new_clears,
+    });
+  };
+
+  const handleSetAllActivityPrefs = (enabled) => {
+    if (activityNotifyPrefs.loading || activityNotifyPrefs.saving) return;
+    updateActivityPrefs({
+      notify_posts: !!enabled,
+      notify_upscores: !!enabled,
+      notify_new_clears: !!enabled,
+    });
+  };
+
   const [syncFeedback, setSyncFeedback] = useState('');
   const handleStartBestScoresSync = async () => {
     try {
@@ -389,7 +1064,7 @@ export default function ProfilePage() {
       setSyncFeedback('Import started successfully. Check progress in Best Scores tab.');
       setTimeout(() => setSyncFeedback(''), 6000);
       // Refresh status to start polling
-      getPiugameSyncStatus(id).then(setPiuStatus).catch(() => {});
+      if (profileId) getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
     } catch (err) {
       alert(err.message);
     }
@@ -401,7 +1076,7 @@ export default function ProfilePage() {
     const scores = [];
 
     for (const { duel, songs } of stats.duelStats) {
-      const isP1 = duel.player1_user_id === id;
+      const isP1 = duel.player1_user_id === profileId;
       for (const s of songs) {
         const myScore = isP1 ? s.player1_score : s.player2_score;
         const opponentScore = isP1 ? s.player2_score : s.player1_score;
@@ -438,7 +1113,7 @@ export default function ProfilePage() {
     }
 
     return scores.sort((a, b) => b.myScore - a.myScore);
-  }, [stats, id]);
+  }, [stats, profileId]);
 
   // Aggregated stats
   const aggregated = useMemo(() => {
@@ -453,7 +1128,7 @@ export default function ProfilePage() {
     let duelWins = 0, duelLosses = 0;
     for (const { duel } of stats.duelStats) {
       if (duel.status !== 'COMPLETED') continue;
-      const isP1 = duel.player1_user_id === id;
+      const isP1 = duel.player1_user_id === profileId;
       if ((isP1 && duel.winner === 'player1') || (!isP1 && duel.winner === 'player2')) duelWins++;
       else if (duel.winner !== 'draw') duelLosses++;
     }
@@ -472,7 +1147,208 @@ export default function ProfilePage() {
       .sort((a, b) => a.level - b.level);
 
     return { tournamentCount, duelCount, totalWins, totalLosses, duelWins, duelLosses, totalSongs, avgScore, bestScore, byLevel };
-  }, [stats, songScores, id]);
+  }, [stats, songScores, profileId]);
+
+  const recentlyPlayedRows = useMemo(() => {
+    const rows = Array.isArray(piuRecentlyPlayed?.plays) ? piuRecentlyPlayed.plays : [];
+    return rows
+      .map((play, idx) => {
+        const parsed = parsePlayedAt(play?.date_played);
+        return {
+          play,
+          idx,
+          ts: parsed ? parsed.getTime() : null,
+        };
+      })
+      .sort((a, b) => {
+        if (a.ts !== null && b.ts !== null && a.ts !== b.ts) return b.ts - a.ts;
+        if (a.ts !== null) return -1;
+        if (b.ts !== null) return 1;
+        return b.idx - a.idx;
+      })
+      .map(({ play }) => play);
+  }, [piuRecentlyPlayed]);
+
+  const overviewPlayHeatmap = useMemo(() => {
+    const plays = recentlyPlayedRows;
+    const dayMap = {};
+    let singleMin = Infinity;
+    let singleMax = 0;
+    let doubleMin = Infinity;
+    let doubleMax = 0;
+    let latestDate = null;
+
+    for (let i = 0; i < plays.length; i++) {
+      const play = plays[i];
+      const dayKey = parsePlayDayKey(play?.date_played);
+      const dayDate = parseDayKey(dayKey);
+      if (!dayKey || !dayDate) continue;
+
+      if (!dayMap[dayKey]) {
+        dayMap[dayKey] = {
+          key: dayKey,
+          plays: [],
+          singles: 0,
+          doubles: 0,
+          singleLevelTotal: 0,
+          doubleLevelTotal: 0,
+        };
+      }
+
+      const mode = play?.mode === 'Single' || play?.mode === 'Double' ? play.mode : '';
+      const level = parseInt(play?.level, 10) || 0;
+      const parsedAt = parsePlayedAt(play?.date_played);
+
+      if (mode === 'Single') {
+        dayMap[dayKey].singles += 1;
+        dayMap[dayKey].singleLevelTotal += level;
+      } else if (mode === 'Double') {
+        dayMap[dayKey].doubles += 1;
+        dayMap[dayKey].doubleLevelTotal += level;
+      }
+
+      if ((parseInt(play?.score, 10) || 0) > 0) {
+        if (mode === 'Single' && level > 0) {
+          singleMin = Math.min(singleMin, level);
+          singleMax = Math.max(singleMax, level);
+        } else if (mode === 'Double' && level > 0) {
+          doubleMin = Math.min(doubleMin, level);
+          doubleMax = Math.max(doubleMax, level);
+        }
+      }
+
+      dayMap[dayKey].plays.push({
+        ...play,
+        _parsedAtMs: parsedAt ? parsedAt.getTime() : null,
+        _index: i,
+      });
+
+      if (!latestDate || dayDate.getTime() > latestDate.getTime()) latestDate = dayDate;
+    }
+
+    const dayEntries = Object.values(dayMap);
+    dayEntries.forEach((d) => {
+      d.total = d.singles + d.doubles;
+      d.singleAvgLevel = d.singles > 0 ? d.singleLevelTotal / d.singles : 0;
+      d.doubleAvgLevel = d.doubles > 0 ? d.doubleLevelTotal / d.doubles : 0;
+      d.singleRatio = d.total > 0 ? d.singles / d.total : 0;
+      d.doubleRatio = d.total > 0 ? d.doubles / d.total : 0;
+      d.singleColor = d.singles > 0 ? getSingleLevelColor(d.singleAvgLevel) : 'transparent';
+      d.doubleColor = d.doubles > 0 ? getDoubleLevelColor(d.doubleAvgLevel) : 'transparent';
+
+      if (d.singles > 0 && d.doubles > 0) {
+        const singlesPct = clamp(d.singleRatio * 100, 0, 100);
+        d.fill = `linear-gradient(90deg, ${d.singleColor} 0%, ${d.singleColor} ${singlesPct}%, ${d.doubleColor} ${singlesPct}%, ${d.doubleColor} 100%)`;
+      } else if (d.singles > 0) {
+        d.fill = d.singleColor;
+      } else if (d.doubles > 0) {
+        d.fill = d.doubleColor;
+      } else {
+        d.fill = 'transparent';
+      }
+
+      d.plays = d.plays.sort((a, b) => {
+        const aTime = a._parsedAtMs ?? -1;
+        const bTime = b._parsedAtMs ?? -1;
+        if (aTime !== bTime) return bTime - aTime;
+        return b._index - a._index;
+      });
+    });
+
+    const today = startOfDay(new Date());
+    const yearStartDate = new Date(today.getFullYear(), 0, 1);
+    const yearEndDate = new Date(today.getFullYear(), 11, 31);
+    const gridStartDate = startOfWeek(yearStartDate);
+    const totalGridDays = diffDays(gridStartDate, yearEndDate) + 1;
+    const weeksCount = Math.ceil(totalGridDays / 7);
+
+    const weeks = [];
+    for (let weekIdx = 0; weekIdx < weeksCount; weekIdx++) {
+      const week = [];
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const date = addDays(gridStartDate, weekIdx * 7 + dayIdx);
+        const key = toDayKey(date);
+        const dayData = dayMap[key] || null;
+        week.push({
+          key,
+          date,
+          data: dayData,
+          fill: dayData?.fill || '#111827',
+          label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+        });
+      }
+      weeks.push(week);
+    }
+
+    const monthLabels = [];
+    let lastMonthKey = '';
+    for (const week of weeks) {
+      const firstInYear = week.find((cell) => cell.date.getTime() >= yearStartDate.getTime());
+      if (!firstInYear) {
+        monthLabels.push('');
+        continue;
+      }
+      const first = firstInYear.date;
+      const monthKey = `${first.getFullYear()}-${first.getMonth()}`;
+      if (monthKey !== lastMonthKey) {
+        monthLabels.push(first.toLocaleDateString(undefined, { month: 'short' }));
+        lastMonthKey = monthKey;
+      } else {
+        monthLabels.push('');
+      }
+    }
+
+    return {
+      weeks,
+      monthLabels,
+      daysByKey: dayMap,
+      latestDayKey: latestDate ? toDayKey(latestDate) : '',
+      activeDays: dayEntries.length,
+      totalPlays: plays.length,
+      singleLegend: singleMax > 0
+        ? {
+          min: singleMin === Infinity ? singleMax : singleMin,
+          max: singleMax,
+          minColor: getSingleLevelColor(singleMin === Infinity ? singleMax : singleMin),
+          maxColor: getSingleLevelColor(singleMax),
+        }
+        : null,
+      doubleLegend: doubleMax > 0
+        ? {
+          min: doubleMin === Infinity ? doubleMax : doubleMin,
+          max: doubleMax,
+          minColor: getDoubleLevelColor(doubleMin === Infinity ? doubleMax : doubleMin),
+          maxColor: getDoubleLevelColor(doubleMax),
+        }
+        : null,
+    };
+  }, [recentlyPlayedRows]);
+
+  useEffect(() => {
+    if (!overviewPlayHeatmap.latestDayKey) {
+      setSelectedOverviewDateKey('');
+      return;
+    }
+    if (!selectedOverviewDateKey || !overviewPlayHeatmap.daysByKey[selectedOverviewDateKey]) {
+      setSelectedOverviewDateKey(overviewPlayHeatmap.latestDayKey);
+    }
+  }, [overviewPlayHeatmap, selectedOverviewDateKey]);
+
+  const selectedOverviewDay = selectedOverviewDateKey
+    ? overviewPlayHeatmap.daysByKey[selectedOverviewDateKey] || null
+    : null;
+
+  const singleLegendLevels = useMemo(() => {
+    const legend = overviewPlayHeatmap.singleLegend;
+    if (!legend) return [];
+    return Array.from({ length: legend.max - legend.min + 1 }, (_, i) => legend.min + i);
+  }, [overviewPlayHeatmap.singleLegend]);
+
+  const doubleLegendLevels = useMemo(() => {
+    const legend = overviewPlayHeatmap.doubleLegend;
+    if (!legend) return [];
+    return Array.from({ length: legend.max - legend.min + 1 }, (_, i) => legend.min + i);
+  }, [overviewPlayHeatmap.doubleLegend]);
 
   // Filtered + sorted best scores
   const filteredBestScores = useMemo(() => {
@@ -531,21 +1407,37 @@ export default function ProfilePage() {
     return { levels, maxCount };
   }, [piuBestScores, piuScoreMode]);
 
+  const filteredActivity = useMemo(() => {
+    if (!Array.isArray(activityItems)) return [];
+    if (activitySubTab === 'all') return activityItems;
+    if (activitySubTab === 'posts') return activityItems.filter(a => a.category === 'posts');
+    if (activitySubTab === 'comments') return activityItems.filter(a => a.category === 'comments');
+    if (activitySubTab === 'scores') return activityItems.filter(a => a.category === 'scores');
+    if (activitySubTab === 'competitions') return activityItems.filter(a => a.category === 'competitions');
+    return activityItems;
+  }, [activityItems, activitySubTab]);
+
   if (!profile) {
+    if (loadError) {
+      return <div className="text-center py-20 text-gray-500">{loadError}</div>;
+    }
     return <div className="text-center py-20 text-gray-500">Loading profile...</div>;
   }
 
   const age = profile.show_age && profile.date_of_birth ? getAge(profile.date_of_birth) : null;
   const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
   const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
+  const locationLabel = [profile.location_city, profile.location_country].filter(Boolean).join(', ');
+  const locationFlag = getCountryFlag(profile.location_country_code || profile.nationality, "inline-block h-3.5 align-middle");
 
-  const tabs = ['overview', 'posts', 'competitions', 'songs'];
+  const tabs = ['overview', 'posts', 'competitions'];
   if (hasPiuData) {
-    tabs.push('pumbility', 'best-scores', 'recently-played');
+    tabs.push(...piuTabs);
   }
+  tabs.push('activity');
 
   const tabLabels = {
-    overview: 'Overview', competitions: 'Competitions', songs: 'Songs', posts: 'Posts',
+    overview: 'Overview', posts: 'Posts', competitions: 'Competitions', activity: 'Activity',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', 'recently-played': 'Recently Played',
   };
 
@@ -586,22 +1478,111 @@ export default function ProfilePage() {
             {profile.description && (
               <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
             )}
+            {locationLabel && (
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                <span className="text-[12px]">📍</span>
+                {locationFlag && <span>{locationFlag}</span>}
+                <span className="truncate">{locationLabel}</span>
+              </p>
+            )}
             <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
               Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
             </p>
-            {/* Follow button */}
+            {/* Follow + compact notify controls */}
             {authUser && !isOwner && (
-              <button
-                onClick={handleFollow}
-                disabled={followLoading}
-                className={`mt-1.5 sm:mt-2 px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-                  followStatus.following
-                    ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
-                    : 'bg-piu-accent text-white hover:bg-piu-accent/80'
-                }`}
-              >
-                {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
-              </button>
+              <div className="mt-1.5 sm:mt-2 relative w-fit" ref={notifyMenuRef}>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleFollow}
+                    disabled={followLoading}
+                    className={`px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                      followStatus.following
+                        ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
+                        : 'bg-piu-accent text-white hover:bg-piu-accent/80'
+                    }`}
+                  >
+                    {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
+                  </button>
+                  <button
+                    onClick={() => setNotifyMenuOpen(v => !v)}
+                    className={`px-3.5 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
+                      activityNotifyPrefs.subscribed
+                        ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
+                        : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <span>Notify</span>
+                      {activityNotifyPrefs.subscribed && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      )}
+                    </span>
+                  </button>
+                </div>
+
+                {notifyMenuOpen && (
+                  <div className="absolute left-0 top-full mt-2 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                        Notify About {profile.username}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleSetAllActivityPrefs(true)}
+                          disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                          className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                        >
+                          All
+                        </button>
+                        <button
+                          onClick={() => handleSetAllActivityPrefs(false)}
+                          disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                          className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {[
+                        { key: 'notify_posts', label: 'New Posts' },
+                        { key: 'notify_upscores', label: 'Upscores' },
+                        { key: 'notify_new_clears', label: 'New Clears' },
+                      ].map(opt => {
+                        const enabled = !!activityNotifyPrefs[opt.key];
+                        return (
+                          <button
+                            key={opt.key}
+                            onClick={() => handleToggleActivityPref(opt.key)}
+                            disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                            className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                              enabled
+                                ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
+                                : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
+                            }`}
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              {enabled && <span className="text-emerald-400">✓</span>}
+                              <span>{opt.label}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="text-[10px] text-gray-500 mt-1.5">
+                      {activityNotifyPrefs.loading && 'Loading activity notification settings...'}
+                      {!activityNotifyPrefs.loading && activityNotifyPrefs.saving && 'Saving activity notification settings...'}
+                      {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && activityNotifyPrefs.subscribed && 'You will get notified for selected activities.'}
+                      {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && !activityNotifyPrefs.subscribed && 'Activity notifications are off.'}
+                    </p>
+                    {activityNotifyError && (
+                      <p className="text-[10px] text-red-400 mt-1">{activityNotifyError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
           {/* Mobile pumbility & best clears - stacked, right-aligned, inline with username */}
@@ -688,7 +1669,7 @@ export default function ProfilePage() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-              (t === 'competitions' ? (tab === 'competitions' || tab === 'tournaments' || tab === 'duels') : tab === t)
+              tab === t
                 ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
           >
@@ -716,69 +1697,261 @@ export default function ProfilePage() {
       )}
 
       {/* Tab Content */}
-      {tab === 'overview' && aggregated && (
+      {tab === 'overview' && (
         <div className="space-y-4">
-          {aggregated.byLevel.length > 0 && (
+          {songAnalytics && (
+            <SongAnalyticsPanel analytics={songAnalytics} />
+          )}
+
+          {(overviewPlayHeatmap.weeks.length > 0 || hasPiuData) && (
             <div className="card">
-              <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Average Score by Level</h3>
-              <div className="space-y-1.5">
-                {aggregated.byLevel.map(l => {
-                  const rank = getRank(l.avg);
-                  return (
-                    <div key={l.level} className="flex items-center gap-2">
-                      <span className="text-xs font-display font-bold w-10 text-gray-400">Lv.{l.level}</span>
-                      <div className="flex-1 h-4 bg-piu-dark rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-piu-accent to-purple-600 rounded-full"
-                          style={{ width: `${(l.avg / 1000000) * 100}%` }}
-                        />
-                      </div>
-                      <span className={`text-xs font-display font-bold w-8 ${rank.color}`}>{rank.label}</span>
-                      <span className="text-xs font-mono text-gray-500 w-16 text-right">{l.avg.toLocaleString()}</span>
-                      <span className="text-[10px] text-gray-600 w-8 text-right">{l.count}x</span>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display font-bold text-sm text-piu-accent">Play Activity Heatmap</h3>
+                {overviewPlayHeatmap.activeDays > 0 && (
+                  <span className="text-[10px] text-gray-500">
+                    {overviewPlayHeatmap.activeDays} active day{overviewPlayHeatmap.activeDays === 1 ? '' : 's'} | {overviewPlayHeatmap.totalPlays} plays
+                  </span>
+                )}
               </div>
+
+              {overviewPlayHeatmap.weeks.length > 0 ? (
+                <>
+                  <div className="overflow-x-auto pb-2">
+                    <div className="inline-block min-w-max">
+                      <div className="flex mb-1">
+                        <div className="w-8 shrink-0" />
+                        <div className="flex gap-1">
+                          {overviewPlayHeatmap.monthLabels.map((label, idx) => (
+                            <div key={`${label}-${idx}`} className="w-4 text-[9px] text-gray-500">
+                              {label}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-1">
+                        <div className="w-8 shrink-0 flex flex-col gap-1 text-[9px] text-gray-600">
+                          <div className="h-4 flex items-center">S</div>
+                          <div className="h-4 flex items-center">M</div>
+                          <div className="h-4 flex items-center">T</div>
+                          <div className="h-4 flex items-center">W</div>
+                          <div className="h-4 flex items-center">T</div>
+                          <div className="h-4 flex items-center">F</div>
+                          <div className="h-4 flex items-center">S</div>
+                        </div>
+                        <div className="flex gap-1">
+                          {overviewPlayHeatmap.weeks.map((week, weekIndex) => (
+                            <div key={weekIndex} className="flex flex-col gap-1">
+                              {week.map((cell, dayIdx) => (
+                                <button
+                                  key={`${cell.key}-${dayIdx}`}
+                                  onClick={() => cell.data && setSelectedOverviewDateKey(cell.key)}
+                                  className={`w-4 h-4 rounded-[3px] border transition-all ${
+                                    cell.data
+                                      ? selectedOverviewDateKey === cell.key
+                                        ? 'border-white/80 ring-1 ring-piu-accent/70'
+                                        : 'border-piu-border/30 hover:border-white/60'
+                                      : 'border-piu-border/20'
+                                  }`}
+                                  style={{ background: cell.data ? cell.fill : '#111827' }}
+                                  title={
+                                    cell.data
+                                      ? `${cell.label} | ${cell.data.total} plays (${Math.round(cell.data.doubleRatio * 100)}% Double / ${Math.round(cell.data.singleRatio * 100)}% Single)`
+                                      : cell.label
+                                  }
+                                  disabled={!cell.data}
+                                />
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5 flex flex-col items-end">
+                    {overviewPlayHeatmap.singleLegend && (
+                      <div className="flex items-center justify-end gap-2 w-full">
+                        <span className="text-[10px] font-display font-bold text-red-300 shrink-0">Singles</span>
+                        <div className="flex items-center gap-[2px] justify-end">
+                          {singleLegendLevels.map((level) => (
+                            <span
+                              key={`single-${level}`}
+                              className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                              style={{ backgroundColor: getSingleLevelColor(level) }}
+                              title={`S${level}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-gray-500 shrink-0">
+                          S{overviewPlayHeatmap.singleLegend.min} - S{overviewPlayHeatmap.singleLegend.max}
+                        </span>
+                      </div>
+                    )}
+                    {overviewPlayHeatmap.doubleLegend && (
+                      <div className="flex items-center justify-end gap-2 w-full">
+                        <span className="text-[10px] font-display font-bold text-green-300 shrink-0">Doubles</span>
+                        <div className="flex items-center gap-[2px] justify-end">
+                          {doubleLegendLevels.map((level) => (
+                            <span
+                              key={`double-${level}`}
+                              className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                              style={{ backgroundColor: getDoubleLevelColor(level) }}
+                              title={`D${level}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-gray-500 shrink-0">
+                          D{overviewPlayHeatmap.doubleLegend.min} - D{overviewPlayHeatmap.doubleLegend.max}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedOverviewDay && (
+                    <div className="mt-4 pt-4 border-t border-piu-border/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-display font-bold text-xs text-piu-accent">
+                          {parseDayKey(selectedOverviewDateKey)?.toLocaleDateString(undefined, {
+                            weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
+                          }) || selectedOverviewDateKey}
+                        </h4>
+                        <span className="text-[10px] text-gray-500">{selectedOverviewDay.total} plays</span>
+                      </div>
+
+                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                        {selectedOverviewDay.plays.map((play, idx) => {
+                          const rank = getRank(play.score);
+                          const isBreak = isStageBreakPlay(play);
+                          const playNorm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                          const playChartKey = `${playNorm}|${play.mode}|${play.level}`;
+                          const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[playNorm];
+                          const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
+                          return (
+                            <div key={`${play.song_title}-${play.mode}-${play.level}-${idx}`} className="flex items-center gap-2 py-1 border-b border-piu-border/20 last:border-0">
+                              <Link to={playChartLink}>
+                                <PiuSongJacket
+                                  title={play.song_title}
+                                  mode={play.mode}
+                                  level={play.level}
+                                  bgUrl={play.background_url}
+                                  jacketLookup={jacketLookup}
+                                  size="sm"
+                                />
+                              </Link>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-display font-bold truncate">{play.song_title}</p>
+                                <p className="text-[10px] text-gray-500">
+                                  {play.mode === 'Single' ? 'S' : play.mode === 'Double' ? 'D' : 'C'}{play.level}
+                                  {play.date_played && (
+                                    <span className="ml-1.5 text-gray-600">{String(play.date_played).split(' ').slice(1).join(' ') || ''}</span>
+                                  )}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                                onClick={() => setSelectedPlay(play)}
+                              >
+                                {isBreak ? (
+                                  <span className="text-xs leading-none font-display font-bold text-red-500">STAGE BREAK</span>
+                                ) : (
+                                  <>
+                                    <span className={`text-xs leading-none font-display font-bold ${play.grade ? getGradeColor(play.grade) : rank.color}`}>
+                                      {play.grade || rank.label}
+                                    </span>
+                                    <p className="text-[11px] leading-none font-mono font-bold mt-0.5">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <DailyLevelGradeChart plays={selectedOverviewDay.plays} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-center text-gray-500 text-sm py-4">No recently played data synced yet</p>
+              )}
             </div>
           )}
 
-          {songScores.length > 0 && (
-            <div className="card">
-              <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Top Scores</h3>
-              <div className="space-y-2">
-                {songScores.slice(0, 10).map((s, i) => {
-                  const rank = getRank(s.myScore);
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-xs text-gray-600 font-mono w-4">#{i + 1}</span>
-                      {s.jacket && (
-                        <img src={s.jacket} alt="" className="w-8 h-8 rounded object-cover" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-display font-bold truncate">{s.title}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {s.mode} Lv.{s.level}
-                          <span className="ml-2 text-gray-600">{s.source}</span>
-                        </p>
+        </div>
+      )}
+
+      {tab === 'activity' && (
+        <div className="space-y-3">
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'posts', label: 'Posts' },
+              { key: 'comments', label: 'Comments' },
+              { key: 'scores', label: 'Scores' },
+              { key: 'competitions', label: 'Competitions' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setActivitySubTab(opt.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                  activitySubTab === opt.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {filteredActivity.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No activity yet</p>
+          ) : (
+            <div className="space-y-3.5">
+              {filteredActivity.map(item => {
+                const visual = getActivityVisual(item);
+                const content = (
+                  <div className="card-hover p-3 sm:p-3.5">
+                    <div className="flex items-start gap-3.5">
+                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${visual.tone}`}>
+                        <ActivityIconGlyph icon={visual.icon} />
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
-                        <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2.5">
+                          <p className="text-sm font-display font-bold text-gray-200 leading-5">{item.message}</p>
+                          <span className="text-[10px] text-gray-600 shrink-0 pt-0.5">{timeAgo(item.created_at)}</span>
+                        </div>
+                        {item.detail && (
+                          <p className="text-xs text-gray-500 mt-1.5 break-words leading-relaxed">{item.detail}</p>
+                        )}
+                        <div className="mt-2.5">
+                          <span className="inline-flex items-center rounded-md border border-piu-border/50 bg-piu-dark/60 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-gray-400">
+                            {getActivityCategoryLabel(item.category)}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                  </div>
+                );
+
+                if (item.link) {
+                  return (
+                    <Link key={item.id} to={item.link} className="block">
+                      {content}
+                    </Link>
                   );
-                })}
-              </div>
+                }
+
+                return <div key={item.id}>{content}</div>;
+              })}
             </div>
           )}
         </div>
       )}
 
-      {tab === 'competitions' && stats && (
+      {tab === 'competitions' && (
         <div>
-          {/* Sub-tabs for Tournaments and Duels */}
-          <div className="flex gap-1 mb-3">
+          {/* Sub-tabs for Tournaments, Duels, and Songs */}
+          <div className="flex gap-1 mb-3 flex-wrap">
             <button
               onClick={() => setCompetitionsSub('tournaments')}
               className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
@@ -795,14 +1968,24 @@ export default function ProfilePage() {
             >
               Duels ({aggregated?.duelCount || 0})
             </button>
+            <button
+              onClick={() => setCompetitionsSub('songs')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'songs' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Songs ({songScores.length})
+            </button>
           </div>
 
           {competitionsSub === 'tournaments' && (
             <div className="space-y-3">
-              {stats.tournamentPlayers.length === 0 ? (
+              {!stats ? (
+                <p className="text-center text-gray-500 py-8">Loading competition history...</p>
+              ) : stats.tournamentPlayers.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">No tournament participation yet</p>
               ) : (
-                stats.tournamentPlayers.map(({ tournament, matches }) => (
+                stats.tournamentPlayers.map(({ tournament }) => (
                   <Link
                     key={tournament.tournament_id || tournament.id}
                     to={`/tournament/${tournament.tournament_id}`}
@@ -838,11 +2021,13 @@ export default function ProfilePage() {
 
           {competitionsSub === 'duels' && (
             <div className="space-y-3">
-              {stats.duelStats.length === 0 ? (
+              {!stats ? (
+                <p className="text-center text-gray-500 py-8">Loading competition history...</p>
+              ) : stats.duelStats.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">No duel participation yet</p>
               ) : (
                 stats.duelStats.map(({ duel, songs }) => {
-                  const isP1 = duel.player1_user_id === id;
+                  const isP1 = duel.player1_user_id === profileId;
                   const opponentName = isP1 ? duel.player2_name : duel.player1_name;
                   const myWins = songs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
                   const oppWins = songs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
@@ -865,39 +2050,94 @@ export default function ProfilePage() {
               )}
             </div>
           )}
-        </div>
-      )}
 
-      {tab === 'songs' && (
-        <div className="space-y-2">
-          {songScores.length === 0 ? (
-            <p className="text-center text-gray-500 py-8">No song scores recorded yet</p>
-          ) : (
-            songScores.map((s, i) => {
-              const rank = getRank(s.myScore);
-              return (
-                <div key={i} className="card flex items-center gap-3 py-2">
-                  {s.jacket && (
-                    <img src={s.jacket} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-display font-bold truncate">{s.title}</p>
-                    <p className="text-[10px] text-gray-500">
-                      {s.mode} Lv.{s.level} - {s.source}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
-                    <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
-                  </div>
-                  <div className="w-6 text-center shrink-0">
-                    {s.won && <span className="text-piu-green text-xs">W</span>}
-                    {!s.won && !s.draw && <span className="text-red-400 text-xs">L</span>}
-                    {s.draw && <span className="text-gray-500 text-xs">D</span>}
+          {competitionsSub === 'songs' && (
+            <div className="space-y-4">
+              {aggregated?.byLevel?.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Average Score by Level</h3>
+                  <div className="space-y-1.5">
+                    {aggregated.byLevel.map(l => {
+                      const rank = getRank(l.avg);
+                      return (
+                        <div key={l.level} className="flex items-center gap-2">
+                          <span className="text-xs font-display font-bold w-10 text-gray-400">Lv.{l.level}</span>
+                          <div className="flex-1 h-4 bg-piu-dark rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-piu-accent to-purple-600 rounded-full"
+                              style={{ width: `${(l.avg / 1000000) * 100}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-display font-bold w-8 ${rank.color}`}>{rank.label}</span>
+                          <span className="text-xs font-mono text-gray-500 w-16 text-right">{l.avg.toLocaleString()}</span>
+                          <span className="text-[10px] text-gray-600 w-8 text-right">{l.count}x</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })
+              )}
+
+              {songScores.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Top Scores</h3>
+                  <div className="space-y-2">
+                    {songScores.slice(0, 10).map((s, i) => {
+                      const rank = getRank(s.myScore);
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="text-xs text-gray-600 font-mono w-4">#{i + 1}</span>
+                          {s.jacket && (
+                            <img src={s.jacket} alt="" className="w-8 h-8 rounded object-cover" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-display font-bold truncate">{s.title}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {s.mode} Lv.{s.level}
+                              <span className="ml-2 text-gray-600">{s.source}</span>
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
+                            <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {songScores.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No song scores recorded yet</p>
+              ) : (
+                songScores.map((s, i) => {
+                  const rank = getRank(s.myScore);
+                  return (
+                    <div key={i} className="card flex items-center gap-3 py-2.5">
+                      {s.jacket && (
+                        <img src={s.jacket} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{s.title}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {s.mode} Lv.{s.level} - {s.source}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
+                        <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
+                      </div>
+                      <div className="w-6 text-center shrink-0">
+                        {s.won && <span className="text-piu-green text-xs">W</span>}
+                        {!s.won && !s.draw && <span className="text-red-400 text-xs">L</span>}
+                        {s.draw && <span className="text-gray-500 text-xs">D</span>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
         </div>
       )}
@@ -919,7 +2159,7 @@ export default function ProfilePage() {
                   const isSelf = authUser && authUser.id === f.id;
                   return (
                     <div key={f.id} className="flex items-center gap-3 py-2.5">
-                      <Link to={`/profile/${f.id}`} className="shrink-0">
+                      <Link to={getProfilePath(f.id, f.username)} className="shrink-0">
                         {f.avatar ? (
                           <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
                         ) : (
@@ -929,7 +2169,7 @@ export default function ProfilePage() {
                         )}
                       </Link>
                       <div className="flex-1 min-w-0">
-                        <Link to={`/profile/${f.id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                        <Link to={getProfilePath(f.id, f.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
                           {fFlag && <span className="mr-1">{fFlag}</span>}
                           {f.username}
                         </Link>
@@ -975,7 +2215,7 @@ export default function ProfilePage() {
                   const fFlag = getCountryFlag(f.nationality);
                   return (
                     <div key={f.id} className="flex items-center gap-3 py-2.5">
-                      <Link to={`/profile/${f.id}`} className="shrink-0">
+                      <Link to={getProfilePath(f.id, f.username)} className="shrink-0">
                         {f.avatar ? (
                           <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
                         ) : (
@@ -985,7 +2225,7 @@ export default function ProfilePage() {
                         )}
                       </Link>
                       <div className="flex-1 min-w-0">
-                        <Link to={`/profile/${f.id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                        <Link to={getProfilePath(f.id, f.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
                           {fFlag && <span className="mr-1">{fFlag}</span>}
                           {f.username}
                         </Link>
@@ -1248,9 +2488,9 @@ export default function ProfilePage() {
         <div className="card">
           <h3 className="font-display font-bold text-base text-piu-accent mb-4">RECENTLY PLAYED</h3>
 
-          {piuRecentlyPlayed?.plays?.length > 0 ? (
+          {recentlyPlayedRows.length > 0 ? (
             <div className="space-y-2">
-              {piuRecentlyPlayed.plays.map((p, i) => {
+              {recentlyPlayedRows.map((p, i) => {
                 const rank = getRank(p.score);
                 return (
                   <div

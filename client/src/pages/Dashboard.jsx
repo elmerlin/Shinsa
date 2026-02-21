@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
@@ -39,6 +40,7 @@ const PHASE_LABELS = {
 };
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [duels, setDuels] = useState([]);
   const [onlineDuels, setOnlineDuels] = useState([]);
@@ -50,6 +52,14 @@ export default function Dashboard() {
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [featuredCommunities, setFeaturedCommunities] = useState([]);
+
+  const matchesSearch = (value, q) => String(value || '').toLowerCase().includes(q);
+  const duelMatchesSearch = (duel, q) => (
+    matchesSearch(duel.name, q)
+    || matchesSearch(duel.location, q)
+    || matchesSearch(duel.player1_name, q)
+    || matchesSearch(duel.player2_name, q)
+  );
 
   useEffect(() => {
     // Fire all requests independently — page renders immediately,
@@ -63,21 +73,29 @@ export default function Dashboard() {
   }, []);
 
   const handleSearch = useCallback(async (q) => {
-    setSearchQuery(q);
     if (!q.trim()) {
       setSearchResults(null);
       return;
     }
     setSearching(true);
     try {
-      const results = await searchTournaments(q);
-      setSearchResults(results);
+      const normalized = q.trim().toLowerCase();
+      const [tournamentResults] = await Promise.all([
+        searchTournaments(q),
+      ]);
+      const duelResults = duels.filter(d => duelMatchesSearch(d, normalized));
+      const onlineDuelResults = onlineDuels.filter(d => duelMatchesSearch(d, normalized));
+      setSearchResults({
+        tournaments: tournamentResults,
+        duels: duelResults,
+        onlineDuels: onlineDuelResults,
+      });
     } catch (err) {
       console.error(err);
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [duels, onlineDuels]);
 
   // Debounce search
   useEffect(() => {
@@ -89,7 +107,7 @@ export default function Dashboard() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, handleSearch]);
 
   const handleDelete = async (e, id) => {
     e.preventDefault();
@@ -97,15 +115,30 @@ export default function Dashboard() {
     if (!confirm('Delete this tournament? This cannot be undone.')) return;
     await deleteTournament(id);
     setTournaments(t => t.filter(x => x.id !== id));
-    if (searchResults) setSearchResults(sr => sr.filter(x => x.id !== id));
+    if (searchResults) {
+      setSearchResults(sr => (sr ? {
+        ...sr,
+        tournaments: sr.tournaments.filter(x => x.id !== id),
+      } : sr));
+    }
   };
 
   const handleDeleteDuel = async (e, id) => {
     e.preventDefault();
     e.stopPropagation();
     if (!confirm('Delete this duel? This cannot be undone.')) return;
-    await deleteDuel(id);
-    setDuels(d => d.filter(x => x.id !== id));
+    try {
+      await deleteDuel(id);
+      setDuels(d => d.filter(x => x.id !== id));
+      if (searchResults) {
+        setSearchResults(sr => (sr ? {
+          ...sr,
+          duels: sr.duels.filter(x => x.id !== id),
+        } : sr));
+      }
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   const handleDeleteOnlineDuel = async (e, id) => {
@@ -115,12 +148,23 @@ export default function Dashboard() {
     try {
       await deleteOnlineDuel(id);
       setOnlineDuels(d => d.filter(x => x.id !== id));
+      if (searchResults) {
+        setSearchResults(sr => (sr ? {
+          ...sr,
+          onlineDuels: sr.onlineDuels.filter(x => x.id !== id),
+        } : sr));
+      }
     } catch (err) {
       alert(err.message);
     }
   };
 
-  const displayTournaments = searchResults !== null ? searchResults : tournaments;
+  const displayTournaments = searchResults !== null ? searchResults.tournaments : tournaments;
+  const displayDuels = searchResults !== null ? searchResults.duels : duels;
+  const displayOnlineDuels = searchResults !== null ? searchResults.onlineDuels : onlineDuels;
+  const totalSearchResults = searchResults === null
+    ? 0
+    : (searchResults.tournaments.length + searchResults.duels.length + searchResults.onlineDuels.length);
 
   const TournamentCard = ({ t }) => (
     <Link
@@ -168,81 +212,113 @@ export default function Dashboard() {
     </Link>
   );
 
-  const DuelCard = ({ d }) => (
-    <Link
-      key={d.id}
-      to={`/duel/${d.id}`}
-      className="card-hover flex items-center justify-between group"
-    >
-      <div className="flex items-center gap-3">
-        {/* Duel avatar: two player avatars with crossed swords */}
-        <div className="flex items-center shrink-0">
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
-            {d.player1_avatar ? (
-              <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
-                {d.player1_name[0].toUpperCase()}
-              </div>
-            )}
+  const DuelCard = ({ d }) => {
+    const creatorUserId = d.creator_user_id || d.player1_user_id || '';
+    const canDeleteDuel = !!(user && creatorUserId && creatorUserId === user.id);
+
+    return (
+      <Link
+        key={d.id}
+        to={`/duel/${d.id}`}
+        className="card-hover flex items-center justify-between group"
+      >
+        <div className="flex items-center gap-3">
+          {/* Duel avatar: two player avatars with crossed swords */}
+          <div className="flex items-center shrink-0">
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
+              {d.player1_avatar ? (
+                <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
+                  {d.player1_name[0].toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="w-5 h-5 bg-piu-card rounded-full flex items-center justify-center z-20 -mx-0.5">
+              <svg width="12" height="12" viewBox="0 0 40 40" fill="none" className="text-piu-accent">
+                <path d="M8 8L32 32M8 8L12 4M8 8L4 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M32 8L8 32M32 8L28 4M32 8L36 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
+              {d.player2_avatar ? (
+                <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
+                  {d.player2_name[0].toUpperCase()}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="w-5 h-5 bg-piu-card rounded-full flex items-center justify-center z-20 -mx-0.5">
-            <svg width="12" height="12" viewBox="0 0 40 40" fill="none" className="text-piu-accent">
-              <path d="M8 8L32 32M8 8L12 4M8 8L4 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M32 8L8 32M32 8L28 4M32 8L36 12" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
-            {d.player2_avatar ? (
-              <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
-                {d.player2_name[0].toUpperCase()}
-              </div>
-            )}
+          <div>
+            <h3 className="font-display text-base font-bold group-hover:text-piu-accent transition-colors">
+              {d.name}
+            </h3>
+            <div className="flex gap-2 text-xs text-gray-500">
+              <span>
+                {d.player1_nationality && <>{getCountryFlag(d.player1_nationality)} </>}
+                {d.player1_name} vs{' '}
+                {d.player2_nationality && <>{getCountryFlag(d.player2_nationality)} </>}
+                {d.player2_name}
+              </span>
+              {d.location && <span>- {d.location}</span>}
+            </div>
           </div>
         </div>
-        <div>
-          <h3 className="font-display text-base font-bold group-hover:text-piu-accent transition-colors">
-            {d.name}
-          </h3>
-          <div className="flex gap-2 text-xs text-gray-500">
-            <span>
-              {d.player1_nationality && <>{getCountryFlag(d.player1_nationality)} </>}
-              {d.player1_name} vs{' '}
-              {d.player2_nationality && <>{getCountryFlag(d.player2_nationality)} </>}
-              {d.player2_name}
-            </span>
-            {d.location && <span>- {d.location}</span>}
-          </div>
+        <div className="flex items-center gap-3">
+          <span className={`badge ${d.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
+            {d.status === 'COMPLETED' ? 'Completed' : 'Active'}
+          </span>
+          {canDeleteDuel && (
+            <button
+              onClick={(e) => handleDeleteDuel(e, d.id)}
+              className="text-gray-600 hover:text-red-500 transition-colors p-1"
+              title="Delete duel"
+            >
+              &#10005;
+            </button>
+          )}
         </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className={`badge ${d.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
-          {d.status === 'COMPLETED' ? 'Completed' : 'Active'}
-        </span>
-        <button
-          onClick={(e) => handleDeleteDuel(e, d.id)}
-          className="text-gray-600 hover:text-red-500 transition-colors p-1"
-          title="Delete duel"
-        >
-          &#10005;
-        </button>
-      </div>
-    </Link>
-  );
+      </Link>
+    );
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-4xl font-display font-bold tracking-wider">
           <span className="text-piu-gold">PUMP</span> SHINSA
         </h1>
-        <div className="flex flex-wrap gap-2 mt-2">
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Social</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Score Tracking</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Competitive Matching</span>
-          <span className="text-xs font-display tracking-wider text-gray-400 bg-gray-800/60 px-2 py-1 rounded">Communities</span>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/world-max"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 border border-sky-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-sky-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
+            </svg>
+            World Max
+          </Link>
+          <Link
+            to="/songs"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border border-emerald-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
+            </svg>
+            Songs
+          </Link>
+          <Link
+            to="/head-to-head"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
+            </svg>
+            Head to Head
+          </Link>
         </div>
       </div>
 
@@ -270,7 +346,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">RECENT ACTIVITY</h2>
           <div className="card divide-y divide-piu-border/20">
-            {recentActivity.slice(0, 15).map((a, i) => {
+            {recentActivity.slice(0, 10).map((a, i) => {
               const ai = ACTIVITY_ICONS[a.type] || { icon: '•', color: 'text-gray-400' };
               return (
                 <Link
@@ -337,11 +413,11 @@ export default function Dashboard() {
       )}
 
       {/* Online Duels Section */}
-      {onlineDuels.length > 0 && searchResults === null && (
+      {displayOnlineDuels.length > 0 && (
         <div className="mb-8">
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">ONLINE DUELS</h2>
           <div className="grid gap-3">
-            {onlineDuels.map(d => (
+            {displayOnlineDuels.map(d => (
               <Link
                 key={d.id}
                 to={`/online-duel/${d.id}`}
@@ -407,11 +483,11 @@ export default function Dashboard() {
       )}
 
       {/* Offline Duels Section */}
-      {duels.length > 0 && searchResults === null && (
+      {displayDuels.length > 0 && (
         <div className="mb-8">
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">OFFLINE DUELS</h2>
           <div className="grid gap-3">
-            {duels.map(d => <DuelCard key={d.id} d={d} />)}
+            {displayDuels.map(d => <DuelCard key={d.id} d={d} />)}
           </div>
         </div>
       )}
@@ -421,9 +497,11 @@ export default function Dashboard() {
         <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">TOURNAMENTS</h2>
         {displayTournaments.length === 0 ? (
           searchResults !== null ? (
-            <div className="text-center py-10">
-              <p className="text-gray-400">No tournaments found</p>
-            </div>
+            totalSearchResults === 0 ? (
+              <div className="text-center py-10">
+                <p className="text-gray-400">No tournaments, duels, or duel players found</p>
+              </div>
+            ) : null
           ) : (
             <div className="text-center py-12">
               <p className="text-gray-400">No tournaments yet</p>
@@ -461,7 +539,7 @@ export default function Dashboard() {
           <input
             type="text"
             className="input-field w-full pl-10"
-            placeholder="Search tournaments, locations, players..."
+            placeholder="Search tournaments, duels, locations, players..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
           />
@@ -475,7 +553,7 @@ export default function Dashboard() {
         {searchResults !== null && (
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-500">
-              {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
+              {totalSearchResults} result{totalSearchResults !== 1 ? 's' : ''} for &ldquo;{searchQuery}&rdquo;
             </p>
             <button
               onClick={() => { setSearchQuery(''); setSearchResults(null); }}

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFeed, getJacketMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment } from '../utils/api';
+import { getFeed, getJacketMap, getChartKeyMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
 import { renderFormattedText } from '../utils/formatText';
+import { getProfilePath } from '../utils/profile';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -39,6 +40,153 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function getClearItems(item) {
+  const fallback = [{
+    song_title: item.song_title || '',
+    mode: item.mode || 'Single',
+    level: parseInt(item.level) || 0,
+    score: parseInt(item.score) || 0,
+    grade: item.grade || '',
+    plate: item.plate || '',
+    background_url: item.background_url || '',
+  }];
+
+  try {
+    const parsed = JSON.parse(item.clears_json || '[]');
+    if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
+
+    return parsed.map(c => ({
+      song_title: c.song_title || fallback[0].song_title,
+      mode: c.mode || fallback[0].mode,
+      level: parseInt(c.level) || fallback[0].level,
+      score: parseInt(c.score) || 0,
+      grade: c.grade || '',
+      plate: c.plate || '',
+      background_url: c.background_url || '',
+      perfect: c.perfect || 0, great: c.great || 0, good: c.good || 0,
+      bad: c.bad || 0, miss: c.miss || 0,
+    }));
+  } catch {
+    return fallback;
+  }
+}
+
+function getGradeColor(grade, score = 0) {
+  const normalized = String(grade || '').toUpperCase();
+  if (normalized) {
+    if (normalized.includes('SSS')) return 'text-sky-300';
+    if (normalized.includes('SS')) return 'text-piu-gold';
+    if (normalized.includes('S')) return 'text-amber-400';
+    if (normalized.includes('AAA')) return 'text-piu-silver';
+    if (normalized.includes('AA')) return 'text-piu-bronze';
+    if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
+  }
+  return getRank(score).color;
+}
+
+const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
+const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
+
+function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
+  if (!score) return null;
+  const rank = getRank(score.new_score ?? score.score ?? 0);
+  const displayScore = score.new_score ?? score.score ?? 0;
+  const grade = score.new_grade || score.grade || rank.label;
+  const plateName = PLATE_NAMES[score.plate] || score.plate || '';
+  const plateColor = PLATE_COLORS[score.plate] || 'text-gray-400';
+  const hasJudgments = (score.perfect > 0 || score.great > 0 || score.good > 0 || score.bad > 0 || score.miss > 0);
+  const judgments = [
+    { label: 'PERFECT', value: score.perfect || 0, textColor: 'text-sky-400' },
+    { label: 'GREAT', value: score.great || 0, textColor: 'text-green-400' },
+    { label: 'GOOD', value: score.good || 0, textColor: 'text-yellow-400' },
+    { label: 'BAD', value: score.bad || 0, textColor: 'text-fuchsia-400' },
+    { label: 'MISS', value: score.miss || 0, textColor: 'text-gray-400' },
+  ];
+  const isUpscore = score.old_score !== undefined;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {jacketUrl && (
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-15"
+            style={{ backgroundImage: `url(${jacketUrl})` }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
+
+        <div className="relative p-5">
+          <button
+            className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
+            onClick={onClose}
+          >
+            x
+          </button>
+
+          {chartLink ? (
+            <Link to={chartLink} className="font-display font-bold text-lg leading-tight pr-6 hover:text-piu-accent transition-colors block" onClick={onClose}>{score.song_title}</Link>
+          ) : (
+            <p className="font-display font-bold text-lg leading-tight pr-6">{score.song_title}</p>
+          )}
+
+          <div className="flex items-center gap-3 mt-4">
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
+              score.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : score.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
+            }`}>
+              <span className={`font-display font-bold text-[10px] uppercase ${score.mode === 'Single' ? 'text-red-400' : score.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{score.mode}</span>
+              <span className={`font-display font-bold text-base ${score.mode === 'Single' ? 'text-red-300' : score.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{score.level}</span>
+            </div>
+            <div className="text-center flex-1">
+              {displayScore > 0 ? (
+                <p className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)}`}>
+                  {grade}
+                </p>
+              ) : (
+                <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+              )}
+            </div>
+          </div>
+
+          {plateName && (
+            <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+          )}
+
+          {displayScore > 0 && (
+            <p className="text-center font-mono text-2xl font-bold mt-2">{displayScore.toLocaleString()}</p>
+          )}
+
+          {isUpscore && score.old_score > 0 && (
+            <div className="text-center mt-2 space-y-0.5">
+              <p className="text-[10px] text-gray-500">Previous: <span className="font-mono">{score.old_score.toLocaleString()}</span> {score.old_grade || getRank(score.old_score).label}</p>
+              <p className="text-xs text-piu-green font-mono font-bold">+{(displayScore - score.old_score).toLocaleString()}</p>
+            </div>
+          )}
+
+          {hasJudgments && (
+            <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
+              {judgments.map(j => (
+                <div key={j.label}>
+                  <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
+                  <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!hasJudgments && displayScore > 0 && (
+            <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
+              Judgment breakdown not available
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function FeedCommentPumpButton({ commentId, type, initialCount, initialPumped }) {
@@ -96,7 +244,7 @@ function UpscorePumpButton({ upscoreId, initialCount, initialPumped }) {
     <button
       onClick={toggle}
       disabled={!user}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold transition-all ${
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
         pumped
           ? 'text-piu-gold bg-piu-gold/10'
           : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
@@ -106,7 +254,7 @@ function UpscorePumpButton({ upscoreId, initialCount, initialPumped }) {
       <img
         src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
         alt=""
-        className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`}
+        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
       />
       <span>{count > 0 ? count : ''}</span>
     </button>
@@ -169,9 +317,9 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
     <>
       <button
         onClick={toggleOpen}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
         <span>{count > 0 ? count : ''}</span>
@@ -181,7 +329,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
           {comments.map(c => (
             <div key={c.id}>
               <div className="flex items-start gap-2">
-                <Link to={`/profile/${c.user_id}`}>
+                <Link to={getProfilePath(c.user_id, c.username)}>
                   {c.avatar ? (
                     <img src={getAvatarUrl(c.avatar)} className="w-6 h-6 rounded-full object-cover" alt="" />
                   ) : (
@@ -190,7 +338,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
+                    <Link to={getProfilePath(c.user_id, c.username)} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
                     <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
@@ -204,7 +352,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
               {/* Replies */}
               {(c.replies || []).map(r => (
                 <div key={r.id} className="flex items-start gap-2 ml-6 mt-1">
-                  <Link to={`/profile/${r.user_id}`}>
+                  <Link to={getProfilePath(r.user_id, r.username)}>
                     {r.avatar ? (
                       <img src={getAvatarUrl(r.avatar)} className="w-5 h-5 rounded-full object-cover" alt="" />
                     ) : (
@@ -213,12 +361,13 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
+                      <Link to={getProfilePath(r.user_id, r.username)} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <FeedCommentPumpButton commentId={r.id} type="upscore" initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                      {user && <button onClick={() => { setReplyTo(c.id); setReplyText(`@${r.username} `); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
                       {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
                     </div>
                   </div>
@@ -236,6 +385,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                     autoFocus
                   />
                   <button onClick={() => submitReply(c.id)} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
+                  <button onClick={() => { setReplyTo(null); setReplyText(''); }} className="text-[10px] text-gray-600 hover:text-gray-400 font-display px-1">&#10005;</button>
                 </div>
               )}
             </div>
@@ -258,10 +408,13 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
   );
 }
 
-function UpscoreCard({ item, jacketLookup }) {
+function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
+  const [showAll, setShowAll] = useState(false);
   const upscores = (() => {
     try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; }
   })();
+  const hasMore = upscores.length > 5;
+  const visibleUpscores = showAll ? upscores : upscores.slice(0, 5);
   const flag = getCountryFlag(item.nationality);
 
   if (upscores.length === 0) return null;
@@ -269,7 +422,7 @@ function UpscoreCard({ item, jacketLookup }) {
   return (
     <div className="card">
       <div className="flex items-center gap-3 mb-3">
-        <Link to={`/profile/${item.user_id}`}>
+        <Link to={getProfilePath(item.user_id, item.username)}>
           {item.avatar ? (
             <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
           ) : (
@@ -280,7 +433,7 @@ function UpscoreCard({ item, jacketLookup }) {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+            <Link to={getProfilePath(item.user_id, item.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
               {flag && <span className="mr-1">{flag}</span>}
               {item.username}
             </Link>
@@ -291,7 +444,7 @@ function UpscoreCard({ item, jacketLookup }) {
       </div>
 
       <div className="space-y-2">
-        {upscores.map((u, i) => {
+        {visibleUpscores.map((u, i) => {
           const oldRank = getRank(u.old_score);
           const newRank = getRank(u.new_score);
           const isSingle = u.mode === 'Single';
@@ -302,15 +455,20 @@ function UpscoreCard({ item, jacketLookup }) {
           const exactKey = `${norm}|${u.mode}|${u.level}`;
           const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
 
+          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
+          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(u.song_title || '')}`;
+
           return (
             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-              {jacketUrl ? (
-                <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover shrink-0" />
-              ) : (
-                <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500 shrink-0">
-                  {(u.song_title || '?')[0]}
-                </div>
-              )}
+              <Link to={chartLink} className="shrink-0">
+                {jacketUrl ? (
+                  <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover hover:brightness-110 transition-all" />
+                ) : (
+                  <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500 hover:brightness-110 transition-all">
+                    {(u.song_title || '?')[0]}
+                  </div>
+                )}
+              </Link>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-display font-bold truncate">{u.song_title}</p>
                 <div className="flex items-center gap-1 mt-0.5">
@@ -319,7 +477,11 @@ function UpscoreCard({ item, jacketLookup }) {
                   </span>
                 </div>
               </div>
-              <div className="text-right shrink-0">
+              <button
+                type="button"
+                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                onClick={() => onScoreClick && onScoreClick({ ...u, _jacketUrl: jacketUrl, _chartLink: chartLink })}
+              >
                 <div className="flex items-center gap-1 justify-end">
                   <span className={`text-[10px] font-mono ${oldRank.color}`}>{u.old_score.toLocaleString()}</span>
                   <span className={`text-[10px] font-display ${oldRank.color}`}>{oldRank.label}</span>
@@ -328,11 +490,19 @@ function UpscoreCard({ item, jacketLookup }) {
                   <span className={`text-xs font-display font-bold ${newRank.color}`}>{newRank.label}</span>
                 </div>
                 <p className="text-[10px] text-piu-green font-mono">+{improvement.toLocaleString()}</p>
-              </div>
+              </button>
             </div>
           );
         })}
       </div>
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="mt-2 text-xs font-display font-bold text-piu-accent hover:text-piu-accent/80 transition-colors"
+        >
+          {showAll ? 'Show less' : `Show ${upscores.length - 5} more`}
+        </button>
+      )}
 
       {/* Actions: Pump + Comments + Share */}
       <div className="border-t border-piu-border/20 pt-2 mt-1">
@@ -372,7 +542,7 @@ function NewClearPumpButton({ clearId, initialCount, initialPumped }) {
     <button
       onClick={toggle}
       disabled={!user}
-      className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold transition-all ${
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
         pumped
           ? 'text-piu-gold bg-piu-gold/10'
           : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
@@ -382,7 +552,7 @@ function NewClearPumpButton({ clearId, initialCount, initialPumped }) {
       <img
         src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
         alt=""
-        className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`}
+        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
       />
       <span>{count > 0 ? count : ''}</span>
     </button>
@@ -445,9 +615,9 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
     <>
       <button
         onClick={toggleOpen}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
         <span>{count > 0 ? count : ''}</span>
@@ -457,7 +627,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
           {comments.map(c => (
             <div key={c.id}>
               <div className="flex items-start gap-2">
-                <Link to={`/profile/${c.user_id}`}>
+                <Link to={getProfilePath(c.user_id, c.username)}>
                   {c.avatar ? (
                     <img src={getAvatarUrl(c.avatar)} className="w-6 h-6 rounded-full object-cover" alt="" />
                   ) : (
@@ -466,7 +636,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1">
-                    <Link to={`/profile/${c.user_id}`} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
+                    <Link to={getProfilePath(c.user_id, c.username)} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
                     <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
                   </div>
                   <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
@@ -479,7 +649,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
               </div>
               {(c.replies || []).map(r => (
                 <div key={r.id} className="flex items-start gap-2 ml-6 mt-1">
-                  <Link to={`/profile/${r.user_id}`}>
+                  <Link to={getProfilePath(r.user_id, r.username)}>
                     {r.avatar ? (
                       <img src={getAvatarUrl(r.avatar)} className="w-5 h-5 rounded-full object-cover" alt="" />
                     ) : (
@@ -488,12 +658,13 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                   </Link>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
-                      <Link to={`/profile/${r.user_id}`} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
+                      <Link to={getProfilePath(r.user_id, r.username)} className="text-[10px] font-display font-bold hover:text-piu-accent leading-none">{r.username}</Link>
                       <span className="text-[8px] text-gray-600">{timeAgo(r.created_at)}</span>
                     </div>
                     <p className="text-[10px] text-gray-300 break-words">{renderFormattedText(r.content)}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <FeedCommentPumpButton commentId={r.id} type="clear" initialCount={r.pump_count || 0} initialPumped={r.user_pumped} />
+                      {user && <button onClick={() => { setReplyTo(c.id); setReplyText(`@${r.username} `); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
                       {user && user.id === r.user_id && <button onClick={() => handleDelete(r.id, c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
                     </div>
                   </div>
@@ -510,6 +681,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                     autoFocus
                   />
                   <button onClick={() => submitReply(c.id)} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
+                  <button onClick={() => { setReplyTo(null); setReplyText(''); }} className="text-[10px] text-gray-600 hover:text-gray-400 font-display px-1">&#10005;</button>
                 </div>
               )}
             </div>
@@ -532,20 +704,18 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
   );
 }
 
-function NewClearCard({ item, jacketLookup }) {
+function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
+  const [showAll, setShowAll] = useState(false);
+  const clears = getClearItems(item);
+  const hasMore = clears.length > 5;
+  const visibleClears = showAll ? clears : clears.slice(0, 5);
+  const isGrouped = clears.length > 1;
   const flag = getCountryFlag(item.nationality);
-  const rank = getRank(item.score);
-  const isSingle = item.mode === 'Single';
-  const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : item.mode === 'Double' ? 'bg-green-600/20 text-green-400' : 'bg-blue-600/20 text-blue-400';
-
-  const norm = (item.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const exactKey = `${norm}|${item.mode}|${item.level}`;
-  const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
 
   return (
     <div className="card">
       <div className="flex items-center gap-3 mb-3">
-        <Link to={`/profile/${item.user_id}`}>
+        <Link to={getProfilePath(item.user_id, item.username)}>
           {item.avatar ? (
             <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
           ) : (
@@ -556,40 +726,74 @@ function NewClearCard({ item, jacketLookup }) {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+            <Link to={getProfilePath(item.user_id, item.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
               {flag && <span className="mr-1">{flag}</span>}
               {item.username}
             </Link>
-            <span className="text-sky-400 font-display font-bold text-xs">new clear!</span>
+            <span className="text-sky-400 font-display font-bold text-xs">{isGrouped ? 'new clears!' : 'new clear!'}</span>
           </div>
           <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 py-1.5">
-        {jacketUrl ? (
-          <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover shrink-0" />
-        ) : (
-          <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 shrink-0">
-            {(item.song_title || '?')[0]}
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-display font-bold truncate">{item.song_title}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
-              {isSingle ? 'S' : item.mode === 'Double' ? 'D' : 'C'}{item.level}
-            </span>
-            {item.plate && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{item.plate}</span>
-            )}
-          </div>
-        </div>
-        <div className="text-right shrink-0">
-          <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
-          <p className="font-mono text-xs font-bold">{item.score.toLocaleString()}</p>
-        </div>
+      <div className="space-y-2">
+        {visibleClears.map((clear, i) => {
+          const rank = getRank(clear.score);
+          const isSingle = clear.mode === 'Single';
+          const badgeColor = isSingle
+            ? 'bg-red-600/20 text-red-400'
+            : clear.mode === 'Double'
+              ? 'bg-green-600/20 text-green-400'
+              : 'bg-blue-600/20 text-blue-400';
+
+          const norm = (clear.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          const exactKey = `${norm}|${clear.mode}|${clear.level}`;
+          const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
+          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
+          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(clear.song_title || '')}`;
+
+          return (
+            <div key={`${clear.song_title}-${clear.mode}-${clear.level}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
+              <Link to={chartLink} className="shrink-0">
+                {jacketUrl ? (
+                  <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover hover:brightness-110 transition-all" />
+                ) : (
+                  <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 hover:brightness-110 transition-all">
+                    {(clear.song_title || '?')[0]}
+                  </div>
+                )}
+              </Link>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-display font-bold truncate">{clear.song_title}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
+                    {isSingle ? 'S' : clear.mode === 'Double' ? 'D' : 'C'}{clear.level}
+                  </span>
+                  {clear.plate && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                onClick={() => onScoreClick && onScoreClick({ ...clear, _jacketUrl: jacketUrl, _chartLink: chartLink })}
+              >
+                <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
+                <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
+              </button>
+            </div>
+          );
+        })}
       </div>
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="mt-2 text-xs font-display font-bold text-piu-accent hover:text-piu-accent/80 transition-colors"
+        >
+          {showAll ? 'Show less' : `Show ${clears.length - 5} more`}
+        </button>
+      )}
 
       {/* Actions: Pump + Comments + Share */}
       <div className="border-t border-piu-border/20 pt-2 mt-1">
@@ -610,6 +814,8 @@ export default function FeedPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [jacketLookup, setJacketLookup] = useState({});
+  const [chartKeyMap, setChartKeyMap] = useState({});
+  const [selectedScore, setSelectedScore] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -624,6 +830,8 @@ export default function FeedPage() {
 
     // Load jacket map from pump-phoenix.json (server-side, normalized)
     getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
+    // Load chart key → chart_id mapping for direct chart links
+    getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
   }, [user]);
 
   const loadMore = async () => {
@@ -648,7 +856,12 @@ export default function FeedPage() {
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display font-bold text-xl">Activity Feed</h2>
-        <Link to="/posts" className="text-xs text-piu-accent hover:underline font-display">My Posts</Link>
+        <Link
+          to="/posts"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-piu-accent/30 bg-piu-accent/10 text-xs font-display font-bold text-piu-accent hover:bg-piu-accent hover:text-white transition-colors"
+        >
+          My Posts
+        </Link>
       </div>
 
       {loading ? (
@@ -664,9 +877,9 @@ export default function FeedPage() {
             if (item.type === 'post') {
               return <PostCard key={`post-${item.id}`} post={item} showAuthor={true} />;
             } else if (item.type === 'upscore') {
-              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} />;
+              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} />;
             } else if (item.type === 'clear') {
-              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} />;
+              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} />;
             }
             return null;
           })}
@@ -681,6 +894,13 @@ export default function FeedPage() {
           )}
         </div>
       )}
+
+      <ScoreDetailModal
+        score={selectedScore}
+        jacketUrl={selectedScore?._jacketUrl || ''}
+        chartLink={selectedScore?._chartLink || ''}
+        onClose={() => setSelectedScore(null)}
+      />
     </div>
   );
 }
