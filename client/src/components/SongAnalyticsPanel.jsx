@@ -159,6 +159,11 @@ function CompetitiveLevelCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const selectedRow = rows[cursor] || null;
+  const computedLevel = parseInt(competitiveLevel?.level, 10) || null;
+  const displayLevel = computedLevel ? `${modePrefix}${computedLevel}` : '-';
+  const displayGrade = competitiveLevel?.average_grade || '';
+  const displayAverage = parseInt(competitiveLevel?.average_score, 10) || 0;
+
   const selectedLevel = selectedRow?.level || null;
   const selectedGrade = selectedRow?.average_grade || '';
   const selectedAverage = selectedRow?.average_score || 0;
@@ -218,26 +223,32 @@ function CompetitiveLevelCard({
       >
         <div className="flex items-center justify-between gap-1 min-w-0">
           <span className={`font-display font-black text-base ${modeColorClass}`}>
-            {selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}
+            {displayLevel}
           </span>
           <div className="shrink-0 flex items-center gap-1.5">
-            <span className={`text-xs font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>
-              {selectedGrade || '-'}
+            <span className={`text-xs font-display font-bold ${displayGrade ? getGradeColor(displayGrade, displayAverage) : 'text-gray-500'}`}>
+              {displayGrade || '-'}
             </span>
             <span className="sm:hidden text-[10px] font-mono text-gray-400">
-              {selectedAverage ? formatNumber(selectedAverage) : '-'}
+              {displayAverage ? formatNumber(displayAverage) : '-'}
             </span>
           </div>
         </div>
       </div>
 
       <div className="hidden xl:block mt-2 rounded-md border border-piu-border/40 bg-[#0b1324]/70 px-2 py-1.5">
-        <p className="text-[10px] text-gray-500">Average Score ({selectedLevel ? `${modePrefix}${selectedLevel}` : '-'})</p>
-        <p className="text-xs font-mono text-gray-100">{selectedAverage ? formatNumber(selectedAverage) : '-'}</p>
+        <p className="text-[10px] text-gray-500">Average Score ({displayLevel})</p>
+        <p className="text-xs font-mono text-gray-100">{displayAverage ? formatNumber(displayAverage) : '-'}</p>
       </div>
 
       {expanded && (
         <div className="mt-2 text-[10px] text-gray-400 rounded-md border border-piu-border/40 bg-piu-card/50 px-2 py-1.5 space-y-1">
+          <p className="text-gray-500">Inspecting level: <span className="font-display font-bold text-gray-300">{selectedLevel ? `${modePrefix}${selectedLevel}` : '-'}</span></p>
+          {!computedLevel && (
+            <p className="text-amber-300">
+              No level currently satisfies both requirements (50%+ clear and S-or-better average).
+            </p>
+          )}
           <p>% passed: <span className="font-mono text-gray-200">{selectedTotal > 0 ? `${selectedPassPercent}% (${selectedPassed}/${selectedTotal})` : '-'}</span></p>
           <p>Average score: <span className="font-mono text-gray-200">{selectedAverage ? formatNumber(selectedAverage) : '-'}</span></p>
           <p>Hypothetical grade: <span className={`font-display font-bold ${selectedGrade ? getGradeColor(selectedGrade, selectedAverage) : 'text-gray-500'}`}>{selectedGrade || '-'}</span></p>

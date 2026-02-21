@@ -719,22 +719,25 @@ function getCompetitiveLevel(entries) {
   let best = null;
   for (const entry of entries) {
     if (!entry || entry.score_count <= 0) continue;
+    const level = parseInt(entry.level, 10) || 0;
     const totalCharts = parseInt(entry.total_charts, 10) || 0;
-    const scoredCharts = parseInt(entry.score_count, 10) || 0;
     const clearedCharts = parseInt(entry.cleared_charts, 10) || 0;
+    const averageScore = parseInt(entry.average_score, 10) || 0;
+    if (level <= 0) continue;
     if (totalCharts <= 0) continue;
-    if ((scoredCharts / totalCharts) < 0.5) continue;
     if ((clearedCharts / totalCharts) < 0.5) continue;
     const grade = entry.average_grade || 'F';
     if ((GRADE_INDEX[grade] || 0) < (GRADE_INDEX.S || 0)) continue;
-    if (!best || entry.level > best.level) {
+    if (!best || level > best.level) {
       best = {
-        level: entry.level,
-        average_score: entry.average_score,
+        level,
+        average_score: averageScore,
         average_grade: grade,
-        passed_charts: entry.cleared_charts,
-        total_charts: entry.total_charts,
-        clear_percentage: entry.clear_percentage,
+        passed_charts: clearedCharts,
+        total_charts: totalCharts,
+        clear_percentage: totalCharts > 0
+          ? Number(((clearedCharts / totalCharts) * 100).toFixed(2))
+          : 0,
       };
     }
   }
