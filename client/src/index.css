@@ -110,6 +110,8 @@
     linear-gradient(180deg, #130d24 0%, #2b2152 24%, #485f8d 52%, #688db2 76%, #b2d4e7 100%);
   position: relative;
   isolation: isolate;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .title-map-3d > * {
@@ -125,8 +127,7 @@
   background:
     radial-gradient(120% 85% at 20% 0%, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 60%),
     radial-gradient(120% 90% at 90% 4%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 63%);
-  mix-blend-mode: screen;
-  opacity: 0.34;
+  opacity: 0.22;
   z-index: 0;
 }
 
@@ -137,18 +138,19 @@
   pointer-events: none;
   background-image: repeating-linear-gradient(
     125deg,
-    rgba(255, 255, 255, 0.05) 0,
-    rgba(255, 255, 255, 0.05) 2px,
+    rgba(255, 255, 255, 0.03) 0,
+    rgba(255, 255, 255, 0.03) 1px,
     transparent 2px,
-    transparent 16px
+    transparent 18px
   );
-  opacity: 0.16;
+  opacity: 0.06;
   z-index: 0;
 }
 
 .title-map-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
+  overscroll-behavior: contain;
 }
 
 .title-map-scroll::-webkit-scrollbar {
@@ -222,7 +224,7 @@
 }
 
 .title-speech-3d {
-  animation: speech-pop-3d 240ms ease-out, speech-float-3d 2.8s ease-in-out infinite;
+  animation: speech-pop-3d 220ms ease-out;
   background:
     linear-gradient(180deg, rgba(22, 30, 74, 0.96), rgba(14, 20, 50, 0.96));
   border: 2px solid rgba(221, 229, 255, 0.8);

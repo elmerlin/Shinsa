@@ -103,21 +103,6 @@ function familyName(title) {
   return String(title?.skill_family || '').trim() || 'Other';
 }
 
-function getTitleTheme(title) {
-  const id = String(title?.id || '');
-  if (id === 'beginner') return { landmark: 'Starter Camp' };
-  if (id === 'master') return { landmark: 'Aether Citadel' };
-  const match = id.match(/^(intermediate|advanced|expert)-(\d+)$/);
-  if (!match) return { landmark: 'Unknown Outpost' };
-  const LANDMARKS = {
-    intermediate: ['Dawn Meadow','Carousel Bend','Puzzle Crossing','Kite Ridge','Balloon Rise','Toy Bastion','Candy Causeway','Sprout Terrace','Clover Loop','Color Workshop'],
-    advanced: ['Street Drift','Rhythm Alley','Voltage Pier','Compass Gate','Fusion Lab','Sprint District','Arcade Terrace','Orbit Deck','Stone Rampart','Champion Grounds'],
-    expert: ['Bladewalk','Ember Span','Aegis Keep','Summit Spiral','Royal Vault','Citadel Rise','Ancient Pillar','Oracle Rift','Starlight Vault','Void Nexus'],
-  };
-  const index = clamp((parseInt(match[2], 10) || 1) - 1, 0, 9);
-  return { landmark: (LANDMARKS[match[1]] || [])[index] || 'Outpost' };
-}
-
 function groupTitles(titles) {
   const ordered = [...titles].sort((a, b) => b.index - a.index);
   const map = new Map();
@@ -310,6 +295,142 @@ function buildTerraceStairs(points, terraces) {
       angle: (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI,
       width: 56 + i * 5,
       drop: 24 + i * 5,
+    });
+  }
+  return stairs;
+}
+
+const BIOME_META = {
+  haunted: {
+    title: 'Haunted Swamp',
+    subtitle: 'Lower Realm',
+    banner: '#5A9E8A',
+    topA: '#466B60',
+    topB: '#233E36',
+    sideA: '#1D2F29',
+    sideB: '#121D1A',
+    rim: '#D5F0E7',
+    texture: 'url(#biome-haunted-texture)',
+    parallax: 0.075,
+    blur: 0,
+  },
+  ruins: {
+    title: 'Ancient Ruins',
+    subtitle: 'Desert Mid-Realm',
+    banner: '#D8A35A',
+    topA: '#A87847',
+    topB: '#7A5633',
+    sideA: '#4E341F',
+    sideB: '#2E1F14',
+    rim: '#FFE7C7',
+    texture: 'url(#biome-ruins-texture)',
+    parallax: 0.055,
+    blur: 0.5,
+  },
+  volcanic: {
+    title: 'Volcanic Crown',
+    subtitle: 'Upper Realm',
+    banner: '#E66553',
+    topA: '#B84B3D',
+    topB: '#8C2E2A',
+    sideA: '#511E1C',
+    sideB: '#2B1212',
+    rim: '#FFD8C8',
+    texture: 'url(#biome-volcanic-texture)',
+    parallax: 0.03,
+    blur: 1.2,
+  },
+};
+
+function buildBiomeZones(points) {
+  if (!Array.isArray(points) || points.length === 0) return [];
+  const total = points.length;
+  const cutOne = Math.max(1, Math.floor(total / 3));
+  const cutTwo = Math.max(cutOne + 1, Math.floor((total * 2) / 3));
+  const ranges = [
+    { id: 'haunted', start: 0, end: Math.min(total - 1, cutOne - 1) },
+    { id: 'ruins', start: cutOne, end: Math.min(total - 1, cutTwo - 1) },
+    { id: 'volcanic', start: cutTwo, end: total - 1 },
+  ];
+
+  return ranges
+    .filter((range) => range.start <= range.end)
+    .map((range) => {
+      const slice = points.slice(range.start, range.end + 1);
+      const xs = slice.map((point) => point.x);
+      const ys = slice.map((point) => point.y);
+      const centerX = xs.reduce((sum, value) => sum + value, 0) / xs.length;
+      const top = Math.max(18, Math.min(...ys) - 130);
+      const bottom = Math.max(...ys) + 120;
+      return {
+        ...range,
+        ...BIOME_META[range.id],
+        centerX,
+        top,
+        bottom,
+        height: bottom - top,
+      };
+    });
+}
+
+function buildIsometricIslands(zones, width) {
+  if (!Array.isArray(zones) || zones.length === 0) return [];
+  return zones.map((zone) => {
+    const sizeScale = zone.id === 'haunted' ? 1.18 : zone.id === 'ruins' ? 1 : 0.84;
+    const halfW = clamp(240 * sizeScale + zone.height * 0.18, 210, 430);
+    const leftTop = clamp(zone.centerX - halfW * 0.82, 16, width - 520);
+    const rightTop = clamp(zone.centerX + halfW * 0.82, 520, width - 16);
+    const leftBottom = clamp(zone.centerX - halfW, 10, width - 540);
+    const rightBottom = clamp(zone.centerX + halfW, 540, width - 10);
+    const topY = zone.top + 14;
+    const bottomY = zone.bottom - 8;
+    const midY = (topY + bottomY) / 2;
+
+    const topSurface = [
+      { x: leftTop + 50, y: topY + 8 },
+      { x: zone.centerX - 124, y: topY },
+      { x: zone.centerX + 134, y: topY + 12 },
+      { x: rightTop, y: midY - 40 },
+      { x: rightBottom - 24, y: bottomY - 16 },
+      { x: zone.centerX + 156, y: bottomY + 10 },
+      { x: zone.centerX - 132, y: bottomY + 18 },
+      { x: leftBottom, y: midY + 28 },
+    ];
+
+    const depth = zone.id === 'haunted' ? 86 : zone.id === 'ruins' ? 74 : 60;
+    const driftX = depth * 0.23;
+    const shifted = topSurface.map((point) => ({ x: point.x + driftX, y: point.y + depth }));
+    const rightFace = [topSurface[2], topSurface[3], topSurface[4], shifted[4], shifted[3], shifted[2]];
+    const frontFace = [topSurface[4], topSurface[5], topSurface[6], shifted[6], shifted[5], shifted[4]];
+    const leftFace = [topSurface[0], topSurface[7], topSurface[6], shifted[6], shifted[7], shifted[0]];
+
+    return {
+      ...zone,
+      topSurface,
+      shifted,
+      rightFace,
+      frontFace,
+      leftFace,
+      depth,
+      labelY: topY + 16,
+    };
+  });
+}
+
+function buildBiomeStairs(points, zones) {
+  if (!Array.isArray(points) || !Array.isArray(zones) || zones.length < 2) return [];
+  const stairs = [];
+  for (let i = 0; i < zones.length - 1; i++) {
+    const low = points[zones[i].end];
+    const high = points[zones[i + 1].start];
+    if (!low || !high) continue;
+    stairs.push({
+      id: `biome-stair-${i}`,
+      x: (low.x + high.x) / 2,
+      y: (low.y + high.y) / 2 - 12,
+      angle: (Math.atan2(high.y - low.y, high.x - low.x) * 180) / Math.PI,
+      width: 72 - i * 7,
+      drop: 38 - i * 5,
     });
   }
   return stairs;
@@ -568,6 +689,82 @@ function GrassClump({ x, y, scale = 1 }) {
   );
 }
 
+function DeadTree3D({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="8" rx="18" ry="6" fill="rgba(0,0,0,0.2)" />
+      <path d="M 0 6 L -2 -34 L 2 -34 L 4 6 Z" fill="#3B2B24" />
+      <path d="M -1 -26 L -16 -42 L -12 -44 L 1 -31 Z" fill="#4A352D" />
+      <path d="M 2 -20 L 18 -34 L 20 -30 L 4 -16 Z" fill="#4A352D" />
+      <path d="M -2 -14 L -17 -18 L -16 -22 L -1 -18 Z" fill="#5D453A" />
+      <circle cx="-14" cy="-43" r="1.7" fill="#6A4A3F" />
+      <circle cx="19" cy="-33" r="1.6" fill="#6A4A3F" />
+    </g>
+  );
+}
+
+function BonePile3D({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="5" rx="16" ry="5" fill="rgba(0,0,0,0.18)" />
+      <rect x="-11" y="-3" width="22" height="5" rx="2.5" fill="#D3C3A9" />
+      <rect x="-7" y="-8" width="14" height="4" rx="2" fill="#E4D6C2" />
+      <circle cx="-9" cy="-1" r="2.8" fill="#CDBA9F" />
+      <circle cx="9" cy="-1" r="2.8" fill="#CDBA9F" />
+      <circle cx="-5" cy="-6.5" r="1.2" fill="#C2AE92" />
+      <circle cx="5" cy="-6.5" r="1.2" fill="#C2AE92" />
+    </g>
+  );
+}
+
+function RuinArch3D({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="7" rx="22" ry="7" fill="rgba(0,0,0,0.2)" />
+      <rect x="-17" y="-22" width="8" height="30" fill="#C2A37C" rx="1.5" />
+      <rect x="9" y="-22" width="8" height="30" fill="#AF8F68" rx="1.5" />
+      <path d="M -17 -22 Q 0 -40 17 -22 L 11 -22 Q 0 -32 -11 -22 Z" fill="#D4B68D" />
+      <rect x="-16" y="-20" width="6" height="2" fill="#9A7B56" opacity="0.5" />
+      <rect x="10" y="-20" width="6" height="2" fill="#9A7B56" opacity="0.5" />
+    </g>
+  );
+}
+
+function Obelisk3D({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="6" rx="12" ry="4.5" fill="rgba(0,0,0,0.18)" />
+      <polygon points="-7,6 -3,-24 3,-24 7,6" fill="#B1916A" />
+      <polygon points="-3,-24 0,-32 3,-24" fill="#DFC49A" />
+      <polygon points="-2,6 1,-24 4,-24 2,6" fill="rgba(255,255,255,0.18)" />
+    </g>
+  );
+}
+
+function Portal3D({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="8" rx="18" ry="6" fill="rgba(0,0,0,0.22)" />
+      <ellipse cx="0" cy="-4" rx="12" ry="16" fill="#3B2D57" />
+      <ellipse cx="0" cy="-4" rx="8" ry="12" fill="#6F5AC7" opacity="0.9" />
+      <ellipse cx="0" cy="-4" rx="5.5" ry="8.2" fill="#A48BFF" opacity="0.8" />
+      <ellipse cx="0" cy="-8" rx="2.2" ry="2.5" fill="#FFFFFF" opacity="0.55" />
+    </g>
+  );
+}
+
+function LavaVent3D({ x, y, scale = 1 }) {
+  return (
+    <g transform={`translate(${x},${y}) scale(${scale})`}>
+      <ellipse cx="0" cy="8" rx="16" ry="6" fill="rgba(0,0,0,0.2)" />
+      <path d="M -14 8 L -7 -16 L 7 -16 L 14 8 Z" fill="#5B2B21" />
+      <ellipse cx="0" cy="-16" rx="7" ry="3.5" fill="#2E130D" />
+      <ellipse cx="0" cy="-16" rx="4.8" ry="2.1" fill="#FF8A36" />
+      <ellipse cx="-1" cy="-17" rx="2.2" ry="1.2" fill="#FFD18B" opacity="0.75" />
+    </g>
+  );
+}
+
 /* ── Biome scene generators ───────────────────────────────────────── */
 
 function generateChildScenery(points) {
@@ -578,23 +775,22 @@ function generateChildScenery(points) {
     const p = points[i];
     const s = seed(i);
     const side = p.x > 500 ? -1 : 1;
-    const ox = side * (80 + s * 120);
+    const ox = side * (120 + s * 160);
 
-    if (i % 3 === 0) {
-      items.push(<Tree3D key={`ct-${i}`} x={p.x + ox} y={p.y + 10} scale={0.7 + s * 0.4} variant={i % 3} />);
+    if (i % 2 === 0) {
+      items.push(<DeadTree3D key={`ct-${i}`} x={p.x + ox} y={p.y + 16} scale={1 + s * 0.45} />);
     }
-    if (i % 4 === 1) {
-      items.push(<Bush3D key={`cb-${i}`} x={p.x - ox * 0.6} y={p.y + 15} scale={0.6 + s * 0.3} />);
+    if (i % 3 === 1) {
+      items.push(<BonePile3D key={`cb-${i}`} x={p.x - ox * 0.55} y={p.y + 20} scale={0.95 + s * 0.35} />);
     }
-    if (i % 5 === 0) {
-      items.push(<House3D key={`ch-${i}`} x={p.x + ox * 1.2} y={p.y - 5} scale={0.55 + s * 0.2} variant={i} />);
+    if (i % 4 === 0) {
+      items.push(<Portal3D key={`ch-${i}`} x={p.x + ox * 1.1} y={p.y - 4} scale={0.85 + s * 0.3} />);
     }
-    if (i % 6 === 2) {
-      items.push(<Flower3D key={`cf-${i}`} x={p.x + side * 45} y={p.y + 20} color={['#E91E63', '#FF9800', '#9C27B0', '#2196F3'][i % 4]} />);
-      items.push(<Flower3D key={`cf2-${i}`} x={p.x + side * 55} y={p.y + 18} color={['#F44336', '#FFEB3B', '#4CAF50'][i % 3]} />);
+    if (i % 5 === 2) {
+      items.push(<Crystal3D key={`cf-${i}`} x={p.x + side * 62} y={p.y + 18} scale={0.92 + s * 0.45} />);
     }
-    if (i % 7 === 0) {
-      items.push(<GrassClump key={`cg-${i}`} x={p.x - ox * 0.3} y={p.y + 22} scale={0.8} />);
+    if (i % 6 === 0) {
+      items.push(<Rock3D key={`cg-${i}`} x={p.x - ox * 0.32} y={p.y + 24} scale={0.85 + s * 0.4} variant={i % 3} />);
     }
   }
   return items;
@@ -608,19 +804,19 @@ function generateAdolescentScenery(points) {
     const p = points[i];
     const s = seed(i);
     const side = p.x > 500 ? -1 : 1;
-    const ox = side * (90 + s * 100);
+    const ox = side * (130 + s * 140);
 
-    if (i % 3 === 0) {
-      items.push(<PineTree3D key={`at-${i}`} x={p.x + ox} y={p.y + 8} scale={0.65 + s * 0.35} />);
+    if (i % 2 === 0) {
+      items.push(<RuinArch3D key={`at-${i}`} x={p.x + ox} y={p.y + 10} scale={1.08 + s * 0.35} />);
     }
-    if (i % 4 === 1) {
-      items.push(<Rock3D key={`ar-${i}`} x={p.x - ox * 0.5} y={p.y + 16} scale={0.7 + s * 0.5} variant={i % 3} />);
+    if (i % 3 === 1) {
+      items.push(<Obelisk3D key={`ar-${i}`} x={p.x - ox * 0.6} y={p.y + 16} scale={0.95 + s * 0.5} />);
     }
-    if (i % 5 === 2) {
-      items.push(<Bridge3D key={`abr-${i}`} x={p.x + ox * 0.3} y={p.y + 6} width={40 + s * 20} />);
+    if (i % 4 === 2) {
+      items.push(<Bridge3D key={`abr-${i}`} x={p.x + ox * 0.35} y={p.y + 8} width={70 + s * 28} />);
     }
-    if (i % 6 === 0) {
-      items.push(<Mountain3D key={`am-${i}`} x={p.x + ox * 1.5} y={p.y - 20} scale={0.4 + s * 0.2} variant={i % 3} />);
+    if (i % 5 === 0) {
+      items.push(<Rock3D key={`am-${i}`} x={p.x + ox * 1.05} y={p.y + 14} scale={1.18 + s * 0.55} variant={i % 3} />);
     }
   }
   return items;
@@ -634,19 +830,19 @@ function generateAdultScenery(points) {
     const p = points[i];
     const s = seed(i);
     const side = p.x > 500 ? -1 : 1;
-    const ox = side * (85 + s * 110);
+    const ox = side * (120 + s * 170);
 
-    if (i % 3 === 0) {
-      items.push(<Crystal3D key={`ec-${i}`} x={p.x + ox} y={p.y + 5} scale={0.7 + s * 0.4} />);
+    if (i % 2 === 0) {
+      items.push(<Volcano3D key={`ec-${i}`} x={p.x + ox} y={p.y + 6} scale={0.82 + s * 0.44} />);
     }
-    if (i % 4 === 1) {
-      items.push(<Torch3D key={`et-${i}`} x={p.x - ox * 0.4} y={p.y + 10} />);
+    if (i % 3 === 1) {
+      items.push(<LavaVent3D key={`et-${i}`} x={p.x - ox * 0.55} y={p.y + 14} scale={0.9 + s * 0.38} />);
     }
-    if (i % 5 === 2) {
-      items.push(<Volcano3D key={`ev-${i}`} x={p.x + ox * 1.5} y={p.y - 10} scale={0.35 + s * 0.15} />);
+    if (i % 4 === 2) {
+      items.push(<Mountain3D key={`ev-${i}`} x={p.x + ox * 1.1} y={p.y - 12} scale={0.86 + s * 0.36} variant={i % 3} />);
     }
-    if (i === 0 || i === points.length - 1) {
-      items.push(<Castle3D key={`eca-${i}`} x={p.x + ox * 1.1} y={p.y - 15} scale={0.5 + s * 0.2} />);
+    if (i % 5 === 0 || i === points.length - 1) {
+      items.push(<Torch3D key={`eca-${i}`} x={p.x - ox * 0.2} y={p.y + 10} />);
     }
   }
   return items;
@@ -699,10 +895,31 @@ function JourneyCharacter({ running, avatarUrl, username, gender }) {
 
 /* ── Waypoint Node (3D styled) ────────────────────────────────────── */
 
-function WaypointNode({ title, point, width, isCurrent, isProgressNode, isTarget, onClick }) {
+function WaypointNode({
+  title,
+  point,
+  width,
+  isCurrent,
+  isProgressNode,
+  isMilestone,
+  isTarget,
+  onClick,
+}) {
   const unlocked = !!title.unlocked;
   const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
-  const theme = getTitleTheme(title);
+  const ratioX = point.x / width;
+  const labelPositionClass = ratioX < 0.18
+    ? 'left-[3px]'
+    : ratioX > 0.82
+      ? 'right-[3px]'
+      : 'left-1/2 -translate-x-1/2';
+  const sizeClass = isMilestone ? 'w-14 h-14 border-[4px]' : 'w-12 h-12 border-[3px]';
+  const lockedStoneBackground = {
+    backgroundImage: 'radial-gradient(circle at 28% 24%, rgba(255,255,255,0.28), rgba(255,255,255,0) 42%), repeating-radial-gradient(circle at 50% 48%, rgba(157,167,176,0.16) 0 2px, rgba(0,0,0,0) 2px 6px), linear-gradient(180deg, #515d69, #2a3340)',
+  };
+  const unlockedBackground = {
+    backgroundImage: `radial-gradient(circle at 26% 24%, rgba(255,255,255,0.45), rgba(255,255,255,0) 46%), linear-gradient(180deg, var(--tw-gradient-stops))`,
+  };
 
   return (
     <div
@@ -712,13 +929,14 @@ function WaypointNode({ title, point, width, isCurrent, isProgressNode, isTarget
       <button
         type="button"
         onClick={onClick}
-        className={`title-node-3d relative w-12 h-12 rounded-full border-[3px] transition-all ${
+        className={`title-node-3d relative ${sizeClass} rounded-full transition-all ${
           unlocked
             ? `bg-gradient-to-b ${palette.bg} border-white/90 text-white title-waypoint-glow-3d`
-            : 'bg-gradient-to-b from-slate-700 to-slate-900 border-slate-500/70 text-slate-400'
+            : 'border-slate-500/80 text-slate-300'
         } ${isCurrent ? `ring-[3px] ring-cyan-200/90 scale-110` : ''} ${
           isTarget ? 'ring-[3px] ring-cyan-300/90' : ''
         } cursor-pointer hover:scale-115`}
+        style={unlocked ? unlockedBackground : lockedStoneBackground}
         title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
       >
         <span className="absolute inset-0 rounded-full bg-gradient-to-b from-white/30 to-transparent pointer-events-none" style={{ height: '50%' }} />
@@ -729,6 +947,10 @@ function WaypointNode({ title, point, width, isCurrent, isProgressNode, isTarget
         <span className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${
           unlocked ? 'bg-amber-300' : 'bg-slate-200/60'
         }`} />
+        {isMilestone && (
+          <span className="absolute -inset-1 rounded-full border border-amber-200/65 pointer-events-none"
+            style={{ boxShadow: '0 0 14px rgba(255, 186, 80, 0.45)' }} />
+        )}
         {isProgressNode && (
           <span className="absolute -left-1 -top-1 w-4 h-4 rounded-full border border-white/70 bg-gradient-to-b from-amber-300 to-amber-600 flex items-center justify-center text-[8px] text-amber-950 font-bold">
             ★
@@ -744,10 +966,10 @@ function WaypointNode({ title, point, width, isCurrent, isProgressNode, isTarget
           </span>
         )}
       </button>
-      <div className={`absolute left-1/2 -translate-x-1/2 top-[54px] px-2 py-0.5 rounded-md text-[9px] font-display font-bold whitespace-nowrap ${
-        unlocked ? 'bg-black/70 text-white border border-white/30' : 'bg-black/50 text-slate-400 border border-slate-600/40'
-      }`} style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-        {theme.landmark}
+      <div className={`absolute ${labelPositionClass} top-[56px] px-2.5 py-1 rounded-md text-[9px] leading-tight font-display font-bold max-w-[148px] whitespace-normal ${
+        unlocked ? 'bg-black/72 text-white border border-white/35' : 'bg-black/55 text-slate-300 border border-slate-500/45'
+      }`} style={{ boxShadow: '0 2px 6px rgba(0,0,0,0.35)' }}>
+        {title.name}
       </div>
     </div>
   );
@@ -778,9 +1000,11 @@ export default function TitleProgressTab({
   const [journeyMode, setJourneyMode] = useState('inspect');
   const [activeJourneyTitle, setActiveJourneyTitle] = useState(null);
   const mapScrollRef = useRef(null);
+  const scrollRafRef = useRef(null);
   const speechTimeoutRef = useRef(null);
   const chatterIntervalRef = useRef(null);
   const audioCtxRef = useRef(null);
+  const [mapScrollTop, setMapScrollTop] = useState(0);
 
   function clearSpeechTimer() {
     if (!speechTimeoutRef.current) return;
@@ -923,6 +1147,7 @@ export default function TitleProgressTab({
   useEffect(() => () => {
     clearSpeechTimer();
     if (chatterIntervalRef.current) clearInterval(chatterIntervalRef.current);
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
@@ -959,33 +1184,35 @@ export default function TitleProgressTab({
   const isRunning = target !== null;
 
   const roadPath = useMemo(() => buildRoadPath(points), [points]);
-  const terraces = useMemo(() => buildTerrainTerraces(points, width, height), [points, width, height]);
-  const terraceStairs = useMemo(() => buildTerraceStairs(points, terraces), [points, terraces]);
+  const biomeZones = useMemo(() => buildBiomeZones(points), [points]);
+  const biomeIslands = useMemo(() => buildIsometricIslands(biomeZones, width), [biomeZones, width]);
+  const biomeStairs = useMemo(() => buildBiomeStairs(points, biomeZones), [points, biomeZones]);
   const avatarNodeIndex = titles.length > 0 ? clamp(Math.round(cursor), 0, titles.length - 1) : 0;
 
-  const zones = useMemo(() => {
-    const child = getZone(points, titles, ['Beginner', 'Intermediate'], 'child');
-    const adolescent = getZone(points, titles, ['Advanced'], 'adolescent');
-    const adult = getZone(points, titles, ['Expert', 'Master'], 'adult');
-    return [adult, adolescent, child].filter(Boolean);
-  }, [points, titles]);
-
-  /* Split titles into zone groups for scenery generation */
   const zoneScenery = useMemo(() => {
-    const childTitles = titles.filter((t) => ['Beginner', 'Intermediate'].includes(familyName(t)));
-    const adolTitles = titles.filter((t) => familyName(t) === 'Advanced');
-    const adultTitles = titles.filter((t) => ['Expert', 'Master'].includes(familyName(t)));
+    const byId = {};
+    for (const zone of biomeZones) {
+      const zonePoints = points.slice(zone.start, zone.end + 1).filter(Boolean);
+      byId[zone.id] = zone.id === 'haunted'
+        ? generateChildScenery(zonePoints)
+        : zone.id === 'ruins'
+          ? generateAdolescentScenery(zonePoints)
+          : generateAdultScenery(zonePoints);
+    }
+    return byId;
+  }, [biomeZones, points]);
 
-    const childPts = childTitles.map((t) => points[t.index]).filter(Boolean);
-    const adolPts = adolTitles.map((t) => points[t.index]).filter(Boolean);
-    const adultPts = adultTitles.map((t) => points[t.index]).filter(Boolean);
-
-    return {
-      child: generateChildScenery(childPts),
-      adolescent: generateAdolescentScenery(adolPts),
-      adult: generateAdultScenery(adultPts),
-    };
-  }, [titles, points, height]);
+  const milestoneIds = useMemo(() => {
+    const families = ['Advanced', 'Expert', 'Master'];
+    const set = new Set();
+    for (const family of families) {
+      const anchor = titles
+        .filter((title) => familyName(title) === family)
+        .sort((a, b) => a.index - b.index)[0];
+      if (anchor?.id) set.add(anchor.id);
+    }
+    return set;
+  }, [titles]);
 
   /* Cloud positions */
   const clouds = useMemo(() => {
@@ -1021,6 +1248,15 @@ export default function TitleProgressTab({
     setJourneyMode('forward');
     setTarget(currentFloat);
     say('Returning to your live checkpoint.', 1500);
+  }
+
+  function handleMapScroll(event) {
+    const nextTop = event.currentTarget.scrollTop;
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
+    scrollRafRef.current = requestAnimationFrame(() => {
+      setMapScrollTop(nextTop);
+      scrollRafRef.current = null;
+    });
   }
 
   useEffect(() => {
@@ -1101,121 +1337,132 @@ export default function TitleProgressTab({
           </div>
         )}
 
+        <div className="mt-3 rounded-xl border border-white/25 bg-slate-950/55 px-3 py-2">
+          <p className="text-[9px] uppercase tracking-[0.16em] text-sky-200/70 font-display">Journey Dialogue</p>
+          <div className="relative mt-1">
+            <div className="title-speech-3d rounded-xl px-3.5 py-3 text-[12px] leading-relaxed text-white">
+              {speech?.text || 'Select a title level node to hear your journey reflection.'}
+            </div>
+          </div>
+        </div>
+
         {/* ── 3D World Map ──────────────────────────────────────── */}
         <div className="mt-4 title-map-3d rounded-xl border-2 border-white/20 overflow-hidden"
           style={{ boxShadow: '0 10px 32px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-          <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[74vh] overflow-y-auto overflow-x-hidden title-map-scroll">
+          <div
+            ref={mapScrollRef}
+            onScroll={handleMapScroll}
+            className="max-h-[68vh] sm:max-h-[74vh] overflow-y-auto overflow-x-hidden title-map-scroll"
+          >
             <div className="relative w-full" style={{ height: `${height}px` }}>
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#120D24" />
-                    <stop offset="18%" stopColor="#2D2454" />
-                    <stop offset="44%" stopColor="#4C5F8D" />
-                    <stop offset="68%" stopColor="#6F93B4" />
-                    <stop offset="100%" stopColor="#B2D4E7" />
+                    <stop offset="0%" stopColor="#110A1F" />
+                    <stop offset="24%" stopColor="#2F1E4B" />
+                    <stop offset="52%" stopColor="#4D5C8A" />
+                    <stop offset="77%" stopColor="#668CAD" />
+                    <stop offset="100%" stopColor="#9CC2D8" />
                   </linearGradient>
-                  <linearGradient id="mistGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.05)" />
-                    <stop offset="60%" stopColor="rgba(255,255,255,0)" />
-                    <stop offset="100%" stopColor="rgba(0,0,0,0.18)" />
+                  <radialGradient id="islandHaze" cx="52%" cy="10%" r="76%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.25)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                  </radialGradient>
+                  <linearGradient id="godRayGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
                   </linearGradient>
-                  <pattern id="terrain-speck-ember" width="22" height="22" patternUnits="userSpaceOnUse">
-                    <circle cx="5" cy="6" r="1.3" fill="rgba(255,214,163,0.35)" />
-                    <circle cx="14" cy="9" r="1.1" fill="rgba(106,36,26,0.33)" />
-                    <circle cx="17" cy="17" r="1.4" fill="rgba(255,245,220,0.24)" />
+                  <pattern id="biome-haunted-texture" width="18" height="18" patternUnits="userSpaceOnUse">
+                    <circle cx="4" cy="3" r="1.1" fill="rgba(198,227,213,0.34)" />
+                    <circle cx="12" cy="10" r="1.4" fill="rgba(25,48,39,0.38)" />
+                    <path d="M 1 14 L 8 11" stroke="rgba(173,212,196,0.26)" strokeWidth="0.8" />
                   </pattern>
-                  <pattern id="terrain-speck-rust" width="24" height="24" patternUnits="userSpaceOnUse">
-                    <circle cx="6" cy="5" r="1.2" fill="rgba(255,226,190,0.32)" />
-                    <circle cx="12" cy="14" r="1.4" fill="rgba(98,58,34,0.3)" />
-                    <circle cx="20" cy="8" r="1.3" fill="rgba(255,244,220,0.24)" />
+                  <pattern id="biome-ruins-texture" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <circle cx="5" cy="6" r="1.2" fill="rgba(255,230,196,0.34)" />
+                    <circle cx="14" cy="12" r="1.5" fill="rgba(120,81,45,0.34)" />
+                    <path d="M 2 16 L 16 16" stroke="rgba(255,220,170,0.24)" strokeWidth="1" />
                   </pattern>
-                  <pattern id="terrain-speck-moss" width="26" height="26" patternUnits="userSpaceOnUse">
-                    <circle cx="5" cy="11" r="1.4" fill="rgba(228,248,198,0.3)" />
-                    <circle cx="12" cy="6" r="1.5" fill="rgba(56,72,41,0.28)" />
-                    <circle cx="20" cy="18" r="1.2" fill="rgba(243,255,233,0.28)" />
+                  <pattern id="biome-volcanic-texture" width="19" height="19" patternUnits="userSpaceOnUse">
+                    <circle cx="4" cy="5" r="1.3" fill="rgba(255,213,196,0.32)" />
+                    <circle cx="13" cy="12" r="1.4" fill="rgba(92,27,24,0.38)" />
+                    <path d="M 3 15 L 10 11" stroke="rgba(255,184,162,0.24)" strokeWidth="0.9" />
                   </pattern>
-                  <pattern id="terrain-speck-rock" width="24" height="24" patternUnits="userSpaceOnUse">
-                    <circle cx="6" cy="7" r="1.3" fill="rgba(225,240,255,0.3)" />
-                    <circle cx="14" cy="13" r="1.4" fill="rgba(43,59,77,0.32)" />
-                    <circle cx="20" cy="5" r="1.1" fill="rgba(208,220,237,0.3)" />
-                  </pattern>
-                  <pattern id="terrain-speck-crystal" width="26" height="26" patternUnits="userSpaceOnUse">
-                    <circle cx="6" cy="8" r="1.2" fill="rgba(250,243,255,0.34)" />
-                    <circle cx="13" cy="15" r="1.5" fill="rgba(56,44,89,0.34)" />
-                    <circle cx="20" cy="6" r="1.1" fill="rgba(232,219,255,0.3)" />
-                  </pattern>
-                  <linearGradient id="roadFill3d" x1="0" y1="1" x2="0" y2="0">
-                    <stop offset="0%" stopColor="#F59F67" />
-                    <stop offset="38%" stopColor="#F6C987" />
-                    <stop offset="100%" stopColor="#FFF3CC" />
+                  <linearGradient id="riverCore" x1="0" y1="1" x2="0" y2="0">
+                    <stop offset="0%" stopColor="#FFBC46" />
+                    <stop offset="50%" stopColor="#FFE699" />
+                    <stop offset="100%" stopColor="#FFF8D2" />
                   </linearGradient>
-                  <linearGradient id="roadEdge3d" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#9A6840" />
-                    <stop offset="100%" stopColor="#5E3C24" />
+                  <linearGradient id="riverShell" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#E88945" />
+                    <stop offset="100%" stopColor="#8B4A26" />
                   </linearGradient>
                   <radialGradient id="waterGradient">
-                    <stop offset="0%" stopColor="#4FC3F7" stopOpacity="0.62" />
-                    <stop offset="100%" stopColor="#0288D1" stopOpacity="0.4" />
+                    <stop offset="0%" stopColor="#55d0ff" stopOpacity="0.62" />
+                    <stop offset="100%" stopColor="#1182bb" stopOpacity="0.35" />
                   </radialGradient>
-                  <filter id="terrainGlow">
-                    <feGaussianBlur stdDeviation="3" result="blur" />
+                  <filter id="riverGlow">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
                     <feMerge>
                       <feMergeNode in="blur" />
                       <feMergeNode in="SourceGraphic" />
                     </feMerge>
                   </filter>
-                  {terraces.map((terrace) => (
-                    <React.Fragment key={`terrain-grad-${terrace.id}`}>
-                      <linearGradient id={`terrace-top-${terrace.id}`} x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor={terrace.theme.topA} />
-                        <stop offset="100%" stopColor={terrace.theme.topB} />
-                      </linearGradient>
-                      <linearGradient id={`terrace-front-${terrace.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={terrace.theme.faceA} />
-                        <stop offset="100%" stopColor={terrace.theme.faceB} />
-                      </linearGradient>
-                      <linearGradient id={`terrace-right-${terrace.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={terrace.theme.faceA} />
-                        <stop offset="100%" stopColor={terrace.theme.faceB} />
-                      </linearGradient>
-                      <linearGradient id={`terrace-left-${terrace.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={terrace.theme.faceA} />
-                        <stop offset="100%" stopColor={terrace.theme.faceB} />
-                      </linearGradient>
-                    </React.Fragment>
+                  <filter id="dof-mid">
+                    <feGaussianBlur stdDeviation="0.5" />
+                  </filter>
+                  <filter id="dof-far">
+                    <feGaussianBlur stdDeviation="1.2" />
+                  </filter>
+                  {biomeIslands.map((island) => (
+                    <linearGradient id={`island-top-${island.id}`} key={`grad-top-${island.id}`} x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={island.topA} />
+                      <stop offset="100%" stopColor={island.topB} />
+                    </linearGradient>
                   ))}
                 </defs>
 
                 <rect x="0" y="0" width={width} height={height} fill="url(#skyGrad)" />
-                <rect x="0" y="0" width={width} height={height} fill="url(#mistGrad)" />
-                <path d={`M 0 0 L ${width * 0.38} 0 L ${width * 0.07} ${height} L 0 ${height} Z`} fill="rgba(255,255,255,0.045)" />
-                <path d={`M ${width * 0.58} 0 L ${width} 0 L ${width} ${height} L ${width * 0.76} ${height} Z`} fill="rgba(255,255,255,0.028)" />
+                <g transform={`translate(0 ${mapScrollTop * 0.08})`}>
+                  <path d={`M 0 0 L ${width * 0.44} 0 L ${width * 0.1} ${height} L 0 ${height} Z`} fill="url(#godRayGrad)" opacity="0.35" />
+                  <path d={`M ${width * 0.58} 0 L ${width} 0 L ${width} ${height} L ${width * 0.78} ${height} Z`} fill="url(#godRayGrad)" opacity="0.25" />
+                </g>
+                <g transform={`translate(0 ${mapScrollTop * 0.05})`}>
+                  {clouds.map((cloud, index) => (
+                    <Cloud3D key={`cloud-${index}`} x={cloud.x} y={cloud.y} scale={cloud.scale} opacity={cloud.opacity} />
+                  ))}
+                </g>
 
-                {clouds.map((c, i) => (
-                  <Cloud3D key={`cloud-${i}`} x={c.x} y={c.y} scale={c.scale} opacity={c.opacity} />
-                ))}
+                {[...biomeIslands]
+                  .sort((a, b) => a.top - b.top)
+                  .map((island) => (
+                    <g key={`island-${island.id}`} transform={`translate(0 ${mapScrollTop * island.parallax})`}>
+                      <polygon points={toSvgPoints(island.shifted)} fill="rgba(0,0,0,0.22)" />
+                      <polygon points={toSvgPoints(island.rightFace)} fill={island.sideA} />
+                      <polygon points={toSvgPoints(island.leftFace)} fill={island.sideA} />
+                      <polygon points={toSvgPoints(island.frontFace)} fill={island.sideB} />
+                      <polygon points={toSvgPoints(island.topSurface)} fill={`url(#island-top-${island.id})`} />
+                      <polygon points={toSvgPoints(island.topSurface)} fill={island.texture} opacity="0.32" />
+                      <polygon points={toSvgPoints(island.topSurface)} fill="url(#islandHaze)" opacity="0.5" />
+                      <polyline
+                        points={toSvgPoints([island.topSurface[0], island.topSurface[1], island.topSurface[2], island.topSurface[3], island.topSurface[4]])}
+                        fill="none"
+                        stroke={island.rim}
+                        strokeWidth="2.2"
+                        strokeOpacity="0.72"
+                      />
+                      {island.id === 'ruins' && (
+                        <WaterBody x={island.centerX - 145} y={island.top + island.height * 0.55} w={120} h={46} />
+                      )}
+                      {island.id === 'haunted' && (
+                        <WaterBody x={island.centerX + 168} y={island.top + island.height * 0.46} w={110} h={40} />
+                      )}
+                      <g style={{ filter: island.id === 'volcanic' ? 'url(#dof-far)' : island.id === 'ruins' ? 'url(#dof-mid)' : 'none' }}>
+                        {zoneScenery[island.id]}
+                      </g>
+                    </g>
+                  ))}
 
-                {[...terraces].reverse().map((terrace) => (
-                  <g key={`terrain-${terrace.id}`}>
-                    <polygon points={toSvgPoints(terrace.shadowSurface)} fill="rgba(0,0,0,0.24)" />
-                    <polygon points={toSvgPoints(terrace.rightFace)} fill={`url(#terrace-right-${terrace.id})`} />
-                    <polygon points={toSvgPoints(terrace.leftFace)} fill={`url(#terrace-left-${terrace.id})`} />
-                    <polygon points={toSvgPoints(terrace.frontFace)} fill={`url(#terrace-front-${terrace.id})`} />
-                    <polygon points={toSvgPoints(terrace.topSurface)} fill={`url(#terrace-top-${terrace.id})`} />
-                    <polygon points={toSvgPoints(terrace.topSurface)} fill={terrace.theme.texture} opacity="0.28" />
-                    <polyline
-                      points={toSvgPoints([terrace.topSurface[0], terrace.topSurface[1], terrace.topSurface[2], terrace.topSurface[3]])}
-                      fill="none"
-                      stroke={terrace.theme.rim}
-                      strokeWidth="2.2"
-                      strokeOpacity="0.72"
-                    />
-                    <ellipse cx={terrace.centerX + 44} cy={terrace.labelY + 44} rx="210" ry="60" fill={terrace.theme.haze} />
-                  </g>
-                ))}
-
-                {terraceStairs.map((stairs) => (
+                {biomeStairs.map((stairs) => (
                   <StairBridge3D
                     key={stairs.id}
                     x={stairs.x}
@@ -1226,22 +1473,11 @@ export default function TitleProgressTab({
                   />
                 ))}
 
-                {zones.filter((z) => z.id === 'child').map((z) => (
-                  <WaterBody key="water-child" x={800} y={z.top + z.height * 0.6} w={100} h={40} />
-                ))}
-                {zones.filter((z) => z.id === 'adolescent').map((z) => (
-                  <WaterBody key="water-adol" x={150} y={z.top + z.height * 0.5} w={80} h={30} />
-                ))}
-
-                {zoneScenery.child}
-                {zoneScenery.adolescent}
-                {zoneScenery.adult}
-
                 <path
                   d={roadPath}
                   fill="none"
                   stroke="rgba(0,0,0,0.46)"
-                  strokeWidth="34"
+                  strokeWidth="38"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   transform="translate(4,7)"
@@ -1249,66 +1485,52 @@ export default function TitleProgressTab({
                 <path
                   d={roadPath}
                   fill="none"
-                  stroke="url(#roadEdge3d)"
-                  strokeWidth="32"
+                  stroke="url(#riverShell)"
+                  strokeWidth="34"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
                 <path
                   d={roadPath}
                   fill="none"
-                  stroke="url(#roadFill3d)"
+                  stroke="url(#riverCore)"
                   strokeWidth="24"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  filter="url(#terrainGlow)"
+                  filter="url(#riverGlow)"
                 />
                 <path
                   d={roadPath}
                   fill="none"
-                  stroke="rgba(255,255,255,0.37)"
+                  stroke="rgba(255,255,255,0.34)"
                   strokeWidth="3"
                   strokeLinecap="round"
-                  strokeDasharray="11 14"
+                  strokeDasharray="10 15"
                 />
-                <path
-                  d={roadPath}
-                  fill="none"
-                  stroke="rgba(255,255,255,0.2)"
-                  strokeWidth="15"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  transform="translate(-2,-2)"
-                />
+
               </svg>
 
-              {zones.map((zone) => {
-                const labels = {
-                  child: { text: 'Foothill Basin', sub: 'Beginner · Intermediate', color: '#5DAF6A' },
-                  adolescent: { text: 'Rifted Highlands', sub: 'Advanced', color: '#4F89D9' },
-                  adult: { text: 'Aether Summit', sub: 'Expert · Master', color: '#8764D9' },
-                };
-                const label = labels[zone.id];
-                return (
+              {biomeIslands.map((island) => (
+                <div
+                  key={`label-${island.id}`}
+                  className="absolute left-3 z-10"
+                  style={{ top: `${island.labelY + mapScrollTop * island.parallax}px` }}
+                >
                   <div
-                    key={`label-${zone.id}`}
-                    className="absolute left-3 z-10"
-                    style={{ top: `${zone.top + 8}px` }}
+                    className="title-zone-banner px-3 py-1.5 rounded-lg"
+                    style={{
+                      background: `linear-gradient(140deg, ${island.banner}df, ${island.banner}8b)`,
+                      boxShadow: `0 5px 16px ${island.banner}4f, inset 0 1px 0 rgba(255,255,255,0.3)`,
+                      border: '1px solid rgba(255,255,255,0.36)',
+                    }}
                   >
-                    <div className="title-zone-banner px-3 py-1.5 rounded-lg"
-                      style={{
-                        background: `linear-gradient(140deg, ${label.color}de, ${label.color}8a)`,
-                        boxShadow: `0 5px 16px ${label.color}44, inset 0 1px 0 rgba(255,255,255,0.3)`,
-                        border: '1px solid rgba(255,255,255,0.36)',
-                      }}>
-                      <p className="text-[11px] font-display font-bold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.46)' }}>
-                        {label.text}
-                      </p>
-                      <p className="text-[9px] text-white/84">{label.sub}</p>
-                    </div>
+                    <p className="text-[11px] font-display font-bold text-white" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.46)' }}>
+                      {island.title}
+                    </p>
+                    <p className="text-[9px] text-white/84">{island.subtitle}</p>
                   </div>
-                );
-              })}
+                </div>
+              ))}
 
               {titles.map((title) => {
                 const point = points[title.index];
@@ -1320,6 +1542,7 @@ export default function TitleProgressTab({
                     width={width}
                     isCurrent={title.index === avatarNodeIndex}
                     isProgressNode={title.index === currentIndex}
+                    isMilestone={milestoneIds.has(title.id)}
                     isTarget={target !== null && Math.abs(title.index - target) < 0.2}
                     onClick={() => handleTitleTap(title)}
                   />
@@ -1330,12 +1553,6 @@ export default function TitleProgressTab({
                 className="absolute pointer-events-none -translate-x-1/2 -translate-y-[88%] z-30"
                 style={{ left: `${avatarLeftPercent}%`, top: `${avatarPos.y}px` }}
               >
-                {speech && (
-                  <div key={speech.key} className="absolute left-1/2 -translate-x-1/2 -top-24 min-w-[220px] max-w-[320px] sm:max-w-[420px] px-4 py-3 rounded-2xl text-[12px] leading-relaxed text-left text-white title-speech-3d">
-                    {speech.text}
-                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[8px] w-4 h-4 rotate-45 title-speech-3d-tail" />
-                  </div>
-                )}
                 <JourneyCharacter
                   running={isRunning}
                   avatarUrl={avatarUrl}
@@ -1396,7 +1613,6 @@ export default function TitleProgressTab({
                       const unlocked = !!title.unlocked;
                       const isCurrent = title.index === currentIndex;
                       const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
-                      const theme = getTitleTheme(title);
                       return (
                         <button
                           key={`checkpoint-${title.id}`}
