@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -82,19 +87,33 @@ function pickRandomLine(lines, fallback = '') {
   return lines[Math.floor(Math.random() * lines.length)] || fallback;
 }
 
-function compactTitleName(name) {
-  const raw = String(name || '').trim();
-  if (!raw) return 'checkpoint';
-  return raw
-    .replace(/\bLv\.\s*/gi, '')
-    .replace(/\blvl\.\s*/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+function inferSkillLevel(title) {
+  const direct = parseInt(title?.skill_level, 10);
+  if (direct > 0) return direct;
+  const name = String(title?.name || title?.skill_title || '').trim();
+  if (!name) return 0;
+  const match = name.match(/\b(?:lv|lvl|level)\.?\s*(\d+)\b/i);
+  if (match) {
+    const parsed = parseInt(match[1], 10);
+    if (parsed > 0) return parsed;
+  }
+  if (/the\s+master/i.test(name)) return 1;
+  return 0;
 }
 
 function titleLevelLabel(title) {
-  const level = parseInt(title?.level, 10) || 0;
-  return level > 0 ? `Title Level ${level}` : 'Title Level ?';
+  const familyRaw = String(title?.skill_family || '').trim();
+  const family = familyRaw || String(title?.skill_title || '').trim();
+  const skillLevel = inferSkillLevel(title);
+
+  if (/^master$/i.test(family) || /the\s+master/i.test(family)) {
+    return skillLevel > 1 ? `Master Lv.${skillLevel}` : 'The Master';
+  }
+  if (family && skillLevel > 0) return `${family} Lv.${skillLevel}`;
+  if (family) return family;
+
+  const fallbackLevel = parseInt(title?.level, 10) || 0;
+  return fallbackLevel > 0 ? `Level ${fallbackLevel}` : 'Title';
 }
 
 function fillTemplate(line, values = {}) {
@@ -1200,56 +1219,307 @@ function createTextSprite(text, options = {}) {
   return sprite;
 }
 
-function createProp(type, position, colorSet = {}) {
-  const group = new THREE.Group();
-  group.position.copy(position);
-  let mesh = null;
-  if (type === 'mountain') {
-    const geo = new THREE.ConeGeometry(1.1, 2.8, 5);
-    const mat = new THREE.MeshStandardMaterial({ color: colorSet.main || '#7A6554', roughness: 0.9, metalness: 0.08 });
-    mesh = new THREE.Mesh(geo, mat);
-    const splitGeo = new THREE.ConeGeometry(0.95, 2.6, 3, 1, true);
-    const splitMat = new THREE.MeshStandardMaterial({ color: colorSet.shade || '#5A493B', roughness: 0.95 });
-    const split = new THREE.Mesh(splitGeo, splitMat);
-    split.rotation.y = Math.PI * 0.14;
-    split.position.y = 0.05;
-    group.add(split);
-  } else if (type === 'ruin') {
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.95, 1.05, 0.75, 10),
-      new THREE.MeshStandardMaterial({ color: colorSet.main || '#A98C69', roughness: 0.92 })
-    );
-    base.position.y = 0.37;
-    const top = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.45, 0.45, 1.25, 8),
-      new THREE.MeshStandardMaterial({ color: colorSet.shade || '#7E654A', roughness: 0.94 })
-    );
-    top.position.y = 1.2;
-    group.add(base, top);
-  } else {
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.22, 0.26, 1.25, 8),
-      new THREE.MeshStandardMaterial({ color: '#4B3628', roughness: 0.95 })
-    );
-    trunk.position.y = 0.6;
-    const canopy = new THREE.Mesh(
-      new THREE.ConeGeometry(0.9, 2.1, 7),
-      new THREE.MeshStandardMaterial({ color: colorSet.main || '#3D6E4A', roughness: 0.9 })
-    );
-    canopy.position.y = 1.9;
-    group.add(trunk, canopy);
-  }
-  if (mesh) group.add(mesh);
+const GLTF_MODEL_LOADER = new GLTFLoader();
+const GLTF_MODEL_CACHE = new Map();
+const TERRAIN_TEXTURE_CACHE = new Map();
 
-  group.traverse((child) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
+const BIOME_MODEL_LIBRARY = {
+  haunted: [
+    '/models/kenney/tree.glb',
+    '/models/kenney/tree-pine.glb',
+    '/models/kenney/mushrooms.glb',
+    '/models/kenney/hedge.glb',
+    '/models/kenney/plant.glb',
+  ],
+  ruins: [
+    '/models/kenney/brick.glb',
+    '/models/kenney/crate.glb',
+    '/models/kenney/fence-broken.glb',
+    '/models/kenney/platform-fortified.glb',
+    '/models/kenney/barrel.glb',
+  ],
+  volcanic: [
+    '/models/kenney/spike-block.glb',
+    '/models/kenney/bomb.glb',
+    '/models/kenney/barrel.glb',
+    '/models/kenney/block-grass-hexagon.glb',
+    '/models/kenney/block-grass-overhang-edge.glb',
+  ],
+};
+
+const BIOME_SURFACE_THEME = {
+  haunted: {
+    topA: '#6F9C86',
+    topB: '#355043',
+    speckA: '#90BBA4',
+    speckB: '#1F2C26',
+    cliffA: '#3A4B44',
+    cliffB: '#1C2622',
+  },
+  ruins: {
+    topA: '#C79860',
+    topB: '#7D5534',
+    speckA: '#E8C080',
+    speckB: '#4A311F',
+    cliffA: '#63402A',
+    cliffB: '#2E1E15',
+  },
+  volcanic: {
+    topA: '#C25C43',
+    topB: '#742723',
+    speckA: '#F38D62',
+    speckB: '#431718',
+    cliffA: '#4A1E1B',
+    cliffB: '#230E11',
+  },
+};
+
+function fract(value) {
+  return value - Math.floor(value);
+}
+
+function hashNoise2d(x, y) {
+  return fract(Math.sin(x * 127.1 + y * 311.7) * 43758.5453123);
+}
+
+function smoothNoise2d(x, y) {
+  const xi = Math.floor(x);
+  const yi = Math.floor(y);
+  const xf = fract(x);
+  const yf = fract(y);
+  const n00 = hashNoise2d(xi, yi);
+  const n10 = hashNoise2d(xi + 1, yi);
+  const n01 = hashNoise2d(xi, yi + 1);
+  const n11 = hashNoise2d(xi + 1, yi + 1);
+  const u = xf * xf * (3 - 2 * xf);
+  const v = yf * yf * (3 - 2 * yf);
+  const nx0 = n00 * (1 - u) + n10 * u;
+  const nx1 = n01 * (1 - u) + n11 * u;
+  return nx0 * (1 - v) + nx1 * v;
+}
+
+function fbmNoise2d(x, y, octaves = 4) {
+  let value = 0;
+  let amplitude = 0.5;
+  let frequency = 1;
+  for (let i = 0; i < octaves; i++) {
+    value += smoothNoise2d(x * frequency, y * frequency) * amplitude;
+    frequency *= 2;
+    amplitude *= 0.5;
+  }
+  return value;
+}
+
+function setShadows(root) {
+  root.traverse((child) => {
+    if (!child?.isMesh) return;
+    child.castShadow = true;
+    child.receiveShadow = true;
+    if (child.material?.map) child.material.map.colorSpace = THREE.SRGBColorSpace;
+  });
+}
+
+function createCanvasTexture(size, drawFn, colorSpace = null) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  drawFn(ctx, size);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.needsUpdate = true;
+  if (colorSpace) texture.colorSpace = colorSpace;
+  return texture;
+}
+
+function getTerrainTextures(biomeId) {
+  if (TERRAIN_TEXTURE_CACHE.has(biomeId)) return TERRAIN_TEXTURE_CACHE.get(biomeId);
+  const theme = BIOME_SURFACE_THEME[biomeId] || BIOME_SURFACE_THEME.volcanic;
+
+  const albedo = createCanvasTexture(256, (ctx, size) => {
+    const gradient = ctx.createLinearGradient(0, 0, size, size);
+    gradient.addColorStop(0, theme.topA);
+    gradient.addColorStop(1, theme.topB);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 2200; i++) {
+      const x = Math.floor(hashNoise2d(i * 0.4, 1.1) * size);
+      const y = Math.floor(hashNoise2d(i * 0.9, 7.3) * size);
+      const radius = 0.6 + hashNoise2d(i * 0.3, 8.7) * 1.8;
+      ctx.globalAlpha = 0.17 + hashNoise2d(i * 0.2, 9.4) * 0.26;
+      ctx.fillStyle = i % 2 ? theme.speckA : theme.speckB;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }, THREE.SRGBColorSpace);
+
+  const normalMap = createCanvasTexture(256, (ctx, size) => {
+    ctx.fillStyle = 'rgb(128,128,255)';
+    ctx.fillRect(0, 0, size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n = fbmNoise2d(x * 0.07, y * 0.07, 3);
+        const bump = Math.floor((n - 0.5) * 34);
+        ctx.fillStyle = `rgb(${128 + bump},${128 + bump},255)`;
+        ctx.fillRect(x, y, 1, 1);
+      }
     }
   });
 
-  // Placeholder architecture: this function can swap to GLTFLoader meshes later.
+  const roughnessMap = createCanvasTexture(256, (ctx, size) => {
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n = fbmNoise2d(x * 0.04, y * 0.04, 4);
+        const tone = Math.floor(110 + n * 130);
+        ctx.fillStyle = `rgb(${tone},${tone},${tone})`;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+
+  const cliffMap = createCanvasTexture(256, (ctx, size) => {
+    const gradient = ctx.createLinearGradient(0, 0, 0, size);
+    gradient.addColorStop(0, theme.cliffA);
+    gradient.addColorStop(1, theme.cliffB);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 60; i++) {
+      const y = Math.floor((i / 60) * size);
+      ctx.globalAlpha = 0.15 + (i % 3) * 0.05;
+      ctx.fillStyle = i % 2 ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0, y, size, 2 + (i % 4));
+    }
+    ctx.globalAlpha = 1;
+  }, THREE.SRGBColorSpace);
+
+  const textures = { albedo, normalMap, roughnessMap, cliffMap };
+  TERRAIN_TEXTURE_CACHE.set(biomeId, textures);
+  return textures;
+}
+
+function loadModelTemplate(url) {
+  if (!GLTF_MODEL_CACHE.has(url)) {
+    GLTF_MODEL_CACHE.set(
+      url,
+      new Promise((resolve, reject) => {
+        GLTF_MODEL_LOADER.load(
+          url,
+          (gltf) => resolve(gltf.scene || gltf.scenes?.[0]),
+          undefined,
+          reject
+        );
+      })
+    );
+  }
+  return GLTF_MODEL_CACHE.get(url);
+}
+
+function createFallbackProp(type, position, scale = 1, palette = {}) {
+  const group = new THREE.Group();
+  group.position.copy(position);
+  group.scale.setScalar(scale);
+
+  if (type === 'ruins') {
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 1.4, 1.3, 8),
+      new THREE.MeshStandardMaterial({ color: palette.main || '#9A7C60', roughness: 0.9 })
+    );
+    const top = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 0.8, 1.2),
+      new THREE.MeshStandardMaterial({ color: palette.shade || '#6D563F', roughness: 0.95 })
+    );
+    top.position.y = 1.05;
+    group.add(base, top);
+  } else if (type === 'haunted') {
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.22, 0.32, 1.8, 7),
+      new THREE.MeshStandardMaterial({ color: '#4A3225', roughness: 0.95 })
+    );
+    trunk.position.y = 0.8;
+    const canopyA = new THREE.Mesh(
+      new THREE.ConeGeometry(0.95, 1.9, 8),
+      new THREE.MeshStandardMaterial({ color: palette.main || '#4A7A5F', roughness: 0.88 })
+    );
+    canopyA.position.y = 2.0;
+    const canopyB = new THREE.Mesh(
+      new THREE.ConeGeometry(0.65, 1.3, 8),
+      new THREE.MeshStandardMaterial({ color: palette.shade || '#2F4C3D', roughness: 0.9 })
+    );
+    canopyB.position.y = 2.7;
+    group.add(trunk, canopyA, canopyB);
+  } else {
+    const cone = new THREE.Mesh(
+      new THREE.ConeGeometry(0.95, 2.2, 7),
+      new THREE.MeshStandardMaterial({ color: palette.main || '#75312A', roughness: 0.86 })
+    );
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 10, 8),
+      new THREE.MeshStandardMaterial({ color: '#FF7B3E', emissive: '#FF4F1A', emissiveIntensity: 0.6, roughness: 0.45 })
+    );
+    cap.position.y = 1.18;
+    group.add(cone, cap);
+  }
+
+  setShadows(group);
   return group;
+}
+
+function buildIslandShape(radiusX, radiusZ, seed) {
+  const shape = new THREE.Shape();
+  const segments = 24;
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const angle = t * Math.PI * 2;
+    const noise = 0.76 + fbmNoise2d(Math.cos(angle) * 1.7 + seed * 0.3, Math.sin(angle) * 1.7 - seed * 0.4, 4) * 0.42;
+    const px = Math.cos(angle) * radiusX * noise + Math.sin(angle * 3 + seed) * 1.4;
+    const py = Math.sin(angle) * radiusZ * noise + Math.cos(angle * 2.7 - seed) * 1.7;
+    if (i === 0) shape.moveTo(px, py);
+    else shape.lineTo(px, py);
+  }
+  shape.closePath();
+  return shape;
+}
+
+function createStoneTexture() {
+  return createCanvasTexture(128, (ctx, size) => {
+    const grad = ctx.createLinearGradient(0, 0, 0, size);
+    grad.addColorStop(0, '#6D7482');
+    grad.addColorStop(1, '#323946');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 600; i++) {
+      const x = Math.floor(hashNoise2d(i * 0.8, 9.2) * size);
+      const y = Math.floor(hashNoise2d(i * 0.6, 4.7) * size);
+      const radius = 0.3 + hashNoise2d(i * 0.4, 2.1) * 1.2;
+      ctx.globalAlpha = 0.08 + hashNoise2d(i * 0.3, 7.1) * 0.2;
+      ctx.fillStyle = i % 2 ? '#9FA8B6' : '#171C24';
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }, THREE.SRGBColorSpace);
+}
+
+function createFlowTexture() {
+  const texture = createCanvasTexture(256, (ctx, size) => {
+    const gradient = ctx.createLinearGradient(0, 0, size, 0);
+    gradient.addColorStop(0, '#FFB84D');
+    gradient.addColorStop(0.5, '#FFF0AB');
+    gradient.addColorStop(1, '#FF9D30');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 48; i++) {
+      const x = Math.floor((i / 48) * size);
+      ctx.fillStyle = i % 2 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)';
+      ctx.fillRect(x, 0, 2, size);
+    }
+  }, THREE.SRGBColorSpace);
+  texture.repeat.set(18, 1);
+  return texture;
 }
 
 function ThreeProgressMap({
@@ -1285,147 +1555,291 @@ function ThreeProgressMap({
     if (!host || !points.length) return undefined;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x0f1224, 70, 165);
+    scene.background = new THREE.Color(0x0b0f21);
+    scene.fog = new THREE.FogExp2(0x11152a, 0.0125);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.03;
+    renderer.physicallyCorrectLights = true;
     host.appendChild(renderer.domElement);
 
-    const camera = new THREE.OrthographicCamera(-26, 26, 20, -20, 0.1, 420);
-    camera.position.set(50, 50, 50);
+    const camera = new THREE.OrthographicCamera(-52, 52, 32, -32, 0.1, 900);
+    camera.position.set(100, 100, 100);
+    camera.zoom = 1.45;
     camera.lookAt(0, 0, 0);
 
-    const ambientLight = new THREE.AmbientLight(0x9fb4ff, 0.7);
+    const composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.88, 0.54, 0.22);
+    composer.addPass(renderPass);
+    composer.addPass(bloomPass);
+
+    const ambientLight = new THREE.AmbientLight(0xa4b6ff, 0.62);
     scene.add(ambientLight);
-    const sun = new THREE.DirectionalLight(0xfff1d4, 1.05);
-    sun.position.set(36, 54, 22);
+    const sun = new THREE.DirectionalLight(0xffe5c1, 1.15);
+    sun.position.set(86, 132, 44);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(4096, 4096);
     sun.shadow.camera.near = 0.5;
-    sun.shadow.camera.far = 180;
-    sun.shadow.camera.left = -60;
-    sun.shadow.camera.right = 60;
-    sun.shadow.camera.top = 60;
-    sun.shadow.camera.bottom = -60;
+    sun.shadow.camera.far = 420;
+    sun.shadow.camera.left = -110;
+    sun.shadow.camera.right = 110;
+    sun.shadow.camera.top = 110;
+    sun.shadow.camera.bottom = -110;
     scene.add(sun);
 
-    const zoneHeights = { haunted: 3.2, ruins: 16.4, volcanic: 29.6 };
-    const worldPoints = points.map((point, index) => {
+    const maxAnisotropy = Math.max(1, Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1));
+    const zStart = 36;
+    const zEnd = -194;
+    const xScale = 74;
+    const basePoints = points.map((point, index) => {
       const t = points.length <= 1 ? 0 : index / (points.length - 1);
-      const zone = biomeZones.find((candidate) => index >= candidate.start && index <= candidate.end) || biomeZones[0];
-      const x = ((point.x / width) - 0.5) * 34;
-      const y = (zoneHeights[zone?.id] || 6) + Math.sin(index * 0.42) * 0.16;
-      const z = THREE.MathUtils.lerp(16, -86, t);
-      return new THREE.Vector3(x, y, z);
+      return new THREE.Vector3(
+        ((point.x / width) - 0.5) * xScale,
+        0,
+        THREE.MathUtils.lerp(zStart, zEnd, t)
+      );
     });
+
+    const zoneBaseY = { haunted: 12, ruins: 40, volcanic: 72 };
+    const terrainMeshes = [];
+    const disposableTextures = [];
+    const islandCenters = [];
 
     biomeZones.forEach((zone) => {
-      const zoneSlice = worldPoints.slice(zone.start, zone.end + 1);
+      const zoneSlice = basePoints.slice(zone.start, zone.end + 1);
+      if (!zoneSlice.length) return;
       const center = zoneSlice.reduce((acc, point) => acc.add(point), new THREE.Vector3()).multiplyScalar(1 / zoneSlice.length);
-      const span = Math.max(6, zoneSlice.length * 2.9);
-      const thickness = zone.id === 'haunted' ? 7.8 : zone.id === 'ruins' ? 7.2 : 6.8;
-      const topColor = zone.id === 'haunted' ? '#527B67' : zone.id === 'ruins' ? '#B08354' : '#BC5541';
-      const sideColor = zone.id === 'haunted' ? '#2B4339' : zone.id === 'ruins' ? '#5A3A24' : '#4E221F';
+      const xs = zoneSlice.map((p) => p.x);
+      const zs = zoneSlice.map((p) => p.z);
+      const extentX = Math.max(...xs) - Math.min(...xs);
+      const extentZ = Math.max(...zs) - Math.min(...zs);
+      const radiusX = clamp(18 + extentX * 0.5 + zoneSlice.length * 0.42, 18, 36);
+      const radiusZ = clamp(24 + extentZ * 0.36 + zoneSlice.length * 0.82, 24, 56);
+      const thickness = zone.id === 'haunted' ? 9.5 : zone.id === 'ruins' ? 10.5 : 12;
+      const topY = zoneBaseY[zone.id] || 12;
+      const shape = buildIslandShape(radiusX, radiusZ, zone.start + zone.end);
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: thickness,
+        bevelEnabled: false,
+        steps: 1,
+        curveSegments: 28,
+      });
+      geometry.rotateX(-Math.PI / 2);
+      geometry.translate(center.x, topY - thickness, center.z);
 
-      const top = new THREE.Mesh(
-        new THREE.CylinderGeometry(span * 0.88, span * 1.04, thickness, 8),
-        new THREE.MeshStandardMaterial({ color: topColor, roughness: 0.9, metalness: 0.05 })
-      );
-      top.position.set(center.x + (zone.id === 'volcanic' ? 1.4 : zone.id === 'haunted' ? -1.1 : 0), center.y - thickness / 2, center.z);
-      top.castShadow = true;
-      top.receiveShadow = true;
-      scene.add(top);
-
-      const rim = new THREE.Mesh(
-        new THREE.CylinderGeometry(span * 0.85, span * 0.9, 0.7, 8),
-        new THREE.MeshStandardMaterial({ color: sideColor, roughness: 0.95, metalness: 0.02 })
-      );
-      rim.position.set(top.position.x, center.y + 0.01, top.position.z);
-      rim.castShadow = true;
-      rim.receiveShadow = true;
-      scene.add(rim);
-
-      const propColorSet = zone.id === 'volcanic'
-        ? { main: '#7A3228', shade: '#4A1F19' }
-        : zone.id === 'ruins'
-          ? { main: '#B89A75', shade: '#7C6249' }
-          : { main: '#466B53', shade: '#2E4738' };
-      for (let i = 0; i < zoneSlice.length; i += 2) {
-        const basePoint = zoneSlice[i];
-        const offset = i % 4 === 0 ? 2.8 : -2.4;
-        const propPos = new THREE.Vector3(basePoint.x + offset, basePoint.y + 0.2, basePoint.z + (i % 3 === 0 ? 2 : -2));
-        const propType = zone.id === 'ruins' ? 'ruin' : zone.id === 'volcanic' ? 'mountain' : 'tree';
-        const prop = createProp(propType, propPos, propColorSet);
-        scene.add(prop);
+      const pos = geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+        if (y > topY - 0.55) {
+          const hill = fbmNoise2d(x * 0.08 + zone.start * 0.11, z * 0.08 - zone.end * 0.07, 4);
+          const ridge = Math.sin((x + z) * 0.12 + zone.start * 0.33) * 0.45;
+          pos.setY(i, y + (hill - 0.48) * 2.4 + ridge);
+        }
       }
+      pos.needsUpdate = true;
+      geometry.computeVertexNormals();
+
+      const textureSet = getTerrainTextures(zone.id);
+      const topMat = new THREE.MeshStandardMaterial({
+        map: textureSet.albedo,
+        normalMap: textureSet.normalMap,
+        roughnessMap: textureSet.roughnessMap,
+        color: '#ffffff',
+        roughness: 0.82,
+        metalness: 0.06,
+      });
+      const sideMat = new THREE.MeshStandardMaterial({
+        map: textureSet.cliffMap,
+        color: '#d8d8d8',
+        roughness: 0.95,
+        metalness: 0.02,
+      });
+      [textureSet.albedo, textureSet.normalMap, textureSet.roughnessMap, textureSet.cliffMap].forEach((texture) => {
+        texture.anisotropy = maxAnisotropy;
+      });
+      textureSet.albedo.repeat.set(3.2, 3.2);
+      textureSet.normalMap.repeat.set(3.2, 3.2);
+      textureSet.roughnessMap.repeat.set(3.2, 3.2);
+      textureSet.cliffMap.repeat.set(2.4, 5.4);
+
+      const island = new THREE.Mesh(geometry, [topMat, sideMat]);
+      setShadows(island);
+      island.renderOrder = 1;
+      scene.add(island);
+      terrainMeshes.push(island);
+      islandCenters.push({ zone, center: center.clone(), topY });
+      disposableTextures.push(textureSet.albedo, textureSet.normalMap, textureSet.roughnessMap, textureSet.cliffMap);
     });
 
-    const pathCurve = new THREE.CatmullRomCurve3(worldPoints, false, 'catmullrom', 0.25);
-    const pathMesh = new THREE.Mesh(
-      new THREE.TubeGeometry(pathCurve, Math.max(100, points.length * 14), 0.6, 14, false),
+    const skyGlowTexture = createCanvasTexture(512, (ctx, size) => {
+      const radial = ctx.createRadialGradient(size * 0.12, size * 0.12, size * 0.05, size * 0.5, size * 0.55, size * 0.62);
+      radial.addColorStop(0, 'rgba(236,247,255,0.92)');
+      radial.addColorStop(0.4, 'rgba(161,187,255,0.28)');
+      radial.addColorStop(1, 'rgba(20,24,43,0)');
+      ctx.fillStyle = radial;
+      ctx.fillRect(0, 0, size, size);
+      for (let i = 0; i < 50; i++) {
+        const angle = (i / 50) * Math.PI * 2;
+        const x = size * 0.2 + Math.cos(angle) * size * 0.45;
+        const y = size * 0.18 + Math.sin(angle) * size * 0.34;
+        ctx.strokeStyle = 'rgba(205,220,255,0.05)';
+        ctx.lineWidth = 2 + (i % 3);
+        ctx.beginPath();
+        ctx.moveTo(size * 0.12, size * 0.08);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      }
+    }, THREE.SRGBColorSpace);
+    const skyGlow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: skyGlowTexture,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    skyGlow.position.set(0, 132, -36);
+    skyGlow.scale.set(320, 240, 1);
+    skyGlow.renderOrder = 0;
+    scene.add(skyGlow);
+    disposableTextures.push(skyGlowTexture);
+
+    const terrainRaycaster = new THREE.Raycaster();
+    const projectToTerrainY = (x, z, fallback = 0) => {
+      terrainRaycaster.set(new THREE.Vector3(x, 260, z), new THREE.Vector3(0, -1, 0));
+      const hits = terrainRaycaster.intersectObjects(terrainMeshes, false);
+      if (!hits.length) return fallback;
+      return hits[0].point.y;
+    };
+
+    const baseCurve = new THREE.CatmullRomCurve3(basePoints, false, 'catmullrom', 0.3);
+    const projectedSampleCount = Math.max(220, points.length * 26);
+    const projectedPoints = baseCurve.getPoints(projectedSampleCount).map((point, idx) => {
+      const normalized = projectedSampleCount <= 1 ? 0 : idx / projectedSampleCount;
+      const blendY = THREE.MathUtils.lerp(zoneBaseY.haunted, zoneBaseY.volcanic, normalized * 0.85);
+      return new THREE.Vector3(point.x, projectToTerrainY(point.x, point.z, blendY) + 0.42, point.z);
+    });
+    const pathCurve = new THREE.CatmullRomCurve3(projectedPoints, false, 'catmullrom', 0.22);
+
+    const flowTexture = createFlowTexture();
+    flowTexture.anisotropy = maxAnisotropy;
+    disposableTextures.push(flowTexture);
+
+    const pathBed = new THREE.Mesh(
+      new THREE.TubeGeometry(pathCurve, Math.max(280, points.length * 42), 0.96, 14, false),
       new THREE.MeshStandardMaterial({
-        color: 0xffd57c,
-        emissive: 0xffa84e,
-        emissiveIntensity: 0.7,
-        roughness: 0.28,
+        color: 0x6f4b2d,
+        roughness: 0.78,
+        metalness: 0.04,
+      })
+    );
+    pathBed.renderOrder = 2;
+    pathBed.receiveShadow = true;
+    scene.add(pathBed);
+
+    const pathMesh = new THREE.Mesh(
+      new THREE.TubeGeometry(pathCurve, Math.max(280, points.length * 42), 0.6, 18, false),
+      new THREE.MeshStandardMaterial({
+        color: 0xffdd80,
+        map: flowTexture,
+        emissive: 0xffcc00,
+        emissiveMap: flowTexture,
+        emissiveIntensity: 2,
+        roughness: 0.18,
         metalness: 0.08,
+        transparent: true,
+        opacity: 0.96,
       })
     );
     pathMesh.castShadow = true;
     pathMesh.receiveShadow = true;
-    pathMesh.renderOrder = 1;
+    pathMesh.renderOrder = 4;
     scene.add(pathMesh);
 
+    const stoneTexture = createStoneTexture();
+    stoneTexture.anisotropy = maxAnisotropy;
+    disposableTextures.push(stoneTexture);
+
     const nodeMeshes = [];
+    const labelSprites = [];
     titles.forEach((title) => {
-      const point = worldPoints[title.index];
-      if (!point) return;
+      if (title.index < 0 || title.index >= points.length) return;
+      const t = points.length <= 1 ? 0 : clamp(title.index / (points.length - 1), 0, 1);
+      const point = pathCurve.getPoint(t);
       const unlocked = title.index <= currentIndex;
+      const skillLevel = inferSkillLevel(title);
+      const isMilestone = skillLevel === 1 || /master/i.test(title?.skill_family || '');
+      const radius = isMilestone ? 1.6 : 1.24;
+
       const node = new THREE.Mesh(
-        new THREE.CylinderGeometry(title.index % 8 === 0 ? 1.45 : 1.12, title.index % 8 === 0 ? 1.45 : 1.12, 0.42, 28),
+        new THREE.CylinderGeometry(radius, radius * 1.04, 0.56, 34),
         new THREE.MeshStandardMaterial({
-          color: unlocked ? '#f2f5ff' : '#6b7382',
-          emissive: unlocked ? '#f4be61' : '#1f2733',
-          emissiveIntensity: unlocked ? 0.44 : 0.08,
-          roughness: 0.4,
-          metalness: 0.3,
+          map: unlocked ? null : stoneTexture,
+          color: unlocked ? '#fff7df' : '#798493',
+          emissive: unlocked ? '#ffca6a' : '#19212f',
+          emissiveIntensity: unlocked ? 0.42 : 0.06,
+          roughness: unlocked ? 0.28 : 0.86,
+          metalness: unlocked ? 0.18 : 0.04,
         })
       );
-      node.position.set(point.x, point.y + 0.7, point.z);
+      node.position.set(point.x, point.y + 0.66, point.z);
       node.castShadow = true;
       node.receiveShadow = true;
-      node.renderOrder = 6;
+      node.renderOrder = 30;
       node.userData = { titleIndex: title.index };
       scene.add(node);
       nodeMeshes.push(node);
 
-      const label = createTextSprite(`${title.name} • ${titleLevelLabel(title)}`, {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(radius * 0.8, isMilestone ? 0.16 : 0.13, 12, 32),
+        new THREE.MeshStandardMaterial({
+          color: unlocked ? '#fff9e9' : '#9ea7b6',
+          emissive: unlocked ? '#ffc866' : '#2a3442',
+          emissiveIntensity: unlocked ? 0.32 : 0.03,
+          roughness: 0.4,
+          metalness: 0.22,
+        })
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.34;
+      node.add(ring);
+
+      const label = createTextSprite(titleLevelLabel(title), {
         bg: unlocked ? 'rgba(13, 20, 52, 0.84)' : 'rgba(26, 28, 36, 0.86)',
         fg: unlocked ? '#FFFFFF' : '#D2DAE6',
+        fontSize: isMilestone ? 24 : 22,
       });
-      label.position.set(point.x, point.y + 2.5, point.z);
+      label.position.set(point.x, point.y + (isMilestone ? 3.2 : 2.7), point.z);
       scene.add(label);
+      labelSprites.push(label);
     });
 
-    const familyAnchors = ['Intermediate', 'Advanced', 'Expert', 'The Master', 'Master']
+    const familyAnchors = ['Intermediate', 'Advanced', 'Expert', 'Master']
       .map((family) => {
         const anchor = titles
-          .filter((title) => familyName(title) === family)
+          .filter((title) => familyName(title) === family || (family === 'Master' && /master/i.test(familyName(title))))
           .sort((a, b) => a.index - b.index)[0];
         if (!anchor) return null;
-        const anchorPoint = worldPoints[anchor.index];
+        const t = points.length <= 1 ? 0 : clamp(anchor.index / (points.length - 1), 0, 1);
+        const anchorPoint = pathCurve.getPoint(t);
         if (!anchorPoint) return null;
-        const sprite = createTextSprite(family === 'Master' ? 'The Master' : family, {
+        const sprite = createTextSprite(family === 'Master' ? 'The Master' : `${family} Zone`, {
           bg: 'rgba(58, 26, 20, 0.82)',
           fg: '#FFE6BC',
-          fontSize: 28,
+          fontSize: 26,
           paddingX: 24,
           paddingY: 12,
         });
-        sprite.position.set(anchorPoint.x + 3.2, anchorPoint.y + 4.4, anchorPoint.z - 0.8);
+        sprite.position.set(anchorPoint.x + 5.2, anchorPoint.y + 5.8, anchorPoint.z - 1.2);
         scene.add(sprite);
         return sprite;
       })
@@ -1451,6 +1865,71 @@ function ThreeProgressMap({
     });
     scene.add(avatar);
 
+    const spawnedProps = [];
+    let propsDisposed = false;
+
+    const spawnModel = async ({ url, position, scale = 1, rotationY = 0, fallbackType = 'ruins', palette = {} }) => {
+      try {
+        const template = await loadModelTemplate(url);
+        if (!template || propsDisposed) return;
+        const model = cloneSkinned(template);
+        model.position.copy(position);
+        model.rotation.y = rotationY;
+        model.scale.setScalar(scale);
+        setShadows(model);
+        scene.add(model);
+        spawnedProps.push(model);
+      } catch {
+        if (propsDisposed) return;
+        const fallback = createFallbackProp(fallbackType, position, scale * 0.82, palette);
+        fallback.rotation.y = rotationY;
+        scene.add(fallback);
+        spawnedProps.push(fallback);
+      }
+    };
+
+    islandCenters.forEach(({ zone, center, topY }) => {
+      const palette = zone.id === 'volcanic'
+        ? { main: '#88342A', shade: '#57201C' }
+        : zone.id === 'ruins'
+          ? { main: '#AB845E', shade: '#775940' }
+          : { main: '#4A7A5E', shade: '#2E4D3D' };
+      const modelPool = BIOME_MODEL_LIBRARY[zone.id] || BIOME_MODEL_LIBRARY.ruins;
+      const slots = Math.max(6, (zone.end - zone.start + 1) * 2);
+      for (let i = 0; i < slots; i++) {
+        const anchorIndex = clamp(zone.start + Math.floor((i / slots) * (zone.end - zone.start + 1)), zone.start, zone.end);
+        const anchor = basePoints[anchorIndex];
+        if (!anchor) continue;
+        const side = i % 2 === 0 ? -1 : 1;
+        const spread = 5.8 + fbmNoise2d(i * 0.47, zone.start * 0.21, 3) * 6.2;
+        const x = anchor.x + side * spread;
+        const z = anchor.z + (fbmNoise2d(i * 0.61, zone.end * 0.17, 3) - 0.5) * 9.2;
+        const y = projectToTerrainY(x, z, topY) + 0.2;
+        const scale = zone.id === 'volcanic'
+          ? 2.35 + fbmNoise2d(i * 0.3, 4.2, 2) * 1.35
+          : zone.id === 'ruins'
+            ? 2.1 + fbmNoise2d(i * 0.4, 7.8, 2) * 1.2
+            : 2.7 + fbmNoise2d(i * 0.5, 2.6, 2) * 1.45;
+        const modelUrl = modelPool[i % modelPool.length];
+        spawnModel({
+          url: modelUrl,
+          position: new THREE.Vector3(x, y, z),
+          scale,
+          rotationY: hashNoise2d(i * 1.3, zone.start * 0.17) * Math.PI * 2,
+          fallbackType: zone.id,
+          palette,
+        });
+      }
+      const islandMonolith = createFallbackProp(
+        zone.id,
+        new THREE.Vector3(center.x + (zone.id === 'volcanic' ? 8.5 : zone.id === 'ruins' ? -7.4 : 7.9), topY + 0.4, center.z),
+        zone.id === 'volcanic' ? 4.3 : 3.9,
+        palette
+      );
+      scene.add(islandMonolith);
+      spawnedProps.push(islandMonolith);
+    });
+
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const onPointerDown = (event) => {
@@ -1471,23 +1950,26 @@ function ThreeProgressMap({
       const w = Math.max(1, host.clientWidth);
       const h = Math.max(1, host.clientHeight);
       const aspect = w / h;
-      const frustumSize = 48;
+      const frustumSize = 74;
       camera.left = (-frustumSize * aspect) / 2;
       camera.right = (frustumSize * aspect) / 2;
       camera.top = frustumSize / 2;
       camera.bottom = -frustumSize / 2;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h, false);
+      composer.setSize(w, h);
+      bloomPass.setSize(w, h);
     };
     onResize();
     window.addEventListener('resize', onResize);
 
-    const camStart = new THREE.Vector3(44, 28, 40);
-    const camEnd = new THREE.Vector3(44, 60, -26);
-    const lookStart = new THREE.Vector3(0, 5, 14);
-    const lookEnd = new THREE.Vector3(0, 28, -66);
+    const camStart = new THREE.Vector3(100, 100, 100);
+    const camEnd = new THREE.Vector3(128, 100, 18);
+    const lookStart = new THREE.Vector3(-8, 18, 30);
+    const lookEnd = new THREE.Vector3(18, 66, -178);
     const workLook = new THREE.Vector3();
     const workCam = new THREE.Vector3();
+    const tangent = new THREE.Vector3();
 
     let rafId = 0;
     const animate = () => {
@@ -1502,14 +1984,19 @@ function ThreeProgressMap({
 
       const pathT = points.length <= 1 ? 0 : clamp((live.cursor || 0) / (points.length - 1), 0, 1);
       const avatarPos = pathCurve.getPoint(pathT);
+      pathCurve.getTangent(pathT, tangent);
       avatar.position.set(avatarPos.x, avatarPos.y + 0.9, avatarPos.z);
+      avatar.rotation.y = Math.atan2(tangent.x, tangent.z);
+      flowTexture.offset.x = (flowTexture.offset.x - 0.0075) % 1;
+      skyGlow.position.set(workLook.x + 24, workLook.y + 52, workLook.z - 28);
 
-      renderer.render(scene, camera);
+      composer.render();
     };
     animate();
 
     return () => {
       cancelAnimationFrame(rafId);
+      propsDisposed = true;
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('resize', onResize);
       scene.traverse((obj) => {
@@ -1522,7 +2009,11 @@ function ThreeProgressMap({
         }
         if (obj.geometry) obj.geometry.dispose?.();
       });
-      host.removeChild(renderer.domElement);
+      disposableTextures.forEach((texture) => texture?.dispose?.());
+      labelSprites.length = 0;
+      spawnedProps.length = 0;
+      composer.dispose?.();
+      if (host.contains(renderer.domElement)) host.removeChild(renderer.domElement);
       renderer.dispose();
       familyAnchors.length = 0;
     };
@@ -1881,7 +2372,7 @@ export default function TitleProgressTab({
           <div>
             <h3 className="font-display font-bold text-base text-piu-accent">TITLE PROGRESSION</h3>
             <p className="text-xs text-gray-500 mt-1">
-              {summary.current_title ? titleLevelLabel(summary.current_title) : 'Title Level 1'}
+              {summary.current_title ? titleLevelLabel(summary.current_title) : 'Beginner Lv.1'}
               {nextTitle ? ` → ${titleLevelLabel(nextTitle)}` : ' → Completed'}
             </p>
           </div>
@@ -1895,7 +2386,7 @@ export default function TitleProgressTab({
           <div className="mt-3 rounded-lg border border-piu-border/50 bg-piu-dark/60 px-3 py-2 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-display font-bold text-gray-200">{titleLevelLabel(nextTitle)}</p>
-              <p className="text-[10px] text-gray-500">Level {nextTitle.level} title challenge</p>
+              <p className="text-[10px] text-gray-500">Machine Lv.{nextTitle.level} challenge track</p>
             </div>
             <div className="text-right">
               <p className="font-mono text-sm text-cyan-200">
@@ -1909,18 +2400,6 @@ export default function TitleProgressTab({
             <p className="text-sm font-display font-bold text-sky-200">All titles unlocked.</p>
           </div>
         )}
-
-        <div className="mt-3 rounded-xl border border-white/25 bg-slate-950/55 px-3 py-2">
-          <p className="text-[9px] uppercase tracking-[0.16em] text-sky-200/70 font-display">Journey Dialogue</p>
-          <div className="relative mt-1">
-            <div className="title-speech-3d rounded-xl px-3.5 py-3 text-[12px] leading-relaxed text-white">
-              <p>{speech?.text || 'Select a title level node to hear your journey reflection.'}</p>
-              {activeNodeTitle && (
-                <p className="mt-2 text-[10px] leading-relaxed text-slate-200/90">{nodeBubbleText}</p>
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* ── 3D World Map ──────────────────────────────────────── */}
         <div className="mt-4 title-map-3d relative rounded-xl border-2 border-white/20 overflow-hidden"
@@ -1946,6 +2425,23 @@ export default function TitleProgressTab({
             </div>
           </div>
 
+          <div className="pointer-events-none absolute inset-x-2 top-2 z-40">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed text-white min-h-[78px]">
+                <p className="text-[9px] uppercase tracking-[0.14em] text-sky-200/80 font-display mb-1">Character Speech</p>
+                <p className="text-[12px] leading-relaxed">
+                  {speech?.text || 'Tap a title node to travel and hear your journey reflection.'}
+                </p>
+              </div>
+              <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed text-white min-h-[78px]">
+                <p className="text-[9px] uppercase tracking-[0.14em] text-amber-200/80 font-display mb-1">Node Speech</p>
+                <p className="text-[12px] leading-relaxed">
+                  {activeNodeTitle ? nodeBubbleText : 'Node status appears here and always stays in frame.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {anchoredIndex !== null && (
             <div className="px-3 py-2 flex items-center justify-end border-t border-white/15 bg-black/25">
               <button
@@ -1961,7 +2457,7 @@ export default function TitleProgressTab({
 
         <div className="mt-3">
           <p className="text-[11px] text-gray-500">
-            Tap any checkpoint to travel there, stay parked there, and read the reflection.
+            Tap any unlocked title node to travel there and stay parked there.
             {isOwner ? ' Title unlocks are computed from imported best scores.' : ''}
           </p>
         </div>
