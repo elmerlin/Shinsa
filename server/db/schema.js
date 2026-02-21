@@ -1051,6 +1051,7 @@ function initializeDb() {
       name TEXT NOT NULL UNIQUE,
       display_name TEXT NOT NULL,
       description TEXT DEFAULT '',
+      index_tags TEXT DEFAULT '[]',
       about TEXT DEFAULT '',
       location_country TEXT DEFAULT '',
       rules TEXT DEFAULT '',
@@ -1330,6 +1331,7 @@ function initializeDb() {
   // Migrations for communities table
   const communityCols = db.prepare("PRAGMA table_info(communities)").all().map(c => c.name);
   const communityMigrations = [
+    ['index_tags', "TEXT DEFAULT '[]'"],
     ['about', "TEXT DEFAULT ''"],
     ['location_country', "TEXT DEFAULT ''"],
     ['rules', "TEXT DEFAULT ''"],

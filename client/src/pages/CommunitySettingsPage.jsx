@@ -16,6 +16,37 @@ import {
 } from '../utils/api';
 import { getProfilePath } from '../utils/profile';
 
+function parseCommunityIndexTags(raw) {
+  if (Array.isArray(raw)) {
+    return raw
+      .map(value => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 20);
+  }
+
+  const value = String(raw || '').trim();
+  if (!value) return [];
+
+  let entries = [];
+  try {
+    const parsed = JSON.parse(value);
+    entries = Array.isArray(parsed) ? parsed : value.split(',');
+  } catch {
+    entries = value.split(',');
+  }
+
+  const dedupe = new Set();
+  const tags = [];
+  for (const entry of entries) {
+    const tag = String(entry || '').trim().toLowerCase();
+    if (!tag || dedupe.has(tag)) continue;
+    dedupe.add(tag);
+    tags.push(tag.slice(0, 32));
+    if (tags.length >= 20) break;
+  }
+  return tags;
+}
+
 export default function CommunitySettingsPage() {
   const { communityName } = useParams();
   const { user } = useAuth();
@@ -129,6 +160,7 @@ function GeneralTab({ community, isOwner, onUpdate, onDelete, setError }) {
   const [displayName, setDisplayName] = useState(community.display_name);
   const [description, setDescription] = useState(community.description || '');
   const [about, setAbout] = useState(community.about || '');
+  const [indexTags, setIndexTags] = useState(parseCommunityIndexTags(community.index_tags).join(', '));
   const [locationCountry, setLocationCountry] = useState(community.location_country || '');
   const [rules, setRules] = useState(community.rules || '');
   const [inviteOnly, setInviteOnly] = useState(!!community.is_invite_only);
@@ -150,6 +182,9 @@ function GeneralTab({ community, isOwner, onUpdate, onDelete, setError }) {
       formData.append('display_name', displayName);
       formData.append('description', description);
       formData.append('about', about);
+      if (isOwner) {
+        formData.append('index_tags', JSON.stringify(parseCommunityIndexTags(indexTags)));
+      }
       formData.append('location_country', locationCountry);
       formData.append('rules', rules);
       formData.append('is_invite_only', inviteOnly ? 'true' : 'false');
@@ -208,6 +243,23 @@ function GeneralTab({ community, isOwner, onUpdate, onDelete, setError }) {
           placeholder="Optional longer description shown on the About tab."
         />
       </div>
+
+      {isOwner && (
+        <div>
+          <label className="block text-sm font-display font-bold text-gray-400 mb-1">Index Tags</label>
+          <input
+            type="text"
+            value={indexTags}
+            onChange={(e) => setIndexTags(e.target.value)}
+            className="w-full bg-piu-dark border border-piu-border rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-piu-accent"
+            placeholder="piu, doubles, tournament, korea"
+            maxLength={500}
+          />
+          <p className="text-[11px] text-gray-500 mt-1">
+            Owner-only. Comma-separated tags used for communities page indexing/search.
+          </p>
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-display font-bold text-gray-400 mb-1">Location</label>

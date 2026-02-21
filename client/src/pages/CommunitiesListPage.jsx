@@ -6,6 +6,18 @@ import CommunityBadge from '../components/CommunityBadge';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
 
+function parseCommunityIndexTags(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map(tag => String(tag || '').trim()).filter(Boolean).slice(0, 4);
+    }
+  } catch {}
+  return value.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 4);
+}
+
 export default function CommunitiesListPage() {
   const { user } = useAuth();
   const [communities, setCommunities] = useState([]);
@@ -80,34 +92,46 @@ export default function CommunitiesListPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {communities.map(c => (
-            <Link
-              key={c.id}
-              to={`/c/${c.name}`}
-              className="flex items-center gap-4 bg-piu-card border border-piu-border rounded-xl p-4 hover:border-piu-accent/30 transition-colors group"
-              style={getCommunityCardStyle(communityPalettes[c.id]) || undefined}
-            >
-              {c.avatar ? (
-                <img src={getAvatarUrl(c.avatar)} alt="" className="w-14 h-14 rounded-xl object-cover shadow-md shrink-0" />
-              ) : (
-                <div className="w-14 h-14 bg-gradient-to-br from-piu-accent to-purple-700 rounded-xl flex items-center justify-center font-display text-2xl font-bold shadow-md shrink-0">
-                  {c.display_name[0]?.toUpperCase()}
+          {communities.map(c => {
+            const indexTags = parseCommunityIndexTags(c.index_tags);
+            return (
+              <Link
+                key={c.id}
+                to={`/c/${c.name}`}
+                className="flex items-center gap-4 bg-piu-card border border-piu-border rounded-xl p-4 hover:border-piu-accent/30 transition-colors group"
+                style={getCommunityCardStyle(communityPalettes[c.id]) || undefined}
+              >
+                {c.avatar ? (
+                  <img src={getAvatarUrl(c.avatar)} alt="" className="w-14 h-14 rounded-xl object-cover shadow-md shrink-0" />
+                ) : (
+                  <div className="w-14 h-14 bg-gradient-to-br from-piu-accent to-purple-700 rounded-xl flex items-center justify-center font-display text-2xl font-bold shadow-md shrink-0">
+                    {c.display_name[0]?.toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-display font-bold text-base group-hover:text-piu-accent transition-colors">{c.display_name}</h3>
+                    {c.badge_text && <CommunityBadge text={c.badge_text} bgColor={c.badge_color} textColor={c.badge_text_color} size="xs" />}
+                    {c.is_invite_only ? <span className="text-[9px] font-display text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-full">Invite Only</span> : null}
+                  </div>
+                  {c.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{c.description}</p>}
+                  {indexTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {indexTags.map((tag) => (
+                        <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full border border-piu-border/60 bg-piu-dark/60 text-gray-400">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-600">
+                    <span>{c.member_count} member{c.member_count !== 1 ? 's' : ''}</span>
+                    <span>{c.posts_last_week || 0} post{(c.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
+                  </div>
                 </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-display font-bold text-base group-hover:text-piu-accent transition-colors">{c.display_name}</h3>
-                  {c.badge_text && <CommunityBadge text={c.badge_text} bgColor={c.badge_color} textColor={c.badge_text_color} size="xs" />}
-                  {c.is_invite_only ? <span className="text-[9px] font-display text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-full">Invite Only</span> : null}
-                </div>
-                {c.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{c.description}</p>}
-                <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-600">
-                  <span>{c.member_count} member{c.member_count !== 1 ? 's' : ''}</span>
-                  <span>{c.posts_last_week || 0} post{(c.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

@@ -57,6 +57,34 @@ function slugify(str) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60);
 }
 
+function normalizeCommunityIndexTags(raw) {
+  let values = [];
+  if (Array.isArray(raw)) {
+    values = raw;
+  } else if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        values = Array.isArray(parsed) ? parsed : trimmed.split(',');
+      } catch {
+        values = trimmed.split(',');
+      }
+    }
+  }
+
+  const dedupe = new Set();
+  const tags = [];
+  for (const value of values) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized || dedupe.has(normalized)) continue;
+    dedupe.add(normalized);
+    tags.push(normalized.slice(0, 32));
+    if (tags.length >= 20) break;
+  }
+  return tags;
+}
+
 // Helper: create notification
 function createNotification(db, userId, type, title, message, link) {
   if (!userId) return null;
@@ -240,6 +268,7 @@ router.post('/', requireAuth, upload.fields([
   const {
     display_name,
     description,
+    index_tags,
     about,
     location_country,
     rules,
@@ -284,17 +313,20 @@ router.post('/', requireAuth, upload.fields([
     avatarData = req.body.avatar;
   }
 
+  const normalizedIndexTags = normalizeCommunityIndexTags(index_tags);
+
   db.prepare(`
     INSERT INTO communities (
-      id, name, display_name, description, about, location_country, rules,
+      id, name, display_name, description, index_tags, about, location_country, rules,
       avatar, banner, owner_id, is_invite_only, badge_text, badge_color, badge_text_color
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
     display_name.trim(),
     description || '',
+    JSON.stringify(normalizedIndexTags),
     about || '',
     location_country || '',
     rules || '',
@@ -355,8 +387,8 @@ router.get('/', optionalAuth, (req, res) => {
   }
 
   if (search) {
-    query += ` WHERE c.display_name LIKE ? OR c.description LIKE ?`;
-    params.push(`%${search}%`, `%${search}%`);
+    query += ` WHERE c.display_name LIKE ? OR c.description LIKE ? OR LOWER(c.index_tags) LIKE LOWER(?)`;
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
 
   query += ` ORDER BY posts_last_week DESC, member_count DESC, c.created_at DESC LIMIT ? OFFSET ?`;
@@ -452,16 +484,23 @@ router.put('/:id', requireAuth, upload.fields([
   const fields = [
     'display_name',
     'description',
-    'about',
-    'location_country',
-    'rules',
     'is_invite_only',
     'badge_text',
     'badge_color',
     'badge_text_color',
+    'about',
+    'location_country',
+    'rules',
   ];
   for (const f of fields) {
     if (req.body[f] !== undefined) updates[f] = req.body[f];
+  }
+
+  if (req.body.index_tags !== undefined) {
+    if (role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can update community indexing tags' });
+    }
+    updates.index_tags = JSON.stringify(normalizeCommunityIndexTags(req.body.index_tags));
   }
 
   // Handle name/slug change (owner only)

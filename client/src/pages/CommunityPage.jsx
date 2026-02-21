@@ -634,9 +634,9 @@ export default function CommunityPage() {
   const loadActiveMembers = useCallback(async () => {
     if (!community) return;
     try {
-      const data = await getCommunityMembers(community.id, 'activity', { limit: 18 });
+      const data = await getCommunityMembers(community.id, 'activity', { limit: 7 });
       const withActivity = (data || []).filter((member) => (member.recent_activity_count || 0) > 0);
-      setActiveMembers(withActivity.length > 0 ? withActivity : (data || []).slice(0, 18));
+      setActiveMembers(withActivity.length > 0 ? withActivity.slice(0, 7) : (data || []).slice(0, 7));
     } catch (err) {
       console.error(err);
       setActiveMembers([]);
@@ -891,6 +891,12 @@ export default function CommunityPage() {
   const isOwner = community.user_role === 'owner';
   const isModOrOwner = community.user_role === 'owner' || community.user_role === 'moderator';
   const canConfigureCommunityNotify = !!user && (!community.is_invite_only || isMember);
+  const topActiveMembers = (activeMembers || []).slice(0, 7);
+  const showMembershipActionBar = (
+    (user && !isMember && !community.user_pending_request)
+    || community.user_pending_request
+    || (isMember && community.user_role !== 'owner')
+  );
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -904,84 +910,7 @@ export default function CommunityPage() {
 
       {/* Community Header */}
       <div className="px-4 sm:px-6 -mt-10 relative z-10">
-        <div className="absolute right-4 sm:right-6 -top-8 sm:-top-10 z-30 flex items-center gap-2">
-          {canConfigureCommunityNotify && (
-            <div className="relative" ref={notifyMenuRef}>
-              <button
-                onClick={() => setCommunityNotifyMenuOpen(v => !v)}
-                className={`px-3.5 py-2 rounded-lg text-xs font-display font-bold border transition-colors backdrop-blur-sm ${
-                  communityNotifyPrefs.subscribed
-                    ? 'bg-piu-dark/85 border-emerald-400/40 text-gray-100'
-                    : 'bg-piu-dark/85 border-piu-border text-gray-300 hover:text-white'
-                }`}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <span>Notify</span>
-                  {communityNotifyPrefs.subscribed && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  )}
-                </span>
-              </button>
-              {communityNotifyMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 z-30 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
-                  <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
-                    Notify About {community.display_name}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {[
-                      { key: 'all', label: 'All New Posts' },
-                      { key: 'following', label: 'Followed Members' },
-                      { key: 'off', label: 'Off' },
-                    ].map(opt => {
-                      const enabled = communityNotifyPrefs.mode === opt.key;
-                      return (
-                        <button
-                          key={opt.key}
-                          onClick={() => handleSetCommunityNotifyMode(opt.key)}
-                          disabled={communityNotifyPrefs.loading || communityNotifyPrefs.saving}
-                          className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
-                            enabled
-                              ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
-                              : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
-                          }`}
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            {enabled && <span className="text-emerald-400">✓</span>}
-                            <span>{opt.label}</span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[10px] text-gray-500 mt-1.5">
-                    {communityNotifyPrefs.loading && 'Loading community notification settings...'}
-                    {!communityNotifyPrefs.loading && communityNotifyPrefs.saving && 'Saving community notification settings...'}
-                    {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'all' && 'You will get notified for all new posts in this community.'}
-                    {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'following' && 'You will get notified for posts from members you follow.'}
-                    {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'off' && 'Community post notifications are off.'}
-                  </p>
-                  {communityNotifyError && (
-                    <p className="text-[10px] text-red-400 mt-1">{communityNotifyError}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {isOwner && (
-            <Link
-              to={`/c/${community.name}/settings`}
-              className="p-2 rounded-lg bg-piu-dark/85 border border-piu-border text-gray-300 hover:text-white transition-colors"
-              title="Community Settings"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </Link>
-          )}
-        </div>
-
-        <div className="flex items-end gap-4 pr-28 sm:pr-0">
+        <div className="flex items-end gap-4">
           {/* Avatar */}
           {community.avatar ? (
             <img src={community.avatar.startsWith('data:') ? community.avatar : getAvatarUrl(community.avatar)} alt="" className="w-20 h-20 rounded-xl object-cover border-4 border-piu-dark shadow-lg" />
@@ -1000,9 +929,19 @@ export default function CommunityPage() {
                 <span className="text-[10px] font-display text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-full">Invite Only</span>
               ) : null}
             </div>
-            <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
-              <span>{community.member_count} member{community.member_count !== 1 ? 's' : ''}</span>
-              <span>{community.posts_last_week || 0} post{(community.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
+            <div className="flex items-center gap-2 text-xs text-gray-300 mt-1">
+              <span className="inline-flex items-center gap-1 rounded-full border border-piu-border/70 bg-piu-dark/60 px-2 py-0.5" title={`${community.member_count} members`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5V9a2 2 0 00-2-2h-3m-4 13h4m-4 0H7m6 0v-5a3 3 0 00-6 0v5m6 0H7m0 0H2V9a2 2 0 012-2h3m0 0a3 3 0 006 0m-6 0a3 3 0 016 0" />
+                </svg>
+                <span>{community.member_count}</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-piu-border/70 bg-piu-dark/60 px-2 py-0.5" title={`${community.posts_last_week || 0} posts this week`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-piu-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7H8m11 4H8m11 4H8m-4 4h16a1 1 0 001-1V6a1 1 0 00-1-1H4a1 1 0 00-1 1v12a1 1 0 001 1zm2-12h.01M6 11h.01M6 15h.01" />
+                </svg>
+                <span>{community.posts_last_week || 0}</span>
+              </span>
             </div>
           </div>
         </div>
@@ -1012,32 +951,115 @@ export default function CommunityPage() {
           <p className="text-sm text-gray-400 mt-3 leading-relaxed">{community.description}</p>
         )}
 
-        {activeMembers.length > 0 && (
-          <div className="mt-3">
+        {(topActiveMembers.length > 0 || canConfigureCommunityNotify || isOwner) && (
+          <div className="mt-2">
             <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Most Active Members This Week</p>
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-              {activeMembers.map((member) => (
-                <Link
-                  key={member.id}
-                  to={getProfilePath(member.id, member.username)}
-                  className="shrink-0 w-9 h-9 rounded-full border border-piu-border hover:border-piu-accent transition-colors overflow-hidden"
-                  title={`${member.username} • ${member.recent_activity_count || 0} activity`}
-                >
-                  {member.avatar ? (
-                    <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt={member.username} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[11px]">
-                      {member.username[0]?.toUpperCase()}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center overflow-x-auto pb-1 pr-1 min-w-0">
+                {topActiveMembers.map((member, index) => (
+                  <Link
+                    key={member.id}
+                    to={getProfilePath(member.id, member.username)}
+                    className={`shrink-0 w-9 h-9 rounded-full border-2 border-piu-card hover:border-piu-accent transition-colors overflow-hidden ${index === 0 ? '' : '-ml-2'}`}
+                    title={`${member.username} • ${member.recent_activity_count || 0} activity`}
+                  >
+                    {member.avatar ? (
+                      <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt={member.username} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[11px]">
+                        {member.username[0]?.toUpperCase()}
+                      </div>
+                    )}
+                  </Link>
+                ))}
+              </div>
+
+              {(canConfigureCommunityNotify || isOwner) && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {canConfigureCommunityNotify && (
+                    <div className="relative" ref={notifyMenuRef}>
+                      <button
+                        onClick={() => setCommunityNotifyMenuOpen(v => !v)}
+                        className={`px-3.5 py-2 rounded-lg text-xs font-display font-bold border transition-colors backdrop-blur-sm ${
+                          communityNotifyPrefs.subscribed
+                            ? 'bg-piu-dark/85 border-emerald-400/40 text-gray-100'
+                            : 'bg-piu-dark/85 border-piu-border text-gray-300 hover:text-white'
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>Notify</span>
+                          {communityNotifyPrefs.subscribed && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          )}
+                        </span>
+                      </button>
+                      {communityNotifyMenuOpen && (
+                        <div className="absolute right-0 top-full mt-2 z-30 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+                          <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                            Notify About {community.display_name}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {[
+                              { key: 'all', label: 'All New Posts' },
+                              { key: 'following', label: 'Followed Members' },
+                              { key: 'off', label: 'Off' },
+                            ].map(opt => {
+                              const enabled = communityNotifyPrefs.mode === opt.key;
+                              return (
+                                <button
+                                  key={opt.key}
+                                  onClick={() => handleSetCommunityNotifyMode(opt.key)}
+                                  disabled={communityNotifyPrefs.loading || communityNotifyPrefs.saving}
+                                  className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                                    enabled
+                                      ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
+                                      : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
+                                  }`}
+                                >
+                                  <span className="inline-flex items-center gap-1">
+                                    {enabled && <span className="text-emerald-400">✓</span>}
+                                    <span>{opt.label}</span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-1.5">
+                            {communityNotifyPrefs.loading && 'Loading community notification settings...'}
+                            {!communityNotifyPrefs.loading && communityNotifyPrefs.saving && 'Saving community notification settings...'}
+                            {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'all' && 'You will get notified for all new posts in this community.'}
+                            {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'following' && 'You will get notified for posts from members you follow.'}
+                            {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'off' && 'Community post notifications are off.'}
+                          </p>
+                          {communityNotifyError && (
+                            <p className="text-[10px] text-red-400 mt-1">{communityNotifyError}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
-                </Link>
-              ))}
+
+                  {isOwner && (
+                    <Link
+                      to={`/c/${community.name}/settings`}
+                      className="p-2 rounded-lg bg-piu-dark/85 border border-piu-border text-gray-300 hover:text-white transition-colors"
+                      title="Community Settings"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Action bar */}
-        <div className="flex items-center gap-2 mt-4">
+        {showMembershipActionBar && (
+        <div className="flex items-center gap-2 mt-2.5">
           {user && !isMember && !community.user_pending_request && (
             <button
               onClick={handleJoin}
@@ -1061,6 +1083,7 @@ export default function CommunityPage() {
             </button>
           )}
         </div>
+        )}
 
         {error && (
           <div className="mt-3 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 text-sm text-red-400">
@@ -1069,7 +1092,7 @@ export default function CommunityPage() {
         )}
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 mt-5 border-b border-piu-border">
+        <div className="flex items-center gap-1 mt-3 border-b border-piu-border">
           <button
             onClick={() => setActiveTab('posts')}
             className={`px-4 py-2.5 font-display font-bold text-sm border-b-2 transition-colors ${
@@ -1079,20 +1102,20 @@ export default function CommunityPage() {
             Posts
           </button>
           <button
-            onClick={() => setActiveTab('about')}
-            className={`px-4 py-2.5 font-display font-bold text-sm border-b-2 transition-colors ${
-              activeTab === 'about' ? 'border-piu-accent text-piu-accent' : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            About
-          </button>
-          <button
             onClick={() => setActiveTab('members')}
             className={`px-4 py-2.5 font-display font-bold text-sm border-b-2 transition-colors ${
               activeTab === 'members' ? 'border-piu-accent text-piu-accent' : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
             Members
+          </button>
+          <button
+            onClick={() => setActiveTab('about')}
+            className={`px-4 py-2.5 font-display font-bold text-sm border-b-2 transition-colors ${
+              activeTab === 'about' ? 'border-piu-accent text-piu-accent' : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            About
           </button>
         </div>
       </div>
