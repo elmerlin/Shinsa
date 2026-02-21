@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
+import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -53,6 +54,7 @@ export default function Dashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [featuredCommunities, setFeaturedCommunities] = useState([]);
   const [joiningCommunity, setJoiningCommunity] = useState(null);
+  const [communityPalettes, setCommunityPalettes] = useState({});
 
   const matchesSearch = (value, q) => String(value || '').toLowerCase().includes(q);
   const duelMatchesSearch = (duel, q) => (
@@ -70,8 +72,36 @@ export default function Dashboard() {
     getOnlineDuels().then(setOnlineDuels).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
     getRecentActivity().then(setRecentActivity).catch(() => {});
-    getFeaturedCommunities().then(setFeaturedCommunities).catch(() => {});
+    getFeaturedCommunities()
+      .then((rows) => setFeaturedCommunities((rows || []).map((community) => ({
+        ...community,
+        joined: !!community.joined,
+        pending_request: !!community.pending_request,
+      }))))
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const missing = featuredCommunities.filter((community) => community.avatar && !communityPalettes[community.id]);
+    if (missing.length === 0) return undefined;
+
+    Promise.all(missing.map(async (community) => {
+      const palette = await extractCommunityPalette(getAvatarUrl(community.avatar));
+      return { id: community.id, palette };
+    })).then((entries) => {
+      if (cancelled) return;
+      setCommunityPalettes((prev) => {
+        const next = { ...prev };
+        for (const entry of entries) {
+          if (entry.palette) next[entry.id] = entry.palette;
+        }
+        return next;
+      });
+    });
+
+    return () => { cancelled = true; };
+  }, [featuredCommunities, communityPalettes]);
 
   const handleSearch = useCallback(async (q) => {
     if (!q.trim()) {
@@ -387,11 +417,15 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {featuredCommunities.map(c => (
-              <div key={c.id} className="card-hover flex items-start gap-3 group relative">
+              <div
+                key={c.id}
+                className="card-hover flex items-start gap-3 group relative"
+                style={getCommunityCardStyle(communityPalettes[c.id]) || undefined}
+              >
                 <Link to={`/c/${c.name}`} className="flex items-start gap-3 flex-1 min-w-0">
                   <div className="relative shrink-0">
                     {c.avatar ? (
-                      <img src={c.avatar} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md" />
+                      <img src={getAvatarUrl(c.avatar)} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md" />
                     ) : (
                       <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
                         {c.display_name[0]?.toUpperCase()}
@@ -414,30 +448,45 @@ export default function Dashboard() {
                       </svg>
                       <span className="text-[9px] text-gray-600">{c.member_count} member{c.member_count !== 1 ? 's' : ''}</span>
                     </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      <span className="text-[9px] text-gray-600">{c.posts_last_week || 0} post{(c.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
+                    </div>
                   </div>
                 </Link>
-                {user && (
+                {user && !c.joined && !c.pending_request && (
                   <button
                     onClick={async (e) => {
                       e.preventDefault();
                       e.stopPropagation();
                       setJoiningCommunity(c.id);
                       try {
-                        await joinCommunity(c.id);
-                        setFeaturedCommunities(prev => prev.map(fc => fc.id === c.id ? { ...fc, joined: true } : fc));
+                        const result = await joinCommunity(c.id);
+                        setFeaturedCommunities(prev => prev.map((fc) => {
+                          if (fc.id !== c.id) return fc;
+                          if (result?.status === 'pending') {
+                            return { ...fc, pending_request: true };
+                          }
+                          return { ...fc, joined: true, member_count: (fc.member_count || 0) + 1 };
+                        }));
                       } catch (err) {
                         if (!err.message.includes('Already')) alert(err.message);
                       } finally {
                         setJoiningCommunity(null);
                       }
                     }}
-                    disabled={joiningCommunity === c.id || c.joined}
-                    className={`shrink-0 mt-1 px-2.5 py-1 rounded-lg text-[9px] font-display font-bold transition-colors ${
-                      c.joined ? 'bg-green-500/20 text-green-400 cursor-default' : 'bg-piu-accent/20 text-piu-accent hover:bg-piu-accent/30'
-                    } disabled:opacity-50`}
+                    disabled={joiningCommunity === c.id}
+                    className="shrink-0 mt-1 px-2.5 py-1 rounded-lg text-[9px] font-display font-bold transition-colors bg-piu-accent/20 text-piu-accent hover:bg-piu-accent/30 disabled:opacity-50"
                   >
-                    {c.joined ? 'Joined' : joiningCommunity === c.id ? '...' : (c.is_invite_only ? 'Request' : 'Join')}
+                    {joiningCommunity === c.id ? '...' : (c.is_invite_only ? 'Request' : 'Join')}
                   </button>
+                )}
+                {user && c.pending_request && (
+                  <span className="shrink-0 mt-1 px-2.5 py-1 rounded-lg text-[9px] font-display font-bold bg-yellow-500/20 text-yellow-400">
+                    Pending
+                  </span>
                 )}
               </div>
             ))}

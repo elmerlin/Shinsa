@@ -15,6 +15,7 @@ import {
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
   getCommunityMembers, pumpCommunityComment, getCommunityEmojis, searchCommunityMentions, getPiugameRecentlyPlayed, getJacketMap,
+  getCommunityNotificationPreferences, updateCommunityNotificationPreferences,
 } from '../utils/api';
 import { calculateClearRating } from '../utils/clearRating';
 import { serializeSessionSummaryMarker, splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
@@ -537,17 +538,28 @@ export default function CommunityPage() {
   const { communityName } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const notifyMenuRef = useRef(null);
   const [community, setCommunity] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('posts');
   const [postSort, setPostSort] = useState('new');
   const [posts, setPosts] = useState([]);
   const [members, setMembers] = useState([]);
+  const [activeMembers, setActiveMembers] = useState([]);
   const [memberSort, setMemberSort] = useState('joined');
   const [postsLoading, setPostsLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(false);
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState('');
+  const [communityNotifyMenuOpen, setCommunityNotifyMenuOpen] = useState(false);
+  const [communityNotifyPrefs, setCommunityNotifyPrefs] = useState({
+    loading: false,
+    saving: false,
+    subscribed: false,
+    notify_new_posts: false,
+    mode: 'off',
+  });
+  const [communityNotifyError, setCommunityNotifyError] = useState('');
 
   // Post composer state
   const [newPostContent, setNewPostContent] = useState('');
@@ -566,6 +578,16 @@ export default function CommunityPage() {
   const loadCommunity = useCallback(async () => {
     setPosts([]);
     setMembers([]);
+    setActiveMembers([]);
+    setCommunityNotifyMenuOpen(false);
+    setCommunityNotifyError('');
+    setCommunityNotifyPrefs({
+      loading: false,
+      saving: false,
+      subscribed: false,
+      notify_new_posts: false,
+      mode: 'off',
+    });
     setExpandedComments({});
     setLoading(true);
     try {
@@ -604,9 +626,106 @@ export default function CommunityPage() {
     finally { setMembersLoading(false); }
   }, [community, memberSort]);
 
+  const loadActiveMembers = useCallback(async () => {
+    if (!community) return;
+    try {
+      const data = await getCommunityMembers(community.id, 'activity', { limit: 18 });
+      const withActivity = (data || []).filter((member) => (member.recent_activity_count || 0) > 0);
+      setActiveMembers(withActivity.length > 0 ? withActivity : (data || []).slice(0, 18));
+    } catch (err) {
+      console.error(err);
+      setActiveMembers([]);
+    }
+  }, [community]);
+
   useEffect(() => { loadCommunity(); }, [loadCommunity]);
   useEffect(() => { if (community && activeTab === 'posts') loadPosts(); }, [community, activeTab, postSort, loadPosts]);
   useEffect(() => { if (community && activeTab === 'members') loadMembers(); }, [community, activeTab, memberSort, loadMembers]);
+  useEffect(() => { if (community) loadActiveMembers(); }, [community, loadActiveMembers]);
+
+  useEffect(() => {
+    const canConfigure = !!user && !!community && (!community.is_invite_only || !!community.user_role);
+    if (!canConfigure) {
+      setCommunityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: false,
+        notify_new_posts: false,
+        mode: 'off',
+      });
+      setCommunityNotifyError('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    setCommunityNotifyError('');
+    setCommunityNotifyPrefs(prev => ({ ...prev, loading: true, saving: false }));
+
+    getCommunityNotificationPreferences(community.id)
+      .then((prefs) => {
+        if (cancelled) return;
+        setCommunityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: !!prefs?.subscribed,
+          notify_new_posts: !!prefs?.notify_new_posts,
+          mode: prefs?.mode === 'following' ? 'following' : (prefs?.mode === 'all' ? 'all' : 'off'),
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setCommunityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: false,
+          notify_new_posts: false,
+          mode: 'off',
+        });
+        setCommunityNotifyError(err?.message || 'Failed to load community notification settings');
+      });
+
+    return () => { cancelled = true; };
+  }, [community?.id, community?.is_invite_only, community?.user_role, user?.id]);
+
+  useEffect(() => {
+    if (!communityNotifyMenuOpen) return undefined;
+    const onDocumentMouseDown = (e) => {
+      if (notifyMenuRef.current && !notifyMenuRef.current.contains(e.target)) {
+        setCommunityNotifyMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    return () => document.removeEventListener('mousedown', onDocumentMouseDown);
+  }, [communityNotifyMenuOpen]);
+
+  const handleSetCommunityNotifyMode = async (mode) => {
+    if (!user || !community || communityNotifyPrefs.saving || communityNotifyPrefs.loading) return;
+    const nextMode = mode === 'all' || mode === 'following' ? mode : 'off';
+    const previous = communityNotifyPrefs;
+    const optimistic = {
+      loading: false,
+      saving: true,
+      subscribed: nextMode !== 'off',
+      notify_new_posts: nextMode !== 'off',
+      mode: nextMode,
+    };
+    setCommunityNotifyError('');
+    setCommunityNotifyPrefs(optimistic);
+
+    try {
+      const saved = await updateCommunityNotificationPreferences(community.id, { mode: nextMode });
+      setCommunityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: !!saved?.subscribed,
+        notify_new_posts: !!saved?.notify_new_posts,
+        mode: saved?.mode === 'following' ? 'following' : (saved?.mode === 'all' ? 'all' : 'off'),
+      });
+    } catch (err) {
+      setCommunityNotifyPrefs({ ...previous, loading: false, saving: false });
+      setCommunityNotifyError(err?.message || 'Failed to update community notification settings');
+    }
+  };
 
   const handleJoin = async () => {
     if (!user) return navigate('/login');
@@ -759,6 +878,7 @@ export default function CommunityPage() {
 
   const isMember = !!community.user_role;
   const isModOrOwner = community.user_role === 'owner' || community.user_role === 'moderator';
+  const canConfigureCommunityNotify = !!user && (!community.is_invite_only || isMember);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -793,13 +913,34 @@ export default function CommunityPage() {
             </div>
             <div className="flex items-center gap-3 text-xs text-gray-400 mt-0.5">
               <span>{community.member_count} member{community.member_count !== 1 ? 's' : ''}</span>
-              <span className="text-gray-600">by</span>
-              <Link to={getProfilePath(community.owner_id, community.owner_username)} className="text-piu-accent hover:underline">
-                {community.owner_username}
-              </Link>
+              <span>{community.posts_last_week || 0} post{(community.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
             </div>
           </div>
         </div>
+
+        {activeMembers.length > 0 && (
+          <div className="mt-3">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Most Active Members This Week</p>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {activeMembers.map((member) => (
+                <Link
+                  key={member.id}
+                  to={getProfilePath(member.id, member.username)}
+                  className="shrink-0 w-9 h-9 rounded-full border border-piu-border hover:border-piu-accent transition-colors overflow-hidden"
+                  title={`${member.username} • ${member.recent_activity_count || 0} activity`}
+                >
+                  {member.avatar ? (
+                    <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt={member.username} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[11px]">
+                      {member.username[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Description */}
         {community.description && (
@@ -829,6 +970,68 @@ export default function CommunityPage() {
             >
               Leave
             </button>
+          )}
+          {canConfigureCommunityNotify && (
+            <div className="relative" ref={notifyMenuRef}>
+              <button
+                onClick={() => setCommunityNotifyMenuOpen(v => !v)}
+                className={`px-3.5 py-2 rounded-lg text-xs font-display font-bold border transition-colors ${
+                  communityNotifyPrefs.subscribed
+                    ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
+                    : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <span>Notify</span>
+                  {communityNotifyPrefs.subscribed && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  )}
+                </span>
+              </button>
+              {communityNotifyMenuOpen && (
+                <div className="absolute left-0 top-full mt-2 z-30 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+                  <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                    Notify About {community.display_name}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[
+                      { key: 'all', label: 'All New Posts' },
+                      { key: 'following', label: 'Followed Members' },
+                      { key: 'off', label: 'Off' },
+                    ].map(opt => {
+                      const enabled = communityNotifyPrefs.mode === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => handleSetCommunityNotifyMode(opt.key)}
+                          disabled={communityNotifyPrefs.loading || communityNotifyPrefs.saving}
+                          className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                            enabled
+                              ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
+                              : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {enabled && <span className="text-emerald-400">✓</span>}
+                            <span>{opt.label}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-gray-500 mt-1.5">
+                    {communityNotifyPrefs.loading && 'Loading community notification settings...'}
+                    {!communityNotifyPrefs.loading && communityNotifyPrefs.saving && 'Saving community notification settings...'}
+                    {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'all' && 'You will get notified for all new posts in this community.'}
+                    {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'following' && 'You will get notified for posts from members you follow.'}
+                    {!communityNotifyPrefs.loading && !communityNotifyPrefs.saving && communityNotifyPrefs.mode === 'off' && 'Community post notifications are off.'}
+                  </p>
+                  {communityNotifyError && (
+                    <p className="text-[10px] text-red-400 mt-1">{communityNotifyError}</p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {isModOrOwner && (
             <Link

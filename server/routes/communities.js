@@ -86,6 +86,149 @@ function isModOrOwner(role) {
   return role === 'owner' || role === 'moderator';
 }
 
+function textSnippet(text, max = 80) {
+  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!compact) return '';
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+}
+
+const POSTS_LAST_WEEK_SQL = `
+  (
+    SELECT COUNT(*)
+    FROM community_posts cp
+    WHERE cp.community_id = c.id
+      AND datetime(cp.created_at) >= datetime('now', '-7 days')
+  )
+`;
+
+function normalizeCommunityPostNotificationRow(row) {
+  const mode = row?.mode === 'following' ? 'following' : (row?.mode === 'all' ? 'all' : 'off');
+  return {
+    subscribed: mode !== 'off',
+    notify_new_posts: mode !== 'off',
+    mode,
+  };
+}
+
+function getCommunityPostNotificationSubscription(db, subscriberUserId, communityId) {
+  if (!db || !subscriberUserId || !communityId) {
+    return {
+      subscribed: false,
+      notify_new_posts: false,
+      mode: 'off',
+    };
+  }
+
+  const row = db.prepare(`
+    SELECT mode
+    FROM community_post_notification_subscriptions
+    WHERE subscriber_user_id = ? AND community_id = ?
+  `).get(subscriberUserId, communityId);
+  return normalizeCommunityPostNotificationRow(row);
+}
+
+function setCommunityPostNotificationSubscription(db, subscriberUserId, communityId, mode = 'off') {
+  if (!db || !subscriberUserId || !communityId) {
+    return {
+      subscribed: false,
+      notify_new_posts: false,
+      mode: 'off',
+    };
+  }
+
+  if (mode !== 'all' && mode !== 'following') {
+    db.prepare(`
+      DELETE FROM community_post_notification_subscriptions
+      WHERE subscriber_user_id = ? AND community_id = ?
+    `).run(subscriberUserId, communityId);
+    return {
+      subscribed: false,
+      notify_new_posts: false,
+      mode: 'off',
+    };
+  }
+
+  db.prepare(`
+    INSERT INTO community_post_notification_subscriptions
+      (subscriber_user_id, community_id, mode, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(subscriber_user_id, community_id) DO UPDATE SET
+      mode = excluded.mode,
+      updated_at = datetime('now')
+  `).run(subscriberUserId, communityId, mode);
+
+  return {
+    subscribed: true,
+    notify_new_posts: true,
+    mode,
+  };
+}
+
+function notifyCommunityPostSubscribers(db, options = {}) {
+  const {
+    communityId = '',
+    communityName = '',
+    communityDisplayName = 'a community',
+    actorUserId = '',
+    actorUsername = 'Someone',
+    postId = '',
+    postContent = '',
+  } = options;
+  if (!db || !communityId || !actorUserId) return 0;
+
+  const subscribers = db.prepare(`
+    SELECT s.subscriber_user_id AS user_id
+    FROM community_post_notification_subscriptions s
+    JOIN communities c ON c.id = s.community_id
+    LEFT JOIN community_members cm
+      ON cm.community_id = s.community_id
+     AND cm.user_id = s.subscriber_user_id
+    LEFT JOIN user_follows uf
+      ON uf.follower_id = s.subscriber_user_id
+     AND uf.following_id = ?
+    WHERE s.community_id = ?
+      AND s.subscriber_user_id != ?
+      AND (c.is_invite_only = 0 OR cm.user_id IS NOT NULL)
+      AND (
+        s.mode = 'all'
+        OR (s.mode = 'following' AND uf.follower_id IS NOT NULL)
+      )
+  `).all(actorUserId, communityId, actorUserId);
+  if (!Array.isArray(subscribers) || subscribers.length === 0) return 0;
+
+  const snippet = textSnippet(postContent);
+  const message = snippet
+    ? `${actorUsername} posted in ${communityDisplayName}: ${snippet}`
+    : `${actorUsername} posted in ${communityDisplayName}`;
+  const link = communityName
+    ? `/c/${communityName}?post=${encodeURIComponent(postId)}`
+    : '/communities';
+
+  let created = 0;
+  for (const subscriber of subscribers) {
+    if (!subscriber?.user_id) continue;
+    createNotification(
+      db,
+      subscriber.user_id,
+      'community_new_post',
+      'New Community Post',
+      message,
+      link
+    );
+    created += 1;
+  }
+  return created;
+}
+
+function canManageCommunityNotifications(db, communityId, userId) {
+  const community = db.prepare('SELECT id, is_invite_only FROM communities WHERE id = ?').get(communityId);
+  if (!community) return { ok: false, status: 404, error: 'Community not found' };
+  if (!community.is_invite_only) return { ok: true, community };
+  const role = getMemberRole(db, communityId, userId);
+  if (!role) return { ok: false, status: 403, error: 'Join this private community to manage notifications' };
+  return { ok: true, community };
+}
+
 // ─── Community CRUD ──────────────────────────────────
 
 // POST /api/communities — create community
@@ -146,27 +289,49 @@ router.post('/', requireAuth, upload.fields([
 });
 
 // GET /api/communities — list communities
-router.get('/', (req, res) => {
+router.get('/', optionalAuth, (req, res) => {
   const db = getDb();
   const page = parseInt(req.query.page) || 1;
   const limit = 20;
   const offset = (page - 1) * limit;
   const search = req.query.q;
 
+  const joinedSelect = req.user
+    ? `, EXISTS(
+         SELECT 1
+         FROM community_members cmj
+         WHERE cmj.community_id = c.id
+           AND cmj.user_id = ?
+       ) as joined,
+       EXISTS(
+         SELECT 1
+         FROM community_join_requests cjr
+         WHERE cjr.community_id = c.id
+           AND cjr.user_id = ?
+           AND cjr.status = 'pending'
+       ) as pending_request`
+    : ', 0 as joined, 0 as pending_request';
+
   let query = `
     SELECT c.*, u.username as owner_username, u.avatar as owner_avatar,
-           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count
+           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count,
+           ${POSTS_LAST_WEEK_SQL} as posts_last_week
+           ${joinedSelect}
     FROM communities c
     JOIN users u ON c.owner_id = u.id
   `;
   const params = [];
+  if (req.user) {
+    params.push(req.user.id);
+    params.push(req.user.id);
+  }
 
   if (search) {
     query += ` WHERE c.display_name LIKE ? OR c.description LIKE ?`;
     params.push(`%${search}%`, `%${search}%`);
   }
 
-  query += ` ORDER BY member_count DESC, c.created_at DESC LIMIT ? OFFSET ?`;
+  query += ` ORDER BY posts_last_week DESC, member_count DESC, c.created_at DESC LIMIT ? OFFSET ?`;
   params.push(limit, offset);
 
   const communities = db.prepare(query).all(...params);
@@ -174,16 +339,40 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/communities/featured — 3 popular communities for home page
-router.get('/featured', (req, res) => {
+router.get('/featured', optionalAuth, (req, res) => {
   const db = getDb();
+  const joinedSelect = req.user
+    ? `, EXISTS(
+         SELECT 1
+         FROM community_members cmj
+         WHERE cmj.community_id = c.id
+           AND cmj.user_id = ?
+       ) as joined,
+       EXISTS(
+         SELECT 1
+         FROM community_join_requests cjr
+         WHERE cjr.community_id = c.id
+           AND cjr.user_id = ?
+           AND cjr.status = 'pending'
+       ) as pending_request`
+    : ', 0 as joined, 0 as pending_request';
+
+  const params = [];
+  if (req.user) {
+    params.push(req.user.id);
+    params.push(req.user.id);
+  }
+
   const communities = db.prepare(`
     SELECT c.*, u.username as owner_username, u.avatar as owner_avatar,
-           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count
+           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count,
+           ${POSTS_LAST_WEEK_SQL} as posts_last_week
+           ${joinedSelect}
     FROM communities c
     JOIN users u ON c.owner_id = u.id
-    ORDER BY member_count DESC, c.created_at DESC
+    ORDER BY posts_last_week DESC, member_count DESC, c.created_at DESC
     LIMIT 3
-  `).all();
+  `).all(...params);
   res.json(communities);
 });
 
@@ -192,7 +381,8 @@ router.get('/name/:name', optionalAuth, (req, res) => {
   const db = getDb();
   const community = db.prepare(`
     SELECT c.*, u.username as owner_username, u.avatar as owner_avatar,
-           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count
+           (SELECT COUNT(*) FROM community_members WHERE community_id = c.id) as member_count,
+           ${POSTS_LAST_WEEK_SQL} as posts_last_week
     FROM communities c
     JOIN users u ON c.owner_id = u.id
     WHERE LOWER(c.name) = LOWER(?)
@@ -345,24 +535,91 @@ router.delete('/:id/leave', requireAuth, (req, res) => {
   db.prepare('DELETE FROM community_members WHERE community_id = ? AND user_id = ?').run(community.id, req.user.id);
   // Also remove any tags assigned to this user in this community
   db.prepare('DELETE FROM community_member_tags WHERE community_id = ? AND user_id = ?').run(community.id, req.user.id);
+  db.prepare('DELETE FROM community_post_notification_subscriptions WHERE community_id = ? AND subscriber_user_id = ?')
+    .run(community.id, req.user.id);
   res.json({ success: true });
+});
+
+// GET /api/communities/:id/notifications — get current user's community post notification preferences
+router.get('/:id/notifications', requireAuth, (req, res) => {
+  const db = getDb();
+  const access = canManageCommunityNotifications(db, req.params.id, req.user.id);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+  res.json(getCommunityPostNotificationSubscription(db, req.user.id, req.params.id));
+});
+
+// PUT /api/communities/:id/notifications — set current user's community post notification preferences
+router.put('/:id/notifications', requireAuth, (req, res) => {
+  const db = getDb();
+  const access = canManageCommunityNotifications(db, req.params.id, req.user.id);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const modeRaw = String(req.body?.mode || '').trim().toLowerCase();
+  const mode = modeRaw === 'all' || modeRaw === 'following' ? modeRaw : (modeRaw === 'off' ? 'off' : null);
+  if (!mode) {
+    return res.status(400).json({ error: "mode must be 'all', 'following', or 'off'" });
+  }
+
+  const saved = setCommunityPostNotificationSubscription(db, req.user.id, req.params.id, mode);
+  res.json(saved);
 });
 
 // GET /api/communities/:id/members — list members
 router.get('/:id/members', (req, res) => {
   const db = getDb();
   const sort = req.query.sort || 'joined';
-  const orderBy = sort === 'pumbility' ? 'u.pumbility DESC' : 'cm.joined_at ASC';
+  const normalizedSort = sort === 'active' ? 'activity' : sort;
+  const rawLimit = parseInt(req.query.limit, 10);
+  const safeLimit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : null;
+
+  let orderBy = 'datetime(cm.joined_at) ASC';
+  if (normalizedSort === 'pumbility') {
+    orderBy = 'u.pumbility DESC, datetime(cm.joined_at) ASC';
+  } else if (normalizedSort === 'activity') {
+    orderBy = 'recent_activity_count DESC, posts_last_week DESC, u.pumbility DESC, datetime(cm.joined_at) ASC';
+  }
+
+  const params = [req.params.id];
+  let limitClause = '';
+  if (safeLimit) {
+    limitClause = 'LIMIT ?';
+    params.push(safeLimit);
+  }
 
   const members = db.prepare(`
-    SELECT cm.role, cm.joined_at, u.id, u.username, u.avatar, u.pumbility, u.skill_title, u.nationality
+    SELECT cm.role, cm.joined_at, u.id, u.username, u.avatar, u.pumbility, u.skill_title, u.nationality,
+           (
+             SELECT COUNT(*)
+             FROM community_posts cp
+             WHERE cp.community_id = cm.community_id
+               AND cp.user_id = cm.user_id
+               AND datetime(cp.created_at) >= datetime('now', '-7 days')
+           ) as posts_last_week,
+           (
+             (
+               SELECT COUNT(*)
+               FROM community_posts cp
+               WHERE cp.community_id = cm.community_id
+                 AND cp.user_id = cm.user_id
+                 AND datetime(cp.created_at) >= datetime('now', '-7 days')
+             ) +
+             (
+               SELECT COUNT(*)
+               FROM community_post_comments cpc
+               JOIN community_posts cp ON cp.id = cpc.post_id
+               WHERE cp.community_id = cm.community_id
+                 AND cpc.user_id = cm.user_id
+                 AND datetime(cpc.created_at) >= datetime('now', '-7 days')
+             )
+           ) as recent_activity_count
     FROM community_members cm
     JOIN users u ON cm.user_id = u.id
     WHERE cm.community_id = ?
     ORDER BY
       CASE cm.role WHEN 'owner' THEN 0 WHEN 'moderator' THEN 1 ELSE 2 END,
       ${orderBy}
-  `).all(req.params.id);
+    ${limitClause}
+  `).all(...params);
 
   // Attach tags and badges for each member
   for (const member of members) {
@@ -498,6 +755,8 @@ router.delete('/:id/members/:userId', requireAuth, (req, res) => {
 
   db.prepare('DELETE FROM community_members WHERE community_id = ? AND user_id = ?').run(community.id, req.params.userId);
   db.prepare('DELETE FROM community_member_tags WHERE community_id = ? AND user_id = ?').run(community.id, req.params.userId);
+  db.prepare('DELETE FROM community_post_notification_subscriptions WHERE community_id = ? AND subscriber_user_id = ?')
+    .run(community.id, req.params.userId);
   res.json({ success: true });
 });
 
@@ -712,6 +971,19 @@ router.post('/:id/posts', requireAuth, upload.array('images', 9), async (req, re
     JOIN community_role_badges rb ON cmb.badge_id = rb.id
     WHERE cmb.community_id = ? AND cmb.user_id = ?
   `).all(req.params.id, req.user.id);
+
+  const communityInfo = db.prepare(
+    'SELECT name, display_name FROM communities WHERE id = ?'
+  ).get(req.params.id);
+  notifyCommunityPostSubscribers(db, {
+    communityId: req.params.id,
+    communityName: communityInfo?.name || '',
+    communityDisplayName: communityInfo?.display_name || 'a community',
+    actorUserId: req.user.id,
+    actorUsername: post?.username || req.user.username || 'Someone',
+    postId: id,
+    postContent: content || '',
+  });
 
   res.status(201).json({ ...post, pump_count: 0, comment_count: 0 });
 });

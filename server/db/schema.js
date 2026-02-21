@@ -1138,6 +1138,15 @@ function initializeDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS community_post_notification_subscriptions (
+      subscriber_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      mode TEXT NOT NULL DEFAULT 'all' CHECK (mode IN ('all', 'following')),
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (subscriber_user_id, community_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_communities_name ON communities(name);
     CREATE INDEX IF NOT EXISTS idx_communities_owner ON communities(owner_id);
     CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);
@@ -1151,6 +1160,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_community_post_pumps ON community_post_pumps(post_id);
     CREATE INDEX IF NOT EXISTS idx_community_post_comments ON community_post_comments(post_id);
     CREATE INDEX IF NOT EXISTS idx_community_join_requests ON community_join_requests(community_id, status);
+    CREATE INDEX IF NOT EXISTS idx_community_post_notif_subscriber ON community_post_notification_subscriptions(subscriber_user_id);
+    CREATE INDEX IF NOT EXISTS idx_community_post_notif_community ON community_post_notification_subscriptions(community_id);
 
     CREATE TABLE IF NOT EXISTS follower_daily_snapshots (
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -309,7 +309,15 @@ export async function updateCommunity(id, formData) {
 export const deleteCommunity = (id) => request(`/communities/${id}`, { method: 'DELETE' });
 export const joinCommunity = (id) => request(`/communities/${id}/join`, { method: 'POST' });
 export const leaveCommunity = (id) => request(`/communities/${id}/leave`, { method: 'DELETE' });
-export const getCommunityMembers = (id, sort) => request(`/communities/${id}/members${sort ? `?sort=${sort}` : ''}`);
+export const getCommunityNotificationPreferences = (id) => request(`/communities/${id}/notifications`);
+export const updateCommunityNotificationPreferences = (id, data) => request(`/communities/${id}/notifications`, { method: 'PUT', body: JSON.stringify(data) });
+export const getCommunityMembers = (id, sort, options = {}) => {
+  const params = new URLSearchParams();
+  if (sort) params.set('sort', sort);
+  if (options.limit) params.set('limit', String(options.limit));
+  const qs = params.toString();
+  return request(`/communities/${id}/members${qs ? `?${qs}` : ''}`);
+};
 export const searchCommunityMentions = (id, q) => request(`/communities/${id}/mentions?q=${encodeURIComponent(q)}`);
 export const updateMemberRole = (communityId, userId, role) => request(`/communities/${communityId}/members/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) });
 export const removeCommunityMember = (communityId, userId) => request(`/communities/${communityId}/members/${userId}`, { method: 'DELETE' });

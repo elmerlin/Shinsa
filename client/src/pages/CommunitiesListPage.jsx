@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getCommunities } from '../utils/api';
 import CommunityBadge from '../components/CommunityBadge';
+import { getAvatarUrl } from '../components/AvatarPicker';
+import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
 
 export default function CommunitiesListPage() {
   const { user } = useAuth();
   const [communities, setCommunities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [communityPalettes, setCommunityPalettes] = useState({});
 
   useEffect(() => {
     getCommunities(search ? { q: search } : {})
@@ -17,8 +20,30 @@ export default function CommunitiesListPage() {
       .finally(() => setLoading(false));
   }, [search]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const missing = communities.filter((community) => community.avatar && !communityPalettes[community.id]);
+    if (missing.length === 0) return undefined;
+
+    Promise.all(missing.map(async (community) => {
+      const palette = await extractCommunityPalette(getAvatarUrl(community.avatar));
+      return { id: community.id, palette };
+    })).then((entries) => {
+      if (cancelled) return;
+      setCommunityPalettes((prev) => {
+        const next = { ...prev };
+        for (const entry of entries) {
+          if (entry.palette) next[entry.id] = entry.palette;
+        }
+        return next;
+      });
+    });
+
+    return () => { cancelled = true; };
+  }, [communities, communityPalettes]);
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="font-display font-bold text-2xl tracking-wider">COMMUNITIES</h1>
         {user && (
@@ -54,15 +79,16 @@ export default function CommunitiesListPage() {
           {user && <p className="text-gray-600 text-sm mt-1">Be the first to create one!</p>}
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {communities.map(c => (
             <Link
               key={c.id}
               to={`/c/${c.name}`}
               className="flex items-center gap-4 bg-piu-card border border-piu-border rounded-xl p-4 hover:border-piu-accent/30 transition-colors group"
+              style={getCommunityCardStyle(communityPalettes[c.id]) || undefined}
             >
               {c.avatar ? (
-                <img src={c.avatar} alt="" className="w-14 h-14 rounded-xl object-cover shadow-md shrink-0" />
+                <img src={getAvatarUrl(c.avatar)} alt="" className="w-14 h-14 rounded-xl object-cover shadow-md shrink-0" />
               ) : (
                 <div className="w-14 h-14 bg-gradient-to-br from-piu-accent to-purple-700 rounded-xl flex items-center justify-center font-display text-2xl font-bold shadow-md shrink-0">
                   {c.display_name[0]?.toUpperCase()}
@@ -77,7 +103,7 @@ export default function CommunitiesListPage() {
                 {c.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{c.description}</p>}
                 <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-600">
                   <span>{c.member_count} member{c.member_count !== 1 ? 's' : ''}</span>
-                  <span>by {c.owner_username}</span>
+                  <span>{c.posts_last_week || 0} post{(c.posts_last_week || 0) !== 1 ? 's' : ''} this week</span>
                 </div>
               </div>
             </Link>
