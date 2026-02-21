@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
@@ -6,12 +6,22 @@ import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
 import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
+import { ImageGrid, Lightbox, YouTubeEmbed, ShareButton, timeAgo as postCardTimeAgo } from '../components/PostCard';
+import ImageEditor from '../components/ImageEditor';
 import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
-  getCommunityMembers,
+  getCommunityMembers, pumpCommunityComment, getCommunityEmojis,
 } from '../utils/api';
+
+// Common emoji sets for quick insert (same as PostsPage)
+const EMOJI_GROUPS = [
+  { label: 'Faces', emojis: ['😀','😂','🤣','😊','😎','🤩','😍','🥳','🤔','😱','😤','😭','🙄','😴','🤮'] },
+  { label: 'Hands', emojis: ['👍','👎','👏','🙌','💪','✌️','🤞','🤘','👊','✊','🫡','🫶'] },
+  { label: 'PIU', emojis: ['🎵','🎶','🎤','🎮','🕹️','🏆','🥇','🥈','🥉','🔥','⭐','💥','💯','🚀','⚡'] },
+  { label: 'Hearts', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💖'] },
+];
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -378,6 +388,84 @@ function PostsTab({
   expandedComments, toggleComments, commentTexts, setCommentTexts,
   replyTo, setReplyTo, onAddComment, onDeleteComment,
 }) {
+  const [showYoutubeInput, setShowYoutubeInput] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
+  const [customEmojis, setCustomEmojis] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [editingIndex, setEditingIndex] = useState(null);
+  const textRef = useRef(null);
+  const fileRef = useRef(null);
+  const emojiRef = useRef(null);
+
+  // Load custom emojis for this community
+  useEffect(() => {
+    if (community?.id) {
+      getCommunityEmojis(community.id).then(setCustomEmojis).catch(() => {});
+    }
+  }, [community?.id]);
+
+  // Close emoji picker on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target)) setShowEmojis(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const insertEmoji = (emoji) => {
+    const textarea = textRef.current;
+    if (!textarea) {
+      setNewPostContent(c => c + emoji);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newContent = newPostContent.slice(0, start) + emoji + newPostContent.slice(end);
+    setNewPostContent(newContent);
+    setTimeout(() => {
+      textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
+      textarea.focus();
+    }, 0);
+  };
+
+  const applyFormat = (prefix, suffix) => {
+    const textarea = textRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = newPostContent.slice(start, end);
+    const newContent = newPostContent.slice(0, start) + prefix + selected + suffix + newPostContent.slice(end);
+    setNewPostContent(newContent);
+    setTimeout(() => {
+      textarea.selectionStart = start + prefix.length;
+      textarea.selectionEnd = end + prefix.length;
+      textarea.focus();
+    }, 0);
+  };
+
+  const handleImageSelect = (e) => {
+    const files = Array.from(e.target.files).slice(0, 9 - newPostImages.length);
+    const newImages = [...newPostImages, ...files].slice(0, 9);
+    setNewPostImages(newImages);
+    previews.forEach(p => URL.revokeObjectURL(p));
+    setPreviews(newImages.map(f => URL.createObjectURL(f)));
+  };
+
+  const removeImage = (idx) => {
+    URL.revokeObjectURL(previews[idx]);
+    setNewPostImages(imgs => imgs.filter((_, i) => i !== idx));
+    setPreviews(prevs => prevs.filter((_, i) => i !== idx));
+  };
+
+  // Clean up previews when post is created (images reset)
+  useEffect(() => {
+    if (newPostImages.length === 0 && previews.length > 0) {
+      previews.forEach(p => URL.revokeObjectURL(p));
+      setPreviews([]);
+    }
+  }, [newPostImages.length]);
+
   return (
     <div>
       {/* Sort toggle */}
@@ -400,58 +488,148 @@ function PostsTab({
         </button>
       </div>
 
-      {/* Post Composer */}
+      {/* Post Composer — feature-matched with regular PostComposer */}
       {isMember && (
-        <form onSubmit={onCreatePost} className="bg-piu-card border border-piu-border rounded-xl p-4 mb-4">
-          <textarea
-            value={newPostContent}
-            onChange={(e) => setNewPostContent(e.target.value)}
-            className="w-full bg-transparent border-none text-white text-sm resize-none focus:outline-none placeholder-gray-600"
-            rows={3}
-            placeholder="Share something with the community..."
-            maxLength={5000}
-          />
+        <form onSubmit={onCreatePost} className="card mb-4">
+          <div className="flex items-start gap-3 mb-3">
+            {user?.avatar ? (
+              <img src={user.avatar.startsWith('data:') ? user.avatar : getAvatarUrl(user.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border shrink-0" />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm shrink-0">
+                {user?.username?.[0]?.toUpperCase()}
+              </div>
+            )}
+            <textarea
+              ref={textRef}
+              value={newPostContent}
+              onChange={(e) => setNewPostContent(e.target.value)}
+              className="input-field flex-1 resize-none min-h-[80px]"
+              rows={3}
+              placeholder="Share something with the community..."
+              maxLength={5000}
+            />
+          </div>
+
+          {/* YouTube URL input */}
+          {showYoutubeInput && (
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="text"
+                className="input-field text-xs py-1.5 flex-1"
+                placeholder="Paste YouTube URL (e.g. youtube.com/watch?v=...)"
+                value={newPostYoutube}
+                onChange={(e) => setNewPostYoutube(e.target.value)}
+              />
+              <button type="button" onClick={() => { setShowYoutubeInput(false); setNewPostYoutube(''); }} className="text-gray-500 hover:text-red-400 text-xs">&#10005;</button>
+            </div>
+          )}
+
           {/* Image previews */}
-          {newPostImages.length > 0 && (
-            <div className="flex gap-2 mt-2 flex-wrap">
-              {newPostImages.map((f, i) => (
-                <div key={i} className="relative">
-                  <img src={URL.createObjectURL(f)} alt="" className="w-16 h-16 object-cover rounded-lg" />
+          {previews.length > 0 && (
+            <div className={`grid gap-1.5 mb-3 ${previews.length === 1 ? 'grid-cols-1 max-w-[120px]' : previews.length <= 4 ? 'grid-cols-2 max-w-[200px]' : 'grid-cols-3 max-w-[280px]'}`}>
+              {previews.map((src, i) => (
+                <div key={i} className="relative group">
+                  <img src={src} alt="" className="w-full aspect-square rounded-lg object-cover" />
                   <button
                     type="button"
-                    onClick={() => setNewPostImages(prev => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] text-white"
+                    onClick={() => setEditingIndex(i)}
+                    className="absolute bottom-1 left-1 w-6 h-6 rounded-full bg-black/60 text-white text-[10px] flex items-center justify-center hover:bg-black/80 transition-colors"
+                    title="Edit image"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center"
                   >x</button>
                 </div>
               ))}
             </div>
           )}
-          <div className="flex items-center justify-between mt-3 border-t border-piu-border/30 pt-3">
-            <div className="flex items-center gap-2">
-              <label className="cursor-pointer p-1.5 text-gray-500 hover:text-piu-accent transition-colors" title="Add images">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+
+          {/* Image Editor Modal */}
+          {editingIndex !== null && newPostImages[editingIndex] && (
+            <ImageEditor
+              file={newPostImages[editingIndex]}
+              onDone={(editedFile) => {
+                const newImages = [...newPostImages];
+                newImages[editingIndex] = editedFile;
+                setNewPostImages(newImages);
+                previews.forEach(p => URL.revokeObjectURL(p));
+                setPreviews(newImages.map(f => URL.createObjectURL(f)));
+                setEditingIndex(null);
+              }}
+              onCancel={() => setEditingIndex(null)}
+            />
+          )}
+
+          {/* Toolbar */}
+          <div className="flex items-center justify-between border-t border-piu-border/30 pt-2">
+            <div className="flex items-center gap-1">
+              {/* Bold */}
+              <button type="button" onClick={() => applyFormat('**', '**')} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-xs font-bold" title="Bold">B</button>
+              {/* Italic */}
+              <button type="button" onClick={() => applyFormat('*', '*')} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-xs italic" title="Italic">I</button>
+              {/* Strikethrough */}
+              <button type="button" onClick={() => applyFormat('~~', '~~')} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-xs line-through" title="Strikethrough">S</button>
+
+              <div className="w-px h-5 bg-piu-border/30 mx-1" />
+
+              {/* Emoji picker */}
+              <div className="relative" ref={emojiRef}>
+                <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm" title="Emoji">&#9786;</button>
+                {showEmojis && (
+                  <div className="absolute left-0 top-full mt-1 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 p-3 w-72 max-h-80 overflow-y-auto">
+                    {/* Custom community emojis */}
+                    {customEmojis.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-[10px] text-piu-accent font-display mb-1">{community.display_name}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {customEmojis.map(e => (
+                            <button key={e.id} type="button" onClick={() => { insertEmoji(`:${e.name}:`); }} className="w-7 h-7 flex items-center justify-center rounded hover:bg-piu-dark/50 transition-colors" title={e.name}>
+                              <img src={e.image} alt={e.name} className="w-5 h-5 object-contain" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {EMOJI_GROUPS.map(group => (
+                      <div key={group.label} className="mb-2">
+                        <p className="text-[10px] text-gray-500 font-display mb-1">{group.label}</p>
+                        <div className="flex flex-wrap gap-1">
+                          {group.emojis.map(e => (
+                            <button key={e} type="button" onClick={() => insertEmoji(e)} className="w-7 h-7 flex items-center justify-center rounded hover:bg-piu-dark/50 transition-colors text-base">{e}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Image upload */}
+              <button type="button" onClick={() => fileRef.current?.click()} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm" title="Attach images (max 9)" disabled={newPostImages.length >= 9}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => setNewPostImages(prev => [...prev, ...Array.from(e.target.files || [])].slice(0, 9))}
-                />
-              </label>
-              <input
-                type="text"
-                value={newPostYoutube}
-                onChange={(e) => setNewPostYoutube(e.target.value)}
-                className="bg-transparent border-none text-xs text-gray-400 focus:outline-none placeholder-gray-600 w-40"
-                placeholder="YouTube URL"
-              />
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelect} />
+
+              {/* YouTube link */}
+              <button type="button" onClick={() => setShowYoutubeInput(!showYoutubeInput)} className={`p-1.5 rounded hover:bg-piu-dark/50 transition-colors text-sm ${showYoutubeInput || newPostYoutube ? 'text-red-400' : 'text-gray-400 hover:text-white'}`} title="Attach YouTube video">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z"/>
+                </svg>
+              </button>
             </div>
+
             <button
               type="submit"
               disabled={posting || (!newPostContent.trim() && newPostImages.length === 0 && !newPostYoutube)}
-              className="px-4 py-1.5 bg-piu-accent rounded-lg text-xs font-display font-bold hover:bg-piu-accent/80 transition-colors disabled:opacity-40"
+              className="btn-primary px-4 py-1.5 text-xs disabled:opacity-50"
             >
               {posting ? 'Posting...' : 'Post'}
             </button>
@@ -509,7 +687,20 @@ function PostsTab({
   );
 }
 
-// ─── Community Post Card ─────────────────────────────
+// ─── Badge List Component ────────────────────────────
+
+function BadgeList({ badges }) {
+  if (!badges || badges.length === 0) return null;
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {badges.map(b => (
+        <img key={b.id} src={b.image} alt={b.name} title={b.name} className="w-4 h-4 object-contain" />
+      ))}
+    </span>
+  );
+}
+
+// ─── Community Post Card (feature-matched with PostCard) ─
 
 function CommunityPostCard({
   post, community, user, isMember, isModOrOwner,
@@ -519,16 +710,32 @@ function CommunityPostCard({
   replyTo, setReplyTo, onAddComment, onDeleteComment,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+  const [pumped, setPumped] = useState(!!post.user_pumped);
+  const [pumpCount, setPumpCount] = useState(post.pump_count || 0);
+  const [animating, setAnimating] = useState(false);
   const images = (() => { try { return JSON.parse(post.images || '[]'); } catch { return []; } })();
   const isAuthor = user?.id === post.user_id;
   const canDelete = isAuthor || isModOrOwner;
-  const youtubeId = post.youtube_url ? extractYoutubeId(post.youtube_url) : null;
+
+  const handlePump = async () => {
+    if (!isMember) return;
+    try {
+      const result = await pumpCommunityPost(community.id, post.id);
+      setPumped(result.pumped);
+      setPumpCount(result.pump_count);
+      if (result.pumped) {
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), 600);
+      }
+    } catch (err) { console.error(err); }
+  };
 
   return (
-    <div className="bg-piu-card border border-piu-border rounded-xl overflow-hidden">
+    <div className="card overflow-hidden">
       {/* Pinned indicator */}
       {post.is_pinned ? (
-        <div className="px-4 py-1.5 bg-piu-accent/10 border-b border-piu-accent/20 flex items-center gap-1.5 text-[10px] text-piu-accent font-display font-bold">
+        <div className="px-4 py-1.5 -mx-4 -mt-4 mb-3 bg-piu-accent/10 border-b border-piu-accent/20 flex items-center gap-1.5 text-[10px] text-piu-accent font-display font-bold">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
             <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182a.5.5 0 0 1-.707-.708l3.182-3.182L2.4 8.044a.5.5 0 0 1 0-.707c.688-.688 1.673-.766 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.109-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/>
           </svg>
@@ -536,160 +743,191 @@ function CommunityPostCard({
         </div>
       ) : null}
 
-      <div className="p-4">
-        {/* Author header */}
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2.5">
-            <Link to={`/profile/${post.user_id}`}>
-              {post.user_avatar ? (
-                <img src={post.user_avatar.startsWith('data:') ? post.user_avatar : getAvatarUrl(post.user_avatar)} alt="" className="w-9 h-9 rounded-full object-cover" />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
-                  {post.username?.[0]?.toUpperCase()}
-                </div>
-              )}
-            </Link>
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Link to={`/profile/${post.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
-                  {post.username}
-                </Link>
-                <CommunityTagList tags={post.author_tags} />
+      {/* Author header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <Link to={`/profile/${post.user_id}`}>
+            {post.user_avatar ? (
+              <img src={post.user_avatar.startsWith('data:') ? post.user_avatar : getAvatarUrl(post.user_avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
+                {post.username?.[0]?.toUpperCase()}
               </div>
-              <span className="text-[10px] text-gray-500">{timeAgo(post.created_at)}</span>
+            )}
+          </Link>
+          <div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Link to={`/profile/${post.user_id}`} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                {post.username}
+              </Link>
+              <BadgeList badges={post.author_badges} />
+              <CommunityTagList tags={post.author_tags} />
             </div>
+            <p className="text-[10px] text-gray-500">{timeAgo(post.created_at)}</p>
           </div>
+        </div>
 
-          {/* Menu */}
-          {canDelete && (
-            <div className="relative">
-              <button onClick={() => setMenuOpen(!menuOpen)} className="p-1 text-gray-600 hover:text-gray-300 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01" />
-                </svg>
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 bg-piu-dark border border-piu-border rounded-lg shadow-xl z-20 py-1 min-w-[120px]">
-                  {isModOrOwner && (
-                    <button
-                      onClick={() => { onPin(post.id); setMenuOpen(false); }}
-                      className="w-full text-left px-3 py-1.5 text-xs font-display hover:bg-piu-card/50 transition-colors"
-                    >
-                      {post.is_pinned ? 'Unpin' : 'Pin'}
-                    </button>
-                  )}
+        {/* Menu */}
+        {canDelete && (
+          <div className="relative">
+            <button onClick={() => setMenuOpen(!menuOpen)} className="p-1 text-gray-600 hover:text-gray-300 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v.01M12 12v.01M12 19v.01" />
+              </svg>
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-piu-dark border border-piu-border rounded-lg shadow-xl z-20 py-1 min-w-[120px]">
+                {isModOrOwner && (
                   <button
-                    onClick={() => { onDelete(post.id); setMenuOpen(false); }}
-                    className="w-full text-left px-3 py-1.5 text-xs font-display text-red-400 hover:bg-piu-card/50 transition-colors"
+                    onClick={() => { onPin(post.id); setMenuOpen(false); }}
+                    className="w-full text-left px-3 py-1.5 text-xs font-display hover:bg-piu-card/50 transition-colors"
                   >
-                    Delete
+                    {post.is_pinned ? 'Unpin' : 'Pin'}
                   </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Content */}
-        {post.content && (
-          <div className="text-sm text-gray-300 mb-3 whitespace-pre-wrap break-words leading-relaxed">
-            {renderFormattedText(post.content)}
-          </div>
-        )}
-
-        {/* Images */}
-        {images.length > 0 && (
-          <div className={`grid gap-1.5 mb-3 ${images.length === 1 ? 'grid-cols-1' : images.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-            {images.map((img, i) => (
-              <img key={i} src={img} alt="" className="w-full rounded-lg object-cover max-h-64" />
-            ))}
-          </div>
-        )}
-
-        {/* YouTube embed */}
-        {youtubeId && (
-          <div className="mb-3 aspect-video rounded-lg overflow-hidden">
-            <iframe
-              src={`https://www.youtube.com/embed/${youtubeId}`}
-              title="YouTube"
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-4 pt-2 border-t border-piu-border/30">
-          <button
-            onClick={() => isMember ? onPump(post.id) : null}
-            className={`flex items-center gap-1.5 text-xs font-display transition-colors ${
-              post.user_pumped ? 'text-piu-accent' : 'text-gray-500 hover:text-piu-accent'
-            } ${!isMember ? 'opacity-50 cursor-default' : ''}`}
-            title={!isMember ? 'Join to interact' : ''}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill={post.user_pumped ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
-            {post.pump_count > 0 && <span>{post.pump_count}</span>}
-          </button>
-
-          <button
-            onClick={() => onToggleComments()}
-            className="flex items-center gap-1.5 text-xs font-display text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            {post.comment_count > 0 && <span>{post.comment_count}</span>}
-          </button>
-        </div>
-
-        {/* Comments section */}
-        {comments && (
-          <div className="mt-3 pt-3 border-t border-piu-border/30 space-y-2">
-            {comments.filter(c => !c.parent_id).map(comment => (
-              <CommentItem
-                key={comment.id}
-                comment={comment}
-                replies={comments.filter(c => c.parent_id === comment.id)}
-                community={community}
-                user={user}
-                isMember={isMember}
-                isModOrOwner={isModOrOwner}
-                postId={post.id}
-                commentTexts={commentTexts}
-                setCommentTexts={setCommentTexts}
-                replyTo={replyTo}
-                setReplyTo={setReplyTo}
-                onAddComment={onAddComment}
-                onDelete={onDeleteComment}
-              />
-            ))}
-
-            {/* Add comment */}
-            {isMember && !replyTo && (
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  type="text"
-                  value={commentTexts[post.id] || ''}
-                  onChange={(e) => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))}
-                  onKeyDown={(e) => e.key === 'Enter' && onAddComment(post.id, null)}
-                  className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-piu-accent"
-                  placeholder="Write a comment..."
-                />
+                )}
                 <button
-                  onClick={() => onAddComment(post.id, null)}
-                  className="text-xs text-piu-accent font-display font-bold hover:text-piu-accent/80"
+                  onClick={() => { onDelete(post.id); setMenuOpen(false); }}
+                  className="w-full text-left px-3 py-1.5 text-xs font-display text-red-400 hover:bg-piu-card/50 transition-colors"
                 >
-                  Send
+                  Delete
                 </button>
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Content */}
+      {post.content && (
+        <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
+          {renderFormattedText(post.content)}
+        </div>
+      )}
+
+      {/* YouTube */}
+      {post.youtube_url && <YouTubeEmbed url={post.youtube_url} />}
+
+      {/* Images with lightbox */}
+      <ImageGrid images={images} onImageClick={setLightboxIndex} />
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <Lightbox images={images} index={lightboxIndex} onClose={() => setLightboxIndex(null)} />
+      )}
+
+      {/* Actions: Pump + Comments + Share */}
+      <div className="border-t border-piu-border/20 pt-2 mt-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Pump button (stomp icon matching PostCard) */}
+          <button
+            onClick={handlePump}
+            disabled={!isMember}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold transition-all ${
+              pumped
+                ? 'text-piu-gold bg-piu-gold/10'
+                : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
+            } ${!isMember ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={!isMember ? 'Join to interact' : (pumped ? 'Un-pump' : 'Pump it up!')}
+          >
+            <img
+              src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+              alt=""
+              className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`}
+            />
+            <span>{pumpCount > 0 ? pumpCount : ''}</span>
+          </button>
+
+          {/* Comments button */}
+          <button
+            onClick={() => onToggleComments()}
+            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <span>{post.comment_count > 0 ? post.comment_count : ''}</span>
+          </button>
+
+          {/* Share button */}
+          <ShareButton path={`/c/${community.name}`} />
+        </div>
+      </div>
+
+      {/* Comments section */}
+      {comments && (
+        <div className="mt-3 pt-3 border-t border-piu-border/30 space-y-2">
+          {comments.filter(c => !c.parent_id).map(comment => (
+            <CommentItem
+              key={comment.id}
+              comment={comment}
+              replies={comments.filter(c => c.parent_id === comment.id)}
+              community={community}
+              user={user}
+              isMember={isMember}
+              isModOrOwner={isModOrOwner}
+              postId={post.id}
+              commentTexts={commentTexts}
+              setCommentTexts={setCommentTexts}
+              replyTo={replyTo}
+              setReplyTo={setReplyTo}
+              onAddComment={onAddComment}
+              onDelete={onDeleteComment}
+            />
+          ))}
+
+          {/* Add comment */}
+          {isMember && !replyTo && (
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="text"
+                value={commentTexts[post.id] || ''}
+                onChange={(e) => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))}
+                onKeyDown={(e) => e.key === 'Enter' && onAddComment(post.id, null)}
+                className="input-field text-xs py-1.5 flex-1"
+                placeholder="Write a comment..."
+              />
+              <button
+                onClick={() => onAddComment(post.id, null)}
+                disabled={!commentTexts[post.id]?.trim()}
+                className="text-xs font-display font-bold text-piu-accent hover:text-white disabled:opacity-30 transition-colors shrink-0"
+              >
+                Send
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+// ─── Comment Pump Button ─────────────────────────────
+
+function CommunityCommentPump({ communityId, commentId, initialCount, initialPumped, isMember }) {
+  const [pumped, setPumped] = useState(!!initialPumped);
+  const [count, setCount] = useState(initialCount || 0);
+
+  const toggle = async () => {
+    if (!isMember) return;
+    try {
+      const res = await pumpCommunityComment(communityId, commentId);
+      setPumped(res.pumped);
+      setCount(res.pump_count);
+    } catch {}
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={!isMember}
+      className={`flex items-center gap-0.5 transition-colors ${
+        pumped ? 'text-piu-gold' : 'text-gray-600 hover:text-piu-gold'
+      } ${!isMember ? 'opacity-50 cursor-not-allowed' : ''}`}
+      title={pumped ? 'Un-pump' : 'Pump'}
+    >
+      <img src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'} alt="" className="w-3 h-3" />
+      {count > 0 && <span className="text-[9px] font-display font-bold">{count}</span>}
+    </button>
   );
 }
 
@@ -704,40 +942,32 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
       <div className="flex items-start gap-2">
         <Link to={`/profile/${comment.user_id}`}>
           {comment.user_avatar ? (
-            <img src={comment.user_avatar.startsWith('data:') ? comment.user_avatar : getAvatarUrl(comment.user_avatar)} alt="" className="w-6 h-6 rounded-full object-cover mt-0.5" />
+            <img src={comment.user_avatar.startsWith('data:') ? comment.user_avatar : getAvatarUrl(comment.user_avatar)} alt="" className="w-6 h-6 rounded-full object-cover border border-piu-border shrink-0" />
           ) : (
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] mt-0.5">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[8px] shrink-0">
               {comment.username?.[0]?.toUpperCase()}
             </div>
           )}
         </Link>
         <div className="flex-1 min-w-0">
-          <div className="bg-piu-dark/50 rounded-lg px-3 py-1.5">
+          <div className="bg-piu-dark/50 rounded-lg px-2.5 py-1.5">
             <div className="flex items-center gap-1.5">
-              <Link to={`/profile/${comment.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors">
+              <Link to={`/profile/${comment.user_id}`} className="font-display font-bold text-[11px] hover:text-piu-accent transition-colors leading-none">
                 {comment.username}
               </Link>
+              <BadgeList badges={comment.author_badges} />
               <CommunityTagList tags={comment.author_tags} />
             </div>
-            <p className="text-xs text-gray-300 mt-0.5 break-words">{comment.content}</p>
+            <p className="text-xs text-gray-200 break-words mt-0.5">{comment.content}</p>
           </div>
-          <div className="flex items-center gap-3 mt-0.5 ml-3">
-            <span className="text-[9px] text-gray-600">{timeAgo(comment.created_at)}</span>
+          <div className="flex items-center gap-3 mt-0.5 px-1">
+            <span className="text-[10px] text-gray-600">{timeAgo(comment.created_at)}</span>
+            <CommunityCommentPump communityId={community.id} commentId={comment.id} initialCount={comment.pump_count || 0} initialPumped={comment.user_pumped} isMember={isMember} />
             {isMember && (
-              <button
-                onClick={() => setReplyTo(comment.id)}
-                className="text-[9px] text-gray-500 hover:text-piu-accent font-display font-bold"
-              >
-                Reply
-              </button>
+              <button onClick={() => setReplyTo(comment.id)} className="text-[10px] text-gray-500 hover:text-piu-accent">Reply</button>
             )}
             {canDelete && (
-              <button
-                onClick={() => onDelete(postId, comment.id)}
-                className="text-[9px] text-gray-600 hover:text-red-400"
-              >
-                Delete
-              </button>
+              <button onClick={() => onDelete(postId, comment.id)} className="text-[10px] text-gray-600 hover:text-red-400">Delete</button>
             )}
           </div>
         </div>
@@ -745,30 +975,32 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
 
       {/* Replies */}
       {replies.length > 0 && (
-        <div className="ml-8 mt-1 space-y-1.5">
+        <div className="ml-8 mt-1 space-y-1">
           {replies.map(reply => (
             <div key={reply.id} className="flex items-start gap-2">
               <Link to={`/profile/${reply.user_id}`}>
                 {reply.user_avatar ? (
-                  <img src={reply.user_avatar.startsWith('data:') ? reply.user_avatar : getAvatarUrl(reply.user_avatar)} alt="" className="w-5 h-5 rounded-full object-cover mt-0.5" />
+                  <img src={reply.user_avatar.startsWith('data:') ? reply.user_avatar : getAvatarUrl(reply.user_avatar)} alt="" className="w-5 h-5 rounded-full object-cover border border-piu-border shrink-0" />
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[7px] mt-0.5">
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[7px] shrink-0">
                     {reply.username?.[0]?.toUpperCase()}
                   </div>
                 )}
               </Link>
               <div className="flex-1 min-w-0">
-                <div className="bg-piu-dark/30 rounded-lg px-2.5 py-1">
+                <div className="bg-piu-dark/30 rounded-lg px-2 py-1">
                   <div className="flex items-center gap-1.5">
-                    <Link to={`/profile/${reply.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors">
+                    <Link to={`/profile/${reply.user_id}`} className="font-display font-bold text-[10px] hover:text-piu-accent transition-colors leading-none">
                       {reply.username}
                     </Link>
+                    <BadgeList badges={reply.author_badges} />
                     <CommunityTagList tags={reply.author_tags} />
                   </div>
-                  <p className="text-[11px] text-gray-300 mt-0.5 break-words">{reply.content}</p>
+                  <p className="text-[11px] text-gray-200 break-words mt-0.5">{reply.content}</p>
                 </div>
-                <div className="flex items-center gap-3 mt-0.5 ml-2.5">
+                <div className="flex items-center gap-3 mt-0.5 px-1">
                   <span className="text-[9px] text-gray-600">{timeAgo(reply.created_at)}</span>
+                  <CommunityCommentPump communityId={community.id} commentId={reply.id} initialCount={reply.pump_count || 0} initialPumped={reply.user_pumped} isMember={isMember} />
                   {(user?.id === reply.user_id || isModOrOwner) && (
                     <button onClick={() => onDelete(postId, reply.id)} className="text-[9px] text-gray-600 hover:text-red-400">Delete</button>
                   )}
@@ -787,7 +1019,7 @@ function CommentItem({ comment, replies, community, user, isMember, isModOrOwner
             value={commentTexts[comment.id] || ''}
             onChange={(e) => setCommentTexts(prev => ({ ...prev, [comment.id]: e.target.value }))}
             onKeyDown={(e) => e.key === 'Enter' && onAddComment(postId, comment.id)}
-            className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-3 py-1 text-[11px] text-white focus:outline-none focus:border-piu-accent"
+            className="input-field text-[11px] py-1 flex-1"
             placeholder={`Reply to ${comment.username}...`}
             autoFocus
           />
@@ -848,6 +1080,7 @@ function MembersTab({ members, loading, memberSort, setMemberSort, community }) 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="font-display font-bold text-sm">{member.username}</span>
+                  <BadgeList badges={member.badges} />
                   {member.nationality && <span className="text-sm">{getCountryFlag(member.nationality)}</span>}
                   {member.role === 'owner' && (
                     <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-gold/20 text-piu-gold">Owner</span>
@@ -870,10 +1103,4 @@ function MembersTab({ members, loading, memberSort, setMemberSort, community }) 
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────
-
-function extractYoutubeId(url) {
-  if (!url) return null;
-  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return match ? match[1] : null;
-}
+// (Helpers: YouTubeEmbed, ImageGrid, Lightbox, ShareButton imported from PostCard)
