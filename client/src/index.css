@@ -113,10 +113,18 @@
 
 @keyframes title-waypoint-glow {
   0%, 100% {
-    box-shadow: 0 0 0 rgba(255, 255, 255, 0.08), 0 0 12px rgba(125, 211, 252, 0.35);
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.4),
+      inset 0 -6px 0 rgba(15, 23, 42, 0.22),
+      0 10px 16px rgba(15, 23, 42, 0.42),
+      0 0 14px rgba(125, 211, 252, 0.25);
   }
   50% {
-    box-shadow: 0 0 0 rgba(255, 255, 255, 0.2), 0 0 18px rgba(253, 224, 71, 0.55);
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.56),
+      inset 0 -7px 0 rgba(15, 23, 42, 0.26),
+      0 11px 19px rgba(15, 23, 42, 0.5),
+      0 0 18px rgba(253, 224, 71, 0.42);
   }
 }
 
@@ -135,46 +143,106 @@
   animation: title-waypoint-spark 2.4s ease-in-out infinite;
 }
 
+.title-waypoint-node {
+  isolation: isolate;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -6px 0 rgba(15, 23, 42, 0.24),
+    0 9px 16px rgba(15, 23, 42, 0.42);
+}
+
+.title-waypoint-node::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
 .title-map-frame {
   background:
-    radial-gradient(circle at 15% 8%, rgba(56, 189, 248, 0.22), transparent 32%),
-    radial-gradient(circle at 84% 14%, rgba(236, 72, 153, 0.2), transparent 28%),
-    linear-gradient(180deg, rgba(8, 22, 49, 0.9) 0%, rgba(5, 10, 26, 0.96) 100%);
+    radial-gradient(circle at 18% 7%, rgba(255, 255, 255, 0.34), transparent 27%),
+    radial-gradient(circle at 84% 11%, rgba(253, 224, 71, 0.3), transparent 28%),
+    radial-gradient(circle at 74% 90%, rgba(16, 185, 129, 0.18), transparent 32%),
+    linear-gradient(180deg, #8ed5ff 0%, #69b4ff 18%, #4f8de8 50%, #3559a4 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -38px 70px rgba(15, 23, 42, 0.3);
+}
+
+.title-world-canvas {
+  transform: perspective(1400px) rotateX(5deg);
+  transform-origin: top center;
+}
+
+@media (max-width: 640px) {
+  .title-world-canvas {
+    transform: perspective(950px) rotateX(3.5deg);
+  }
+}
+
+.title-zone-shell {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    0 14px 24px rgba(15, 23, 42, 0.38),
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -12px 18px rgba(15, 23, 42, 0.26);
+  overflow: hidden;
+}
+
+.title-zone-shell::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+}
+
+.title-zone-label {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.7));
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.35);
 }
 
 .title-zone-child {
   background:
-    radial-gradient(circle at 25% 75%, rgba(16, 185, 129, 0.26), transparent 45%),
-    radial-gradient(circle at 70% 20%, rgba(251, 191, 36, 0.3), transparent 40%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.28), rgba(21, 128, 61, 0.2));
+    radial-gradient(circle at 22% 28%, rgba(251, 191, 36, 0.58), transparent 33%),
+    radial-gradient(circle at 78% 66%, rgba(34, 197, 94, 0.48), transparent 35%),
+    radial-gradient(circle at 58% 38%, rgba(254, 240, 138, 0.52), transparent 30%),
+    linear-gradient(180deg, rgba(255, 237, 162, 0.9), rgba(251, 191, 36, 0.58));
 }
 
 .title-zone-adolescent {
   background:
-    radial-gradient(circle at 75% 30%, rgba(96, 165, 250, 0.25), transparent 45%),
-    radial-gradient(circle at 20% 70%, rgba(129, 140, 248, 0.27), transparent 40%),
-    linear-gradient(180deg, rgba(59, 130, 246, 0.2), rgba(30, 64, 175, 0.16));
+    radial-gradient(circle at 24% 22%, rgba(125, 211, 252, 0.52), transparent 34%),
+    radial-gradient(circle at 72% 70%, rgba(59, 130, 246, 0.4), transparent 36%),
+    radial-gradient(circle at 78% 36%, rgba(186, 230, 253, 0.44), transparent 30%),
+    linear-gradient(180deg, rgba(103, 232, 249, 0.8), rgba(59, 130, 246, 0.52));
 }
 
 .title-zone-adult {
   background:
-    radial-gradient(circle at 30% 22%, rgba(244, 114, 182, 0.22), transparent 38%),
-    radial-gradient(circle at 70% 78%, rgba(56, 189, 248, 0.24), transparent 42%),
-    linear-gradient(180deg, rgba(49, 46, 129, 0.25), rgba(15, 23, 42, 0.22));
+    radial-gradient(circle at 30% 22%, rgba(244, 114, 182, 0.5), transparent 34%),
+    radial-gradient(circle at 70% 78%, rgba(192, 132, 252, 0.46), transparent 38%),
+    radial-gradient(circle at 75% 35%, rgba(254, 205, 211, 0.4), transparent 30%),
+    linear-gradient(180deg, rgba(244, 114, 182, 0.78), rgba(168, 85, 247, 0.5));
 }
 
 .title-world-cap {
   background:
-    radial-gradient(circle at 25% 30%, rgba(255, 255, 255, 0.6), transparent 55%),
-    radial-gradient(circle at 70% 35%, rgba(186, 230, 253, 0.55), transparent 52%),
-    linear-gradient(180deg, rgba(125, 211, 252, 0.45), rgba(125, 211, 252, 0.08));
+    radial-gradient(circle at 22% 30%, rgba(255, 255, 255, 0.72), transparent 54%),
+    radial-gradient(circle at 72% 35%, rgba(191, 219, 254, 0.72), transparent 50%),
+    linear-gradient(180deg, rgba(219, 234, 254, 0.7), rgba(125, 211, 252, 0.14));
 }
 
 .title-world-floor {
   background:
-    radial-gradient(circle at 40% 40%, rgba(34, 197, 94, 0.28), transparent 50%),
-    radial-gradient(circle at 65% 55%, rgba(234, 179, 8, 0.24), transparent 45%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(22, 101, 52, 0.2));
+    radial-gradient(circle at 38% 40%, rgba(34, 197, 94, 0.34), transparent 48%),
+    radial-gradient(circle at 67% 55%, rgba(251, 191, 36, 0.3), transparent 44%),
+    linear-gradient(180deg, rgba(110, 231, 183, 0.28), rgba(22, 101, 52, 0.24));
 }
 
 @keyframes title-prop-float {
@@ -185,6 +253,22 @@
 .title-prop {
   animation: title-prop-float 3.4s ease-in-out infinite;
   backdrop-filter: blur(1px);
+  box-shadow:
+    0 6px 10px rgba(15, 23, 42, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+}
+
+.title-prop-pod {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background:
+    radial-gradient(circle at 35% 22%, rgba(255, 255, 255, 0.45), transparent 45%),
+    linear-gradient(180deg, rgba(2, 132, 199, 0.34), rgba(30, 41, 59, 0.45));
+}
+
+.title-badge-pod {
+  box-shadow:
+    0 4px 8px rgba(15, 23, 42, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .title-landmark-beginner {

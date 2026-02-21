@@ -7,12 +7,12 @@ function clamp(value, min, max) {
 const GROUP_ORDER = ['Master', 'Expert', 'Advanced', 'Intermediate', 'Beginner'];
 
 const TIER_PALETTE = {
-  beginner: { bg: 'from-emerald-400 to-emerald-700', ring: 'ring-emerald-200/80', glow: 'shadow-emerald-300/70' },
-  bronze: { bg: 'from-amber-300 to-amber-700', ring: 'ring-amber-200/80', glow: 'shadow-amber-300/70' },
-  silver: { bg: 'from-slate-100 to-slate-500', ring: 'ring-slate-100/90', glow: 'shadow-slate-100/70' },
-  gold: { bg: 'from-yellow-200 to-yellow-600', ring: 'ring-yellow-200/90', glow: 'shadow-yellow-200/70' },
-  blue: { bg: 'from-cyan-200 to-blue-700', ring: 'ring-cyan-200/90', glow: 'shadow-cyan-200/70' },
-  default: { bg: 'from-slate-200 to-slate-600', ring: 'ring-slate-200/70', glow: 'shadow-slate-300/60' },
+  beginner: { bg: 'from-emerald-500 to-emerald-800', ring: 'ring-emerald-200/80', glow: 'shadow-emerald-900/75' },
+  bronze: { bg: 'from-amber-500 to-amber-800', ring: 'ring-amber-200/80', glow: 'shadow-amber-900/75' },
+  silver: { bg: 'from-slate-300 to-slate-700', ring: 'ring-slate-100/90', glow: 'shadow-slate-900/75' },
+  gold: { bg: 'from-amber-700 to-amber-950', ring: 'ring-amber-200/90', glow: 'shadow-amber-950/80' },
+  blue: { bg: 'from-sky-500 to-indigo-900', ring: 'ring-sky-200/90', glow: 'shadow-indigo-950/80' },
+  default: { bg: 'from-slate-400 to-slate-800', ring: 'ring-slate-200/70', glow: 'shadow-slate-900/70' },
 };
 
 const TIER_PIP_COLOR = {
@@ -156,29 +156,26 @@ function familyName(title) {
 function getTitleTheme(title) {
   const id = String(title?.id || '');
   if (id === 'beginner') {
-    return { sprite: 'seed-sprout', landmark: 'Starter Camp', chipClass: 'title-landmark-beginner' };
+    return { sprite: 'seed-sprout', landmark: 'Starter Camp' };
   }
   if (id === 'master') {
-    return { sprite: 'aether-core', landmark: 'Aether Citadel', chipClass: 'title-landmark-master' };
+    return { sprite: 'aether-core', landmark: 'Aether Citadel' };
   }
 
   const match = id.match(/^(intermediate|advanced|expert)-(\d+)$/);
   if (!match) {
-    return { sprite: 'default', landmark: 'Unknown Outpost', chipClass: 'title-landmark-neutral' };
+    return { sprite: 'default', landmark: 'Unknown Outpost' };
   }
   const family = match[1];
   const index = clamp((parseInt(match[2], 10) || 1) - 1, 0, 9);
 
   if (family === 'intermediate') {
-    const row = INTERMEDIATE_TITLE_THEMES[index];
-    return { ...row, chipClass: 'title-landmark-child' };
+    return INTERMEDIATE_TITLE_THEMES[index];
   }
   if (family === 'advanced') {
-    const row = ADVANCED_TITLE_THEMES[index];
-    return { ...row, chipClass: 'title-landmark-adolescent' };
+    return ADVANCED_TITLE_THEMES[index];
   }
-  const row = EXPERT_TITLE_THEMES[index];
-  return { ...row, chipClass: 'title-landmark-adult' };
+  return EXPERT_TITLE_THEMES[index];
 }
 
 function getLevelBand(level) {
@@ -839,32 +836,55 @@ export default function TitleProgressTab({
 
         <div className="mt-4 title-map-frame rounded-xl border border-piu-border/50 overflow-hidden">
           <div ref={mapScrollRef} className="max-h-[68vh] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden">
-            <div className="relative w-full" style={{ height: `${height}px` }}>
+            <div className="relative w-full title-world-canvas" style={{ height: `${height}px` }}>
               <div className="absolute left-1/2 -translate-x-1/2 top-0 w-[80%] h-16 rounded-b-[999px] title-world-cap pointer-events-none" />
               <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[92%] h-24 rounded-t-[999px] title-world-floor pointer-events-none" />
               <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
                 <defs>
-                  <linearGradient id="mapPathGlow" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#7dd3fc" />
-                    <stop offset="50%" stopColor="#facc15" />
-                    <stop offset="100%" stopColor="#34d399" />
+                  <linearGradient id="mapRoadFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fff7cc" />
+                    <stop offset="58%" stopColor="#fbbf5d" />
+                    <stop offset="100%" stopColor="#ea8c3d" />
+                  </linearGradient>
+                  <linearGradient id="mapRoadRim" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fff9e5" />
+                    <stop offset="100%" stopColor="#fde7a2" />
                   </linearGradient>
                 </defs>
                 {points.slice(0, -1).map((point, idx) => {
                   const next = points[idx + 1];
                   return (
-                    <line
-                      key={`path-${idx}`}
-                      x1={point.x}
-                      y1={point.y}
-                      x2={next.x}
-                      y2={next.y}
-                      stroke="url(#mapPathGlow)"
-                      strokeWidth="10"
-                      strokeLinecap="round"
-                      opacity="0.55"
-                      strokeDasharray={idx % 2 === 0 ? '14 10' : '10 9'}
-                    />
+                    <g key={`path-${idx}`}>
+                      <line
+                        x1={point.x}
+                        y1={point.y + 5}
+                        x2={next.x}
+                        y2={next.y + 5}
+                        stroke="#0f172a"
+                        strokeWidth="14"
+                        strokeLinecap="round"
+                        opacity="0.26"
+                      />
+                      <line
+                        x1={point.x}
+                        y1={point.y}
+                        x2={next.x}
+                        y2={next.y}
+                        stroke="url(#mapRoadFill)"
+                        strokeWidth="11"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1={point.x}
+                        y1={point.y - 1}
+                        x2={next.x}
+                        y2={next.y - 1}
+                        stroke="url(#mapRoadRim)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        opacity="0.9"
+                      />
+                    </g>
                   );
                 })}
               </svg>
@@ -872,16 +892,16 @@ export default function TitleProgressTab({
               {zones.map((zone) => (
                 <div
                   key={zone.id}
-                  className={`absolute left-2 right-2 rounded-3xl border border-white/20 ${zone.className}`}
+                  className={`absolute left-2 right-2 rounded-3xl title-zone-shell ${zone.className}`}
                   style={{ top: `${zone.top}px`, height: `${zone.height}px` }}
                 >
-                  <div className="absolute left-3 top-2 px-2 py-1 rounded-md bg-black/40 text-[10px] font-display font-bold tracking-wide text-white/90">
+                  <div className="absolute left-3 top-2 px-2 py-1 rounded-md title-zone-label text-[10px] font-display font-bold tracking-wide text-white/90">
                     {zone.label}
                   </div>
                   {(ZONE_PROPS[zone.id] || []).map((prop, idx) => (
                     <span
                       key={`${zone.id}-prop-${idx}`}
-                      className="absolute w-9 h-9 rounded-full bg-black/25 border border-white/40 flex items-center justify-center backdrop-blur-[1px]"
+                      className="absolute w-9 h-9 rounded-full title-prop-pod flex items-center justify-center backdrop-blur-[1px]"
                       style={{
                         left: `${prop.x}%`,
                         top: `${prop.y}%`,
@@ -897,7 +917,7 @@ export default function TitleProgressTab({
               {bandProps.map((prop) => (
                 <span
                   key={prop.id}
-                  className={`absolute w-8 h-8 rounded-full border flex items-center justify-center title-prop ${
+                  className={`absolute w-8 h-8 rounded-full border flex items-center justify-center title-prop title-badge-pod ${
                     prop.unlocked
                       ? 'bg-black/30 border-white/55 text-white'
                       : 'bg-black/20 border-slate-500/60 text-slate-300'
@@ -918,29 +938,22 @@ export default function TitleProgressTab({
                 const isCurrent = title.index === currentIndex;
                 const canTravel = unlocked && title.index <= currentIndex;
                 const isTarget = target !== null && title.index === target;
-                const isNext = !!nextTitle && nextTitle.id === title.id;
                 const palette = TIER_PALETTE[title.tier] || TIER_PALETTE.default;
                 const pipColor = TIER_PIP_COLOR[title.tier] || TIER_PIP_COLOR.default;
                 const theme = getTitleTheme(title);
-                const showPlaque = isCurrent || isTarget || isNext;
                 return (
                   <div
                     key={title.id}
                     className="absolute -translate-x-1/2 -translate-y-1/2"
                     style={{ left: `${(point.x / width) * 100}%`, top: `${point.y}px` }}
                   >
-                    {showPlaque && (
-                      <div className="absolute left-1/2 -translate-x-1/2 -top-8 whitespace-nowrap px-2 py-[2px] rounded-full border border-white/40 bg-black/55 text-[9px] font-display font-bold text-white pointer-events-none">
-                        {theme.landmark}
-                      </div>
-                    )}
                     <button
                       type="button"
                       onClick={() => {
                         if (!canTravel) return;
                         setTarget(title.index);
                       }}
-                      className={`relative w-9 h-9 rounded-xl border-2 transition-all ${
+                      className={`relative w-10 h-10 rounded-full border-2 transition-all title-waypoint-node ${
                         unlocked
                           ? `bg-gradient-to-b ${palette.bg} border-white/85 text-white title-waypoint-unlocked title-waypoint-spark ${palette.glow}`
                           : 'bg-slate-800/80 border-slate-500/80 text-slate-300'
@@ -951,17 +964,23 @@ export default function TitleProgressTab({
                       } ${
                         canTravel ? 'cursor-pointer hover:scale-110' : 'cursor-default'
                       }`}
-                      title={`${title.name} • ${theme.landmark} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
+                      title={`${title.name} (${title.earned_points.toLocaleString()} / ${title.required_points.toLocaleString()})`}
                     >
+                      <span className="absolute inset-x-1 -bottom-[5px] h-2 rounded-full bg-black/40 blur-[1px]" />
+                      <span className="absolute inset-[2px] rounded-full border border-white/35 bg-white/10" />
                       <span
-                        className="absolute left-[3px] top-[3px] w-1.5 h-1.5 rounded-full border border-white/70"
+                        className="absolute left-[3px] top-[3px] w-1.5 h-1.5 rounded-full border border-white/70 z-20"
                         style={{ backgroundColor: pipColor }}
                       />
-                      <span className="inline-flex items-center justify-center">
+                      <span className="inline-flex items-center justify-center relative z-10">
                         <SpriteIcon token={theme.sprite} size={17} locked={!unlocked} />
                       </span>
-                      {!unlocked && (
-                        <span className="absolute right-[-4px] bottom-[-5px] text-[10px] leading-none">🔒</span>
+                      {unlocked ? (
+                        <span className="absolute right-[-5px] bottom-[-6px] w-4 h-4 rounded-full border border-amber-200/85 bg-amber-400 text-[9px] font-bold leading-[14px] text-amber-950 shadow-[0_3px_6px_rgba(15,23,42,0.45)] z-20">
+                          ★
+                        </span>
+                      ) : (
+                        <span className="absolute right-[-4px] bottom-[-5px] text-[10px] leading-none z-20">🔒</span>
                       )}
                     </button>
                   </div>
@@ -1052,9 +1071,6 @@ export default function TitleProgressTab({
                               {unlocked ? 'UNLOCKED' : `${title.progress_percent.toFixed(1)}%`}
                             </span>
                           </div>
-                          <p className={`inline-flex items-center rounded-full px-2 py-[2px] mt-1 text-[9px] font-display font-bold border ${theme.chipClass}`}>
-                            {theme.landmark}
-                          </p>
                           {title.required_points > 0 && (
                             <p className="text-[10px] mt-1 opacity-90">
                               Lv.{title.level}: {title.earned_points.toLocaleString()} / {title.required_points.toLocaleString()}
