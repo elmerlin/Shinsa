@@ -7,7 +7,9 @@ import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment, searchUsers } from '../utils/api';
 import SessionSummaryCard from './SessionSummaryCard';
+import SessionPlanCard from './SessionPlanCard';
 import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
+import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -819,8 +821,10 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
   const parsedCurrent = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
-  const visibleContent = parsedCurrent.text || '';
+  const planParsed = useMemo(() => splitSessionPlanContent(parsedCurrent.text || ''), [parsedCurrent.text]);
+  const visibleContent = planParsed.text || '';
   const currentSummary = parsedCurrent.summary;
+  const currentPlan = planParsed.plan;
 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }
@@ -839,7 +843,8 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
     setSaving(true);
     try {
       const summaryMarker = currentSummary ? serializeSessionSummaryMarker(currentSummary) : '';
-      const contentToSave = [editContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
+      const planMarker = currentPlan ? serializeSessionPlanMarker(currentPlan) : '';
+      const contentToSave = [editContent.trim(), summaryMarker, planMarker].filter(Boolean).join('\n\n');
       const updated = await editPost(post.id, { content: contentToSave, youtube_url: editYoutubeUrl });
       setCurrentContent(updated.content || '');
       setCurrentYoutubeUrl(updated.youtube_url || '');
@@ -957,6 +962,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           )}
           {currentSummary && (
             <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
+          )}
+          {currentPlan && (
+            <SessionPlanCard plan={currentPlan} className="mb-3" />
           )}
         </>
       )}

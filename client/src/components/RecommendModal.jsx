@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getSongRecommendations, savePostDraft } from '../utils/api';
+import { serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 
 const ALL_SKILLS = [
   { slug: 'jump', name: 'jump' },
@@ -265,28 +266,27 @@ export default function RecommendModal({ open, onClose, user }) {
 
   const buildDraftContent = () => {
     if (!results) return '';
-    const lines = [];
-    lines.push(`Session Plan - ${formatDateTime(generatedAt)}`);
-    lines.push('');
-    const fl = FEELINGS.find((f) => f.value === results.feeling);
-    const ml = MODES.find((m) => m.value === results.chart_mode);
-    lines.push(`${fl?.emoji || ''} ${fl?.label || results.feeling} | ${ml?.label || results.chart_mode}`);
-    lines.push(`Pumbility: ${(results.pumbility || 0).toLocaleString()} | Scoring Lv: ${results.adjusted_scoring_level} | Passing Lv: ${results.adjusted_passing_level}`);
-    lines.push('');
-
-    const fmtSection = (title, songs) => {
-      if (!songs || songs.length === 0) return;
-      lines.push(`--- ${title} ---`);
-      songs.forEach((s, i) => {
-        const mode = s.mode === 'Single' ? 'S' : 'D';
-        lines.push(`${i + 1}. ${s.title} (${mode}${s.level})`);
-      });
-      lines.push('');
-    };
-    fmtSection('Activation', results.activation);
-    fmtSection('Scoring', results.scoring_songs);
-    fmtSection('Passing', results.passing_songs);
-    return lines.join('\n');
+    const pickFields = (s) => ({
+      title: s.title, mode: s.mode, level: s.level,
+      jacket_url: s.jacket_url, best_score: s.best_score, best_grade: s.best_grade,
+    });
+    const marker = serializeSessionPlanMarker({
+      generatedAt: generatedAt ? generatedAt.toISOString() : new Date().toISOString(),
+      feeling: results.feeling,
+      chartMode: results.chart_mode,
+      pumbility: results.pumbility,
+      avgRating: results.avg_rating,
+      scoringLevel: results.scoring_level,
+      passingLevel: results.passing_level,
+      adjustedScoringLevel: results.adjusted_scoring_level,
+      adjustedPassingLevel: results.adjusted_passing_level,
+      skillsTrain: results.skills_train,
+      skillsAvoid: results.skills_avoid,
+      activation: (results.activation || []).map(pickFields),
+      scoring: (results.scoring_songs || []).map(pickFields),
+      passing: (results.passing_songs || []).map(pickFields),
+    });
+    return marker;
   };
 
   const handleDownloadImage = async () => {
