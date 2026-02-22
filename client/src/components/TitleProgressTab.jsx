@@ -2468,14 +2468,14 @@ export default function TitleProgressTab({
       const seedC = Math.abs(Math.sin((i + 1) * 17.21));
       clouds.push({
         id: `cloud-${i + 1}`,
-        top: 6 + i * 13 + seed * 4,
-        left: -10 + seedB * 90,
-        width: 90 + seed * 70,
-        height: 24 + seedB * 20,
-        opacity: 0.11 + seedC * 0.14,
-        duration: 28 + seed * 30,
-        delay: -(seedB * 18),
-        drift: (seedC * 24) - 12,
+        top: 5 + i * 13 + seed * 5,
+        left: -12 + seedB * 95,
+        width: 140 + seed * 120,
+        height: 36 + seedB * 28,
+        opacity: 0.25 + seedC * 0.2,
+        duration: 40 + seed * 40,
+        delay: -(seedB * 20),
+        drift: (seedC * 60) - 30,
       });
     }
     return clouds;
