@@ -121,6 +121,7 @@ function insertGroupedNewClearPost(db, userId, clears) {
   if (!Array.isArray(clears) || clears.length === 0) return null;
 
   const normalized = clears.map(c => ({
+    entry_type: c.entry_type || 'song_clear',
     song_title: c.song_title,
     mode: c.mode,
     level: c.level,
@@ -130,6 +131,11 @@ function insertGroupedNewClearPost(db, userId, clears) {
     background_url: c.background_url || '',
     perfect: c.perfect || 0, great: c.great || 0, good: c.good || 0,
     bad: c.bad || 0, miss: c.miss || 0,
+    title_name: c.title_name || '',
+    title_family: c.title_family || '',
+    title_level: c.title_level || 0,
+    title_plate: c.title_plate || '',
+    title_tier: c.title_tier || '',
   }));
   const first = normalized[0];
 
@@ -150,6 +156,63 @@ function insertGroupedNewClearPost(db, userId, clears) {
   );
 
   return result.lastInsertRowid;
+}
+
+function isBeginnerTitleRow(title) {
+  const family = String(title?.skill_family || '').trim();
+  const name = String(title?.name || title?.skill_title || '').trim();
+  return /^beginner$/i.test(family) || /^beginner\b/i.test(name);
+}
+
+function getTitlePlateMeta(title) {
+  const family = String(title?.skill_family || '').trim().toLowerCase();
+  if (family === 'intermediate') {
+    return { plate: 'Bronze Plate', tier: 'bronze' };
+  }
+  if (family === 'advanced') {
+    return { plate: 'Silver Plate', tier: 'silver' };
+  }
+  if (family === 'expert') {
+    return { plate: 'Gold Plate', tier: 'gold' };
+  }
+  if (family === 'master') {
+    return { plate: 'Master Plate', tier: 'master' };
+  }
+  return { plate: 'Title Plate', tier: 'title' };
+}
+
+function getNewlyUnlockedTitles(previousProgress, latestProgress) {
+  const previouslyUnlocked = new Set(
+    (previousProgress?.titles || [])
+      .filter((title) => title?.unlocked)
+      .map((title) => title.id)
+  );
+
+  return (latestProgress?.titles || [])
+    .filter((title) => title?.unlocked && !previouslyUnlocked.has(title.id) && !isBeginnerTitleRow(title));
+}
+
+function insertTitleUnlockActivityPost(db, userId, unlockedTitles) {
+  if (!Array.isArray(unlockedTitles) || unlockedTitles.length === 0) return null;
+  const payload = unlockedTitles.map((title) => {
+    const plateMeta = getTitlePlateMeta(title);
+    return {
+      entry_type: 'title_unlock',
+      song_title: title.name || title.skill_title || 'Title Unlock',
+      mode: 'Title',
+      level: parseInt(title.skill_level, 10) || 0,
+      score: parseInt(title.required_points, 10) || 0,
+      grade: 'TITLE',
+      plate: plateMeta.plate,
+      title_name: title.name || title.skill_title || 'Title Unlock',
+      title_family: title.skill_family || '',
+      title_level: parseInt(title.skill_level, 10) || 0,
+      title_plate: plateMeta.plate,
+      title_tier: plateMeta.tier,
+      background_url: '',
+    };
+  });
+  return insertGroupedNewClearPost(db, userId, payload);
 }
 
 // ─── Sync: Pumbility ───────────────────────────────────
@@ -235,6 +298,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
   // Run in background
   (async () => {
     try {
+      const progressBeforeSync = getUserTitleProgress(db, userId);
       const client = await loginWithStoredCredentials(userId);
       const scores = await scrapeBestScores(client, (progress, total) => {
         // Update progress in DB so client can poll
@@ -301,7 +365,9 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         `).run(userId);
       });
       txn();
-      updateUserSkillTitleFromBestScores(db, userId);
+      const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
+      const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
+      const titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles);
 
       // Create notification
       const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
@@ -340,6 +406,20 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         });
       }
 
+      if (newlyUnlockedTitles.length > 0) {
+        const titleList = newlyUnlockedTitles.map((title) => title.name || title.skill_title).filter(Boolean);
+        const titleSummary = titleList.length > 1 ? `${titleList[0]} +${titleList.length - 1}` : (titleList[0] || 'a new title');
+        notifyActivitySubscribers(db, {
+          actorUserId: userId,
+          actorUsername,
+          activityType: 'new_clears',
+          notificationType: 'followed_user_new_title',
+          title: 'Title Earned',
+          message: `${actorUsername} earned ${titleSummary}`,
+          link: titleUnlockPostId ? `/clear/${titleUnlockPostId}` : profileLink,
+        });
+      }
+
       console.log(`Background best scores sync complete for ${userId}: ${scores.length} scores`);
     } catch (err) {
       console.error('Background best scores sync error:', err.message);
@@ -368,9 +448,10 @@ router.get('/sync/progress', requireAuth, (req, res) => {
 // POST /api/piugame/sync/recently-played — fetch recent plays & update best scores
 router.post('/sync/recently-played', requireAuth, async (req, res) => {
   try {
+    const db = getDb();
+    const progressBeforeSync = getUserTitleProgress(db, req.user.id);
     const client = await loginWithStoredCredentials(req.user.id);
     const plays = await scrapeRecentlyPlayed(client);
-    const db = getDb();
 
     const insertRecent = db.prepare(`
       INSERT INTO user_recently_played
@@ -469,7 +550,9 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       newClearPostId = insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent);
     });
     txn();
-    updateUserSkillTitleFromBestScores(db, req.user.id);
+    const progressAfterSync = updateUserSkillTitleFromBestScores(db, req.user.id);
+    const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
+    const titleUnlockPostId = insertTitleUnlockActivityPost(db, req.user.id, newlyUnlockedTitles);
 
     const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
     const actorUsername = profile?.username || 'Someone';
@@ -496,6 +579,20 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
         title: 'New Clears',
         message: `${actorUsername} posted ${newClearsFromRecent.length} new clear${newClearsFromRecent.length === 1 ? '' : 's'}`,
         link: newClearPostId ? `/clear/${newClearPostId}` : profileLink,
+      });
+    }
+
+    if (newlyUnlockedTitles.length > 0) {
+      const titleList = newlyUnlockedTitles.map((title) => title.name || title.skill_title).filter(Boolean);
+      const titleSummary = titleList.length > 1 ? `${titleList[0]} +${titleList.length - 1}` : (titleList[0] || 'a new title');
+      notifyActivitySubscribers(db, {
+        actorUserId: req.user.id,
+        actorUsername,
+        activityType: 'new_clears',
+        notificationType: 'followed_user_new_title',
+        title: 'Title Earned',
+        message: `${actorUsername} earned ${titleSummary}`,
+        link: titleUnlockPostId ? `/clear/${titleUnlockPostId}` : profileLink,
       });
     }
 

@@ -10,6 +10,12 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function withBase(path) {
+  const base = String(import.meta?.env?.BASE_URL || '/');
+  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  return `${cleanBase}${String(path || '').replace(/^\/+/, '')}`;
+}
+
 const GROUP_ORDER = ['Master', 'Expert', 'Advanced', 'Intermediate', 'Beginner'];
 
 const TIER_PALETTE = {
@@ -167,6 +173,20 @@ function fillTemplate(line, values = {}) {
 
 function familyName(title) {
   return String(title?.skill_family || '').trim() || 'Other';
+}
+
+function isBeginnerTitle(title) {
+  const family = familyName(title);
+  const name = String(title?.name || title?.skill_title || '').trim();
+  return /^beginner$/i.test(family) || /^beginner\b/i.test(name);
+}
+
+function lerpCoordinate(from, to, t) {
+  const mix = clamp(Number(t) || 0, 0, 1);
+  return {
+    left: from.left + (to.left - from.left) * mix,
+    top: from.top + (to.top - from.top) * mix,
+  };
 }
 
 function groupTitles(titles) {
@@ -2170,7 +2190,10 @@ export default function TitleProgressTab({
 }) {
   const imported = !!data?.imported;
   const titles = useMemo(() => (Array.isArray(data?.titles) ? data.titles : []), [data]);
-  const groups = useMemo(() => groupTitles(titles), [titles]);
+  const groups = useMemo(
+    () => groupTitles(titles).filter((group) => !/^beginner$/i.test(group.family)),
+    [titles]
+  );
   const summary = data?.summary || null;
   const currentIndex = Math.max(0, parseInt(summary?.current_index, 10) || 0);
   const nextTitle = summary?.next_title || null;
@@ -2179,9 +2202,11 @@ export default function TitleProgressTab({
   const [speech, setSpeech] = useState(null);
   const [journeyMode, setJourneyMode] = useState('inspect');
   const [activeJourneyTitle, setActiveJourneyTitle] = useState(null);
+  const [mapImageSrc, setMapImageSrc] = useState(withBase('progress-map.jpg'));
   const mapScrollRef = useRef(null);
   const speechTimeoutRef = useRef(null);
   const audioCtxRef = useRef(null);
+  const lastUnlockedMapIndexRef = useRef(null);
 
   function clearSpeechTimer() {
     if (!speechTimeoutRef.current) return;
@@ -2275,15 +2300,52 @@ export default function TitleProgressTab({
     }
   }, []);
 
-  const scrollToCurrentLevel = () => {
+  const orderedTitles = useMemo(
+    () => [...titles].sort((a, b) => a.index - b.index),
+    [titles]
+  );
+
+  const mapTitles = useMemo(
+    () => orderedTitles.filter((title) => !isBeginnerTitle(title)).slice(0, LEVEL_COORDINATES.length),
+    [orderedTitles]
+  );
+
+  const mapTitleIndexByKey = useMemo(() => {
+    const map = new Map();
+    mapTitles.forEach((title, mapIndex) => {
+      map.set(title.id, mapIndex);
+      map.set(title.index, mapIndex);
+    });
+    return map;
+  }, [mapTitles]);
+
+  const currentMapUnlockedIndex = useMemo(() => {
+    let unlocked = -1;
+    mapTitles.forEach((title, index) => {
+      if (title?.unlocked) unlocked = index;
+    });
+    return unlocked;
+  }, [mapTitles]);
+
+  const furthestTravelIndex = clamp(Math.max(currentMapUnlockedIndex, 0), 0, LEVEL_COORDINATES.length - 1);
+  const activeNodeIndex = anchoredIndex === null
+    ? furthestTravelIndex
+    : clamp(anchoredIndex, 0, LEVEL_COORDINATES.length - 1);
+
+  const scrollToNodeIndex = (nodeIndex, behavior = 'smooth') => {
     const scrollWrapper = mapScrollRef.current || document.getElementById('scroll-wrapper');
     if (!scrollWrapper) return;
-    const currentNode = scrollWrapper.querySelector('.level-node.current');
-    if (!currentNode) return;
-    const nodeTop = currentNode.offsetTop + (currentNode.offsetHeight / 2);
+    const bounded = clamp(nodeIndex, 0, LEVEL_COORDINATES.length - 1);
+    const targetNode = scrollWrapper.querySelector(`.level-node[data-node-index="${bounded}"]`);
+    if (!targetNode) return;
+    const nodeTop = targetNode.offsetTop + (targetNode.offsetHeight / 2);
     const wrapperHalfHeight = scrollWrapper.clientHeight / 2;
     const nextTop = Math.max(0, nodeTop - wrapperHalfHeight);
-    scrollWrapper.scrollTo({ top: nextTop, behavior: 'smooth' });
+    scrollWrapper.scrollTo({ top: nextTop, behavior });
+  };
+
+  const scrollToCurrentLevel = () => {
+    scrollToNodeIndex(activeNodeIndex, 'smooth');
   };
 
   useEffect(() => {
@@ -2293,29 +2355,26 @@ export default function TitleProgressTab({
       clearTimeout(timerA);
       clearTimeout(timerB);
     };
-  }, [currentIndex, anchoredIndex, titles.length]);
+  }, [activeNodeIndex, titles.length]);
 
   useEffect(() => {
     if (!groups.length || Object.keys(collapsedGroups).length > 0) return;
-    const currentFamily = summary?.current_title?.skill_family || '';
+    const currentFamily = !isBeginnerTitle(summary?.current_title)
+      ? (summary?.current_title?.skill_family || '')
+      : (mapTitles[furthestTravelIndex]?.skill_family || '');
     const initial = {};
     for (const group of groups) initial[group.family] = group.family !== currentFamily;
     setCollapsedGroups(initial);
-  }, [groups, collapsedGroups, summary]);
+  }, [groups, collapsedGroups, summary, mapTitles, furthestTravelIndex]);
 
   useEffect(() => {
     if (titles.length === 0) return;
     setAnchoredIndex((prev) => {
       if (prev === null) return null;
-      const bounded = clamp(prev, 0, titles.length - 1);
+      const bounded = clamp(prev, 0, LEVEL_COORDINATES.length - 1);
       return bounded === prev ? prev : bounded;
     });
   }, [titles.length]);
-
-  const orderedTitles = useMemo(
-    () => [...titles].sort((a, b) => a.index - b.index),
-    [titles]
-  );
 
   const nextLevelPoints = nextTitle ? (levelMap[nextTitle.level]?.points || 0) : 0;
   const sameLevelSegment = nextTitle && summary?.current_title?.level === nextTitle.level;
@@ -2323,9 +2382,8 @@ export default function TitleProgressTab({
   const segmentEarned = Math.max(0, nextLevelPoints - segmentStart);
   const segmentNeeded = nextTitle ? Math.max(1, nextTitle.required_points - segmentStart) : 0;
   const displayedProgress = nextTitle ? clamp(Number(summary?.segment_progress_percent) || 0, 0, 100) : 100;
-
-  const progressLevel = clamp((currentIndex || 0) + 1, 1, LEVEL_COORDINATES.length);
-  const activeLevel = progressLevel;
+  const displayCurrentTitle = (!isBeginnerTitle(summary?.current_title) ? summary?.current_title : (mapTitles[furthestTravelIndex] || mapTitles[0] || summary?.current_title));
+  const displayNextTitle = (!isBeginnerTitle(nextTitle) ? nextTitle : (mapTitles[clamp(furthestTravelIndex + 1, 0, Math.max(0, mapTitles.length - 1))] || nextTitle));
 
   const buildNodeTierMeta = (ordinal) => {
     if (ordinal <= 10) {
@@ -2343,7 +2401,7 @@ export default function TitleProgressTab({
   const sagaNodes = useMemo(() => {
     return LEVEL_COORDINATES.map((coordinate, index) => {
       const ordinal = index + 1;
-      const title = orderedTitles[index] || null;
+      const title = mapTitles[index] || null;
       const tierMeta = buildNodeTierMeta(ordinal);
       const shortLabel = `${tierMeta.short} ${tierMeta.tierLevel}`;
       return {
@@ -2357,54 +2415,124 @@ export default function TitleProgressTab({
         shortLabel,
         title,
         label: title ? `${shortLabel} • ${titleLevelLabel(title)}` : shortLabel,
-        isCompleted: ordinal < progressLevel,
-        isCurrent: ordinal === progressLevel,
-        isLocked: ordinal > progressLevel,
+        isCompleted: index <= currentMapUnlockedIndex,
+        isCurrent: index === activeNodeIndex,
+        isLocked: index > furthestTravelIndex,
         isBoss: ordinal === 31,
       };
     });
-  }, [orderedTitles, progressLevel]);
+  }, [mapTitles, currentMapUnlockedIndex, activeNodeIndex, furthestTravelIndex]);
 
   const activeNodeCoordinate = useMemo(() => {
-    const idx = clamp(activeLevel - 1, 0, LEVEL_COORDINATES.length - 1);
-    return LEVEL_COORDINATES[idx];
-  }, [activeLevel]);
+    return LEVEL_COORDINATES[activeNodeIndex] || LEVEL_COORDINATES[0];
+  }, [activeNodeIndex]);
+
+  const liveAvatarCoordinate = useMemo(() => {
+    if (currentMapUnlockedIndex < 0) return LEVEL_COORDINATES[0];
+    const startIndex = clamp(currentMapUnlockedIndex, 0, LEVEL_COORDINATES.length - 1);
+    const endIndex = clamp(startIndex + 1, 0, LEVEL_COORDINATES.length - 1);
+    const start = LEVEL_COORDINATES[startIndex];
+    const end = LEVEL_COORDINATES[endIndex];
+    if (!start || !end || endIndex === startIndex) return start || LEVEL_COORDINATES[0];
+    return lerpCoordinate(start, end, displayedProgress / 100);
+  }, [currentMapUnlockedIndex, displayedProgress]);
+
+  const avatarCoordinate = anchoredIndex === null ? liveAvatarCoordinate : activeNodeCoordinate;
 
   const activeNodeTitle = useMemo(() => {
-    if (!titles.length) return null;
-    const mapped = orderedTitles[clamp(activeLevel - 1, 0, Math.max(0, orderedTitles.length - 1))];
-    return mapped || titles.find((title) => title.index === currentIndex) || summary?.current_title || titles[0] || null;
-  }, [titles, orderedTitles, currentIndex, summary, activeLevel]);
+    const selected = sagaNodes[activeNodeIndex]?.title;
+    if (selected) return selected;
+    if (currentMapUnlockedIndex >= 0 && mapTitles[currentMapUnlockedIndex]) return mapTitles[currentMapUnlockedIndex];
+    if (mapTitles[0]) return mapTitles[0];
+    return nextTitle || summary?.current_title || null;
+  }, [sagaNodes, activeNodeIndex, currentMapUnlockedIndex, mapTitles, nextTitle, summary]);
 
   const nodeBubbleText = useMemo(() => {
     if (!activeNodeTitle) return '';
     const progressPct = Number(activeNodeTitle?.progress_percent) || 0;
-    const status = activeNodeTitle.unlocked ? 'cleared' : 'locked';
-    return `${titleLevelLabel(activeNodeTitle)} ${status}. ${activeNodeTitle.earned_points.toLocaleString()} / ${activeNodeTitle.required_points.toLocaleString()} pts (${progressPct.toFixed(1)}%).`;
+    const earnedPoints = Number(activeNodeTitle?.earned_points) || 0;
+    const requiredPoints = Number(activeNodeTitle?.required_points) || 0;
+    const status = activeNodeTitle.unlocked ? 'cleared' : 'in progress';
+    if (requiredPoints <= 0) return `${status}.`;
+    return `${status}. ${earnedPoints.toLocaleString()} / ${requiredPoints.toLocaleString()} pts (${progressPct.toFixed(1)}%).`;
   }, [activeNodeTitle]);
-  const activeNodeShortLabel = sagaNodes[clamp(activeLevel - 1, 0, sagaNodes.length - 1)]?.shortLabel || `Int. 1`;
+  const activeNodeShortLabel = sagaNodes[activeNodeIndex]?.shortLabel || 'Int. 1';
 
-  function handleTitleTap(title) {
-    if (!title) return;
-    if (title.index > currentIndex) {
-      const safeCurrent = titles[clamp(currentIndex, 0, Math.max(0, titles.length - 1))] || summary?.current_title || null;
+  const cloudSeeds = useMemo(() => {
+    const clouds = [];
+    for (let i = 0; i < 7; i++) {
+      const seed = Math.abs(Math.sin((i + 1) * 93.17));
+      const seedB = Math.abs(Math.cos((i + 1) * 41.63));
+      const seedC = Math.abs(Math.sin((i + 1) * 17.21));
+      clouds.push({
+        id: `cloud-${i + 1}`,
+        top: 6 + i * 13 + seed * 4,
+        left: -10 + seedB * 90,
+        width: 90 + seed * 70,
+        height: 24 + seedB * 20,
+        opacity: 0.11 + seedC * 0.14,
+        duration: 28 + seed * 30,
+        delay: -(seedB * 18),
+        drift: (seedC * 24) - 12,
+      });
+    }
+    return clouds;
+  }, []);
+
+  useEffect(() => {
+    if (lastUnlockedMapIndexRef.current === null) {
+      lastUnlockedMapIndexRef.current = currentMapUnlockedIndex;
+      return;
+    }
+    const previous = lastUnlockedMapIndexRef.current;
+    if (currentMapUnlockedIndex > previous) {
+      const earnedTitle = mapTitles[currentMapUnlockedIndex];
+      if (earnedTitle) {
+        say(`Congratulations! ${titleLevelLabel(earnedTitle)} earned. The next ascent begins now.`, 3200);
+      }
+    }
+    lastUnlockedMapIndexRef.current = currentMapUnlockedIndex;
+  }, [currentMapUnlockedIndex, mapTitles]);
+
+  function resolveMapIndexForTitle(title) {
+    if (!title) return furthestTravelIndex;
+    if (mapTitleIndexByKey.has(title.id)) return mapTitleIndexByKey.get(title.id);
+    if (mapTitleIndexByKey.has(title.index)) return mapTitleIndexByKey.get(title.index);
+    return furthestTravelIndex;
+  }
+
+  function handleTitleTap(input) {
+    const nodeInput = input && typeof input === 'object' && typeof input.index === 'number' && Object.prototype.hasOwnProperty.call(input, 'shortLabel')
+      ? input
+      : null;
+    const title = nodeInput?.title || input || null;
+    const targetIndex = nodeInput ? nodeInput.index : resolveMapIndexForTitle(title);
+    const boundedIndex = clamp(targetIndex, 0, LEVEL_COORDINATES.length - 1);
+    const withinTravelRange = boundedIndex <= furthestTravelIndex;
+    const targetTitle = sagaNodes[boundedIndex]?.title || title || null;
+    const safeCurrent = mapTitles[furthestTravelIndex] || targetTitle || summary?.current_title || null;
+
+    if (!withinTravelRange) {
       playNodeTouchSound(false);
-      setAnchoredIndex(currentIndex);
+      setAnchoredIndex(furthestTravelIndex);
       setJourneyMode('inspect');
       setActiveJourneyTitle(safeCurrent);
+      scrollToNodeIndex(furthestTravelIndex);
       say(
-        `You can only travel up to ${titleLevelLabel(safeCurrent)}. Earn more points to unlock ${titleLevelLabel(title)}.`,
-        2200
+        `You can only travel up to ${titleLevelLabel(safeCurrent)}. Earn more points to unlock ${titleLevelLabel(targetTitle || title)}.`,
+        2300
       );
       return;
     }
-    const unlocked = !!title.unlocked;
-    const referenceIndex = anchoredIndex ?? currentIndex;
-    const movingForward = title.index > referenceIndex;
+
+    const unlocked = !!targetTitle?.unlocked;
+    const referenceIndex = anchoredIndex ?? furthestTravelIndex;
+    const movingForward = boundedIndex > referenceIndex;
     const mode = unlocked ? (movingForward ? 'forward' : 'inspect') : 'scout';
     setJourneyMode(mode);
-    setActiveJourneyTitle({ ...title });
-    setAnchoredIndex(title.index);
+    setActiveJourneyTitle(targetTitle ? { ...targetTitle } : null);
+    setAnchoredIndex(boundedIndex);
+    scrollToNodeIndex(boundedIndex);
     playNodeTouchSound(unlocked);
     say(
       mode === 'forward'
@@ -2419,6 +2547,8 @@ export default function TitleProgressTab({
   function returnToLiveCheckpoint() {
     setAnchoredIndex(null);
     setJourneyMode('forward');
+    setActiveJourneyTitle(mapTitles[furthestTravelIndex] || null);
+    scrollToNodeIndex(furthestTravelIndex);
     say('Returning to your live checkpoint.', 1500);
   }
 
@@ -2459,8 +2589,8 @@ export default function TitleProgressTab({
           <div>
             <h3 className="font-display font-bold text-base text-piu-accent">TITLE PROGRESSION</h3>
             <p className="text-xs text-gray-500 mt-1">
-              {summary.current_title ? titleLevelLabel(summary.current_title) : 'Beginner Lv.1'}
-              {nextTitle ? ` → ${titleLevelLabel(nextTitle)}` : ' → Completed'}
+              {displayCurrentTitle ? titleLevelLabel(displayCurrentTitle) : 'Intermediate Lv.1'}
+              {displayNextTitle ? ` → ${titleLevelLabel(displayNextTitle)}` : ' → Completed'}
             </p>
           </div>
           <div className="text-right">
@@ -2469,11 +2599,11 @@ export default function TitleProgressTab({
           </div>
         </div>
 
-        {nextTitle ? (
+        {displayNextTitle ? (
           <div className="mt-3 rounded-lg border border-piu-border/50 bg-piu-dark/60 px-3 py-2 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-display font-bold text-gray-200">{titleLevelLabel(nextTitle)}</p>
-              <p className="text-[10px] text-gray-500">Machine Lv.{nextTitle.level} challenge track</p>
+              <p className="text-xs font-display font-bold text-gray-200">{titleLevelLabel(displayNextTitle)}</p>
+              <p className="text-[10px] text-gray-500">Machine Lv.{displayNextTitle.level} challenge track</p>
             </div>
             <div className="text-right">
               <p className="font-mono text-sm text-cyan-200">
@@ -2494,11 +2624,34 @@ export default function TitleProgressTab({
           <div id="scroll-wrapper" ref={mapScrollRef} className="title-saga-scroll-wrapper">
             <div id="map-container" className="title-saga-map-container">
               <img
-                src="/progress-map.jpg"
+                src={mapImageSrc}
                 alt="Full Map"
                 className="title-saga-biome-image"
                 onLoad={() => setTimeout(scrollToCurrentLevel, 100)}
+                onError={() => {
+                  const pngFallback = withBase('progress-map.png');
+                  if (mapImageSrc !== pngFallback) setMapImageSrc(pngFallback);
+                }}
               />
+
+              <div className="title-map-cloud-layer" aria-hidden="true">
+                {cloudSeeds.map((cloud) => (
+                  <span
+                    key={cloud.id}
+                    className="title-map-cloud"
+                    style={{
+                      left: `${cloud.left}%`,
+                      top: `${cloud.top}%`,
+                      width: `${cloud.width}px`,
+                      height: `${cloud.height}px`,
+                      opacity: cloud.opacity,
+                      '--cloud-drift-x': `${cloud.drift}px`,
+                      '--cloud-duration': `${cloud.duration}s`,
+                      '--cloud-delay': `${cloud.delay}s`,
+                    }}
+                  />
+                ))}
+              </div>
 
               <svg
                 viewBox="0 0 100 100"
@@ -2532,7 +2685,8 @@ export default function TitleProgressTab({
                     key={node.id}
                     type="button"
                     disabled={node.isLocked}
-                    onClick={() => node.title && handleTitleTap(node.title)}
+                    data-node-index={node.index}
+                    onClick={() => handleTitleTap(node)}
                     className={className}
                     style={{ position: 'absolute', left: `${node.left}%`, top: `${node.top}%`, transform: 'translate(-50%, -50%)' }}
                     title={node.label}
@@ -2544,22 +2698,11 @@ export default function TitleProgressTab({
 
               <div
                 className="title-saga-avatar"
-                style={{ left: `${activeNodeCoordinate.left}%`, top: `${activeNodeCoordinate.top}%` }}
+                style={{ left: `${avatarCoordinate.left}%`, top: `${avatarCoordinate.top}%` }}
                 aria-hidden="true"
               >
                 <div className="title-saga-avatar-head" />
                 <div className="title-saga-avatar-body" />
-              </div>
-
-              <div
-                className="title-saga-node-speech title-speech-3d"
-                style={{
-                  left: `${clamp(activeNodeCoordinate.left, 18, 82)}%`,
-                  top: `${clamp(activeNodeCoordinate.top - 7, 4, 93)}%`,
-                }}
-              >
-                <p className="text-[10px] uppercase tracking-[0.12em] text-amber-200/80 font-display mb-1">Active Node</p>
-                <p className="text-[12px] leading-[1.35]">{activeNodeTitle ? `${activeNodeShortLabel} • ${nodeBubbleText}` : activeNodeShortLabel}</p>
               </div>
             </div>
           </div>
@@ -2575,6 +2718,15 @@ export default function TitleProgressTab({
               </button>
             </div>
           )}
+        </div>
+
+        <div className="mt-3 pointer-events-none">
+          <div className="title-speech-3d rounded-xl px-3.5 py-2.5 text-white">
+            <p className="text-[clamp(0.56rem,1.9vw,0.66rem)] uppercase tracking-[0.14em] text-amber-200/80 font-display mb-1">Active Node</p>
+            <p className="text-[clamp(0.76rem,2.5vw,0.9rem)] leading-[1.45]">
+              {activeNodeTitle ? `${activeNodeShortLabel} • ${titleLevelLabel(activeNodeTitle)} • ${nodeBubbleText}` : activeNodeShortLabel}
+            </p>
+          </div>
         </div>
 
         <div className="title-saga-fixed-ui title-saga-fixed-character pointer-events-none">

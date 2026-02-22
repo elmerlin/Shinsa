@@ -44,6 +44,7 @@ function timeAgo(dateStr) {
 
 function getClearItems(item) {
   const fallback = [{
+    entry_type: 'song_clear',
     song_title: item.song_title || '',
     mode: item.mode || 'Single',
     level: parseInt(item.level) || 0,
@@ -51,6 +52,11 @@ function getClearItems(item) {
     grade: item.grade || '',
     plate: item.plate || '',
     background_url: item.background_url || '',
+    title_name: '',
+    title_family: '',
+    title_level: 0,
+    title_plate: '',
+    title_tier: '',
   }];
 
   try {
@@ -58,6 +64,7 @@ function getClearItems(item) {
     if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
 
     return parsed.map(c => ({
+      entry_type: c.entry_type || 'song_clear',
       song_title: c.song_title || fallback[0].song_title,
       mode: c.mode || fallback[0].mode,
       level: parseInt(c.level) || fallback[0].level,
@@ -67,6 +74,11 @@ function getClearItems(item) {
       background_url: c.background_url || '',
       perfect: c.perfect || 0, great: c.great || 0, good: c.good || 0,
       bad: c.bad || 0, miss: c.miss || 0,
+      title_name: c.title_name || '',
+      title_family: c.title_family || '',
+      title_level: parseInt(c.title_level) || 0,
+      title_plate: c.title_plate || '',
+      title_tier: c.title_tier || '',
     }));
   } catch {
     return fallback;
@@ -88,6 +100,38 @@ function getGradeColor(grade, score = 0) {
 
 const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
 const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
+
+function getTitlePlateStyles(clear) {
+  const tier = String(clear?.title_tier || clear?.title_family || '').trim().toLowerCase();
+  if (tier === 'bronze' || tier === 'intermediate') {
+    return {
+      chip: 'bg-amber-900/45 border-amber-300/60 text-amber-200',
+      plate: 'from-amber-200 via-amber-300 to-amber-500 border-amber-100/85 text-amber-950',
+    };
+  }
+  if (tier === 'silver' || tier === 'advanced') {
+    return {
+      chip: 'bg-slate-700/45 border-slate-200/60 text-slate-100',
+      plate: 'from-slate-100 via-slate-200 to-slate-400 border-white/85 text-slate-900',
+    };
+  }
+  if (tier === 'gold' || tier === 'expert') {
+    return {
+      chip: 'bg-yellow-900/45 border-yellow-300/65 text-yellow-200',
+      plate: 'from-yellow-200 via-amber-300 to-yellow-500 border-yellow-100/90 text-amber-950',
+    };
+  }
+  if (tier === 'master') {
+    return {
+      chip: 'bg-fuchsia-900/45 border-fuchsia-300/65 text-fuchsia-100',
+      plate: 'from-fuchsia-200 via-violet-300 to-fuchsia-500 border-fuchsia-100/90 text-fuchsia-950',
+    };
+  }
+  return {
+    chip: 'bg-slate-800/45 border-slate-300/55 text-slate-100',
+    plate: 'from-slate-200 via-slate-300 to-slate-500 border-slate-100/90 text-slate-950',
+  };
+}
 
 function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
   if (!score) return null;
@@ -710,6 +754,7 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
   const hasMore = clears.length > 5;
   const visibleClears = showAll ? clears : clears.slice(0, 5);
   const isGrouped = clears.length > 1;
+  const isTitleUnlockPost = clears.length > 0 && clears.every((clear) => clear.entry_type === 'title_unlock');
   const flag = getCountryFlag(item.nationality);
 
   return (
@@ -730,7 +775,11 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
               {flag && <span className="mr-1">{flag}</span>}
               {item.username}
             </Link>
-            <span className="text-sky-400 font-display font-bold text-xs">{isGrouped ? 'new clears!' : 'new clear!'}</span>
+            <span className="text-sky-400 font-display font-bold text-xs">
+              {isTitleUnlockPost
+                ? (isGrouped ? 'earned new titles!' : 'earned a new title!')
+                : (isGrouped ? 'new clears!' : 'new clear!')}
+            </span>
           </div>
           <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
         </div>
@@ -738,6 +787,33 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
 
       <div className="space-y-2">
         {visibleClears.map((clear, i) => {
+          if (clear.entry_type === 'title_unlock') {
+            const titleName = clear.title_name || clear.song_title || `Title Lv.${clear.title_level || clear.level || 1}`;
+            const family = clear.title_family || '';
+            const level = clear.title_level || clear.level || 1;
+            const plateLabel = clear.title_plate || clear.plate || 'Title Plate';
+            const plateStyles = getTitlePlateStyles(clear);
+            const chipText = family ? `${family} Lv.${level}` : `Lv.${level}`;
+            return (
+              <div key={`title-unlock-${titleName}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
+                <div className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-display font-bold ${plateStyles.chip}`}>
+                  Title
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-display font-bold truncate">{titleName}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-display font-bold ${plateStyles.chip}`}>
+                      {chipText}
+                    </span>
+                  </div>
+                </div>
+                <div className={`shrink-0 rounded-lg border px-2.5 py-1 bg-gradient-to-b text-[10px] font-display font-black tracking-wide ${plateStyles.plate}`}>
+                  {plateLabel}
+                </div>
+              </div>
+            );
+          }
+
           const rank = getRank(clear.score);
           const isSingle = clear.mode === 'Single';
           const badgeColor = isSingle
