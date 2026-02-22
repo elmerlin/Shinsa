@@ -2204,6 +2204,8 @@ export default function TitleProgressTab({
   const [activeJourneyTitle, setActiveJourneyTitle] = useState(null);
   const [mapImageSrc, setMapImageSrc] = useState(withBase('progress-map.jpg'));
   const mapScrollRef = useRef(null);
+  const mapCaptureRef = useRef(null);
+  const [captureBusy, setCaptureBusy] = useState(false);
   const speechTimeoutRef = useRef(null);
   const audioCtxRef = useRef(null);
   const lastUnlockedMapIndexRef = useRef(null);
@@ -2552,6 +2554,31 @@ export default function TitleProgressTab({
     say('Returning to your live checkpoint.', 1500);
   }
 
+  async function handleSnapshotMap() {
+    if (!mapCaptureRef.current || captureBusy) return;
+    setCaptureBusy(true);
+    try {
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(resolve);
+        });
+      });
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(mapCaptureRef.current, {
+        backgroundColor: '#071326',
+        pixelRatio: 2,
+      });
+      const link = document.createElement('a');
+      link.download = 'title-progress-map.png';
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to capture progress map:', err);
+    } finally {
+      setCaptureBusy(false);
+    }
+  }
+
   if (!data) {
     return (
       <div className="card">
@@ -2619,7 +2646,7 @@ export default function TitleProgressTab({
         )}
 
         {/* ── 2D Saga Map ────────────────────────────────────────── */}
-        <div className="mt-4 title-saga-shell relative rounded-xl border-2 border-white/20 overflow-hidden"
+        <div ref={mapCaptureRef} className="mt-4 title-saga-shell relative rounded-xl border-2 border-white/20 overflow-hidden"
           style={{ boxShadow: '0 10px 32px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
           <div id="scroll-wrapper" ref={mapScrollRef} className="title-saga-scroll-wrapper">
             <div id="map-container" className="title-saga-map-container">
@@ -2707,8 +2734,16 @@ export default function TitleProgressTab({
             </div>
           </div>
 
-          {anchoredIndex !== null && (
-            <div className="px-3 py-2 flex items-center justify-end border-t border-white/15 bg-black/25">
+          <div className="px-3 py-2 flex items-center justify-end gap-2 border-t border-white/15 bg-black/25">
+            <button
+              type="button"
+              onClick={handleSnapshotMap}
+              disabled={captureBusy}
+              className="text-[10px] font-display font-bold px-2.5 py-1 rounded-md border border-white/40 text-white bg-slate-900/45 hover:bg-slate-800/70 disabled:opacity-50"
+            >
+              {captureBusy ? 'Capturing…' : '📸 Snapshot'}
+            </button>
+            {anchoredIndex !== null && (
               <button
                 type="button"
                 onClick={returnToLiveCheckpoint}
@@ -2716,8 +2751,8 @@ export default function TitleProgressTab({
               >
                 Return to Live Checkpoint
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="mt-3 pointer-events-none">
