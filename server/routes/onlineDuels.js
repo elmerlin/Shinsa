@@ -128,7 +128,7 @@ router.get('/:id/chat', (req, res) => {
 // POST /api/online-duels - create online duel (requires auth)
 router.post('/', requireAuth, (req, res) => {
   const db = getDb();
-  const { name, location, date, time, mode, opponent_user_id } = req.body;
+  const { name, location, date, time, mode, opponent_user_id, best_of } = req.body;
 
   if (!name) return res.status(400).json({ error: 'Duel name is required' });
   if (!opponent_user_id) return res.status(400).json({ error: 'Opponent is required' });
@@ -137,11 +137,14 @@ router.post('/', requireAuth, (req, res) => {
   if (!opponent) return res.status(404).json({ error: 'Opponent not found' });
   if (opponent_user_id === req.user.id) return res.status(400).json({ error: 'Cannot duel yourself' });
 
+  const validBestOf = [0, 3, 5, 7, 9];
+  const bestOfVal = validBestOf.includes(parseInt(best_of)) ? parseInt(best_of) : 0;
+
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO online_duels (id, name, location, date, time, mode, creator_user_id, opponent_user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, name, location || '', date || '', time || '', mode || 'both', req.user.id, opponent_user_id);
+    INSERT INTO online_duels (id, name, location, date, time, mode, creator_user_id, opponent_user_id, best_of)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, name, location || '', date || '', time || '', mode || 'both', req.user.id, opponent_user_id, bestOfVal);
 
   // Create invitation for opponent
   const invId = uuidv4();
@@ -309,6 +312,10 @@ router.post('/:id/accept', requireAuth, (req, res) => {
     const otherName = playerSlot === 'player1' ? duel.opponent_user_id : duel.creator_user_id;
     const otherUser = db.prepare('SELECT username FROM users WHERE id = ?').get(otherName);
     addSystemMessage(db, duel.id, `${otherUser.username} declined the song and forfeits this round! ${user.username} wins!`);
+
+    // Check Best-of-N auto-complete
+    const freshDuel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(duel.id);
+    checkBestOfComplete(db, freshDuel);
   }
 
   res.json({ success: true });
@@ -361,6 +368,10 @@ router.post('/:id/decline', requireAuth, (req, res) => {
     const winnerUserId = winner === 'player1' ? duel.creator_user_id : duel.opponent_user_id;
     const winnerUser = db.prepare('SELECT username FROM users WHERE id = ?').get(winnerUserId);
     addSystemMessage(db, duel.id, `${user.username} declined the song and forfeits this round! ${winnerUser.username} wins!`);
+
+    // Check Best-of-N auto-complete
+    const freshDuel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(duel.id);
+    checkBestOfComplete(db, freshDuel);
   } else {
     // Other hasn't responded yet
     addSystemMessage(db, duel.id, `${user.username} declined the song. Waiting for other player...`);
@@ -425,6 +436,10 @@ router.post('/:id/submit-score', requireAuth, (req, res) => {
       const winnerName = winner === 'player1' ? p1Name : p2Name;
       addSystemMessage(db, duel.id, `${winnerName} wins! ${p1Name}: ${updated.player1_score.toLocaleString()} vs ${p2Name}: ${updated.player2_score.toLocaleString()}`);
     }
+
+    // Check Best-of-N auto-complete
+    const freshDuel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(duel.id);
+    checkBestOfComplete(db, freshDuel);
   }
 
   res.json({ success: true });
@@ -559,9 +574,9 @@ router.post('/:id/rematch', requireAuth, (req, res) => {
   const finalName = rematchNum > 0 ? `${rematchName} (Rematch ${rematchNum})` : `${rematchName} (Rematch)`;
 
   db.prepare(`
-    INSERT INTO online_duels (id, name, location, date, time, mode, creator_user_id, opponent_user_id, status, current_turn)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
-  `).run(newId, finalName, duel.location, '', '', duel.mode, duel.creator_user_id, duel.opponent_user_id, firstTurn);
+    INSERT INTO online_duels (id, name, location, date, time, mode, creator_user_id, opponent_user_id, status, current_turn, best_of)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+  `).run(newId, finalName, duel.location, '', '', duel.mode, duel.creator_user_id, duel.opponent_user_id, firstTurn, duel.best_of || 0);
 
   const p1 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.creator_user_id);
   const p2 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.opponent_user_id);
@@ -646,6 +661,32 @@ function addSystemMessage(db, duelId, message) {
     INSERT INTO duel_chat (id, duel_id, user_id, username, message, is_system, is_participant)
     VALUES (?, ?, '', 'System', ?, 1, 0)
   `).run(uuidv4(), duelId, message);
+}
+
+// Check if Best-of-N threshold reached and auto-complete the duel
+function checkBestOfComplete(db, duel) {
+  if (!duel.best_of || duel.best_of <= 0) return false;
+  const majority = Math.ceil(duel.best_of / 2);
+  const songs = db.prepare("SELECT winner FROM online_duel_songs WHERE duel_id = ? AND status = 'completed'").all(duel.id);
+  let p1Wins = 0, p2Wins = 0;
+  songs.forEach(s => {
+    if (s.winner === 'player1') p1Wins++;
+    else if (s.winner === 'player2') p2Wins++;
+  });
+
+  if (p1Wins >= majority || p2Wins >= majority) {
+    let winner = 'draw';
+    if (p1Wins > p2Wins) winner = 'player1';
+    else if (p2Wins > p1Wins) winner = 'player2';
+    db.prepare('UPDATE online_duels SET status = ?, winner = ? WHERE id = ?').run('COMPLETED', winner, duel.id);
+
+    const p1 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.creator_user_id);
+    const p2 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.opponent_user_id);
+    const winnerName = winner === 'player1' ? p1.username : p2.username;
+    addSystemMessage(db, duel.id, `Best of ${duel.best_of} complete! ${winnerName} wins the series ${p1Wins}-${p2Wins}!`);
+    return true;
+  }
+  return false;
 }
 
 module.exports = router;

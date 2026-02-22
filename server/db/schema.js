@@ -669,6 +669,17 @@ function initializeDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_duel_spectators ON duel_spectators(duel_id);
 
+    CREATE TABLE IF NOT EXISTS duel_predictions (
+      duel_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      predicted_winner TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (duel_id, user_id),
+      FOREIGN KEY (duel_id) REFERENCES online_duels(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_duel_predictions ON duel_predictions(duel_id);
+
     -- PIUGame integration tables
     CREATE TABLE IF NOT EXISTS user_piugame_credentials (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -1362,6 +1373,12 @@ function initializeDb() {
     if (!communityCols.includes(col)) {
       db.exec(`ALTER TABLE communities ADD COLUMN ${col} ${type}`);
     }
+  }
+
+  // Migrations for online_duels table - add best_of format
+  const onlineDuelCols = db.prepare("PRAGMA table_info(online_duels)").all().map(c => c.name);
+  if (!onlineDuelCols.includes('best_of')) {
+    db.exec("ALTER TABLE online_duels ADD COLUMN best_of INT DEFAULT 0");
   }
 }
 
