@@ -7,7 +7,7 @@ const GAME_WIDTH = 420;
 const GAME_HEIGHT = 700;
 const CAMERA_LINE = 250;
 const FRAME_MS = 1000 / 60;
-const MAX_PLATFORMS = 34;
+const MAX_PLATFORMS = 24;
 const BEST_SCORE_KEY = 'fun_city_jump_best_score_v1';
 
 const PLAYABLE_CHARACTER = {
@@ -195,30 +195,41 @@ function createSafePathPlatform(previousPlatform, score) {
   });
 }
 
-function createSidePlatform(pathPlatform, score) {
-  if (Math.random() > 0.58) return null;
-  const y = pathPlatform.y + randomBetween(18, 52);
-  const width = randomBetween(72, 116);
+function pickCompanionCount(score) {
+  const progress = Math.min(1, score / 9000);
+  const onePlatformChance = 0.56 - progress * 0.06;
+  const twoPlatformChance = 0.90 + progress * 0.02;
+  const roll = Math.random();
+  if (roll < onePlatformChance) return 0; // total platforms in jump: 1
+  if (roll < twoPlatformChance) return 1; // total platforms in jump: 2
+  return 2; // total platforms in jump: 3
+}
+
+function overlapsHorizontally(a, b, padding = 18) {
+  return a.x < b.x + b.width + padding && a.x + a.width > b.x - padding;
+}
+
+function createCompanionPlatform(pathPlatform, score, existingCompanions = []) {
   const pathCenter = pathPlatform.x + pathPlatform.width * 0.5;
-  let center = clamp(
-    pathCenter + randomBetween(-176, 176),
-    SAFE_PATH_MARGIN + width * 0.5,
-    GAME_WIDTH - SAFE_PATH_MARGIN - width * 0.5,
-  );
-  if (Math.abs(center - pathCenter) < 56) {
-    const nudge = center < pathCenter ? -64 : 64;
-    center = clamp(
-      center + nudge,
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const y = pathPlatform.y + randomBetween(8, 30);
+    const width = randomBetween(68, 108);
+    const direction = Math.random() < 0.5 ? -1 : 1;
+    const offset = randomBetween(72, 170) * direction + randomBetween(-18, 18);
+    const center = clamp(
+      pathCenter + offset,
       SAFE_PATH_MARGIN + width * 0.5,
       GAME_WIDTH - SAFE_PATH_MARGIN - width * 0.5,
     );
+    const candidate = createPlatform(y, score, { x: center - width * 0.5, width });
+    if (score < 900 && candidate.type === 'break') {
+      candidate.type = 'normal';
+    }
+    if (overlapsHorizontally(candidate, pathPlatform, 16)) continue;
+    if (existingCompanions.some((platform) => overlapsHorizontally(candidate, platform, 16))) continue;
+    return candidate;
   }
-
-  const sidePlatform = createPlatform(y, score, { x: center - width * 0.5, width });
-  if (score < 900 && sidePlatform.type === 'break') {
-    sidePlatform.type = 'normal';
-  }
-  return sidePlatform;
+  return null;
 }
 
 function getTopPathPlatform(platforms) {
@@ -247,9 +258,14 @@ function fillReachablePlatforms(platforms, score) {
     platforms.push(nextPath);
     topPath = nextPath;
     if (platforms.length >= MAX_PLATFORMS) break;
-    const side = createSidePlatform(nextPath, score);
-    if (side) {
-      platforms.push(side);
+
+    const companionCount = pickCompanionCount(score);
+    const companions = [];
+    for (let i = 0; i < companionCount && platforms.length < MAX_PLATFORMS; i += 1) {
+      const companion = createCompanionPlatform(nextPath, score, companions);
+      if (!companion) continue;
+      companions.push(companion);
+      platforms.push(companion);
     }
   }
 }
@@ -315,15 +331,11 @@ function createInitialGame(bestScore) {
   });
 
   let topPath = platforms[0];
-  for (let i = 0; i < 12 && platforms.length < MAX_PLATFORMS; i += 1) {
+  for (let i = 0; i < 3 && platforms.length < MAX_PLATFORMS; i += 1) {
     const pathPlatform = createSafePathPlatform(topPath, 0);
-    if (i < 2) pathPlatform.type = 'normal';
+    pathPlatform.type = 'normal';
     platforms.push(pathPlatform);
     topPath = pathPlatform;
-    const sidePlatform = createSidePlatform(pathPlatform, 0);
-    if (sidePlatform && platforms.length < MAX_PLATFORMS) {
-      platforms.push(sidePlatform);
-    }
   }
   fillReachablePlatforms(platforms, 0);
 
@@ -818,6 +830,7 @@ export default function FunPage() {
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardError, setLeaderboardError] = useState('');
   const [myLeaderboardSummary, setMyLeaderboardSummary] = useState(null);
+  const [showLeaderboardAtStart, setShowLeaderboardAtStart] = useState(false);
 
   const canvasRef = useRef(null);
   const animationRef = useRef(0);
@@ -1146,6 +1159,7 @@ export default function FunPage() {
     pointerStateRef.current.direction = null;
     pointerStateRef.current.startedAt = 0;
     releaseDirectionalControl();
+    setShowLeaderboardAtStart(true);
     setGameStatus('gameover');
     stopBgm();
     playGameOverSound();
@@ -1298,6 +1312,7 @@ export default function FunPage() {
     scoreRef.current = 0;
     setScore(0);
     setLeaderboardError('');
+    setShowLeaderboardAtStart(false);
     setGameStatus('playing');
     if (soundEnabledRef.current) {
       ensureAudioContext();
@@ -1389,6 +1404,8 @@ export default function FunPage() {
     }
   }, [ensureAudioContext, gameStatus, soundEnabled, startBgm, stopBgm]);
 
+  const shouldShowLeaderboard = gameStatus === 'gameover' || (gameStatus === 'idle' && showLeaderboardAtStart);
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -1446,42 +1463,6 @@ export default function FunPage() {
             </button>
           </div>
 
-          <div className="absolute top-[62px] right-3 w-[192px] rounded-xl bg-black/45 border border-white/15 backdrop-blur-sm px-3 py-2 text-[11px] text-gray-200 pointer-events-none">
-            <p className="font-display font-bold tracking-wide text-piu-accent text-[11px]">HIGH SCORES</p>
-            {!user && (
-              <p className="mt-1 text-[10px] text-gray-300 leading-snug">
-                Registered users only. Log in to join the table.
-              </p>
-            )}
-            {user && leaderboardLoading && (
-              <p className="mt-1 text-[10px] text-gray-300">Loading...</p>
-            )}
-            {user && !leaderboardLoading && leaderboardError && (
-              <p className="mt-1 text-[10px] text-rose-300 leading-snug">{leaderboardError}</p>
-            )}
-            {user && !leaderboardLoading && !leaderboardError && leaderboard.length === 0 && (
-              <p className="mt-1 text-[10px] text-gray-300">No scores yet.</p>
-            )}
-            {user && !leaderboardLoading && !leaderboardError && leaderboard.length > 0 && (
-              <div className="mt-1 space-y-1">
-                {leaderboard.slice(0, 6).map((entry) => (
-                  <div key={entry.user_id} className="flex items-center justify-between gap-2">
-                    <p className="truncate">
-                      <span className="text-piu-gold font-display mr-1">#{entry.rank}</span>
-                      <span className="text-white">{entry.username}</span>
-                    </p>
-                    <span className="text-piu-accent font-display">{entry.score}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {user && myLeaderboardSummary?.best_score > 0 && (
-              <p className="mt-1 text-[10px] text-emerald-200">
-                You: #{myLeaderboardSummary.rank || '-'} • {myLeaderboardSummary.best_score}
-              </p>
-            )}
-          </div>
-
           {gameStatus === 'playing' && (
             <div className="absolute inset-x-0 bottom-4 px-4 pointer-events-none">
               <div className="mx-auto max-w-[330px] rounded-xl bg-black/35 border border-white/10 py-2 text-center text-[11px] text-gray-200">
@@ -1492,7 +1473,7 @@ export default function FunPage() {
 
           {gameStatus !== 'playing' && (
             <div className="absolute inset-0 flex items-center justify-center p-4">
-              <div className="w-full max-w-[330px] rounded-2xl bg-black/58 border border-white/20 backdrop-blur-md p-4 pointer-events-auto">
+              <div className={`w-full ${shouldShowLeaderboard ? 'max-w-[388px]' : 'max-w-[330px]'} rounded-2xl bg-black/58 border border-white/20 backdrop-blur-md p-4 pointer-events-auto`}>
                 <p className="text-center font-display font-bold text-xl text-white mb-3">
                   {gameStatus === 'gameover' ? 'ROUND OVER' : 'CITY SKY JUMP'}
                 </p>
@@ -1518,6 +1499,15 @@ export default function FunPage() {
                 >
                   {gameStatus === 'gameover' ? 'Restart Run' : 'Start Run'}
                 </button>
+                {gameStatus === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowLeaderboardAtStart((prev) => !prev)}
+                    className="w-full mt-2 rounded-xl border-2 border-[#7b3f09] bg-gradient-to-b from-[#ffd56a] to-[#f3902f] text-[#4a2200] font-display font-black tracking-wide py-2 shadow-[0_4px_0_#6b3207]"
+                  >
+                    {shouldShowLeaderboard ? 'Hide Leaderboard' : 'View Leaderboard'}
+                  </button>
+                )}
                 <p className="mt-3 text-[11px] text-gray-200 text-center leading-snug">
                   Tap left side of the game area to go left, right side to go right.
                 </p>
@@ -1526,6 +1516,44 @@ export default function FunPage() {
                 </p>
                 {gameStatus === 'gameover' && (
                   <p className="mt-2 text-sm text-piu-gold text-center font-display">Final score: {score}</p>
+                )}
+
+                {shouldShowLeaderboard && (
+                  <div className="mt-4 rounded-[18px] border-4 border-[#5a2f06] bg-gradient-to-b from-[#ffd86f] via-[#ffad43] to-[#f06d1f] shadow-[0_6px_0_#7b3f09,0_14px_26px_rgba(0,0,0,0.45)] p-3 text-[#3f1d00]">
+                    <p className="text-center font-display font-black tracking-[0.12em] text-sm">LEADERBOARD</p>
+                    {!user && (
+                      <p className="mt-2 text-[11px] font-semibold text-[#5a2500] text-center">
+                        Registered users only. Log in to view the table.
+                      </p>
+                    )}
+                    {user && leaderboardLoading && (
+                      <p className="mt-2 text-[11px] font-semibold text-[#5a2500] text-center">Loading...</p>
+                    )}
+                    {user && !leaderboardLoading && leaderboardError && (
+                      <p className="mt-2 text-[11px] font-semibold text-[#6f0000] text-center">{leaderboardError}</p>
+                    )}
+                    {user && !leaderboardLoading && !leaderboardError && leaderboard.length === 0 && (
+                      <p className="mt-2 text-[11px] font-semibold text-[#5a2500] text-center">No scores yet.</p>
+                    )}
+                    {user && !leaderboardLoading && !leaderboardError && leaderboard.length > 0 && (
+                      <div className="mt-2 space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                        {leaderboard.slice(0, 8).map((entry) => (
+                          <div key={entry.user_id} className="flex items-center justify-between gap-2 rounded-lg border-2 border-[#6b340b]/70 bg-[rgba(84,38,8,0.18)] px-2 py-1">
+                            <p className="truncate text-[11px] font-semibold">
+                              <span className="inline-flex min-w-[32px] justify-center rounded-md bg-[rgba(60,24,0,0.52)] px-1 py-0.5 mr-1 text-[#ffe6a1] font-display">#{entry.rank}</span>
+                              <span className="text-[#4a2200]">{entry.username}</span>
+                            </p>
+                            <span className="text-[12px] font-display font-black text-[#3d1800]">{entry.score}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {user && myLeaderboardSummary?.best_score > 0 && (
+                      <p className="mt-2 text-[11px] text-center font-display font-black text-[#4a2200]">
+                        Dojo Cat Rank: #{myLeaderboardSummary.rank || '-'}  Score: {myLeaderboardSummary.best_score}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
