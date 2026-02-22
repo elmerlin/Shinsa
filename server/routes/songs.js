@@ -2514,18 +2514,12 @@ router.post('/recommendations', optionalAuth, (req, res) => {
   const adjScoring = scoringLevel + feelingModifier;
   const adjPassing = passingLevel + feelingModifier;
 
-  // ─── Warm-up (5 songs) ─────────────────────────────────
-  const warmupOffsets = normalizedFeeling === 'lethargic'
-    ? [-3, -2, -1, -1, 0]
-    : normalizedFeeling === 'ambitious'
-      ? [-1, 0, 0, 0, +1]
-      : [-2, -1, 0, 0, +1];
-
-  const warmup = [];
-  for (const offset of warmupOffsets) {
-    const targetLv = adjScoring + offset;
-    const picks = pickFromPool(targetLv, 1);
-    if (picks.length > 0) warmup.push(formatChart(picks[0]));
+  // ─── Activation (5 songs at scoring level - 3) ─────────────────────────────────
+  const activationLevel = adjScoring - 3;
+  const activation = [];
+  const activationPicks = pickFromPool(activationLevel, 5);
+  for (const chart of activationPicks) {
+    activation.push(formatChart(chart));
   }
 
   // ─── Scoring songs (5 songs) ─────────────────────────────
@@ -2567,7 +2561,7 @@ router.post('/recommendations', optionalAuth, (req, res) => {
     chart_mode: chart_mode,
     skills_train: mustHaveSlugs,
     skills_avoid: avoidSlugs,
-    warmup,
+    activation,
     scoring_songs: scoringSongs,
     passing_songs: passingSongs,
   });

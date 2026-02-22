@@ -237,6 +237,13 @@ export const getUserPosts = (userId, page) => request(`/social/posts/user/${user
 export const editPost = (id, data) => request(`/social/posts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deletePost = (id) => request(`/social/posts/${id}`, { method: 'DELETE' });
 
+// Social — Post Drafts
+export const savePostDraft = (data) => request('/social/drafts', { method: 'POST', body: JSON.stringify(data) });
+export const getPostDrafts = () => request('/social/drafts');
+export const getPostDraft = (id) => request(`/social/drafts/${id}`);
+export const updatePostDraft = (id, data) => request(`/social/drafts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deletePostDraft = (id) => request(`/social/drafts/${id}`, { method: 'DELETE' });
+
 // Social — Post Pumps
 export const pumpPost = (id) => request(`/social/posts/${id}/pump`, { method: 'POST' });
 

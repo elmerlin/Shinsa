@@ -797,6 +797,18 @@ function initializeDb() {
       FOREIGN KEY (parent_id) REFERENCES post_comments(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS post_drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL DEFAULT '',
+      images TEXT DEFAULT '[]',
+      youtube_url TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_post_drafts_user ON post_drafts(user_id);
+
     CREATE TABLE IF NOT EXISTS user_upscores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
