@@ -964,7 +964,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
             <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
           )}
           {currentPlan && (
-            <SessionPlanCard plan={currentPlan} className="mb-3" />
+            <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} />
           )}
         </>
       )}
