@@ -9,7 +9,7 @@ Path:
 - client/public/fun-assets/characters/cat-sprite-sheet.png
 
 Expected layout:
-- 4 columns x 6 rows
+- 4 columns x 4 rows
 - Transparent background recommended
 - Place character frames in the same positions as the provided sheet
 

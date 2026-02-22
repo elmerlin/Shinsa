@@ -27,16 +27,19 @@ const CHARACTER_STATS = {
 const CAT_SPRITE_SHEET = {
   path: '/fun-assets/characters/cat-sprite-sheet.png',
   columns: 4,
-  rows: 6,
+  rows: 4,
   scale: 1.74,
   yOffset: -10,
-  previewFrame: 13,
+  previewFrame: 12,
   idleFrames: [12, 13, 14, 15],
   moveFrames: [0, 1, 2, 3],
   riseFrames: [5, 6, 7],
   apexFrame: 10,
-  fallFrames: [8, 9],
+  fallFrames: [8, 9, 10, 11],
 };
+
+const PREVIEW_LOOP_FRAMES = [12, 13, 14, 15, 0, 1, 2, 3, 5, 6, 7, 10, 9, 8];
+const PREVIEW_LOOP_FRAME_MS = 95;
 
 const NOTES = {
   C3: 130.81,
@@ -591,14 +594,14 @@ function drawCharacterSprite(ctx, player, time, spriteSheet) {
   return true;
 }
 
-function drawCharacterPreview(ctx, spriteSheet) {
+function drawCharacterPreview(ctx, spriteSheet, frameIndex = CAT_SPRITE_SHEET.previewFrame) {
   ctx.clearRect(0, 0, 92, 92);
   ctx.fillStyle = '#f2f8ff';
   drawRoundedRect(ctx, 2, 2, 88, 88, 16);
   ctx.fill();
 
   if (spriteSheet) {
-    const frame = getSpriteRectFromIndex(spriteSheet, CAT_SPRITE_SHEET.previewFrame);
+    const frame = getSpriteRectFromIndex(spriteSheet, frameIndex);
     const ratio = frame.sw / frame.sh;
     const targetHeight = 61;
     const targetWidth = targetHeight * ratio;
@@ -680,8 +683,33 @@ function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
     if (!canvas) return undefined;
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
-    drawCharacterPreview(ctx, spriteSheet);
-    return undefined;
+    if (!spriteSheet) {
+      drawCharacterPreview(ctx, null);
+      return undefined;
+    }
+
+    let rafId = 0;
+    let frameCursor = 0;
+    let lastTs = 0;
+
+    const renderCurrent = () => {
+      const frame = PREVIEW_LOOP_FRAMES[frameCursor % PREVIEW_LOOP_FRAMES.length];
+      drawCharacterPreview(ctx, spriteSheet, frame);
+    };
+
+    renderCurrent();
+
+    const tick = (ts) => {
+      if (!lastTs || ts - lastTs >= PREVIEW_LOOP_FRAME_MS) {
+        frameCursor = (frameCursor + 1) % PREVIEW_LOOP_FRAMES.length;
+        renderCurrent();
+        lastTs = ts;
+      }
+      rafId = window.requestAnimationFrame(tick);
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
   }, [spriteSheet, spriteVersion]);
 
   return <canvas ref={canvasRef} width={92} height={92} className="w-[92px] h-[92px] rounded-2xl border border-white/30 shadow-sm" />;
@@ -1190,15 +1218,7 @@ export default function FunPage() {
               </div>
             </div>
             <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
-              Sprite sheet file:
-              {' '}
-              <span className="font-mono text-gray-400">client/public/fun-assets/characters/cat-sprite-sheet.png</span>
-              {' '}
-              with
-              {' '}
-              <span className="font-mono text-gray-400">4 columns x 6 rows</span>
-              {' '}
-              frames.
+              Preview loops through the full animation cycle.
             </p>
           </div>
 
