@@ -2646,10 +2646,10 @@ export default function TitleProgressTab({
         )}
 
         {/* ── 2D Saga Map ────────────────────────────────────────── */}
-        <div ref={mapCaptureRef} className="mt-4 title-saga-shell relative rounded-xl border-2 border-white/20 overflow-hidden"
+        <div className="mt-4 title-saga-shell relative rounded-xl border-2 border-white/20 overflow-hidden"
           style={{ boxShadow: '0 10px 32px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
           <div id="scroll-wrapper" ref={mapScrollRef} className="title-saga-scroll-wrapper">
-            <div id="map-container" className="title-saga-map-container">
+            <div id="map-container" ref={mapCaptureRef} className="title-saga-map-container">
               <img
                 src={mapImageSrc}
                 alt="Full Map"
