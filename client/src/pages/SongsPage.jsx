@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getSongLibrary } from '../utils/api';
+import RecommendModal from '../components/RecommendModal';
 
 function ChartBadge({ chart }) {
   const isSingle = chart.mode === 'Single';
@@ -31,6 +32,7 @@ export default function SongsPage() {
   const [search, setSearch] = useState(searchParams.get('q') || '');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchWrapRef = useRef(null);
+  const [showRecommend, setShowRecommend] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -125,16 +127,30 @@ export default function SongsPage() {
           <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">SONGS</h1>
           <p className="text-xs text-gray-500">Phoenix chart database with singles and doubles</p>
         </div>
-        <Link
-          to="/head-to-head"
-          className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all whitespace-nowrap"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
-          </svg>
-          Head to Head
-        </Link>
+        <div className="flex items-center gap-2">
+          {user && (
+            <button
+              type="button"
+              onClick={() => setShowRecommend(true)}
+              className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-700 border border-cyan-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-cyan-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+              </svg>
+              Recommend
+            </button>
+          )}
+          <Link
+            to="/head-to-head"
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
+            </svg>
+            Head to Head
+          </Link>
+        </div>
       </div>
 
       {error && (
@@ -214,6 +230,12 @@ export default function SongsPage() {
           )}
         </div>
       </section>
+
+      <RecommendModal
+        open={showRecommend}
+        onClose={() => setShowRecommend(false)}
+        user={user}
+      />
     </div>
   );
 }
