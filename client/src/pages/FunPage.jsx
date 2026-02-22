@@ -13,6 +13,7 @@ const GAME_TITLE = 'TOP CITY JUMP';
 const SCORE_DIFFICULTY_CAP = 100000;
 const DEVIT_UNLOCK_SCORE = 5000;
 const DEVIT_JUMP_LAG = 3;
+const DEVIT_STALL_CATCH_COUNT = 4;
 const DEVIT_TRAIL_LIMIT = 14000;
 const DEVIT_TOUCH_PADDING = 8;
 
@@ -48,8 +49,8 @@ const CAT_SPRITE_SHEET = {
 
 const DEVIT_SPRITE_SHEET = {
   path: '/fun-assets/characters/devit-sprite-sheet.png',
-  scale: 1.65,
-  yOffset: -9,
+  scale: 1.74,
+  yOffset: -10,
   // This sheet is arranged unevenly inside a 4x4 canvas; use explicit trimmed frame rects.
   frames: [
     { sx: 677, sy: 43, sw: 192, sh: 286 },
@@ -383,8 +384,8 @@ function createInitialGame(bestScore) {
     active: false,
     x: player.x,
     y: player.y + 140,
-    width: stats.width * 0.96,
-    height: stats.height * 0.98,
+    width: stats.width,
+    height: stats.height,
     vx: 0,
     vy: 0,
     facing: 1,
@@ -409,6 +410,8 @@ function createInitialGame(bestScore) {
     playerTrail: initialTrail,
     devitTrailIndex: 0,
     jumpCount: 0,
+    nonProgressCount: 0,
+    lastLandingDistance: 0,
     platforms,
     clouds: createClouds(),
     cars: createCars(),
@@ -1369,6 +1372,13 @@ export default function FunPage() {
             player.squash = boostJump ? 0.4 : 0.32;
             game.bounceFlash = boostJump ? 0.95 : 0.52;
             game.jumpCount += 1;
+            const distanceSinceLastLanding = game.distance - game.lastLandingDistance;
+            if (distanceSinceLastLanding > 16) {
+              game.nonProgressCount = 0;
+            } else {
+              game.nonProgressCount += 1;
+            }
+            game.lastLandingDistance = game.distance;
             playJumpSound(boostJump);
             break;
           }
@@ -1438,7 +1448,9 @@ export default function FunPage() {
     }
 
     if (devit.active) {
-      const targetJump = Math.max(0, game.jumpCount - DEVIT_JUMP_LAG);
+      const catchUpSteps = Math.max(0, game.nonProgressCount - 1);
+      const currentLag = Math.max(0, DEVIT_JUMP_LAG - catchUpSteps);
+      const targetJump = Math.max(0, game.jumpCount - currentLag);
       while (
         game.devitTrailIndex + 1 < game.playerTrail.length
         && game.playerTrail[game.devitTrailIndex + 1].jumpCount <= targetJump
@@ -1456,7 +1468,18 @@ export default function FunPage() {
         devit.squash = snapshot.squash;
       }
 
-      if (entitiesOverlap(player, devit, DEVIT_TOUCH_PADDING)) {
+      if (game.nonProgressCount >= DEVIT_STALL_CATCH_COUNT) {
+        devit.x = player.x;
+        devit.y = player.y;
+        devit.vx = player.vx;
+        devit.vy = player.vy;
+        devit.facing = player.facing;
+        devit.squash = player.squash;
+        handleGameOver(game.score, 'devit');
+        return;
+      }
+
+      if (entitiesOverlap(player, devit, DEVIT_TOUCH_PADDING) && currentLag <= 0) {
         handleGameOver(game.score, 'devit');
         return;
       }
