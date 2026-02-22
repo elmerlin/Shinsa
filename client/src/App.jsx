@@ -449,13 +449,6 @@ export default function App() {
               </svg>
               <span>Head to Head</span>
             </Link>
-            <Link to="/fun" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0Zm6 0a9 9 0 11-18 0 9 9 0 0118 0Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 15.5h8" />
-              </svg>
-              <span>Fun</span>
-            </Link>
             <Link to="/communities" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
               Communities
             </Link>

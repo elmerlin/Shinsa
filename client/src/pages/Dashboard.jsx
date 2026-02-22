@@ -350,16 +350,6 @@ export default function Dashboard() {
             </svg>
             Head to Head
           </Link>
-          <Link
-            to="/fun"
-            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-700 border border-fuchsia-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-indigo-900/30 hover:brightness-110 transition-all whitespace-nowrap"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0Zm6 0a9 9 0 11-18 0 9 9 0 0118 0Z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 15.5h8" />
-            </svg>
-            Fun
-          </Link>
         </div>
       </div>
 
@@ -501,32 +491,6 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Fun Section */}
-      {searchResults === null && (
-        <div className="mb-8">
-          <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">FUN</h2>
-          <Link to="/fun" className="card-hover flex items-center justify-between gap-4 group">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-900/40 shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0Zm6 0a9 9 0 11-18 0 9 9 0 0118 0Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 15.5h8" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <h3 className="font-display text-lg font-bold group-hover:text-piu-accent transition-colors truncate">
-                  City Sky Jump
-                </h3>
-                <p className="text-xs text-gray-400">
-                  Doodle-jump style mini game with selectable characters and chiptune audio.
-                </p>
-              </div>
-            </div>
-            <span className="badge badge-active shrink-0">Play</span>
-          </Link>
         </div>
       )}
 

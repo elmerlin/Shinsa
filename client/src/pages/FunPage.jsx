@@ -8,38 +8,34 @@ const FRAME_MS = 1000 / 60;
 const MAX_PLATFORMS = 34;
 const BEST_SCORE_KEY = 'fun_city_jump_best_score_v1';
 
-const CHARACTERS = [
-  {
-    id: 'devil',
-    name: 'Sky Devil',
-    description: 'Floaty jumps and smooth control.',
-    cardClass: 'from-rose-500 to-orange-500',
-  },
-  {
-    id: 'cat',
-    name: 'Fighter Cat',
-    description: 'Fast movement and stronger dash feel.',
-    cardClass: 'from-amber-500 to-orange-500',
-  },
-];
+const PLAYABLE_CHARACTER = {
+  id: 'cat',
+  name: 'Fighter Cat',
+  description: 'Sprite-sheet animated sky fighter.',
+  cardClass: 'from-amber-500 to-orange-500',
+};
 
 const CHARACTER_STATS = {
-  devil: {
-    width: 48,
-    height: 56,
-    accel: 0.42,
-    maxSpeed: 5.4,
-    gravity: 0.218,
-    jumpVelocity: -9.2,
-  },
-  cat: {
-    width: 52,
-    height: 58,
-    accel: 0.5,
-    maxSpeed: 5.9,
-    gravity: 0.236,
-    jumpVelocity: -8.9,
-  },
+  width: 52,
+  height: 58,
+  accel: 0.5,
+  maxSpeed: 5.9,
+  gravity: 0.236,
+  jumpVelocity: -8.9,
+};
+
+const CAT_SPRITE_SHEET = {
+  path: '/fun/characters/cat-sprite-sheet.png',
+  columns: 4,
+  rows: 6,
+  scale: 1.74,
+  yOffset: -10,
+  previewFrame: 13,
+  idleFrames: [12, 13, 14, 15],
+  moveFrames: [0, 1, 2, 3],
+  riseFrames: [5, 6, 7],
+  apexFrame: 10,
+  fallFrames: [8, 9],
 };
 
 const NOTES = {
@@ -68,17 +64,46 @@ const NOTES = {
 };
 
 const MELODY_SEQUENCE = [
+  // A
   'E5', 'G5', 'A5', 'R', 'A5', 'C6', 'B5', 'R',
   'G5', 'E5', 'D5', 'R', 'E5', 'G5', 'A5', 'R',
   'C6', 'B5', 'A5', 'G5', 'E5', 'D5', 'C5', 'R',
   'E5', 'G5', 'A5', 'B5', 'A5', 'G5', 'E5', 'R',
+  // B
+  'G5', 'A5', 'B5', 'R', 'B5', 'C6', 'B5', 'R',
+  'A5', 'G5', 'E5', 'R', 'G5', 'A5', 'B5', 'R',
+  'C6', 'B5', 'A5', 'G5', 'E5', 'D5', 'C5', 'R',
+  'G5', 'A5', 'B5', 'A5', 'G5', 'E5', 'D5', 'R',
+  // C
+  'E5', 'E5', 'G5', 'A5', 'B5', 'A5', 'G5', 'E5',
+  'D5', 'E5', 'G5', 'A5', 'C6', 'B5', 'A5', 'G5',
+  'E5', 'D5', 'C5', 'R', 'D5', 'E5', 'G5', 'R',
+  'A5', 'G5', 'E5', 'D5', 'C5', 'D5', 'E5', 'R',
 ];
 
 const BASS_SEQUENCE = [
+  // A
   'C3', 'R', 'C3', 'R', 'A3', 'R', 'A3', 'R',
   'F3', 'R', 'F3', 'R', 'G3', 'R', 'G3', 'R',
   'C3', 'R', 'C3', 'R', 'A3', 'R', 'A3', 'R',
   'F3', 'R', 'G3', 'R', 'C4', 'R', 'C4', 'R',
+  // B
+  'C3', 'R', 'G3', 'R', 'A3', 'R', 'E3', 'R',
+  'F3', 'R', 'C3', 'R', 'G3', 'R', 'D3', 'R',
+  'A3', 'R', 'E3', 'R', 'F3', 'R', 'C3', 'R',
+  'G3', 'R', 'D3', 'R', 'C4', 'R', 'G3', 'R',
+  // C
+  'C3', 'C3', 'R', 'C3', 'A3', 'A3', 'R', 'A3',
+  'F3', 'F3', 'R', 'F3', 'G3', 'G3', 'R', 'G3',
+  'C3', 'R', 'G3', 'R', 'A3', 'R', 'E3', 'R',
+  'F3', 'R', 'G3', 'R', 'C4', 'R', 'C3', 'R',
+];
+
+const COUNTER_SEQUENCE = [
+  'A4', 'R', 'C5', 'R', 'E5', 'R', 'C5', 'R',
+  'G4', 'R', 'B4', 'R', 'D5', 'R', 'B4', 'R',
+  'A4', 'R', 'C5', 'R', 'E5', 'R', 'G5', 'R',
+  'B4', 'R', 'A4', 'R', 'G4', 'R', 'E4', 'R',
 ];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -90,6 +115,16 @@ function hashNoise(index, salt = 0) {
 }
 
 let platformIdCounter = 1;
+
+function createWindNoiseBuffer(audioContext, durationSeconds = 2.5) {
+  const frameCount = Math.floor(audioContext.sampleRate * durationSeconds);
+  const buffer = audioContext.createBuffer(1, frameCount, audioContext.sampleRate);
+  const channel = buffer.getChannelData(0);
+  for (let i = 0; i < frameCount; i += 1) {
+    channel[i] = (Math.random() * 2 - 1) * 0.46;
+  }
+  return buffer;
+}
 
 function selectPlatformType(score) {
   const progress = Math.min(1, score / 6500);
@@ -149,8 +184,8 @@ function createCars() {
   ];
 }
 
-function createInitialGame(characterId, bestScore) {
-  const stats = CHARACTER_STATS[characterId] || CHARACTER_STATS.devil;
+function createInitialGame(bestScore) {
+  const stats = CHARACTER_STATS;
   const player = {
     x: GAME_WIDTH * 0.5 - stats.width * 0.5,
     y: GAME_HEIGHT - 120,
@@ -183,7 +218,7 @@ function createInitialGame(characterId, bestScore) {
   }
 
   return {
-    characterId,
+    characterId: PLAYABLE_CHARACTER.id,
     stats,
     player,
     platforms,
@@ -425,72 +460,6 @@ function drawCharacterShadow(ctx, player) {
   ctx.fill();
 }
 
-function drawDevilCharacter(ctx, player, time) {
-  const centerX = player.x + player.width * 0.5;
-  const centerY = player.y + player.height * 0.52;
-  const bob = Math.sin(time * 0.11) * 1.8;
-  const squash = clamp(player.squash, 0, 0.45);
-  const scaleX = 1 + squash * 0.22;
-  const scaleY = 1 - squash * 0.17;
-
-  ctx.save();
-  ctx.translate(centerX, centerY + bob);
-  ctx.scale(player.facing, 1);
-  ctx.scale(scaleX, scaleY);
-  ctx.lineWidth = 2.8;
-  ctx.strokeStyle = '#3f3f46';
-  ctx.fillStyle = '#ffffff';
-
-  ctx.beginPath();
-  ctx.ellipse(0, 0, player.width * 0.34, player.height * 0.38, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = '#ff6548';
-  ctx.strokeStyle = '#c63c20';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(-player.width * 0.19, -player.height * 0.28);
-  ctx.quadraticCurveTo(-player.width * 0.27, -player.height * 0.54, -player.width * 0.09, -player.height * 0.49);
-  ctx.quadraticCurveTo(-player.width * 0.03, -player.height * 0.42, -player.width * 0.12, -player.height * 0.26);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(player.width * 0.19, -player.height * 0.28);
-  ctx.quadraticCurveTo(player.width * 0.27, -player.height * 0.54, player.width * 0.09, -player.height * 0.49);
-  ctx.quadraticCurveTo(player.width * 0.03, -player.height * 0.42, player.width * 0.12, -player.height * 0.26);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = '#ff6c5d';
-  ctx.beginPath();
-  ctx.ellipse(-player.width * 0.1, -player.height * 0.02, 5.5, 7.5, -0.2, 0, Math.PI * 2);
-  ctx.ellipse(player.width * 0.1, -player.height * 0.02, 5.5, 7.5, 0.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = '#2f2f35';
-  ctx.beginPath();
-  ctx.arc(-player.width * 0.1, -player.height * 0.03, 2.5, 0, Math.PI * 2);
-  ctx.arc(player.width * 0.1, -player.height * 0.03, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.strokeStyle = '#2f2f35';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(0, player.height * 0.06, 7, 0.1, Math.PI - 0.1);
-  ctx.stroke();
-
-  ctx.fillStyle = '#ffbfd0';
-  ctx.beginPath();
-  ctx.arc(-player.width * 0.2, player.height * 0.06, 4.5, 0, Math.PI * 2);
-  ctx.arc(player.width * 0.2, player.height * 0.06, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
-}
-
 function drawCatCharacter(ctx, player, time) {
   const centerX = player.x + player.width * 0.5;
   const centerY = player.y + player.height * 0.54;
@@ -571,27 +540,82 @@ function drawCatCharacter(ctx, player, time) {
   ctx.restore();
 }
 
-function drawCharacterPreview(ctx, characterId) {
+function getSpriteRectFromIndex(sheet, frameIndex) {
+  const frameWidth = Math.floor(sheet.naturalWidth / CAT_SPRITE_SHEET.columns);
+  const frameHeight = Math.floor(sheet.naturalHeight / CAT_SPRITE_SHEET.rows);
+  const col = frameIndex % CAT_SPRITE_SHEET.columns;
+  const row = Math.floor(frameIndex / CAT_SPRITE_SHEET.columns);
+  return {
+    sx: col * frameWidth,
+    sy: row * frameHeight,
+    sw: frameWidth,
+    sh: frameHeight,
+  };
+}
+
+function selectCatFrameIndex(player, time) {
+  const tick = Math.floor(time / 5);
+  if (player.vy < -3.5) return CAT_SPRITE_SHEET.riseFrames[tick % CAT_SPRITE_SHEET.riseFrames.length];
+  if (player.vy < -0.8) return CAT_SPRITE_SHEET.apexFrame;
+  if (player.vy > 2.6) return CAT_SPRITE_SHEET.fallFrames[tick % CAT_SPRITE_SHEET.fallFrames.length];
+  if (Math.abs(player.vx) > 0.45) return CAT_SPRITE_SHEET.moveFrames[tick % CAT_SPRITE_SHEET.moveFrames.length];
+  return CAT_SPRITE_SHEET.idleFrames[tick % CAT_SPRITE_SHEET.idleFrames.length];
+}
+
+function drawCharacterSprite(ctx, player, time, spriteSheet) {
+  if (!spriteSheet) return false;
+  const centerX = player.x + player.width * 0.5;
+  const centerY = player.y + player.height * 0.54;
+  const bob = Math.sin(time * 0.095 + 0.4) * 1.6;
+  const squash = clamp(player.squash, 0, 0.45);
+  const scaleX = 1 + squash * 0.2;
+  const scaleY = 1 - squash * 0.14;
+  const targetHeight = player.height * CAT_SPRITE_SHEET.scale;
+  const ratio = spriteSheet.naturalWidth > 0 && spriteSheet.naturalHeight > 0
+    ? (spriteSheet.naturalWidth / CAT_SPRITE_SHEET.columns) / (spriteSheet.naturalHeight / CAT_SPRITE_SHEET.rows)
+    : 1;
+  const targetWidth = targetHeight * ratio;
+  const frame = getSpriteRectFromIndex(spriteSheet, selectCatFrameIndex(player, time));
+
+  ctx.save();
+  ctx.translate(centerX, centerY + bob + CAT_SPRITE_SHEET.yOffset);
+  ctx.scale(player.facing, 1);
+  ctx.scale(scaleX, scaleY);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(
+    spriteSheet,
+    frame.sx, frame.sy, frame.sw, frame.sh,
+    -targetWidth * 0.5, -targetHeight * 0.78, targetWidth, targetHeight,
+  );
+  ctx.restore();
+  return true;
+}
+
+function drawCharacterPreview(ctx, spriteSheet) {
   ctx.clearRect(0, 0, 92, 92);
   ctx.fillStyle = '#f2f8ff';
   drawRoundedRect(ctx, 2, 2, 88, 88, 16);
   ctx.fill();
-  const dummy = {
-    x: 22,
-    y: 20,
-    width: characterId === 'cat' ? 46 : 42,
-    height: characterId === 'cat' ? 52 : 50,
-    facing: 1,
-    squash: 0,
-  };
-  if (characterId === 'cat') {
-    drawCatCharacter(ctx, dummy, 0);
-  } else {
-    drawDevilCharacter(ctx, dummy, 0);
+
+  if (spriteSheet) {
+    const frame = getSpriteRectFromIndex(spriteSheet, CAT_SPRITE_SHEET.previewFrame);
+    const ratio = frame.sw / frame.sh;
+    const targetHeight = 61;
+    const targetWidth = targetHeight * ratio;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      spriteSheet,
+      frame.sx, frame.sy, frame.sw, frame.sh,
+      46 - targetWidth * 0.5, 46 - targetHeight * 0.56, targetWidth, targetHeight,
+    );
+    return;
   }
+
+  const dummy = { x: 22, y: 20, width: 46, height: 52, facing: 1, squash: 0 };
+  drawCatCharacter(ctx, dummy, 0);
 }
 
-function renderGame(ctx, game, status) {
+function renderGame(ctx, game, status, spriteSheet) {
   drawBackground(ctx, game);
 
   for (const platform of game.platforms) {
@@ -599,10 +623,9 @@ function renderGame(ctx, game, status) {
   }
 
   drawCharacterShadow(ctx, game.player);
-  if (game.characterId === 'cat') {
+  const usedSprite = drawCharacterSprite(ctx, game.player, game.time, spriteSheet);
+  if (!usedSprite) {
     drawCatCharacter(ctx, game.player, game.time);
-  } else {
-    drawDevilCharacter(ctx, game.player, game.time);
   }
 
   ctx.fillStyle = 'rgba(9, 20, 35, 0.72)';
@@ -649,7 +672,7 @@ function renderGame(ctx, game, status) {
   }
 }
 
-function CharacterPreview({ characterId }) {
+function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -657,17 +680,17 @@ function CharacterPreview({ characterId }) {
     if (!canvas) return undefined;
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
-    drawCharacterPreview(ctx, characterId);
+    drawCharacterPreview(ctx, spriteSheet);
     return undefined;
-  }, [characterId]);
+  }, [spriteSheet, spriteVersion]);
 
   return <canvas ref={canvasRef} width={92} height={92} className="w-[92px] h-[92px] rounded-2xl border border-white/30 shadow-sm" />;
 }
 
 export default function FunPage() {
-  const [selectedCharacter, setSelectedCharacter] = useState('devil');
   const [gameStatus, setGameStatus] = useState('idle');
   const [score, setScore] = useState(0);
+  const [spriteVersion, setSpriteVersion] = useState(0);
   const [bestScore, setBestScore] = useState(() => {
     const raw = Number(window.localStorage.getItem(BEST_SCORE_KEY));
     return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
@@ -679,23 +702,21 @@ export default function FunPage() {
   const lastTimeRef = useRef(0);
   const controlsRef = useRef({ left: false, right: false });
   const gameStatusRef = useRef(gameStatus);
-  const selectedCharacterRef = useRef(selectedCharacter);
   const bestScoreRef = useRef(bestScore);
   const soundEnabledRef = useRef(soundEnabled);
   const scoreRef = useRef(score);
-  const gameRef = useRef(createInitialGame(selectedCharacter, bestScore));
+  const spriteSheetRef = useRef(null);
+  const gameRef = useRef(createInitialGame(bestScore));
 
   const audioContextRef = useRef(null);
   const bgmIntervalRef = useRef(null);
   const bgmStepRef = useRef(0);
+  const windNodesRef = useRef(null);
+  const windBufferRef = useRef(null);
 
   useEffect(() => {
     gameStatusRef.current = gameStatus;
   }, [gameStatus]);
-
-  useEffect(() => {
-    selectedCharacterRef.current = selectedCharacter;
-  }, [selectedCharacter]);
 
   useEffect(() => {
     bestScoreRef.current = bestScore;
@@ -708,6 +729,23 @@ export default function FunPage() {
   useEffect(() => {
     scoreRef.current = score;
   }, [score]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      if (cancelled) return;
+      spriteSheetRef.current = image;
+      setSpriteVersion((v) => v + 1);
+    };
+    image.onerror = () => {};
+    image.src = CAT_SPRITE_SHEET.path;
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const ensureAudioContext = useCallback(() => {
     if (!soundEnabledRef.current) return null;
@@ -772,33 +810,99 @@ export default function FunPage() {
     playTone(NOTES.C4, 0.24, { volume: 0.05, type: 'triangle', delay: 0.36 });
   }, [playTone]);
 
+  const stopWind = useCallback(() => {
+    const wind = windNodesRef.current;
+    if (!wind) return;
+    try { wind.source.stop(); } catch {}
+    try { wind.lfo.stop(); } catch {}
+    try { wind.source.disconnect(); } catch {}
+    try { wind.highpass.disconnect(); } catch {}
+    try { wind.lowpass.disconnect(); } catch {}
+    try { wind.gain.disconnect(); } catch {}
+    try { wind.lfo.disconnect(); } catch {}
+    try { wind.lfoGain.disconnect(); } catch {}
+    windNodesRef.current = null;
+  }, []);
+
+  const startWind = useCallback(() => {
+    const ctx = ensureAudioContext();
+    if (!ctx || windNodesRef.current) return;
+
+    if (!windBufferRef.current || windBufferRef.current.sampleRate !== ctx.sampleRate) {
+      windBufferRef.current = createWindNoiseBuffer(ctx, 2.5);
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = windBufferRef.current;
+    source.loop = true;
+
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.setValueAtTime(260, ctx.currentTime);
+    highpass.Q.setValueAtTime(0.6, ctx.currentTime);
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.setValueAtTime(2100, ctx.currentTime);
+    lowpass.Q.setValueAtTime(0.35, ctx.currentTime);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.02, ctx.currentTime + 0.8);
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(0.07, ctx.currentTime);
+
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.setValueAtTime(0.011, ctx.currentTime);
+
+    lfo.connect(lfoGain);
+    lfoGain.connect(gain.gain);
+    source.connect(highpass);
+    highpass.connect(lowpass);
+    lowpass.connect(gain);
+    gain.connect(ctx.destination);
+
+    source.start();
+    lfo.start();
+
+    windNodesRef.current = { source, highpass, lowpass, gain, lfo, lfoGain };
+  }, [ensureAudioContext]);
+
   const stopBgm = useCallback(() => {
     if (bgmIntervalRef.current) {
       window.clearInterval(bgmIntervalRef.current);
       bgmIntervalRef.current = null;
     }
-  }, []);
+    stopWind();
+  }, [stopWind]);
 
   const startBgm = useCallback(() => {
     const ctx = ensureAudioContext();
     if (!ctx || bgmIntervalRef.current) return;
     bgmStepRef.current = 0;
+    startWind();
     const stepMs = 140;
 
     bgmIntervalRef.current = window.setInterval(() => {
       if (!soundEnabledRef.current) return;
-      const i = bgmStepRef.current % MELODY_SEQUENCE.length;
-      const melodyNote = MELODY_SEQUENCE[i];
-      const bassNote = BASS_SEQUENCE[i];
+      const step = bgmStepRef.current;
+      const melodyNote = MELODY_SEQUENCE[step % MELODY_SEQUENCE.length];
+      const bassNote = BASS_SEQUENCE[step % BASS_SEQUENCE.length];
+      const counterNote = COUNTER_SEQUENCE[step % COUNTER_SEQUENCE.length];
       if (melodyNote && melodyNote !== 'R') {
-        playTone(NOTES[melodyNote], 0.13, { type: 'square', volume: 0.032 });
+        playTone(NOTES[melodyNote], 0.13, { type: 'square', volume: 0.034 });
       }
       if (bassNote && bassNote !== 'R') {
-        playTone(NOTES[bassNote], 0.15, { type: 'triangle', volume: 0.022 });
+        playTone(NOTES[bassNote], 0.16, { type: 'triangle', volume: 0.023 });
+      }
+      if (counterNote && counterNote !== 'R' && step % 2 === 0) {
+        playTone(NOTES[counterNote], 0.11, { type: 'triangle', volume: 0.016 });
       }
       bgmStepRef.current += 1;
     }, stepMs);
-  }, [ensureAudioContext, playTone]);
+  }, [ensureAudioContext, playTone, startWind]);
 
   const setControl = useCallback((direction, value) => {
     controlsRef.current[direction] = value;
@@ -953,11 +1057,11 @@ export default function FunPage() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    renderGame(ctx, gameRef.current, gameStatusRef.current);
+    renderGame(ctx, gameRef.current, gameStatusRef.current, spriteSheetRef.current);
   }, []);
 
   const startGame = useCallback(() => {
-    const nextGame = createInitialGame(selectedCharacterRef.current, bestScoreRef.current);
+    const nextGame = createInitialGame(bestScoreRef.current);
     gameRef.current = nextGame;
     scoreRef.current = 0;
     setScore(0);
@@ -993,7 +1097,7 @@ export default function FunPage() {
 
   useEffect(() => {
     drawGame();
-  }, [drawGame, selectedCharacter]);
+  }, [drawGame, spriteVersion]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -1055,7 +1159,7 @@ export default function FunPage() {
             <span className="text-piu-accent">FUN</span> SECTION
           </h1>
           <p className="text-sm text-gray-400 mt-1">
-            City Sky Jump: a vertical jumper with selectable mascot fighters.
+            City Sky Jump: a vertical jumper with one sprite-sheet animated fighter.
           </p>
         </div>
         <Link
@@ -1069,42 +1173,33 @@ export default function FunPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
         <section className="card space-y-4">
           <div>
-            <h2 className="text-base font-display font-bold tracking-wider text-piu-accent mb-2">CHARACTER SELECT</h2>
-            <div className="space-y-3">
-              {CHARACTERS.map((character) => (
-                <button
-                  key={character.id}
-                  type="button"
-                  disabled={gameStatus === 'playing'}
-                  onClick={() => {
-                    setSelectedCharacter(character.id);
-                    if (gameStatusRef.current !== 'playing') {
-                      gameRef.current = createInitialGame(character.id, bestScoreRef.current);
-                      drawGame();
-                    }
-                  }}
-                  className={`w-full text-left rounded-xl border transition-all ${
-                    selectedCharacter === character.id
-                      ? 'border-piu-accent bg-piu-accent/10'
-                      : 'border-piu-border bg-piu-dark/30 hover:border-piu-accent/40'
-                  } ${gameStatus === 'playing' ? 'opacity-70 cursor-not-allowed' : ''}`}
-                >
-                  <div className="flex items-center gap-3 p-3">
-                    <CharacterPreview characterId={character.id} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-display font-bold">{character.name}</p>
-                      <p className="text-xs text-gray-400 mt-1">{character.description}</p>
-                      <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${character.cardClass}`}>
-                        SELECTABLE
-                      </div>
-                    </div>
+            <h2 className="text-base font-display font-bold tracking-wider text-piu-accent mb-2">PLAYABLE CHARACTER</h2>
+            <div className="w-full text-left rounded-xl border border-piu-accent bg-piu-accent/10">
+              <div className="flex items-center gap-3 p-3">
+                <CharacterPreview
+                  spriteSheet={spriteSheetRef.current}
+                  spriteVersion={spriteVersion}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-display font-bold">{PLAYABLE_CHARACTER.name}</p>
+                  <p className="text-xs text-gray-400 mt-1">{PLAYABLE_CHARACTER.description}</p>
+                  <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${PLAYABLE_CHARACTER.cardClass}`}>
+                    ONLY CHARACTER
                   </div>
-                </button>
-              ))}
+                </div>
+              </div>
             </div>
-            {gameStatus === 'playing' && (
-              <p className="text-[11px] text-gray-500 mt-2">Restart the run to switch character.</p>
-            )}
+            <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+              Sprite sheet file:
+              {' '}
+              <span className="font-mono text-gray-400">client/public/fun/characters/cat-sprite-sheet.png</span>
+              {' '}
+              with
+              {' '}
+              <span className="font-mono text-gray-400">4 columns x 6 rows</span>
+              {' '}
+              frames.
+            </p>
           </div>
 
           <div className="border-t border-piu-border/40 pt-4">
@@ -1118,7 +1213,7 @@ export default function FunPage() {
                   : 'bg-gray-700/30 text-gray-300 border border-gray-600/60'
               }`}
             >
-              {soundEnabled ? 'Sound: ON (Jump + 16-bit BGM)' : 'Sound: OFF'}
+              {soundEnabled ? 'Sound: ON (Jump + 16-bit BGM + Wind)' : 'Sound: OFF'}
             </button>
           </div>
 
