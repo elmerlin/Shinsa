@@ -6,7 +6,7 @@ Required file:
 - cat-sprite-sheet.png
 
 Path:
-- client/public/fun/characters/cat-sprite-sheet.png
+- client/public/fun-assets/characters/cat-sprite-sheet.png
 
 Expected layout:
 - 4 columns x 6 rows

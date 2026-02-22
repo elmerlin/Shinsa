@@ -25,7 +25,7 @@ const CHARACTER_STATS = {
 };
 
 const CAT_SPRITE_SHEET = {
-  path: '/fun/characters/cat-sprite-sheet.png',
+  path: '/fun-assets/characters/cat-sprite-sheet.png',
   columns: 4,
   rows: 6,
   scale: 1.74,
@@ -1192,7 +1192,7 @@ export default function FunPage() {
             <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
               Sprite sheet file:
               {' '}
-              <span className="font-mono text-gray-400">client/public/fun/characters/cat-sprite-sheet.png</span>
+              <span className="font-mono text-gray-400">client/public/fun-assets/characters/cat-sprite-sheet.png</span>
               {' '}
               with
               {' '}
