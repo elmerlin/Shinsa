@@ -2288,4 +2288,289 @@ router.post('/import', (req, res) => {
   res.json({ imported: count });
 });
 
+// ─── Song Recommendations ───────────────────────────────────────────────
+
+const RATING_TABLE = {
+  10:  { AA: 100, 'AA+': 100, AAA: 105, 'AAA+': 110, S: 115, 'S+': 120, SS: 126, 'SS+': 132, SSS: 138, 'SSS+': 144 },
+  11:  { AA: 110, 'AA+': 110, AAA: 116, 'AAA+': 121, S: 127, 'S+': 132, SS: 139, 'SS+': 145, SSS: 152, 'SSS+': 158 },
+  12:  { AA: 130, 'AA+': 130, AAA: 137, 'AAA+': 143, S: 150, 'S+': 156, SS: 164, 'SS+': 172, SSS: 179, 'SSS+': 187 },
+  13:  { AA: 160, 'AA+': 160, AAA: 168, 'AAA+': 176, S: 184, 'S+': 192, SS: 202, 'SS+': 211, SSS: 221, 'SSS+': 230 },
+  14:  { AA: 200, 'AA+': 200, AAA: 210, 'AAA+': 220, S: 230, 'S+': 240, SS: 252, 'SS+': 264, SSS: 276, 'SSS+': 288 },
+  15:  { AA: 250, 'AA+': 250, AAA: 263, 'AAA+': 275, S: 288, 'S+': 300, SS: 315, 'SS+': 330, SSS: 345, 'SSS+': 360 },
+  16:  { AA: 310, 'AA+': 310, AAA: 326, 'AAA+': 341, S: 357, 'S+': 372, SS: 391, 'SS+': 409, SSS: 428, 'SSS+': 446 },
+  17:  { AA: 380, 'AA+': 380, AAA: 399, 'AAA+': 418, S: 437, 'S+': 456, SS: 479, 'SS+': 502, SSS: 524, 'SSS+': 547 },
+  18:  { AA: 460, 'AA+': 460, AAA: 483, 'AAA+': 506, S: 529, 'S+': 552, SS: 580, 'SS+': 607, SSS: 635, 'SSS+': 662 },
+  19:  { AA: 550, 'AA+': 550, AAA: 578, 'AAA+': 605, S: 633, 'S+': 660, SS: 693, 'SS+': 726, SSS: 759, 'SSS+': 792 },
+  20:  { AA: 650, 'AA+': 650, AAA: 683, 'AAA+': 715, S: 748, 'S+': 780, SS: 819, 'SS+': 858, SSS: 897, 'SSS+': 936 },
+  21:  { AA: 760, 'AA+': 760, AAA: 798, 'AAA+': 836, S: 874, 'S+': 912, SS: 958, 'SS+': 1003, SSS: 1049, 'SSS+': 1094 },
+  22:  { AA: 880, 'AA+': 880, AAA: 924, 'AAA+': 968, S: 1012, 'S+': 1056, SS: 1109, 'SS+': 1162, SSS: 1214, 'SSS+': 1267 },
+  23:  { AA: 1010, 'AA+': 1010, AAA: 1061, 'AAA+': 1111, S: 1162, 'S+': 1212, SS: 1273, 'SS+': 1333, SSS: 1394, 'SSS+': 1454 },
+  24:  { AA: 1150, 'AA+': 1150, AAA: 1208, 'AAA+': 1265, S: 1323, 'S+': 1380, SS: 1449, 'SS+': 1518, SSS: 1587, 'SSS+': 1656 },
+  25:  { AA: 1300, 'AA+': 1300, AAA: 1365, 'AAA+': 1430, S: 1495, 'S+': 1560, SS: 1638, 'SS+': 1716, SSS: 1794, 'SSS+': 1872 },
+  26:  { AA: 1460, 'AA+': 1460, AAA: 1533, 'AAA+': 1606, S: 1679, 'S+': 1752, SS: 1840, 'SS+': 1927, SSS: 2015, 'SSS+': 2102 },
+  27:  { AA: 1630, 'AA+': 1630, AAA: 1712, 'AAA+': 1793, S: 1875, 'S+': 1956, SS: 2054, 'SS+': 2152, SSS: 2249, 'SSS+': 2347 },
+  28:  { AA: 1810, 'AA+': 1810, AAA: 1901, 'AAA+': 1991, S: 2082, 'S+': 2172, SS: 2281, 'SS+': 2389, SSS: 2498, 'SSS+': 2606 },
+};
+
+const SORTED_LEVELS = Object.keys(RATING_TABLE).map(Number).sort((a, b) => a - b);
+
+function determineUserLevels(avgRating) {
+  let passingLevel = SORTED_LEVELS[0];
+  let scoringLevel = SORTED_LEVELS[0];
+
+  for (const lvl of SORTED_LEVELS) {
+    if (RATING_TABLE[lvl].AA <= avgRating) passingLevel = lvl;
+    if (RATING_TABLE[lvl].SSS <= avgRating) scoringLevel = lvl;
+  }
+
+  return { passingLevel, scoringLevel };
+}
+
+function pickCharts({ candidates, count, bestByChart, aliases, preferUnplayed = true }) {
+  if (candidates.length === 0) return [];
+
+  const unplayed = [];
+  const played = [];
+
+  for (const chart of candidates) {
+    const key = makeChartKey(chart.title, chart.mode, chart.level, aliases);
+    const best = bestByChart.get(key);
+    if (!best) {
+      unplayed.push(chart);
+    } else {
+      played.push({ chart, score: best.score });
+    }
+  }
+
+  // Shuffle unplayed for variety
+  for (let i = unplayed.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [unplayed[i], unplayed[j]] = [unplayed[j], unplayed[i]];
+  }
+
+  // Sort played by lowest score first
+  played.sort((a, b) => a.score - b.score);
+
+  const picked = [];
+  const usedIds = new Set();
+
+  if (preferUnplayed) {
+    for (const chart of unplayed) {
+      if (picked.length >= count) break;
+      if (usedIds.has(chart.chart_id)) continue;
+      usedIds.add(chart.chart_id);
+      picked.push(chart);
+    }
+  }
+
+  for (const { chart } of played) {
+    if (picked.length >= count) break;
+    if (usedIds.has(chart.chart_id)) continue;
+    usedIds.add(chart.chart_id);
+    picked.push(chart);
+  }
+
+  if (!preferUnplayed) {
+    for (const chart of unplayed) {
+      if (picked.length >= count) break;
+      if (usedIds.has(chart.chart_id)) continue;
+      usedIds.add(chart.chart_id);
+      picked.push(chart);
+    }
+  }
+
+  return picked;
+}
+
+function filterChartsBySkills(charts, mustHaveSlugs, avoidSlugs) {
+  return charts.filter((chart) => {
+    const chartSkillSlugs = new Set((chart.skills || []).map((s) => s.slug));
+
+    // If chart has no skills tagged, we can't guarantee it matches - skip it
+    if (mustHaveSlugs.length > 0 && chartSkillSlugs.size === 0) return false;
+
+    // Must have at least one of the required skills
+    if (mustHaveSlugs.length > 0) {
+      const hasAny = mustHaveSlugs.some((slug) => chartSkillSlugs.has(slug));
+      if (!hasAny) return false;
+    }
+
+    // Must NOT have any of the avoided skills
+    for (const slug of avoidSlugs) {
+      if (chartSkillSlugs.has(slug)) return false;
+    }
+
+    return true;
+  });
+}
+
+router.post('/recommendations', optionalAuth, (req, res) => {
+  const userId = String(req.user?.id || '').trim();
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const db = getDb();
+  const aliases = loadSongAliases();
+
+  const {
+    feeling = 'normal',
+    chart_mode = 'both',
+    skills_train = [],
+    skills_avoid = [],
+  } = req.body;
+
+  // Validate inputs
+  const validFeelings = ['ambitious', 'normal', 'lethargic'];
+  const normalizedFeeling = String(feeling).toLowerCase();
+  if (!validFeelings.includes(normalizedFeeling)) {
+    return res.status(400).json({ error: 'Invalid feeling value' });
+  }
+
+  const feelingModifier = normalizedFeeling === 'ambitious' ? 1 : normalizedFeeling === 'lethargic' ? -1 : 0;
+
+  // Get user's pumbility
+  const userRow = db.prepare('SELECT pumbility FROM users WHERE id = ?').get(userId);
+  if (!userRow) return res.status(404).json({ error: 'User not found' });
+
+  const pumbility = parseInt(userRow.pumbility, 10) || 0;
+  const avgRating = pumbility / 50;
+
+  // Determine user levels
+  const { passingLevel, scoringLevel } = determineUserLevels(avgRating);
+
+  // Build chart catalog and user scores
+  const modeFilter = normalizeMode(chart_mode);
+  const allowedModes = modeFilter ? [modeFilter] : ['Single', 'Double'];
+  const songCatalog = getSongCatalog(db, aliases, allowedModes);
+
+  const bestScores = queryUserBestScores(db, userId);
+  const recentScores = queryUserRecentScores(db, userId);
+  const pumbilityScores = queryUserPumbilityScores(db, userId);
+  const { bestByChart } = buildUserBestByChartMap({
+    bestScores,
+    recentScores,
+    pumbilityScores,
+    aliases,
+    validChartKeys: songCatalog.chartsByKey,
+  });
+
+  // Normalize skill inputs
+  const mustHaveSlugs = (Array.isArray(skills_train) ? skills_train : [])
+    .map(normalizeSkillSlug).filter(Boolean);
+  const avoidSlugs = (Array.isArray(skills_avoid) ? skills_avoid : [])
+    .map(normalizeSkillSlug).filter(Boolean);
+
+  // Build level-indexed chart pools
+  const chartsByLevel = new Map();
+  for (const chart of songCatalog.charts) {
+    const lv = chart.level;
+    if (!chartsByLevel.has(lv)) chartsByLevel.set(lv, []);
+    chartsByLevel.get(lv).push(chart);
+  }
+
+  // Apply skill filter
+  const filteredByLevel = new Map();
+  for (const [lv, charts] of chartsByLevel) {
+    const filtered = filterChartsBySkills(charts, mustHaveSlugs, avoidSlugs);
+    if (filtered.length > 0) filteredByLevel.set(lv, filtered);
+  }
+
+  // Helper to get charts at a target level, with fallback to nearby levels
+  const getPoolAtLevel = (targetLevel) => {
+    if (filteredByLevel.has(targetLevel)) return filteredByLevel.get(targetLevel);
+    // Try +/- 1
+    if (filteredByLevel.has(targetLevel - 1)) return filteredByLevel.get(targetLevel - 1);
+    if (filteredByLevel.has(targetLevel + 1)) return filteredByLevel.get(targetLevel + 1);
+    return [];
+  };
+
+  const usedChartIds = new Set();
+
+  const pickFromPool = (targetLevel, count) => {
+    const pool = getPoolAtLevel(targetLevel).filter((c) => !usedChartIds.has(c.chart_id));
+    const picked = pickCharts({ candidates: pool, count, bestByChart, aliases });
+    for (const c of picked) usedChartIds.add(c.chart_id);
+    return picked;
+  };
+
+  const formatChart = (chart) => {
+    const key = makeChartKey(chart.title, chart.mode, chart.level, aliases);
+    const best = bestByChart.get(key);
+    return {
+      chart_id: chart.chart_id,
+      title: chart.title,
+      artist: chart.artist,
+      mode: chart.mode,
+      level: chart.level,
+      jacket_url: chart.jacket_url,
+      bpm: chart.bpm,
+      skills: chart.skills || [],
+      best_score: best ? best.score : null,
+      best_grade: best ? best.grade : '',
+      is_pass: best ? !!best.is_pass : false,
+    };
+  };
+
+  // Apply feeling modifier
+  const adjScoring = scoringLevel + feelingModifier;
+  const adjPassing = passingLevel + feelingModifier;
+
+  // ─── Warm-up (5 songs) ─────────────────────────────────
+  const warmupOffsets = normalizedFeeling === 'lethargic'
+    ? [-3, -2, -1, -1, 0]
+    : normalizedFeeling === 'ambitious'
+      ? [-1, 0, 0, 0, +1]
+      : [-2, -1, 0, 0, +1];
+
+  const warmup = [];
+  for (const offset of warmupOffsets) {
+    const targetLv = adjScoring + offset;
+    const picks = pickFromPool(targetLv, 1);
+    if (picks.length > 0) warmup.push(formatChart(picks[0]));
+  }
+
+  // ─── Scoring songs (5 songs) ─────────────────────────────
+  const scoringOffsets = [0, 0, +1, +1, +2];
+  const scoringSongs = [];
+  for (const offset of scoringOffsets) {
+    const targetLv = adjScoring + offset;
+    const picks = pickFromPool(targetLv, 1);
+    if (picks.length > 0) scoringSongs.push(formatChart(picks[0]));
+  }
+
+  // ─── Passing songs (5 songs) ─────────────────────────────
+  const passingOffsets = [0, 0, +1, +1, +2];
+  const passingSongs = [];
+  for (const offset of passingOffsets) {
+    const targetLv = adjPassing + offset;
+    const pool = getPoolAtLevel(targetLv).filter((c) => !usedChartIds.has(c.chart_id));
+    // For passing, prefer unplayed/unpassed charts
+    const unpassed = pool.filter((c) => {
+      const key = makeChartKey(c.title, c.mode, c.level, aliases);
+      const best = bestByChart.get(key);
+      return !best || !best.is_pass;
+    });
+    const sourcePool = unpassed.length > 0 ? unpassed : pool;
+
+    const picked = pickCharts({ candidates: sourcePool, count: 1, bestByChart, aliases });
+    for (const c of picked) usedChartIds.add(c.chart_id);
+    if (picked.length > 0) passingSongs.push(formatChart(picked[0]));
+  }
+
+  res.json({
+    pumbility,
+    avg_rating: Math.round(avgRating * 100) / 100,
+    scoring_level: scoringLevel,
+    passing_level: passingLevel,
+    adjusted_scoring_level: adjScoring,
+    adjusted_passing_level: adjPassing,
+    feeling: normalizedFeeling,
+    chart_mode: chart_mode,
+    skills_train: mustHaveSlugs,
+    skills_avoid: avoidSlugs,
+    warmup,
+    scoring_songs: scoringSongs,
+    passing_songs: passingSongs,
+  });
+});
+
 module.exports = router;

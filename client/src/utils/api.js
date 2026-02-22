@@ -486,6 +486,9 @@ export async function streamChatbotAsk(message, history, onEvent) {
   }
 }
 
+// Song Recommendations
+export const getSongRecommendations = (data) => request('/songs/recommendations', { method: 'POST', body: JSON.stringify(data) });
+
 // Parser
 export async function parseScorePhoto(file) {
   const formData = new FormData();
