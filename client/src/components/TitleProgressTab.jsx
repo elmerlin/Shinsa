@@ -2468,14 +2468,14 @@ export default function TitleProgressTab({
       const seedC = Math.abs(Math.sin((i + 1) * 17.21));
       clouds.push({
         id: `cloud-${i + 1}`,
-        top: 6 + i * 13 + seed * 4,
-        left: -10 + seedB * 90,
-        width: 90 + seed * 70,
-        height: 24 + seedB * 20,
-        opacity: 0.11 + seedC * 0.14,
-        duration: 28 + seed * 30,
-        delay: -(seedB * 18),
-        drift: (seedC * 24) - 12,
+        top: 5 + i * 13 + seed * 5,
+        left: -12 + seedB * 95,
+        width: 140 + seed * 120,
+        height: 36 + seedB * 28,
+        opacity: 0.25 + seedC * 0.2,
+        duration: 40 + seed * 40,
+        delay: -(seedB * 20),
+        drift: (seedC * 60) - 30,
       });
     }
     return clouds;
@@ -2646,10 +2646,10 @@ export default function TitleProgressTab({
         )}
 
         {/* ── 2D Saga Map ────────────────────────────────────────── */}
-        <div ref={mapCaptureRef} className="mt-4 title-saga-shell relative rounded-xl border-2 border-white/20 overflow-hidden"
+        <div className="mt-4 title-saga-shell relative rounded-xl border-2 border-white/20 overflow-hidden"
           style={{ boxShadow: '0 10px 32px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
           <div id="scroll-wrapper" ref={mapScrollRef} className="title-saga-scroll-wrapper">
-            <div id="map-container" className="title-saga-map-container">
+            <div id="map-container" ref={mapCaptureRef} className="title-saga-map-container">
               <img
                 src={mapImageSrc}
                 alt="Full Map"

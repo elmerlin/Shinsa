@@ -241,11 +241,11 @@
   position: absolute;
   border-radius: 999px;
   background:
-    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.08) 66%, transparent 100%);
-  filter: blur(0.4px);
-  animation: title-cloud-drift var(--cloud-duration, 34s) linear infinite;
+    radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.12) 66%, transparent 100%);
+  filter: blur(1.2px);
+  animation: title-cloud-drift var(--cloud-duration, 34s) ease-in-out infinite;
   animation-delay: var(--cloud-delay, 0s);
-  transform: translateX(-12px);
+  transform: translateX(-30px);
 }
 
 .title-map-cloud::before,
@@ -253,7 +253,7 @@
   content: '';
   position: absolute;
   border-radius: 999px;
-  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.06) 72%, transparent 100%);
+  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.52), rgba(255, 255, 255, 0.1) 72%, transparent 100%);
 }
 
 .title-map-cloud::before {
@@ -272,13 +272,13 @@
 
 @keyframes title-cloud-drift {
   0% {
-    transform: translateX(calc(-16px + var(--cloud-drift-x, 0px)));
+    transform: translateX(calc(-40px + var(--cloud-drift-x, 0px)));
   }
   50% {
-    transform: translateX(calc(8px + var(--cloud-drift-x, 0px)));
+    transform: translateX(calc(40px + var(--cloud-drift-x, 0px)));
   }
   100% {
-    transform: translateX(calc(-16px + var(--cloud-drift-x, 0px)));
+    transform: translateX(calc(-40px + var(--cloud-drift-x, 0px)));
   }
 }
 
