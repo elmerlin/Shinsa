@@ -36,7 +36,7 @@ server {
         text/javascript
         text/plain;
 
-    client_max_body_size 50m;
+    client_max_body_size 25m;
 
     location / {
         proxy_pass http://127.0.0.1:3001;
@@ -53,4 +53,3 @@ server {
     server_name pumpshinsa.com www.pumpshinsa.com;
     return 301 https://$host$request_uri;
 }
-

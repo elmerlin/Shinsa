@@ -238,8 +238,12 @@ export async function createPost(content, imageFiles, youtubeUrl, commentsDisabl
     body: formData,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Failed to create post');
+    const err = await res.json().catch(() => null);
+    if (err?.error) throw new Error(err.error);
+    if (res.status === 413) {
+      throw new Error('Upload too large. Keep each image under 10MB and total upload under 25MB.');
+    }
+    throw new Error(res.statusText || 'Failed to create post');
   }
   return res.json();
 }

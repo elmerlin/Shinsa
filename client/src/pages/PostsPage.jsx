@@ -29,6 +29,13 @@ const SLASH_COMMANDS = {
 const SUMMARY_SESSION_GAP_MS = 90 * 60 * 1000;
 const SUMMARY_KCAL_PER_SONG = 18;
 const SUMMARY_TOP_SONGS = 3;
+const MAX_POST_IMAGES = 9;
+const MAX_POST_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_POST_TOTAL_BYTES = 24 * 1024 * 1024;
+
+function formatMegabytes(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
 
 function getRankLabel(score) {
   const s = parseInt(score, 10) || 0;
@@ -536,8 +543,35 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
   }, []);
 
   const handleImageSelect = (e) => {
-    const files = Array.from(e.target.files).slice(0, 9 - images.length);
-    const newImages = [...images, ...files].slice(0, 9);
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
+
+    const availableSlots = MAX_POST_IMAGES - images.length;
+    if (availableSlots <= 0) {
+      alert(`You can upload up to ${MAX_POST_IMAGES} images per post.`);
+      e.target.value = '';
+      return;
+    }
+
+    const files = selectedFiles.slice(0, availableSlots);
+    if (selectedFiles.length > files.length) {
+      alert(`You can upload up to ${MAX_POST_IMAGES} images per post.`);
+    }
+
+    const oversized = files.filter(file => (file?.size || 0) > MAX_POST_IMAGE_BYTES);
+    if (oversized.length > 0) {
+      alert(`Each image must be ${formatMegabytes(MAX_POST_IMAGE_BYTES)} or smaller.`);
+    }
+
+    const allowedFiles = files.filter(file => (file?.size || 0) <= MAX_POST_IMAGE_BYTES);
+    const newImages = [...images, ...allowedFiles].slice(0, MAX_POST_IMAGES);
+    const totalBytes = newImages.reduce((sum, file) => sum + (file?.size || 0), 0);
+    if (totalBytes > MAX_POST_TOTAL_BYTES) {
+      alert(`Total upload is too large. Keep combined images under ${formatMegabytes(MAX_POST_TOTAL_BYTES)}.`);
+      e.target.value = '';
+      return;
+    }
+
     setImages(newImages);
 
     // Generate previews
@@ -548,6 +582,7 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
     // Clean up old previews
     previews.forEach(p => URL.revokeObjectURL(p));
     setPreviews(newPreviews);
+    e.target.value = '';
   };
 
   const removeImage = (idx) => {
@@ -850,8 +885,8 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
           <button
             onClick={() => fileRef.current?.click()}
             className="w-8 h-8 flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
-            title="Attach images (max 9)"
-            disabled={images.length >= 9}
+            title={`Attach images (max ${MAX_POST_IMAGES}, ${formatMegabytes(MAX_POST_IMAGE_BYTES)} each)`}
+            disabled={images.length >= MAX_POST_IMAGES}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />

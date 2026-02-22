@@ -78,6 +78,18 @@ app.use((req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  if (err?.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Image too large. Maximum file size is 10MB.' });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(413).json({ error: 'Too many images. Maximum is 9 images per post.' });
+    }
+    return res.status(413).json({ error: 'Upload payload is too large.' });
+  }
+  if (err?.type === 'entity.too.large' || err?.status === 413) {
+    return res.status(413).json({ error: 'Request payload is too large.' });
+  }
   console.error(err.stack);
   res.status(500).json({ error: 'Internal server error' });
 });
