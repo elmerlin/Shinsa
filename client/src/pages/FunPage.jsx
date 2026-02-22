@@ -7,8 +7,14 @@ const GAME_WIDTH = 420;
 const GAME_HEIGHT = 700;
 const CAMERA_LINE = 250;
 const FRAME_MS = 1000 / 60;
-const MAX_PLATFORMS = 24;
+const MAX_PLATFORMS = 18;
 const BEST_SCORE_KEY = 'fun_city_jump_best_score_v1';
+const GAME_TITLE = 'TOP CITY JUMP';
+const SCORE_DIFFICULTY_CAP = 100000;
+const DEVIT_UNLOCK_SCORE = 5000;
+const DEVIT_JUMP_LAG = 3;
+const DEVIT_TRAIL_LIMIT = 14000;
+const DEVIT_TOUCH_PADDING = 8;
 
 const PLAYABLE_CHARACTER = {
   id: 'cat',
@@ -38,6 +44,32 @@ const CAT_SPRITE_SHEET = {
   riseFrames: [5, 6, 7],
   apexFrame: 10,
   fallFrames: [8, 9, 10, 11],
+};
+
+const DEVIT_SPRITE_SHEET = {
+  path: '/fun-assets/characters/devit-sprite-sheet.png',
+  scale: 1.65,
+  yOffset: -9,
+  // This sheet is arranged unevenly inside a 4x4 canvas; use explicit trimmed frame rects.
+  frames: [
+    { sx: 677, sy: 43, sw: 192, sh: 286 },
+    { sx: 1161, sy: 45, sw: 189, sh: 284 },
+    { sx: 1647, sy: 28, sw: 193, sh: 288 },
+    { sx: 2125, sy: 27, sw: 196, sh: 289 },
+    { sx: 657, sy: 402, sw: 227, sh: 306 },
+    { sx: 1138, sy: 384, sw: 244, sh: 310 },
+    { sx: 1624, sy: 370, sw: 244, sh: 290 },
+    { sx: 2096, sy: 359, sw: 241, sh: 305 },
+    { sx: 658, sy: 988, sw: 206, sh: 317 },
+    { sx: 1138, sy: 845, sw: 242, sh: 314 },
+    { sx: 1615, sy: 853, sw: 239, sh: 314 },
+    { sx: 2120, sy: 988, sw: 204, sh: 314 },
+  ],
+  moveFrames: [0, 1, 2, 3],
+  riseFrames: [4, 5, 6, 7],
+  fallFrames: [9, 10],
+  idleFrames: [8, 11],
+  apexFrame: 6,
 };
 
 const PREVIEW_LOOP_FRAMES = [12, 13, 14, 15, 0, 1, 2, 3, 5, 6, 7, 10, 9, 8];
@@ -113,6 +145,19 @@ const COUNTER_SEQUENCE = [
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
+const getDifficultyProgress = (score) => clamp((score || 0) / SCORE_DIFFICULTY_CAP, 0, 1);
+
+function entitiesOverlap(a, b, padding = 0) {
+  const leftA = a.x + padding;
+  const rightA = a.x + a.width - padding;
+  const topA = a.y + padding;
+  const bottomA = a.y + a.height - padding;
+  const leftB = b.x + padding;
+  const rightB = b.x + b.width - padding;
+  const topB = b.y + padding;
+  const bottomB = b.y + b.height - padding;
+  return rightA >= leftB && leftA <= rightB && bottomA >= topB && topA <= bottomB;
+}
 
 function hashNoise(index, salt = 0) {
   const x = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
@@ -121,12 +166,7 @@ function hashNoise(index, salt = 0) {
 
 let platformIdCounter = 1;
 
-const SAFE_PATH_MIN_GAP = 52;
-const SAFE_PATH_MAX_GAP_BASE = 78;
-const SAFE_PATH_MAX_GAP_SCORE_BONUS = 20;
 const SAFE_PATH_MARGIN = 10;
-const SAFE_PATH_MAX_SHIFT_BASE = 108;
-const SAFE_PATH_MAX_SHIFT_FLOOR = 72;
 
 function createWindNoiseBuffer(audioContext, durationSeconds = 2.5) {
   const frameCount = Math.floor(audioContext.sampleRate * durationSeconds);
@@ -139,11 +179,11 @@ function createWindNoiseBuffer(audioContext, durationSeconds = 2.5) {
 }
 
 function selectPlatformType(score) {
-  const progress = Math.min(1, score / 6500);
+  const progress = getDifficultyProgress(score);
   const roll = Math.random();
-  if (roll < 0.63 - progress * 0.12) return 'normal';
-  if (roll < 0.82) return 'moving';
-  if (roll < 0.93) return 'break';
+  if (roll < 0.76 - progress * 0.12) return 'normal';
+  if (roll < 0.9) return 'moving';
+  if (roll < 0.96) return 'break';
   return 'boost';
 }
 
@@ -169,22 +209,21 @@ function createPlatform(y, score, options = {}) {
 }
 
 function createSafePathPlatform(previousPlatform, score) {
-  const maxGap = SAFE_PATH_MAX_GAP_BASE + Math.min(SAFE_PATH_MAX_GAP_SCORE_BONUS, score / 500);
-  const gap = randomBetween(SAFE_PATH_MIN_GAP, maxGap);
+  const difficulty = getDifficultyProgress(score);
+  const minGap = 52 + difficulty * 24;
+  const maxGap = 80 + difficulty * 38;
+  const gap = randomBetween(minGap, maxGap);
   const y = previousPlatform.y - gap;
-  const width = randomBetween(88, 126);
+  const width = randomBetween(108 - difficulty * 40, 142 - difficulty * 48);
   const previousCenter = previousPlatform.x + previousPlatform.width * 0.5;
-  const maxShift = clamp(
-    SAFE_PATH_MAX_SHIFT_BASE - (gap - SAFE_PATH_MIN_GAP) * 1.15,
-    SAFE_PATH_MAX_SHIFT_FLOOR,
-    SAFE_PATH_MAX_SHIFT_BASE,
-  );
+  const gapWeight = (gap - minGap) / Math.max(1, maxGap - minGap);
+  const maxShift = clamp((72 + difficulty * 62) - gapWeight * 18, 56, 146);
   const center = clamp(
     previousCenter + randomBetween(-maxShift, maxShift),
     SAFE_PATH_MARGIN + width * 0.5,
     GAME_WIDTH - SAFE_PATH_MARGIN - width * 0.5,
   );
-  const boostChance = Math.min(0.22, 0.06 + score / 12000);
+  const boostChance = 0.04 + difficulty * 0.08;
   const type = Math.random() < boostChance ? 'boost' : 'normal';
 
   return createPlatform(y, score, {
@@ -196,9 +235,9 @@ function createSafePathPlatform(previousPlatform, score) {
 }
 
 function pickCompanionCount(score) {
-  const progress = Math.min(1, score / 9000);
-  const onePlatformChance = 0.56 - progress * 0.06;
-  const twoPlatformChance = 0.90 + progress * 0.02;
+  const progress = getDifficultyProgress(score);
+  const onePlatformChance = 0.58 + progress * 0.2;
+  const twoPlatformChance = 0.94 + progress * 0.03;
   const roll = Math.random();
   if (roll < onePlatformChance) return 0; // total platforms in jump: 1
   if (roll < twoPlatformChance) return 1; // total platforms in jump: 2
@@ -210,12 +249,13 @@ function overlapsHorizontally(a, b, padding = 18) {
 }
 
 function createCompanionPlatform(pathPlatform, score, existingCompanions = []) {
+  const difficulty = getDifficultyProgress(score);
   const pathCenter = pathPlatform.x + pathPlatform.width * 0.5;
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const y = pathPlatform.y + randomBetween(8, 30);
-    const width = randomBetween(68, 108);
+    const y = pathPlatform.y + randomBetween(6, 24 + difficulty * 10);
+    const width = randomBetween(74 - difficulty * 22, 108 - difficulty * 26);
     const direction = Math.random() < 0.5 ? -1 : 1;
-    const offset = randomBetween(72, 170) * direction + randomBetween(-18, 18);
+    const offset = randomBetween(80 + difficulty * 30, 152 + difficulty * 54) * direction + randomBetween(-18, 18);
     const center = clamp(
       pathCenter + offset,
       SAFE_PATH_MARGIN + width * 0.5,
@@ -253,7 +293,7 @@ function fillReachablePlatforms(platforms, score) {
   let topPath = getTopPathPlatform(platforms);
   if (!topPath) return;
 
-  while (topPath.y > -120 && platforms.length < MAX_PLATFORMS) {
+  while (topPath.y > -84 && platforms.length < MAX_PLATFORMS) {
     const nextPath = createSafePathPlatform(topPath, score);
     platforms.push(nextPath);
     topPath = nextPath;
@@ -339,10 +379,36 @@ function createInitialGame(bestScore) {
   }
   fillReachablePlatforms(platforms, 0);
 
+  const devit = {
+    active: false,
+    x: player.x,
+    y: player.y + 140,
+    width: stats.width * 0.96,
+    height: stats.height * 0.98,
+    vx: 0,
+    vy: 0,
+    facing: 1,
+    squash: 0,
+  };
+
+  const initialTrail = [{
+    x: player.x,
+    y: player.y,
+    vx: player.vx,
+    vy: player.vy,
+    facing: player.facing,
+    squash: player.squash,
+    jumpCount: 0,
+  }];
+
   return {
     characterId: PLAYABLE_CHARACTER.id,
     stats,
     player,
+    devit,
+    playerTrail: initialTrail,
+    devitTrailIndex: 0,
+    jumpCount: 0,
     platforms,
     clouds: createClouds(),
     cars: createCars(),
@@ -662,11 +728,14 @@ function drawCatCharacter(ctx, player, time) {
   ctx.restore();
 }
 
-function getSpriteRectFromIndex(sheet, frameIndex) {
-  const frameWidth = Math.floor(sheet.naturalWidth / CAT_SPRITE_SHEET.columns);
-  const frameHeight = Math.floor(sheet.naturalHeight / CAT_SPRITE_SHEET.rows);
-  const col = frameIndex % CAT_SPRITE_SHEET.columns;
-  const row = Math.floor(frameIndex / CAT_SPRITE_SHEET.columns);
+function getSpriteRectFromIndex(sheet, spriteConfig, frameIndex) {
+  if (Array.isArray(spriteConfig.frames) && spriteConfig.frames[frameIndex]) {
+    return spriteConfig.frames[frameIndex];
+  }
+  const frameWidth = Math.floor(sheet.naturalWidth / spriteConfig.columns);
+  const frameHeight = Math.floor(sheet.naturalHeight / spriteConfig.rows);
+  const col = frameIndex % spriteConfig.columns;
+  const row = Math.floor(frameIndex / spriteConfig.columns);
   return {
     sx: col * frameWidth,
     sy: row * frameHeight,
@@ -684,7 +753,16 @@ function selectCatFrameIndex(player, time) {
   return CAT_SPRITE_SHEET.idleFrames[tick % CAT_SPRITE_SHEET.idleFrames.length];
 }
 
-function drawCharacterSprite(ctx, player, time, spriteSheet) {
+function selectDevitFrameIndex(devit, time) {
+  const tick = Math.floor(time / 5);
+  if (devit.vy < -2.8) return DEVIT_SPRITE_SHEET.riseFrames[tick % DEVIT_SPRITE_SHEET.riseFrames.length];
+  if (devit.vy < -0.6) return DEVIT_SPRITE_SHEET.apexFrame;
+  if (devit.vy > 2.4) return DEVIT_SPRITE_SHEET.fallFrames[tick % DEVIT_SPRITE_SHEET.fallFrames.length];
+  if (Math.abs(devit.vx) > 0.45) return DEVIT_SPRITE_SHEET.moveFrames[tick % DEVIT_SPRITE_SHEET.moveFrames.length];
+  return DEVIT_SPRITE_SHEET.idleFrames[tick % DEVIT_SPRITE_SHEET.idleFrames.length];
+}
+
+function drawCharacterSprite(ctx, player, time, spriteSheet, spriteConfig, frameIndex) {
   if (!spriteSheet) return false;
   const centerX = player.x + player.width * 0.5;
   const centerY = player.y + player.height * 0.54;
@@ -692,15 +770,13 @@ function drawCharacterSprite(ctx, player, time, spriteSheet) {
   const squash = clamp(player.squash, 0, 0.45);
   const scaleX = 1 + squash * 0.2;
   const scaleY = 1 - squash * 0.14;
-  const targetHeight = player.height * CAT_SPRITE_SHEET.scale;
-  const ratio = spriteSheet.naturalWidth > 0 && spriteSheet.naturalHeight > 0
-    ? (spriteSheet.naturalWidth / CAT_SPRITE_SHEET.columns) / (spriteSheet.naturalHeight / CAT_SPRITE_SHEET.rows)
-    : 1;
+  const frame = getSpriteRectFromIndex(spriteSheet, spriteConfig, frameIndex);
+  const targetHeight = player.height * (spriteConfig.scale || 1);
+  const ratio = frame.sw / frame.sh;
   const targetWidth = targetHeight * ratio;
-  const frame = getSpriteRectFromIndex(spriteSheet, selectCatFrameIndex(player, time));
 
   ctx.save();
-  ctx.translate(centerX, centerY + bob + CAT_SPRITE_SHEET.yOffset);
+  ctx.translate(centerX, centerY + bob + (spriteConfig.yOffset || 0));
   ctx.scale(player.facing, 1);
   ctx.scale(scaleX, scaleY);
   ctx.imageSmoothingEnabled = false;
@@ -713,14 +789,14 @@ function drawCharacterSprite(ctx, player, time, spriteSheet) {
   return true;
 }
 
-function drawCharacterPreview(ctx, spriteSheet, frameIndex = CAT_SPRITE_SHEET.previewFrame) {
+function drawCharacterPreview(ctx, spriteSheet, spriteConfig, frameIndex = spriteConfig.previewFrame) {
   ctx.clearRect(0, 0, 92, 92);
   ctx.fillStyle = '#f2f8ff';
   drawRoundedRect(ctx, 2, 2, 88, 88, 16);
   ctx.fill();
 
   if (spriteSheet) {
-    const frame = getSpriteRectFromIndex(spriteSheet, frameIndex);
+    const frame = getSpriteRectFromIndex(spriteSheet, spriteConfig, frameIndex);
     const ratio = frame.sw / frame.sh;
     const targetHeight = 61;
     const targetWidth = targetHeight * ratio;
@@ -737,15 +813,34 @@ function drawCharacterPreview(ctx, spriteSheet, frameIndex = CAT_SPRITE_SHEET.pr
   drawCatCharacter(ctx, dummy, 0);
 }
 
-function renderGame(ctx, game, status, spriteSheet) {
+function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet) {
   drawBackground(ctx, game);
 
   for (const platform of game.platforms) {
     drawPlatform(ctx, platform);
   }
 
+  if (game.devit?.active) {
+    drawCharacterShadow(ctx, game.devit);
+    drawCharacterSprite(
+      ctx,
+      game.devit,
+      game.time + 7.5,
+      devitSpriteSheet,
+      DEVIT_SPRITE_SHEET,
+      selectDevitFrameIndex(game.devit, game.time),
+    );
+  }
+
   drawCharacterShadow(ctx, game.player);
-  const usedSprite = drawCharacterSprite(ctx, game.player, game.time, spriteSheet);
+  const usedSprite = drawCharacterSprite(
+    ctx,
+    game.player,
+    game.time,
+    spriteSheet,
+    CAT_SPRITE_SHEET,
+    selectCatFrameIndex(game.player, game.time),
+  );
   if (!usedSprite) {
     drawCatCharacter(ctx, game.player, game.time);
   }
@@ -770,6 +865,17 @@ function renderGame(ctx, game, status, spriteSheet) {
   ctx.font = 'bold 18px sans-serif';
   ctx.fillText(String(game.bestScore), GAME_WIDTH - 120, 48);
 
+  if (game.devit?.active) {
+    ctx.fillStyle = 'rgba(63, 7, 10, 0.72)';
+    drawRoundedRect(ctx, GAME_WIDTH * 0.5 - 76, 12, 152, 30, 10);
+    ctx.fill();
+    ctx.fillStyle = '#ffd3d8';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DEVIT IS CHASING', GAME_WIDTH * 0.5, 32);
+    ctx.textAlign = 'start';
+  }
+
   if (status !== 'playing') {
     ctx.fillStyle = 'rgba(8, 16, 28, 0.56)';
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -785,7 +891,7 @@ function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
     if (!spriteSheet) {
-      drawCharacterPreview(ctx, null);
+      drawCharacterPreview(ctx, null, CAT_SPRITE_SHEET);
       return undefined;
     }
 
@@ -795,7 +901,7 @@ function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
 
     const renderCurrent = () => {
       const frame = PREVIEW_LOOP_FRAMES[frameCursor % PREVIEW_LOOP_FRAMES.length];
-      drawCharacterPreview(ctx, spriteSheet, frame);
+      drawCharacterPreview(ctx, spriteSheet, CAT_SPRITE_SHEET, frame);
     };
 
     renderCurrent();
@@ -831,6 +937,7 @@ export default function FunPage() {
   const [leaderboardError, setLeaderboardError] = useState('');
   const [myLeaderboardSummary, setMyLeaderboardSummary] = useState(null);
   const [showLeaderboardAtStart, setShowLeaderboardAtStart] = useState(false);
+  const [gameOverReason, setGameOverReason] = useState('fall');
 
   const canvasRef = useRef(null);
   const animationRef = useRef(0);
@@ -841,6 +948,7 @@ export default function FunPage() {
   const soundEnabledRef = useRef(soundEnabled);
   const scoreRef = useRef(score);
   const spriteSheetRef = useRef(null);
+  const devitSpriteSheetRef = useRef(null);
   const gameRef = useRef(createInitialGame(bestScore));
 
   const audioContextRef = useRef(null);
@@ -870,15 +978,25 @@ export default function FunPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const image = new Image();
-    image.decoding = 'async';
-    image.onload = () => {
+    const catImage = new Image();
+    catImage.decoding = 'async';
+    catImage.onload = () => {
       if (cancelled) return;
-      spriteSheetRef.current = image;
+      spriteSheetRef.current = catImage;
       setSpriteVersion((v) => v + 1);
     };
-    image.onerror = () => {};
-    image.src = CAT_SPRITE_SHEET.path;
+    catImage.onerror = () => {};
+    catImage.src = CAT_SPRITE_SHEET.path;
+
+    const devitImage = new Image();
+    devitImage.decoding = 'async';
+    devitImage.onload = () => {
+      if (cancelled) return;
+      devitSpriteSheetRef.current = devitImage;
+      setSpriteVersion((v) => v + 1);
+    };
+    devitImage.onerror = () => {};
+    devitImage.src = DEVIT_SPRITE_SHEET.path;
 
     return () => {
       cancelled = true;
@@ -1154,11 +1272,12 @@ export default function FunPage() {
     }
   }, [releaseDirectionalControl]);
 
-  const handleGameOver = useCallback((finalScore) => {
+  const handleGameOver = useCallback((finalScore, reason = 'fall') => {
     pointerStateRef.current.id = null;
     pointerStateRef.current.direction = null;
     pointerStateRef.current.startedAt = 0;
     releaseDirectionalControl();
+    setGameOverReason(reason);
     setShowLeaderboardAtStart(true);
     setGameStatus('gameover');
     stopBgm();
@@ -1174,7 +1293,8 @@ export default function FunPage() {
     const game = gameRef.current;
     if (!game || gameStatusRef.current !== 'playing') return;
 
-    const { player, stats } = game;
+    const { player, stats, devit } = game;
+    const difficulty = getDifficultyProgress(game.score);
     game.time += delta;
     game.bounceFlash *= Math.pow(0.82, delta);
     player.squash *= Math.pow(0.8, delta);
@@ -1232,8 +1352,9 @@ export default function FunPage() {
       for (const platform of game.platforms) {
         if (platform.broken) continue;
         if (oldBottom <= platform.y + 4 && newBottom >= platform.y - 1) {
-          const footLeft = player.x + player.width * 0.2;
-          const footRight = player.x + player.width * 0.8;
+          const footInsetRatio = 0.18 + difficulty * 0.12;
+          const footLeft = player.x + player.width * footInsetRatio;
+          const footRight = player.x + player.width * (1 - footInsetRatio);
           if (footRight >= platform.x && footLeft <= platform.x + platform.width) {
             if (platform.type === 'break') {
               platform.broken = true;
@@ -1247,6 +1368,7 @@ export default function FunPage() {
             player.vy = boostJump ? -12.8 : stats.jumpVelocity;
             player.squash = boostJump ? 0.4 : 0.32;
             game.bounceFlash = boostJump ? 0.95 : 0.52;
+            game.jumpCount += 1;
             playJumpSound(boostJump);
             break;
           }
@@ -1260,6 +1382,9 @@ export default function FunPage() {
       game.distance += shift;
       for (const platform of game.platforms) {
         platform.y += shift;
+      }
+      if (devit.active) {
+        devit.y += shift;
       }
       for (const cloud of game.clouds) {
         cloud.y += shift * 0.17;
@@ -1277,6 +1402,66 @@ export default function FunPage() {
 
     fillReachablePlatforms(game.platforms, game.score);
 
+    // Keep an exact movement trail; Devit replays it with jump-lag.
+    game.playerTrail.push({
+      x: player.x,
+      y: player.y,
+      vx: player.vx,
+      vy: player.vy,
+      facing: player.facing,
+      squash: player.squash,
+      jumpCount: game.jumpCount,
+    });
+    if (game.playerTrail.length > DEVIT_TRAIL_LIMIT) {
+      const removeCount = game.playerTrail.length - DEVIT_TRAIL_LIMIT;
+      game.playerTrail.splice(0, removeCount);
+      game.devitTrailIndex = Math.max(0, game.devitTrailIndex - removeCount);
+    }
+
+    if (!devit.active && game.score >= DEVIT_UNLOCK_SCORE && game.jumpCount >= DEVIT_JUMP_LAG) {
+      devit.active = true;
+      const targetJump = Math.max(0, game.jumpCount - DEVIT_JUMP_LAG);
+      let spawnIndex = game.playerTrail.length - 1;
+      while (spawnIndex > 0 && game.playerTrail[spawnIndex].jumpCount > targetJump) {
+        spawnIndex -= 1;
+      }
+      game.devitTrailIndex = spawnIndex;
+      const snapshot = game.playerTrail[spawnIndex];
+      if (snapshot) {
+        devit.x = snapshot.x;
+        devit.y = snapshot.y;
+        devit.vx = snapshot.vx;
+        devit.vy = snapshot.vy;
+        devit.facing = snapshot.facing;
+        devit.squash = snapshot.squash;
+      }
+    }
+
+    if (devit.active) {
+      const targetJump = Math.max(0, game.jumpCount - DEVIT_JUMP_LAG);
+      while (
+        game.devitTrailIndex + 1 < game.playerTrail.length
+        && game.playerTrail[game.devitTrailIndex + 1].jumpCount <= targetJump
+      ) {
+        game.devitTrailIndex += 1;
+      }
+
+      const snapshot = game.playerTrail[game.devitTrailIndex];
+      if (snapshot) {
+        devit.x = snapshot.x;
+        devit.y = snapshot.y;
+        devit.vx = snapshot.vx;
+        devit.vy = snapshot.vy;
+        devit.facing = snapshot.facing;
+        devit.squash = snapshot.squash;
+      }
+
+      if (entitiesOverlap(player, devit, DEVIT_TOUCH_PADDING)) {
+        handleGameOver(game.score, 'devit');
+        return;
+      }
+    }
+
     const nextScore = Math.max(0, Math.floor(game.distance));
     if (nextScore !== game.score) {
       game.score = nextScore;
@@ -1290,7 +1475,7 @@ export default function FunPage() {
     }
 
     if (player.y > GAME_HEIGHT + 96) {
-      handleGameOver(game.score);
+      handleGameOver(game.score, 'fall');
     }
   }, [handleGameOver, playBreakSound, playJumpSound]);
 
@@ -1299,7 +1484,13 @@ export default function FunPage() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    renderGame(ctx, gameRef.current, gameStatusRef.current, spriteSheetRef.current);
+    renderGame(
+      ctx,
+      gameRef.current,
+      gameStatusRef.current,
+      spriteSheetRef.current,
+      devitSpriteSheetRef.current,
+    );
   }, []);
 
   const startGame = useCallback(() => {
@@ -1313,6 +1504,7 @@ export default function FunPage() {
     setScore(0);
     setLeaderboardError('');
     setShowLeaderboardAtStart(false);
+    setGameOverReason('fall');
     setGameStatus('playing');
     if (soundEnabledRef.current) {
       ensureAudioContext();
@@ -1414,7 +1606,7 @@ export default function FunPage() {
             <span className="text-piu-accent">FUN</span> SECTION
           </h1>
           <p className="text-sm text-gray-400 mt-1">
-            City Sky Jump: a vertical jumper with one sprite-sheet animated fighter.
+            Top City Jump: a vertical jumper with one sprite-sheet animated fighter.
           </p>
         </div>
         <Link
@@ -1427,7 +1619,7 @@ export default function FunPage() {
 
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 className="text-base font-display font-bold tracking-wider text-piu-accent">CITY SKY JUMP</h2>
+          <h2 className="text-base font-display font-bold tracking-wider text-piu-accent">{GAME_TITLE}</h2>
           <div className="text-xs text-gray-400">
             Score: <span className="text-white font-display">{score}</span>
             {'  '}|{'  '}
@@ -1475,7 +1667,7 @@ export default function FunPage() {
             <div className="absolute inset-0 flex items-center justify-center p-4">
               <div className={`w-full ${shouldShowLeaderboard ? 'max-w-[388px]' : 'max-w-[330px]'} rounded-2xl bg-black/58 border border-white/20 backdrop-blur-md p-4 pointer-events-auto`}>
                 <p className="text-center font-display font-bold text-xl text-white mb-3">
-                  {gameStatus === 'gameover' ? 'ROUND OVER' : 'CITY SKY JUMP'}
+                  {gameStatus === 'gameover' ? 'ROUND OVER' : GAME_TITLE}
                 </p>
                 <div className="rounded-xl border border-piu-accent/40 bg-piu-accent/10 p-3">
                   <div className="flex items-center gap-3">
@@ -1515,7 +1707,12 @@ export default function FunPage() {
                   Keyboard fallback: Left/Right or A/D.
                 </p>
                 {gameStatus === 'gameover' && (
-                  <p className="mt-2 text-sm text-piu-gold text-center font-display">Final score: {score}</p>
+                  <>
+                    <p className="mt-2 text-sm text-piu-gold text-center font-display">Final score: {score}</p>
+                    <p className="mt-1 text-[11px] text-rose-200 text-center font-display">
+                      {gameOverReason === 'devit' ? 'Devit caught you.' : 'You fell from the skyline.'}
+                    </p>
+                  </>
                 )}
 
                 {shouldShowLeaderboard && (
