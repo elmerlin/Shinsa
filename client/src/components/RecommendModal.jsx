@@ -294,16 +294,14 @@ export default function RecommendModal({ open, onClose, user }) {
     setCaptureBusy(true);
     try {
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const { default: html2canvas } = await import('html2canvas');
-      const canvas = await html2canvas(captureRef.current, {
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(captureRef.current, {
         backgroundColor: '#071326',
-        scale: 2,
-        useCORS: true,
-        logging: false,
+        pixelRatio: 2,
       });
       const link = document.createElement('a');
       link.download = `session-plan-${Date.now()}.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
     } catch (err) {
       setError(err?.message || 'Failed to create image');
