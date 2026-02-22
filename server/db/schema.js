@@ -1280,6 +1280,19 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_world_max_machine_photos_machine ON world_max_machine_photos(machine_id, created_at);
   `);
 
+  // Fun mini-game scores (registered users only).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fun_scores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      score INTEGER NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_fun_scores_user ON fun_scores(user_id);
+    CREATE INDEX IF NOT EXISTS idx_fun_scores_score ON fun_scores(score DESC);
+    CREATE INDEX IF NOT EXISTS idx_fun_scores_created ON fun_scores(created_at DESC);
+  `);
+
   bootstrapSongsFromJsonIfEmpty();
   ensureCoOpChartsFromJson();
   bootstrapChartTiersFromSnapshotIfEmpty();

@@ -153,6 +153,10 @@ export const getInvitations = () => request('/auth/invitations');
 export const respondInvitation = (id, status) => request(`/auth/invitations/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
 export const sendInvitation = (data) => request('/auth/invite', { method: 'POST', body: JSON.stringify(data) });
 
+// Fun mini-game
+export const getFunLeaderboard = (limit = 10) => request(`/fun/leaderboard?limit=${encodeURIComponent(limit)}`);
+export const submitFunScore = (score) => request('/fun/score', { method: 'POST', body: JSON.stringify({ score }) });
+
 // Online Duels
 export const getOnlineDuels = () => request('/online-duels');
 export const getOnlineDuel = (id) => request(`/online-duels/${id}`);

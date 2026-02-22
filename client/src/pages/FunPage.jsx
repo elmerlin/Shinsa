@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { getFunLeaderboard, submitFunScore } from '../utils/api';
 
 const GAME_WIDTH = 420;
 const GAME_HEIGHT = 700;
@@ -119,6 +121,13 @@ function hashNoise(index, salt = 0) {
 
 let platformIdCounter = 1;
 
+const SAFE_PATH_MIN_GAP = 52;
+const SAFE_PATH_MAX_GAP_BASE = 78;
+const SAFE_PATH_MAX_GAP_SCORE_BONUS = 20;
+const SAFE_PATH_MARGIN = 10;
+const SAFE_PATH_MAX_SHIFT_BASE = 108;
+const SAFE_PATH_MAX_SHIFT_FLOOR = 72;
+
 function createWindNoiseBuffer(audioContext, durationSeconds = 2.5) {
   const frameCount = Math.floor(audioContext.sampleRate * durationSeconds);
   const buffer = audioContext.createBuffer(1, frameCount, audioContext.sampleRate);
@@ -138,19 +147,111 @@ function selectPlatformType(score) {
   return 'boost';
 }
 
-function createPlatform(y, score) {
-  const width = randomBetween(76, 122);
-  const type = selectPlatformType(score);
+function createPlatform(y, score, options = {}) {
+  const width = options.width ?? randomBetween(76, 122);
+  const type = options.type ?? selectPlatformType(score);
+  const x = clamp(
+    options.x ?? randomBetween(8, GAME_WIDTH - width - 8),
+    5,
+    GAME_WIDTH - width - 5,
+  );
   return {
     id: platformIdCounter++,
-    x: randomBetween(8, GAME_WIDTH - width - 8),
+    x,
     y,
     width,
     type,
     velocityX: type === 'moving' ? randomBetween(0.8, 1.7) * (Math.random() < 0.5 ? -1 : 1) : 0,
     broken: false,
     brokenTimer: 0,
+    path: Boolean(options.path),
   };
+}
+
+function createSafePathPlatform(previousPlatform, score) {
+  const maxGap = SAFE_PATH_MAX_GAP_BASE + Math.min(SAFE_PATH_MAX_GAP_SCORE_BONUS, score / 500);
+  const gap = randomBetween(SAFE_PATH_MIN_GAP, maxGap);
+  const y = previousPlatform.y - gap;
+  const width = randomBetween(88, 126);
+  const previousCenter = previousPlatform.x + previousPlatform.width * 0.5;
+  const maxShift = clamp(
+    SAFE_PATH_MAX_SHIFT_BASE - (gap - SAFE_PATH_MIN_GAP) * 1.15,
+    SAFE_PATH_MAX_SHIFT_FLOOR,
+    SAFE_PATH_MAX_SHIFT_BASE,
+  );
+  const center = clamp(
+    previousCenter + randomBetween(-maxShift, maxShift),
+    SAFE_PATH_MARGIN + width * 0.5,
+    GAME_WIDTH - SAFE_PATH_MARGIN - width * 0.5,
+  );
+  const boostChance = Math.min(0.22, 0.06 + score / 12000);
+  const type = Math.random() < boostChance ? 'boost' : 'normal';
+
+  return createPlatform(y, score, {
+    x: center - width * 0.5,
+    width,
+    type,
+    path: true,
+  });
+}
+
+function createSidePlatform(pathPlatform, score) {
+  if (Math.random() > 0.58) return null;
+  const y = pathPlatform.y + randomBetween(18, 52);
+  const width = randomBetween(72, 116);
+  const pathCenter = pathPlatform.x + pathPlatform.width * 0.5;
+  let center = clamp(
+    pathCenter + randomBetween(-176, 176),
+    SAFE_PATH_MARGIN + width * 0.5,
+    GAME_WIDTH - SAFE_PATH_MARGIN - width * 0.5,
+  );
+  if (Math.abs(center - pathCenter) < 56) {
+    const nudge = center < pathCenter ? -64 : 64;
+    center = clamp(
+      center + nudge,
+      SAFE_PATH_MARGIN + width * 0.5,
+      GAME_WIDTH - SAFE_PATH_MARGIN - width * 0.5,
+    );
+  }
+
+  const sidePlatform = createPlatform(y, score, { x: center - width * 0.5, width });
+  if (score < 900 && sidePlatform.type === 'break') {
+    sidePlatform.type = 'normal';
+  }
+  return sidePlatform;
+}
+
+function getTopPathPlatform(platforms) {
+  let topPath = null;
+  for (const platform of platforms) {
+    if (platform.path && (!topPath || platform.y < topPath.y)) {
+      topPath = platform;
+    }
+  }
+  if (topPath) return topPath;
+  let topAny = null;
+  for (const platform of platforms) {
+    if (!topAny || platform.y < topAny.y) {
+      topAny = platform;
+    }
+  }
+  return topAny;
+}
+
+function fillReachablePlatforms(platforms, score) {
+  let topPath = getTopPathPlatform(platforms);
+  if (!topPath) return;
+
+  while (topPath.y > -120 && platforms.length < MAX_PLATFORMS) {
+    const nextPath = createSafePathPlatform(topPath, score);
+    platforms.push(nextPath);
+    topPath = nextPath;
+    if (platforms.length >= MAX_PLATFORMS) break;
+    const side = createSidePlatform(nextPath, score);
+    if (side) {
+      platforms.push(side);
+    }
+  }
 }
 
 function createClouds() {
@@ -210,15 +311,21 @@ function createInitialGame(bestScore) {
     velocityX: 0,
     broken: false,
     brokenTimer: 0,
+    path: true,
   });
 
-  let nextY = GAME_HEIGHT - 92;
-  for (let i = 0; i < 13; i += 1) {
-    nextY -= randomBetween(56, 84);
-    const platform = createPlatform(nextY, 0);
-    if (i < 2) platform.type = 'normal';
-    platforms.push(platform);
+  let topPath = platforms[0];
+  for (let i = 0; i < 12 && platforms.length < MAX_PLATFORMS; i += 1) {
+    const pathPlatform = createSafePathPlatform(topPath, 0);
+    if (i < 2) pathPlatform.type = 'normal';
+    platforms.push(pathPlatform);
+    topPath = pathPlatform;
+    const sidePlatform = createSidePlatform(pathPlatform, 0);
+    if (sidePlatform && platforms.length < MAX_PLATFORMS) {
+      platforms.push(sidePlatform);
+    }
   }
+  fillReachablePlatforms(platforms, 0);
 
   return {
     characterId: PLAYABLE_CHARACTER.id,
@@ -654,24 +761,6 @@ function renderGame(ctx, game, status, spriteSheet) {
   if (status !== 'playing') {
     ctx.fillStyle = 'rgba(8, 16, 28, 0.56)';
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 31px sans-serif';
-    const title = status === 'gameover' ? 'ROUND OVER' : 'CITY SKY JUMP';
-    ctx.fillText(title, GAME_WIDTH * 0.5, GAME_HEIGHT * 0.38);
-
-    ctx.font = '600 16px sans-serif';
-    const subtitle = status === 'gameover'
-      ? `Final score: ${game.score}`
-      : 'Start to launch into the skyline.';
-    ctx.fillText(subtitle, GAME_WIDTH * 0.5, GAME_HEIGHT * 0.43);
-
-    ctx.font = '500 13px sans-serif';
-    ctx.fillStyle = 'rgba(228, 240, 255, 0.92)';
-    ctx.fillText('Use Left/Right or A/D. Wrap around screen edges.', GAME_WIDTH * 0.5, GAME_HEIGHT * 0.48);
-    ctx.fillText('Land on platforms to chain jumps and climb.', GAME_WIDTH * 0.5, GAME_HEIGHT * 0.51);
-    ctx.textAlign = 'start';
   }
 }
 
@@ -716,6 +805,7 @@ function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
 }
 
 export default function FunPage() {
+  const { user } = useAuth();
   const [gameStatus, setGameStatus] = useState('idle');
   const [score, setScore] = useState(0);
   const [spriteVersion, setSpriteVersion] = useState(0);
@@ -724,6 +814,10 @@ export default function FunPage() {
     return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
   });
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState('');
+  const [myLeaderboardSummary, setMyLeaderboardSummary] = useState(null);
 
   const canvasRef = useRef(null);
   const animationRef = useRef(0);
@@ -741,6 +835,9 @@ export default function FunPage() {
   const bgmStepRef = useRef(0);
   const windNodesRef = useRef(null);
   const windBufferRef = useRef(null);
+  const pointerStateRef = useRef({ id: null, direction: null, startedAt: 0 });
+  const tapReleaseTimeoutRef = useRef(0);
+  const leaderboardSubmitInFlightRef = useRef(false);
 
   useEffect(() => {
     gameStatusRef.current = gameStatus;
@@ -932,19 +1029,132 @@ export default function FunPage() {
     }, stepMs);
   }, [ensureAudioContext, playTone, startWind]);
 
+  const loadLeaderboard = useCallback(async () => {
+    if (!user?.id) {
+      setLeaderboard([]);
+      setMyLeaderboardSummary(null);
+      setLeaderboardError('');
+      setLeaderboardLoading(false);
+      return;
+    }
+
+    setLeaderboardLoading(true);
+    try {
+      const payload = await getFunLeaderboard(8);
+      setLeaderboard(Array.isArray(payload?.leaderboard) ? payload.leaderboard : []);
+      setMyLeaderboardSummary(payload?.me || null);
+      setLeaderboardError('');
+    } catch (error) {
+      setLeaderboardError(error?.message || 'Failed to load high scores');
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, [user?.id]);
+
+  const submitLeaderboardScore = useCallback(async (finalScore) => {
+    if (!user?.id || finalScore <= 0 || leaderboardSubmitInFlightRef.current) return;
+    leaderboardSubmitInFlightRef.current = true;
+    try {
+      const payload = await submitFunScore(finalScore);
+      if (payload) {
+        setMyLeaderboardSummary({
+          best_score: payload.best_score || finalScore,
+          run_count: payload.run_count || 0,
+          rank: payload.rank || null,
+        });
+      }
+      await loadLeaderboard();
+    } catch {}
+    leaderboardSubmitInFlightRef.current = false;
+  }, [loadLeaderboard, user?.id]);
+
   const setControl = useCallback((direction, value) => {
     controlsRef.current[direction] = value;
   }, []);
 
+  const clearTapReleaseTimeout = useCallback(() => {
+    if (tapReleaseTimeoutRef.current) {
+      window.clearTimeout(tapReleaseTimeoutRef.current);
+      tapReleaseTimeoutRef.current = 0;
+    }
+  }, []);
+
+  const applyDirectionalControl = useCallback((direction) => {
+    setControl('left', direction === 'left');
+    setControl('right', direction === 'right');
+    pointerStateRef.current.direction = direction;
+  }, [setControl]);
+
+  const releaseDirectionalControl = useCallback((delayMs = 0) => {
+    clearTapReleaseTimeout();
+    if (delayMs > 0) {
+      tapReleaseTimeoutRef.current = window.setTimeout(() => {
+        setControl('left', false);
+        setControl('right', false);
+        tapReleaseTimeoutRef.current = 0;
+      }, delayMs);
+      return;
+    }
+    setControl('left', false);
+    setControl('right', false);
+  }, [clearTapReleaseTimeout, setControl]);
+
+  const getPointerDirection = useCallback((event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relativeX = event.clientX - rect.left;
+    return relativeX < rect.width * 0.5 ? 'left' : 'right';
+  }, []);
+
+  const handleGameAreaPointerDown = useCallback((event) => {
+    if (gameStatusRef.current !== 'playing') return;
+    clearTapReleaseTimeout();
+    const direction = getPointerDirection(event);
+    applyDirectionalControl(direction);
+    pointerStateRef.current.id = event.pointerId;
+    pointerStateRef.current.startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (event.currentTarget.setPointerCapture) {
+      try { event.currentTarget.setPointerCapture(event.pointerId); } catch {}
+    }
+    event.preventDefault();
+  }, [applyDirectionalControl, clearTapReleaseTimeout, getPointerDirection]);
+
+  const handleGameAreaPointerMove = useCallback((event) => {
+    if (gameStatusRef.current !== 'playing') return;
+    if (pointerStateRef.current.id !== event.pointerId) return;
+    const direction = getPointerDirection(event);
+    if (direction !== pointerStateRef.current.direction) {
+      applyDirectionalControl(direction);
+    }
+  }, [applyDirectionalControl, getPointerDirection]);
+
+  const handleGameAreaPointerRelease = useCallback((event) => {
+    if (pointerStateRef.current.id !== event.pointerId) return;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const heldMs = Math.max(0, now - (pointerStateRef.current.startedAt || now));
+    const graceMs = heldMs < 110 ? 120 : 0;
+    pointerStateRef.current.id = null;
+    pointerStateRef.current.direction = null;
+    pointerStateRef.current.startedAt = 0;
+    releaseDirectionalControl(graceMs);
+    if (event.currentTarget.releasePointerCapture) {
+      try { event.currentTarget.releasePointerCapture(event.pointerId); } catch {}
+    }
+  }, [releaseDirectionalControl]);
+
   const handleGameOver = useCallback((finalScore) => {
+    pointerStateRef.current.id = null;
+    pointerStateRef.current.direction = null;
+    pointerStateRef.current.startedAt = 0;
+    releaseDirectionalControl();
     setGameStatus('gameover');
     stopBgm();
     playGameOverSound();
+    void submitLeaderboardScore(finalScore);
     if (finalScore > bestScoreRef.current) {
       setBestScore(finalScore);
       window.localStorage.setItem(BEST_SCORE_KEY, String(finalScore));
     }
-  }, [playGameOverSound, stopBgm]);
+  }, [playGameOverSound, releaseDirectionalControl, stopBgm, submitLeaderboardScore]);
 
   const updateGame = useCallback((delta) => {
     const game = gameRef.current;
@@ -1051,17 +1261,7 @@ export default function FunPage() {
       return true;
     });
 
-    let minimumY = Infinity;
-    for (const platform of game.platforms) {
-      if (platform.y < minimumY) minimumY = platform.y;
-    }
-    if (!Number.isFinite(minimumY)) minimumY = GAME_HEIGHT - 32;
-
-    while (minimumY > -120 && game.platforms.length < MAX_PLATFORMS) {
-      const gap = randomBetween(55, 87 + Math.min(34, game.score / 220));
-      minimumY -= gap;
-      game.platforms.push(createPlatform(minimumY, game.score));
-    }
+    fillReachablePlatforms(game.platforms, game.score);
 
     const nextScore = Math.max(0, Math.floor(game.distance));
     if (nextScore !== game.score) {
@@ -1089,16 +1289,21 @@ export default function FunPage() {
   }, []);
 
   const startGame = useCallback(() => {
+    pointerStateRef.current.id = null;
+    pointerStateRef.current.direction = null;
+    pointerStateRef.current.startedAt = 0;
+    releaseDirectionalControl();
     const nextGame = createInitialGame(bestScoreRef.current);
     gameRef.current = nextGame;
     scoreRef.current = 0;
     setScore(0);
+    setLeaderboardError('');
     setGameStatus('playing');
     if (soundEnabledRef.current) {
       ensureAudioContext();
       startBgm();
     }
-  }, [ensureAudioContext, startBgm]);
+  }, [ensureAudioContext, releaseDirectionalControl, startBgm]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1126,6 +1331,10 @@ export default function FunPage() {
   useEffect(() => {
     drawGame();
   }, [drawGame, spriteVersion]);
+
+  useEffect(() => {
+    void loadLeaderboard();
+  }, [loadLeaderboard]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -1163,12 +1372,13 @@ export default function FunPage() {
   }, [setControl, startGame]);
 
   useEffect(() => () => {
+    clearTapReleaseTimeout();
     stopBgm();
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
-  }, [stopBgm]);
+  }, [clearTapReleaseTimeout, stopBgm]);
 
   useEffect(() => {
     if (!soundEnabled) {
@@ -1198,105 +1408,130 @@ export default function FunPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
-        <section className="card space-y-4">
-          <div>
-            <h2 className="text-base font-display font-bold tracking-wider text-piu-accent mb-2">PLAYABLE CHARACTER</h2>
-            <div className="w-full text-left rounded-xl border border-piu-accent bg-piu-accent/10">
-              <div className="flex items-center gap-3 p-3">
-                <CharacterPreview
-                  spriteSheet={spriteSheetRef.current}
-                  spriteVersion={spriteVersion}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-display font-bold">{PLAYABLE_CHARACTER.name}</p>
-                  <p className="text-xs text-gray-400 mt-1">{PLAYABLE_CHARACTER.description}</p>
-                  <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${PLAYABLE_CHARACTER.cardClass}`}>
-                    ONLY CHARACTER
-                  </div>
-                </div>
-              </div>
-            </div>
+      <section className="card">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h2 className="text-base font-display font-bold tracking-wider text-piu-accent">CITY SKY JUMP</h2>
+          <div className="text-xs text-gray-400">
+            Score: <span className="text-white font-display">{score}</span>
+            {'  '}|{'  '}
+            Best: <span className="text-piu-gold font-display">{bestScore}</span>
           </div>
+        </div>
 
-          <div className="border-t border-piu-border/40 pt-4">
-            <h3 className="text-sm font-display font-bold tracking-wider text-piu-accent mb-2">AUDIO</h3>
+        <div className="relative rounded-2xl overflow-hidden border border-piu-border/50 bg-slate-900 max-w-[780px] mx-auto">
+          <canvas
+            ref={canvasRef}
+            width={GAME_WIDTH}
+            height={GAME_HEIGHT}
+            className="w-full h-auto block touch-none"
+            style={{ touchAction: 'none' }}
+            onPointerDown={handleGameAreaPointerDown}
+            onPointerMove={handleGameAreaPointerMove}
+            onPointerUp={handleGameAreaPointerRelease}
+            onPointerCancel={handleGameAreaPointerRelease}
+            onPointerLeave={handleGameAreaPointerRelease}
+          />
+
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-auto">
             <button
               type="button"
               onClick={() => setSoundEnabled((prev) => !prev)}
-              className={`w-full py-2 rounded-lg text-sm font-display font-bold transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold backdrop-blur-sm transition-colors ${
                 soundEnabled
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                  : 'bg-gray-700/30 text-gray-300 border border-gray-600/60'
+                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40'
+                  : 'bg-gray-800/55 text-gray-300 border border-gray-600/60'
               }`}
             >
               {soundEnabled ? 'Audio: ON' : 'Audio: OFF'}
             </button>
           </div>
 
-          <div className="border-t border-piu-border/40 pt-4 space-y-2">
-            <button
-              type="button"
-              onClick={startGame}
-              className="w-full btn-primary text-center"
-            >
-              {gameStatus === 'playing' ? 'Restart Run' : 'Start Run'}
-            </button>
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Controls: <span className="text-gray-200 font-semibold">Left/Right</span> or <span className="text-gray-200 font-semibold">A/D</span>.
-              You auto-jump when landing on platforms.
-            </p>
-            <p className="text-xs text-gray-500">
-              Orange platforms break, blue platforms move, green spring platforms launch high.
-            </p>
+          <div className="absolute top-[62px] right-3 w-[192px] rounded-xl bg-black/45 border border-white/15 backdrop-blur-sm px-3 py-2 text-[11px] text-gray-200 pointer-events-none">
+            <p className="font-display font-bold tracking-wide text-piu-accent text-[11px]">HIGH SCORES</p>
+            {!user && (
+              <p className="mt-1 text-[10px] text-gray-300 leading-snug">
+                Registered users only. Log in to join the table.
+              </p>
+            )}
+            {user && leaderboardLoading && (
+              <p className="mt-1 text-[10px] text-gray-300">Loading...</p>
+            )}
+            {user && !leaderboardLoading && leaderboardError && (
+              <p className="mt-1 text-[10px] text-rose-300 leading-snug">{leaderboardError}</p>
+            )}
+            {user && !leaderboardLoading && !leaderboardError && leaderboard.length === 0 && (
+              <p className="mt-1 text-[10px] text-gray-300">No scores yet.</p>
+            )}
+            {user && !leaderboardLoading && !leaderboardError && leaderboard.length > 0 && (
+              <div className="mt-1 space-y-1">
+                {leaderboard.slice(0, 6).map((entry) => (
+                  <div key={entry.user_id} className="flex items-center justify-between gap-2">
+                    <p className="truncate">
+                      <span className="text-piu-gold font-display mr-1">#{entry.rank}</span>
+                      <span className="text-white">{entry.username}</span>
+                    </p>
+                    <span className="text-piu-accent font-display">{entry.score}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {user && myLeaderboardSummary?.best_score > 0 && (
+              <p className="mt-1 text-[10px] text-emerald-200">
+                You: #{myLeaderboardSummary.rank || '-'} • {myLeaderboardSummary.best_score}
+              </p>
+            )}
           </div>
-        </section>
 
-        <section className="card">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 className="text-base font-display font-bold tracking-wider text-piu-accent">CITY SKY JUMP</h2>
-            <div className="text-xs text-gray-400">
-              Score: <span className="text-white font-display">{score}</span>
-              {'  '}|{'  '}
-              Best: <span className="text-piu-gold font-display">{bestScore}</span>
+          {gameStatus === 'playing' && (
+            <div className="absolute inset-x-0 bottom-4 px-4 pointer-events-none">
+              <div className="mx-auto max-w-[330px] rounded-xl bg-black/35 border border-white/10 py-2 text-center text-[11px] text-gray-200">
+                Tap left half to move left. Tap right half to move right.
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="relative rounded-2xl overflow-hidden border border-piu-border/50 bg-slate-900">
-            <canvas
-              ref={canvasRef}
-              width={GAME_WIDTH}
-              height={GAME_HEIGHT}
-              className="w-full h-auto block"
-            />
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:hidden">
-            <button
-              type="button"
-              className="py-2 rounded-lg bg-piu-dark border border-piu-border font-display text-sm active:scale-95 transition-transform"
-              onTouchStart={() => setControl('left', true)}
-              onTouchEnd={() => setControl('left', false)}
-              onMouseDown={() => setControl('left', true)}
-              onMouseUp={() => setControl('left', false)}
-              onMouseLeave={() => setControl('left', false)}
-            >
-              Move Left
-            </button>
-            <button
-              type="button"
-              className="py-2 rounded-lg bg-piu-dark border border-piu-border font-display text-sm active:scale-95 transition-transform"
-              onTouchStart={() => setControl('right', true)}
-              onTouchEnd={() => setControl('right', false)}
-              onMouseDown={() => setControl('right', true)}
-              onMouseUp={() => setControl('right', false)}
-              onMouseLeave={() => setControl('right', false)}
-            >
-              Move Right
-            </button>
-          </div>
-        </section>
-      </div>
+          {gameStatus !== 'playing' && (
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <div className="w-full max-w-[330px] rounded-2xl bg-black/58 border border-white/20 backdrop-blur-md p-4 pointer-events-auto">
+                <p className="text-center font-display font-bold text-xl text-white mb-3">
+                  {gameStatus === 'gameover' ? 'ROUND OVER' : 'CITY SKY JUMP'}
+                </p>
+                <div className="rounded-xl border border-piu-accent/40 bg-piu-accent/10 p-3">
+                  <div className="flex items-center gap-3">
+                    <CharacterPreview
+                      spriteSheet={spriteSheetRef.current}
+                      spriteVersion={spriteVersion}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-display font-bold text-white">{PLAYABLE_CHARACTER.name}</p>
+                      <p className="text-xs text-gray-300 mt-1">{PLAYABLE_CHARACTER.description}</p>
+                      <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${PLAYABLE_CHARACTER.cardClass}`}>
+                        PLAYABLE
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={startGame}
+                  className="w-full mt-4 btn-primary text-center"
+                >
+                  {gameStatus === 'gameover' ? 'Restart Run' : 'Start Run'}
+                </button>
+                <p className="mt-3 text-[11px] text-gray-200 text-center leading-snug">
+                  Tap left side of the game area to go left, right side to go right.
+                </p>
+                <p className="mt-1 text-[10px] text-gray-400 text-center">
+                  Keyboard fallback: Left/Right or A/D.
+                </p>
+                {gameStatus === 'gameover' && (
+                  <p className="mt-2 text-sm text-piu-gold text-center font-display">Final score: {score}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
