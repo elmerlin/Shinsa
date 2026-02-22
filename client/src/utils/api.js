@@ -169,6 +169,10 @@ export const onlineDuelEndRequest = (id) => request(`/online-duels/${id}/end-req
 export const onlineDuelCancelEnd = (id) => request(`/online-duels/${id}/cancel-end`, { method: 'POST' });
 export const pumpPlayer = (id, player) => request(`/online-duels/${id}/pump`, { method: 'POST', body: JSON.stringify({ player }) });
 export const getMyPump = (id) => request(`/online-duels/${id}/my-pump`);
+export const onlineDuelRematch = (id) => request(`/online-duels/${id}/rematch`, { method: 'POST' });
+export const onlineDuelForfeit = (id) => request(`/online-duels/${id}/forfeit`, { method: 'POST' });
+export const sendSpectateHeartbeat = (id, sessionId) => request(`/online-duels/${id}/spectate`, { method: 'POST', body: JSON.stringify({ session_id: sessionId }) });
+export const getOnlineDuelHistory = (userId) => request(`/online-duels/user/${userId}/history`);
 
 // PIUGame Integration
 export const getPiugameCredentialStatus = () => request('/piugame/credentials/status');

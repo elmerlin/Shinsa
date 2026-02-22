@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -7,6 +7,7 @@ import {
   onlineDuelDraw, onlineDuelAccept, onlineDuelDecline, onlineDuelSubmitScore,
   onlineDuelEndRequest, onlineDuelCancelEnd,
   pumpPlayer, getMyPump,
+  onlineDuelRematch, onlineDuelForfeit, sendSpectateHeartbeat,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -42,6 +43,7 @@ function getRank(score) {
 
 export default function OnlineDuelRoom() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [duel, setDuel] = useState(null);
   const [chat, setChat] = useState([]);
@@ -62,6 +64,13 @@ export default function OnlineDuelRoom() {
   const reactionIdRef = useRef(0);
   const songCardRef = useRef(null);
   const drawAreaRef = useRef(null);
+  const sessionIdRef = useRef(() => {
+    const stored = sessionStorage.getItem('spectate_session');
+    if (stored) return stored;
+    const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem('spectate_session', sid);
+    return sid;
+  });
 
   // Determine current user's role
   const playerSlot = duel && user ? (
@@ -122,6 +131,16 @@ export default function OnlineDuelRoom() {
       getMyPump(id).then(r => setMyPump(r.player)).catch(() => {});
     }
   }, [id, user]);
+
+  // Spectator heartbeat — sends a ping every 10 seconds
+  useEffect(() => {
+    const sid = typeof sessionIdRef.current === 'function' ? sessionIdRef.current() : sessionIdRef.current;
+    sessionIdRef.current = sid;
+    const ping = () => sendSpectateHeartbeat(id, sid).catch(() => {});
+    ping();
+    const interval = setInterval(ping, 10000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   const handlePump = async (player) => {
     if (!user) return;
@@ -211,6 +230,18 @@ export default function OnlineDuelRoom() {
     try { await onlineDuelEndRequest(id); } catch (err) { alert(err.message); }
   };
 
+  const handleForfeit = async () => {
+    if (!confirm('Are you sure you want to forfeit? Your opponent will win the duel.')) return;
+    try { await onlineDuelForfeit(id); } catch (err) { alert(err.message); }
+  };
+
+  const handleRematch = async () => {
+    try {
+      const res = await onlineDuelRematch(id);
+      if (res.id) navigate(`/online-duel/${res.id}`);
+    } catch (err) { alert(err.message); }
+  };
+
   // Compute stats
   const stats = useMemo(() => {
     if (!duel?.songs) return { p1Wins: 0, p2Wins: 0, completed: [] };
@@ -298,9 +329,17 @@ export default function OnlineDuelRoom() {
           <h1 className="font-display font-bold text-xl tracking-wider">{duel.name}</h1>
           <p className="text-xs text-gray-500">{duel.location} {duel.date && `- ${duel.date}`} | Online Duel</p>
         </div>
-        <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : duel.status === 'WAITING' ? 'badge-pending' : 'badge-active'}`}>
-          {duel.status}
-        </span>
+        <div className="flex items-center gap-2">
+          {duel.spectatorCount > 0 && (
+            <span className="text-[10px] text-gray-500 flex items-center gap-1" title={`${duel.spectatorCount} watching`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              {duel.spectatorCount}
+            </span>
+          )}
+          <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : duel.status === 'WAITING' ? 'badge-pending' : 'badge-active'}`}>
+            {duel.status}
+          </span>
+        </div>
       </div>
 
       {/* Scoreboard — VS layout with Pump system */}
@@ -487,10 +526,18 @@ export default function OnlineDuelRoom() {
                       const myDeclined = playerSlot === 'player1' ? currentSong.player1_declined : currentSong.player2_declined;
                       if (myAccepted) return <p className="text-xs text-piu-green font-display">You accepted. Waiting for opponent...</p>;
                       if (myDeclined) return <p className="text-xs text-red-400 font-display">You declined. Waiting for opponent...</p>;
+                      const myDeclineCount = playerSlot === 'player1' ? (duel.p1Declines || 0) : (duel.p2Declines || 0);
+                      const maxDeclines = 3;
+                      const declinesLeft = maxDeclines - myDeclineCount;
                       return (
-                        <div className="flex gap-2">
-                          <button onClick={() => handleAccept(currentSong.id)} className="btn-primary flex-1 text-sm">Accept Song</button>
-                          <button onClick={() => handleDecline(currentSong.id)} className="flex-1 text-sm px-4 py-2 bg-red-500/20 text-red-400 rounded-lg font-display font-bold hover:bg-red-500/30 transition-colors">Decline Song</button>
+                        <div className="space-y-1">
+                          <div className="flex gap-2">
+                            <button onClick={() => handleAccept(currentSong.id)} className="btn-primary flex-1 text-sm">Accept Song</button>
+                            <button onClick={() => handleDecline(currentSong.id)} disabled={declinesLeft <= 0} className={`flex-1 text-sm px-4 py-2 rounded-lg font-display font-bold transition-colors ${declinesLeft <= 0 ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'}`}>
+                              Decline{declinesLeft < maxDeclines ? ` (${declinesLeft} left)` : ''}
+                            </button>
+                          </div>
+                          {declinesLeft <= 0 && <p className="text-[10px] text-red-400">No declines remaining. You must accept.</p>}
                         </div>
                       );
                     })()}
@@ -571,14 +618,17 @@ export default function OnlineDuelRoom() {
                   )
                 )}
 
-                {/* End duel */}
+                {/* End duel / Forfeit */}
                 {isParticipant && (
                   <div className="flex items-center justify-between text-xs">
-                    {(playerSlot === 'player1' ? duel.player1_end_requested : duel.player2_end_requested) ? (
-                      <span className="text-yellow-400 font-display">You requested to end the duel. Waiting for opponent...</span>
-                    ) : (
-                      <button onClick={handleEndRequest} className="text-gray-500 hover:text-red-400 transition-colors font-display">End Duel</button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {(playerSlot === 'player1' ? duel.player1_end_requested : duel.player2_end_requested) ? (
+                        <span className="text-yellow-400 font-display">You requested to end the duel. Waiting for opponent...</span>
+                      ) : (
+                        <button onClick={handleEndRequest} className="text-gray-500 hover:text-red-400 transition-colors font-display">End Duel</button>
+                      )}
+                      <button onClick={handleForfeit} className="text-gray-600 hover:text-red-500 transition-colors font-display">Forfeit</button>
+                    </div>
                     {(playerSlot === 'player1' ? duel.player2_end_requested : duel.player1_end_requested) && (
                       <button onClick={handleEndRequest} className="text-yellow-400 hover:text-yellow-300 font-display font-bold">Opponent wants to end - Confirm?</button>
                     )}
@@ -596,6 +646,9 @@ export default function OnlineDuelRoom() {
                     duel.winner === 'player1' ? `${duel.player1_name} wins!` : `${duel.player2_name} wins!`}
                 </p>
                 <p className="text-gray-400 mt-1">{stats.p1Wins} - {stats.p2Wins}</p>
+                {isParticipant && (
+                  <button onClick={handleRematch} className="btn-primary mt-4 text-sm px-6">Rematch</button>
+                )}
               </div>
             )}
 

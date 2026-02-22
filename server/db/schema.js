@@ -659,6 +659,16 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_duel_pumps ON duel_pumps(duel_id);
     CREATE INDEX IF NOT EXISTS idx_duel_pumps_user ON duel_pumps(duel_id, user_id);
 
+    CREATE TABLE IF NOT EXISTS duel_spectators (
+      duel_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      user_id TEXT DEFAULT '',
+      last_seen TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (duel_id, session_id),
+      FOREIGN KEY (duel_id) REFERENCES online_duels(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_duel_spectators ON duel_spectators(duel_id);
+
     -- PIUGame integration tables
     CREATE TABLE IF NOT EXISTS user_piugame_credentials (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
