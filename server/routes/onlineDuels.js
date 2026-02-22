@@ -105,7 +105,14 @@ router.get('/:id', (req, res) => {
     spectatorCount = db.prepare('SELECT COUNT(DISTINCT session_id) as count FROM duel_spectators WHERE duel_id = ?').get(duel.id).count;
   } catch { /* table may not exist yet */ }
 
-  res.json({ ...normalizeOnlineDuelAvatars(duel, 96), songs, p1Pumps, p2Pumps, p1Declines, p2Declines, spectatorCount });
+  // Prediction counts
+  let predictions = { player1: 0, player2: 0 };
+  try {
+    predictions.player1 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player1'").get(duel.id).c;
+    predictions.player2 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player2'").get(duel.id).c;
+  } catch { /* table may not exist yet */ }
+
+  res.json({ ...normalizeOnlineDuelAvatars(duel, 96), songs, p1Pumps, p2Pumps, p1Declines, p2Declines, spectatorCount, predictions });
 });
 
 // GET /api/online-duels/:id/chat - get chat messages (for polling)
@@ -647,6 +654,39 @@ router.get('/:id/spectators', (req, res) => {
   db.prepare("DELETE FROM duel_spectators WHERE duel_id = ? AND last_seen < datetime('now', '-15 seconds')").run(req.params.id);
   const count = db.prepare('SELECT COUNT(DISTINCT session_id) as count FROM duel_spectators WHERE duel_id = ?').get(req.params.id).count;
   res.json({ spectators: count });
+});
+
+// POST /api/online-duels/:id/predict - predict winner (spectator/user)
+router.post('/:id/predict', requireAuth, (req, res) => {
+  const db = getDb();
+  const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
+  if (!duel) return res.status(404).json({ error: 'Duel not found' });
+
+  const { predicted_winner } = req.body;
+  if (predicted_winner !== 'player1' && predicted_winner !== 'player2') {
+    return res.status(400).json({ error: 'predicted_winner must be player1 or player2' });
+  }
+
+  db.prepare(`
+    INSERT INTO duel_predictions (duel_id, user_id, predicted_winner)
+    VALUES (?, ?, ?)
+    ON CONFLICT(duel_id, user_id) DO UPDATE SET predicted_winner = ?
+  `).run(duel.id, req.user.id, predicted_winner, predicted_winner);
+
+  res.json({ success: true });
+});
+
+// GET /api/online-duels/:id/predictions - get prediction counts + user's pick
+router.get('/:id/predictions', optionalAuth, (req, res) => {
+  const db = getDb();
+  const p1 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player1'").get(req.params.id).c;
+  const p2 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player2'").get(req.params.id).c;
+  let myPick = null;
+  if (req.user) {
+    const row = db.prepare('SELECT predicted_winner FROM duel_predictions WHERE duel_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (row) myPick = row.predicted_winner;
+  }
+  res.json({ player1: p1, player2: p2, myPick });
 });
 
 // Helpers
