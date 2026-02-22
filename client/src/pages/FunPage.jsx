@@ -10,8 +10,8 @@ const BEST_SCORE_KEY = 'fun_city_jump_best_score_v1';
 
 const PLAYABLE_CHARACTER = {
   id: 'cat',
-  name: 'Fighter Cat',
-  description: 'Sprite-sheet animated sky fighter.',
+  name: 'Dojo Cat',
+  description: 'The Dojo Mascot',
   cardClass: 'from-amber-500 to-orange-500',
 };
 
@@ -25,7 +25,7 @@ const CHARACTER_STATS = {
 };
 
 const CAT_SPRITE_SHEET = {
-  path: '/fun-assets/characters/cat-sprite-sheet.png',
+  path: '/fun-assets/dojo-cat.png',
   columns: 4,
   rows: 4,
   scale: 1.74,
@@ -1217,9 +1217,6 @@ export default function FunPage() {
                 </div>
               </div>
             </div>
-            <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
-              Preview loops through the full animation cycle.
-            </p>
           </div>
 
           <div className="border-t border-piu-border/40 pt-4">
@@ -1233,7 +1230,7 @@ export default function FunPage() {
                   : 'bg-gray-700/30 text-gray-300 border border-gray-600/60'
               }`}
             >
-              {soundEnabled ? 'Sound: ON (Jump + 16-bit BGM + Wind)' : 'Sound: OFF'}
+              {soundEnabled ? 'Audio: ON' : 'Audio: OFF'}
             </button>
           </div>
 
