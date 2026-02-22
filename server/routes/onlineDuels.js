@@ -30,6 +30,48 @@ router.get('/', (req, res) => {
   res.json(duels.map(d => normalizeOnlineDuelAvatars(d, 64)));
 });
 
+// GET /api/online-duels/user/:userId/history - get duel history for a user
+router.get('/user/:userId/history', (req, res) => {
+  const db = getDb();
+  const userId = req.params.userId;
+
+  const duels = db.prepare(`
+    SELECT od.*, u1.username as player1_name, u1.avatar as player1_avatar,
+           u2.username as player2_name, u2.avatar as player2_avatar
+    FROM online_duels od
+    LEFT JOIN users u1 ON od.creator_user_id = u1.id
+    LEFT JOIN users u2 ON od.opponent_user_id = u2.id
+    WHERE (od.creator_user_id = ? OR od.opponent_user_id = ?) AND od.status = 'COMPLETED'
+    ORDER BY od.created_at DESC
+    LIMIT 50
+  `).all(userId, userId);
+
+  // Compute stats
+  let wins = 0, losses = 0, draws = 0;
+  const enriched = duels.map(d => {
+    const isPlayer1 = d.creator_user_id === userId;
+    const playerSlot = isPlayer1 ? 'player1' : 'player2';
+    if (d.winner === 'draw') draws++;
+    else if (d.winner === playerSlot) wins++;
+    else losses++;
+
+    // Get song scores for this duel
+    const songs = db.prepare("SELECT winner FROM online_duel_songs WHERE duel_id = ? AND status = 'completed'").all(d.id);
+    const songWins = songs.filter(s => s.winner === playerSlot).length;
+    const songLosses = songs.filter(s => s.winner === (isPlayer1 ? 'player2' : 'player1')).length;
+
+    return {
+      ...normalizeOnlineDuelAvatars(d, 40),
+      user_slot: playerSlot,
+      song_wins: songWins,
+      song_losses: songLosses,
+      total_songs: songs.length,
+    };
+  });
+
+  res.json({ duels: enriched, stats: { wins, losses, draws, total: duels.length } });
+});
+
 // GET /api/online-duels/:id - get full duel state (for polling)
 router.get('/:id', (req, res) => {
   const db = getDb();
@@ -51,7 +93,26 @@ router.get('/:id', (req, res) => {
   const songs = db.prepare('SELECT * FROM online_duel_songs WHERE duel_id = ? ORDER BY played_order ASC').all(duel.id);
   const p1Pumps = db.prepare("SELECT COUNT(*) as count FROM duel_pumps WHERE duel_id = ? AND player = 'player1'").get(duel.id).count;
   const p2Pumps = db.prepare("SELECT COUNT(*) as count FROM duel_pumps WHERE duel_id = ? AND player = 'player2'").get(duel.id).count;
-  res.json({ ...normalizeOnlineDuelAvatars(duel, 96), songs, p1Pumps, p2Pumps });
+
+  // Decline counts
+  const p1Declines = db.prepare("SELECT COUNT(*) as c FROM online_duel_songs WHERE duel_id = ? AND player1_declined = 1").get(duel.id).c;
+  const p2Declines = db.prepare("SELECT COUNT(*) as c FROM online_duel_songs WHERE duel_id = ? AND player2_declined = 1").get(duel.id).c;
+
+  // Spectator count (clean up stale first)
+  let spectatorCount = 0;
+  try {
+    db.prepare("DELETE FROM duel_spectators WHERE duel_id = ? AND last_seen < datetime('now', '-15 seconds')").run(duel.id);
+    spectatorCount = db.prepare('SELECT COUNT(DISTINCT session_id) as count FROM duel_spectators WHERE duel_id = ?').get(duel.id).count;
+  } catch { /* table may not exist yet */ }
+
+  // Prediction counts
+  let predictions = { player1: 0, player2: 0 };
+  try {
+    predictions.player1 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player1'").get(duel.id).c;
+    predictions.player2 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player2'").get(duel.id).c;
+  } catch { /* table may not exist yet */ }
+
+  res.json({ ...normalizeOnlineDuelAvatars(duel, 96), songs, p1Pumps, p2Pumps, p1Declines, p2Declines, spectatorCount, predictions });
 });
 
 // GET /api/online-duels/:id/chat - get chat messages (for polling)
@@ -74,7 +135,7 @@ router.get('/:id/chat', (req, res) => {
 // POST /api/online-duels - create online duel (requires auth)
 router.post('/', requireAuth, (req, res) => {
   const db = getDb();
-  const { name, location, date, time, mode, opponent_user_id } = req.body;
+  const { name, location, date, time, mode, opponent_user_id, best_of } = req.body;
 
   if (!name) return res.status(400).json({ error: 'Duel name is required' });
   if (!opponent_user_id) return res.status(400).json({ error: 'Opponent is required' });
@@ -83,11 +144,14 @@ router.post('/', requireAuth, (req, res) => {
   if (!opponent) return res.status(404).json({ error: 'Opponent not found' });
   if (opponent_user_id === req.user.id) return res.status(400).json({ error: 'Cannot duel yourself' });
 
+  const validBestOf = [0, 3, 5, 7, 9];
+  const bestOfVal = validBestOf.includes(parseInt(best_of)) ? parseInt(best_of) : 0;
+
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO online_duels (id, name, location, date, time, mode, creator_user_id, opponent_user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, name, location || '', date || '', time || '', mode || 'both', req.user.id, opponent_user_id);
+    INSERT INTO online_duels (id, name, location, date, time, mode, creator_user_id, opponent_user_id, best_of)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, name, location || '', date || '', time || '', mode || 'both', req.user.id, opponent_user_id, bestOfVal);
 
   // Create invitation for opponent
   const invId = uuidv4();
@@ -255,6 +319,10 @@ router.post('/:id/accept', requireAuth, (req, res) => {
     const otherName = playerSlot === 'player1' ? duel.opponent_user_id : duel.creator_user_id;
     const otherUser = db.prepare('SELECT username FROM users WHERE id = ?').get(otherName);
     addSystemMessage(db, duel.id, `${otherUser.username} declined the song and forfeits this round! ${user.username} wins!`);
+
+    // Check Best-of-N auto-complete
+    const freshDuel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(duel.id);
+    checkBestOfComplete(db, freshDuel);
   }
 
   res.json({ success: true });
@@ -268,6 +336,16 @@ router.post('/:id/decline', requireAuth, (req, res) => {
 
   const playerSlot = getPlayerSlot(duel, req.user.id);
   if (!playerSlot) return res.status(403).json({ error: 'Not a participant' });
+
+  // Decline limit: max 3 declines per player per duel
+  const MAX_DECLINES = 3;
+  const declineCountCol = playerSlot === 'player1' ? 'player1_declined' : 'player2_declined';
+  const declineCount = db.prepare(
+    `SELECT COUNT(*) as c FROM online_duel_songs WHERE duel_id = ? AND ${declineCountCol} = 1`
+  ).get(duel.id).c;
+  if (declineCount >= MAX_DECLINES) {
+    return res.status(400).json({ error: `You've reached the maximum of ${MAX_DECLINES} declines. You must accept this song.` });
+  }
 
   const { song_id } = req.body;
   const song = db.prepare("SELECT * FROM online_duel_songs WHERE id = ? AND duel_id = ? AND status = 'drawn'").get(song_id, duel.id);
@@ -297,6 +375,10 @@ router.post('/:id/decline', requireAuth, (req, res) => {
     const winnerUserId = winner === 'player1' ? duel.creator_user_id : duel.opponent_user_id;
     const winnerUser = db.prepare('SELECT username FROM users WHERE id = ?').get(winnerUserId);
     addSystemMessage(db, duel.id, `${user.username} declined the song and forfeits this round! ${winnerUser.username} wins!`);
+
+    // Check Best-of-N auto-complete
+    const freshDuel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(duel.id);
+    checkBestOfComplete(db, freshDuel);
   } else {
     // Other hasn't responded yet
     addSystemMessage(db, duel.id, `${user.username} declined the song. Waiting for other player...`);
@@ -361,6 +443,10 @@ router.post('/:id/submit-score', requireAuth, (req, res) => {
       const winnerName = winner === 'player1' ? p1Name : p2Name;
       addSystemMessage(db, duel.id, `${winnerName} wins! ${p1Name}: ${updated.player1_score.toLocaleString()} vs ${p2Name}: ${updated.player2_score.toLocaleString()}`);
     }
+
+    // Check Best-of-N auto-complete
+    const freshDuel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(duel.id);
+    checkBestOfComplete(db, freshDuel);
   }
 
   res.json({ success: true });
@@ -473,6 +559,136 @@ router.get('/:id/my-pump', optionalAuth, (req, res) => {
   res.json({ player: pump ? pump.player : null });
 });
 
+// POST /api/online-duels/:id/rematch - create a rematch from a completed duel
+router.post('/:id/rematch', requireAuth, (req, res) => {
+  const db = getDb();
+  const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
+  if (!duel) return res.status(404).json({ error: 'Duel not found' });
+  if (duel.status !== 'COMPLETED') return res.status(400).json({ error: 'Duel is not completed' });
+
+  const playerSlot = getPlayerSlot(duel, req.user.id);
+  if (!playerSlot) return res.status(403).json({ error: 'Not a participant' });
+
+  // Swap who goes first: loser (or player2 on draw) starts
+  const firstTurn = duel.winner === 'player1' ? 'player2' : 'player1';
+
+  const newId = uuidv4();
+  const rematchName = duel.name.replace(/ \(Rematch(?: \d+)?\)$/, '');
+  const existingRematches = db.prepare(
+    "SELECT COUNT(*) as c FROM online_duels WHERE name LIKE ? AND creator_user_id IN (?, ?) AND opponent_user_id IN (?, ?)"
+  ).get(`${rematchName}%`, duel.creator_user_id, duel.opponent_user_id, duel.creator_user_id, duel.opponent_user_id);
+  const rematchNum = existingRematches.c;
+  const finalName = rematchNum > 0 ? `${rematchName} (Rematch ${rematchNum})` : `${rematchName} (Rematch)`;
+
+  db.prepare(`
+    INSERT INTO online_duels (id, name, location, date, time, mode, creator_user_id, opponent_user_id, status, current_turn, best_of)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
+  `).run(newId, finalName, duel.location, '', '', duel.mode, duel.creator_user_id, duel.opponent_user_id, firstTurn, duel.best_of || 0);
+
+  const p1 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.creator_user_id);
+  const p2 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.opponent_user_id);
+  addSystemMessage(db, newId, `Rematch! ${p1.username} vs ${p2.username}. ${firstTurn === 'player1' ? p1.username : p2.username} draws first. Let's go!`);
+
+  res.status(201).json({ id: newId });
+});
+
+// POST /api/online-duels/:id/forfeit - forfeit/surrender the duel
+router.post('/:id/forfeit', requireAuth, (req, res) => {
+  const db = getDb();
+  const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
+  if (!duel) return res.status(404).json({ error: 'Duel not found' });
+  if (duel.status !== 'ACTIVE') return res.status(400).json({ error: 'Duel is not active' });
+
+  const playerSlot = getPlayerSlot(duel, req.user.id);
+  if (!playerSlot) return res.status(403).json({ error: 'Not a participant' });
+
+  // Cancel any pending song
+  db.prepare("DELETE FROM online_duel_songs WHERE duel_id = ? AND status != 'completed'").run(duel.id);
+
+  // The other player wins
+  const winner = playerSlot === 'player1' ? 'player2' : 'player1';
+  db.prepare('UPDATE online_duels SET status = ?, winner = ? WHERE id = ?').run('COMPLETED', winner, duel.id);
+
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+  const winnerId = winner === 'player1' ? duel.creator_user_id : duel.opponent_user_id;
+  const winnerUser = db.prepare('SELECT username FROM users WHERE id = ?').get(winnerId);
+
+  const songs = db.prepare("SELECT * FROM online_duel_songs WHERE duel_id = ? AND status = 'completed'").all(duel.id);
+  let p1Wins = 0, p2Wins = 0;
+  songs.forEach(s => {
+    if (s.winner === 'player1') p1Wins++;
+    else if (s.winner === 'player2') p2Wins++;
+  });
+
+  addSystemMessage(db, duel.id, `${user.username} forfeited! ${winnerUser.username} wins the duel ${p1Wins}-${p2Wins}!`);
+
+  res.json({ success: true });
+});
+
+// POST /api/online-duels/:id/spectate - register spectator heartbeat
+router.post('/:id/spectate', optionalAuth, (req, res) => {
+  const db = getDb();
+  const duel = db.prepare('SELECT id FROM online_duels WHERE id = ?').get(req.params.id);
+  if (!duel) return res.status(404).json({ error: 'Duel not found' });
+
+  const sessionId = req.body.session_id;
+  if (!sessionId) return res.status(400).json({ error: 'session_id is required' });
+
+  db.prepare(`
+    INSERT INTO duel_spectators (duel_id, session_id, user_id, last_seen)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(duel_id, session_id) DO UPDATE SET last_seen = datetime('now')
+  `).run(duel.id, sessionId, req.user?.id || '');
+
+  // Clean up stale spectators (not seen in 15 seconds)
+  db.prepare("DELETE FROM duel_spectators WHERE duel_id = ? AND last_seen < datetime('now', '-15 seconds')").run(duel.id);
+
+  const count = db.prepare('SELECT COUNT(DISTINCT session_id) as count FROM duel_spectators WHERE duel_id = ?').get(duel.id).count;
+  res.json({ spectators: count });
+});
+
+// GET /api/online-duels/:id/spectators - get spectator count
+router.get('/:id/spectators', (req, res) => {
+  const db = getDb();
+  // Clean up stale spectators
+  db.prepare("DELETE FROM duel_spectators WHERE duel_id = ? AND last_seen < datetime('now', '-15 seconds')").run(req.params.id);
+  const count = db.prepare('SELECT COUNT(DISTINCT session_id) as count FROM duel_spectators WHERE duel_id = ?').get(req.params.id).count;
+  res.json({ spectators: count });
+});
+
+// POST /api/online-duels/:id/predict - predict winner (spectator/user)
+router.post('/:id/predict', requireAuth, (req, res) => {
+  const db = getDb();
+  const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
+  if (!duel) return res.status(404).json({ error: 'Duel not found' });
+
+  const { predicted_winner } = req.body;
+  if (predicted_winner !== 'player1' && predicted_winner !== 'player2') {
+    return res.status(400).json({ error: 'predicted_winner must be player1 or player2' });
+  }
+
+  db.prepare(`
+    INSERT INTO duel_predictions (duel_id, user_id, predicted_winner)
+    VALUES (?, ?, ?)
+    ON CONFLICT(duel_id, user_id) DO UPDATE SET predicted_winner = ?
+  `).run(duel.id, req.user.id, predicted_winner, predicted_winner);
+
+  res.json({ success: true });
+});
+
+// GET /api/online-duels/:id/predictions - get prediction counts + user's pick
+router.get('/:id/predictions', optionalAuth, (req, res) => {
+  const db = getDb();
+  const p1 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player1'").get(req.params.id).c;
+  const p2 = db.prepare("SELECT COUNT(*) as c FROM duel_predictions WHERE duel_id = ? AND predicted_winner = 'player2'").get(req.params.id).c;
+  let myPick = null;
+  if (req.user) {
+    const row = db.prepare('SELECT predicted_winner FROM duel_predictions WHERE duel_id = ? AND user_id = ?').get(req.params.id, req.user.id);
+    if (row) myPick = row.predicted_winner;
+  }
+  res.json({ player1: p1, player2: p2, myPick });
+});
+
 // Helpers
 function getPlayerSlot(duel, userId) {
   if (duel.creator_user_id === userId) return 'player1';
@@ -485,6 +701,32 @@ function addSystemMessage(db, duelId, message) {
     INSERT INTO duel_chat (id, duel_id, user_id, username, message, is_system, is_participant)
     VALUES (?, ?, '', 'System', ?, 1, 0)
   `).run(uuidv4(), duelId, message);
+}
+
+// Check if Best-of-N threshold reached and auto-complete the duel
+function checkBestOfComplete(db, duel) {
+  if (!duel.best_of || duel.best_of <= 0) return false;
+  const majority = Math.ceil(duel.best_of / 2);
+  const songs = db.prepare("SELECT winner FROM online_duel_songs WHERE duel_id = ? AND status = 'completed'").all(duel.id);
+  let p1Wins = 0, p2Wins = 0;
+  songs.forEach(s => {
+    if (s.winner === 'player1') p1Wins++;
+    else if (s.winner === 'player2') p2Wins++;
+  });
+
+  if (p1Wins >= majority || p2Wins >= majority) {
+    let winner = 'draw';
+    if (p1Wins > p2Wins) winner = 'player1';
+    else if (p2Wins > p1Wins) winner = 'player2';
+    db.prepare('UPDATE online_duels SET status = ?, winner = ? WHERE id = ?').run('COMPLETED', winner, duel.id);
+
+    const p1 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.creator_user_id);
+    const p2 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.opponent_user_id);
+    const winnerName = winner === 'player1' ? p1.username : p2.username;
+    addSystemMessage(db, duel.id, `Best of ${duel.best_of} complete! ${winnerName} wins the series ${p1Wins}-${p2Wins}!`);
+    return true;
+  }
+  return false;
 }
 
 module.exports = router;

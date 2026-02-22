@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -7,6 +7,8 @@ import {
   onlineDuelDraw, onlineDuelAccept, onlineDuelDecline, onlineDuelSubmitScore,
   onlineDuelEndRequest, onlineDuelCancelEnd,
   pumpPlayer, getMyPump,
+  onlineDuelRematch, onlineDuelForfeit, sendSpectateHeartbeat,
+  predictDuelWinner, getDuelPredictions, createPost,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -42,6 +44,7 @@ function getRank(score) {
 
 export default function OnlineDuelRoom() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [duel, setDuel] = useState(null);
   const [chat, setChat] = useState([]);
@@ -57,11 +60,20 @@ export default function OnlineDuelRoom() {
   const [pumpFeedback, setPumpFeedback] = useState(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState([]);
+  const [myPrediction, setMyPrediction] = useState(null);
+  const [sharing, setSharing] = useState(false);
   const chatEndRef = useRef(null);
   const lastChatTime = useRef('');
   const reactionIdRef = useRef(0);
   const songCardRef = useRef(null);
   const drawAreaRef = useRef(null);
+  const sessionIdRef = useRef(() => {
+    const stored = sessionStorage.getItem('spectate_session');
+    if (stored) return stored;
+    const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem('spectate_session', sid);
+    return sid;
+  });
 
   // Determine current user's role
   const playerSlot = duel && user ? (
@@ -116,12 +128,23 @@ export default function OnlineDuelRoom() {
     }
   }, [currentSong]);
 
-  // Fetch user's pump choice
+  // Fetch user's pump choice and prediction
   useEffect(() => {
     if (user) {
       getMyPump(id).then(r => setMyPump(r.player)).catch(() => {});
+      getDuelPredictions(id).then(r => setMyPrediction(r.myPick)).catch(() => {});
     }
   }, [id, user]);
+
+  // Spectator heartbeat — sends a ping every 10 seconds
+  useEffect(() => {
+    const sid = typeof sessionIdRef.current === 'function' ? sessionIdRef.current() : sessionIdRef.current;
+    sessionIdRef.current = sid;
+    const ping = () => sendSpectateHeartbeat(id, sid).catch(() => {});
+    ping();
+    const interval = setInterval(ping, 10000);
+    return () => clearInterval(interval);
+  }, [id]);
 
   const handlePump = async (player) => {
     if (!user) return;
@@ -211,6 +234,39 @@ export default function OnlineDuelRoom() {
     try { await onlineDuelEndRequest(id); } catch (err) { alert(err.message); }
   };
 
+  const handleForfeit = async () => {
+    if (!confirm('Are you sure you want to forfeit? Your opponent will win the duel.')) return;
+    try { await onlineDuelForfeit(id); } catch (err) { alert(err.message); }
+  };
+
+  const handleRematch = async () => {
+    try {
+      const res = await onlineDuelRematch(id);
+      if (res.id) navigate(`/online-duel/${res.id}`);
+    } catch (err) { alert(err.message); }
+  };
+
+  const handlePredict = async (player) => {
+    if (!user) return;
+    try {
+      await predictDuelWinner(id, player);
+      setMyPrediction(player);
+      getOnlineDuel(id).then(setDuel).catch(() => {});
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleShareToFeed = async () => {
+    if (!user || !duel || duel.status !== 'COMPLETED') return;
+    setSharing(true);
+    try {
+      const winnerName = duel.winner === 'draw' ? 'Draw' : duel.winner === 'player1' ? duel.player1_name : duel.player2_name;
+      const content = `Online Duel Result: ${duel.player1_name} vs ${duel.player2_name}\n${stats.p1Wins} - ${stats.p2Wins}${duel.best_of ? ` (Best of ${duel.best_of})` : ''}\n${duel.winner === 'draw' ? "It's a draw!" : `${winnerName} wins!`}\n\n${window.location.href}`;
+      await createPost(content);
+      alert('Shared to feed!');
+    } catch (err) { alert(err.message); }
+    finally { setSharing(false); }
+  };
+
   // Compute stats
   const stats = useMemo(() => {
     if (!duel?.songs) return { p1Wins: 0, p2Wins: 0, completed: [] };
@@ -224,7 +280,18 @@ export default function OnlineDuelRoom() {
     const p2Avg = completed.length > 0 ? Math.round(p2TotalScore / completed.length) : 0;
     const p1Best = completed.length > 0 ? Math.max(...completed.map(s => s.player1_score)) : 0;
     const p2Best = completed.length > 0 ? Math.max(...completed.map(s => s.player2_score)) : 0;
-    return { p1Wins, p2Wins, draws, completed, p1Avg, p2Avg, p1Best, p2Best };
+
+    // Current streak
+    let streak = { player: null, count: 0 };
+    for (let i = completed.length - 1; i >= 0; i--) {
+      const w = completed[i].winner;
+      if (w === 'draw') break;
+      if (streak.player === null) { streak.player = w; streak.count = 1; }
+      else if (streak.player === w) streak.count++;
+      else break;
+    }
+
+    return { p1Wins, p2Wins, draws, completed, p1Avg, p2Avg, p1Best, p2Best, streak };
   }, [duel]);
 
   // Chart data: group by level
@@ -295,12 +362,31 @@ export default function OnlineDuelRoom() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="font-display font-bold text-xl tracking-wider">{duel.name}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display font-bold text-xl tracking-wider">{duel.name}</h1>
+            {duel.best_of > 0 && (
+              <span className="badge bg-purple-500/20 border-purple-500/40 text-purple-300 text-[10px]">Bo{duel.best_of}</span>
+            )}
+          </div>
           <p className="text-xs text-gray-500">{duel.location} {duel.date && `- ${duel.date}`} | Online Duel</p>
         </div>
-        <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : duel.status === 'WAITING' ? 'badge-pending' : 'badge-active'}`}>
-          {duel.status}
-        </span>
+        <div className="flex items-center gap-2">
+          {duel.spectatorCount > 0 && (
+            <span className="text-[10px] text-gray-500 flex items-center gap-1" title={`${duel.spectatorCount} watching`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+              {duel.spectatorCount}
+            </span>
+          )}
+          {duel.status === 'ACTIVE' && (
+            <span className="badge bg-red-500/20 border-red-500/50 text-red-400 text-[10px] animate-pulse flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+              LIVE
+            </span>
+          )}
+          <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : duel.status === 'WAITING' ? 'badge-pending' : 'badge-active'}`}>
+            {duel.status}
+          </span>
+        </div>
       </div>
 
       {/* Scoreboard — VS layout with Pump system */}
@@ -439,6 +525,115 @@ export default function OnlineDuelRoom() {
         </div>
       </div>
 
+      {/* Win Probability Bar + Streak + Best-of-N progress */}
+      {stats.completed.length > 0 && (
+        <div className="card mb-4 space-y-2">
+          {/* Win probability bar */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-red-400 font-mono font-bold w-10 text-right">
+              {stats.completed.length > 0 ? Math.round((stats.p1Wins / stats.completed.length) * 100) : 50}%
+            </span>
+            <div className="flex-1 h-2.5 bg-piu-dark rounded-full overflow-hidden flex">
+              <div
+                className="h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500"
+                style={{ width: `${stats.completed.length > 0 ? (stats.p1Wins / stats.completed.length) * 100 : 50}%` }}
+              />
+              {stats.draws > 0 && (
+                <div
+                  className="h-full bg-gray-500 transition-all duration-500"
+                  style={{ width: `${(stats.draws / stats.completed.length) * 100}%` }}
+                />
+              )}
+              <div className="h-full bg-gradient-to-r from-blue-400 to-blue-500 flex-1 transition-all duration-500" />
+            </div>
+            <span className="text-blue-400 font-mono font-bold w-10">
+              {stats.completed.length > 0 ? Math.round((stats.p2Wins / stats.completed.length) * 100) : 50}%
+            </span>
+          </div>
+
+          {/* Best-of-N progress */}
+          {duel.best_of > 0 && (
+            <div className="flex items-center justify-center gap-1 text-[10px] text-gray-400 font-display">
+              <span>Best of {duel.best_of}: first to {Math.ceil(duel.best_of / 2)}</span>
+              <span className="text-red-400 font-bold ml-2">{stats.p1Wins}</span>
+              <span className="text-gray-600">-</span>
+              <span className="text-blue-400 font-bold">{stats.p2Wins}</span>
+            </div>
+          )}
+
+          {/* Streak indicator */}
+          {stats.streak.count >= 2 && (
+            <div className="flex items-center justify-center gap-1 text-[10px] font-display">
+              <span className={stats.streak.player === 'player1' ? 'text-red-400' : 'text-blue-400'}>
+                {stats.streak.player === 'player1' ? duel.player1_name : duel.player2_name}
+              </span>
+              <span className="text-piu-gold font-bold">
+                {stats.streak.count} win streak {Array(Math.min(stats.streak.count, 5)).fill('\u{1F525}').join('')}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Predictions */}
+      {duel.status === 'ACTIVE' && !isParticipant && (
+        <div className="card mb-4">
+          <h3 className="font-display font-bold text-xs text-gray-400 mb-2">Who will win? Predict!</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePredict('player1')}
+              disabled={!user}
+              className={`flex-1 py-2 rounded-lg text-xs font-display font-bold transition-all border-2 ${
+                myPrediction === 'player1'
+                  ? 'border-red-500 bg-red-500/20 text-red-300'
+                  : 'border-piu-border hover:border-red-500/50 text-gray-400'
+              } ${!user ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              {duel.player1_name}
+              {duel.predictions && <span className="ml-1 text-gray-500">({duel.predictions.player1})</span>}
+            </button>
+            <button
+              onClick={() => handlePredict('player2')}
+              disabled={!user}
+              className={`flex-1 py-2 rounded-lg text-xs font-display font-bold transition-all border-2 ${
+                myPrediction === 'player2'
+                  ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                  : 'border-piu-border hover:border-blue-500/50 text-gray-400'
+              } ${!user ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              {duel.player2_name}
+              {duel.predictions && <span className="ml-1 text-gray-500">({duel.predictions.player2})</span>}
+            </button>
+          </div>
+          {!user && <p className="text-[10px] text-gray-600 mt-1">Log in to predict</p>}
+        </div>
+      )}
+
+      {/* Prediction results (when duel is completed) */}
+      {duel.status === 'COMPLETED' && duel.predictions && (duel.predictions.player1 + duel.predictions.player2) > 0 && (
+        <div className="card mb-4">
+          <h3 className="font-display font-bold text-xs text-gray-400 mb-2">Predictions</h3>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-red-400 font-display">{duel.player1_name}: {duel.predictions.player1}</span>
+            <div className="flex-1 h-2 bg-piu-dark rounded-full overflow-hidden flex">
+              {(duel.predictions.player1 + duel.predictions.player2) > 0 && (
+                <>
+                  <div className="h-full bg-red-500" style={{ width: `${(duel.predictions.player1 / (duel.predictions.player1 + duel.predictions.player2)) * 100}%` }} />
+                  <div className="h-full bg-blue-500 flex-1" />
+                </>
+              )}
+            </div>
+            <span className="text-blue-400 font-display">{duel.player2_name}: {duel.predictions.player2}</span>
+          </div>
+          {myPrediction && (
+            <p className="text-[10px] text-gray-500 mt-1">
+              You predicted {myPrediction === 'player1' ? duel.player1_name : duel.player2_name}
+              {myPrediction === duel.winner ? ' - Correct!' : duel.winner === 'draw' ? ' - Draw' : ''}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Join button for opponent */}
       {duel.status === 'WAITING' && user && duel.opponent_user_id === user.id && (
         <div className="card text-center py-6 mb-4">
@@ -487,10 +682,18 @@ export default function OnlineDuelRoom() {
                       const myDeclined = playerSlot === 'player1' ? currentSong.player1_declined : currentSong.player2_declined;
                       if (myAccepted) return <p className="text-xs text-piu-green font-display">You accepted. Waiting for opponent...</p>;
                       if (myDeclined) return <p className="text-xs text-red-400 font-display">You declined. Waiting for opponent...</p>;
+                      const myDeclineCount = playerSlot === 'player1' ? (duel.p1Declines || 0) : (duel.p2Declines || 0);
+                      const maxDeclines = 3;
+                      const declinesLeft = maxDeclines - myDeclineCount;
                       return (
-                        <div className="flex gap-2">
-                          <button onClick={() => handleAccept(currentSong.id)} className="btn-primary flex-1 text-sm">Accept Song</button>
-                          <button onClick={() => handleDecline(currentSong.id)} className="flex-1 text-sm px-4 py-2 bg-red-500/20 text-red-400 rounded-lg font-display font-bold hover:bg-red-500/30 transition-colors">Decline Song</button>
+                        <div className="space-y-1">
+                          <div className="flex gap-2">
+                            <button onClick={() => handleAccept(currentSong.id)} className="btn-primary flex-1 text-sm">Accept Song</button>
+                            <button onClick={() => handleDecline(currentSong.id)} disabled={declinesLeft <= 0} className={`flex-1 text-sm px-4 py-2 rounded-lg font-display font-bold transition-colors ${declinesLeft <= 0 ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'}`}>
+                              Decline{declinesLeft < maxDeclines ? ` (${declinesLeft} left)` : ''}
+                            </button>
+                          </div>
+                          {declinesLeft <= 0 && <p className="text-[10px] text-red-400">No declines remaining. You must accept.</p>}
                         </div>
                       );
                     })()}
@@ -571,14 +774,17 @@ export default function OnlineDuelRoom() {
                   )
                 )}
 
-                {/* End duel */}
+                {/* End duel / Forfeit */}
                 {isParticipant && (
                   <div className="flex items-center justify-between text-xs">
-                    {(playerSlot === 'player1' ? duel.player1_end_requested : duel.player2_end_requested) ? (
-                      <span className="text-yellow-400 font-display">You requested to end the duel. Waiting for opponent...</span>
-                    ) : (
-                      <button onClick={handleEndRequest} className="text-gray-500 hover:text-red-400 transition-colors font-display">End Duel</button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {(playerSlot === 'player1' ? duel.player1_end_requested : duel.player2_end_requested) ? (
+                        <span className="text-yellow-400 font-display">You requested to end the duel. Waiting for opponent...</span>
+                      ) : (
+                        <button onClick={handleEndRequest} className="text-gray-500 hover:text-red-400 transition-colors font-display">End Duel</button>
+                      )}
+                      <button onClick={handleForfeit} className="text-gray-600 hover:text-red-500 transition-colors font-display">Forfeit</button>
+                    </div>
                     {(playerSlot === 'player1' ? duel.player2_end_requested : duel.player1_end_requested) && (
                       <button onClick={handleEndRequest} className="text-yellow-400 hover:text-yellow-300 font-display font-bold">Opponent wants to end - Confirm?</button>
                     )}
@@ -596,6 +802,16 @@ export default function OnlineDuelRoom() {
                     duel.winner === 'player1' ? `${duel.player1_name} wins!` : `${duel.player2_name} wins!`}
                 </p>
                 <p className="text-gray-400 mt-1">{stats.p1Wins} - {stats.p2Wins}</p>
+                <div className="flex items-center justify-center gap-3 mt-4">
+                  {isParticipant && (
+                    <button onClick={handleRematch} className="btn-primary text-sm px-6">Rematch</button>
+                  )}
+                  {user && (
+                    <button onClick={handleShareToFeed} disabled={sharing} className="text-sm px-4 py-2 rounded-lg font-display font-bold bg-piu-card text-gray-300 hover:text-white hover:bg-piu-card/80 transition-colors border border-piu-border disabled:opacity-50">
+                      {sharing ? 'Sharing...' : 'Share to Feed'}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

@@ -1099,6 +1099,23 @@ export default function ProfilePage() {
       }
     }
 
+    for (const { duel, songs } of (stats.onlineDuelStats || [])) {
+      const isP1 = duel.creator_user_id === profileId;
+      for (const s of songs) {
+        if (s.status !== 'completed') continue;
+        const myScore = isP1 ? s.player1_score : s.player2_score;
+        const opponentScore = isP1 ? s.player2_score : s.player1_score;
+        const won = (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2');
+        if (myScore > 0 || opponentScore > 0) {
+          scores.push({
+            title: s.song_title, artist: s.song_artist, mode: s.song_mode, level: s.song_level,
+            jacket: s.song_jacket_url, myScore, opponentScore, won,
+            draw: s.winner === 'draw', source: `Online Duel: ${duel.name}`, date: duel.created_at,
+          });
+        }
+      }
+    }
+
     for (const { tournament, matches } of stats.tournamentPlayers) {
       for (const m of matches) {
         if (m.status !== 'COMPLETED') continue;
@@ -1127,7 +1144,8 @@ export default function ProfilePage() {
   const aggregated = useMemo(() => {
     if (!stats) return null;
     const tournamentCount = stats.tournamentPlayers.length;
-    const duelCount = stats.duelStats.length;
+    const onlineDuelCount = (stats.onlineDuelStats || []).length;
+    const duelCount = stats.duelStats.length + onlineDuelCount;
     let totalWins = 0, totalLosses = 0;
     for (const { tournament } of stats.tournamentPlayers) {
       totalWins += tournament.wins || 0;
@@ -1137,6 +1155,12 @@ export default function ProfilePage() {
     for (const { duel } of stats.duelStats) {
       if (duel.status !== 'COMPLETED') continue;
       const isP1 = duel.player1_user_id === profileId;
+      if ((isP1 && duel.winner === 'player1') || (!isP1 && duel.winner === 'player2')) duelWins++;
+      else if (duel.winner !== 'draw') duelLosses++;
+    }
+    for (const { duel } of (stats.onlineDuelStats || [])) {
+      if (duel.status !== 'COMPLETED') continue;
+      const isP1 = duel.creator_user_id === profileId;
       if ((isP1 && duel.winner === 'player1') || (!isP1 && duel.winner === 'player2')) duelWins++;
       else if (duel.winner !== 'draw') duelLosses++;
     }
@@ -2033,30 +2057,57 @@ export default function ProfilePage() {
             <div className="space-y-3">
               {!stats ? (
                 <p className="text-center text-gray-500 py-8">Loading competition history...</p>
-              ) : stats.duelStats.length === 0 ? (
+              ) : (stats.duelStats.length === 0 && (stats.onlineDuelStats || []).length === 0) ? (
                 <p className="text-center text-gray-500 py-8">No duel participation yet</p>
               ) : (
-                stats.duelStats.map(({ duel, songs }) => {
-                  const isP1 = duel.player1_user_id === profileId;
-                  const opponentName = isP1 ? duel.player2_name : duel.player1_name;
-                  const myWins = songs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
-                  const oppWins = songs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
-                  return (
-                    <Link key={duel.id} to={`/duel/${duel.id}`} className="card-hover flex items-center justify-between group">
-                      <div>
-                        <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
-                          {duel.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          vs {opponentName} - {myWins}W {oppWins}L ({songs.length} songs)
-                        </p>
-                      </div>
-                      <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
-                        {duel.status === 'COMPLETED' ? 'Completed' : 'Active'}
-                      </span>
-                    </Link>
-                  );
-                })
+                <>
+                  {/* Online Duels */}
+                  {(stats.onlineDuelStats || []).map(({ duel, songs }) => {
+                    const isP1 = duel.creator_user_id === profileId;
+                    const opponentName = isP1 ? duel.opponent_username : duel.creator_username;
+                    const completedSongs = songs.filter(s => s.status === 'completed');
+                    const myWins = completedSongs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
+                    const oppWins = completedSongs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
+                    return (
+                      <Link key={duel.id} to={`/online-duel/${duel.id}`} className="card-hover flex items-center justify-between group">
+                        <div>
+                          <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
+                            {duel.name}
+                            <span className="text-[10px] text-piu-accent ml-1.5 font-normal">ONLINE</span>
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            vs {opponentName} - {myWins}W {oppWins}L ({completedSongs.length} songs)
+                          </p>
+                        </div>
+                        <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : duel.status === 'WAITING' ? 'badge-pending' : 'badge-active'}`}>
+                          {duel.status === 'COMPLETED' ? 'Completed' : duel.status === 'WAITING' ? 'Waiting' : 'Active'}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                  {/* Offline Duels */}
+                  {stats.duelStats.map(({ duel, songs }) => {
+                    const isP1 = duel.player1_user_id === profileId;
+                    const opponentName = isP1 ? duel.player2_name : duel.player1_name;
+                    const myWins = songs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
+                    const oppWins = songs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
+                    return (
+                      <Link key={duel.id} to={`/duel/${duel.id}`} className="card-hover flex items-center justify-between group">
+                        <div>
+                          <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
+                            {duel.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            vs {opponentName} - {myWins}W {oppWins}L ({songs.length} songs)
+                          </p>
+                        </div>
+                        <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
+                          {duel.status === 'COMPLETED' ? 'Completed' : 'Active'}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </>
               )}
             </div>
           )}

@@ -11,6 +11,14 @@ const MODE_OPTIONS = [
   { value: 'doubles', label: 'Doubles', desc: 'Doubles only' },
 ];
 
+const BEST_OF_OPTIONS = [
+  { value: 0, label: 'Unlimited', desc: 'No limit' },
+  { value: 3, label: 'Bo3', desc: 'Best of 3' },
+  { value: 5, label: 'Bo5', desc: 'Best of 5' },
+  { value: 7, label: 'Bo7', desc: 'Best of 7' },
+  { value: 9, label: 'Bo9', desc: 'Best of 9' },
+];
+
 export default function OnlineDuelSetup() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -20,6 +28,7 @@ export default function OnlineDuelSetup() {
     date: now.toISOString().split('T')[0],
     time: now.toTimeString().slice(0, 5),
     mode: 'both',
+    best_of: 0,
   });
   const [opponent, setOpponent] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -105,6 +114,22 @@ export default function OnlineDuelSetup() {
         </div>
 
         <div className="card space-y-4">
+          <h2 className="font-display font-bold text-lg text-piu-accent">Format</h2>
+          <div className="flex flex-wrap gap-2">
+            {BEST_OF_OPTIONS.map(opt => (
+              <button key={opt.value} type="button" onClick={() => setForm(f => ({ ...f, best_of: opt.value }))}
+                className={`px-4 py-2 rounded-lg border-2 transition-all text-center ${form.best_of === opt.value ? 'border-piu-accent bg-piu-accent/10' : 'border-piu-border hover:border-piu-accent/50'}`}>
+                <div className="font-display font-bold text-sm">{opt.label}</div>
+                <div className="text-[10px] text-gray-500">{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+          {form.best_of > 0 && (
+            <p className="text-xs text-gray-400">First to {Math.ceil(form.best_of / 2)} wins takes the series.</p>
+          )}
+        </div>
+
+        <div className="card space-y-4">
           <h2 className="font-display font-bold text-lg text-piu-accent">Players</h2>
 
           {/* VS Preview */}
@@ -176,7 +201,7 @@ export default function OnlineDuelSetup() {
             <li>Players take turns choosing mode + level, a song is drawn</li>
             <li>Both players accept, then play the song on their own machine</li>
             <li>Upload a photo of your result screen to submit your score</li>
-            <li>The duel ends when both players agree to end it</li>
+            <li>The duel ends when both players agree, or auto-ends in Best-of-N format</li>
           </ul>
         </div>
 
