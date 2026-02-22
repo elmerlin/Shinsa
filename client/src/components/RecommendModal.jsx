@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { getSongRecommendations } from '../utils/api';
+import { getSongRecommendations, savePostDraft } from '../utils/api';
+import { serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 
 const ALL_SKILLS = [
   { slug: 'jump', name: 'jump' },
@@ -180,6 +181,11 @@ export default function RecommendModal({ open, onClose, user }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState(null);
+  const [generatedAt, setGeneratedAt] = useState(null);
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const captureRef = useRef(null);
 
   const totalSteps = 5; // feeling, mode, skills train, skills avoid, results
 
@@ -211,6 +217,8 @@ export default function RecommendModal({ open, onClose, user }) {
         skills_avoid: skillsAvoid,
       });
       setResults(data);
+      setGeneratedAt(new Date());
+      setDraftSaved(false);
       setStep(4);
     } catch (err) {
       setError(err.message || 'Failed to generate recommendations');
@@ -243,7 +251,76 @@ export default function RecommendModal({ open, onClose, user }) {
     setSkillsTrain([]);
     setSkillsAvoid([]);
     setResults(null);
+    setGeneratedAt(null);
+    setDraftSaved(false);
     setError('');
+  };
+
+  const formatDateTime = (date) => {
+    if (!date) return '';
+    return date.toLocaleDateString(undefined, {
+      weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const buildDraftContent = () => {
+    if (!results) return '';
+    const pickFields = (s) => ({
+      title: s.title, mode: s.mode, level: s.level,
+      jacket_url: s.jacket_url, best_score: s.best_score, best_grade: s.best_grade,
+    });
+    const marker = serializeSessionPlanMarker({
+      generatedAt: generatedAt ? generatedAt.toISOString() : new Date().toISOString(),
+      feeling: results.feeling,
+      chartMode: results.chart_mode,
+      pumbility: results.pumbility,
+      avgRating: results.avg_rating,
+      scoringLevel: results.scoring_level,
+      passingLevel: results.passing_level,
+      adjustedScoringLevel: results.adjusted_scoring_level,
+      adjustedPassingLevel: results.adjusted_passing_level,
+      skillsTrain: results.skills_train,
+      skillsAvoid: results.skills_avoid,
+      activation: (results.activation || []).map(pickFields),
+      scoring: (results.scoring_songs || []).map(pickFields),
+      passing: (results.passing_songs || []).map(pickFields),
+    });
+    return marker;
+  };
+
+  const handleDownloadImage = async () => {
+    if (!captureRef.current || captureBusy) return;
+    setCaptureBusy(true);
+    try {
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(captureRef.current, {
+        backgroundColor: '#071326',
+        pixelRatio: 2,
+      });
+      const link = document.createElement('a');
+      link.download = `session-plan-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      setError(err?.message || 'Failed to create image');
+    } finally {
+      setCaptureBusy(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (savingDraft || draftSaved) return;
+    setSavingDraft(true);
+    try {
+      await savePostDraft({ content: buildDraftContent() });
+      setDraftSaved(true);
+    } catch (err) {
+      setError(err?.message || 'Failed to save draft');
+    } finally {
+      setSavingDraft(false);
+    }
   };
 
   if (!open) return null;
@@ -252,9 +329,9 @@ export default function RecommendModal({ open, onClose, user }) {
   const modeLabel = MODES.find((m) => m.value === chartMode);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 pb-20 sm:pb-4 overflow-y-auto" onClick={onClose}>
       <div
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-piu-border/60 bg-gradient-to-br from-[#0b1324] via-[#0f1d36] to-[#0b1324] shadow-2xl"
+        className="w-full max-w-lg rounded-2xl border border-piu-border/60 bg-gradient-to-br from-[#0b1324] via-[#0f1d36] to-[#0b1324] shadow-2xl my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -389,7 +466,12 @@ export default function RecommendModal({ open, onClose, user }) {
 
           {/* Step 4: Results */}
           {step === 4 && results && (
-            <div className="space-y-4">
+            <div className="space-y-4" ref={captureRef}>
+              {/* Date/time */}
+              {generatedAt && (
+                <p className="text-[10px] text-gray-500 font-display text-right">{formatDateTime(generatedAt)}</p>
+              )}
+
               {/* Summary header */}
               <div className="rounded-xl border border-piu-border/40 bg-piu-dark/30 p-3 space-y-2.5">
                 <div className="grid grid-cols-2 gap-2">
@@ -476,11 +558,11 @@ export default function RecommendModal({ open, onClose, user }) {
                 )}
               </div>
 
-              {/* Warmup songs */}
+              {/* Activation songs */}
               <SongSection
-                title="Warm-up"
-                subtitle="Ease into your session with these charts"
-                songs={results.warmup}
+                title="Activation"
+                subtitle="Get your body moving with these charts"
+                songs={results.activation}
                 borderColor="border-amber-400/30"
                 bgGradient="from-amber-500/10"
               />
@@ -522,38 +604,73 @@ export default function RecommendModal({ open, onClose, user }) {
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 rounded-b-2xl border-t border-piu-border/40 bg-[#0b1324]/95 backdrop-blur-sm px-4 py-3 flex items-center justify-between gap-2">
-          {step > 0 && !loading ? (
-            <button
-              type="button"
-              onClick={handleBack}
-              className="px-4 py-2 rounded-xl border border-piu-border/40 bg-piu-dark/30 text-gray-300 text-sm font-display font-bold hover:bg-piu-dark/60 transition-colors"
-            >
-              Back
-            </button>
-          ) : (
-            <div />
+        <div className="rounded-b-2xl border-t border-piu-border/40 bg-[#0b1324]/95 backdrop-blur-sm px-4 py-3 space-y-2">
+          {/* Action buttons row (results only) */}
+          {step === 4 && results && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadImage}
+                disabled={captureBusy}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-piu-border/40 bg-piu-dark/30 text-gray-300 text-xs font-display font-bold hover:bg-piu-dark/60 transition-colors disabled:opacity-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                {captureBusy ? 'Saving...' : 'Download'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={savingDraft || draftSaved}
+                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-display font-bold transition-colors disabled:opacity-50 ${
+                  draftSaved
+                    ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300'
+                    : 'border-piu-border/40 bg-piu-dark/30 text-gray-300 hover:bg-piu-dark/60'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                {draftSaved ? 'Saved!' : savingDraft ? 'Saving...' : 'Save Draft'}
+              </button>
+            </div>
           )}
 
-          <div className="flex items-center gap-2">
-            {step === 4 && (
+          {/* Navigation row */}
+          <div className="flex items-center justify-between gap-2">
+            {step > 0 && !loading ? (
               <button
                 type="button"
-                onClick={handleReset}
+                onClick={handleBack}
                 className="px-4 py-2 rounded-xl border border-piu-border/40 bg-piu-dark/30 text-gray-300 text-sm font-display font-bold hover:bg-piu-dark/60 transition-colors"
               >
-                Start Over
+                Back
               </button>
+            ) : (
+              <div />
             )}
-            {step < 4 && !loading && (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 border border-cyan-300/30 text-white text-sm font-display font-bold shadow-lg shadow-cyan-900/30 hover:brightness-110 transition-all"
-              >
-                {step === 3 ? 'Generate' : 'Next'}
-              </button>
-            )}
+
+            <div className="flex items-center gap-2">
+              {step === 4 && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-4 py-2 rounded-xl border border-piu-border/40 bg-piu-dark/30 text-gray-300 text-sm font-display font-bold hover:bg-piu-dark/60 transition-colors"
+                >
+                  Start Over
+                </button>
+              )}
+              {step < 4 && !loading && (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 border border-cyan-300/30 text-white text-sm font-display font-bold shadow-lg shadow-cyan-900/30 hover:brightness-110 transition-all"
+                >
+                  {step === 3 ? 'Generate' : 'Next'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

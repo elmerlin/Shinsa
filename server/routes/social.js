@@ -398,6 +398,61 @@ router.delete('/posts/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Post Drafts ────────────────────────────────────
+
+// POST /api/social/drafts — save a new draft
+router.post('/drafts', requireAuth, (req, res) => {
+  const db = getDb();
+  const { content, youtube_url } = req.body;
+  if (!content && !youtube_url) {
+    return res.status(400).json({ error: 'Draft must have content or a video' });
+  }
+  const result = db.prepare(
+    'INSERT INTO post_drafts (user_id, content, youtube_url) VALUES (?, ?, ?)'
+  ).run(req.user.id, content || '', youtube_url || '');
+  const draft = db.prepare('SELECT * FROM post_drafts WHERE id = ?').get(result.lastInsertRowid);
+  res.status(201).json(draft);
+});
+
+// GET /api/social/drafts — list user's drafts
+router.get('/drafts', requireAuth, (req, res) => {
+  const db = getDb();
+  const drafts = db.prepare(
+    'SELECT * FROM post_drafts WHERE user_id = ? ORDER BY updated_at DESC'
+  ).all(req.user.id);
+  res.json(drafts);
+});
+
+// GET /api/social/drafts/:id — get a single draft
+router.get('/drafts/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const draft = db.prepare('SELECT * FROM post_drafts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!draft) return res.status(404).json({ error: 'Draft not found' });
+  res.json(draft);
+});
+
+// PUT /api/social/drafts/:id — update a draft
+router.put('/drafts/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const draft = db.prepare('SELECT * FROM post_drafts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!draft) return res.status(404).json({ error: 'Draft not found' });
+  const { content, youtube_url } = req.body;
+  db.prepare(
+    "UPDATE post_drafts SET content = ?, youtube_url = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(content ?? draft.content, youtube_url ?? draft.youtube_url, draft.id);
+  const updated = db.prepare('SELECT * FROM post_drafts WHERE id = ?').get(draft.id);
+  res.json(updated);
+});
+
+// DELETE /api/social/drafts/:id — delete a draft
+router.delete('/drafts/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const draft = db.prepare('SELECT * FROM post_drafts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!draft) return res.status(404).json({ error: 'Draft not found' });
+  db.prepare('DELETE FROM post_drafts WHERE id = ?').run(draft.id);
+  res.json({ success: true });
+});
+
 // ─── Post Pumps (Likes) ─────────────────────────────
 
 // POST /api/social/posts/:id/pump — toggle pump on a post

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserPosts, createPost, deletePost, getPiugameRecentlyPlayed, getJacketMap } from '../utils/api';
+import { getUserPosts, createPost, deletePost, getPiugameRecentlyPlayed, getJacketMap, getPostDrafts, deletePostDraft } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import PostCard from '../components/PostCard';
 import ImageEditor from '../components/ImageEditor';
 import SessionSummaryCard from '../components/SessionSummaryCard';
+import SessionPlanCard from '../components/SessionPlanCard';
 import { calculateClearRating } from '../utils/clearRating';
 import { serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
+import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 
 // Common emoji sets for quick insert
 const EMOJI_GROUPS = [
@@ -496,7 +498,7 @@ function SummarySongTable({ title, rows, type }) {
   );
 }
 
-function PostComposer({ onPost }) {
+function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
   const { user } = useAuth();
   const [content, setContent] = useState('');
   const [images, setImages] = useState([]);
@@ -510,13 +512,19 @@ function PostComposer({ onPost }) {
   const [summaryPreview, setSummaryPreview] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [planPreview, setPlanPreview] = useState(initialPlan);
   const textRef = useRef(null);
   const fileRef = useRef(null);
   const emojiRef = useRef(null);
   const summaryCommand = SLASH_COMMANDS.summary;
   const hasSummaryCommand = hasSlashCommand(content, summaryCommand.trigger);
   const sanitizedContent = stripSlashCommand(content, summaryCommand.trigger);
-  const canSubmit = !!(sanitizedContent.trim() || images.length > 0 || youtubeUrl.trim() || summaryPreview);
+  const canSubmit = !!(sanitizedContent.trim() || images.length > 0 || youtubeUrl.trim() || summaryPreview || planPreview);
+
+  // Sync initialPlan prop into local state
+  useEffect(() => {
+    if (initialPlan) setPlanPreview(initialPlan);
+  }, [initialPlan]);
 
   // Close emoji picker on outside click
   useEffect(() => {
@@ -609,7 +617,8 @@ function PostComposer({ onPost }) {
 
   const handleSubmit = async () => {
     const summaryMarker = summaryPreview ? serializeSessionSummaryMarker(summaryPreview) : '';
-    const finalText = [sanitizedContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
+    const planMarker = planPreview ? serializeSessionPlanMarker(planPreview) : '';
+    const finalText = [sanitizedContent.trim(), summaryMarker, planMarker].filter(Boolean).join('\n\n');
     if (!finalText && images.length === 0 && !youtubeUrl.trim()) return;
 
     setPosting(true);
@@ -624,6 +633,8 @@ function PostComposer({ onPost }) {
       setCommentsDisabled(false);
       setSummaryPreview(null);
       setSummaryError('');
+      setPlanPreview(null);
+      if (onPlanCleared) onPlanCleared();
       onPost(post);
     } catch (err) {
       alert(err.message);
@@ -695,6 +706,25 @@ function PostComposer({ onPost }) {
 
       {summaryError && (
         <p className="text-xs text-red-400 mb-3">{summaryError}</p>
+      )}
+
+      {planPreview && (
+        <SessionPlanCard
+          plan={planPreview}
+          className="mb-3"
+          defaultScoringExpanded={false}
+          defaultPassingExpanded={false}
+        />
+      )}
+      {planPreview && (
+        <div className="flex justify-end mb-3">
+          <button
+            onClick={() => { setPlanPreview(null); if (onPlanCleared) onPlanCleared(); }}
+            className="px-2 py-1 rounded border border-red-400/40 text-red-300 hover:bg-red-400/10 text-[10px] font-display font-bold"
+          >
+            Remove Plan
+          </button>
+        </div>
       )}
 
       {/* YouTube URL input */}
@@ -884,6 +914,11 @@ export default function PostsPage() {
   const [hasMore, setHasMore] = useState(true);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [drafts, setDrafts] = useState([]);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [deletingDraftId, setDeletingDraftId] = useState(null);
+  const [activePlan, setActivePlan] = useState(null);
+  const [activeDraftId, setActiveDraftId] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -891,14 +926,44 @@ export default function PostsPage() {
       return;
     }
     setLoading(true);
-    getUserPosts(user.id, 1).then(data => {
-      setPosts(data);
-      setHasMore(data.length >= 20);
+    Promise.all([
+      getUserPosts(user.id, 1),
+      getPostDrafts().catch(() => []),
+    ]).then(([postData, draftData]) => {
+      setPosts(postData);
+      setHasMore(postData.length >= 20);
+      setDrafts(draftData);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [user]);
 
   const handleNewPost = (post) => {
     setPosts(prev => [{ ...post, username: user.username, avatar: user.avatar }, ...prev]);
+  };
+
+  const handleUseDraft = (draft) => {
+    const { text, plan } = splitSessionPlanContent(draft.content || '');
+    if (plan) {
+      setActivePlan(plan);
+      setActiveDraftId(draft.id);
+      setShowDrafts(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      // Plain text draft - copy to clipboard
+      navigator.clipboard?.writeText(text).catch(() => {});
+      alert('Draft content copied to clipboard! Paste it into the composer above.');
+    }
+  };
+
+  const handleDeleteDraft = async (id) => {
+    setDeletingDraftId(id);
+    try {
+      await deletePostDraft(id);
+      setDrafts(prev => prev.filter(d => d.id !== id));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingDraftId(null);
+    }
   };
 
   const handleDelete = (id) => {
@@ -949,7 +1014,72 @@ export default function PostsPage() {
         </Link>
       </div>
 
-      <PostComposer onPost={handleNewPost} />
+      <PostComposer
+        onPost={handleNewPost}
+        initialPlan={activePlan}
+        onPlanCleared={() => {
+          if (activeDraftId) {
+            deletePostDraft(activeDraftId).catch(() => {});
+            setDrafts(prev => prev.filter(d => d.id !== activeDraftId));
+            setActiveDraftId(null);
+          }
+          setActivePlan(null);
+        }}
+      />
+
+      {/* Drafts section */}
+      {drafts.length > 0 && (
+        <div className="mb-6">
+          <button
+            onClick={() => setShowDrafts(!showDrafts)}
+            className="flex items-center gap-2 text-sm font-display font-bold text-gray-400 hover:text-gray-200 transition-colors mb-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`w-4 h-4 transition-transform ${showDrafts ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            Drafts ({drafts.length})
+          </button>
+          {showDrafts && (
+            <div className="space-y-2">
+              {drafts.map(draft => {
+                const draftParsed = splitSessionPlanContent(draft.content || '');
+                const hasPlan = !!draftParsed.plan;
+                return (
+                  <div key={draft.id} className="rounded-lg border border-piu-border/40 bg-piu-dark/30 p-3">
+                    {hasPlan ? (
+                      <SessionPlanCard plan={draftParsed.plan} defaultScoringExpanded={false} defaultPassingExpanded={false} />
+                    ) : (
+                      <p className="text-xs text-gray-300 whitespace-pre-wrap line-clamp-4">{draft.content}</p>
+                    )}
+                    <div className="flex items-center justify-between mt-2">
+                      <p className="text-[10px] text-gray-500">
+                        {new Date(draft.updated_at || draft.created_at).toLocaleDateString(undefined, {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleUseDraft(draft)}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-display font-bold border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-colors"
+                        >
+                          {hasPlan ? 'Use' : 'Copy'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDraft(draft.id)}
+                          disabled={deletingDraftId === draft.id}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-display font-bold border border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                        >
+                          {deletingDraftId === draft.id ? '...' : 'Delete'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-12 text-gray-500">Loading posts...</div>

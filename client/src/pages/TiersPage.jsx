@@ -622,17 +622,15 @@ export default function TiersPage() {
         });
       });
 
-      const { default: html2canvas } = await import('html2canvas');
-      const canvas = await html2canvas(captureRef.current, {
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(captureRef.current, {
         backgroundColor: '#071326',
-        scale: 2,
-        useCORS: true,
-        logging: false,
+        pixelRatio: 2,
       });
       const download = document.createElement('a');
       const levelLabel = `${MODE_PREFIX[mode] || '?'}${level || '-'}`;
       download.download = `tiers-${levelLabel}.png`;
-      download.href = canvas.toDataURL('image/png');
+      download.href = dataUrl;
       download.click();
     } catch (err) {
       setError(err?.message || 'Failed to create tier image.');
