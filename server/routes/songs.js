@@ -2514,7 +2514,7 @@ router.post('/recommendations', optionalAuth, (req, res) => {
   const adjScoring = scoringLevel + feelingModifier;
   const adjPassing = passingLevel + feelingModifier;
 
-  // ─── Activation (5 songs at scoring level - 3) ─────────────────────────────────
+  // ─── Activation (5 songs at adjusted scoring level - 3) ─────────────────────────────────
   const activationLevel = adjScoring - 3;
   const activation = [];
   const activationPicks = pickFromPool(activationLevel, 5);
@@ -2531,8 +2531,8 @@ router.post('/recommendations', optionalAuth, (req, res) => {
     if (picks.length > 0) scoringSongs.push(formatChart(picks[0]));
   }
 
-  // ─── Passing songs (5 songs) ─────────────────────────────
-  const passingOffsets = [0, 0, +1, +1, +2];
+  // ─── Passing songs (5 songs: 2 at -1, 2 at 0, 1 at +1) ─────────────────────────────
+  const passingOffsets = [-1, -1, 0, 0, +1];
   const passingSongs = [];
   for (const offset of passingOffsets) {
     const targetLv = adjPassing + offset;
