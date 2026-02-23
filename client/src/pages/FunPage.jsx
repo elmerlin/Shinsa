@@ -16,6 +16,12 @@ const DEVIT_JUMP_LAG = 3;
 const DEVIT_STALL_CATCH_COUNT = 4;
 const DEVIT_TRAIL_LIMIT = 14000;
 const DEVIT_TOUCH_PADDING = 8;
+const BGM_TRACKS = [
+  '/fun-assets/audio/Pixel%20Paws%20Pursuit.mp3',
+  '/fun-assets/audio/Pixel%20Paws.mp3',
+  '/fun-assets/audio/Devit%20Pursuit.mp3',
+  '/fun-assets/audio/Devil%20Hop.mp3',
+];
 
 const PLAYABLE_CHARACTER = {
   id: 'cat',
@@ -48,29 +54,16 @@ const CAT_SPRITE_SHEET = {
 };
 
 const DEVIT_SPRITE_SHEET = {
-  path: '/fun-assets/characters/devit-sprite-sheet.png',
+  path: '/fun-assets/characters/devit-sprite.png',
+  columns: 4,
+  rows: 4,
   scale: 1.74,
   yOffset: -10,
-  // This sheet is arranged unevenly inside a 4x4 canvas; use explicit trimmed frame rects.
-  frames: [
-    { sx: 677, sy: 43, sw: 192, sh: 286 },
-    { sx: 1161, sy: 45, sw: 189, sh: 284 },
-    { sx: 1647, sy: 28, sw: 193, sh: 288 },
-    { sx: 2125, sy: 27, sw: 196, sh: 289 },
-    { sx: 657, sy: 402, sw: 227, sh: 306 },
-    { sx: 1138, sy: 384, sw: 244, sh: 310 },
-    { sx: 1624, sy: 370, sw: 244, sh: 290 },
-    { sx: 2096, sy: 359, sw: 241, sh: 305 },
-    { sx: 658, sy: 988, sw: 206, sh: 317 },
-    { sx: 1138, sy: 845, sw: 242, sh: 314 },
-    { sx: 1615, sy: 853, sw: 239, sh: 314 },
-    { sx: 2120, sy: 988, sw: 204, sh: 314 },
-  ],
   moveFrames: [0, 1, 2, 3],
-  riseFrames: [4, 5, 6, 7],
-  fallFrames: [9, 10],
-  idleFrames: [8, 11],
-  apexFrame: 6,
+  riseFrames: [5, 6, 7],
+  fallFrames: [8, 9, 10, 11],
+  idleFrames: [12, 13, 14, 15],
+  apexFrame: 10,
 };
 
 const PREVIEW_LOOP_FRAMES = [12, 13, 14, 15, 0, 1, 2, 3, 5, 6, 7, 10, 9, 8];
@@ -100,49 +93,6 @@ const NOTES = {
   B5: 987.77,
   C6: 1046.5,
 };
-
-const MELODY_SEQUENCE = [
-  // A
-  'E5', 'G5', 'A5', 'R', 'A5', 'C6', 'B5', 'R',
-  'G5', 'E5', 'D5', 'R', 'E5', 'G5', 'A5', 'R',
-  'C6', 'B5', 'A5', 'G5', 'E5', 'D5', 'C5', 'R',
-  'E5', 'G5', 'A5', 'B5', 'A5', 'G5', 'E5', 'R',
-  // B
-  'G5', 'A5', 'B5', 'R', 'B5', 'C6', 'B5', 'R',
-  'A5', 'G5', 'E5', 'R', 'G5', 'A5', 'B5', 'R',
-  'C6', 'B5', 'A5', 'G5', 'E5', 'D5', 'C5', 'R',
-  'G5', 'A5', 'B5', 'A5', 'G5', 'E5', 'D5', 'R',
-  // C
-  'E5', 'E5', 'G5', 'A5', 'B5', 'A5', 'G5', 'E5',
-  'D5', 'E5', 'G5', 'A5', 'C6', 'B5', 'A5', 'G5',
-  'E5', 'D5', 'C5', 'R', 'D5', 'E5', 'G5', 'R',
-  'A5', 'G5', 'E5', 'D5', 'C5', 'D5', 'E5', 'R',
-];
-
-const BASS_SEQUENCE = [
-  // A
-  'C3', 'R', 'C3', 'R', 'A3', 'R', 'A3', 'R',
-  'F3', 'R', 'F3', 'R', 'G3', 'R', 'G3', 'R',
-  'C3', 'R', 'C3', 'R', 'A3', 'R', 'A3', 'R',
-  'F3', 'R', 'G3', 'R', 'C4', 'R', 'C4', 'R',
-  // B
-  'C3', 'R', 'G3', 'R', 'A3', 'R', 'E3', 'R',
-  'F3', 'R', 'C3', 'R', 'G3', 'R', 'D3', 'R',
-  'A3', 'R', 'E3', 'R', 'F3', 'R', 'C3', 'R',
-  'G3', 'R', 'D3', 'R', 'C4', 'R', 'G3', 'R',
-  // C
-  'C3', 'C3', 'R', 'C3', 'A3', 'A3', 'R', 'A3',
-  'F3', 'F3', 'R', 'F3', 'G3', 'G3', 'R', 'G3',
-  'C3', 'R', 'G3', 'R', 'A3', 'R', 'E3', 'R',
-  'F3', 'R', 'G3', 'R', 'C4', 'R', 'C3', 'R',
-];
-
-const COUNTER_SEQUENCE = [
-  'A4', 'R', 'C5', 'R', 'E5', 'R', 'C5', 'R',
-  'G4', 'R', 'B4', 'R', 'D5', 'R', 'B4', 'R',
-  'A4', 'R', 'C5', 'R', 'E5', 'R', 'G5', 'R',
-  'B4', 'R', 'A4', 'R', 'G4', 'R', 'E4', 'R',
-];
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
@@ -955,8 +905,10 @@ export default function FunPage() {
   const gameRef = useRef(createInitialGame(bestScore));
 
   const audioContextRef = useRef(null);
-  const bgmIntervalRef = useRef(null);
-  const bgmStepRef = useRef(0);
+  const bgmAudioRef = useRef(null);
+  const bgmTrackPathRef = useRef('');
+  const bgmTrackIndexRef = useRef(0);
+  const bgmPlaylistRef = useRef([...BGM_TRACKS]);
   const windNodesRef = useRef(null);
   const windBufferRef = useRef(null);
   const pointerStateRef = useRef({ id: null, direction: null, startedAt: 0 });
@@ -1017,6 +969,31 @@ export default function FunPage() {
       audioContextRef.current.resume().catch(() => {});
     }
     return audioContextRef.current;
+  }, []);
+
+  const ensureBgmAudio = useCallback(() => {
+    if (!bgmAudioRef.current) {
+      const audio = new Audio();
+      audio.loop = false;
+      audio.preload = 'auto';
+      audio.volume = 0.36;
+      audio.addEventListener('ended', () => {
+        if (!soundEnabledRef.current || gameStatusRef.current !== 'playing') return;
+        const playlist = bgmPlaylistRef.current;
+        if (!playlist.length) return;
+        bgmTrackIndexRef.current = (bgmTrackIndexRef.current + 1) % playlist.length;
+        const nextPath = playlist[bgmTrackIndexRef.current];
+        bgmTrackPathRef.current = nextPath;
+        audio.src = nextPath;
+        audio.load();
+        const playPromise = audio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {});
+        }
+      });
+      bgmAudioRef.current = audio;
+    }
+    return bgmAudioRef.current;
   }, []);
 
   const playTone = useCallback((frequency, duration = 0.1, options = {}) => {
@@ -1130,38 +1107,34 @@ export default function FunPage() {
   }, [ensureAudioContext]);
 
   const stopBgm = useCallback(() => {
-    if (bgmIntervalRef.current) {
-      window.clearInterval(bgmIntervalRef.current);
-      bgmIntervalRef.current = null;
+    const bgm = bgmAudioRef.current;
+    if (bgm) {
+      bgm.pause();
+      bgm.currentTime = 0;
     }
     stopWind();
   }, [stopWind]);
 
   const startBgm = useCallback(() => {
-    const ctx = ensureAudioContext();
-    if (!ctx || bgmIntervalRef.current) return;
-    bgmStepRef.current = 0;
+    if (!soundEnabledRef.current) return;
+    ensureAudioContext();
     startWind();
-    const stepMs = 140;
-
-    bgmIntervalRef.current = window.setInterval(() => {
-      if (!soundEnabledRef.current) return;
-      const step = bgmStepRef.current;
-      const melodyNote = MELODY_SEQUENCE[step % MELODY_SEQUENCE.length];
-      const bassNote = BASS_SEQUENCE[step % BASS_SEQUENCE.length];
-      const counterNote = COUNTER_SEQUENCE[step % COUNTER_SEQUENCE.length];
-      if (melodyNote && melodyNote !== 'R') {
-        playTone(NOTES[melodyNote], 0.13, { type: 'square', volume: 0.034 });
-      }
-      if (bassNote && bassNote !== 'R') {
-        playTone(NOTES[bassNote], 0.16, { type: 'triangle', volume: 0.023 });
-      }
-      if (counterNote && counterNote !== 'R' && step % 2 === 0) {
-        playTone(NOTES[counterNote], 0.11, { type: 'triangle', volume: 0.016 });
-      }
-      bgmStepRef.current += 1;
-    }, stepMs);
-  }, [ensureAudioContext, playTone, startWind]);
+    const playlist = bgmPlaylistRef.current;
+    if (!playlist.length) return;
+    const bgm = ensureBgmAudio();
+    if (!bgm) return;
+    if (!bgm.paused) return;
+    const currentPath = playlist[bgmTrackIndexRef.current] || playlist[0];
+    if (currentPath && bgmTrackPathRef.current !== currentPath) {
+      bgmTrackPathRef.current = currentPath;
+      bgm.src = currentPath;
+      bgm.load();
+    }
+    const playPromise = bgm.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {});
+    }
+  }, [ensureAudioContext, ensureBgmAudio, startWind]);
 
   const loadLeaderboard = useCallback(async () => {
     if (!user?.id) {
@@ -1604,6 +1577,12 @@ export default function FunPage() {
   useEffect(() => () => {
     clearTapReleaseTimeout();
     stopBgm();
+    if (bgmAudioRef.current) {
+      bgmTrackPathRef.current = '';
+      bgmAudioRef.current.src = '';
+      bgmAudioRef.current.load();
+      bgmAudioRef.current = null;
+    }
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
