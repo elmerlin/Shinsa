@@ -520,14 +520,6 @@ const PLAYABLE_CHARACTERS = [
     runTracks: DOJO_CAT_RUN_TRACKS,
   },
   {
-    id: 'buu',
-    name: 'Buu',
-    description: 'Big Boy',
-    cardClass: 'from-fuchsia-500 to-rose-500',
-    sprite: BUU_SPRITE_SHEET,
-    runTracks: BUU_RUN_TRACKS,
-  },
-  {
     id: 'labubu',
     name: 'Labubu',
     description: 'Small Size, Big Bite',
@@ -1842,7 +1834,12 @@ function renderGame(ctx, game, status, spriteSheet, spriteConfig, devitSpriteShe
   }
 }
 
-function CharacterPreview({ spriteSheet, spriteConfig = CAT_SPRITE_SHEET, spriteVersion = 0 }) {
+function CharacterPreview({
+  spriteSheet,
+  spriteConfig = CAT_SPRITE_SHEET,
+  spriteVersion = 0,
+  size = 92,
+}) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -1879,7 +1876,15 @@ function CharacterPreview({ spriteSheet, spriteConfig = CAT_SPRITE_SHEET, sprite
     return () => window.cancelAnimationFrame(rafId);
   }, [spriteConfig, spriteSheet, spriteVersion]);
 
-  return <canvas ref={canvasRef} width={92} height={92} className="w-[92px] h-[92px] rounded-2xl border border-white/30 shadow-sm" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      width={92}
+      height={92}
+      className="rounded-2xl border border-white/30 shadow-sm"
+      style={{ width: `${size}px`, height: `${size}px` }}
+    />
+  );
 }
 
 export default function FunPage() {
@@ -2935,37 +2940,42 @@ export default function FunPage() {
                 <p className="text-center font-display font-bold text-xl text-white mb-3">
                   {gameStatus === 'gameover' ? 'ROUND OVER' : GAME_TITLE}
                 </p>
-                <div className="rounded-xl border border-piu-accent/40 bg-piu-accent/10 p-3 space-y-2">
-                  {PLAYABLE_CHARACTERS.map((character) => {
-                    const isSelected = selectedCharacter.id === character.id;
-                    return (
-                      <button
-                        key={character.id}
-                        type="button"
-                        onClick={() => setSelectedCharacterId(character.id)}
-                        className={`w-full rounded-xl border px-2.5 py-2 text-left transition-colors ${
-                          isSelected
-                            ? 'border-piu-accent bg-piu-accent/20'
-                            : 'border-white/15 bg-black/20 hover:border-piu-accent/55'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <CharacterPreview
-                            spriteSheet={playableSpriteSheetsRef.current[character.id]}
-                            spriteConfig={character.sprite}
-                            spriteVersion={spriteVersion}
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm font-display font-bold text-white">{character.name}</p>
-                            <p className="text-xs text-gray-300 mt-1">{character.description}</p>
-                            <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${character.cardClass}`}>
-                              {isSelected ? 'SELECTED' : 'SELECT'}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="rounded-xl border border-piu-accent/40 bg-piu-accent/10 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-piu-accent/90 font-display">Character</p>
+                  <div className="mt-1 flex items-center gap-3">
+                    <CharacterPreview
+                      spriteSheet={playableSpriteSheetsRef.current[selectedCharacter.id]}
+                      spriteConfig={selectedCharacter.sprite}
+                      spriteVersion={spriteVersion}
+                      size={74}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-display font-bold text-white">{selectedCharacter.name}</p>
+                      <p className="text-xs text-gray-300 mt-1">{selectedCharacter.description}</p>
+                      <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${selectedCharacter.cardClass}`}>
+                        SELECTED
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {PLAYABLE_CHARACTERS.map((character) => {
+                      const isSelected = selectedCharacter.id === character.id;
+                      return (
+                        <button
+                          key={character.id}
+                          type="button"
+                          onClick={() => setSelectedCharacterId(character.id)}
+                          className={`rounded-lg border px-2 py-1.5 text-[11px] font-display font-bold transition-colors ${
+                            isSelected
+                              ? 'border-piu-accent bg-piu-accent/20 text-white'
+                              : 'border-white/20 bg-black/25 text-gray-200 hover:border-piu-accent/55'
+                          }`}
+                        >
+                          {character.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <button
                   type="button"
