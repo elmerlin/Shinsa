@@ -31,6 +31,7 @@ const BGM_TRACKS = [
   '/fun-assets/audio/Devit%20Pursuit.mp3',
   '/fun-assets/audio/Devil%20Hop.mp3',
 ];
+const START_SCREEN_TRACK = '/fun-assets/audio/Start%20Screen.mp3';
 const BACKGROUND_TRANSITION_WINDOW = 500;
 const SPRITE_PLATFORM_ANCHOR = 0.7;
 const BACKGROUND_TIERS = [
@@ -1830,6 +1831,7 @@ export default function FunPage() {
 
   const audioContextRef = useRef(null);
   const bgmAudioRef = useRef(null);
+  const startScreenAudioRef = useRef(null);
   const bgmTrackPathRef = useRef('');
   const bgmTrackIndexRef = useRef(0);
   const bgmPlaylistRef = useRef([...BGM_TRACKS]);
@@ -1941,6 +1943,17 @@ export default function FunPage() {
       bgmAudioRef.current = audio;
     }
     return bgmAudioRef.current;
+  }, []);
+
+  const ensureStartScreenAudio = useCallback(() => {
+    if (!startScreenAudioRef.current) {
+      const audio = new Audio(START_SCREEN_TRACK);
+      audio.loop = true;
+      audio.preload = 'auto';
+      audio.volume = 0.3;
+      startScreenAudioRef.current = audio;
+    }
+    return startScreenAudioRef.current;
   }, []);
 
   const playTone = useCallback((frequency, duration = 0.1, options = {}) => {
@@ -2062,9 +2075,17 @@ export default function FunPage() {
     stopWind();
   }, [stopWind]);
 
+  const stopStartScreenMusic = useCallback(() => {
+    const menu = startScreenAudioRef.current;
+    if (!menu) return;
+    menu.pause();
+    menu.currentTime = 0;
+  }, []);
+
   const startBgm = useCallback(() => {
     if (!soundEnabledRef.current) return;
     ensureAudioContext();
+    stopStartScreenMusic();
     startWind();
     const playlist = bgmPlaylistRef.current;
     if (!playlist.length) return;
@@ -2081,7 +2102,18 @@ export default function FunPage() {
     if (playPromise && typeof playPromise.catch === 'function') {
       playPromise.catch(() => {});
     }
-  }, [ensureAudioContext, ensureBgmAudio, startWind]);
+  }, [ensureAudioContext, ensureBgmAudio, startWind, stopStartScreenMusic]);
+
+  const startStartScreenMusic = useCallback(() => {
+    if (!soundEnabledRef.current || gameStatusRef.current === 'playing') return;
+    ensureAudioContext();
+    const menu = ensureStartScreenAudio();
+    if (!menu || !menu.paused) return;
+    const playPromise = menu.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(() => {});
+    }
+  }, [ensureAudioContext, ensureStartScreenAudio]);
 
   const loadLeaderboard = useCallback(async () => {
     if (!user?.id) {
@@ -2583,9 +2615,10 @@ export default function FunPage() {
     setGameStatus('playing');
     if (soundEnabledRef.current) {
       ensureAudioContext();
+      stopStartScreenMusic();
       startBgm();
     }
-  }, [ensureAudioContext, releaseDirectionalControl, startBgm]);
+  }, [ensureAudioContext, releaseDirectionalControl, startBgm, stopStartScreenMusic]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2656,26 +2689,37 @@ export default function FunPage() {
   useEffect(() => () => {
     clearTapReleaseTimeout();
     stopBgm();
+    stopStartScreenMusic();
     if (bgmAudioRef.current) {
       bgmTrackPathRef.current = '';
       bgmAudioRef.current.src = '';
       bgmAudioRef.current.load();
       bgmAudioRef.current = null;
     }
+    if (startScreenAudioRef.current) {
+      startScreenAudioRef.current.src = '';
+      startScreenAudioRef.current.load();
+      startScreenAudioRef.current = null;
+    }
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
     }
-  }, [clearTapReleaseTimeout, stopBgm]);
+  }, [clearTapReleaseTimeout, stopBgm, stopStartScreenMusic]);
 
   useEffect(() => {
     if (!soundEnabled) {
       stopBgm();
+      stopStartScreenMusic();
     } else if (gameStatus === 'playing') {
       ensureAudioContext();
       startBgm();
+      stopStartScreenMusic();
+    } else {
+      stopBgm();
+      startStartScreenMusic();
     }
-  }, [ensureAudioContext, gameStatus, soundEnabled, startBgm, stopBgm]);
+  }, [ensureAudioContext, gameStatus, soundEnabled, startBgm, startStartScreenMusic, stopBgm, stopStartScreenMusic]);
 
   const shouldShowLeaderboard = gameStatus === 'gameover' || (gameStatus === 'idle' && showLeaderboardAtStart);
 
@@ -2701,10 +2745,23 @@ export default function FunPage() {
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h2 className="text-base font-display font-bold tracking-wider text-piu-accent">{GAME_TITLE}</h2>
-          <div className="text-xs text-gray-400">
-            Score: <span className="text-white font-display">{score}</span>
-            {'  '}|{'  '}
-            Best: <span className="text-piu-gold font-display">{bestScore}</span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setSoundEnabled((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                soundEnabled
+                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40'
+                  : 'bg-gray-800/55 text-gray-300 border border-gray-600/60'
+              }`}
+            >
+              {soundEnabled ? 'Audio: ON' : 'Audio: OFF'}
+            </button>
+            <div className="text-xs text-gray-400">
+              Score: <span className="text-white font-display">{score}</span>
+              {'  '}|{'  '}
+              Best: <span className="text-piu-gold font-display">{bestScore}</span>
+            </div>
           </div>
         </div>
 
@@ -2721,20 +2778,6 @@ export default function FunPage() {
             onPointerCancel={handleGameAreaPointerRelease}
             onPointerLeave={handleGameAreaPointerRelease}
           />
-
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-auto">
-            <button
-              type="button"
-              onClick={() => setSoundEnabled((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold backdrop-blur-sm transition-colors ${
-                soundEnabled
-                  ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40'
-                  : 'bg-gray-800/55 text-gray-300 border border-gray-600/60'
-              }`}
-            >
-              {soundEnabled ? 'Audio: ON' : 'Audio: OFF'}
-            </button>
-          </div>
 
           {gameStatus === 'playing' && (
             <div className="absolute inset-x-0 bottom-4 px-4 pointer-events-none">
@@ -2828,7 +2871,7 @@ export default function FunPage() {
                     )}
                     {user && myLeaderboardSummary?.best_score > 0 && (
                       <p className="mt-2 text-[11px] text-center font-display font-black text-[#4a2200]">
-                        Dojo Cat Rank: #{myLeaderboardSummary.rank || '-'}  Score: {myLeaderboardSummary.best_score}
+                        {user?.username || 'You'} Rank: #{myLeaderboardSummary.rank || '-'}  Score: {myLeaderboardSummary.best_score}
                       </p>
                     )}
                   </div>
