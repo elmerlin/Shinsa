@@ -22,6 +22,9 @@ const DEVIT_RUBBER_BAND_RESET_PLATFORMS = 3;
 const DEVIT_SPEED_BOOST_PLATFORM_DISTANCE = 5;
 const DEVIT_NORMAL_PLATFORM_DISTANCE = 3;
 const DEVIT_SPEED_BOOST_MULTIPLIER = 1.2;
+const DEVIT_STALE_TARGET_BUFFER = 36;
+const DEVIT_FAILSAFE_LAND_BUFFER = 18;
+const DEVIT_MAX_AIR_FRAMES = 72;
 const BGM_TRACKS = [
   '/fun-assets/audio/Pixel%20Paws%20Pursuit.mp3',
   '/fun-assets/audio/Pixel%20Paws.mp3',
@@ -879,6 +882,7 @@ function createInitialGame(bestScore, devitStartLag = DEVIT_START_PLATFORM_LAG_D
     facing: 1,
     squash: 0,
     jumping: false,
+    jumpFrames: 0,
     jumpCooldown: DEVIT_JUMP_COOLDOWN_FRAMES,
     currentPlatformId: devitStartPlatform?.id || null,
   };
@@ -2329,6 +2333,7 @@ export default function FunPage() {
     if (!devit.active && game.jumpCount >= game.devitStartLag) {
       devit.active = true;
       devit.jumping = false;
+      devit.jumpFrames = 0;
       devit.vx = 0;
       devit.vy = 0;
       devit.jumpCooldown = DEVIT_JUMP_COOLDOWN_FRAMES;
@@ -2336,6 +2341,25 @@ export default function FunPage() {
 
     if (devit.active) {
       devit.squash *= Math.pow(0.8, delta);
+      const settleOnTarget = (targetRect) => {
+        if (!targetRect) return;
+        devit.x = clamp(targetRect.x - devit.width * 0.5, -devit.width * 0.45, GAME_WIDTH - devit.width * 0.55);
+        devit.y = targetRect.y - devit.height;
+        devit.vx = 0;
+        devit.vy = 0;
+        devit.jumping = false;
+        devit.jumpFrames = 0;
+        devit.jumpCooldown = DEVIT_JUMP_COOLDOWN_FRAMES;
+        devit.squash = 0.25;
+        devit.currentPlatformId = targetRect.platformId;
+        const queueIndex = game.playerPathQueue.findIndex((entry) => entry.platformId === targetRect.platformId);
+        if (queueIndex >= 0) {
+          game.playerPathQueue.splice(0, queueIndex + 1);
+        } else if (game.playerPathQueue.length) {
+          game.playerPathQueue.shift();
+        }
+      };
+
       const platformDistanceToPlayer = Math.max(0, (devit.y - player.y) / DEVIT_PLATFORM_DISTANCE_UNIT);
       if (platformDistanceToPlayer > DEVIT_RUBBER_BAND_TRIGGER_PLATFORMS) {
         devit.x = player.x;
@@ -2345,7 +2369,21 @@ export default function FunPage() {
         devit.facing = player.facing;
         devit.squash = 0.22;
         devit.jumping = false;
+        devit.jumpFrames = 0;
         devit.jumpCooldown = 0;
+        rebuildDevitPathQueueFromRecent(game, game.devitStartLag + 2);
+      }
+
+      // Discard stale targets that are already well below Devit's feet.
+      while (game.playerPathQueue.length) {
+        const staleStep = game.playerPathQueue[0];
+        if (staleStep.y > devit.y + devit.height + DEVIT_STALE_TARGET_BUFFER) {
+          game.playerPathQueue.shift();
+          continue;
+        }
+        break;
+      }
+      if (!game.playerPathQueue.length) {
         rebuildDevitPathQueueFromRecent(game, game.devitStartLag + 2);
       }
 
@@ -2354,6 +2392,7 @@ export default function FunPage() {
 
       if (devit.jumping) {
         const previousDevitY = devit.y;
+        devit.jumpFrames += delta;
         devit.vy += stats.gravity * DEVIT_GRAVITY_SCALE * delta;
         devit.x += devit.vx * delta;
         devit.y += devit.vy * delta;
@@ -2371,22 +2410,26 @@ export default function FunPage() {
             const footLeft = devit.x + devit.width * 0.2;
             const footRight = devit.x + devit.width * 0.8;
             if (footRight >= targetLeft && footLeft <= targetRight) {
-              devit.x = clamp(targetRect.x - devit.width * 0.5, -devit.width * 0.45, GAME_WIDTH - devit.width * 0.55);
-              devit.y = targetRect.y - devit.height;
-              devit.vx = 0;
-              devit.vy = 0;
-              devit.jumping = false;
-              devit.jumpCooldown = DEVIT_JUMP_COOLDOWN_FRAMES;
-              devit.squash = 0.25;
-              devit.currentPlatformId = targetRect.platformId;
-              game.playerPathQueue.shift();
+              settleOnTarget(targetRect);
             }
           }
+          const missedVerticalWindow = devit.vy > 0 && devit.y >= targetRect.y - devit.height + DEVIT_FAILSAFE_LAND_BUFFER;
+          const jumpTimedOut = devit.jumpFrames >= DEVIT_MAX_AIR_FRAMES;
+          if (devit.jumping && (missedVerticalWindow || jumpTimedOut)) {
+            settleOnTarget(targetRect);
+          }
+        } else if (devit.jumpFrames >= DEVIT_MAX_AIR_FRAMES || devit.y > GAME_HEIGHT + 180) {
+          devit.jumping = false;
+          devit.jumpFrames = 0;
+          devit.vx = 0;
+          devit.vy = 0;
+          devit.jumpCooldown = 0;
         }
       } else {
         devit.vx *= Math.pow(0.82, delta);
         if (Math.abs(devit.vx) < 0.02) devit.vx = 0;
         devit.vy = 0;
+        devit.jumpFrames = 0;
         devit.jumpCooldown = Math.max(0, devit.jumpCooldown - delta);
         if (targetRect && devit.jumpCooldown <= 0) {
           const startCenterX = devit.x + devit.width * 0.5;
@@ -2413,6 +2456,7 @@ export default function FunPage() {
           devit.vx = deltaX / boostedAirTime;
           devit.vy = (deltaY - 0.5 * gravity * boostedAirTime * boostedAirTime) / boostedAirTime;
           devit.jumping = true;
+          devit.jumpFrames = 0;
           devit.squash = 0.34;
           if (Math.abs(devit.vx) > 0.16) {
             devit.facing = devit.vx > 0 ? 1 : -1;
