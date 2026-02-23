@@ -11,16 +11,419 @@ const MAX_PLATFORMS = 18;
 const BEST_SCORE_KEY = 'fun_city_jump_best_score_v1';
 const GAME_TITLE = 'TOP CITY JUMP';
 const SCORE_DIFFICULTY_CAP = 100000;
-const DEVIT_UNLOCK_SCORE = 5000;
-const DEVIT_JUMP_LAG = 3;
-const DEVIT_STALL_CATCH_COUNT = 4;
-const DEVIT_TRAIL_LIMIT = 14000;
 const DEVIT_TOUCH_PADDING = 8;
+const DEVIT_START_PLATFORM_LAG = 3;
+const DEVIT_JUMP_COOLDOWN_FRAMES = 5;
+const DEVIT_GRAVITY_SCALE = 1;
+const DEVIT_MAX_PATH_QUEUE = 2500;
 const BGM_TRACKS = [
   '/fun-assets/audio/Pixel%20Paws%20Pursuit.mp3',
   '/fun-assets/audio/Pixel%20Paws.mp3',
   '/fun-assets/audio/Devit%20Pursuit.mp3',
   '/fun-assets/audio/Devil%20Hop.mp3',
+];
+const BACKGROUND_TRANSITION_WINDOW = 2600;
+const BACKGROUND_TIERS = [
+  {
+    id: 'ground',
+    name: 'Ground Level',
+    minScore: 0,
+    maxScore: 10000,
+    backgroundPath: '/fun-assets/backgrounds/Ground.png',
+    sky: { top: '#7ed2ff', mid: '#bce9ff', bottom: '#ffe1a1' },
+    celestial: {
+      mode: 'sun',
+      x: 0.82,
+      y: 0.16,
+      radius: 24,
+      color: 'rgba(255, 222, 120, 0.96)',
+      glow: 'rgba(255, 236, 182, 0.46)',
+    },
+    weather: {
+      clouds: 0.24,
+      wisps: 0.05,
+      rain: 0,
+      snow: 0,
+      storm: 0,
+      stars: 0,
+      aurora: 0,
+      stardust: 0.02,
+      breeze: 0.28,
+    },
+    imageLayers: [
+      { parallax: 0.024, height: 0.64, yOffset: 80, alpha: 0.2 },
+      { parallax: 0.056, height: 0.78, yOffset: 114, alpha: 0.3 },
+      { parallax: 0.104, height: 0.92, yOffset: 152, alpha: 0.4 },
+    ],
+    cityLayers: [
+      {
+        baseY: GAME_HEIGHT - 74,
+        parallax: 0.06,
+        minWidth: 30,
+        maxWidth: 62,
+        minHeight: 54,
+        maxHeight: 154,
+        gap: 8,
+        fill: '#6d9dcd',
+        stroke: 'rgba(55, 91, 131, 0.65)',
+        windowColor: 'rgba(207, 231, 255, 0.16)',
+        seed: 0.3,
+        detail: false,
+      },
+      {
+        baseY: GAME_HEIGHT - 67,
+        parallax: 0.12,
+        minWidth: 34,
+        maxWidth: 74,
+        minHeight: 82,
+        maxHeight: 208,
+        gap: 9,
+        fill: '#4f7cad',
+        stroke: 'rgba(36, 63, 94, 0.66)',
+        windowColor: 'rgba(213, 236, 255, 0.2)',
+        seed: 1.2,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 60,
+        parallax: 0.2,
+        minWidth: 38,
+        maxWidth: 88,
+        minHeight: 112,
+        maxHeight: 258,
+        gap: 12,
+        fill: '#385d84',
+        stroke: 'rgba(20, 39, 61, 0.82)',
+        windowColor: 'rgba(211, 234, 255, 0.2)',
+        seed: 2.4,
+        detail: true,
+      },
+    ],
+    streetAlpha: 1,
+    carsAlpha: 1,
+    detailMode: 'ground',
+    cloudDeck: 0,
+  },
+  {
+    id: 'metropolis',
+    name: 'The Metropolis',
+    minScore: 10001,
+    maxScore: 30000,
+    backgroundPath: '/fun-assets/backgrounds/Metropolis.png',
+    sky: { top: '#74b8f0', mid: '#f0d1a6', bottom: '#d79e64' },
+    celestial: {
+      mode: 'sun',
+      x: 0.76,
+      y: 0.2,
+      radius: 21,
+      color: 'rgba(255, 195, 104, 0.94)',
+      glow: 'rgba(255, 200, 128, 0.4)',
+    },
+    weather: {
+      clouds: 0.46,
+      wisps: 0.4,
+      rain: 0,
+      snow: 0,
+      storm: 0,
+      stars: 0,
+      aurora: 0,
+      stardust: 0.02,
+      breeze: 0.2,
+    },
+    imageLayers: [
+      { parallax: 0.03, height: 0.7, yOffset: 70, alpha: 0.24 },
+      { parallax: 0.068, height: 0.82, yOffset: 102, alpha: 0.34 },
+      { parallax: 0.116, height: 0.94, yOffset: 136, alpha: 0.44 },
+    ],
+    cityLayers: [
+      {
+        baseY: GAME_HEIGHT - 80,
+        parallax: 0.05,
+        minWidth: 34,
+        maxWidth: 78,
+        minHeight: 96,
+        maxHeight: 238,
+        gap: 10,
+        fill: '#59789f',
+        stroke: 'rgba(52, 70, 95, 0.7)',
+        windowColor: 'rgba(250, 220, 162, 0.2)',
+        seed: 3.1,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 70,
+        parallax: 0.108,
+        minWidth: 40,
+        maxWidth: 92,
+        minHeight: 122,
+        maxHeight: 286,
+        gap: 11,
+        fill: '#426387',
+        stroke: 'rgba(32, 49, 70, 0.78)',
+        windowColor: 'rgba(255, 226, 170, 0.26)',
+        seed: 3.8,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 64,
+        parallax: 0.18,
+        minWidth: 44,
+        maxWidth: 106,
+        minHeight: 154,
+        maxHeight: 334,
+        gap: 12,
+        fill: '#334d6b',
+        stroke: 'rgba(20, 33, 49, 0.84)',
+        windowColor: 'rgba(255, 219, 162, 0.3)',
+        seed: 4.5,
+        detail: true,
+      },
+    ],
+    streetAlpha: 0.58,
+    carsAlpha: 0.55,
+    detailMode: 'metropolis',
+    cloudDeck: 0.06,
+  },
+  {
+    id: 'skyline',
+    name: 'The Skyline',
+    minScore: 30001,
+    maxScore: 60000,
+    backgroundPath: '/fun-assets/backgrounds/Skyline.png',
+    sky: { top: '#482f6d', mid: '#a6577d', bottom: '#ff995c' },
+    celestial: {
+      mode: 'sunset',
+      x: 0.74,
+      y: 0.22,
+      radius: 19,
+      color: 'rgba(255, 156, 109, 0.9)',
+      glow: 'rgba(255, 145, 110, 0.34)',
+    },
+    weather: {
+      clouds: 0.38,
+      wisps: 0.28,
+      rain: 0.32,
+      snow: 0,
+      storm: 0,
+      stars: 0.14,
+      aurora: 0,
+      stardust: 0.04,
+      breeze: 0.13,
+    },
+    imageLayers: [
+      { parallax: 0.032, height: 0.74, yOffset: 56, alpha: 0.25 },
+      { parallax: 0.074, height: 0.87, yOffset: 92, alpha: 0.36 },
+      { parallax: 0.13, height: 1.0, yOffset: 126, alpha: 0.5 },
+    ],
+    cityLayers: [
+      {
+        baseY: GAME_HEIGHT - 92,
+        parallax: 0.046,
+        minWidth: 36,
+        maxWidth: 84,
+        minHeight: 136,
+        maxHeight: 288,
+        gap: 10,
+        fill: '#503b6f',
+        stroke: 'rgba(39, 28, 58, 0.72)',
+        windowColor: 'rgba(227, 169, 255, 0.22)',
+        seed: 5.2,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 84,
+        parallax: 0.096,
+        minWidth: 44,
+        maxWidth: 104,
+        minHeight: 180,
+        maxHeight: 356,
+        gap: 12,
+        fill: '#382953',
+        stroke: 'rgba(26, 18, 39, 0.8)',
+        windowColor: 'rgba(115, 240, 255, 0.22)',
+        seed: 5.8,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 78,
+        parallax: 0.162,
+        minWidth: 52,
+        maxWidth: 118,
+        minHeight: 212,
+        maxHeight: 418,
+        gap: 12,
+        fill: '#291c40',
+        stroke: 'rgba(18, 12, 31, 0.88)',
+        windowColor: 'rgba(255, 157, 223, 0.24)',
+        seed: 6.3,
+        detail: true,
+      },
+    ],
+    streetAlpha: 0.22,
+    carsAlpha: 0,
+    detailMode: 'skyline',
+    cloudDeck: 0.14,
+  },
+  {
+    id: 'stratosphere',
+    name: 'The Stratosphere',
+    minScore: 60001,
+    maxScore: 100000,
+    backgroundPath: '/fun-assets/backgrounds/Stratosphere.png',
+    sky: { top: '#040c1d', mid: '#112343', bottom: '#1f3e66' },
+    celestial: {
+      mode: 'moon',
+      x: 0.18,
+      y: 0.18,
+      radius: 20,
+      color: 'rgba(221, 233, 255, 0.95)',
+      glow: 'rgba(178, 206, 255, 0.3)',
+    },
+    weather: {
+      clouds: 0.28,
+      wisps: 0.16,
+      rain: 0.74,
+      snow: 0,
+      storm: 0.86,
+      stars: 0.42,
+      aurora: 0.06,
+      stardust: 0.08,
+      breeze: 0.08,
+    },
+    imageLayers: [
+      { parallax: 0.034, height: 0.78, yOffset: 50, alpha: 0.22 },
+      { parallax: 0.08, height: 0.9, yOffset: 86, alpha: 0.3 },
+      { parallax: 0.146, height: 1.04, yOffset: 120, alpha: 0.42 },
+    ],
+    cityLayers: [
+      {
+        baseY: GAME_HEIGHT - 120,
+        parallax: 0.04,
+        minWidth: 44,
+        maxWidth: 98,
+        minHeight: 196,
+        maxHeight: 378,
+        gap: 12,
+        fill: '#243955',
+        stroke: 'rgba(16, 25, 39, 0.8)',
+        windowColor: 'rgba(156, 214, 255, 0.24)',
+        seed: 7.2,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 110,
+        parallax: 0.088,
+        minWidth: 52,
+        maxWidth: 122,
+        minHeight: 246,
+        maxHeight: 470,
+        gap: 13,
+        fill: '#182942',
+        stroke: 'rgba(10, 17, 28, 0.86)',
+        windowColor: 'rgba(184, 224, 255, 0.28)',
+        seed: 7.9,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 102,
+        parallax: 0.15,
+        minWidth: 62,
+        maxWidth: 132,
+        minHeight: 284,
+        maxHeight: 548,
+        gap: 14,
+        fill: '#101d32',
+        stroke: 'rgba(6, 10, 19, 0.9)',
+        windowColor: 'rgba(168, 246, 255, 0.24)',
+        seed: 8.6,
+        detail: true,
+      },
+    ],
+    streetAlpha: 0,
+    carsAlpha: 0,
+    detailMode: 'stratosphere',
+    cloudDeck: 0.32,
+  },
+  {
+    id: 'orbit',
+    name: 'Low Orbit',
+    minScore: 100001,
+    maxScore: Number.POSITIVE_INFINITY,
+    backgroundPath: '/fun-assets/backgrounds/Orbit.png',
+    sky: { top: '#030510', mid: '#10244f', bottom: '#385f8d' },
+    celestial: {
+      mode: 'night',
+      x: 0.14,
+      y: 0.16,
+      radius: 16,
+      color: 'rgba(214, 230, 255, 0.85)',
+      glow: 'rgba(152, 209, 255, 0.24)',
+    },
+    weather: {
+      clouds: 0.08,
+      wisps: 0.12,
+      rain: 0,
+      snow: 0.4,
+      storm: 0,
+      stars: 0.76,
+      aurora: 0.7,
+      stardust: 0.82,
+      breeze: 0.05,
+    },
+    imageLayers: [
+      { parallax: 0.022, height: 0.74, yOffset: 44, alpha: 0.22 },
+      { parallax: 0.054, height: 0.88, yOffset: 74, alpha: 0.3 },
+      { parallax: 0.11, height: 1.02, yOffset: 110, alpha: 0.4 },
+    ],
+    cityLayers: [
+      {
+        baseY: GAME_HEIGHT - 166,
+        parallax: 0.034,
+        minWidth: 40,
+        maxWidth: 90,
+        minHeight: 82,
+        maxHeight: 206,
+        gap: 14,
+        fill: '#233858',
+        stroke: 'rgba(15, 23, 39, 0.84)',
+        windowColor: 'rgba(170, 246, 255, 0.3)',
+        seed: 9.4,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 152,
+        parallax: 0.078,
+        minWidth: 48,
+        maxWidth: 104,
+        minHeight: 94,
+        maxHeight: 244,
+        gap: 15,
+        fill: '#182b47',
+        stroke: 'rgba(10, 16, 27, 0.9)',
+        windowColor: 'rgba(161, 255, 255, 0.34)',
+        seed: 10.1,
+        detail: true,
+      },
+      {
+        baseY: GAME_HEIGHT - 140,
+        parallax: 0.13,
+        minWidth: 52,
+        maxWidth: 112,
+        minHeight: 110,
+        maxHeight: 274,
+        gap: 15,
+        fill: '#111f35',
+        stroke: 'rgba(5, 10, 17, 0.92)',
+        windowColor: 'rgba(164, 255, 255, 0.33)',
+        seed: 10.8,
+        detail: true,
+      },
+    ],
+    streetAlpha: 0,
+    carsAlpha: 0,
+    detailMode: 'orbit',
+    cloudDeck: 0.42,
+  },
 ];
 
 const PLAYABLE_CHARACTER = {
@@ -97,6 +500,48 @@ const NOTES = {
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
 const getDifficultyProgress = (score) => clamp((score || 0) / SCORE_DIFFICULTY_CAP, 0, 1);
+
+function resolveBackgroundState(score) {
+  const altitudeScore = Math.max(0, Number(score) || 0);
+  let currentIndex = 0;
+  for (let i = BACKGROUND_TIERS.length - 1; i >= 0; i -= 1) {
+    if (altitudeScore >= BACKGROUND_TIERS[i].minScore) {
+      currentIndex = i;
+      break;
+    }
+  }
+
+  const currentTier = BACKGROUND_TIERS[currentIndex];
+  const nextTier = BACKGROUND_TIERS[currentIndex + 1] || currentTier;
+  if (currentTier === nextTier) {
+    return {
+      currentTier,
+      nextTier,
+      currentIndex,
+      nextIndex: currentIndex,
+      blend: 0,
+    };
+  }
+
+  const tierRange = Math.max(1, nextTier.minScore - currentTier.minScore);
+  const transitionWindow = clamp(
+    currentTier.transitionWindow || BACKGROUND_TRANSITION_WINDOW,
+    1,
+    tierRange,
+  );
+  const transitionStart = nextTier.minScore - transitionWindow;
+  const blend = altitudeScore >= transitionStart
+    ? clamp((altitudeScore - transitionStart) / transitionWindow, 0, 1)
+    : 0;
+
+  return {
+    currentTier,
+    nextTier,
+    currentIndex,
+    nextIndex: currentIndex + 1,
+    blend,
+  };
+}
 
 function entitiesOverlap(a, b, padding = 0) {
   const leftA = a.x + padding;
@@ -261,6 +706,21 @@ function fillReachablePlatforms(platforms, score) {
   }
 }
 
+function createPathStepFromPlatform(platform) {
+  return {
+    platformId: platform.id,
+    x: platform.x + platform.width * 0.5,
+    y: platform.y,
+    width: platform.width,
+  };
+}
+
+function sortPathPlatformsByHeight(platforms) {
+  return platforms
+    .filter((platform) => platform.path && !platform.broken)
+    .sort((a, b) => b.y - a.y);
+}
+
 function createClouds() {
   const clouds = [];
   for (let i = 0; i < 14; i += 1) {
@@ -330,38 +790,43 @@ function createInitialGame(bestScore) {
   }
   fillReachablePlatforms(platforms, 0);
 
+  const pathPlatforms = sortPathPlatformsByHeight(platforms);
+  const devitStartPlatform = pathPlatforms[0] || platforms[0];
+  const initialPathQueue = [];
+  for (let i = 1; i <= DEVIT_START_PLATFORM_LAG && i < pathPlatforms.length; i += 1) {
+    initialPathQueue.push(createPathStepFromPlatform(pathPlatforms[i]));
+  }
+
+  const devitCenterX = devitStartPlatform
+    ? devitStartPlatform.x + devitStartPlatform.width * 0.5
+    : player.x + player.width * 0.5;
+  const devitStandY = devitStartPlatform
+    ? devitStartPlatform.y - stats.height
+    : player.y + 140;
+
   const devit = {
-    active: false,
-    x: player.x,
-    y: player.y + 140,
+    active: true,
+    x: devitCenterX - stats.width * 0.5,
+    y: devitStandY,
     width: stats.width,
     height: stats.height,
     vx: 0,
     vy: 0,
     facing: 1,
     squash: 0,
+    jumping: false,
+    jumpCooldown: DEVIT_JUMP_COOLDOWN_FRAMES,
+    currentPlatformId: devitStartPlatform?.id || null,
   };
-
-  const initialTrail = [{
-    x: player.x,
-    y: player.y,
-    vx: player.vx,
-    vy: player.vy,
-    facing: player.facing,
-    squash: player.squash,
-    jumpCount: 0,
-  }];
 
   return {
     characterId: PLAYABLE_CHARACTER.id,
     stats,
     player,
     devit,
-    playerTrail: initialTrail,
-    devitTrailIndex: 0,
+    playerPathQueue: initialPathQueue,
+    playerLastLandedPlatformId: null,
     jumpCount: 0,
-    nonProgressCount: 0,
-    lastLandingDistance: 0,
     platforms,
     clouds: createClouds(),
     cars: createCars(),
@@ -370,6 +835,27 @@ function createInitialGame(bestScore) {
     bestScore,
     time: 0,
     bounceFlash: 0,
+  };
+}
+
+function enqueuePlayerPathStep(game, platform) {
+  if (!platform) return;
+  if (platform.id === game.playerLastLandedPlatformId) return;
+  game.playerLastLandedPlatformId = platform.id;
+  if (game.playerPathQueue.some((step) => step.platformId === platform.id)) return;
+  game.playerPathQueue.push(createPathStepFromPlatform(platform));
+  if (game.playerPathQueue.length > DEVIT_MAX_PATH_QUEUE) {
+    game.playerPathQueue.splice(0, game.playerPathQueue.length - DEVIT_MAX_PATH_QUEUE);
+  }
+}
+
+function getPathTargetRect(step) {
+  if (!step) return null;
+  return {
+    x: step.x,
+    y: step.y,
+    width: step.width,
+    platformId: step.platformId,
   };
 }
 
@@ -388,12 +874,12 @@ function drawRoundedRect(ctx, x, y, width, height, radius) {
   ctx.closePath();
 }
 
-function drawCloud(ctx, x, y, scale, opacity = 0.9) {
+function drawCloud(ctx, x, y, scale, opacity = 0.9, fillColor = '#f4f9ff') {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
   ctx.globalAlpha = opacity;
-  ctx.fillStyle = '#f4f9ff';
+  ctx.fillStyle = fillColor;
   ctx.beginPath();
   ctx.ellipse(0, 8, 22, 12, 0, 0, Math.PI * 2);
   ctx.ellipse(-16, 10, 12, 8, 0, 0, Math.PI * 2);
@@ -416,6 +902,7 @@ function drawCityLayer(ctx, options) {
     stroke,
     seed,
     detail = false,
+    windowColor = 'rgba(203, 228, 255, 0.16)',
   } = options;
   const scroll = (score * parallax) % (maxWidth + gap);
   let x = -maxWidth - scroll;
@@ -434,7 +921,7 @@ function drawCityLayer(ctx, options) {
     ctx.stroke();
 
     if (detail && height > 60) {
-      ctx.fillStyle = 'rgba(203, 228, 255, 0.16)';
+      ctx.fillStyle = windowColor;
       for (let winY = y + 10; winY < baseY - 10; winY += 14) {
         for (let winX = x + 8; winX < x + width - 8; winX += 11) {
           if (hashNoise(winX + winY, 0.91) > 0.52) {
@@ -450,7 +937,10 @@ function drawCityLayer(ctx, options) {
   }
 }
 
-function drawCars(ctx, cars) {
+function drawCars(ctx, cars, alpha = 1) {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
   for (const car of cars) {
     ctx.fillStyle = car.color;
     drawRoundedRect(ctx, car.x, car.y, car.width, car.height, 8);
@@ -464,77 +954,373 @@ function drawCars(ctx, cars) {
     ctx.arc(car.x + car.width - 17, car.y + car.height + 3, 6, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.restore();
 }
 
-function drawBackground(ctx, game) {
+function drawParallaxBackdropImage(ctx, image, score, layer) {
+  if (!image || !image.naturalWidth || !image.naturalHeight) return;
+  const drawHeight = GAME_HEIGHT * layer.height;
+  const drawWidth = Math.max(GAME_WIDTH + 40, drawHeight * (image.naturalWidth / image.naturalHeight));
+  const gap = 26;
+  const wrapWidth = drawWidth + gap;
+  const scroll = (score * layer.parallax) % wrapWidth;
+  let x = -scroll - gap * 0.5;
+  const y = GAME_HEIGHT - drawHeight + layer.yOffset;
+
+  ctx.save();
+  ctx.globalAlpha = layer.alpha;
+  while (x < GAME_WIDTH + drawWidth) {
+    ctx.drawImage(image, x, y, drawWidth, drawHeight);
+    x += wrapWidth;
+  }
+  ctx.restore();
+}
+
+function drawCelestialBody(ctx, celestial) {
+  if (!celestial) return;
+  const cx = GAME_WIDTH * celestial.x;
+  const cy = GAME_HEIGHT * celestial.y;
+  const radius = celestial.radius;
+
+  const glow = ctx.createRadialGradient(cx, cy, radius * 0.45, cx, cy, radius * 2.7);
+  glow.addColorStop(0, celestial.glow);
+  glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 2.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = celestial.color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawStars(ctx, time, intensity) {
+  if (intensity <= 0) return;
+  const starCount = Math.floor(26 + intensity * 102);
+  for (let i = 0; i < starCount; i += 1) {
+    const baseX = hashNoise(i, 4.13) * GAME_WIDTH;
+    const baseY = hashNoise(i, 7.61) * (GAME_HEIGHT * 0.72);
+    const twinkle = 0.45 + 0.55 * Math.sin(time * 0.022 + i * 1.37);
+    const radius = 0.6 + hashNoise(i, 2.9) * (1.55 + intensity * 0.9);
+    ctx.fillStyle = `rgba(226, 238, 255, ${Math.max(0, 0.22 + twinkle * 0.5) * intensity})`;
+    ctx.beginPath();
+    ctx.arc(baseX, baseY, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawAurora(ctx, time, intensity) {
+  if (intensity <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let band = 0; band < 3; band += 1) {
+    const baseY = 122 + band * 34;
+    const amplitude = 20 + band * 8;
+    ctx.beginPath();
+    ctx.moveTo(-40, baseY);
+    for (let x = -40; x <= GAME_WIDTH + 40; x += 36) {
+      const wave = Math.sin(x * 0.02 + time * 0.006 + band * 1.6) * amplitude;
+      ctx.lineTo(x, baseY + wave);
+    }
+    ctx.lineTo(GAME_WIDTH + 40, baseY + 150);
+    ctx.lineTo(-40, baseY + 150);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, baseY - 46, 0, baseY + 142);
+    g.addColorStop(0, `rgba(138, 250, 220, ${0.22 * intensity})`);
+    g.addColorStop(0.45, `rgba(118, 162, 255, ${0.18 * intensity})`);
+    g.addColorStop(1, 'rgba(100, 255, 211, 0)');
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawWindStreaks(ctx, time, strength) {
+  if (strength <= 0) return;
+  const streaks = Math.floor(6 + strength * 14);
+  ctx.save();
+  ctx.strokeStyle = `rgba(233, 247, 255, ${0.08 + strength * 0.18})`;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < streaks; i += 1) {
+    const y = hashNoise(i, 12.2) * (GAME_HEIGHT * 0.64);
+    const width = 26 + hashNoise(i, 10.1) * 52;
+    const speed = 0.065 + hashNoise(i, 8.7) * 0.08;
+    const x = ((time * speed + hashNoise(i, 7.2)) % 1.2) * (GAME_WIDTH + 80) - 60;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + width, y - width * 0.04);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRain(ctx, time, intensity) {
+  if (intensity <= 0) return;
+  const count = Math.floor(34 + intensity * 152);
+  const heavy = intensity > 0.58;
+  const length = heavy ? 18 : 13;
+  const drift = heavy ? 0.34 : 0.24;
+  const speed = heavy ? 0.006 : 0.0046;
+
+  ctx.save();
+  ctx.strokeStyle = heavy
+    ? `rgba(176, 204, 255, ${0.26 + intensity * 0.4})`
+    : `rgba(182, 210, 255, ${0.18 + intensity * 0.3})`;
+  ctx.lineWidth = heavy ? 1.25 : 1;
+  for (let i = 0; i < count; i += 1) {
+    const baseX = hashNoise(i, 22.3);
+    const baseY = hashNoise(i, 27.9);
+    const wobble = Math.sin(time * 0.028 + i * 0.51) * 4.8;
+    const x = baseX * (GAME_WIDTH + 70) - 35 + wobble;
+    const y = ((baseY + time * speed) % 1.16) * (GAME_HEIGHT + 120) - 80;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - length * drift, y + length);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSnowAndStardust(ctx, time, snowIntensity, stardustIntensity) {
+  const total = Math.max(0, snowIntensity) + Math.max(0, stardustIntensity);
+  if (total <= 0) return;
+  const count = Math.floor(26 + snowIntensity * 70 + stardustIntensity * 86);
+  for (let i = 0; i < count; i += 1) {
+    const baseX = hashNoise(i, 33.1);
+    const baseY = hashNoise(i, 35.4);
+    const drift = Math.sin(time * 0.016 + i * 1.9) * (4 + stardustIntensity * 7);
+    const x = baseX * GAME_WIDTH + drift;
+    const y = ((baseY + time * (0.0012 + snowIntensity * 0.0018 + stardustIntensity * 0.0013)) % 1.24) * (GAME_HEIGHT + 120) - 80;
+    const radius = 0.9 + hashNoise(i, 38.7) * (1.8 + stardustIntensity * 1.4);
+    const sparkle = 0.45 + 0.55 * Math.sin(time * 0.03 + i * 0.73);
+    const alpha = (0.15 + sparkle * 0.4) * (0.5 * snowIntensity + 0.7 * stardustIntensity + 0.15);
+    ctx.fillStyle = `rgba(225, 240, 255, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawCloudDeck(ctx, opacity = 0) {
+  if (opacity <= 0) return;
+  const deckY = GAME_HEIGHT * 0.54;
+  const g = ctx.createLinearGradient(0, deckY - 120, 0, GAME_HEIGHT);
+  g.addColorStop(0, `rgba(223, 237, 255, ${0.03 + opacity * 0.08})`);
+  g.addColorStop(0.56, `rgba(228, 240, 255, ${0.15 + opacity * 0.16})`);
+  g.addColorStop(1, `rgba(239, 248, 255, ${0.24 + opacity * 0.2})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, deckY - 120, GAME_WIDTH, GAME_HEIGHT - deckY + 120);
+}
+
+function drawTierDetails(ctx, tier, game) {
+  switch (tier.detailMode) {
+    case 'ground': {
+      ctx.fillStyle = 'rgba(84, 136, 90, 0.42)';
+      ctx.fillRect(0, GAME_HEIGHT - 102, GAME_WIDTH, 26);
+      for (let i = 0; i < 6; i += 1) {
+        const x = i * 80 - ((game.score * 0.05) % 80) - 20;
+        ctx.fillStyle = 'rgba(204, 172, 140, 0.45)';
+        drawRoundedRect(ctx, x, GAME_HEIGHT - 132, 42, 34, 4);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(82, 133, 86, 0.55)';
+        ctx.beginPath();
+        ctx.arc(x + 8, GAME_HEIGHT - 108, 8, 0, Math.PI * 2);
+        ctx.arc(x + 16, GAME_HEIGHT - 112, 9, 0, Math.PI * 2);
+        ctx.arc(x + 24, GAME_HEIGHT - 108, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'metropolis': {
+      ctx.strokeStyle = 'rgba(55, 62, 78, 0.52)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i += 1) {
+        const x = i * 146 - ((game.score * 0.06) % 146) + 40;
+        const y = GAME_HEIGHT - 228 - (i % 2) * 42;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + 84);
+        ctx.moveTo(x, y + 14);
+        ctx.lineTo(x + 56, y - 6);
+        ctx.moveTo(x + 54, y - 6);
+        ctx.lineTo(x + 54, y + 18);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'skyline': {
+      for (let i = 0; i < 4; i += 1) {
+        const x = i * 118 - ((game.score * 0.12) % 118) + 24;
+        const y = GAME_HEIGHT - 280 - (i % 2) * 36;
+        drawRoundedRect(ctx, x, y, 34, 16, 3);
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(106, 237, 255, 0.42)' : 'rgba(255, 117, 209, 0.4)';
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(122, 95, 132, 0.22)';
+      for (let i = 0; i < 3; i += 1) {
+        const x = 90 + i * 140 - ((game.score * 0.05) % 140);
+        ctx.beginPath();
+        ctx.ellipse(x, GAME_HEIGHT - 108, 58, 18, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'stratosphere': {
+      for (let i = 0; i < 2; i += 1) {
+        const x = ((game.time * (0.22 + i * 0.08) + i * 160 + game.score * 0.03) % (GAME_WIDTH + 220)) - 110;
+        const y = 110 + i * 76;
+        ctx.fillStyle = 'rgba(186, 203, 236, 0.34)';
+        ctx.beginPath();
+        ctx.ellipse(x, y, 44, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(121, 154, 214, 0.35)';
+        ctx.fillRect(x - 8, y - 10, 16, 8);
+      }
+      for (let i = 0; i < 3; i += 1) {
+        const x = ((game.time * (0.4 + i * 0.09) + i * 128 + game.score * 0.04) % (GAME_WIDTH + 170)) - 85;
+        const y = 220 + i * 42;
+        ctx.fillStyle = 'rgba(151, 212, 255, 0.4)';
+        drawRoundedRect(ctx, x, y, 22, 8, 3);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'orbit': {
+      const earthY = GAME_HEIGHT + 280;
+      ctx.fillStyle = 'rgba(55, 112, 168, 0.42)';
+      ctx.beginPath();
+      ctx.arc(GAME_WIDTH * 0.5, earthY, 420, Math.PI * 1.07, Math.PI * 1.93);
+      ctx.lineTo(GAME_WIDTH, GAME_HEIGHT);
+      ctx.lineTo(0, GAME_HEIGHT);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(153, 220, 255, 0.3)';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(GAME_WIDTH * 0.52, GAME_HEIGHT - 140);
+      ctx.lineTo(GAME_WIDTH * 0.525, 42);
+      ctx.stroke();
+      for (let i = 0; i < 4; i += 1) {
+        const x = ((game.time * (0.18 + i * 0.07) + i * 126) % (GAME_WIDTH + 100)) - 50;
+        const y = 128 + i * 66;
+        ctx.fillStyle = 'rgba(204, 236, 255, 0.5)';
+        drawRoundedRect(ctx, x, y, 18, 8, 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(144, 220, 255, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y + 4);
+        ctx.lineTo(x + 26, y + 4);
+        ctx.stroke();
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function drawCloudAndBreezeLayer(ctx, game, weather) {
+  if (!weather) return;
+  if (weather.clouds > 0) {
+    for (const cloud of game.clouds) {
+      const tint = weather.storm > 0.3 ? '#d3deef' : '#f4f9ff';
+      drawCloud(ctx, cloud.x, cloud.y, cloud.scale, weather.clouds * (0.42 + cloud.scale * 0.18), tint);
+    }
+  }
+  if (weather.wisps > 0) {
+    ctx.save();
+    ctx.fillStyle = `rgba(236, 245, 255, ${0.1 + weather.wisps * 0.2})`;
+    for (let i = 0; i < 6; i += 1) {
+      const x = ((game.time * (0.32 + i * 0.09) + i * 90) % (GAME_WIDTH + 180)) - 90;
+      const y = 70 + i * 52 + Math.sin(game.time * 0.01 + i) * 8;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 56, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  if (weather.breeze > 0) {
+    drawWindStreaks(ctx, game.time, weather.breeze);
+  }
+}
+
+function drawFrontWeatherLayer(ctx, game, weather) {
+  if (!weather) return;
+  if (weather.rain > 0) {
+    drawRain(ctx, game.time + game.score * 0.02, weather.rain);
+  }
+  if (weather.snow > 0 || weather.stardust > 0) {
+    drawSnowAndStardust(ctx, game.time + game.score * 0.01, weather.snow, weather.stardust);
+  }
+  if (weather.storm > 0) {
+    const flashA = Math.max(0, Math.sin(game.time * 0.046 + 0.4) - 0.905) * 8.3;
+    const flashB = Math.max(0, Math.sin(game.time * 0.089 + 2.1) - 0.966) * 15.2;
+    const flash = clamp(flashA + flashB, 0, 1) * weather.storm;
+    if (flash > 0.02) {
+      ctx.fillStyle = `rgba(214, 230, 255, ${0.15 + flash * 0.36})`;
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
+  }
+}
+
+function drawTierScene(ctx, game, tier, backgroundSheets, alpha = 1) {
+  if (!tier || alpha <= 0.001) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
   const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
-  gradient.addColorStop(0, '#d7ecff');
-  gradient.addColorStop(0.53, '#a4cdf5');
-  gradient.addColorStop(1, '#678dbe');
+  gradient.addColorStop(0, tier.sky.top);
+  gradient.addColorStop(0.53, tier.sky.mid);
+  gradient.addColorStop(1, tier.sky.bottom);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-  ctx.fillStyle = 'rgba(255, 221, 120, 0.82)';
-  ctx.beginPath();
-  ctx.arc(GAME_WIDTH - 66, 82, 24, 0, Math.PI * 2);
-  ctx.fill();
+  drawStars(ctx, game.time + game.score * 0.01, tier.weather.stars);
+  drawAurora(ctx, game.time + game.score * 0.006, tier.weather.aurora);
+  drawCelestialBody(ctx, tier.celestial);
+  drawCloudAndBreezeLayer(ctx, game, tier.weather);
 
-  for (const cloud of game.clouds) {
-    drawCloud(ctx, cloud.x, cloud.y, cloud.scale, 0.78);
+  const backdrop = backgroundSheets?.[tier.id];
+  if (backdrop) {
+    for (const layer of tier.imageLayers) {
+      drawParallaxBackdropImage(ctx, backdrop, game.score, layer);
+    }
   }
 
-  drawCityLayer(ctx, {
-    baseY: GAME_HEIGHT - 72,
-    score: game.score,
-    parallax: 0.07,
-    minWidth: 30,
-    maxWidth: 64,
-    minHeight: 58,
-    maxHeight: 170,
-    gap: 7,
-    fill: '#6596cc',
-    stroke: 'rgba(57, 94, 139, 0.6)',
-    seed: 0.3,
-    detail: false,
-  });
-  drawCityLayer(ctx, {
-    baseY: GAME_HEIGHT - 66,
-    score: game.score,
-    parallax: 0.13,
-    minWidth: 34,
-    maxWidth: 74,
-    minHeight: 80,
-    maxHeight: 212,
-    gap: 8,
-    fill: '#4878af',
-    stroke: 'rgba(37, 65, 97, 0.65)',
-    seed: 1.1,
-    detail: true,
-  });
-  drawCityLayer(ctx, {
-    baseY: GAME_HEIGHT - 60,
-    score: game.score,
-    parallax: 0.2,
-    minWidth: 38,
-    maxWidth: 90,
-    minHeight: 110,
-    maxHeight: 260,
-    gap: 11,
-    fill: '#365b84',
-    stroke: 'rgba(20, 39, 62, 0.8)',
-    seed: 2.4,
-    detail: true,
-  });
-
-  ctx.fillStyle = '#1f2e46';
-  ctx.fillRect(0, GAME_HEIGHT - 70, GAME_WIDTH, 70);
-  ctx.fillStyle = 'rgba(117, 145, 188, 0.26)';
-  for (let i = 0; i < GAME_WIDTH; i += 32) {
-    ctx.fillRect(i + ((game.score * 0.55) % 32), GAME_HEIGHT - 45, 16, 4);
+  for (const layer of tier.cityLayers) {
+    drawCityLayer(ctx, {
+      ...layer,
+      score: game.score,
+    });
   }
 
-  drawCars(ctx, game.cars);
+  drawTierDetails(ctx, tier, game);
+  drawCloudDeck(ctx, tier.cloudDeck);
+  drawFrontWeatherLayer(ctx, game, tier.weather);
 
+  if (tier.streetAlpha > 0) {
+    ctx.fillStyle = `rgba(18, 31, 49, ${0.86 * tier.streetAlpha})`;
+    ctx.fillRect(0, GAME_HEIGHT - 70, GAME_WIDTH, 70);
+    ctx.fillStyle = `rgba(143, 177, 220, ${0.3 * tier.streetAlpha})`;
+    for (let i = 0; i < GAME_WIDTH; i += 32) {
+      ctx.fillRect(i + ((game.score * 0.55) % 32), GAME_HEIGHT - 45, 16, 4);
+    }
+  }
+
+  drawCars(ctx, game.cars, tier.carsAlpha || 0);
+  ctx.restore();
+}
+
+function drawBackground(ctx, game, backgroundSheets) {
+  const state = resolveBackgroundState(game.score);
+  const baseAlpha = clamp(1 - state.blend, 0, 1);
+  drawTierScene(ctx, game, state.currentTier, backgroundSheets, baseAlpha);
+  if (state.blend > 0.001) {
+    drawTierScene(ctx, game, state.nextTier, backgroundSheets, state.blend);
+  }
   if (game.bounceFlash > 0.02) {
     ctx.fillStyle = `rgba(255, 246, 196, ${Math.min(0.2, game.bounceFlash * 0.2)})`;
     ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
@@ -766,8 +1552,8 @@ function drawCharacterPreview(ctx, spriteSheet, spriteConfig, frameIndex = sprit
   drawCatCharacter(ctx, dummy, 0);
 }
 
-function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet) {
-  drawBackground(ctx, game);
+function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet, backgroundSheets) {
+  drawBackground(ctx, game, backgroundSheets);
 
   for (const platform of game.platforms) {
     drawPlatform(ctx, platform);
@@ -880,6 +1666,7 @@ export default function FunPage() {
   const [gameStatus, setGameStatus] = useState('idle');
   const [score, setScore] = useState(0);
   const [spriteVersion, setSpriteVersion] = useState(0);
+  const [backgroundVersion, setBackgroundVersion] = useState(0);
   const [bestScore, setBestScore] = useState(() => {
     const raw = Number(window.localStorage.getItem(BEST_SCORE_KEY));
     return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
@@ -902,6 +1689,7 @@ export default function FunPage() {
   const scoreRef = useRef(score);
   const spriteSheetRef = useRef(null);
   const devitSpriteSheetRef = useRef(null);
+  const backgroundSheetsRef = useRef({});
   const gameRef = useRef(createInitialGame(bestScore));
 
   const audioContextRef = useRef(null);
@@ -953,6 +1741,27 @@ export default function FunPage() {
     devitImage.onerror = () => {};
     devitImage.src = DEVIT_SPRITE_SHEET.path;
 
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadedIds = new Set();
+    for (const tier of BACKGROUND_TIERS) {
+      if (loadedIds.has(tier.id)) continue;
+      loadedIds.add(tier.id);
+      const image = new Image();
+      image.decoding = 'async';
+      image.onload = () => {
+        if (cancelled) return;
+        backgroundSheetsRef.current[tier.id] = image;
+        setBackgroundVersion((v) => v + 1);
+      };
+      image.onerror = () => {};
+      image.src = tier.backgroundPath;
+    }
     return () => {
       cancelled = true;
     };
@@ -1345,13 +2154,7 @@ export default function FunPage() {
             player.squash = boostJump ? 0.4 : 0.32;
             game.bounceFlash = boostJump ? 0.95 : 0.52;
             game.jumpCount += 1;
-            const distanceSinceLastLanding = game.distance - game.lastLandingDistance;
-            if (distanceSinceLastLanding > 16) {
-              game.nonProgressCount = 0;
-            } else {
-              game.nonProgressCount += 1;
-            }
-            game.lastLandingDistance = game.distance;
+            enqueuePlayerPathStep(game, platform);
             playJumpSound(boostJump);
             break;
           }
@@ -1369,6 +2172,9 @@ export default function FunPage() {
       if (devit.active) {
         devit.y += shift;
       }
+      for (const step of game.playerPathQueue) {
+        step.y += shift;
+      }
       for (const cloud of game.clouds) {
         cloud.y += shift * 0.17;
         if (cloud.y > GAME_HEIGHT + 60) {
@@ -1385,74 +2191,72 @@ export default function FunPage() {
 
     fillReachablePlatforms(game.platforms, game.score);
 
-    // Keep an exact movement trail; Devit replays it with jump-lag.
-    game.playerTrail.push({
-      x: player.x,
-      y: player.y,
-      vx: player.vx,
-      vy: player.vy,
-      facing: player.facing,
-      squash: player.squash,
-      jumpCount: game.jumpCount,
-    });
-    if (game.playerTrail.length > DEVIT_TRAIL_LIMIT) {
-      const removeCount = game.playerTrail.length - DEVIT_TRAIL_LIMIT;
-      game.playerTrail.splice(0, removeCount);
-      game.devitTrailIndex = Math.max(0, game.devitTrailIndex - removeCount);
-    }
-
-    if (!devit.active && game.score >= DEVIT_UNLOCK_SCORE && game.jumpCount >= DEVIT_JUMP_LAG) {
-      devit.active = true;
-      const targetJump = Math.max(0, game.jumpCount - DEVIT_JUMP_LAG);
-      let spawnIndex = game.playerTrail.length - 1;
-      while (spawnIndex > 0 && game.playerTrail[spawnIndex].jumpCount > targetJump) {
-        spawnIndex -= 1;
-      }
-      game.devitTrailIndex = spawnIndex;
-      const snapshot = game.playerTrail[spawnIndex];
-      if (snapshot) {
-        devit.x = snapshot.x;
-        devit.y = snapshot.y;
-        devit.vx = snapshot.vx;
-        devit.vy = snapshot.vy;
-        devit.facing = snapshot.facing;
-        devit.squash = snapshot.squash;
-      }
-    }
-
     if (devit.active) {
-      const catchUpSteps = Math.max(0, game.nonProgressCount - 1);
-      const currentLag = Math.max(0, DEVIT_JUMP_LAG - catchUpSteps);
-      const targetJump = Math.max(0, game.jumpCount - currentLag);
-      while (
-        game.devitTrailIndex + 1 < game.playerTrail.length
-        && game.playerTrail[game.devitTrailIndex + 1].jumpCount <= targetJump
-      ) {
-        game.devitTrailIndex += 1;
+      devit.squash *= Math.pow(0.8, delta);
+      const targetStep = game.playerPathQueue[0];
+      const targetRect = getPathTargetRect(targetStep);
+
+      if (devit.jumping) {
+        const previousDevitY = devit.y;
+        devit.vy += stats.gravity * DEVIT_GRAVITY_SCALE * delta;
+        devit.x += devit.vx * delta;
+        devit.y += devit.vy * delta;
+        if (devit.vx > 0.2) devit.facing = 1;
+        if (devit.vx < -0.2) devit.facing = -1;
+        if (devit.x > GAME_WIDTH + devit.width * 0.48) devit.x = -devit.width * 0.48;
+        if (devit.x < -devit.width * 0.48) devit.x = GAME_WIDTH + devit.width * 0.48;
+
+        if (targetRect) {
+          const targetLeft = targetRect.x - targetRect.width * 0.5;
+          const targetRight = targetRect.x + targetRect.width * 0.5;
+          const oldBottom = previousDevitY + devit.height;
+          const newBottom = devit.y + devit.height;
+          if (devit.vy > 0 && oldBottom <= targetRect.y + 4 && newBottom >= targetRect.y - 1) {
+            const footLeft = devit.x + devit.width * 0.2;
+            const footRight = devit.x + devit.width * 0.8;
+            if (footRight >= targetLeft && footLeft <= targetRight) {
+              devit.x = clamp(targetRect.x - devit.width * 0.5, -devit.width * 0.45, GAME_WIDTH - devit.width * 0.55);
+              devit.y = targetRect.y - devit.height;
+              devit.vx = 0;
+              devit.vy = 0;
+              devit.jumping = false;
+              devit.jumpCooldown = DEVIT_JUMP_COOLDOWN_FRAMES;
+              devit.squash = 0.25;
+              devit.currentPlatformId = targetRect.platformId;
+              game.playerPathQueue.shift();
+            }
+          }
+        }
+      } else {
+        devit.vx *= Math.pow(0.82, delta);
+        if (Math.abs(devit.vx) < 0.02) devit.vx = 0;
+        devit.vy = 0;
+        devit.jumpCooldown = Math.max(0, devit.jumpCooldown - delta);
+        if (targetRect && devit.jumpCooldown <= 0) {
+          const startCenterX = devit.x + devit.width * 0.5;
+          const targetCenterX = targetRect.x;
+          let deltaX = targetCenterX - startCenterX;
+          if (deltaX > GAME_WIDTH * 0.5) deltaX -= GAME_WIDTH;
+          if (deltaX < -GAME_WIDTH * 0.5) deltaX += GAME_WIDTH;
+          const destinationY = targetRect.y - devit.height;
+          const deltaY = destinationY - devit.y;
+          const airTime = clamp(
+            16 + Math.abs(deltaX) * 0.22 + Math.max(0, -deltaY) * 0.14,
+            14,
+            42,
+          );
+          const gravity = stats.gravity * DEVIT_GRAVITY_SCALE;
+          devit.vx = deltaX / airTime;
+          devit.vy = (deltaY - 0.5 * gravity * airTime * airTime) / airTime;
+          devit.jumping = true;
+          devit.squash = 0.34;
+          if (Math.abs(devit.vx) > 0.16) {
+            devit.facing = devit.vx > 0 ? 1 : -1;
+          }
+        }
       }
 
-      const snapshot = game.playerTrail[game.devitTrailIndex];
-      if (snapshot) {
-        devit.x = snapshot.x;
-        devit.y = snapshot.y;
-        devit.vx = snapshot.vx;
-        devit.vy = snapshot.vy;
-        devit.facing = snapshot.facing;
-        devit.squash = snapshot.squash;
-      }
-
-      if (game.nonProgressCount >= DEVIT_STALL_CATCH_COUNT) {
-        devit.x = player.x;
-        devit.y = player.y;
-        devit.vx = player.vx;
-        devit.vy = player.vy;
-        devit.facing = player.facing;
-        devit.squash = player.squash;
-        handleGameOver(game.score, 'devit');
-        return;
-      }
-
-      if (entitiesOverlap(player, devit, DEVIT_TOUCH_PADDING) && currentLag <= 0) {
+      if (entitiesOverlap(player, devit, DEVIT_TOUCH_PADDING)) {
         handleGameOver(game.score, 'devit');
         return;
       }
@@ -1486,6 +2290,7 @@ export default function FunPage() {
       gameStatusRef.current,
       spriteSheetRef.current,
       devitSpriteSheetRef.current,
+      backgroundSheetsRef.current,
     );
   }, []);
 
@@ -1533,7 +2338,7 @@ export default function FunPage() {
 
   useEffect(() => {
     drawGame();
-  }, [drawGame, spriteVersion]);
+  }, [backgroundVersion, drawGame, spriteVersion]);
 
   useEffect(() => {
     void loadLeaderboard();
