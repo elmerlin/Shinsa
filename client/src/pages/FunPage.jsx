@@ -25,11 +25,20 @@ const DEVIT_SPEED_BOOST_MULTIPLIER = 1.2;
 const DEVIT_STALE_TARGET_BUFFER = 36;
 const DEVIT_FAILSAFE_LAND_BUFFER = 18;
 const DEVIT_MAX_AIR_FRAMES = 72;
-const BGM_TRACKS = [
+const DOJO_CAT_RUN_TRACKS = [
   '/fun-assets/audio/Pixel%20Paws%20Pursuit.mp3',
   '/fun-assets/audio/Pixel%20Paws.mp3',
   '/fun-assets/audio/Devit%20Pursuit.mp3',
   '/fun-assets/audio/Devil%20Hop.mp3',
+];
+const BUU_RUN_TRACKS = [
+  '/fun-assets/audio/Buu-1.mp3',
+  '/fun-assets/audio/Buu-2.mp3',
+];
+const LABUBU_RUN_TRACKS = [
+  '/fun-assets/audio/Labubu-1.mp3',
+  '/fun-assets/audio/Labubu-2.mp3',
+  '/fun-assets/audio/Labubu-3.mp3',
 ];
 const START_SCREEN_TRACK = '/fun-assets/audio/Start%20Screen.mp3';
 const BACKGROUND_TRANSITION_WINDOW = 500;
@@ -437,13 +446,6 @@ const BACKGROUND_TIERS = [
   },
 ];
 
-const PLAYABLE_CHARACTER = {
-  id: 'cat',
-  name: 'Dojo Cat',
-  description: 'The Dojo Mascot',
-  cardClass: 'from-amber-500 to-orange-500',
-};
-
 const CHARACTER_STATS = {
   width: 52,
   height: 58,
@@ -455,6 +457,34 @@ const CHARACTER_STATS = {
 
 const CAT_SPRITE_SHEET = {
   path: '/fun-assets/dojo-cat.png',
+  columns: 4,
+  rows: 4,
+  scale: 1.74,
+  yOffset: -2,
+  previewFrame: 12,
+  idleFrames: [12, 13, 14, 15],
+  moveFrames: [0, 1, 2, 3],
+  riseFrames: [5, 6, 7],
+  apexFrame: 10,
+  fallFrames: [8, 9, 10, 11],
+};
+
+const BUU_SPRITE_SHEET = {
+  path: '/fun-assets/characters/buu-sprite.png',
+  columns: 4,
+  rows: 4,
+  scale: 1.74,
+  yOffset: -2,
+  previewFrame: 12,
+  idleFrames: [12, 13, 14, 15],
+  moveFrames: [0, 1, 2, 3],
+  riseFrames: [5, 6, 7],
+  apexFrame: 10,
+  fallFrames: [8, 9, 10, 11],
+};
+
+const LABUBU_SPRITE_SHEET = {
+  path: '/fun-assets/characters/labubu-sprite.png',
   columns: 4,
   rows: 4,
   scale: 1.74,
@@ -479,6 +509,45 @@ const DEVIT_SPRITE_SHEET = {
   idleFrames: [12, 13, 14, 15],
   apexFrame: 10,
 };
+
+const PLAYABLE_CHARACTERS = [
+  {
+    id: 'cat',
+    name: 'Dojo Cat',
+    description: 'The Dojo Mascot',
+    cardClass: 'from-amber-500 to-orange-500',
+    sprite: CAT_SPRITE_SHEET,
+    runTracks: DOJO_CAT_RUN_TRACKS,
+  },
+  {
+    id: 'buu',
+    name: 'Buu',
+    description: 'Big Boy',
+    cardClass: 'from-fuchsia-500 to-rose-500',
+    sprite: BUU_SPRITE_SHEET,
+    runTracks: BUU_RUN_TRACKS,
+  },
+  {
+    id: 'labubu',
+    name: 'Labubu',
+    description: 'Small Size, Big Bite',
+    cardClass: 'from-cyan-500 to-blue-500',
+    sprite: LABUBU_SPRITE_SHEET,
+    runTracks: LABUBU_RUN_TRACKS,
+  },
+];
+const DEFAULT_CHARACTER_ID = PLAYABLE_CHARACTERS[0].id;
+
+function getPlayableCharacter(characterId) {
+  return PLAYABLE_CHARACTERS.find((character) => character.id === characterId) || PLAYABLE_CHARACTERS[0];
+}
+
+function getRunTracksForCharacter(characterId) {
+  const character = getPlayableCharacter(characterId);
+  return Array.isArray(character.runTracks) && character.runTracks.length
+    ? [...character.runTracks]
+    : [...DOJO_CAT_RUN_TRACKS];
+}
 
 const PREVIEW_LOOP_FRAMES = [12, 13, 14, 15, 0, 1, 2, 3, 5, 6, 7, 10, 9, 8];
 const PREVIEW_LOOP_FRAME_MS = 95;
@@ -818,7 +887,11 @@ function createCars() {
   ];
 }
 
-function createInitialGame(bestScore, devitStartLag = DEVIT_START_PLATFORM_LAG_DEFAULT) {
+function createInitialGame(
+  bestScore,
+  devitStartLag = DEVIT_START_PLATFORM_LAG_DEFAULT,
+  characterId = DEFAULT_CHARACTER_ID,
+) {
   const stats = CHARACTER_STATS;
   const lag = normalizeDevitStartLag(devitStartLag);
   const player = {
@@ -889,7 +962,7 @@ function createInitialGame(bestScore, devitStartLag = DEVIT_START_PLATFORM_LAG_D
   };
 
   return {
-    characterId: PLAYABLE_CHARACTER.id,
+    characterId,
     devitStartLag: lag,
     stats,
     player,
@@ -1631,13 +1704,13 @@ function getSpriteRectFromIndex(sheet, spriteConfig, frameIndex) {
   };
 }
 
-function selectCatFrameIndex(player, time) {
+function selectCharacterFrameIndex(player, time, spriteConfig) {
   const tick = Math.floor(time / 5);
-  if (player.vy < -3.5) return CAT_SPRITE_SHEET.riseFrames[tick % CAT_SPRITE_SHEET.riseFrames.length];
-  if (player.vy < -0.8) return CAT_SPRITE_SHEET.apexFrame;
-  if (player.vy > 2.6) return CAT_SPRITE_SHEET.fallFrames[tick % CAT_SPRITE_SHEET.fallFrames.length];
-  if (Math.abs(player.vx) > 0.45) return CAT_SPRITE_SHEET.moveFrames[tick % CAT_SPRITE_SHEET.moveFrames.length];
-  return CAT_SPRITE_SHEET.idleFrames[tick % CAT_SPRITE_SHEET.idleFrames.length];
+  if (player.vy < -3.5) return spriteConfig.riseFrames[tick % spriteConfig.riseFrames.length];
+  if (player.vy < -0.8) return spriteConfig.apexFrame;
+  if (player.vy > 2.6) return spriteConfig.fallFrames[tick % spriteConfig.fallFrames.length];
+  if (Math.abs(player.vx) > 0.45) return spriteConfig.moveFrames[tick % spriteConfig.moveFrames.length];
+  return spriteConfig.idleFrames[tick % spriteConfig.idleFrames.length];
 }
 
 function selectDevitFrameIndex(devit, time) {
@@ -1700,7 +1773,7 @@ function drawCharacterPreview(ctx, spriteSheet, spriteConfig, frameIndex = sprit
   drawCatCharacter(ctx, dummy, 0);
 }
 
-function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet) {
+function renderGame(ctx, game, status, spriteSheet, spriteConfig, devitSpriteSheet) {
   drawBackground(ctx, game);
 
   for (const platform of game.platforms) {
@@ -1725,8 +1798,8 @@ function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet) {
     game.player,
     game.time,
     spriteSheet,
-    CAT_SPRITE_SHEET,
-    selectCatFrameIndex(game.player, game.time),
+    spriteConfig,
+    selectCharacterFrameIndex(game.player, game.time, spriteConfig),
   );
   if (!usedSprite) {
     drawCatCharacter(ctx, game.player, game.time);
@@ -1769,7 +1842,7 @@ function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet) {
   }
 }
 
-function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
+function CharacterPreview({ spriteSheet, spriteConfig = CAT_SPRITE_SHEET, spriteVersion = 0 }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -1778,7 +1851,7 @@ function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return undefined;
     if (!spriteSheet) {
-      drawCharacterPreview(ctx, null, CAT_SPRITE_SHEET);
+      drawCharacterPreview(ctx, null, spriteConfig);
       return undefined;
     }
 
@@ -1788,7 +1861,7 @@ function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
 
     const renderCurrent = () => {
       const frame = PREVIEW_LOOP_FRAMES[frameCursor % PREVIEW_LOOP_FRAMES.length];
-      drawCharacterPreview(ctx, spriteSheet, CAT_SPRITE_SHEET, frame);
+      drawCharacterPreview(ctx, spriteSheet, spriteConfig, frame);
     };
 
     renderCurrent();
@@ -1804,7 +1877,7 @@ function CharacterPreview({ spriteSheet, spriteVersion = 0 }) {
 
     rafId = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(rafId);
-  }, [spriteSheet, spriteVersion]);
+  }, [spriteConfig, spriteSheet, spriteVersion]);
 
   return <canvas ref={canvasRef} width={92} height={92} className="w-[92px] h-[92px] rounded-2xl border border-white/30 shadow-sm" />;
 }
@@ -1814,6 +1887,7 @@ export default function FunPage() {
   const [gameStatus, setGameStatus] = useState('idle');
   const [score, setScore] = useState(0);
   const [spriteVersion, setSpriteVersion] = useState(0);
+  const [selectedCharacterId, setSelectedCharacterId] = useState(DEFAULT_CHARACTER_ID);
   const [devitStartLag, setDevitStartLag] = useState(DEVIT_START_PLATFORM_LAG_DEFAULT);
   const [bestScore, setBestScore] = useState(() => {
     const raw = Number(window.localStorage.getItem(BEST_SCORE_KEY));
@@ -1835,17 +1909,18 @@ export default function FunPage() {
   const bestScoreRef = useRef(bestScore);
   const soundEnabledRef = useRef(soundEnabled);
   const scoreRef = useRef(score);
+  const selectedCharacterRef = useRef(selectedCharacterId);
   const devitStartLagRef = useRef(devitStartLag);
-  const spriteSheetRef = useRef(null);
+  const playableSpriteSheetsRef = useRef({});
   const devitSpriteSheetRef = useRef(null);
-  const gameRef = useRef(createInitialGame(bestScore, devitStartLag));
+  const gameRef = useRef(createInitialGame(bestScore, devitStartLag, selectedCharacterId));
 
   const audioContextRef = useRef(null);
   const bgmAudioRef = useRef(null);
   const startScreenAudioRef = useRef(null);
   const bgmTrackPathRef = useRef('');
   const bgmTrackIndexRef = useRef(0);
-  const bgmPlaylistRef = useRef([...BGM_TRACKS]);
+  const bgmPlaylistRef = useRef(getRunTracksForCharacter(selectedCharacterId));
   const windNodesRef = useRef(null);
   const windBufferRef = useRef(null);
   const pointerStateRef = useRef({ id: null, direction: null, startedAt: 0 });
@@ -1869,6 +1944,10 @@ export default function FunPage() {
   }, [score]);
 
   useEffect(() => {
+    selectedCharacterRef.current = selectedCharacterId;
+  }, [selectedCharacterId]);
+
+  useEffect(() => {
     devitStartLagRef.current = normalizeDevitStartLag(devitStartLag);
   }, [devitStartLag]);
 
@@ -1880,7 +1959,11 @@ export default function FunPage() {
         const nextLag = normalizeDevitStartLag(payload?.devit_start_platform_lag);
         setDevitStartLag(nextLag);
         if (gameStatusRef.current !== 'playing') {
-          gameRef.current = createInitialGame(bestScoreRef.current, nextLag);
+          gameRef.current = createInitialGame(
+            bestScoreRef.current,
+            nextLag,
+            selectedCharacterRef.current,
+          );
           scoreRef.current = 0;
           setScore(0);
         }
@@ -1893,15 +1976,17 @@ export default function FunPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const catImage = new Image();
-    catImage.decoding = 'async';
-    catImage.onload = () => {
-      if (cancelled) return;
-      spriteSheetRef.current = catImage;
-      setSpriteVersion((v) => v + 1);
-    };
-    catImage.onerror = () => {};
-    catImage.src = CAT_SPRITE_SHEET.path;
+    for (const character of PLAYABLE_CHARACTERS) {
+      const image = new Image();
+      image.decoding = 'async';
+      image.onload = () => {
+        if (cancelled) return;
+        playableSpriteSheetsRef.current[character.id] = image;
+        setSpriteVersion((v) => v + 1);
+      };
+      image.onerror = () => {};
+      image.src = character.sprite.path;
+    }
 
     const devitImage = new Image();
     devitImage.decoding = 'async';
@@ -2563,11 +2648,16 @@ export default function FunPage() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const currentCharacter = getPlayableCharacter(
+      gameRef.current?.characterId || selectedCharacterRef.current,
+    );
+    const spriteSheet = playableSpriteSheetsRef.current[currentCharacter.id] || null;
     renderGame(
       ctx,
       gameRef.current,
       gameStatusRef.current,
-      spriteSheetRef.current,
+      spriteSheet,
+      currentCharacter.sprite,
       devitSpriteSheetRef.current,
     );
   }, []);
@@ -2644,7 +2734,11 @@ export default function FunPage() {
     pointerStateRef.current.direction = null;
     pointerStateRef.current.startedAt = 0;
     releaseDirectionalControl();
-    const nextGame = createInitialGame(bestScoreRef.current, devitStartLagRef.current);
+    const nextCharacterId = selectedCharacterRef.current;
+    bgmPlaylistRef.current = getRunTracksForCharacter(nextCharacterId);
+    bgmTrackIndexRef.current = 0;
+    bgmTrackPathRef.current = '';
+    const nextGame = createInitialGame(bestScoreRef.current, devitStartLagRef.current, nextCharacterId);
     gameRef.current = nextGame;
     scoreRef.current = 0;
     setScore(0);
@@ -2685,6 +2779,14 @@ export default function FunPage() {
   useEffect(() => {
     drawGame();
   }, [drawGame, spriteVersion]);
+
+  useEffect(() => {
+    if (gameStatusRef.current === 'playing') return;
+    if (gameRef.current) {
+      gameRef.current.characterId = selectedCharacterId;
+    }
+    drawGame();
+  }, [drawGame, selectedCharacterId]);
 
   useEffect(() => {
     void loadLeaderboard();
@@ -2760,6 +2862,7 @@ export default function FunPage() {
     }
   }, [ensureAudioContext, gameStatus, soundEnabled, startBgm, startStartScreenMusic, stopBgm, stopStartScreenMusic]);
 
+  const selectedCharacter = getPlayableCharacter(selectedCharacterId);
   const shouldShowLeaderboard = gameStatus !== 'playing' && showLeaderboardAtStart;
 
   return (
@@ -2832,20 +2935,37 @@ export default function FunPage() {
                 <p className="text-center font-display font-bold text-xl text-white mb-3">
                   {gameStatus === 'gameover' ? 'ROUND OVER' : GAME_TITLE}
                 </p>
-                <div className="rounded-xl border border-piu-accent/40 bg-piu-accent/10 p-3">
-                  <div className="flex items-center gap-3">
-                    <CharacterPreview
-                      spriteSheet={spriteSheetRef.current}
-                      spriteVersion={spriteVersion}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-sm font-display font-bold text-white">{PLAYABLE_CHARACTER.name}</p>
-                      <p className="text-xs text-gray-300 mt-1">{PLAYABLE_CHARACTER.description}</p>
-                      <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${PLAYABLE_CHARACTER.cardClass}`}>
-                        PLAYABLE
-                      </div>
-                    </div>
-                  </div>
+                <div className="rounded-xl border border-piu-accent/40 bg-piu-accent/10 p-3 space-y-2">
+                  {PLAYABLE_CHARACTERS.map((character) => {
+                    const isSelected = selectedCharacter.id === character.id;
+                    return (
+                      <button
+                        key={character.id}
+                        type="button"
+                        onClick={() => setSelectedCharacterId(character.id)}
+                        className={`w-full rounded-xl border px-2.5 py-2 text-left transition-colors ${
+                          isSelected
+                            ? 'border-piu-accent bg-piu-accent/20'
+                            : 'border-white/15 bg-black/20 hover:border-piu-accent/55'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <CharacterPreview
+                            spriteSheet={playableSpriteSheetsRef.current[character.id]}
+                            spriteConfig={character.sprite}
+                            spriteVersion={spriteVersion}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm font-display font-bold text-white">{character.name}</p>
+                            <p className="text-xs text-gray-300 mt-1">{character.description}</p>
+                            <div className={`mt-2 inline-flex px-2 py-1 rounded-full text-[10px] font-bold text-white bg-gradient-to-r ${character.cardClass}`}>
+                              {isSelected ? 'SELECTED' : 'SELECT'}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
                 <button
                   type="button"
