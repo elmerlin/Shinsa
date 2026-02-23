@@ -16,20 +16,27 @@ const DEVIT_START_PLATFORM_LAG_DEFAULT = 3;
 const DEVIT_JUMP_COOLDOWN_FRAMES = 5;
 const DEVIT_GRAVITY_SCALE = 1;
 const DEVIT_MAX_PATH_QUEUE = 2500;
+const DEVIT_PLATFORM_DISTANCE_UNIT = 72;
+const DEVIT_RUBBER_BAND_TRIGGER_PLATFORMS = 10;
+const DEVIT_RUBBER_BAND_RESET_PLATFORMS = 3;
+const DEVIT_SPEED_BOOST_PLATFORM_DISTANCE = 5;
+const DEVIT_NORMAL_PLATFORM_DISTANCE = 3;
+const DEVIT_SPEED_BOOST_MULTIPLIER = 1.2;
 const BGM_TRACKS = [
   '/fun-assets/audio/Pixel%20Paws%20Pursuit.mp3',
   '/fun-assets/audio/Pixel%20Paws.mp3',
   '/fun-assets/audio/Devit%20Pursuit.mp3',
   '/fun-assets/audio/Devil%20Hop.mp3',
 ];
-const BACKGROUND_TRANSITION_WINDOW = 2600;
+const BACKGROUND_TRANSITION_WINDOW = 500;
+const SPRITE_PLATFORM_ANCHOR = 0.7;
 const BACKGROUND_TIERS = [
   {
     id: 'ground',
     name: 'Ground Level',
     minScore: 0,
     maxScore: 10000,
-    backgroundPath: '/fun-assets/backgrounds/Ground.png',
+    techLevel: 0.08,
     sky: { top: '#7ed2ff', mid: '#bce9ff', bottom: '#ffe1a1' },
     celestial: {
       mode: 'sun',
@@ -109,7 +116,7 @@ const BACKGROUND_TIERS = [
     name: 'The Metropolis',
     minScore: 10001,
     maxScore: 30000,
-    backgroundPath: '/fun-assets/backgrounds/Metropolis.png',
+    techLevel: 0.34,
     sky: { top: '#74b8f0', mid: '#f0d1a6', bottom: '#d79e64' },
     celestial: {
       mode: 'sun',
@@ -189,7 +196,7 @@ const BACKGROUND_TIERS = [
     name: 'The Skyline',
     minScore: 30001,
     maxScore: 60000,
-    backgroundPath: '/fun-assets/backgrounds/Skyline.png',
+    techLevel: 0.58,
     sky: { top: '#482f6d', mid: '#a6577d', bottom: '#ff995c' },
     celestial: {
       mode: 'sunset',
@@ -269,7 +276,7 @@ const BACKGROUND_TIERS = [
     name: 'The Stratosphere',
     minScore: 60001,
     maxScore: 100000,
-    backgroundPath: '/fun-assets/backgrounds/Stratosphere.png',
+    techLevel: 0.82,
     sky: { top: '#040c1d', mid: '#112343', bottom: '#1f3e66' },
     celestial: {
       mode: 'moon',
@@ -349,7 +356,7 @@ const BACKGROUND_TIERS = [
     name: 'Low Orbit',
     minScore: 100001,
     maxScore: Number.POSITIVE_INFINITY,
-    backgroundPath: '/fun-assets/backgrounds/Orbit.png',
+    techLevel: 1,
     sky: { top: '#030510', mid: '#10244f', bottom: '#385f8d' },
     celestial: {
       mode: 'night',
@@ -447,7 +454,7 @@ const CAT_SPRITE_SHEET = {
   columns: 4,
   rows: 4,
   scale: 1.74,
-  yOffset: -10,
+  yOffset: -2,
   previewFrame: 12,
   idleFrames: [12, 13, 14, 15],
   moveFrames: [0, 1, 2, 3],
@@ -461,7 +468,7 @@ const DEVIT_SPRITE_SHEET = {
   columns: 4,
   rows: 4,
   scale: 1.74,
-  yOffset: -10,
+  yOffset: -2,
   moveFrames: [0, 1, 2, 3],
   riseFrames: [5, 6, 7],
   fallFrames: [8, 9, 10, 11],
@@ -500,6 +507,7 @@ const NOTES = {
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
 const getDifficultyProgress = (score) => clamp((score || 0) / SCORE_DIFFICULTY_CAP, 0, 1);
+const getPlatformDifficulty = (score) => Math.pow(getDifficultyProgress(score), 0.9);
 const normalizeDevitStartLag = (value) => {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEVIT_START_PLATFORM_LAG_DEFAULT;
@@ -569,6 +577,25 @@ let platformIdCounter = 1;
 
 const SAFE_PATH_MARGIN = 10;
 
+function getPlatformBudget(score) {
+  const difficulty = getPlatformDifficulty(score);
+  return Math.round(17 - difficulty * 8);
+}
+
+function estimateReachableHorizontalShift(gap, nextWidth, previousWidth) {
+  const gravity = CHARACTER_STATS.gravity;
+  const jumpSpeed = Math.abs(CHARACTER_STATS.jumpVelocity);
+  const discriminant = jumpSpeed * jumpSpeed - 2 * gravity * gap;
+  if (discriminant <= 0) return 62;
+  const descentTime = (jumpSpeed + Math.sqrt(discriminant)) / gravity;
+  const conservativeSpeed = CHARACTER_STATS.maxSpeed * 0.62;
+  const rawReach = descentTime * conservativeSpeed;
+  return Math.max(
+    58,
+    rawReach - nextWidth * 0.35 - previousWidth * 0.18,
+  );
+}
+
 function createWindNoiseBuffer(audioContext, durationSeconds = 2.5) {
   const frameCount = Math.floor(audioContext.sampleRate * durationSeconds);
   const buffer = audioContext.createBuffer(1, frameCount, audioContext.sampleRate);
@@ -580,29 +607,36 @@ function createWindNoiseBuffer(audioContext, durationSeconds = 2.5) {
 }
 
 function selectPlatformType(score) {
-  const progress = getDifficultyProgress(score);
+  const progress = getPlatformDifficulty(score);
   const roll = Math.random();
-  if (roll < 0.76 - progress * 0.12) return 'normal';
-  if (roll < 0.9) return 'moving';
-  if (roll < 0.96) return 'break';
+  const normalChance = 0.7 - progress * 0.42;
+  const movingChance = 0.18 + progress * 0.46;
+  const breakChance = 0.06 + progress * 0.02;
+  if (roll < normalChance) return 'normal';
+  if (roll < normalChance + movingChance) return 'moving';
+  if (roll < normalChance + movingChance + breakChance) return 'break';
   return 'boost';
 }
 
 function createPlatform(y, score, options = {}) {
-  const width = options.width ?? randomBetween(76, 122);
+  const difficulty = getPlatformDifficulty(score);
+  const width = options.width ?? randomBetween(74 - difficulty * 24, 118 - difficulty * 30);
   const type = options.type ?? selectPlatformType(score);
   const x = clamp(
     options.x ?? randomBetween(8, GAME_WIDTH - width - 8),
     5,
     GAME_WIDTH - width - 5,
   );
+  const movingSpeedScale = options.movingSpeedScale ?? 1;
+  const movingSpeedMin = (0.78 + difficulty * 0.7) * movingSpeedScale;
+  const movingSpeedMax = (1.45 + difficulty * 1.05) * movingSpeedScale;
   return {
     id: platformIdCounter++,
     x,
     y,
     width,
     type,
-    velocityX: type === 'moving' ? randomBetween(0.8, 1.7) * (Math.random() < 0.5 ? -1 : 1) : 0,
+    velocityX: type === 'moving' ? randomBetween(movingSpeedMin, movingSpeedMax) * (Math.random() < 0.5 ? -1 : 1) : 0,
     broken: false,
     brokenTimer: 0,
     path: Boolean(options.path),
@@ -610,35 +644,45 @@ function createPlatform(y, score, options = {}) {
 }
 
 function createSafePathPlatform(previousPlatform, score) {
-  const difficulty = getDifficultyProgress(score);
-  const minGap = 52 + difficulty * 24;
-  const maxGap = 80 + difficulty * 38;
+  const difficulty = getPlatformDifficulty(score);
+  const minGap = 54 + difficulty * 28;
+  const maxGap = 84 + difficulty * 38;
   const gap = randomBetween(minGap, maxGap);
   const y = previousPlatform.y - gap;
-  const width = randomBetween(108 - difficulty * 40, 142 - difficulty * 48);
+  const movingChance = 0.08 + difficulty * 0.52;
+  const boostChance = 0.08 + (1 - difficulty) * 0.06;
+  const roll = Math.random();
+  const type = roll < movingChance ? 'moving' : roll < movingChance + boostChance ? 'boost' : 'normal';
+  const widthBaseMin = 98 - difficulty * 44;
+  const widthBaseMax = 136 - difficulty * 58;
+  const width = randomBetween(
+    type === 'moving' ? widthBaseMin + 8 : widthBaseMin,
+    type === 'moving' ? widthBaseMax + 8 : widthBaseMax,
+  );
   const previousCenter = previousPlatform.x + previousPlatform.width * 0.5;
   const gapWeight = (gap - minGap) / Math.max(1, maxGap - minGap);
-  const maxShift = clamp((72 + difficulty * 62) - gapWeight * 18, 56, 146);
+  const naturalShift = clamp((66 + difficulty * 58) - gapWeight * 22, 52, 126);
+  const reachableShift = estimateReachableHorizontalShift(gap, width, previousPlatform.width);
+  const maxShift = clamp(Math.min(naturalShift, reachableShift), 48, 122);
   const center = clamp(
     previousCenter + randomBetween(-maxShift, maxShift),
     SAFE_PATH_MARGIN + width * 0.5,
     GAME_WIDTH - SAFE_PATH_MARGIN - width * 0.5,
   );
-  const boostChance = 0.04 + difficulty * 0.08;
-  const type = Math.random() < boostChance ? 'boost' : 'normal';
 
   return createPlatform(y, score, {
     x: center - width * 0.5,
     width,
     type,
+    movingSpeedScale: 0.82,
     path: true,
   });
 }
 
 function pickCompanionCount(score) {
-  const progress = getDifficultyProgress(score);
-  const onePlatformChance = 0.58 + progress * 0.2;
-  const twoPlatformChance = 0.94 + progress * 0.03;
+  const progress = getPlatformDifficulty(score);
+  const onePlatformChance = 0.5 + progress * 0.42;
+  const twoPlatformChance = 0.92 + progress * 0.05;
   const roll = Math.random();
   if (roll < onePlatformChance) return 0; // total platforms in jump: 1
   if (roll < twoPlatformChance) return 1; // total platforms in jump: 2
@@ -650,13 +694,13 @@ function overlapsHorizontally(a, b, padding = 18) {
 }
 
 function createCompanionPlatform(pathPlatform, score, existingCompanions = []) {
-  const difficulty = getDifficultyProgress(score);
+  const difficulty = getPlatformDifficulty(score);
   const pathCenter = pathPlatform.x + pathPlatform.width * 0.5;
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const y = pathPlatform.y + randomBetween(6, 24 + difficulty * 10);
-    const width = randomBetween(74 - difficulty * 22, 108 - difficulty * 26);
+    const y = pathPlatform.y + randomBetween(8, 23 + difficulty * 8);
+    const width = randomBetween(70 - difficulty * 20, 102 - difficulty * 30);
     const direction = Math.random() < 0.5 ? -1 : 1;
-    const offset = randomBetween(80 + difficulty * 30, 152 + difficulty * 54) * direction + randomBetween(-18, 18);
+    const offset = randomBetween(92 + difficulty * 22, 146 + difficulty * 40) * direction + randomBetween(-14, 14);
     const center = clamp(
       pathCenter + offset,
       SAFE_PATH_MARGIN + width * 0.5,
@@ -693,16 +737,17 @@ function getTopPathPlatform(platforms) {
 function fillReachablePlatforms(platforms, score) {
   let topPath = getTopPathPlatform(platforms);
   if (!topPath) return;
+  const platformBudget = clamp(getPlatformBudget(score), 8, MAX_PLATFORMS);
 
-  while (topPath.y > -84 && platforms.length < MAX_PLATFORMS) {
+  while (topPath.y > -84 && platforms.length < platformBudget) {
     const nextPath = createSafePathPlatform(topPath, score);
     platforms.push(nextPath);
     topPath = nextPath;
-    if (platforms.length >= MAX_PLATFORMS) break;
+    if (platforms.length >= platformBudget) break;
 
     const companionCount = pickCompanionCount(score);
     const companions = [];
-    for (let i = 0; i < companionCount && platforms.length < MAX_PLATFORMS; i += 1) {
+    for (let i = 0; i < companionCount && platforms.length < platformBudget; i += 1) {
       const companion = createCompanionPlatform(nextPath, score, companions);
       if (!companion) continue;
       companions.push(companion);
@@ -724,6 +769,15 @@ function sortPathPlatformsByHeight(platforms) {
   return platforms
     .filter((platform) => platform.path && !platform.broken)
     .sort((a, b) => b.y - a.y);
+}
+
+function clonePathStep(step) {
+  return {
+    platformId: step.platformId,
+    x: step.x,
+    y: step.y,
+    width: step.width,
+  };
 }
 
 function createClouds() {
@@ -802,6 +856,10 @@ function createInitialGame(bestScore, devitStartLag = DEVIT_START_PLATFORM_LAG_D
   for (let i = 1; i <= lag && i < pathPlatforms.length; i += 1) {
     initialPathQueue.push(createPathStepFromPlatform(pathPlatforms[i]));
   }
+  const initialPathHistory = [];
+  if (devitStartPlatform) {
+    initialPathHistory.push(createPathStepFromPlatform(devitStartPlatform));
+  }
 
   const devitCenterX = devitStartPlatform
     ? devitStartPlatform.x + devitStartPlatform.width * 0.5
@@ -832,6 +890,7 @@ function createInitialGame(bestScore, devitStartLag = DEVIT_START_PLATFORM_LAG_D
     player,
     devit,
     playerPathQueue: initialPathQueue,
+    playerPathHistory: initialPathHistory,
     playerLastLandedPlatformId: null,
     jumpCount: 0,
     platforms,
@@ -849,8 +908,16 @@ function enqueuePlayerPathStep(game, platform) {
   if (!platform) return;
   if (platform.id === game.playerLastLandedPlatformId) return;
   game.playerLastLandedPlatformId = platform.id;
-  if (game.playerPathQueue.some((step) => step.platformId === platform.id)) return;
-  game.playerPathQueue.push(createPathStepFromPlatform(platform));
+  const step = createPathStepFromPlatform(platform);
+  const historyLast = game.playerPathHistory[game.playerPathHistory.length - 1];
+  if (!historyLast || historyLast.platformId !== step.platformId) {
+    game.playerPathHistory.push(clonePathStep(step));
+    if (game.playerPathHistory.length > DEVIT_MAX_PATH_QUEUE) {
+      game.playerPathHistory.splice(0, game.playerPathHistory.length - DEVIT_MAX_PATH_QUEUE);
+    }
+  }
+  if (game.playerPathQueue.some((entry) => entry.platformId === step.platformId)) return;
+  game.playerPathQueue.push(step);
   if (game.playerPathQueue.length > DEVIT_MAX_PATH_QUEUE) {
     game.playerPathQueue.splice(0, game.playerPathQueue.length - DEVIT_MAX_PATH_QUEUE);
   }
@@ -864,6 +931,26 @@ function getPathTargetRect(step) {
     width: step.width,
     platformId: step.platformId,
   };
+}
+
+function rebuildDevitPathQueueFromRecent(game, count = DEVIT_START_PLATFORM_LAG_DEFAULT + 2) {
+  const desiredCount = Math.max(3, count);
+  const rebuilt = [];
+  const pushUnique = (step) => {
+    if (!step) return;
+    if (rebuilt.some((entry) => entry.platformId === step.platformId)) return;
+    rebuilt.push(clonePathStep(step));
+  };
+
+  const historySlice = game.playerPathHistory.slice(-desiredCount);
+  for (const step of historySlice) {
+    pushUnique(step);
+  }
+  for (const step of game.playerPathQueue) {
+    if (rebuilt.length >= desiredCount + 2) break;
+    pushUnique(step);
+  }
+  game.playerPathQueue = rebuilt;
 }
 
 function drawRoundedRect(ctx, x, y, width, height, radius) {
@@ -964,23 +1051,73 @@ function drawCars(ctx, cars, alpha = 1) {
   ctx.restore();
 }
 
-function drawParallaxBackdropImage(ctx, image, score, layer) {
-  if (!image || !image.naturalWidth || !image.naturalHeight) return;
-  const drawHeight = GAME_HEIGHT * layer.height;
-  const drawWidth = Math.max(GAME_WIDTH + 40, drawHeight * (image.naturalWidth / image.naturalHeight));
-  const gap = 26;
-  const wrapWidth = drawWidth + gap;
-  const scroll = (score * layer.parallax) % wrapWidth;
-  let x = -scroll - gap * 0.5;
-  const y = GAME_HEIGHT - drawHeight + layer.yOffset;
+function drawStreetForeground(ctx, game, tier) {
+  const streetAlpha = clamp(tier.streetAlpha || 0, 0, 1);
+  if (streetAlpha <= 0.001) return;
+  const roadTop = GAME_HEIGHT - 84;
+  const tech = clamp(tier.techLevel || 0, 0, 1);
 
   ctx.save();
-  ctx.globalAlpha = layer.alpha;
-  while (x < GAME_WIDTH + drawWidth) {
-    ctx.drawImage(image, x, y, drawWidth, drawHeight);
-    x += wrapWidth;
+  ctx.globalAlpha = streetAlpha;
+  const roadGradient = ctx.createLinearGradient(0, roadTop, 0, GAME_HEIGHT);
+  roadGradient.addColorStop(0, `rgba(40, 52, 72, ${0.46 + tech * 0.16})`);
+  roadGradient.addColorStop(0.55, `rgba(25, 33, 46, ${0.64 + tech * 0.2})`);
+  roadGradient.addColorStop(1, `rgba(11, 16, 24, ${0.9 + tech * 0.08})`);
+  ctx.fillStyle = roadGradient;
+  ctx.fillRect(0, roadTop, GAME_WIDTH, GAME_HEIGHT - roadTop);
+
+  ctx.strokeStyle = `rgba(255, 236, 170, ${0.22 + 0.2 * (1 - tech)})`;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([16, 16]);
+  ctx.lineDashOffset = -(game.time * (0.85 + tech * 0.7));
+  ctx.beginPath();
+  ctx.moveTo(0, roadTop + 36);
+  ctx.lineTo(GAME_WIDTH, roadTop + 36);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  drawCars(ctx, game.cars, tier.carsAlpha || 0);
+}
+
+function drawTechOverlay(ctx, game, tier) {
+  const tech = clamp(tier.techLevel || 0, 0, 1);
+  if (tech <= 0.12) return;
+  const hazeOpacity = 0.03 + tech * 0.11;
+  const haze = ctx.createLinearGradient(0, GAME_HEIGHT * 0.38, 0, GAME_HEIGHT);
+  haze.addColorStop(0, `rgba(90, 195, 255, ${hazeOpacity * 0.45})`);
+  haze.addColorStop(0.6, `rgba(129, 238, 255, ${hazeOpacity})`);
+  haze.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, GAME_HEIGHT * 0.32, GAME_WIDTH, GAME_HEIGHT * 0.68);
+
+  if (tech < 0.42) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const lineCount = Math.floor(2 + tech * 6);
+  for (let i = 0; i < lineCount; i += 1) {
+    const y = GAME_HEIGHT * (0.52 + i * 0.065);
+    const scroll = ((game.time * (0.75 + i * 0.2)) % (GAME_WIDTH + 180)) - 90;
+    const width = 40 + i * 10 + tech * 30;
+    ctx.strokeStyle = i % 2 === 0
+      ? `rgba(126, 252, 255, ${0.06 + tech * 0.1})`
+      : `rgba(255, 153, 222, ${0.05 + tech * 0.08})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(scroll, y);
+    ctx.lineTo(scroll + width, y - 2);
+    ctx.stroke();
   }
   ctx.restore();
+}
+
+function drawAltitudeMood(ctx, game, tier) {
+  const altitudeProgress = getDifficultyProgress(game.score);
+  const tech = clamp(tier.techLevel || 0, 0, 1);
+  const darkness = clamp(0.02 + altitudeProgress * 0.22 + tech * 0.18, 0, 0.46);
+  if (darkness <= 0.001) return;
+  ctx.fillStyle = `rgba(3, 7, 18, ${darkness})`;
+  ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 }
 
 function drawCelestialBody(ctx, celestial) {
@@ -1273,7 +1410,7 @@ function drawFrontWeatherLayer(ctx, game, weather) {
   }
 }
 
-function drawTierScene(ctx, game, tier, backgroundSheets, alpha = 1) {
+function drawTierScene(ctx, game, tier, alpha = 1) {
   if (!tier || alpha <= 0.001) return;
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -1290,24 +1427,31 @@ function drawTierScene(ctx, game, tier, backgroundSheets, alpha = 1) {
   drawCelestialBody(ctx, tier.celestial);
   drawCloudAndBreezeLayer(ctx, game, tier.weather);
 
-  const backdrop = backgroundSheets?.[tier.id];
-  if (backdrop) {
-    for (const layer of tier.imageLayers) {
-      drawParallaxBackdropImage(ctx, backdrop, game.score, layer);
+  if (Array.isArray(tier.cityLayers)) {
+    for (const layer of tier.cityLayers) {
+      drawCityLayer(ctx, {
+        ...layer,
+        score: game.score,
+      });
     }
   }
 
+  drawTierDetails(ctx, tier, game);
+  drawStreetForeground(ctx, game, tier);
   drawCloudDeck(ctx, tier.cloudDeck);
+  drawTechOverlay(ctx, game, tier);
+  drawAltitudeMood(ctx, game, tier);
   drawFrontWeatherLayer(ctx, game, tier.weather);
   ctx.restore();
 }
 
-function drawBackground(ctx, game, backgroundSheets) {
+function drawBackground(ctx, game) {
   const state = resolveBackgroundState(game.score);
-  const baseAlpha = clamp(1 - state.blend, 0, 1);
-  drawTierScene(ctx, game, state.currentTier, backgroundSheets, baseAlpha);
-  if (state.blend > 0.001) {
-    drawTierScene(ctx, game, state.nextTier, backgroundSheets, state.blend);
+  const backgroundLayerCurrentOpacity = clamp(1 - state.blend, 0, 1);
+  const backgroundLayerNextOpacity = clamp(state.blend, 0, 1);
+  drawTierScene(ctx, game, state.currentTier, backgroundLayerCurrentOpacity);
+  if (backgroundLayerNextOpacity > 0.001) {
+    drawTierScene(ctx, game, state.nextTier, backgroundLayerNextOpacity);
   }
   if (game.bounceFlash > 0.02) {
     ctx.fillStyle = `rgba(255, 246, 196, ${Math.min(0.2, game.bounceFlash * 0.2)})`;
@@ -1510,7 +1654,7 @@ function drawCharacterSprite(ctx, player, time, spriteSheet, spriteConfig, frame
   ctx.drawImage(
     spriteSheet,
     frame.sx, frame.sy, frame.sw, frame.sh,
-    -targetWidth * 0.5, -targetHeight * 0.78, targetWidth, targetHeight,
+    -targetWidth * 0.5, -targetHeight * SPRITE_PLATFORM_ANCHOR, targetWidth, targetHeight,
   );
   ctx.restore();
   return true;
@@ -1540,8 +1684,8 @@ function drawCharacterPreview(ctx, spriteSheet, spriteConfig, frameIndex = sprit
   drawCatCharacter(ctx, dummy, 0);
 }
 
-function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet, backgroundSheets) {
-  drawBackground(ctx, game, backgroundSheets);
+function renderGame(ctx, game, status, spriteSheet, devitSpriteSheet) {
+  drawBackground(ctx, game);
 
   for (const platform of game.platforms) {
     drawPlatform(ctx, platform);
@@ -1654,7 +1798,6 @@ export default function FunPage() {
   const [gameStatus, setGameStatus] = useState('idle');
   const [score, setScore] = useState(0);
   const [spriteVersion, setSpriteVersion] = useState(0);
-  const [backgroundVersion, setBackgroundVersion] = useState(0);
   const [devitStartLag, setDevitStartLag] = useState(DEVIT_START_PLATFORM_LAG_DEFAULT);
   const [bestScore, setBestScore] = useState(() => {
     const raw = Number(window.localStorage.getItem(BEST_SCORE_KEY));
@@ -1679,7 +1822,6 @@ export default function FunPage() {
   const devitStartLagRef = useRef(devitStartLag);
   const spriteSheetRef = useRef(null);
   const devitSpriteSheetRef = useRef(null);
-  const backgroundSheetsRef = useRef({});
   const gameRef = useRef(createInitialGame(bestScore, devitStartLag));
 
   const audioContextRef = useRef(null);
@@ -1754,27 +1896,6 @@ export default function FunPage() {
     devitImage.onerror = () => {};
     devitImage.src = DEVIT_SPRITE_SHEET.path;
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadedIds = new Set();
-    for (const tier of BACKGROUND_TIERS) {
-      if (loadedIds.has(tier.id)) continue;
-      loadedIds.add(tier.id);
-      const image = new Image();
-      image.decoding = 'async';
-      image.onload = () => {
-        if (cancelled) return;
-        backgroundSheetsRef.current[tier.id] = image;
-        setBackgroundVersion((v) => v + 1);
-      };
-      image.onerror = () => {};
-      image.src = tier.backgroundPath;
-    }
     return () => {
       cancelled = true;
     };
@@ -2186,6 +2307,9 @@ export default function FunPage() {
       for (const step of game.playerPathQueue) {
         step.y += shift;
       }
+      for (const step of game.playerPathHistory) {
+        step.y += shift;
+      }
       for (const cloud of game.clouds) {
         cloud.y += shift * 0.17;
         if (cloud.y > GAME_HEIGHT + 60) {
@@ -2212,6 +2336,19 @@ export default function FunPage() {
 
     if (devit.active) {
       devit.squash *= Math.pow(0.8, delta);
+      const platformDistanceToPlayer = Math.max(0, (devit.y - player.y) / DEVIT_PLATFORM_DISTANCE_UNIT);
+      if (platformDistanceToPlayer > DEVIT_RUBBER_BAND_TRIGGER_PLATFORMS) {
+        devit.x = player.x;
+        devit.y = player.y + DEVIT_RUBBER_BAND_RESET_PLATFORMS * DEVIT_PLATFORM_DISTANCE_UNIT;
+        devit.vx = 0;
+        devit.vy = 0;
+        devit.facing = player.facing;
+        devit.squash = 0.22;
+        devit.jumping = false;
+        devit.jumpCooldown = 0;
+        rebuildDevitPathQueueFromRecent(game, game.devitStartLag + 2);
+      }
+
       const targetStep = game.playerPathQueue[0];
       const targetRect = getPathTargetRect(targetStep);
 
@@ -2264,9 +2401,17 @@ export default function FunPage() {
             14,
             42,
           );
+          const jumpDistanceToPlayer = Math.max(0, (devit.y - player.y) / DEVIT_PLATFORM_DISTANCE_UNIT);
+          let speedMultiplier = 1;
+          if (jumpDistanceToPlayer > DEVIT_SPEED_BOOST_PLATFORM_DISTANCE) {
+            speedMultiplier = DEVIT_SPEED_BOOST_MULTIPLIER;
+          } else if (jumpDistanceToPlayer < DEVIT_NORMAL_PLATFORM_DISTANCE) {
+            speedMultiplier = 1;
+          }
+          const boostedAirTime = airTime / speedMultiplier;
           const gravity = stats.gravity * DEVIT_GRAVITY_SCALE;
-          devit.vx = deltaX / airTime;
-          devit.vy = (deltaY - 0.5 * gravity * airTime * airTime) / airTime;
+          devit.vx = deltaX / boostedAirTime;
+          devit.vy = (deltaY - 0.5 * gravity * boostedAirTime * boostedAirTime) / boostedAirTime;
           devit.jumping = true;
           devit.squash = 0.34;
           if (Math.abs(devit.vx) > 0.16) {
@@ -2309,9 +2454,75 @@ export default function FunPage() {
       gameStatusRef.current,
       spriteSheetRef.current,
       devitSpriteSheetRef.current,
-      backgroundSheetsRef.current,
     );
   }, []);
+
+  const renderGameToText = useCallback(() => {
+    const game = gameRef.current;
+    if (!game) return JSON.stringify({ mode: gameStatusRef.current, note: 'game_uninitialized' });
+    const bgState = resolveBackgroundState(game.score);
+    const visiblePlatforms = game.platforms
+      .filter((platform) => !platform.broken && platform.y > -40 && platform.y < GAME_HEIGHT + 80)
+      .sort((a, b) => a.y - b.y)
+      .slice(0, 8)
+      .map((platform) => ({
+        x: Math.round(platform.x),
+        y: Math.round(platform.y),
+        w: Math.round(platform.width),
+        type: platform.type,
+      }));
+    const payload = {
+      coords: 'origin top-left; +x right; +y down',
+      mode: gameStatusRef.current,
+      score: game.score,
+      best: game.bestScore,
+      tier: bgState.currentTier.id,
+      next_tier: bgState.nextTier.id,
+      transition_blend: Number(bgState.blend.toFixed(3)),
+      player: {
+        x: Number(game.player.x.toFixed(2)),
+        y: Number(game.player.y.toFixed(2)),
+        vx: Number(game.player.vx.toFixed(2)),
+        vy: Number(game.player.vy.toFixed(2)),
+      },
+      chaser: game.devit?.active
+        ? {
+          active: true,
+          x: Number(game.devit.x.toFixed(2)),
+          y: Number(game.devit.y.toFixed(2)),
+          vx: Number(game.devit.vx.toFixed(2)),
+          vy: Number(game.devit.vy.toFixed(2)),
+          queue: game.playerPathQueue.length,
+        }
+        : { active: false, queue: game.playerPathQueue.length },
+      platforms: visiblePlatforms,
+    };
+    return JSON.stringify(payload);
+  }, []);
+
+  const advanceGameTime = useCallback((ms = FRAME_MS) => {
+    const totalMs = Math.max(1, Number(ms) || FRAME_MS);
+    const steps = Math.max(1, Math.round(totalMs / FRAME_MS));
+    const delta = clamp(totalMs / FRAME_MS / steps, 0.45, 2.3);
+    for (let i = 0; i < steps; i += 1) {
+      if (gameStatusRef.current === 'playing') {
+        updateGame(delta);
+      }
+      drawGame();
+    }
+  }, [drawGame, updateGame]);
+
+  useEffect(() => {
+    window.render_game_to_text = renderGameToText;
+    window.advanceTime = (ms) => {
+      advanceGameTime(ms);
+      return window.render_game_to_text();
+    };
+    return () => {
+      delete window.render_game_to_text;
+      delete window.advanceTime;
+    };
+  }, [advanceGameTime, renderGameToText]);
 
   const startGame = useCallback(() => {
     pointerStateRef.current.id = null;
@@ -2357,7 +2568,7 @@ export default function FunPage() {
 
   useEffect(() => {
     drawGame();
-  }, [backgroundVersion, drawGame, spriteVersion]);
+  }, [drawGame, spriteVersion]);
 
   useEffect(() => {
     void loadLeaderboard();
