@@ -8,17 +8,49 @@ function mixToward(value, target, amount) {
   return clamp(Math.round(value + (target - value) * amount));
 }
 
-function buildPalette(base) {
+function mixColors(a, b, amount = 0.5) {
   return {
-    primary: {
-      r: mixToward(base.r, 255, 0.04),
-      g: mixToward(base.g, 255, 0.04),
-      b: mixToward(base.b, 255, 0.04),
-    },
-    secondary: {
-      r: mixToward(base.r, 20, 0.34),
-      g: mixToward(base.g, 20, 0.34),
-      b: mixToward(base.b, 20, 0.34),
+    r: mixToward(a.r, b.r, amount),
+    g: mixToward(a.g, b.g, amount),
+    b: mixToward(a.b, b.b, amount),
+  };
+}
+
+function colorDistance(a, b) {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return Math.sqrt((dr * dr) + (dg * dg) + (db * db));
+}
+
+function averageBucket(bucket) {
+  return {
+    r: clamp(Math.round(bucket.r / bucket.weight)),
+    g: clamp(Math.round(bucket.g / bucket.weight)),
+    b: clamp(Math.round(bucket.b / bucket.weight)),
+  };
+}
+
+function buildPalette(primaryBase, secondaryBase) {
+  const primary = {
+    r: mixToward(primaryBase.r, 255, 0.08),
+    g: mixToward(primaryBase.g, 255, 0.08),
+    b: mixToward(primaryBase.b, 255, 0.08),
+  };
+  const secondary = {
+    r: mixToward(secondaryBase.r, 255, 0.06),
+    g: mixToward(secondaryBase.g, 255, 0.06),
+    b: mixToward(secondaryBase.b, 255, 0.06),
+  };
+  const accentBase = mixColors(primaryBase, secondaryBase, 0.5);
+
+  return {
+    primary,
+    secondary,
+    accent: {
+      r: mixToward(accentBase.r, 255, 0.16),
+      g: mixToward(accentBase.g, 255, 0.16),
+      b: mixToward(accentBase.b, 255, 0.16),
     },
   };
 }
@@ -27,11 +59,8 @@ function rgba(color, alpha) {
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
 }
 
-function computeDominantColor(data) {
-  let totalR = 0;
-  let totalG = 0;
-  let totalB = 0;
-  let totalWeight = 0;
+function computeDominantColors(data) {
+  const buckets = new Map();
 
   for (let i = 0; i < data.length; i += 16) {
     const r = data[i];
@@ -46,19 +75,43 @@ function computeDominantColor(data) {
     const luminance = (max + min) / 2;
     if (luminance < 18 || luminance > 244) continue;
 
-    const weight = alpha * (1 + saturation / 255);
-    totalR += r * weight;
-    totalG += g * weight;
-    totalB += b * weight;
-    totalWeight += weight;
+    const saturationFactor = saturation / 255;
+    const midToneFactor = 1 - Math.min(1, Math.abs((luminance / 255) - 0.5) * 1.6);
+    const weight = alpha * (0.45 + saturationFactor * 0.85) * (0.35 + midToneFactor * 0.75);
+    if (weight < 0.01) continue;
+
+    const key = `${Math.round(r / 24)}-${Math.round(g / 24)}-${Math.round(b / 24)}`;
+    const existing = buckets.get(key) || { r: 0, g: 0, b: 0, weight: 0 };
+    existing.r += r * weight;
+    existing.g += g * weight;
+    existing.b += b * weight;
+    existing.weight += weight;
+    buckets.set(key, existing);
   }
 
-  if (totalWeight <= 0) return null;
-  return {
-    r: clamp(Math.round(totalR / totalWeight)),
-    g: clamp(Math.round(totalG / totalWeight)),
-    b: clamp(Math.round(totalB / totalWeight)),
-  };
+  const ranked = [...buckets.values()].sort((a, b) => b.weight - a.weight);
+  if (ranked.length === 0) return null;
+
+  const primary = averageBucket(ranked[0]);
+  let secondary = null;
+
+  for (let i = 1; i < ranked.length; i += 1) {
+    const candidate = averageBucket(ranked[i]);
+    if (colorDistance(primary, candidate) >= 50) {
+      secondary = candidate;
+      break;
+    }
+  }
+
+  if (!secondary) {
+    secondary = {
+      r: mixToward(primary.r, 18, 0.28),
+      g: mixToward(primary.g, 18, 0.28),
+      b: mixToward(primary.b, 18, 0.28),
+    };
+  }
+
+  return { primary, secondary };
 }
 
 export async function extractCommunityPalette(src) {
@@ -83,8 +136,8 @@ export async function extractCommunityPalette(src) {
         }
         ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
         const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        const dominant = computeDominantColor(pixelData);
-        resolve(dominant ? buildPalette(dominant) : null);
+        const dominant = computeDominantColors(pixelData);
+        resolve(dominant ? buildPalette(dominant.primary, dominant.secondary) : null);
       } catch {
         resolve(null);
       }
@@ -101,8 +154,24 @@ export async function extractCommunityPalette(src) {
 export function getCommunityCardStyle(palette) {
   if (!palette) return null;
   return {
-    backgroundImage: `linear-gradient(140deg, ${rgba(palette.primary, 0.24)} 0%, ${rgba(palette.secondary, 0.2)} 44%, rgba(11, 16, 30, 0.9) 100%)`,
-    borderColor: rgba(palette.primary, 0.48),
-    boxShadow: `0 10px 26px ${rgba(palette.primary, 0.16)}`,
+    backgroundColor: 'rgba(11, 16, 30, 0.92)',
+    backgroundImage: `linear-gradient(140deg, ${rgba(palette.primary, 0.32)} 0%, ${rgba(palette.secondary, 0.26)} 46%, rgba(11, 16, 30, 0.92) 100%)`,
+    borderColor: rgba(palette.primary, 0.5),
+    boxShadow: `0 12px 28px ${rgba(palette.accent || palette.primary, 0.2)}`,
+  };
+}
+
+export function getCommunityStatStyle(palette, tone = 'accent') {
+  if (!palette) return null;
+  const color = tone === 'primary'
+    ? palette.primary
+    : tone === 'secondary'
+      ? palette.secondary
+      : (palette.accent || palette.primary);
+
+  return {
+    borderColor: rgba(color, 0.46),
+    backgroundColor: rgba(color, 0.14),
+    color: rgba(color, 0.98),
   };
 }
