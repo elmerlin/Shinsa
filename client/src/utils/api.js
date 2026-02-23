@@ -156,6 +156,8 @@ export const sendInvitation = (data) => request('/auth/invite', { method: 'POST'
 // Fun mini-game
 export const getFunLeaderboard = (limit = 10) => request(`/fun/leaderboard?limit=${encodeURIComponent(limit)}`);
 export const submitFunScore = (score) => request('/fun/score', { method: 'POST', body: JSON.stringify({ score }) });
+export const getFunSettings = () => request('/fun/settings');
+export const updateFunSettings = (data) => request('/fun/settings', { method: 'PUT', body: JSON.stringify(data) });
 
 // Online Duels
 export const getOnlineDuels = () => request('/online-duels');

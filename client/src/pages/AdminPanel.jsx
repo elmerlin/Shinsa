@@ -4,6 +4,7 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
   getNotices, createNotice, updateNotice, deleteNotice,
+  getFunSettings, updateFunSettings,
 } from '../utils/api';
 
 const PHASE_LABELS = {
@@ -18,6 +19,12 @@ export default function AdminPanel() {
   const [archived, setArchived] = useState([]);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [funSettings, setFunSettings] = useState({ devit_start_platform_lag: 3, updated_at: '' });
+  const [funLagInput, setFunLagInput] = useState('3');
+  const [funLoading, setFunLoading] = useState(false);
+  const [funSaving, setFunSaving] = useState(false);
+  const [funError, setFunError] = useState('');
+  const [funSuccess, setFunSuccess] = useState('');
 
   // Notice form
   const [noticeForm, setNoticeForm] = useState({ title: '', content: '', pinned: false });
@@ -32,6 +39,22 @@ export default function AdminPanel() {
     getTournaments().then(setTournaments).catch(() => {});
     getArchivedTournaments().then(setArchived).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
+    setFunLoading(true);
+    getFunSettings()
+      .then((payload) => {
+        const lag = Number.parseInt(payload?.devit_start_platform_lag, 10);
+        const normalizedLag = Number.isFinite(lag) && lag > 0 ? lag : 3;
+        setFunSettings({
+          devit_start_platform_lag: normalizedLag,
+          updated_at: payload?.updated_at || '',
+        });
+        setFunLagInput(String(normalizedLag));
+        setFunError('');
+      })
+      .catch((err) => {
+        setFunError(err?.message || 'Failed to load fun settings');
+      })
+      .finally(() => setFunLoading(false));
   };
 
   const handleArchive = async (id) => {
@@ -86,6 +109,35 @@ export default function AdminPanel() {
     await loadAll();
   };
 
+  const handleSaveFunSettings = async (e) => {
+    e.preventDefault();
+    const parsedLag = Number.parseInt(funLagInput, 10);
+    if (!Number.isFinite(parsedLag) || parsedLag <= 0) {
+      setFunError('Devit start threshold must be a positive integer');
+      setFunSuccess('');
+      return;
+    }
+
+    setFunSaving(true);
+    try {
+      const payload = await updateFunSettings({ devit_start_platform_lag: parsedLag });
+      const lag = Number.parseInt(payload?.devit_start_platform_lag, 10);
+      const normalizedLag = Number.isFinite(lag) && lag > 0 ? lag : 3;
+      setFunSettings({
+        devit_start_platform_lag: normalizedLag,
+        updated_at: payload?.updated_at || '',
+      });
+      setFunLagInput(String(normalizedLag));
+      setFunError('');
+      setFunSuccess('Fun settings updated');
+    } catch (err) {
+      setFunError(err?.message || 'Failed to save fun settings');
+      setFunSuccess('');
+    } finally {
+      setFunSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -97,7 +149,7 @@ export default function AdminPanel() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6">
-        {['tournaments', 'archived', 'notices'].map(t => (
+        {['tournaments', 'archived', 'notices', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -107,7 +159,8 @@ export default function AdminPanel() {
           >
             {t === 'tournaments' ? `Active (${tournaments.length})` :
              t === 'archived' ? `Archived (${archived.length})` :
-             `Notices (${notices.length})`}
+             t === 'notices' ? `Notices (${notices.length})` :
+             'Fun Settings'}
           </button>
         ))}
       </div>
@@ -284,6 +337,40 @@ export default function AdminPanel() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Fun Settings Tab */}
+      {tab === 'fun' && (
+        <div className="space-y-4">
+          <form onSubmit={handleSaveFunSettings} className="card space-y-3 max-w-xl">
+            <h3 className="font-display font-bold text-piu-accent">Fun Game Settings</h3>
+            <label className="block space-y-1">
+              <span className="text-sm text-gray-300 font-display">Devit Start Threshold (Player Jumps)</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                className="input-field"
+                value={funLagInput}
+                onChange={(e) => setFunLagInput(e.target.value)}
+              />
+            </label>
+            <p className="text-xs text-gray-500">
+              Devit starts chasing after this many successful jumps.
+            </p>
+            {funLoading && <p className="text-xs text-gray-400">Loading settings...</p>}
+            {funError && <p className="text-xs text-red-400">{funError}</p>}
+            {funSuccess && <p className="text-xs text-piu-green">{funSuccess}</p>}
+            {!funLoading && (
+              <p className="text-xs text-gray-500">
+                Current value: {funSettings.devit_start_platform_lag}
+              </p>
+            )}
+            <button type="submit" className="btn-primary text-sm" disabled={funSaving || funLoading}>
+              {funSaving ? 'Saving...' : 'Save Fun Settings'}
+            </button>
+          </form>
         </div>
       )}
     </div>

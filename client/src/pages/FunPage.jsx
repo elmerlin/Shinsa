@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFunLeaderboard, submitFunScore } from '../utils/api';
+import { getFunLeaderboard, getFunSettings, submitFunScore } from '../utils/api';
 
 const GAME_WIDTH = 420;
 const GAME_HEIGHT = 700;
@@ -12,7 +12,7 @@ const BEST_SCORE_KEY = 'fun_city_jump_best_score_v1';
 const GAME_TITLE = 'TOP CITY JUMP';
 const SCORE_DIFFICULTY_CAP = 100000;
 const DEVIT_TOUCH_PADDING = 8;
-const DEVIT_START_PLATFORM_LAG = 3;
+const DEVIT_START_PLATFORM_LAG_DEFAULT = 3;
 const DEVIT_JUMP_COOLDOWN_FRAMES = 5;
 const DEVIT_GRAVITY_SCALE = 1;
 const DEVIT_MAX_PATH_QUEUE = 2500;
@@ -500,6 +500,11 @@ const NOTES = {
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const randomBetween = (min, max) => min + Math.random() * (max - min);
 const getDifficultyProgress = (score) => clamp((score || 0) / SCORE_DIFFICULTY_CAP, 0, 1);
+const normalizeDevitStartLag = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEVIT_START_PLATFORM_LAG_DEFAULT;
+  return clamp(parsed, 1, 12);
+};
 
 function resolveBackgroundState(score) {
   const altitudeScore = Math.max(0, Number(score) || 0);
@@ -755,8 +760,9 @@ function createCars() {
   ];
 }
 
-function createInitialGame(bestScore) {
+function createInitialGame(bestScore, devitStartLag = DEVIT_START_PLATFORM_LAG_DEFAULT) {
   const stats = CHARACTER_STATS;
+  const lag = normalizeDevitStartLag(devitStartLag);
   const player = {
     x: GAME_WIDTH * 0.5 - stats.width * 0.5,
     y: GAME_HEIGHT - 120,
@@ -793,7 +799,7 @@ function createInitialGame(bestScore) {
   const pathPlatforms = sortPathPlatformsByHeight(platforms);
   const devitStartPlatform = pathPlatforms[0] || platforms[0];
   const initialPathQueue = [];
-  for (let i = 1; i <= DEVIT_START_PLATFORM_LAG && i < pathPlatforms.length; i += 1) {
+  for (let i = 1; i <= lag && i < pathPlatforms.length; i += 1) {
     initialPathQueue.push(createPathStepFromPlatform(pathPlatforms[i]));
   }
 
@@ -805,7 +811,7 @@ function createInitialGame(bestScore) {
     : player.y + 140;
 
   const devit = {
-    active: true,
+    active: false,
     x: devitCenterX - stats.width * 0.5,
     y: devitStandY,
     width: stats.width,
@@ -821,6 +827,7 @@ function createInitialGame(bestScore) {
 
   return {
     characterId: PLAYABLE_CHARACTER.id,
+    devitStartLag: lag,
     stats,
     player,
     devit,
@@ -1290,27 +1297,8 @@ function drawTierScene(ctx, game, tier, backgroundSheets, alpha = 1) {
     }
   }
 
-  for (const layer of tier.cityLayers) {
-    drawCityLayer(ctx, {
-      ...layer,
-      score: game.score,
-    });
-  }
-
-  drawTierDetails(ctx, tier, game);
   drawCloudDeck(ctx, tier.cloudDeck);
   drawFrontWeatherLayer(ctx, game, tier.weather);
-
-  if (tier.streetAlpha > 0) {
-    ctx.fillStyle = `rgba(18, 31, 49, ${0.86 * tier.streetAlpha})`;
-    ctx.fillRect(0, GAME_HEIGHT - 70, GAME_WIDTH, 70);
-    ctx.fillStyle = `rgba(143, 177, 220, ${0.3 * tier.streetAlpha})`;
-    for (let i = 0; i < GAME_WIDTH; i += 32) {
-      ctx.fillRect(i + ((game.score * 0.55) % 32), GAME_HEIGHT - 45, 16, 4);
-    }
-  }
-
-  drawCars(ctx, game.cars, tier.carsAlpha || 0);
   ctx.restore();
 }
 
@@ -1667,6 +1655,7 @@ export default function FunPage() {
   const [score, setScore] = useState(0);
   const [spriteVersion, setSpriteVersion] = useState(0);
   const [backgroundVersion, setBackgroundVersion] = useState(0);
+  const [devitStartLag, setDevitStartLag] = useState(DEVIT_START_PLATFORM_LAG_DEFAULT);
   const [bestScore, setBestScore] = useState(() => {
     const raw = Number(window.localStorage.getItem(BEST_SCORE_KEY));
     return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
@@ -1687,10 +1676,11 @@ export default function FunPage() {
   const bestScoreRef = useRef(bestScore);
   const soundEnabledRef = useRef(soundEnabled);
   const scoreRef = useRef(score);
+  const devitStartLagRef = useRef(devitStartLag);
   const spriteSheetRef = useRef(null);
   const devitSpriteSheetRef = useRef(null);
   const backgroundSheetsRef = useRef({});
-  const gameRef = useRef(createInitialGame(bestScore));
+  const gameRef = useRef(createInitialGame(bestScore, devitStartLag));
 
   const audioContextRef = useRef(null);
   const bgmAudioRef = useRef(null);
@@ -1718,6 +1708,29 @@ export default function FunPage() {
   useEffect(() => {
     scoreRef.current = score;
   }, [score]);
+
+  useEffect(() => {
+    devitStartLagRef.current = normalizeDevitStartLag(devitStartLag);
+  }, [devitStartLag]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getFunSettings()
+      .then((payload) => {
+        if (cancelled) return;
+        const nextLag = normalizeDevitStartLag(payload?.devit_start_platform_lag);
+        setDevitStartLag(nextLag);
+        if (gameStatusRef.current !== 'playing') {
+          gameRef.current = createInitialGame(bestScoreRef.current, nextLag);
+          scoreRef.current = 0;
+          setScore(0);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2169,9 +2182,7 @@ export default function FunPage() {
       for (const platform of game.platforms) {
         platform.y += shift;
       }
-      if (devit.active) {
-        devit.y += shift;
-      }
+      devit.y += shift;
       for (const step of game.playerPathQueue) {
         step.y += shift;
       }
@@ -2190,6 +2201,14 @@ export default function FunPage() {
     });
 
     fillReachablePlatforms(game.platforms, game.score);
+
+    if (!devit.active && game.jumpCount >= game.devitStartLag) {
+      devit.active = true;
+      devit.jumping = false;
+      devit.vx = 0;
+      devit.vy = 0;
+      devit.jumpCooldown = DEVIT_JUMP_COOLDOWN_FRAMES;
+    }
 
     if (devit.active) {
       devit.squash *= Math.pow(0.8, delta);
@@ -2299,7 +2318,7 @@ export default function FunPage() {
     pointerStateRef.current.direction = null;
     pointerStateRef.current.startedAt = 0;
     releaseDirectionalControl();
-    const nextGame = createInitialGame(bestScoreRef.current);
+    const nextGame = createInitialGame(bestScoreRef.current, devitStartLagRef.current);
     gameRef.current = nextGame;
     scoreRef.current = 0;
     setScore(0);

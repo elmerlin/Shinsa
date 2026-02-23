@@ -4,11 +4,50 @@ const { requireAuth } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 const router = express.Router();
+const DEVIT_START_PLATFORM_LAG_DEFAULT = 3;
+const DEVIT_START_PLATFORM_LAG_MIN = 1;
+const DEVIT_START_PLATFORM_LAG_MAX = 12;
 
 function toPositiveInt(value, fallback, max = 50) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.min(parsed, max);
+}
+
+function normalizeDevitStartPlatformLag(value, fallback = DEVIT_START_PLATFORM_LAG_DEFAULT) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(DEVIT_START_PLATFORM_LAG_MIN, Math.min(DEVIT_START_PLATFORM_LAG_MAX, parsed));
+}
+
+function ensureFunSettingsTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fun_settings (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      devit_start_platform_lag INTEGER NOT NULL DEFAULT ${DEVIT_START_PLATFORM_LAG_DEFAULT},
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+  const hasRow = db.prepare('SELECT id FROM fun_settings WHERE id = 1').get();
+  if (!hasRow) {
+    db.prepare(`
+      INSERT INTO fun_settings (id, devit_start_platform_lag)
+      VALUES (1, ?)
+    `).run(DEVIT_START_PLATFORM_LAG_DEFAULT);
+  }
+}
+
+function getFunSettingsPayload(db) {
+  ensureFunSettingsTable(db);
+  const row = db.prepare(`
+    SELECT devit_start_platform_lag, updated_at
+    FROM fun_settings
+    WHERE id = 1
+  `).get();
+  return {
+    devit_start_platform_lag: normalizeDevitStartPlatformLag(row?.devit_start_platform_lag),
+    updated_at: row?.updated_at || '',
+  };
 }
 
 function getUserRank(db, bestScore) {
@@ -39,6 +78,33 @@ function getMySummary(db, userId) {
     rank: bestScore > 0 ? getUserRank(db, bestScore) : null,
   };
 }
+
+// GET /api/fun/settings
+router.get('/settings', (req, res) => {
+  const db = getDb();
+  res.json(getFunSettingsPayload(db));
+});
+
+// PUT /api/fun/settings
+router.put('/settings', requireAuth, (req, res) => {
+  const db = getDb();
+  const requested = req.body?.devit_start_platform_lag;
+  if (requested === undefined || requested === null || requested === '') {
+    return res.status(400).json({ error: 'devit_start_platform_lag is required' });
+  }
+  const parsed = Number.parseInt(requested, 10);
+  if (!Number.isFinite(parsed)) {
+    return res.status(400).json({ error: 'devit_start_platform_lag must be an integer' });
+  }
+  const value = normalizeDevitStartPlatformLag(parsed);
+  ensureFunSettingsTable(db);
+  db.prepare(`
+    UPDATE fun_settings
+    SET devit_start_platform_lag = ?, updated_at = datetime('now')
+    WHERE id = 1
+  `).run(value);
+  res.json(getFunSettingsPayload(db));
+});
 
 // GET /api/fun/leaderboard
 router.get('/leaderboard', requireAuth, (req, res) => {
