@@ -156,22 +156,5 @@ export function getCommunityCardStyle(palette) {
   return {
     backgroundColor: 'rgba(11, 16, 30, 0.92)',
     backgroundImage: `linear-gradient(140deg, ${rgba(palette.primary, 0.32)} 0%, ${rgba(palette.secondary, 0.26)} 46%, rgba(11, 16, 30, 0.92) 100%)`,
-    borderColor: rgba(palette.primary, 0.5),
-    boxShadow: `0 12px 28px ${rgba(palette.accent || palette.primary, 0.2)}`,
-  };
-}
-
-export function getCommunityStatStyle(palette, tone = 'accent') {
-  if (!palette) return null;
-  const color = tone === 'primary'
-    ? palette.primary
-    : tone === 'secondary'
-      ? palette.secondary
-      : (palette.accent || palette.primary);
-
-  return {
-    borderColor: rgba(color, 0.46),
-    backgroundColor: rgba(color, 0.14),
-    color: rgba(color, 0.98),
   };
 }
