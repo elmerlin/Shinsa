@@ -928,8 +928,19 @@ function enqueuePlayerPathStep(game, platform) {
   }
 }
 
-function getPathTargetRect(step) {
+function getPathTargetRect(step, platforms = []) {
   if (!step) return null;
+  if (step.platformId != null && Array.isArray(platforms)) {
+    const livePlatform = platforms.find((platform) => platform.id === step.platformId && !platform.broken);
+    if (livePlatform) {
+      return {
+        x: livePlatform.x + livePlatform.width * 0.5,
+        y: livePlatform.y,
+        width: livePlatform.width,
+        platformId: livePlatform.id,
+      };
+    }
+  }
   return {
     x: step.x,
     y: step.y,
@@ -2408,8 +2419,12 @@ export default function FunPage() {
 
       // Discard stale targets that are already well below Devit's feet.
       while (game.playerPathQueue.length) {
-        const staleStep = game.playerPathQueue[0];
-        if (staleStep.y > devit.y + devit.height + DEVIT_STALE_TARGET_BUFFER) {
+        const staleRect = getPathTargetRect(game.playerPathQueue[0], game.platforms);
+        if (!staleRect) {
+          game.playerPathQueue.shift();
+          continue;
+        }
+        if (staleRect.y > devit.y + devit.height + DEVIT_STALE_TARGET_BUFFER) {
           game.playerPathQueue.shift();
           continue;
         }
@@ -2420,7 +2435,7 @@ export default function FunPage() {
       }
 
       const targetStep = game.playerPathQueue[0];
-      const targetRect = getPathTargetRect(targetStep);
+      const targetRect = getPathTargetRect(targetStep, game.platforms);
 
       if (devit.jumping) {
         const previousDevitY = devit.y;
@@ -2428,6 +2443,18 @@ export default function FunPage() {
         devit.vy += stats.gravity * DEVIT_GRAVITY_SCALE * delta;
         devit.x += devit.vx * delta;
         devit.y += devit.vy * delta;
+        if (targetRect && devit.vy > -0.4) {
+          const currentCenterX = devit.x + devit.width * 0.5;
+          let steerDeltaX = targetRect.x - currentCenterX;
+          if (steerDeltaX > GAME_WIDTH * 0.5) steerDeltaX -= GAME_WIDTH;
+          if (steerDeltaX < -GAME_WIDTH * 0.5) steerDeltaX += GAME_WIDTH;
+          const steer = clamp(steerDeltaX * 0.009, -0.26, 0.26);
+          devit.vx = clamp(
+            devit.vx + steer * delta * 0.22,
+            -stats.maxSpeed * 1.9,
+            stats.maxSpeed * 1.9,
+          );
+        }
         if (devit.vx > 0.2) devit.facing = 1;
         if (devit.vx < -0.2) devit.facing = -1;
         if (devit.x > GAME_WIDTH + devit.width * 0.48) devit.x = -devit.width * 0.48;
@@ -2448,7 +2475,19 @@ export default function FunPage() {
           const missedVerticalWindow = devit.vy > 0 && devit.y >= targetRect.y - devit.height + DEVIT_FAILSAFE_LAND_BUFFER;
           const jumpTimedOut = devit.jumpFrames >= DEVIT_MAX_AIR_FRAMES;
           if (devit.jumping && (missedVerticalWindow || jumpTimedOut)) {
-            settleOnTarget(targetRect);
+            const footLeft = devit.x + devit.width * 0.2;
+            const footRight = devit.x + devit.width * 0.8;
+            const isHorizontallyClose = footRight >= targetLeft - DEVIT_FAILSAFE_LAND_BUFFER
+              && footLeft <= targetRight + DEVIT_FAILSAFE_LAND_BUFFER;
+            if (isHorizontallyClose) {
+              settleOnTarget(targetRect);
+            } else {
+              devit.jumping = false;
+              devit.jumpFrames = 0;
+              devit.vx *= 0.28;
+              devit.vy = 0;
+              devit.jumpCooldown = 0;
+            }
           }
         } else if (devit.jumpFrames >= DEVIT_MAX_AIR_FRAMES || devit.y > GAME_HEIGHT + 180) {
           devit.jumping = false;
@@ -2721,7 +2760,7 @@ export default function FunPage() {
     }
   }, [ensureAudioContext, gameStatus, soundEnabled, startBgm, startStartScreenMusic, stopBgm, stopStartScreenMusic]);
 
-  const shouldShowLeaderboard = gameStatus === 'gameover' || (gameStatus === 'idle' && showLeaderboardAtStart);
+  const shouldShowLeaderboard = gameStatus !== 'playing' && showLeaderboardAtStart;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -2815,7 +2854,7 @@ export default function FunPage() {
                 >
                   {gameStatus === 'gameover' ? 'Restart Run' : 'Start Run'}
                 </button>
-                {gameStatus === 'idle' && (
+                {gameStatus !== 'playing' && (
                   <button
                     type="button"
                     onClick={() => setShowLeaderboardAtStart((prev) => !prev)}
@@ -2839,42 +2878,64 @@ export default function FunPage() {
                   </>
                 )}
 
-                {shouldShowLeaderboard && (
-                  <div className="mt-4 rounded-[18px] border-4 border-[#5a2f06] bg-gradient-to-b from-[#ffd86f] via-[#ffad43] to-[#f06d1f] shadow-[0_6px_0_#7b3f09,0_14px_26px_rgba(0,0,0,0.45)] p-3 text-[#3f1d00]">
-                    <p className="text-center font-display font-black tracking-[0.12em] text-sm">LEADERBOARD</p>
-                    {!user && (
-                      <p className="mt-2 text-[11px] font-semibold text-[#5a2500] text-center">
-                        Registered users only. Log in to view the table.
-                      </p>
-                    )}
-                    {user && leaderboardLoading && (
-                      <p className="mt-2 text-[11px] font-semibold text-[#5a2500] text-center">Loading...</p>
-                    )}
-                    {user && !leaderboardLoading && leaderboardError && (
-                      <p className="mt-2 text-[11px] font-semibold text-[#6f0000] text-center">{leaderboardError}</p>
-                    )}
-                    {user && !leaderboardLoading && !leaderboardError && leaderboard.length === 0 && (
-                      <p className="mt-2 text-[11px] font-semibold text-[#5a2500] text-center">No scores yet.</p>
-                    )}
-                    {user && !leaderboardLoading && !leaderboardError && leaderboard.length > 0 && (
-                      <div className="mt-2 space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                        {leaderboard.slice(0, 8).map((entry) => (
-                          <div key={entry.user_id} className="flex items-center justify-between gap-2 rounded-lg border-2 border-[#6b340b]/70 bg-[rgba(84,38,8,0.18)] px-2 py-1">
-                            <p className="truncate text-[11px] font-semibold">
-                              <span className="inline-flex min-w-[32px] justify-center rounded-md bg-[rgba(60,24,0,0.52)] px-1 py-0.5 mr-1 text-[#ffe6a1] font-display">#{entry.rank}</span>
-                              <span className="text-[#4a2200]">{entry.username}</span>
-                            </p>
-                            <span className="text-[12px] font-display font-black text-[#3d1800]">{entry.score}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {user && myLeaderboardSummary?.best_score > 0 && (
-                      <p className="mt-2 text-[11px] text-center font-display font-black text-[#4a2200]">
-                        {user?.username || 'You'} Rank: #{myLeaderboardSummary.rank || '-'}  Score: {myLeaderboardSummary.best_score}
-                      </p>
-                    )}
-                  </div>
+              </div>
+            </div>
+          )}
+
+          {shouldShowLeaderboard && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center p-3 pointer-events-auto">
+              <button
+                type="button"
+                aria-label="Close leaderboard"
+                className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+                onClick={() => setShowLeaderboardAtStart(false)}
+              />
+              <div className="relative w-full max-w-[376px] max-h-[88%] rounded-[18px] border-4 border-[#5a2f06] bg-gradient-to-b from-[#ffd86f] via-[#ffad43] to-[#f06d1f] shadow-[0_6px_0_#7b3f09,0_14px_26px_rgba(0,0,0,0.45)] p-3 text-[#3f1d00] flex flex-col">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-display font-black tracking-[0.12em] text-sm">LEADERBOARD</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowLeaderboardAtStart(false)}
+                    className="rounded-md border-2 border-[#6b340b]/70 bg-[rgba(84,38,8,0.2)] px-2 py-0.5 text-[10px] font-display font-black"
+                  >
+                    CLOSE
+                  </button>
+                </div>
+
+                <div className="mt-2 flex-1 overflow-y-auto pr-1">
+                  {!user && (
+                    <p className="text-[11px] font-semibold text-[#5a2500] text-center">
+                      Registered users only. Log in to view the table.
+                    </p>
+                  )}
+                  {user && leaderboardLoading && (
+                    <p className="text-[11px] font-semibold text-[#5a2500] text-center">Loading...</p>
+                  )}
+                  {user && !leaderboardLoading && leaderboardError && (
+                    <p className="text-[11px] font-semibold text-[#6f0000] text-center">{leaderboardError}</p>
+                  )}
+                  {user && !leaderboardLoading && !leaderboardError && leaderboard.length === 0 && (
+                    <p className="text-[11px] font-semibold text-[#5a2500] text-center">No scores yet.</p>
+                  )}
+                  {user && !leaderboardLoading && !leaderboardError && leaderboard.length > 0 && (
+                    <div className="space-y-1.5">
+                      {leaderboard.slice(0, 50).map((entry) => (
+                        <div key={entry.user_id} className="flex items-center justify-between gap-2 rounded-lg border-2 border-[#6b340b]/70 bg-[rgba(84,38,8,0.18)] px-2 py-1">
+                          <p className="truncate text-[11px] font-semibold">
+                            <span className="inline-flex min-w-[32px] justify-center rounded-md bg-[rgba(60,24,0,0.52)] px-1 py-0.5 mr-1 text-[#ffe6a1] font-display">#{entry.rank}</span>
+                            <span className="text-[#4a2200]">{entry.username}</span>
+                          </p>
+                          <span className="text-[12px] font-display font-black text-[#3d1800]">{entry.score}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {user && myLeaderboardSummary?.best_score > 0 && (
+                  <p className="mt-2 text-[11px] text-center font-display font-black text-[#4a2200]">
+                    {user?.username || 'You'} Rank: #{myLeaderboardSummary.rank || '-'}  Score: {myLeaderboardSummary.best_score}
+                  </p>
                 )}
               </div>
             </div>
