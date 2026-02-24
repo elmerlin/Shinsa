@@ -102,6 +102,19 @@ function StarValue({ value, starred, className = '' }) {
   );
 }
 
+function tinyLevelBadge(mode, level) {
+  const isSingle = String(mode || '').toLowerCase().startsWith('s');
+  return (
+    <span className={`inline-flex items-center justify-center rounded-full min-w-[24px] h-6 px-1.5 border text-white font-display font-black text-[10px] ${
+      isSingle
+        ? 'bg-gradient-to-b from-red-500 to-red-800 border-red-300/50'
+        : 'bg-gradient-to-b from-green-500 to-emerald-800 border-green-300/50'
+    }`}>
+      {level}
+    </span>
+  );
+}
+
 function SongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'sm' }) {
   const sizeClass = size === 'sm' ? 'w-10 h-10' : 'w-12 h-12';
   const badgeColor = mode === 'Single' ? 'bg-red-600' : mode === 'Double' ? 'bg-green-600' : 'bg-blue-600';
@@ -333,6 +346,7 @@ export default function OptimisePage() {
   const [snipingLevel, setSnipingLevel] = useState('All');
   const [snipingPage, setSnipingPage] = useState(1);
   const [snipingResult, setSnipingResult] = useState(null);
+  const [snipingOpenSongInfoKey, setSnipingOpenSongInfoKey] = useState('');
   const snipingSearchWrapRef = useRef(null);
 
   const [skillInfoOpen, setSkillInfoOpen] = useState(false);
@@ -507,6 +521,7 @@ export default function OptimisePage() {
     setSnipingShowSuggestions(false);
     setSnipingPage(1);
     setSnipingResult(null);
+    setSnipingOpenSongInfoKey('');
   };
 
   const runSnipingComparison = async (targetPage = 1) => {
@@ -518,6 +533,7 @@ export default function OptimisePage() {
 
     setSnipingLoading(true);
     setError('');
+    setSnipingOpenSongInfoKey('');
     try {
       const params = {
         user_a_id: user.id,
@@ -940,6 +956,7 @@ export default function OptimisePage() {
                     setSnipingLevel('All');
                     setSnipingPage(1);
                     setSnipingResult(null);
+                    setSnipingOpenSongInfoKey('');
                   }}
                   className="input-field w-full"
                 >
@@ -957,6 +974,7 @@ export default function OptimisePage() {
                     setSnipingLevel(event.target.value);
                     setSnipingPage(1);
                     setSnipingResult(null);
+                    setSnipingOpenSongInfoKey('');
                   }}
                   className="input-field w-full"
                 >
@@ -1062,52 +1080,61 @@ export default function OptimisePage() {
                   Only songs where {snipingUserB?.username || 'your opponent'} has a higher score than you. Sorted by biggest score difference.
                 </p>
                 <div className="overflow-x-auto mt-2 rounded-lg border border-piu-border/40">
-                  <table className="min-w-[560px] w-full text-xs sm:text-sm">
+                  <table className="w-full text-xs sm:text-sm">
                     <thead className="bg-[#0f172a] text-gray-400">
                       <tr>
                         <th className="px-3 py-2 text-left">Song</th>
-                        <th className="px-3 py-2 text-right">You (Score / Grade)</th>
-                        <th className="px-3 py-2 text-right">Opponent (Score / Grade)</th>
-                        <th className="px-3 py-2 text-right">Score Diff</th>
+                        <th className="px-3 py-2 text-right">My Score</th>
+                        <th className="px-3 py-2 text-right">Opponent Score</th>
+                        <th className="px-3 py-2 text-right">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {displayedSnipingRows.map((row, index) => (
-                        <tr key={`${row.chart_id || row.title}-${index}`} className="border-t border-piu-border/30">
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <SongJacket
-                                title={row.title}
-                                mode={row.mode}
-                                level={row.level}
-                                bgUrl={row.jacket_url}
-                                jacketLookup={jacketLookup}
-                              />
-                              <div className="min-w-0">
-                                {row.chart_id ? (
-                                  <Link to={`/songs/chart/${row.chart_id}`} className="text-sm font-display font-bold hover:text-piu-accent transition-colors line-clamp-1">
+                      {displayedSnipingRows.map((row, index) => {
+                        const rowKey = `${row.chart_id || row.title}-${index}`;
+                        const showInfo = snipingOpenSongInfoKey === rowKey;
+                        const myGrade = row.grade_a || getRank(row.score_a).label;
+                        const opponentGrade = row.grade_b || getRank(row.score_b).label;
+                        const diff = row.score_diff || ((row.score_b || 0) - (row.score_a || 0));
+                        return (
+                          <tr key={rowKey} className="border-t border-piu-border/30 hover:bg-piu-dark/35 transition-colors">
+                            <td className="px-3 py-2 align-top">
+                              <button
+                                type="button"
+                                onClick={() => setSnipingOpenSongInfoKey((prev) => (prev === rowKey ? '' : rowKey))}
+                                className="inline-flex flex-col items-start"
+                                title={row.title || 'Song'}
+                              >
+                                <span className="relative inline-block w-10 h-6 shrink-0">
+                                  {row.jacket_url ? (
+                                    <img src={row.jacket_url} alt={row.title} className="w-full h-full rounded object-cover border border-piu-border/40" />
+                                  ) : (
+                                    <span className="w-full h-full rounded bg-piu-dark border border-piu-border/40 inline-block" />
+                                  )}
+                                  <span className="absolute -top-2 -right-2">{tinyLevelBadge(row.mode, row.level)}</span>
+                                </span>
+                                {showInfo && (
+                                  <span className="mt-1 rounded-md border border-piu-border/40 bg-[#0b1324]/80 px-1.5 py-1 text-[10px] text-left leading-tight text-gray-200 max-w-[160px] break-words">
                                     {row.title}
-                                  </Link>
-                                ) : (
-                                  <p className="text-sm font-display font-bold line-clamp-1">{row.title}</p>
+                                  </span>
                                 )}
-                                <p className="text-[10px] text-gray-500">{row.mode} {row.level}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <p className="font-mono">{formatNumber(row.score_a)}</p>
-                            <p className={`text-[10px] font-display ${getGradeColor(row.grade_a)}`}>{row.grade_a || getRank(row.score_a).label}</p>
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <p className="font-mono">{formatNumber(row.score_b)}</p>
-                            <p className={`text-[10px] font-display ${getGradeColor(row.grade_b)}`}>{row.grade_b || getRank(row.score_b).label}</p>
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
-                            {formatNumber(row.score_diff || ((row.score_b || 0) - (row.score_a || 0)))}
-                          </td>
-                        </tr>
-                      ))}
+                              </button>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <p className="font-mono">{formatNumber(row.score_a)}</p>
+                              <p className={`font-display font-bold ${getGradeColor(myGrade)}`}>{myGrade}</p>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <p className="font-mono inline-flex items-center gap-1 justify-end">
+                                <span className="text-emerald-400">★</span>
+                                {formatNumber(row.score_b)}
+                              </p>
+                              <p className={`font-display font-bold ${getGradeColor(opponentGrade)}`}>{opponentGrade}</p>
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono text-emerald-300">{formatNumber(diff)}</td>
+                          </tr>
+                        );
+                      })}
                       {snipingRows.length === 0 && (
                         <tr>
                           <td colSpan={4} className="text-center text-gray-500 py-8">No opponent wins found for this mode/level selection.</td>
