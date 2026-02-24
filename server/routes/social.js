@@ -59,6 +59,13 @@ function invalidateRecentActivityCache() {
   recentActivityCache = { data: null, expiresAt: 0 };
 }
 
+function normalizePumpUserRows(rows = []) {
+  return rows.map((row) => ({
+    ...row,
+    avatar: normalizeUserAvatarForList(row.avatar, row.id, 40),
+  }));
+}
+
 // Multer config for image uploads (memory-only, images stored as base64 in DB)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -484,6 +491,26 @@ router.post('/posts/:id/pump', requireAuth, (req, res) => {
   res.json({ pumped: true, pump_count: count });
 });
 
+// GET /api/social/posts/:id/pumps — list users who pumped a post
+router.get('/posts/:id/pumps', (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id, 10);
+  if (Number.isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+
+  const post = db.prepare('SELECT id FROM user_posts WHERE id = ?').get(postId);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.avatar, pp.created_at
+    FROM post_pumps pp
+    JOIN users u ON u.id = pp.user_id
+    WHERE pp.post_id = ?
+    ORDER BY datetime(pp.created_at) DESC, u.username COLLATE NOCASE ASC
+  `).all(postId);
+
+  res.json(normalizePumpUserRows(rows));
+});
+
 // GET /api/social/posts/:id/pump-status — check if user pumped
 router.get('/posts/:id/pump-status', optionalAuth, (req, res) => {
   const db = getDb();
@@ -837,6 +864,26 @@ router.post('/upscores/:id/pump', requireAuth, (req, res) => {
   res.json({ pumped: true, pump_count: count });
 });
 
+// GET /api/social/upscores/:id/pumps — list users who pumped an upscore
+router.get('/upscores/:id/pumps', (req, res) => {
+  const db = getDb();
+  const upscoreId = parseInt(req.params.id, 10);
+  if (Number.isNaN(upscoreId)) return res.status(400).json({ error: 'Invalid upscore ID' });
+
+  const upscore = db.prepare('SELECT id FROM user_upscores WHERE id = ?').get(upscoreId);
+  if (!upscore) return res.status(404).json({ error: 'Upscore not found' });
+
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.avatar, p.created_at
+    FROM upscore_pumps p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.upscore_id = ?
+    ORDER BY datetime(p.created_at) DESC, u.username COLLATE NOCASE ASC
+  `).all(upscoreId);
+
+  res.json(normalizePumpUserRows(rows));
+});
+
 // ─── Upscore Comments ──────────────────────────────────
 
 // GET /api/social/upscores/:id/comments
@@ -991,6 +1038,26 @@ router.post('/clears/:id/pump', requireAuth, (req, res) => {
   }
 
   res.json({ pumped: true, pump_count: count });
+});
+
+// GET /api/social/clears/:id/pumps — list users who pumped a clear
+router.get('/clears/:id/pumps', (req, res) => {
+  const db = getDb();
+  const clearId = parseInt(req.params.id, 10);
+  if (Number.isNaN(clearId)) return res.status(400).json({ error: 'Invalid clear ID' });
+
+  const clear = db.prepare('SELECT id FROM user_new_clears WHERE id = ?').get(clearId);
+  if (!clear) return res.status(404).json({ error: 'Clear not found' });
+
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.avatar, p.created_at
+    FROM new_clear_pumps p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.clear_id = ?
+    ORDER BY datetime(p.created_at) DESC, u.username COLLATE NOCASE ASC
+  `).all(clearId);
+
+  res.json(normalizePumpUserRows(rows));
 });
 
 // ─── New Clear Comments ──────────────────────────────────

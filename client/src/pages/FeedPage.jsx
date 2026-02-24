@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFeed, getJacketMap, getChartKeyMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment } from '../utils/api';
+import { getFeed, getJacketMap, getChartKeyMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment, getUpscorePumpers, getNewClearPumpers } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
+import PumpersModal from '../components/PumpersModal';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 
@@ -268,6 +269,7 @@ function UpscorePumpButton({ upscoreId, initialCount, initialPumped }) {
   const [count, setCount] = useState(initialCount || 0);
   const [loading, setLoading] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const [showPumpers, setShowPumpers] = useState(false);
 
   const toggle = async () => {
     if (!user || loading) return;
@@ -285,23 +287,41 @@ function UpscorePumpButton({ upscoreId, initialCount, initialPumped }) {
   };
 
   return (
-    <button
-      onClick={toggle}
-      disabled={!user}
-      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
-        pumped
-          ? 'text-piu-gold bg-piu-gold/10'
-          : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
-      } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
-      title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
-    >
-      <img
-        src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
-        alt=""
-        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
+    <>
+      <button
+        onClick={toggle}
+        disabled={!user}
+        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
+          pumped
+            ? 'text-piu-gold bg-piu-gold/10'
+            : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
+        } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+        title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
+      >
+        <img
+          src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+          alt=""
+          className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
+        />
+      </button>
+      {count > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPumpers(true)}
+          className="px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-300 hover:text-white hover:bg-piu-dark/50 transition-colors"
+          title="See who pumped this upscore"
+        >
+          {count}
+        </button>
+      )}
+      <PumpersModal
+        open={showPumpers}
+        onClose={() => setShowPumpers(false)}
+        title={`Pumped by (${count})`}
+        loadPumpers={() => getUpscorePumpers(upscoreId)}
+        reloadKey={count}
       />
-      <span>{count > 0 ? count : ''}</span>
-    </button>
+    </>
   );
 }
 
@@ -566,6 +586,7 @@ function NewClearPumpButton({ clearId, initialCount, initialPumped }) {
   const [count, setCount] = useState(initialCount || 0);
   const [loading, setLoading] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const [showPumpers, setShowPumpers] = useState(false);
 
   const toggle = async () => {
     if (!user || loading) return;
@@ -583,23 +604,41 @@ function NewClearPumpButton({ clearId, initialCount, initialPumped }) {
   };
 
   return (
-    <button
-      onClick={toggle}
-      disabled={!user}
-      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
-        pumped
-          ? 'text-piu-gold bg-piu-gold/10'
-          : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
-      } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
-      title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
-    >
-      <img
-        src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
-        alt=""
-        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
+    <>
+      <button
+        onClick={toggle}
+        disabled={!user}
+        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
+          pumped
+            ? 'text-piu-gold bg-piu-gold/10'
+            : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
+        } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+        title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
+      >
+        <img
+          src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+          alt=""
+          className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
+        />
+      </button>
+      {count > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPumpers(true)}
+          className="px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-300 hover:text-white hover:bg-piu-dark/50 transition-colors"
+          title="See who pumped this clear"
+        >
+          {count}
+        </button>
+      )}
+      <PumpersModal
+        open={showPumpers}
+        onClose={() => setShowPumpers(false)}
+        title={`Pumped by (${count})`}
+        loadPumpers={() => getNewClearPumpers(clearId)}
+        reloadKey={count}
       />
-      <span>{count > 0 ? count : ''}</span>
-    </button>
+    </>
   );
 }
 

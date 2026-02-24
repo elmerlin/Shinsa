@@ -7,6 +7,7 @@ const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const { createUserNotification } = require('../lib/notifications');
+const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 // Multer config for image uploads
 const upload = multer({
@@ -89,6 +90,13 @@ function normalizeCommunityIndexTags(raw) {
 function createNotification(db, userId, type, title, message, link) {
   if (!userId) return null;
   return createUserNotification(db, userId, type, title, message || '', link || '');
+}
+
+function normalizePumpUserRows(rows = []) {
+  return rows.map((row) => ({
+    ...row,
+    avatar: normalizeUserAvatarForList(row.avatar, row.id, 40),
+  }));
 }
 
 // Helper: get member role in a community
@@ -1191,6 +1199,26 @@ router.post('/:id/posts/:postId/pump', requireAuth, (req, res) => {
 
   const count = db.prepare('SELECT COUNT(*) as c FROM community_post_pumps WHERE post_id = ?').get(req.params.postId);
   res.json({ pumped: !existing, pump_count: count.c });
+});
+
+// GET /api/communities/:id/posts/:postId/pumps — list users who pumped a community post
+router.get('/:id/posts/:postId/pumps', optionalAuth, (req, res) => {
+  const db = getDb();
+  const access = canAccessPrivateContent(db, req.params.id, req.user?.id);
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
+  const post = db.prepare('SELECT id FROM community_posts WHERE id = ? AND community_id = ?').get(req.params.postId, req.params.id);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+
+  const rows = db.prepare(`
+    SELECT u.id, u.username, u.avatar, p.created_at
+    FROM community_post_pumps p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.post_id = ?
+    ORDER BY datetime(p.created_at) DESC, u.username COLLATE NOCASE ASC
+  `).all(req.params.postId);
+
+  res.json(normalizePumpUserRows(rows));
 });
 
 // GET /api/communities/:id/posts/:postId/comments — get comments

@@ -5,7 +5,8 @@ import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from './PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
-import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment, searchUsers } from '../utils/api';
+import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment, searchUsers, getPostPumpers } from '../utils/api';
+import PumpersModal from './PumpersModal';
 import SessionSummaryCard from './SessionSummaryCard';
 import SessionPlanCard from './SessionPlanCard';
 import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
@@ -326,6 +327,7 @@ function PumpButton({ postId, initialCount, initialPumped }) {
   const [pumped, setPumped] = useState(!!initialPumped);
   const [count, setCount] = useState(initialCount || 0);
   const [animating, setAnimating] = useState(false);
+  const [showPumpers, setShowPumpers] = useState(false);
 
   const handlePump = async () => {
     if (!user) return;
@@ -343,23 +345,41 @@ function PumpButton({ postId, initialCount, initialPumped }) {
   };
 
   return (
-    <button
-      onClick={handlePump}
-      disabled={!user}
-      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
-        pumped
-          ? 'text-piu-gold bg-piu-gold/10'
-          : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
-      } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
-      title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
-    >
-      <img
-        src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
-        alt=""
-        className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
+    <>
+      <button
+        onClick={handlePump}
+        disabled={!user}
+        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
+          pumped
+            ? 'text-piu-gold bg-piu-gold/10'
+            : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
+        } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+        title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
+      >
+        <img
+          src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+          alt=""
+          className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
+        />
+      </button>
+      {count > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPumpers(true)}
+          className="px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-300 hover:text-white hover:bg-piu-dark/50 transition-colors"
+          title="See who pumped this post"
+        >
+          {count}
+        </button>
+      )}
+      <PumpersModal
+        open={showPumpers}
+        onClose={() => setShowPumpers(false)}
+        title={`Pumped by (${count})`}
+        loadPumpers={() => getPostPumpers(postId)}
+        reloadKey={count}
       />
-      <span>{count > 0 ? count : ''}</span>
-    </button>
+    </>
   );
 }
 

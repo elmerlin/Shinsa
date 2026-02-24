@@ -262,6 +262,7 @@ export const deletePostDraft = (id) => request(`/social/drafts/${id}`, { method:
 
 // Social — Post Pumps
 export const pumpPost = (id) => request(`/social/posts/${id}/pump`, { method: 'POST' });
+export const getPostPumpers = (id) => request(`/social/posts/${id}/pumps`);
 
 // Social — Post Comments
 export const getPostComments = (postId) => request(`/social/posts/${postId}/comments`);
@@ -271,12 +272,14 @@ export const togglePostComments = (postId) => request(`/social/posts/${postId}/c
 
 // Social — Upscore Interactions
 export const pumpUpscore = (id) => request(`/social/upscores/${id}/pump`, { method: 'POST' });
+export const getUpscorePumpers = (id) => request(`/social/upscores/${id}/pumps`);
 export const getUpscoreComments = (upscoreId) => request(`/social/upscores/${upscoreId}/comments`);
 export const addUpscoreComment = (upscoreId, content, parentId) => request(`/social/upscores/${upscoreId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteUpscoreComment = (id) => request(`/social/upscores/comments/${id}`, { method: 'DELETE' });
 
 // Social — New Clear Interactions
 export const pumpNewClear = (id) => request(`/social/clears/${id}/pump`, { method: 'POST' });
+export const getNewClearPumpers = (id) => request(`/social/clears/${id}/pumps`);
 export const getNewClearComments = (clearId) => request(`/social/clears/${clearId}/comments`);
 export const addNewClearComment = (clearId, content, parentId) => request(`/social/clears/${clearId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteNewClearComment = (id) => request(`/social/clears/comments/${id}`, { method: 'DELETE' });
@@ -377,6 +380,7 @@ export const editCommunityPost = (communityId, postId, data) => request(`/commun
 export const deleteCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}`, { method: 'DELETE' });
 export const pinCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pin`, { method: 'PUT' });
 export const pumpCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pump`, { method: 'POST' });
+export const getCommunityPostPumpers = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pumps`);
 export const getCommunityPostComments = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/comments`);
 export const addCommunityPostComment = (communityId, postId, content, parentId) => request(`/communities/${communityId}/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteCommunityPostComment = (communityId, postId, commentId) => request(`/communities/${communityId}/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });

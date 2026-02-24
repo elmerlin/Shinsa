@@ -9,12 +9,13 @@ import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
 import SessionSummaryCard from '../components/SessionSummaryCard';
 import { ImageGrid, Lightbox, YouTubeEmbed, ShareButton, timeAgo as postCardTimeAgo } from '../components/PostCard';
+import PumpersModal from '../components/PumpersModal';
 import ImageEditor from '../components/ImageEditor';
 import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
-  getCommunityMembers, pumpCommunityComment, getCommunityEmojis, searchCommunityMentions, getPiugameRecentlyPlayed, getJacketMap,
+  getCommunityMembers, pumpCommunityComment, getCommunityEmojis, searchCommunityMentions, getPiugameRecentlyPlayed, getJacketMap, getCommunityPostPumpers,
   getCommunityNotificationPreferences, updateCommunityNotificationPreferences,
 } from '../utils/api';
 import { calculateClearRating } from '../utils/clearRating';
@@ -1632,6 +1633,7 @@ function CommunityPostCard({
   const [pumped, setPumped] = useState(!!post.user_pumped);
   const [pumpCount, setPumpCount] = useState(post.pump_count || 0);
   const [animating, setAnimating] = useState(false);
+  const [showPumpers, setShowPumpers] = useState(false);
   const images = (() => { try { return JSON.parse(post.images || '[]'); } catch { return []; } })();
   const isAuthor = user?.id === post.user_id;
   const canDelete = isAuthor || isModOrOwner;
@@ -1757,8 +1759,24 @@ function CommunityPostCard({
               alt=""
               className={`w-4 h-4 ${animating ? 'animate-bounce' : ''}`}
             />
-            <span>{pumpCount > 0 ? pumpCount : ''}</span>
           </button>
+          {pumpCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowPumpers(true)}
+              className="px-2 py-1 rounded-lg text-xs font-display font-bold text-gray-300 hover:text-white hover:bg-piu-dark/50 transition-colors"
+              title="See who pumped this post"
+            >
+              {pumpCount}
+            </button>
+          )}
+          <PumpersModal
+            open={showPumpers}
+            onClose={() => setShowPumpers(false)}
+            title={`Pumped by (${pumpCount})`}
+            loadPumpers={() => getCommunityPostPumpers(community.id, post.id)}
+            reloadKey={pumpCount}
+          />
 
           {/* Comments button */}
           <button
