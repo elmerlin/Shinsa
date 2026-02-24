@@ -653,6 +653,37 @@ router.post('/shoes/:shoeId/wear', requireAuth, (req, res) => {
   res.json({ success: true, cabinet: getShoeCabinet(db, req.user.id) });
 });
 
+// POST /api/piugame/shoes/:shoeId/photo
+router.post('/shoes/:shoeId/photo', requireAuth, SHOE_UPLOAD.single('photo'), async (req, res) => {
+  try {
+    const db = getDb();
+    const shoeId = parseInt(req.params.shoeId, 10);
+    if (!Number.isInteger(shoeId) || shoeId <= 0) {
+      return res.status(400).json({ error: 'Invalid shoe ID' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'Photo is required' });
+
+    const shoe = db.prepare(`
+      SELECT id
+      FROM user_shoes
+      WHERE id = ? AND user_id = ?
+    `).get(shoeId, req.user.id);
+    if (!shoe) return res.status(404).json({ error: 'Shoe not found' });
+
+    const imageData = await encodeShoeImage(req.file);
+    db.prepare(`
+      UPDATE user_shoes
+      SET image_data = ?, updated_at = datetime('now')
+      WHERE id = ? AND user_id = ?
+    `).run(imageData, shoeId, req.user.id);
+
+    res.json({ success: true, cabinet: getShoeCabinet(db, req.user.id) });
+  } catch (err) {
+    console.error('Update shoe photo error:', err.message);
+    res.status(500).json({ error: 'Failed to update shoe photo' });
+  }
+});
+
 // POST /api/piugame/shoes/:shoeId/retire
 router.post('/shoes/:shoeId/retire', requireAuth, (req, res) => {
   const db = getDb();
@@ -675,6 +706,39 @@ router.post('/shoes/:shoeId/retire', requireAuth, (req, res) => {
       WHERE id = ? AND user_id = ?
     `).run(shoeId, req.user.id);
   }
+
+  res.json({ success: true, cabinet: getShoeCabinet(db, req.user.id) });
+});
+
+// DELETE /api/piugame/shoes/:shoeId
+router.delete('/shoes/:shoeId', requireAuth, (req, res) => {
+  const db = getDb();
+  const shoeId = parseInt(req.params.shoeId, 10);
+  if (!Number.isInteger(shoeId) || shoeId <= 0) {
+    return res.status(400).json({ error: 'Invalid shoe ID' });
+  }
+
+  const shoe = db.prepare(`
+    SELECT id
+    FROM user_shoes
+    WHERE id = ? AND user_id = ?
+  `).get(shoeId, req.user.id);
+  if (!shoe) return res.status(404).json({ error: 'Shoe not found' });
+
+  const txn = db.transaction(() => {
+    // Clear references first to avoid stale historical links if foreign keys are not enforced.
+    db.prepare(`
+      UPDATE user_recently_played
+      SET shoe_id = NULL
+      WHERE user_id = ? AND shoe_id = ?
+    `).run(req.user.id, shoeId);
+
+    db.prepare(`
+      DELETE FROM user_shoes
+      WHERE id = ? AND user_id = ?
+    `).run(shoeId, req.user.id);
+  });
+  txn();
 
   res.json({ success: true, cabinet: getShoeCabinet(db, req.user.id) });
 });

@@ -5,6 +5,7 @@ import {
   updateMe, changePassword, getInvitations, respondInvitation,
   getPiugameCredentialStatus, savePiugameCredentials, deletePiugameCredentials,
   syncPumbility, syncBestScores, syncRecentlyPlayed, saveWorldMaxLocation,
+  getProfileShoes, createProfileShoe, updateProfileShoePhoto, deleteProfileShoe,
 } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
@@ -56,6 +57,18 @@ export default function MyAccountPage() {
   const [piuForm, setPiuForm] = useState({ piugame_username: '', piugame_password: '' });
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuMessage, setPiuMessage] = useState('');
+  const [shoeCabinet, setShoeCabinet] = useState(null);
+  const [shoeLoading, setShoeLoading] = useState(false);
+  const [shoeBusy, setShoeBusy] = useState(false);
+  const [shoeMessage, setShoeMessage] = useState('');
+  const [shoeForm, setShoeForm] = useState({
+    make: '',
+    model: '',
+    setCurrent: true,
+    photoFile: null,
+  });
+  const [shoePhotoFiles, setShoePhotoFiles] = useState({});
+  const [shoeDeleteConfirmId, setShoeDeleteConfirmId] = useState(null);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -75,9 +88,34 @@ export default function MyAccountPage() {
       location_city: user.location_city || '',
     });
     setAvatarDirty(false);
+    setShoeCabinet(null);
+    setShoeMessage('');
+    setShoePhotoFiles({});
+    setShoeDeleteConfirmId(null);
+    setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
     getInvitations().then(setInvitations).catch(() => {});
     getPiugameCredentialStatus().then(r => setPiuLinked(r.linked)).catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    if (!user || tab !== 'shoes') return;
+    let cancelled = false;
+    setShoeLoading(true);
+    getProfileShoes(user.id)
+      .then((data) => {
+        if (cancelled) return;
+        setShoeCabinet(data || { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShoeCabinet({ active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setShoeLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [tab, user?.id]);
 
   if (!user) return null;
 
@@ -206,6 +244,96 @@ export default function MyAccountPage() {
     }
   };
 
+  const refreshShoeCabinet = async () => {
+    if (!user?.id) return null;
+    const data = await getProfileShoes(user.id);
+    const cabinet = data || { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] };
+    setShoeCabinet(cabinet);
+    return cabinet;
+  };
+
+  const handleAddShoe = async (e) => {
+    e.preventDefault();
+    if (shoeBusy) return;
+    const make = String(shoeForm.make || '').trim();
+    const model = String(shoeForm.model || '').trim();
+    if (!make && !model) {
+      setShoeMessage('Enter a shoe make or model.');
+      return;
+    }
+
+    setShoeBusy(true);
+    setShoeMessage('');
+    try {
+      const result = await createProfileShoe({
+        make,
+        model,
+        photoFile: shoeForm.photoFile || null,
+        setCurrent: !!shoeForm.setCurrent,
+      });
+      setShoeCabinet(result?.cabinet || shoeCabinet);
+      setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
+      setShoeDeleteConfirmId(null);
+      setShoeMessage('Shoe saved.');
+    } catch (err) {
+      setShoeMessage(err.message || 'Failed to add shoe.');
+    } finally {
+      setShoeBusy(false);
+    }
+  };
+
+  const handleUploadShoePhoto = async (shoeId) => {
+    if (shoeBusy) return;
+    const file = shoePhotoFiles[shoeId] || null;
+    if (!file) {
+      setShoeMessage('Choose a photo file first.');
+      return;
+    }
+
+    setShoeBusy(true);
+    setShoeMessage('');
+    try {
+      const result = await updateProfileShoePhoto(shoeId, file);
+      setShoeCabinet(result?.cabinet || shoeCabinet);
+      setShoePhotoFiles((prev) => {
+        const next = { ...prev };
+        delete next[shoeId];
+        return next;
+      });
+      setShoeDeleteConfirmId(null);
+      setShoeMessage('Shoe photo updated.');
+    } catch (err) {
+      setShoeMessage(err.message || 'Failed to update shoe photo.');
+    } finally {
+      setShoeBusy(false);
+    }
+  };
+
+  const handleDeleteShoe = async (shoeId) => {
+    if (shoeBusy) return;
+
+    setShoeBusy(true);
+    setShoeMessage('');
+    try {
+      const result = await deleteProfileShoe(shoeId);
+      setShoeCabinet(result?.cabinet || shoeCabinet);
+      setShoePhotoFiles((prev) => {
+        const next = { ...prev };
+        delete next[shoeId];
+        return next;
+      });
+      setShoeDeleteConfirmId(null);
+      setShoeMessage('Shoe deleted.');
+    } catch (err) {
+      setShoeMessage(err.message || 'Failed to delete shoe.');
+    } finally {
+      setShoeBusy(false);
+    }
+  };
+
+  const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
+  const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -259,10 +387,11 @@ export default function MyAccountPage() {
           { key: 'profile', label: 'Edit Profile' },
           { key: 'password', label: 'Change Password' },
           { key: 'piugame', label: 'PIUGame Link' },
+          { key: 'shoes', label: 'Shoes' },
         ].map(t => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setMessage(''); setPiuMessage(''); }}
+            onClick={() => { setTab(t.key); setMessage(''); setPiuMessage(''); setShoeMessage(''); }}
             className={`px-4 py-2 rounded-lg text-sm font-display font-bold transition-colors ${
               tab === t.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
@@ -461,6 +590,208 @@ export default function MyAccountPage() {
             {saving ? 'Changing...' : 'Change Password'}
           </button>
         </form>
+      ) : tab === 'shoes' ? (
+        <div className="space-y-4">
+          <div className="card space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-display font-bold text-sm text-piu-accent">SHOE CABINET SETTINGS</h3>
+              <button
+                type="button"
+                onClick={() => refreshShoeCabinet().catch(() => {})}
+                className="px-3 py-1 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                disabled={shoeBusy || shoeLoading}
+              >
+                {shoeLoading ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Add your shoes here and upload or replace photos later if needed.
+            </p>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Lifetime Steps</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {(shoeCabinet?.lifetime_steps || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Lifetime Songs</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {(shoeCabinet?.lifetime_songs || 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Current Shoe</p>
+                <p className="font-display font-bold text-xs mt-1 truncate">
+                  {activeShoe ? `${activeShoe.make} ${activeShoe.model}`.trim() : 'Not set'}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAddShoe} className="space-y-3 pt-2 border-t border-piu-border/30">
+              <h4 className="font-display font-bold text-xs text-gray-300 uppercase tracking-wide">Add Shoe</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Make</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Nike"
+                    maxLength={80}
+                    value={shoeForm.make}
+                    onChange={(e) => setShoeForm((prev) => ({ ...prev, make: e.target.value }))}
+                    disabled={shoeBusy}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Model</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. ZoomX Invincible 3"
+                    maxLength={80}
+                    value={shoeForm.model}
+                    onChange={(e) => setShoeForm((prev) => ({ ...prev, model: e.target.value }))}
+                    disabled={shoeBusy}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setShoeForm((prev) => ({ ...prev, photoFile: e.target.files?.[0] || null }))}
+                  className="text-xs text-gray-400 file:mr-3 file:px-3 file:py-1 file:rounded-lg file:border file:border-piu-border file:bg-piu-dark file:text-gray-300 file:cursor-pointer"
+                  disabled={shoeBusy}
+                />
+                <label className="inline-flex items-center gap-2 text-xs text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={shoeForm.setCurrent}
+                    onChange={(e) => setShoeForm((prev) => ({ ...prev, setCurrent: e.target.checked }))}
+                    disabled={shoeBusy}
+                  />
+                  Set as current shoe
+                </label>
+              </div>
+
+              <button type="submit" className="btn-primary w-full" disabled={shoeBusy}>
+                {shoeBusy ? 'Saving...' : 'Add Shoe'}
+              </button>
+            </form>
+          </div>
+
+          {shoeMessage && (
+            <div className={`px-4 py-2 rounded-lg text-sm ${
+              shoeMessage.includes('saved') || shoeMessage.includes('updated') || shoeMessage.includes('deleted')
+                ? 'bg-piu-green/10 text-piu-green border border-piu-green/30'
+                : 'bg-red-500/10 text-red-400 border border-red-500/30'
+            }`}>
+              {shoeMessage}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {shoeLoading && cabinetShoes.length === 0 ? (
+              <p className="text-center text-gray-500 text-sm py-6">Loading shoes...</p>
+            ) : cabinetShoes.length === 0 ? (
+              <p className="text-center text-gray-500 text-sm py-6">No shoes in your cabinet yet.</p>
+            ) : (
+              cabinetShoes.map((shoe) => {
+                const label = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                const pendingFile = shoePhotoFiles[shoe.id] || null;
+                return (
+                  <div key={shoe.id} className="card space-y-3">
+                    <div className="flex items-start gap-3">
+                      {shoe.image_data ? (
+                        <img src={shoe.image_data} alt={label} className="w-16 h-16 rounded-lg object-cover border border-piu-border/40 shrink-0" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-lg border border-piu-border/40 bg-piu-dark/60 flex items-center justify-center text-[11px] text-gray-500 text-center shrink-0">
+                          No Photo
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-display font-bold text-sm truncate">{label}</p>
+                          {shoe.retired_at ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-gray-700/60 text-gray-300 border border-gray-500/40">
+                              Retired
+                            </span>
+                          ) : shoe.is_current ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-piu-accent/20 text-piu-accent border border-piu-accent/40">
+                              Current
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {(shoe.songs_logged || 0).toLocaleString()} songs
+                          <span className="mx-1.5 text-gray-700">|</span>
+                          {(shoe.steps_logged || 0).toLocaleString()} steps
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-piu-border/30 space-y-2">
+                      <label className="block text-xs text-gray-400">Upload / replace photo</label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setShoePhotoFiles((prev) => ({ ...prev, [shoe.id]: e.target.files?.[0] || null }))}
+                          className="text-xs text-gray-400 file:mr-3 file:px-3 file:py-1 file:rounded-lg file:border file:border-piu-border file:bg-piu-dark file:text-gray-300 file:cursor-pointer"
+                          disabled={shoeBusy}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleUploadShoePhoto(shoe.id)}
+                          className="px-3 py-1 rounded-lg text-xs font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                          disabled={shoeBusy || !pendingFile}
+                        >
+                          {shoeBusy ? 'Saving...' : 'Save Photo'}
+                        </button>
+                      </div>
+
+                      <div className="pt-2 border-t border-red-500/30">
+                        {shoeDeleteConfirmId === shoe.id ? (
+                          <div className="space-y-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteShoe(shoe.id)}
+                              className="w-full px-3 py-1.5 rounded-lg text-[11px] font-display font-bold text-red-200 border border-red-500/60 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-60"
+                              disabled={shoeBusy}
+                            >
+                              Confirm Delete
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShoeDeleteConfirmId(null)}
+                              className="w-full px-3 py-1 rounded-lg text-[10px] font-display font-bold bg-piu-dark text-gray-400 border border-piu-border hover:text-gray-200 disabled:opacity-60"
+                              disabled={shoeBusy}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShoeDeleteConfirmId(shoe.id)}
+                            className="w-full px-3 py-1 rounded-lg text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
+                            disabled={shoeBusy}
+                          >
+                            Delete...
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
       ) : (
         /* PIUGame Link Tab */
         <div className="space-y-4">

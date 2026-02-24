@@ -198,6 +198,7 @@ export const getSyncProgress = () => request('/piugame/sync/progress');
 export const getProfileShoes = (userId) => request(`/piugame/shoes/${userId}`);
 export const wearProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/wear`, { method: 'POST' });
 export const retireProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/retire`, { method: 'POST' });
+export const deleteProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}`, { method: 'DELETE' });
 
 export async function createProfileShoe({ make, model, photoFile, setCurrent = true }) {
   const formData = new FormData();
@@ -215,6 +216,23 @@ export async function createProfileShoe({ make, model, photoFile, setCurrent = t
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || 'Failed to create shoe');
+  }
+  return res.json();
+}
+
+export async function updateProfileShoePhoto(shoeId, photoFile) {
+  const formData = new FormData();
+  if (photoFile) formData.append('photo', photoFile);
+
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/piugame/shoes/${encodeURIComponent(shoeId)}/photo`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to update shoe photo');
   }
   return res.json();
 }

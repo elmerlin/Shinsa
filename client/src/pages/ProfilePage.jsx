@@ -9,7 +9,7 @@ import {
   getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
-  getProfileShoes, createProfileShoe, wearProfileShoe, retireProfileShoe,
+  getProfileShoes, wearProfileShoe, retireProfileShoe, deleteProfileShoe,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
@@ -713,12 +713,8 @@ export default function ProfilePage() {
   const [shoesLoaded, setShoesLoaded] = useState(false);
   const [shoeBusy, setShoeBusy] = useState(false);
   const [shoeFeedback, setShoeFeedback] = useState('');
-  const [shoeForm, setShoeForm] = useState({
-    make: '',
-    model: '',
-    setCurrent: true,
-    photoFile: null,
-  });
+  const [retireConfirmId, setRetireConfirmId] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   // Social state
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
@@ -767,7 +763,8 @@ export default function ProfilePage() {
     setShoesLoaded(false);
     setShoeBusy(false);
     setShoeFeedback('');
-    setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
+    setRetireConfirmId(null);
+    setDeleteConfirmId(null);
     setFollowersLoaded(false);
     setTab('overview');
     setSelectedOverviewDateKey('');
@@ -1101,40 +1098,12 @@ export default function ProfilePage() {
     });
   };
 
-  const handleCreateShoe = async (e) => {
-    e.preventDefault();
-    if (!isOwner || shoeBusy) return;
-    const make = String(shoeForm.make || '').trim();
-    const model = String(shoeForm.model || '').trim();
-    if (!make && !model) {
-      setShoeFeedback('Enter a make or model first');
-      return;
-    }
-
-    setShoeBusy(true);
-    setShoeFeedback('');
-    try {
-      const data = await createProfileShoe({
-        make,
-        model,
-        photoFile: shoeForm.photoFile || null,
-        setCurrent: !!shoeForm.setCurrent,
-      });
-      setShoeCabinet(data?.cabinet || null);
-      setShoesLoaded(true);
-      setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
-      setShoeFeedback('Shoe added');
-    } catch (err) {
-      setShoeFeedback(err?.message || 'Failed to add shoe');
-    } finally {
-      setShoeBusy(false);
-    }
-  };
-
   const handleWearShoe = async (shoeId) => {
     if (!isOwner || shoeBusy) return;
     setShoeBusy(true);
     setShoeFeedback('');
+    setRetireConfirmId(null);
+    setDeleteConfirmId(null);
     try {
       const data = await wearProfileShoe(shoeId);
       setShoeCabinet(data?.cabinet || null);
@@ -1151,12 +1120,31 @@ export default function ProfilePage() {
     if (!confirm(`Retire ${label}?`)) return;
     setShoeBusy(true);
     setShoeFeedback('');
+    setDeleteConfirmId(null);
     try {
       const data = await retireProfileShoe(shoeId);
       setShoeCabinet(data?.cabinet || null);
+      setRetireConfirmId(null);
       setShoeFeedback('Shoe retired');
     } catch (err) {
       setShoeFeedback(err?.message || 'Failed to retire shoe');
+    } finally {
+      setShoeBusy(false);
+    }
+  };
+
+  const handleDeleteShoe = async (shoeId) => {
+    if (!isOwner || shoeBusy) return;
+    setShoeBusy(true);
+    setShoeFeedback('');
+    try {
+      const data = await deleteProfileShoe(shoeId);
+      setShoeCabinet(data?.cabinet || null);
+      setRetireConfirmId(null);
+      setDeleteConfirmId(null);
+      setShoeFeedback('Shoe deleted');
+    } catch (err) {
+      setShoeFeedback(err?.message || 'Failed to delete shoe');
     } finally {
       setShoeBusy(false);
     }
@@ -2333,53 +2321,18 @@ export default function ProfilePage() {
           </div>
 
           {isOwner && (
-            <form onSubmit={handleCreateShoe} className="card space-y-3">
-              <h4 className="font-display font-bold text-sm text-piu-accent">Add Shoe</h4>
-              <div className="grid sm:grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  value={shoeForm.make}
-                  onChange={(e) => setShoeForm((prev) => ({ ...prev, make: e.target.value }))}
-                  className="input-field"
-                  placeholder="Make (e.g. Nike)"
-                  maxLength={80}
-                  disabled={shoeBusy}
-                />
-                <input
-                  type="text"
-                  value={shoeForm.model}
-                  onChange={(e) => setShoeForm((prev) => ({ ...prev, model: e.target.value }))}
-                  className="input-field"
-                  placeholder="Model (e.g. ZoomX Invincible 3)"
-                  maxLength={80}
-                  disabled={shoeBusy}
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setShoeForm((prev) => ({ ...prev, photoFile: e.target.files?.[0] || null }))}
-                  className="text-xs text-gray-400 file:mr-3 file:px-3 file:py-1 file:rounded-lg file:border file:border-piu-border file:bg-piu-dark file:text-gray-300 file:cursor-pointer"
-                  disabled={shoeBusy}
-                />
-                <label className="inline-flex items-center gap-2 text-xs text-gray-400">
-                  <input
-                    type="checkbox"
-                    checked={shoeForm.setCurrent}
-                    onChange={(e) => setShoeForm((prev) => ({ ...prev, setCurrent: e.target.checked }))}
-                    disabled={shoeBusy}
-                  />
-                  Set as current shoe
-                </label>
-              </div>
-              <div className="flex items-center gap-3">
-                <button type="submit" className="btn-primary text-xs px-4 py-1.5" disabled={shoeBusy}>
-                  {shoeBusy ? 'Saving...' : 'Add Shoe'}
-                </button>
-                {shoeFeedback && <p className="text-xs text-gray-400">{shoeFeedback}</p>}
-              </div>
-            </form>
+            <div className="card">
+              <p className="text-[11px] text-gray-400">
+                Add shoes and upload or update shoe photos from account settings.
+              </p>
+              <Link
+                to="/account"
+                className="inline-flex mt-2 px-3 py-1.5 rounded-lg text-xs font-display font-bold bg-piu-dark border border-piu-border text-gray-300 hover:text-white transition-colors"
+              >
+                Open Account Shoes Settings
+              </Link>
+              {shoeFeedback && <p className="text-xs text-gray-400 mt-2">{shoeFeedback}</p>}
+            </div>
           )}
 
           <div className="space-y-3">
@@ -2423,26 +2376,94 @@ export default function ProfilePage() {
                         </p>
                       )}
                     </div>
-                    {isOwner && !shoe.retired_at && (
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        {!shoe.is_current && (
-                          <button
-                            type="button"
-                            onClick={() => handleWearShoe(shoe.id)}
-                            className="px-3 py-1 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
-                            disabled={shoeBusy}
-                          >
-                            Wear
-                          </button>
+                    {isOwner && (
+                      <div className="flex flex-col items-end gap-2 shrink-0 min-w-[126px]">
+                        {!shoe.retired_at && (
+                          <>
+                            {!shoe.is_current && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRetireConfirmId(null);
+                                  setDeleteConfirmId(null);
+                                  handleWearShoe(shoe.id);
+                                }}
+                                className="w-full px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                                disabled={shoeBusy}
+                              >
+                                Wear
+                              </button>
+                            )}
+                            <div className="w-full pt-1 border-t border-red-500/30">
+                              {retireConfirmId === shoe.id ? (
+                                <div className="space-y-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRetireShoe(shoe.id, shoeLabel)}
+                                    className="w-full px-3 py-1.5 rounded-lg text-[11px] font-display font-bold text-red-200 border border-red-500/60 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-60"
+                                    disabled={shoeBusy}
+                                  >
+                                    Confirm Retire
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setRetireConfirmId(null)}
+                                    className="w-full px-3 py-1 rounded-lg text-[10px] font-display font-bold bg-piu-dark text-gray-400 border border-piu-border hover:text-gray-200 disabled:opacity-60"
+                                    disabled={shoeBusy}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeleteConfirmId(null);
+                                    setRetireConfirmId(shoe.id);
+                                  }}
+                                  className="w-full px-3 py-1 rounded-lg text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
+                                  disabled={shoeBusy}
+                                >
+                                  Retire...
+                                </button>
+                              )}
+                            </div>
+                          </>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => handleRetireShoe(shoe.id, shoeLabel)}
-                          className="px-3 py-1 rounded-lg text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
-                          disabled={shoeBusy}
-                        >
-                          Retire
-                        </button>
+                        <div className="w-full pt-1 border-t border-red-500/30">
+                          {deleteConfirmId === shoe.id ? (
+                            <div className="space-y-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteShoe(shoe.id)}
+                                className="w-full px-3 py-1.5 rounded-lg text-[11px] font-display font-bold text-red-200 border border-red-500/60 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-60"
+                                disabled={shoeBusy}
+                              >
+                                Confirm Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteConfirmId(null)}
+                                className="w-full px-3 py-1 rounded-lg text-[10px] font-display font-bold bg-piu-dark text-gray-400 border border-piu-border hover:text-gray-200 disabled:opacity-60"
+                                disabled={shoeBusy}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRetireConfirmId(null);
+                                setDeleteConfirmId(shoe.id);
+                              }}
+                              className="w-full px-3 py-1 rounded-lg text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
+                              disabled={shoeBusy}
+                            >
+                              Delete...
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
