@@ -713,7 +713,6 @@ export default function ProfilePage() {
   const [shoeLoading, setShoeLoading] = useState(false);
   const [shoeBusy, setShoeBusy] = useState(false);
   const [shoeFeedback, setShoeFeedback] = useState('');
-  const [selectedWearShoeId, setSelectedWearShoeId] = useState('');
 
   // Social state
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
@@ -762,7 +761,6 @@ export default function ProfilePage() {
     setShoeLoading(false);
     setShoeBusy(false);
     setShoeFeedback('');
-    setSelectedWearShoeId('');
     setFollowersLoaded(false);
     setTab('overview');
     setSelectedOverviewDateKey('');
@@ -1517,17 +1515,6 @@ export default function ProfilePage() {
     return activityItems;
   }, [activityItems, activitySubTab]);
 
-  useEffect(() => {
-    if (!isOwner || tab !== 'shoes') return;
-    const shoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
-    const currentShoe = shoes.find((shoe) => shoe.is_current) || null;
-    const currentId = currentShoe ? String(currentShoe.id) : '';
-    const firstAvailable = shoes.find((shoe) => !shoe.retired_at);
-    const fallbackId = firstAvailable ? String(firstAvailable.id) : '';
-    const nextValue = currentId || fallbackId;
-    setSelectedWearShoeId((prev) => (prev === nextValue ? prev : nextValue));
-  }, [tab, isOwner, shoeCabinet]);
-
   if (!profile) {
     if (loadError) {
       return <div className="text-center py-20 text-gray-500">{loadError}</div>;
@@ -1559,7 +1546,6 @@ export default function ProfilePage() {
   const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
   const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
-  const selectedWearShoeIsCurrent = String(activeShoe?.id || '') === String(selectedWearShoeId || '');
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
@@ -2292,14 +2278,26 @@ export default function ProfilePage() {
           <div className="card">
             <div className="flex items-center justify-between gap-3 mb-3">
               <h3 className="font-display font-bold text-base text-piu-accent">SHOE CABINET</h3>
-              <button
-                type="button"
-                onClick={() => refreshShoeCabinet().catch(() => {})}
-                className="px-3 py-1 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
-                disabled={shoeBusy || shoeLoading}
-              >
-                {shoeLoading ? 'Loading...' : 'Refresh'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => refreshShoeCabinet().catch(() => {})}
+                  className="px-3 py-1 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                  disabled={shoeBusy || shoeLoading}
+                >
+                  {shoeLoading ? 'Loading...' : 'Refresh'}
+                </button>
+                {isOwner && (
+                  <Link
+                    to="/account"
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white transition-colors"
+                    title="Open shoe settings"
+                    aria-label="Open shoe settings"
+                  >
+                    ⚙
+                  </Link>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
@@ -2324,59 +2322,8 @@ export default function ProfilePage() {
             <p className="text-[11px] text-gray-500 mt-2">
               Syncing recently played asserts your current shoe for fetched plays.
             </p>
-            {isOwner && activeCabinetShoes.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-piu-border/30">
-                <p className="text-[11px] text-gray-400">Set currently worn shoe</p>
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <select
-                    className="input-field !py-1.5 !text-xs min-w-[220px]"
-                    value={selectedWearShoeId}
-                    onChange={(e) => setSelectedWearShoeId(e.target.value)}
-                    disabled={shoeBusy || shoeLoading}
-                  >
-                    {activeCabinetShoes.map((shoe) => {
-                      const label = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
-                      return (
-                        <option key={shoe.id} value={String(shoe.id)}>
-                          {label}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const shoeId = parseInt(selectedWearShoeId, 10);
-                      if (!Number.isInteger(shoeId) || shoeId <= 0) {
-                        setShoeFeedback('Select a shoe first');
-                        return;
-                      }
-                      handleWearShoe(shoeId);
-                    }}
-                    className="px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
-                    disabled={shoeBusy || shoeLoading || !selectedWearShoeId || selectedWearShoeIsCurrent}
-                  >
-                    {shoeBusy ? 'Saving...' : 'Set Current'}
-                  </button>
-                </div>
-              </div>
-            )}
+            {shoeFeedback && <p className="text-xs text-gray-400 mt-2">{shoeFeedback}</p>}
           </div>
-
-          {isOwner && (
-            <div className="card">
-              <p className="text-[11px] text-gray-400">
-                Add shoes, upload photos, and manage retire/delete actions in account settings.
-              </p>
-              <Link
-                to="/account"
-                className="inline-flex mt-2 px-3 py-1.5 rounded-lg text-xs font-display font-bold bg-piu-dark border border-piu-border text-gray-300 hover:text-white transition-colors"
-              >
-                Open Account Shoes Settings
-              </Link>
-              {shoeFeedback && <p className="text-xs text-gray-400 mt-2">{shoeFeedback}</p>}
-            </div>
-          )}
 
           <div className="space-y-3">
             {shoeLoading && cabinetShoes.length === 0 ? (
@@ -2390,7 +2337,10 @@ export default function ProfilePage() {
                 {activeCabinetShoes.map((shoe) => {
                   const shoeLabel = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
                   return (
-                    <div key={shoe.id} className="card flex items-start gap-3">
+                    <div
+                      key={shoe.id}
+                      className={`card flex items-start gap-3 ${shoe.is_current ? 'bg-piu-accent/10 border-piu-accent/50' : ''}`}
+                    >
                       {shoe.image_data ? (
                         <img src={shoe.image_data} alt={shoeLabel} className="w-28 h-16 rounded-lg object-contain bg-piu-dark/60 border border-piu-border/40 shrink-0 p-1" />
                       ) : (
