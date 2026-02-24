@@ -710,9 +710,10 @@ export default function ProfilePage() {
   const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
   const [profilePosts, setProfilePosts] = useState([]);
   const [shoeCabinet, setShoeCabinet] = useState(null);
-  const [shoesLoaded, setShoesLoaded] = useState(false);
+  const [shoeLoading, setShoeLoading] = useState(false);
   const [shoeBusy, setShoeBusy] = useState(false);
   const [shoeFeedback, setShoeFeedback] = useState('');
+  const [selectedWearShoeId, setSelectedWearShoeId] = useState('');
 
   // Social state
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
@@ -758,9 +759,10 @@ export default function ProfilePage() {
     setActivityItems([]);
     setSongAnalytics(null);
     setShoeCabinet(null);
-    setShoesLoaded(false);
+    setShoeLoading(false);
     setShoeBusy(false);
     setShoeFeedback('');
+    setSelectedWearShoeId('');
     setFollowersLoaded(false);
     setTab('overview');
     setSelectedOverviewDateKey('');
@@ -916,25 +918,47 @@ export default function ProfilePage() {
     return () => { cancelled = true; };
   }, [authUser, profileId, isOwner]);
 
+  const refreshShoeCabinet = async (options = {}) => {
+    const { silent = false } = options;
+    if (!profileId) return null;
+
+    if (!silent) setShoeLoading(true);
+    try {
+      const data = await getProfileShoes(profileId);
+      const cabinet = data || { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] };
+      setShoeCabinet(cabinet);
+      return cabinet;
+    } catch {
+      const emptyCabinet = { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] };
+      setShoeCabinet(emptyCabinet);
+      return emptyCabinet;
+    } finally {
+      if (!silent) setShoeLoading(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
-    if (tab !== 'shoes' || !profileId || shoesLoaded) {
+    if (tab !== 'shoes' || !profileId) {
       return () => { cancelled = true; };
     }
 
-    setShoesLoaded(true);
+    setShoeLoading(true);
     getProfileShoes(profileId)
       .then((data) => {
         if (cancelled) return;
-        setShoeCabinet(data || null);
+        setShoeCabinet(data || { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] });
       })
       .catch(() => {
         if (cancelled) return;
         setShoeCabinet({ active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setShoeLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [tab, profileId, shoesLoaded]);
+  }, [tab, profileId]);
 
   useEffect(() => {
     if (!notifyMenuOpen) return undefined;
@@ -1524,6 +1548,16 @@ export default function ProfilePage() {
   const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
   const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
+  const selectedWearShoeIsCurrent = String(activeShoe?.id || '') === String(selectedWearShoeId || '');
+
+  useEffect(() => {
+    if (!isOwner || tab !== 'shoes') return;
+    const currentId = activeShoe ? String(activeShoe.id) : '';
+    const firstAvailable = cabinetShoes.find((shoe) => !shoe.retired_at);
+    const fallbackId = firstAvailable ? String(firstAvailable.id) : '';
+    const nextValue = currentId || fallbackId;
+    setSelectedWearShoeId((prev) => (prev === nextValue ? prev : nextValue));
+  }, [tab, isOwner, cabinetShoes, activeShoe?.id]);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
@@ -2254,7 +2288,17 @@ export default function ProfilePage() {
       {tab === 'shoes' && (
         <div className="space-y-4">
           <div className="card">
-            <h3 className="font-display font-bold text-base text-piu-accent mb-3">SHOE CABINET</h3>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="font-display font-bold text-base text-piu-accent">SHOE CABINET</h3>
+              <button
+                type="button"
+                onClick={() => refreshShoeCabinet().catch(() => {})}
+                className="px-3 py-1 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                disabled={shoeBusy || shoeLoading}
+              >
+                {shoeLoading ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide">Lifetime Steps</p>
@@ -2278,6 +2322,43 @@ export default function ProfilePage() {
             <p className="text-[11px] text-gray-500 mt-2">
               Syncing recently played asserts your current shoe for fetched plays.
             </p>
+            {isOwner && activeCabinetShoes.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-piu-border/30">
+                <p className="text-[11px] text-gray-400">Set currently worn shoe</p>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <select
+                    className="input-field !py-1.5 !text-xs min-w-[220px]"
+                    value={selectedWearShoeId}
+                    onChange={(e) => setSelectedWearShoeId(e.target.value)}
+                    disabled={shoeBusy || shoeLoading}
+                  >
+                    {activeCabinetShoes.map((shoe) => {
+                      const label = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                      return (
+                        <option key={shoe.id} value={String(shoe.id)}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const shoeId = parseInt(selectedWearShoeId, 10);
+                      if (!Number.isInteger(shoeId) || shoeId <= 0) {
+                        setShoeFeedback('Select a shoe first');
+                        return;
+                      }
+                      handleWearShoe(shoeId);
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                    disabled={shoeBusy || shoeLoading || !selectedWearShoeId || selectedWearShoeIsCurrent}
+                  >
+                    {shoeBusy ? 'Saving...' : 'Set Current'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {isOwner && (
@@ -2296,7 +2377,9 @@ export default function ProfilePage() {
           )}
 
           <div className="space-y-3">
-            {cabinetShoes.length === 0 ? (
+            {shoeLoading && cabinetShoes.length === 0 ? (
+              <p className="text-center text-gray-500 text-sm py-6">Loading shoes...</p>
+            ) : cabinetShoes.length === 0 ? (
               <p className="text-center text-gray-500 text-sm py-6">
                 {isOwner ? 'No shoes in your cabinet yet' : 'No shoes added yet'}
               </p>
