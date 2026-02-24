@@ -1517,6 +1517,17 @@ export default function ProfilePage() {
     return activityItems;
   }, [activityItems, activitySubTab]);
 
+  useEffect(() => {
+    if (!isOwner || tab !== 'shoes') return;
+    const shoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
+    const currentShoe = shoes.find((shoe) => shoe.is_current) || null;
+    const currentId = currentShoe ? String(currentShoe.id) : '';
+    const firstAvailable = shoes.find((shoe) => !shoe.retired_at);
+    const fallbackId = firstAvailable ? String(firstAvailable.id) : '';
+    const nextValue = currentId || fallbackId;
+    setSelectedWearShoeId((prev) => (prev === nextValue ? prev : nextValue));
+  }, [tab, isOwner, shoeCabinet]);
+
   if (!profile) {
     if (loadError) {
       return <div className="text-center py-20 text-gray-500">{loadError}</div>;
@@ -1549,15 +1560,6 @@ export default function ProfilePage() {
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
   const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
   const selectedWearShoeIsCurrent = String(activeShoe?.id || '') === String(selectedWearShoeId || '');
-
-  useEffect(() => {
-    if (!isOwner || tab !== 'shoes') return;
-    const currentId = activeShoe ? String(activeShoe.id) : '';
-    const firstAvailable = cabinetShoes.find((shoe) => !shoe.retired_at);
-    const fallbackId = firstAvailable ? String(firstAvailable.id) : '';
-    const nextValue = currentId || fallbackId;
-    setSelectedWearShoeId((prev) => (prev === nextValue ? prev : nextValue));
-  }, [tab, isOwner, cabinetShoes, activeShoe?.id]);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
