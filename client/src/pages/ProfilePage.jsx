@@ -2340,7 +2340,7 @@ export default function ProfilePage() {
                   type="text"
                   value={shoeForm.make}
                   onChange={(e) => setShoeForm((prev) => ({ ...prev, make: e.target.value }))}
-                  className="input"
+                  className="input-field"
                   placeholder="Make (e.g. Nike)"
                   maxLength={80}
                   disabled={shoeBusy}
@@ -2349,7 +2349,7 @@ export default function ProfilePage() {
                   type="text"
                   value={shoeForm.model}
                   onChange={(e) => setShoeForm((prev) => ({ ...prev, model: e.target.value }))}
-                  className="input"
+                  className="input-field"
                   placeholder="Model (e.g. ZoomX Invincible 3)"
                   maxLength={80}
                   disabled={shoeBusy}
