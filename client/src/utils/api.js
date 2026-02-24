@@ -194,7 +194,13 @@ export const getPiugameBestScores = (userId, mode) => request(`/piugame/best-sco
 export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-played/${userId}`);
 export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
-export const getPumbilityRecommendations = (userId) => request(`/piugame/pumbility-recommendations/${userId}`);
+export const getPumbilityRecommendations = (userId, options = {}) => {
+  const qs = new URLSearchParams();
+  if (options.metric) qs.set('metric', String(options.metric));
+  if (options.mode) qs.set('mode', String(options.mode));
+  const query = qs.toString();
+  return request(`/piugame/pumbility-recommendations/${userId}${query ? `?${query}` : ''}`);
+};
 export const getPumbilityRanking = () => request('/piugame/pumbility-ranking');
 export const syncPumbilityRanking = () => longRequest('/piugame/sync/pumbility-ranking', { method: 'POST' });
 export const getSyncProgress = () => request('/piugame/sync/progress');
@@ -623,6 +629,7 @@ export async function streamChatbotAsk(message, history, onEvent) {
 
 // Song Recommendations
 export const getSongRecommendations = (data) => request('/songs/recommendations', { method: 'POST', body: JSON.stringify(data) });
+export const getTrainingRecommendations = (chartMode = 'both') => request(`/songs/recommendations/training?chart_mode=${encodeURIComponent(chartMode)}`);
 
 // Parser
 export async function parseScorePhoto(file) {

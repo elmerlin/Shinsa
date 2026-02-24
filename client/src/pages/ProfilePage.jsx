@@ -9,7 +9,6 @@ import {
   getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
-  getPumbilityRecommendations,
   getProfileShoes, wearProfileShoe,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
@@ -702,7 +701,6 @@ export default function ProfilePage() {
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
-  const [pumbilityRecs, setPumbilityRecs] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
@@ -985,7 +983,6 @@ export default function ProfilePage() {
       getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
       getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
       getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
-      getPumbilityRecommendations(profileId).then(setPumbilityRecs).catch(() => {});
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
       getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
     }
@@ -1018,7 +1015,6 @@ export default function ProfilePage() {
         getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
         getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
         getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
-        getPumbilityRecommendations(profileId).then(setPumbilityRecs).catch(() => {});
       }).finally(() => setPiuSyncing(''));
     }
   }, [isPiuTab, profileId, isOwner, piuStatus?.linked]);
@@ -1549,6 +1545,13 @@ export default function ProfilePage() {
   const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
   const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
+  const pumbilityTopScores = Array.isArray(piuPumbility?.scores) ? piuPumbility.scores : [];
+  const pumbilityAvgScore = pumbilityTopScores.length > 0
+    ? Math.round(pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.score, 10) || 0), 0) / pumbilityTopScores.length)
+    : 0;
+  const pumbilityAvgLevel = pumbilityTopScores.length > 0
+    ? Math.round((pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.level, 10) || 0), 0) / pumbilityTopScores.length) * 10) / 10
+    : 0;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
@@ -2557,11 +2560,24 @@ export default function ProfilePage() {
           <div className="card">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-base text-piu-accent">PUMBILITY</h3>
-              {piuPumbility?.pumbility_value > 0 && (
-                <span className="text-2xl font-mono font-bold text-piu-gold">
-                  {piuPumbility.pumbility_value.toLocaleString()}
-                </span>
-              )}
+              <div className="text-right">
+                {piuPumbility?.pumbility_value > 0 && (
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="text-2xl font-mono font-bold text-piu-gold">
+                      {piuPumbility.pumbility_value.toLocaleString()}
+                    </span>
+                    {piuPumbility.ranking ? (
+                      <span className="px-2 py-0.5 rounded border border-piu-gold/40 text-piu-gold text-xs font-display font-bold">
+                        #{piuPumbility.ranking}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded border border-piu-border/40 text-gray-500 text-[10px] font-display">
+                        Outside Top 1000
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {piuPumbility && piuPumbility.pumbility_value > 0 && (
@@ -2594,8 +2610,34 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* Leaderboard Threshold (1000th place) */}
+                {/* Average Score */}
                 <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Avg Score</p>
+                  <p className="text-lg font-mono font-bold text-white">
+                    {pumbilityAvgScore > 0 ? pumbilityAvgScore.toLocaleString() : '--'}
+                  </p>
+                  {pumbilityAvgScore > 0 && (
+                    <p className="text-[10px] text-gray-500 font-display mt-0.5">
+                      Top 50 average
+                    </p>
+                  )}
+                </div>
+
+                {/* Average Level */}
+                <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Avg Level</p>
+                  <p className="text-lg font-mono font-bold text-white">
+                    {pumbilityAvgLevel > 0 ? pumbilityAvgLevel.toFixed(1) : '--'}
+                  </p>
+                  {pumbilityAvgLevel > 0 && (
+                    <p className="text-[10px] text-gray-500 font-display mt-0.5">
+                      Top 50 average
+                    </p>
+                  )}
+                </div>
+
+                {/* Leaderboard Threshold (1000th place) */}
+                <div className="bg-piu-dark/50 rounded-lg p-3 text-center col-start-2 sm:col-start-4">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Top 1000 Threshold</p>
                   <p className="text-lg font-mono font-bold text-white">
                     {piuPumbility.threshold > 0 ? piuPumbility.threshold.toLocaleString() : '--'}
@@ -2610,20 +2652,6 @@ export default function ProfilePage() {
                     </p>
                   )}
                 </div>
-
-                {/* Ranking */}
-                <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
-                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Ranking</p>
-                  <p className="text-lg font-mono font-bold text-white">
-                    {piuPumbility.ranking ? `#${piuPumbility.ranking}` : '--'}
-                  </p>
-                  {piuPumbility.ranking && (
-                    <p className="text-[10px] text-piu-gold font-display mt-0.5">Top 1000</p>
-                  )}
-                  {!piuPumbility.ranking && piuPumbility.threshold > 0 && (
-                    <p className="text-[10px] text-gray-500 font-display mt-0.5">Outside top 1000</p>
-                  )}
-                </div>
               </div>
             )}
 
@@ -2633,63 +2661,6 @@ export default function ProfilePage() {
               </p>
             )}
           </div>
-
-          {/* Recommendations Card */}
-          {pumbilityRecs?.recommendations?.length > 0 && (
-            <div className="card">
-              <h3 className="font-display font-bold text-base text-piu-accent mb-1">RECOMMENDATIONS</h3>
-              <p className="text-[10px] text-gray-500 font-display mb-3">
-                Songs closest to crossing to the next grade with the most pumbility impact
-              </p>
-              <div className="space-y-2">
-                {pumbilityRecs.recommendations.map((r, i) => {
-                  const currentRank = getRank(r.current_score);
-                  const nextRank = getRank(r.next_threshold);
-                  return (
-                    <div key={i} className="flex items-center gap-3 py-2 border-b border-piu-border/30 last:border-0">
-                      <span className="text-xs text-gray-500 font-mono w-5 shrink-0 text-right">{i + 1}</span>
-                      <PiuSongJacket
-                        title={r.song_title} mode={r.mode} level={r.level}
-                        bgUrl={r.background_url} jacketLookup={jacketLookup}
-                        size="sm"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <p className="text-sm font-display font-bold truncate">{r.song_title}</p>
-                          {(r.recommendation_type === 'easiest' || r.recommendation_type === 'easiest_and_best_impact') && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded border border-cyan-500/40 text-cyan-300 font-display shrink-0">
-                              Easiest
-                            </span>
-                          )}
-                          {(r.recommendation_type === 'best_impact_per_point' || r.recommendation_type === 'easiest_and_best_impact') && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/40 text-emerald-300 font-display shrink-0">
-                              Best Impact
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className={`text-[10px] font-display font-bold ${currentRank.color}`}>
-                            {r.current_grade}
-                          </span>
-                          <span className="text-[10px] text-gray-600">{'\u2192'}</span>
-                          <span className={`text-[10px] font-display font-bold ${nextRank.color}`}>
-                            {r.next_grade}
-                          </span>
-                          <span className="text-[10px] text-gray-500 font-mono">
-                            +{r.score_needed.toLocaleString()} pts
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-mono font-bold text-green-400">+{r.pumbility_gain.toLocaleString()}</p>
-                        <p className="text-[10px] text-gray-500 font-mono">{r.current_score.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Top 50 Scores List */}
           <div className="card">

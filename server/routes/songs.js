@@ -2404,6 +2404,243 @@ function filterChartsBySkills(charts, mustHaveSlugs, avoidSlugs) {
   });
 }
 
+function normalizeTrainingChartMode(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw || raw === 'both' || raw === 'all') {
+    return { ok: true, chartMode: 'both', allowedModes: ['Single', 'Double'] };
+  }
+  const normalized = normalizeMode(raw);
+  if (!normalized || normalized === 'CoOp') {
+    return { ok: false, chartMode: 'both', allowedModes: ['Single', 'Double'] };
+  }
+  return { ok: true, chartMode: normalized.toLowerCase(), allowedModes: [normalized] };
+}
+
+function buildTrainingRecommendations({
+  songCatalog,
+  bestByChart,
+  passingLevel,
+  scoringLevel,
+  limit = 10,
+}) {
+  const minLevel = Math.min(parseInt(passingLevel, 10) || 0, parseInt(scoringLevel, 10) || 0);
+  const maxLevel = Math.max(parseInt(passingLevel, 10) || 0, parseInt(scoringLevel, 10) || 0);
+
+  const inRangeCharts = songCatalog.charts.filter((chart) => {
+    const level = parseInt(chart.level, 10) || 0;
+    return level >= minLevel && level <= maxLevel;
+  });
+
+  const lowScorePassed = [];
+  for (const chart of inRangeCharts) {
+    const best = bestByChart.get(chart.key);
+    if (!best || !best.is_pass) continue;
+    const bestScore = scoreValue(best.score);
+    if (bestScore <= 0) continue;
+    lowScorePassed.push({ chart, best, bestScore });
+  }
+  lowScorePassed.sort((a, b) => {
+    if (a.bestScore !== b.bestScore) return a.bestScore - b.bestScore;
+    if ((a.chart.level || 0) !== (b.chart.level || 0)) return (a.chart.level || 0) - (b.chart.level || 0);
+    return String(a.chart.title || '').localeCompare(String(b.chart.title || ''), undefined, { sensitivity: 'base' });
+  });
+
+  const skillStats = new Map();
+  const weakSkillSource = lowScorePassed.slice(0, 120);
+  for (const row of weakSkillSource) {
+    const seen = new Set();
+    for (const skill of row.chart.skills || []) {
+      const slug = normalizeSkillSlug(skill?.slug || skill?.skill_slug);
+      if (!slug || seen.has(slug)) continue;
+      seen.add(slug);
+
+      const entry = skillStats.get(slug) || {
+        slug,
+        name: getSkillNameForSlug(slug, skill?.name || skill?.skill_name),
+        count: 0,
+        score_sum: 0,
+        lowest_score: 0,
+        pressure_weight: 0,
+      };
+      entry.count += 1;
+      entry.score_sum += row.bestScore;
+      entry.lowest_score = entry.lowest_score > 0 ? Math.min(entry.lowest_score, row.bestScore) : row.bestScore;
+      entry.pressure_weight += Math.max(1, 1000000 - row.bestScore);
+      skillStats.set(slug, entry);
+    }
+  }
+
+  const weakSkills = Array.from(skillStats.values())
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      if (b.pressure_weight !== a.pressure_weight) return b.pressure_weight - a.pressure_weight;
+      return a.lowest_score - b.lowest_score;
+    })
+    .slice(0, 8)
+    .map((entry) => ({
+      slug: entry.slug,
+      name: entry.name,
+      count: entry.count,
+      average_score: entry.count > 0 ? Math.round(entry.score_sum / entry.count) : 0,
+      lowest_score: entry.lowest_score,
+    }));
+  const weakSkillSet = new Set(weakSkills.map((entry) => entry.slug));
+
+  const buildSkillHits = (chart) => {
+    const hits = [];
+    const seen = new Set();
+    for (const skill of chart.skills || []) {
+      const slug = normalizeSkillSlug(skill?.slug || skill?.skill_slug);
+      if (!slug || seen.has(slug) || !weakSkillSet.has(slug)) continue;
+      seen.add(slug);
+      const stat = skillStats.get(slug);
+      hits.push({
+        slug,
+        name: getSkillNameForSlug(slug, skill?.name || skill?.skill_name),
+        count: stat?.count || 0,
+      });
+    }
+    hits.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+    });
+    return hits;
+  };
+
+  const buildRow = ({ chart, best, reason }) => {
+    const bestScore = best ? scoreValue(best.score) : null;
+    const bestGrade = best ? getGrade(best) : '';
+    const skillHits = buildSkillHits(chart);
+    const weakSkillWeight = skillHits.reduce((sum, hit) => sum + (skillStats.get(hit.slug)?.count || 0), 0);
+    return {
+      chart_id: chart.chart_id,
+      title: chart.title,
+      artist: chart.artist || '',
+      mode: chart.mode,
+      level: chart.level,
+      jacket_url: chart.jacket_url || '',
+      bpm: chart.bpm || '',
+      skills: chart.skills || [],
+      best_score: bestScore,
+      best_grade: bestGrade,
+      is_pass: best ? !!best.is_pass : false,
+      skill_match_count: skillHits.length,
+      weak_skill_hits: skillHits,
+      weak_skill_weight: weakSkillWeight,
+      reason,
+    };
+  };
+
+  const primary = lowScorePassed
+    .map((row) => buildRow({ chart: row.chart, best: row.best, reason: 'Low-score clears with recurring weak skills' }))
+    .filter((row) => row.skill_match_count > 0);
+
+  const secondary = lowScorePassed
+    .map((row) => buildRow({ chart: row.chart, best: row.best, reason: 'Low-score clear in your current level range' }))
+    .filter((row) => row.skill_match_count === 0);
+
+  const tertiary = inRangeCharts
+    .filter((chart) => {
+      const best = bestByChart.get(chart.key);
+      return !best || !best.is_pass;
+    })
+    .map((chart) => buildRow({
+      chart,
+      best: bestByChart.get(chart.key),
+      reason: 'In-range chart covering recurring weak skills',
+    }))
+    .filter((row) => row.skill_match_count > 0);
+
+  const sortRows = (a, b) => {
+    if (b.skill_match_count !== a.skill_match_count) return b.skill_match_count - a.skill_match_count;
+    if (b.weak_skill_weight !== a.weak_skill_weight) return b.weak_skill_weight - a.weak_skill_weight;
+    const aScore = Number.isFinite(a.best_score) ? a.best_score : 1000001;
+    const bScore = Number.isFinite(b.best_score) ? b.best_score : 1000001;
+    if (aScore !== bScore) return aScore - bScore;
+    if ((a.level || 0) !== (b.level || 0)) return (a.level || 0) - (b.level || 0);
+    return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+  };
+
+  primary.sort(sortRows);
+  secondary.sort(sortRows);
+  tertiary.sort(sortRows);
+
+  const recommendations = [];
+  const seenCharts = new Set();
+  const pushRows = (rows) => {
+    for (const row of rows) {
+      if (recommendations.length >= limit) break;
+      if (seenCharts.has(row.chart_id)) continue;
+      seenCharts.add(row.chart_id);
+      recommendations.push(row);
+    }
+  };
+
+  pushRows(primary);
+  pushRows(secondary);
+  pushRows(tertiary);
+
+  return {
+    recommendations: recommendations.slice(0, limit).map((row) => {
+      const { weak_skill_weight, ...rest } = row;
+      return rest;
+    }),
+    weak_skills: weakSkills,
+    min_level: minLevel,
+    max_level: maxLevel,
+    source_low_score_passed_count: lowScorePassed.length,
+  };
+}
+
+router.get('/recommendations/training', optionalAuth, (req, res) => {
+  const userId = String(req.user?.id || '').trim();
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const modeInfo = normalizeTrainingChartMode(req.query.chart_mode);
+  if (!modeInfo.ok) {
+    return res.status(400).json({ error: 'Invalid chart_mode value' });
+  }
+
+  const db = getDb();
+  const aliases = loadSongAliases();
+
+  const userRow = db.prepare('SELECT pumbility FROM users WHERE id = ?').get(userId);
+  if (!userRow) return res.status(404).json({ error: 'User not found' });
+
+  const pumbility = parseInt(userRow.pumbility, 10) || 0;
+  const avgRating = pumbility / 50;
+  const { passingLevel, scoringLevel } = determineUserLevels(avgRating);
+
+  const songCatalog = getSongCatalog(db, aliases, modeInfo.allowedModes);
+  const bestScores = queryUserBestScores(db, userId);
+  const recentScores = queryUserRecentScores(db, userId);
+  const pumbilityScores = queryUserPumbilityScores(db, userId);
+  const { bestByChart } = buildUserBestByChartMap({
+    bestScores,
+    recentScores,
+    pumbilityScores,
+    aliases,
+    validChartKeys: songCatalog.chartsByKey,
+  });
+
+  const training = buildTrainingRecommendations({
+    songCatalog,
+    bestByChart,
+    passingLevel,
+    scoringLevel,
+    limit: 10,
+  });
+
+  res.json({
+    pumbility,
+    avg_rating: Math.round(avgRating * 100) / 100,
+    scoring_level: scoringLevel,
+    passing_level: passingLevel,
+    chart_mode: modeInfo.chartMode,
+    ...training,
+  });
+});
+
 router.post('/recommendations', optionalAuth, (req, res) => {
   const userId = String(req.user?.id || '').trim();
   if (!userId) return res.status(401).json({ error: 'Authentication required' });

@@ -59,6 +59,175 @@ function getNextGradeThreshold(score) {
   return null;
 }
 
+function normalizeRecommendationMetric(metricRaw, modeRaw) {
+  const metric = String(metricRaw || '').trim().toLowerCase();
+  const mode = String(modeRaw || '').trim().toLowerCase();
+
+  if (metric === 'singles' || metric === 'single' || mode === 'single' || mode === 'singles') {
+    return { metric: 'singles', modeFilter: 'Single' };
+  }
+  if (metric === 'doubles' || metric === 'double' || mode === 'double' || mode === 'doubles') {
+    return { metric: 'doubles', modeFilter: 'Double' };
+  }
+  return { metric: 'overall', modeFilter: '' };
+}
+
+function buildPumbilityRecommendations(bestScores, options = {}) {
+  const modeFilter = String(options.modeFilter || '');
+  const metric = String(options.metric || '').trim() || (modeFilter ? modeFilter.toLowerCase() : 'overall');
+
+  const sourceScores = modeFilter
+    ? bestScores.filter((row) => String(row.mode || '') === modeFilter)
+    : bestScores;
+
+  if (!sourceScores.length) {
+    return {
+      recommendations: [],
+      min_pumbility_rating: 0,
+      pumbility_scores_count: 0,
+      metric,
+      mode_filter: modeFilter || null,
+    };
+  }
+
+  const ratedEntries = [];
+  for (const s of sourceScores) {
+    const level = parseInt(s.level, 10) || 0;
+    if (!LEVEL_BASE_POINTS[level]) continue;
+    const score = parseInt(s.score, 10) || 0;
+    if (score <= 0) continue;
+
+    const currentGrade = gradeFromScore(score);
+    const currentRating = calculateRatingPoints(level, currentGrade, score);
+    ratedEntries.push({
+      song_title: s.song_title,
+      mode: s.mode,
+      level,
+      current_score: score,
+      current_grade: currentGrade,
+      current_rating: currentRating,
+      background_url: s.background_url || '',
+    });
+  }
+  if (!ratedEntries.length) {
+    return {
+      recommendations: [],
+      min_pumbility_rating: 0,
+      pumbility_scores_count: 0,
+      metric,
+      mode_filter: modeFilter || null,
+    };
+  }
+
+  const baselineRatings = ratedEntries.map((entry) => entry.current_rating);
+  const baselineSorted = [...baselineRatings].sort((a, b) => b - a);
+  const pumbilityTopCount = Math.min(50, baselineSorted.length);
+  const baselinePumbility = baselineSorted.slice(0, pumbilityTopCount)
+    .reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
+  const minPumbilityRating = pumbilityTopCount >= 50
+    ? (parseInt(baselineSorted[49], 10) || 0)
+    : 0;
+
+  const candidates = [];
+  for (let idx = 0; idx < ratedEntries.length; idx++) {
+    const entry = ratedEntries[idx];
+    const nextTier = getNextGradeThreshold(entry.current_score);
+    if (!nextTier) continue;
+
+    const nextThreshold = parseInt(nextTier.min, 10) || 0;
+    const nextGrade = String(nextTier.grade || '').trim();
+    if (!nextThreshold || !nextGrade) continue;
+
+    const scoreNeeded = nextThreshold - entry.current_score;
+    if (scoreNeeded <= 0) continue;
+
+    const nextRating = calculateRatingPoints(entry.level, nextGrade, nextThreshold);
+    if (nextRating <= entry.current_rating) continue;
+
+    const simulatedRatings = [...baselineRatings];
+    simulatedRatings[idx] = nextRating;
+    simulatedRatings.sort((a, b) => b - a);
+    const simulatedPumbility = simulatedRatings.slice(0, pumbilityTopCount)
+      .reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
+    const pumbilityGain = simulatedPumbility - baselinePumbility;
+    if (pumbilityGain <= 0) continue;
+
+    const ratingGain = nextRating - entry.current_rating;
+    const impactPerPoint = pumbilityGain / scoreNeeded;
+    candidates.push({
+      song_title: entry.song_title,
+      mode: entry.mode,
+      level: entry.level,
+      current_score: entry.current_score,
+      current_grade: entry.current_grade,
+      current_rating: entry.current_rating,
+      next_grade: nextGrade,
+      next_threshold: nextThreshold,
+      next_rating: nextRating,
+      score_needed: scoreNeeded,
+      rating_gain: ratingGain,
+      pumbility_gain: pumbilityGain,
+      impact_per_point: Math.round(impactPerPoint * 1000000) / 1000000,
+      background_url: entry.background_url || '',
+      _key: `${entry.song_title}|${entry.mode}|${entry.level}`,
+    });
+  }
+
+  if (!candidates.length) {
+    return {
+      recommendations: [],
+      min_pumbility_rating: minPumbilityRating,
+      pumbility_scores_count: pumbilityTopCount,
+      metric,
+      mode_filter: modeFilter || null,
+    };
+  }
+
+  const easiest = [...candidates].sort((a, b) => {
+    if (a.score_needed !== b.score_needed) return a.score_needed - b.score_needed;
+    if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
+    return b.impact_per_point - a.impact_per_point;
+  })[0];
+
+  const bestEfficiency = [...candidates].sort((a, b) => {
+    if (b.impact_per_point !== a.impact_per_point) return b.impact_per_point - a.impact_per_point;
+    if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
+    return a.score_needed - b.score_needed;
+  })[0];
+
+  const byImpact = [...candidates].sort((a, b) => {
+    if (b.impact_per_point !== a.impact_per_point) return b.impact_per_point - a.impact_per_point;
+    if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
+    return a.score_needed - b.score_needed;
+  });
+
+  const ordered = [];
+  const used = new Set();
+  const pushCandidate = (row, label) => {
+    if (!row || used.has(row._key)) return;
+    used.add(row._key);
+    ordered.push({ ...row, recommendation_type: label });
+  };
+
+  pushCandidate(easiest, 'easiest');
+  if (bestEfficiency?._key === easiest?._key) {
+    if (ordered.length > 0) ordered[0].recommendation_type = 'easiest_and_best_impact';
+  } else {
+    pushCandidate(bestEfficiency, 'best_impact_per_point');
+  }
+  for (const row of byImpact) pushCandidate(row, 'impact_ranked');
+
+  const recommendations = ordered.slice(0, 10).map(({ _key, ...row }) => row);
+
+  return {
+    recommendations,
+    min_pumbility_rating: minPumbilityRating,
+    pumbility_scores_count: pumbilityTopCount,
+    metric,
+    mode_filter: modeFilter || null,
+  };
+}
+
 function buildShoeCatalogKey(make, model, colorway) {
   return [
     normalizeShoeText(make, 80).toLowerCase(),
@@ -2155,136 +2324,13 @@ router.get('/pumbility-ranking', (req, res) => {
 router.get('/pumbility-recommendations/:userId', (req, res) => {
   const db = getDb();
   const userId = req.params.userId;
+  const { metric, modeFilter } = normalizeRecommendationMetric(req.query.metric, req.query.mode);
 
   const bestScores = db.prepare(
     'SELECT song_title, mode, level, score, grade, background_url FROM user_best_scores WHERE user_id = ? AND score > 0 ORDER BY level DESC, score DESC'
   ).all(userId);
-  if (!bestScores.length) return res.json({ recommendations: [] });
-
-  const ratedEntries = [];
-  for (const s of bestScores) {
-    const level = parseInt(s.level, 10) || 0;
-    if (!LEVEL_BASE_POINTS[level]) continue;
-    const score = parseInt(s.score, 10) || 0;
-    if (score <= 0) continue;
-
-    const currentGrade = gradeFromScore(score);
-    const currentRating = calculateRatingPoints(level, currentGrade, score);
-    ratedEntries.push({
-      song_title: s.song_title,
-      mode: s.mode,
-      level,
-      current_score: score,
-      current_grade: currentGrade,
-      current_rating: currentRating,
-      background_url: s.background_url || '',
-    });
-  }
-  if (!ratedEntries.length) return res.json({ recommendations: [] });
-
-  const baselineRatings = ratedEntries.map((entry) => entry.current_rating);
-  const baselineSorted = [...baselineRatings].sort((a, b) => b - a);
-  const pumbilityTopCount = Math.min(50, baselineSorted.length);
-  const baselinePumbility = baselineSorted.slice(0, pumbilityTopCount)
-    .reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
-  const minPumbilityRating = pumbilityTopCount >= 50
-    ? (parseInt(baselineSorted[49], 10) || 0)
-    : 0;
-
-  const candidates = [];
-  for (let idx = 0; idx < ratedEntries.length; idx++) {
-    const entry = ratedEntries[idx];
-    const nextTier = getNextGradeThreshold(entry.current_score);
-    if (!nextTier) continue;
-
-    const nextThreshold = parseInt(nextTier.min, 10) || 0;
-    const nextGrade = String(nextTier.grade || '').trim();
-    if (!nextThreshold || !nextGrade) continue;
-
-    const scoreNeeded = nextThreshold - entry.current_score;
-    if (scoreNeeded <= 0) continue;
-
-    const nextRating = calculateRatingPoints(entry.level, nextGrade, nextThreshold);
-    if (nextRating <= entry.current_rating) continue;
-
-    const simulatedRatings = [...baselineRatings];
-    simulatedRatings[idx] = nextRating;
-    simulatedRatings.sort((a, b) => b - a);
-    const simulatedPumbility = simulatedRatings.slice(0, pumbilityTopCount)
-      .reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
-    const pumbilityGain = simulatedPumbility - baselinePumbility;
-    if (pumbilityGain <= 0) continue;
-
-    const ratingGain = nextRating - entry.current_rating;
-    const impactPerPoint = pumbilityGain / scoreNeeded;
-    candidates.push({
-      song_title: entry.song_title,
-      mode: entry.mode,
-      level: entry.level,
-      current_score: entry.current_score,
-      current_grade: entry.current_grade,
-      current_rating: entry.current_rating,
-      next_grade: nextGrade,
-      next_threshold: nextThreshold,
-      next_rating: nextRating,
-      score_needed: scoreNeeded,
-      rating_gain: ratingGain,
-      pumbility_gain: pumbilityGain,
-      impact_per_point: Math.round(impactPerPoint * 1000000) / 1000000,
-      background_url: entry.background_url || '',
-      _key: `${entry.song_title}|${entry.mode}|${entry.level}`,
-    });
-  }
-
-  if (!candidates.length) {
-    return res.json({
-      recommendations: [],
-      min_pumbility_rating: minPumbilityRating,
-      pumbility_scores_count: pumbilityTopCount,
-    });
-  }
-
-  const easiest = [...candidates].sort((a, b) => {
-    if (a.score_needed !== b.score_needed) return a.score_needed - b.score_needed;
-    if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
-    return b.impact_per_point - a.impact_per_point;
-  })[0];
-
-  const bestEfficiency = [...candidates].sort((a, b) => {
-    if (b.impact_per_point !== a.impact_per_point) return b.impact_per_point - a.impact_per_point;
-    if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
-    return a.score_needed - b.score_needed;
-  })[0];
-
-  const byImpact = [...candidates].sort((a, b) => {
-    if (b.impact_per_point !== a.impact_per_point) return b.impact_per_point - a.impact_per_point;
-    if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
-    return a.score_needed - b.score_needed;
-  });
-
-  const ordered = [];
-  const used = new Set();
-  const pushCandidate = (row, label) => {
-    if (!row || used.has(row._key)) return;
-    used.add(row._key);
-    ordered.push({ ...row, recommendation_type: label });
-  };
-
-  pushCandidate(easiest, 'easiest');
-  if (bestEfficiency?._key === easiest?._key) {
-    if (ordered.length > 0) ordered[0].recommendation_type = 'easiest_and_best_impact';
-  } else {
-    pushCandidate(bestEfficiency, 'best_impact_per_point');
-  }
-  for (const row of byImpact) pushCandidate(row, 'impact_ranked');
-
-  const recommendations = ordered.slice(0, 10).map(({ _key, ...row }) => row);
-
-  res.json({
-    recommendations,
-    min_pumbility_rating: minPumbilityRating,
-    pumbility_scores_count: pumbilityTopCount,
-  });
+  const payload = buildPumbilityRecommendations(bestScores, { metric, modeFilter });
+  res.json(payload);
 });
 
 module.exports = router;

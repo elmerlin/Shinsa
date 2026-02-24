@@ -37,6 +37,7 @@ import SkillsPage from './pages/SkillsPage';
 import SkillChartsPage from './pages/SkillChartsPage';
 import ChatPage from './pages/ChatPage';
 import FunPage from './pages/FunPage';
+import OptimisePage from './pages/OptimisePage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -346,6 +347,17 @@ function UserMenu() {
             Shoes
           </Link>
           <Link
+            to="/optimise"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M9 12h6M7.5 18h9" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h1m10 0h1a2 2 0 012 2v1m0 8v1a2 2 0 01-2 2h-1m-10 0H6a2 2 0 01-2-2v-1m0-8V7" />
+            </svg>
+            Optimise
+          </Link>
+          <Link
             to="/tiers"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
@@ -509,6 +521,8 @@ export default function App() {
           <Route path="/world-max/machine/:id" element={<WorldMaxMachinePage />} />
           <Route path="/songs" element={<SongsPage />} />
           <Route path="/shoes" element={<ShoesPage />} />
+          <Route path="/optimise" element={<OptimisePage />} />
+          <Route path="/optimize" element={<OptimisePage />} />
           <Route path="/songs/chart/:chartId" element={<SongChartPage />} />
           <Route path="/skill" element={<SkillsPage />} />
           <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
