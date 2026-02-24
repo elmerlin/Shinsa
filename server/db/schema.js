@@ -716,9 +716,22 @@ function initializeDb() {
       UNIQUE(user_id, song_title, mode, level)
     );
 
+    CREATE TABLE IF NOT EXISTS user_shoes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      make TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      image_data TEXT DEFAULT '',
+      is_current INTEGER DEFAULT 0,
+      retired_at TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS user_recently_played (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      shoe_id INTEGER REFERENCES user_shoes(id) ON DELETE SET NULL,
       song_title TEXT NOT NULL,
       mode TEXT NOT NULL,
       level INTEGER NOT NULL,
@@ -851,6 +864,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_pumbility_scores_user ON user_pumbility_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
+    CREATE INDEX IF NOT EXISTS idx_user_shoes_user ON user_shoes(user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_shoes_single_active ON user_shoes(user_id) WHERE is_current = 1;
     CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON user_notifications(user_id);
     CREATE INDEX IF NOT EXISTS idx_activity_notif_subscriber ON user_activity_notification_subscriptions(subscriber_user_id);
@@ -953,6 +968,7 @@ function initializeDb() {
   // Migrations for recently played - add breakdown columns
   const recentCols = db.prepare("PRAGMA table_info(user_recently_played)").all().map(c => c.name);
   const recentMigrations = [
+    ['shoe_id', 'INTEGER DEFAULT NULL'],
     ['perfect', 'INT DEFAULT 0'],
     ['great', 'INT DEFAULT 0'],
     ['good', 'INT DEFAULT 0'],
@@ -982,6 +998,9 @@ function initializeDb() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_unique_play
         ON user_recently_played(user_id, song_title, mode, level, score, grade, date_played);
     `);
+  }
+  if (!recentIndexes.includes('idx_recently_played_shoe')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_shoe ON user_recently_played(shoe_id)');
   }
 
   // Migrations for best scores - add background_url

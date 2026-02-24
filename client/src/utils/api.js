@@ -195,6 +195,29 @@ export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-p
 export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
 export const getSyncProgress = () => request('/piugame/sync/progress');
+export const getProfileShoes = (userId) => request(`/piugame/shoes/${userId}`);
+export const wearProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/wear`, { method: 'POST' });
+export const retireProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/retire`, { method: 'POST' });
+
+export async function createProfileShoe({ make, model, photoFile, setCurrent = true }) {
+  const formData = new FormData();
+  formData.append('make', String(make || '').trim());
+  formData.append('model', String(model || '').trim());
+  formData.append('set_current', setCurrent ? 'true' : 'false');
+  if (photoFile) formData.append('photo', photoFile);
+
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/piugame/shoes`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to create shoe');
+  }
+  return res.json();
+}
 
 // Notifications
 export const getNotifications = () => request('/auth/notifications');

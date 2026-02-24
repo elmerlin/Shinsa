@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { login, scrapePumbility, scrapeBestScores, scrapeRecentlyPlayed } = require('../lib/piugameScraper');
 const { createUserNotification } = require('../lib/notifications');
@@ -10,6 +12,118 @@ const { getUserTitleProgress, updateUserSkillTitleFromBestScores } = require('..
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
+const SHOE_UPLOAD = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 6 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/x-png', 'image/heic', 'image/heif'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
+
+function parseBoolean(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return null;
+}
+
+function normalizeShoeText(value, max = 80) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+async function encodeShoeImage(file) {
+  if (!file) return '';
+  try {
+    let buffer = await sharp(file.buffer)
+      .rotate()
+      .resize(900, 900, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 76 })
+      .toBuffer();
+
+    if (buffer.length > 220 * 1024) {
+      buffer = await sharp(file.buffer)
+        .rotate()
+        .resize(760, 760, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 62 })
+        .toBuffer();
+    }
+
+    return `data:image/webp;base64,${buffer.toString('base64')}`;
+  } catch {
+    const mime = file.mimetype || 'image/png';
+    return `data:${mime};base64,${file.buffer.toString('base64')}`;
+  }
+}
+
+function getShoeCabinet(db, userId) {
+  const shoes = db.prepare(`
+    SELECT id, user_id, make, model, image_data, is_current, retired_at, created_at, updated_at
+    FROM user_shoes
+    WHERE user_id = ?
+    ORDER BY
+      CASE
+        WHEN retired_at IS NULL AND is_current = 1 THEN 0
+        WHEN retired_at IS NULL THEN 1
+        ELSE 2
+      END,
+      created_at DESC,
+      id DESC
+  `).all(userId);
+
+  const playTotals = db.prepare(`
+    SELECT
+      shoe_id,
+      COUNT(*) AS songs_logged,
+      COALESCE(SUM(
+        COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
+      ), 0) AS steps_logged
+    FROM user_recently_played
+    WHERE user_id = ? AND shoe_id IS NOT NULL
+    GROUP BY shoe_id
+  `).all(userId);
+
+  const totalsByShoe = new Map(
+    playTotals.map((row) => [
+      parseInt(row.shoe_id, 10),
+      {
+        songs_logged: parseInt(row.songs_logged, 10) || 0,
+        steps_logged: parseInt(row.steps_logged, 10) || 0,
+      },
+    ])
+  );
+
+  const lifetime = db.prepare(`
+    SELECT
+      COUNT(*) AS songs_logged,
+      COALESCE(SUM(
+        COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
+      ), 0) AS steps_logged
+    FROM user_recently_played
+    WHERE user_id = ?
+  `).get(userId) || { songs_logged: 0, steps_logged: 0 };
+
+  const cabinetShoes = shoes.map((shoe) => {
+    const totals = totalsByShoe.get(parseInt(shoe.id, 10)) || { songs_logged: 0, steps_logged: 0 };
+    return {
+      ...shoe,
+      is_current: !!shoe.is_current && !shoe.retired_at,
+      songs_logged: totals.songs_logged,
+      steps_logged: totals.steps_logged,
+      status: shoe.retired_at ? 'retired' : (shoe.is_current ? 'current' : 'available'),
+    };
+  });
+
+  const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
+
+  return {
+    active_shoe_id: activeShoe ? activeShoe.id : null,
+    lifetime_songs: parseInt(lifetime.songs_logged, 10) || 0,
+    lifetime_steps: parseInt(lifetime.steps_logged, 10) || 0,
+    shoes: cabinetShoes,
+  };
+}
 
 // Auth middleware
 function requireAuth(req, res, next) {
@@ -443,6 +557,128 @@ router.get('/sync/progress', requireAuth, (req, res) => {
   });
 });
 
+// ─── Shoe Cabinet ───────────────────────────────────────
+
+// GET /api/piugame/shoes/:userId
+router.get('/shoes/:userId', (req, res) => {
+  const db = getDb();
+  res.json(getShoeCabinet(db, req.params.userId));
+});
+
+// POST /api/piugame/shoes
+router.post('/shoes', requireAuth, SHOE_UPLOAD.single('photo'), async (req, res) => {
+  try {
+    const db = getDb();
+    const make = normalizeShoeText(req.body?.make, 80);
+    const model = normalizeShoeText(req.body?.model, 80);
+    if (!make && !model) {
+      return res.status(400).json({ error: 'Shoe make or model is required' });
+    }
+
+    const imageData = await encodeShoeImage(req.file);
+    const requestedCurrent = parseBoolean(req.body?.set_current);
+    const existingCurrent = db.prepare(
+      'SELECT id FROM user_shoes WHERE user_id = ? AND is_current = 1 AND retired_at IS NULL LIMIT 1'
+    ).get(req.user.id);
+    const shouldSetCurrent = requestedCurrent === true || (!existingCurrent && requestedCurrent !== false);
+
+    const txn = db.transaction(() => {
+      if (shouldSetCurrent) {
+        db.prepare(`
+          UPDATE user_shoes
+          SET is_current = 0, updated_at = datetime('now')
+          WHERE user_id = ? AND is_current = 1
+        `).run(req.user.id);
+      }
+      return db.prepare(`
+        INSERT INTO user_shoes (user_id, make, model, image_data, is_current, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `).run(req.user.id, make, model, imageData, shouldSetCurrent ? 1 : 0);
+    });
+
+    const insert = txn();
+    const shoe = db.prepare(`
+      SELECT id, user_id, make, model, image_data, is_current, retired_at, created_at, updated_at
+      FROM user_shoes
+      WHERE id = ?
+    `).get(insert.lastInsertRowid);
+
+    res.status(201).json({
+      shoe: {
+        ...shoe,
+        is_current: !!shoe?.is_current && !shoe?.retired_at,
+        songs_logged: 0,
+        steps_logged: 0,
+        status: shoe?.retired_at ? 'retired' : (shoe?.is_current ? 'current' : 'available'),
+      },
+      cabinet: getShoeCabinet(db, req.user.id),
+    });
+  } catch (err) {
+    console.error('Create shoe error:', err.message);
+    res.status(500).json({ error: 'Failed to create shoe' });
+  }
+});
+
+// POST /api/piugame/shoes/:shoeId/wear
+router.post('/shoes/:shoeId/wear', requireAuth, (req, res) => {
+  const db = getDb();
+  const shoeId = parseInt(req.params.shoeId, 10);
+  if (!Number.isInteger(shoeId) || shoeId <= 0) {
+    return res.status(400).json({ error: 'Invalid shoe ID' });
+  }
+
+  const shoe = db.prepare(`
+    SELECT id, retired_at
+    FROM user_shoes
+    WHERE id = ? AND user_id = ?
+  `).get(shoeId, req.user.id);
+  if (!shoe) return res.status(404).json({ error: 'Shoe not found' });
+  if (shoe.retired_at) return res.status(400).json({ error: 'Retired shoes cannot be set as current' });
+
+  const txn = db.transaction(() => {
+    db.prepare(`
+      UPDATE user_shoes
+      SET is_current = 0, updated_at = datetime('now')
+      WHERE user_id = ? AND is_current = 1
+    `).run(req.user.id);
+
+    db.prepare(`
+      UPDATE user_shoes
+      SET is_current = 1, updated_at = datetime('now')
+      WHERE id = ? AND user_id = ?
+    `).run(shoeId, req.user.id);
+  });
+  txn();
+
+  res.json({ success: true, cabinet: getShoeCabinet(db, req.user.id) });
+});
+
+// POST /api/piugame/shoes/:shoeId/retire
+router.post('/shoes/:shoeId/retire', requireAuth, (req, res) => {
+  const db = getDb();
+  const shoeId = parseInt(req.params.shoeId, 10);
+  if (!Number.isInteger(shoeId) || shoeId <= 0) {
+    return res.status(400).json({ error: 'Invalid shoe ID' });
+  }
+
+  const shoe = db.prepare(`
+    SELECT id, retired_at
+    FROM user_shoes
+    WHERE id = ? AND user_id = ?
+  `).get(shoeId, req.user.id);
+  if (!shoe) return res.status(404).json({ error: 'Shoe not found' });
+
+  if (!shoe.retired_at) {
+    db.prepare(`
+      UPDATE user_shoes
+      SET is_current = 0, retired_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ? AND user_id = ?
+    `).run(shoeId, req.user.id);
+  }
+
+  res.json({ success: true, cabinet: getShoeCabinet(db, req.user.id) });
+});
+
 // ─── Sync: Recently Played ─────────────────────────────
 
 // POST /api/piugame/sync/recently-played — fetch recent plays & update best scores
@@ -453,30 +689,53 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     const client = await loginWithStoredCredentials(req.user.id);
     const plays = await scrapeRecentlyPlayed(client);
 
+    const activeShoe = db.prepare(`
+      SELECT id
+      FROM user_shoes
+      WHERE user_id = ? AND is_current = 1 AND retired_at IS NULL
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1
+    `).get(req.user.id);
+    const activeShoeId = activeShoe ? parseInt(activeShoe.id, 10) : null;
+
+    const findRecentPlay = db.prepare(`
+      SELECT id, shoe_id
+      FROM user_recently_played
+      WHERE user_id = ?
+        AND song_title = ?
+        AND mode = ?
+        AND level = ?
+        AND score = ?
+        AND grade = ?
+        AND date_played = ?
+      LIMIT 1
+    `);
+
     const insertRecent = db.prepare(`
       INSERT INTO user_recently_played
-      (user_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO UPDATE SET
-        machine_name = CASE
-          WHEN excluded.machine_name != '' THEN excluded.machine_name
-          ELSE user_recently_played.machine_name
-        END,
-        background_url = CASE
-          WHEN excluded.background_url != '' THEN excluded.background_url
-          ELSE user_recently_played.background_url
-        END,
-        plate = CASE
-          WHEN excluded.plate != '' THEN excluded.plate
-          ELSE user_recently_played.plate
-        END,
-        perfect = MAX(COALESCE(user_recently_played.perfect, 0), COALESCE(excluded.perfect, 0)),
-        great = MAX(COALESCE(user_recently_played.great, 0), COALESCE(excluded.great, 0)),
-        good = MAX(COALESCE(user_recently_played.good, 0), COALESCE(excluded.good, 0)),
-        bad = MAX(COALESCE(user_recently_played.bad, 0), COALESCE(excluded.bad, 0)),
-        miss = MAX(COALESCE(user_recently_played.miss, 0), COALESCE(excluded.miss, 0)),
-        max_combo = MAX(COALESCE(user_recently_played.max_combo, 0), COALESCE(excluded.max_combo, 0)),
-        kcal = MAX(COALESCE(user_recently_played.kcal, 0), COALESCE(excluded.kcal, 0))
+      (user_id, shoe_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO NOTHING
+    `);
+
+    const updateRecent = db.prepare(`
+      UPDATE user_recently_played
+      SET
+        machine_name = CASE WHEN ? != '' THEN ? ELSE machine_name END,
+        background_url = CASE WHEN ? != '' THEN ? ELSE background_url END,
+        plate = CASE WHEN ? != '' THEN ? ELSE plate END,
+        perfect = MAX(COALESCE(perfect, 0), ?),
+        great = MAX(COALESCE(great, 0), ?),
+        good = MAX(COALESCE(good, 0), ?),
+        bad = MAX(COALESCE(bad, 0), ?),
+        miss = MAX(COALESCE(miss, 0), ?),
+        max_combo = MAX(COALESCE(max_combo, 0), ?),
+        kcal = MAX(COALESCE(kcal, 0), ?),
+        shoe_id = CASE
+          WHEN shoe_id IS NULL AND ? IS NOT NULL THEN ?
+          ELSE shoe_id
+        END
+      WHERE id = ?
     `);
 
     // Also update best scores if this play is better
@@ -495,42 +754,96 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     let newClearPostId = null;
 
     const txn = db.transaction(() => {
-      // Keep historical rows and only add newly scraped plays.
-      // Duplicate prevention is handled by a unique index in schema migration.
       for (const p of plays) {
-        insertRecent.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade, p.machine_name || '', p.background_url, p.date_played,
-          p.perfect || 0, p.great || 0, p.good || 0, p.bad || 0, p.miss || 0, p.max_combo || 0, p.kcal || 0, p.plate || '');
+        const songTitle = p.song_title;
+        const mode = p.mode;
+        const level = parseInt(p.level, 10) || 0;
+        const score = parseInt(p.score, 10) || 0;
+        const grade = p.grade || '';
+        const machineName = p.machine_name || '';
+        const backgroundUrl = p.background_url || '';
+        const datePlayed = p.date_played || '';
+        const perfect = parseInt(p.perfect, 10) || 0;
+        const great = parseInt(p.great, 10) || 0;
+        const good = parseInt(p.good, 10) || 0;
+        const bad = parseInt(p.bad, 10) || 0;
+        const miss = parseInt(p.miss, 10) || 0;
+        const maxCombo = parseInt(p.max_combo, 10) || 0;
+        const kcal = Number.isFinite(Number(p.kcal)) ? Number(p.kcal) : 0;
+        const plate = p.plate || '';
+
+        // When syncing, the current shoe is treated as the shoe worn for fetched plays.
+        const existingPlay = findRecentPlay.get(req.user.id, songTitle, mode, level, score, grade, datePlayed);
+        if (!existingPlay) {
+          insertRecent.run(
+            req.user.id,
+            activeShoeId,
+            songTitle,
+            mode,
+            level,
+            score,
+            grade,
+            machineName,
+            backgroundUrl,
+            datePlayed,
+            perfect,
+            great,
+            good,
+            bad,
+            miss,
+            maxCombo,
+            kcal,
+            plate
+          );
+        } else {
+          updateRecent.run(
+            machineName,
+            machineName,
+            backgroundUrl,
+            backgroundUrl,
+            plate,
+            plate,
+            perfect,
+            great,
+            good,
+            bad,
+            miss,
+            maxCombo,
+            kcal,
+            activeShoeId,
+            activeShoeId,
+            existingPlay.id
+          );
+        }
 
         // Only update best scores if this was a real play (not stage break)
-        if (p.score > 0) {
+        if (score > 0) {
           const existing = db.prepare(
             'SELECT score, grade FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
-          ).get(req.user.id, p.song_title, p.mode, p.level);
-          if (!existing || p.score > existing.score) {
-            if (existing && p.score > existing.score) {
+          ).get(req.user.id, songTitle, mode, level);
+          if (!existing || score > existing.score) {
+            if (existing && score > existing.score) {
               upscoresFromRecent.push({
-                song_title: p.song_title, mode: p.mode, level: p.level,
-                old_score: existing.score, new_score: p.score,
-                old_grade: existing.grade || '', new_grade: p.grade || '',
-                background_url: p.background_url || '',
-                perfect: p.perfect || 0, great: p.great || 0, good: p.good || 0,
-                bad: p.bad || 0, miss: p.miss || 0,
+                song_title: songTitle, mode, level,
+                old_score: existing.score, new_score: score,
+                old_grade: existing.grade || '', new_grade: grade || '',
+                background_url: backgroundUrl || '',
+                perfect, great, good, bad, miss,
               });
             } else if (!existing) {
               // New clear - first time playing this song
               newClearsFromRecent.push({
-                song_title: p.song_title,
-                mode: p.mode,
-                level: p.level,
-                score: p.score,
-                grade: p.grade || '',
-                plate: p.plate || '',
-                background_url: p.background_url || '',
-                perfect: p.perfect || 0, great: p.great || 0, good: p.good || 0,
-                bad: p.bad || 0, miss: p.miss || 0,
+                song_title: songTitle,
+                mode,
+                level,
+                score,
+                grade: grade || '',
+                plate: plate || '',
+                background_url: backgroundUrl || '',
+                perfect, great, good, bad, miss,
               });
             }
-            updateBest.run(req.user.id, p.song_title, p.mode, p.level, p.score, p.grade);
+            updateBest.run(req.user.id, songTitle, mode, level, score, grade);
             updatedCount++;
           }
         }

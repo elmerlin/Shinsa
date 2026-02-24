@@ -9,6 +9,7 @@ import {
   getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
+  getProfileShoes, createProfileShoe, wearProfileShoe, retireProfileShoe,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
@@ -708,6 +709,16 @@ export default function ProfilePage() {
   const [bestScoreSearch, setBestScoreSearch] = useState('');
   const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
   const [profilePosts, setProfilePosts] = useState([]);
+  const [shoeCabinet, setShoeCabinet] = useState(null);
+  const [shoesLoaded, setShoesLoaded] = useState(false);
+  const [shoeBusy, setShoeBusy] = useState(false);
+  const [shoeFeedback, setShoeFeedback] = useState('');
+  const [shoeForm, setShoeForm] = useState({
+    make: '',
+    model: '',
+    setCurrent: true,
+    photoFile: null,
+  });
 
   // Social state
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
@@ -752,6 +763,11 @@ export default function ProfilePage() {
     setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
     setActivityItems([]);
     setSongAnalytics(null);
+    setShoeCabinet(null);
+    setShoesLoaded(false);
+    setShoeBusy(false);
+    setShoeFeedback('');
+    setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
     setFollowersLoaded(false);
     setTab('overview');
     setSelectedOverviewDateKey('');
@@ -906,6 +922,26 @@ export default function ProfilePage() {
 
     return () => { cancelled = true; };
   }, [authUser, profileId, isOwner]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (tab !== 'shoes' || !profileId || shoesLoaded) {
+      return () => { cancelled = true; };
+    }
+
+    setShoesLoaded(true);
+    getProfileShoes(profileId)
+      .then((data) => {
+        if (cancelled) return;
+        setShoeCabinet(data || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShoeCabinet({ active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] });
+      });
+
+    return () => { cancelled = true; };
+  }, [tab, profileId, shoesLoaded]);
 
   useEffect(() => {
     if (!notifyMenuOpen) return undefined;
@@ -1063,6 +1099,67 @@ export default function ProfilePage() {
       notify_upscores: !!enabled,
       notify_new_clears: !!enabled,
     });
+  };
+
+  const handleCreateShoe = async (e) => {
+    e.preventDefault();
+    if (!isOwner || shoeBusy) return;
+    const make = String(shoeForm.make || '').trim();
+    const model = String(shoeForm.model || '').trim();
+    if (!make && !model) {
+      setShoeFeedback('Enter a make or model first');
+      return;
+    }
+
+    setShoeBusy(true);
+    setShoeFeedback('');
+    try {
+      const data = await createProfileShoe({
+        make,
+        model,
+        photoFile: shoeForm.photoFile || null,
+        setCurrent: !!shoeForm.setCurrent,
+      });
+      setShoeCabinet(data?.cabinet || null);
+      setShoesLoaded(true);
+      setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
+      setShoeFeedback('Shoe added');
+    } catch (err) {
+      setShoeFeedback(err?.message || 'Failed to add shoe');
+    } finally {
+      setShoeBusy(false);
+    }
+  };
+
+  const handleWearShoe = async (shoeId) => {
+    if (!isOwner || shoeBusy) return;
+    setShoeBusy(true);
+    setShoeFeedback('');
+    try {
+      const data = await wearProfileShoe(shoeId);
+      setShoeCabinet(data?.cabinet || null);
+      setShoeFeedback('Current shoe updated');
+    } catch (err) {
+      setShoeFeedback(err?.message || 'Failed to set current shoe');
+    } finally {
+      setShoeBusy(false);
+    }
+  };
+
+  const handleRetireShoe = async (shoeId, label) => {
+    if (!isOwner || shoeBusy) return;
+    if (!confirm(`Retire ${label}?`)) return;
+    setShoeBusy(true);
+    setShoeFeedback('');
+    try {
+      const data = await retireProfileShoe(shoeId);
+      setShoeCabinet(data?.cabinet || null);
+      setShoeFeedback('Shoe retired');
+    } catch (err) {
+      setShoeFeedback(err?.message || 'Failed to retire shoe');
+    } finally {
+      setShoeBusy(false);
+    }
   };
 
   const [syncFeedback, setSyncFeedback] = useState('');
@@ -1464,18 +1561,21 @@ export default function ProfilePage() {
   const computedSkillTitle = piuTitles?.imported ? (piuTitles?.summary?.current_title?.name || '') : '';
   const displaySkillTitle = computedSkillTitle || profile.skill_title;
 
-  const tabs = ['overview', 'posts', 'competitions'];
+  const tabs = ['overview', 'posts', 'competitions', 'shoes'];
   if (hasPiuData) {
     tabs.push(...piuTabs);
   }
   tabs.push('activity');
 
   const tabLabels = {
-    overview: 'Overview', posts: 'Posts', competitions: 'Competitions', activity: 'Activity',
+    overview: 'Overview', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', titles: 'Titles', 'recently-played': 'Recently Played',
   };
 
   const competitionsCount = aggregated ? aggregated.duelCount + aggregated.tournamentCount : 0;
+  const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
+  const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
+  const retiredShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
@@ -2199,6 +2299,162 @@ export default function ProfilePage() {
                 })
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'shoes' && (
+        <div className="space-y-4">
+          <div className="card">
+            <h3 className="font-display font-bold text-base text-piu-accent mb-3">SHOE CABINET</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Lifetime Steps</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {((shoeCabinet?.lifetime_steps || 0)).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Lifetime Songs</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {((shoeCabinet?.lifetime_songs || 0)).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Current</p>
+                <p className="font-display font-bold text-xs mt-1 truncate">
+                  {activeShoe ? `${activeShoe.make} ${activeShoe.model}`.trim() : 'Not set'}
+                </p>
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Syncing recently played asserts your current shoe for fetched plays.
+            </p>
+          </div>
+
+          {isOwner && (
+            <form onSubmit={handleCreateShoe} className="card space-y-3">
+              <h4 className="font-display font-bold text-sm text-piu-accent">Add Shoe</h4>
+              <div className="grid sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={shoeForm.make}
+                  onChange={(e) => setShoeForm((prev) => ({ ...prev, make: e.target.value }))}
+                  className="input"
+                  placeholder="Make (e.g. Nike)"
+                  maxLength={80}
+                  disabled={shoeBusy}
+                />
+                <input
+                  type="text"
+                  value={shoeForm.model}
+                  onChange={(e) => setShoeForm((prev) => ({ ...prev, model: e.target.value }))}
+                  className="input"
+                  placeholder="Model (e.g. ZoomX Invincible 3)"
+                  maxLength={80}
+                  disabled={shoeBusy}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setShoeForm((prev) => ({ ...prev, photoFile: e.target.files?.[0] || null }))}
+                  className="text-xs text-gray-400 file:mr-3 file:px-3 file:py-1 file:rounded-lg file:border file:border-piu-border file:bg-piu-dark file:text-gray-300 file:cursor-pointer"
+                  disabled={shoeBusy}
+                />
+                <label className="inline-flex items-center gap-2 text-xs text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={shoeForm.setCurrent}
+                    onChange={(e) => setShoeForm((prev) => ({ ...prev, setCurrent: e.target.checked }))}
+                    disabled={shoeBusy}
+                  />
+                  Set as current shoe
+                </label>
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="submit" className="btn-primary text-xs px-4 py-1.5" disabled={shoeBusy}>
+                  {shoeBusy ? 'Saving...' : 'Add Shoe'}
+                </button>
+                {shoeFeedback && <p className="text-xs text-gray-400">{shoeFeedback}</p>}
+              </div>
+            </form>
+          )}
+
+          <div className="space-y-3">
+            {cabinetShoes.length === 0 ? (
+              <p className="text-center text-gray-500 text-sm py-6">
+                {isOwner ? 'No shoes in your cabinet yet' : 'No shoes added yet'}
+              </p>
+            ) : (
+              cabinetShoes.map((shoe) => {
+                const shoeLabel = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                return (
+                  <div key={shoe.id} className="card flex items-start gap-3">
+                    {shoe.image_data ? (
+                      <img src={shoe.image_data} alt={shoeLabel} className="w-16 h-16 rounded-lg object-cover border border-piu-border/40 shrink-0" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg border border-piu-border/40 bg-piu-dark/60 flex items-center justify-center text-[11px] text-gray-500 text-center shrink-0">
+                        No Photo
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-display font-bold text-sm truncate">{shoeLabel}</p>
+                        {shoe.retired_at ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-gray-700/60 text-gray-300 border border-gray-500/40">
+                            Retired
+                          </span>
+                        ) : shoe.is_current ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-piu-accent/20 text-piu-accent border border-piu-accent/40">
+                            Current
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {shoe.songs_logged?.toLocaleString() || 0} songs
+                        <span className="mx-1.5 text-gray-700">|</span>
+                        {shoe.steps_logged?.toLocaleString() || 0} steps
+                      </p>
+                      {shoe.retired_at && (
+                        <p className="text-[10px] text-gray-600 mt-1">
+                          Retired {new Date(`${shoe.retired_at}Z`).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                    {isOwner && !shoe.retired_at && (
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        {!shoe.is_current && (
+                          <button
+                            type="button"
+                            onClick={() => handleWearShoe(shoe.id)}
+                            className="px-3 py-1 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                            disabled={shoeBusy}
+                          >
+                            Wear
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRetireShoe(shoe.id, shoeLabel)}
+                          className="px-3 py-1 rounded-lg text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
+                          disabled={shoeBusy}
+                        >
+                          Retire
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {retiredShoes.length > 0 && (
+            <p className="text-[11px] text-gray-600">
+              Retired shoes stay in your cabinet with their logged songs and steps.
+            </p>
           )}
         </div>
       )}
