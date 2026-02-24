@@ -196,6 +196,13 @@ export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`)
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
 export const getSyncProgress = () => request('/piugame/sync/progress');
 export const getProfileShoes = (userId) => request(`/piugame/shoes/${userId}`);
+export const searchProfileShoeCatalog = (q = '', limit = 12) => {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (limit) params.set('limit', String(limit));
+  const query = params.toString();
+  return request(`/piugame/shoes/catalog${query ? `?${query}` : ''}`);
+};
 export const wearProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/wear`, { method: 'POST' });
 export const retireProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/retire`, { method: 'POST' });
 export const deleteProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}`, { method: 'DELETE' });

@@ -559,6 +559,82 @@ router.get('/sync/progress', requireAuth, (req, res) => {
 
 // ─── Shoe Cabinet ───────────────────────────────────────
 
+// GET /api/piugame/shoes/catalog?q=...&limit=...
+router.get('/shoes/catalog', requireAuth, (req, res) => {
+  const db = getDb();
+  const q = normalizeShoeText(req.query?.q, 80).toLowerCase();
+  const parsedLimit = parseInt(req.query?.limit, 10);
+  const limit = Number.isInteger(parsedLimit)
+    ? Math.min(Math.max(parsedLimit, 1), 24)
+    : 12;
+  const like = q ? `%${q}%` : '';
+
+  const rows = db.prepare(`
+    WITH grouped AS (
+      SELECT
+        LOWER(TRIM(COALESCE(make, ''))) AS make_key,
+        LOWER(TRIM(COALESCE(model, ''))) AS model_key,
+        MAX(TRIM(COALESCE(make, ''))) AS make,
+        MAX(TRIM(COALESCE(model, ''))) AS model,
+        COUNT(*) AS usage_count,
+        MAX(COALESCE(updated_at, created_at, datetime('now'))) AS last_used_at
+      FROM user_shoes
+      WHERE
+        (TRIM(COALESCE(make, '')) != '' OR TRIM(COALESCE(model, '')) != '')
+        AND (
+          ? = ''
+          OR LOWER(TRIM(COALESCE(make, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(model, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(make, '') || ' ' || COALESCE(model, ''))) LIKE ?
+        )
+      GROUP BY make_key, model_key
+    ),
+    picked AS (
+      SELECT
+        g.*,
+        COALESCE(
+          (
+            SELECT s.id
+            FROM user_shoes s
+            WHERE LOWER(TRIM(COALESCE(s.make, ''))) = g.make_key
+              AND LOWER(TRIM(COALESCE(s.model, ''))) = g.model_key
+              AND TRIM(COALESCE(s.image_data, '')) != ''
+            ORDER BY COALESCE(s.updated_at, s.created_at) DESC, s.id DESC
+            LIMIT 1
+          ),
+          (
+            SELECT s.id
+            FROM user_shoes s
+            WHERE LOWER(TRIM(COALESCE(s.make, ''))) = g.make_key
+              AND LOWER(TRIM(COALESCE(s.model, ''))) = g.model_key
+            ORDER BY COALESCE(s.updated_at, s.created_at) DESC, s.id DESC
+            LIMIT 1
+          )
+        ) AS sample_shoe_id
+      FROM grouped g
+    )
+    SELECT
+      p.sample_shoe_id AS id,
+      p.make,
+      p.model,
+      p.usage_count,
+      COALESCE((SELECT image_data FROM user_shoes WHERE id = p.sample_shoe_id), '') AS image_data
+    FROM picked p
+    ORDER BY p.usage_count DESC, p.last_used_at DESC, p.model ASC, p.make ASC
+    LIMIT ?
+  `).all(q, like, like, like, limit);
+
+  res.json({
+    results: rows.map((row) => ({
+      id: parseInt(row.id, 10),
+      make: row.make || '',
+      model: row.model || '',
+      usage_count: parseInt(row.usage_count, 10) || 0,
+      image_data: row.image_data || '',
+    })),
+  });
+});
+
 // GET /api/piugame/shoes/:userId
 router.get('/shoes/:userId', (req, res) => {
   const db = getDb();

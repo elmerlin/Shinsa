@@ -5,7 +5,7 @@ import {
   updateMe, changePassword, getInvitations, respondInvitation,
   getPiugameCredentialStatus, savePiugameCredentials, deletePiugameCredentials,
   syncPumbility, syncBestScores, syncRecentlyPlayed, saveWorldMaxLocation,
-  getProfileShoes, createProfileShoe, updateProfileShoePhoto, retireProfileShoe, deleteProfileShoe,
+  getProfileShoes, searchProfileShoeCatalog, createProfileShoe, updateProfileShoePhoto, retireProfileShoe, deleteProfileShoe,
 } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
@@ -70,6 +70,10 @@ export default function MyAccountPage() {
   const [shoePhotoFiles, setShoePhotoFiles] = useState({});
   const [shoeRetireConfirmId, setShoeRetireConfirmId] = useState(null);
   const [shoeDeleteConfirmId, setShoeDeleteConfirmId] = useState(null);
+  const [shoeCatalogQuery, setShoeCatalogQuery] = useState('');
+  const [shoeCatalogResults, setShoeCatalogResults] = useState([]);
+  const [shoeCatalogLoading, setShoeCatalogLoading] = useState(false);
+  const [shoeCatalogSelectedId, setShoeCatalogSelectedId] = useState(null);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -94,6 +98,10 @@ export default function MyAccountPage() {
     setShoePhotoFiles({});
     setShoeRetireConfirmId(null);
     setShoeDeleteConfirmId(null);
+    setShoeCatalogQuery('');
+    setShoeCatalogResults([]);
+    setShoeCatalogLoading(false);
+    setShoeCatalogSelectedId(null);
     setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
     getInvitations().then(setInvitations).catch(() => {});
     getPiugameCredentialStatus().then(r => setPiuLinked(r.linked)).catch(() => {});
@@ -118,6 +126,32 @@ export default function MyAccountPage() {
 
     return () => { cancelled = true; };
   }, [tab, user?.id]);
+
+  useEffect(() => {
+    if (!user || tab !== 'shoes') return undefined;
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setShoeCatalogLoading(true);
+      searchProfileShoeCatalog(shoeCatalogQuery, 12)
+        .then((data) => {
+          if (cancelled) return;
+          setShoeCatalogResults(Array.isArray(data?.results) ? data.results : []);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setShoeCatalogResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setShoeCatalogLoading(false);
+        });
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [tab, user?.id, shoeCatalogQuery]);
 
   if (!user) return null;
 
@@ -254,6 +288,16 @@ export default function MyAccountPage() {
     return cabinet;
   };
 
+  const handleSelectCatalogShoe = (catalogShoe) => {
+    if (!catalogShoe) return;
+    setShoeCatalogSelectedId(catalogShoe.id);
+    setShoeForm((prev) => ({
+      ...prev,
+      make: String(catalogShoe.make || ''),
+      model: String(catalogShoe.model || ''),
+    }));
+  };
+
   const handleAddShoe = async (e) => {
     e.preventDefault();
     if (shoeBusy) return;
@@ -277,6 +321,7 @@ export default function MyAccountPage() {
       setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
       setShoeRetireConfirmId(null);
       setShoeDeleteConfirmId(null);
+      setShoeCatalogSelectedId(null);
       setShoeMessage('Shoe saved.');
     } catch (err) {
       setShoeMessage(err.message || 'Failed to add shoe.');
@@ -657,6 +702,63 @@ export default function MyAccountPage() {
 
             <form onSubmit={handleAddShoe} className="space-y-3 pt-2 border-t border-piu-border/30">
               <h4 className="font-display font-bold text-xs text-gray-300 uppercase tracking-wide">Add Shoe</h4>
+
+              <div className="space-y-2">
+                <label className="block text-sm text-gray-400">Find Existing Shoe Model</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Search make or model..."
+                  value={shoeCatalogQuery}
+                  onChange={(e) => setShoeCatalogQuery(e.target.value)}
+                  maxLength={80}
+                  disabled={shoeBusy}
+                />
+                {shoeCatalogLoading ? (
+                  <p className="text-[11px] text-gray-500">Searching shared shoe models...</p>
+                ) : shoeCatalogResults.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {shoeCatalogResults.map((catalogShoe) => {
+                      const catalogLabel = `${catalogShoe.make} ${catalogShoe.model}`.trim() || 'Unnamed Shoe';
+                      const isSelected = String(shoeCatalogSelectedId || '') === String(catalogShoe.id || '');
+                      return (
+                        <button
+                          key={catalogShoe.id}
+                          type="button"
+                          onClick={() => handleSelectCatalogShoe(catalogShoe)}
+                          className={`rounded-lg border p-2 text-left transition-colors ${
+                            isSelected
+                              ? 'border-piu-accent/70 bg-piu-accent/10'
+                              : 'border-piu-border/40 bg-piu-dark/40 hover:border-piu-accent/50'
+                          }`}
+                          disabled={shoeBusy}
+                        >
+                          {catalogShoe.image_data ? (
+                            <img
+                              src={catalogShoe.image_data}
+                              alt={catalogLabel}
+                              className="w-full h-16 rounded-md object-contain bg-piu-dark/60 border border-piu-border/30 p-1"
+                            />
+                          ) : (
+                            <div className="w-full h-16 rounded-md bg-piu-dark/60 border border-piu-border/30 flex items-center justify-center text-[10px] text-gray-500">
+                              No Photo
+                            </div>
+                          )}
+                          <p className="font-display font-bold text-[11px] mt-1 leading-tight line-clamp-2">{catalogLabel}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            Used by {(catalogShoe.usage_count || 0).toLocaleString()} players
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500">
+                    {shoeCatalogQuery ? 'No matching models found.' : 'Popular community models will appear here.'}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Make</label>
@@ -666,7 +768,10 @@ export default function MyAccountPage() {
                     placeholder="e.g. Nike"
                     maxLength={80}
                     value={shoeForm.make}
-                    onChange={(e) => setShoeForm((prev) => ({ ...prev, make: e.target.value }))}
+                    onChange={(e) => {
+                      setShoeCatalogSelectedId(null);
+                      setShoeForm((prev) => ({ ...prev, make: e.target.value }));
+                    }}
                     disabled={shoeBusy}
                   />
                 </div>
@@ -678,7 +783,10 @@ export default function MyAccountPage() {
                     placeholder="e.g. ZoomX Invincible 3"
                     maxLength={80}
                     value={shoeForm.model}
-                    onChange={(e) => setShoeForm((prev) => ({ ...prev, model: e.target.value }))}
+                    onChange={(e) => {
+                      setShoeCatalogSelectedId(null);
+                      setShoeForm((prev) => ({ ...prev, model: e.target.value }));
+                    }}
                     disabled={shoeBusy}
                   />
                 </div>
