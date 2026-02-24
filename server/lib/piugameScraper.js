@@ -990,9 +990,9 @@ async function scrapePumbilityRanking() {
   listItems.each((idx, li) => {
     const $li = $(li);
 
-    const rankText = collapseWhitespace($li.find('.num > i.tt, .num i.tt').first().text());
-    const parsedRank = parseInt(rankText, 10);
-    const rank = Number.isFinite(parsedRank) && parsedRank > 0 ? parsedRank : (idx + 1);
+    // Use stable list position (1..1000) for unique storage.
+    // PIUGame can emit duplicate displayed ranks for ties, which breaks a PRIMARY KEY(rank) cache table.
+    const rank = idx + 1;
 
     const playerName = collapseWhitespace(
       $li.find('.name .name_w .profile_name').first().text()
@@ -1009,8 +1009,7 @@ async function scrapePumbilityRanking() {
     rankings.push({ rank, player_name: playerName, pumbility });
   });
 
-  rankings.sort((a, b) => a.rank - b.rank);
-  const top1000 = rankings.filter((row) => row.rank > 0).slice(0, 1000);
+  const top1000 = rankings.slice(0, 1000);
   const threshold = top1000.length > 0
     ? (parseInt(top1000[top1000.length - 1].pumbility, 10) || 0)
     : 0;
