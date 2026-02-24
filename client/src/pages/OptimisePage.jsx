@@ -5,6 +5,7 @@ import {
   getJacketMap,
   getPiugamePumbility,
   getPumbilityRecommendations,
+  getSongSkillInfo,
   getTrainingRecommendations,
 } from '../utils/api';
 
@@ -130,6 +131,115 @@ function PumbilityRecommendationList({ title, subtitle, recommendations, jacketL
   );
 }
 
+function SkillDescriptionBody({ skill }) {
+  const descriptionText = String(skill?.description_text || '').trim();
+  const descriptionSegments = Array.isArray(skill?.description_segments) ? skill.description_segments : [];
+  const patternImages = Array.isArray(skill?.pattern_images) ? skill.pattern_images : [];
+
+  if (!descriptionText && descriptionSegments.length === 0 && patternImages.length === 0) {
+    return (
+      <p className="text-sm text-gray-400">
+        No description available yet for this skill.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {descriptionSegments.length > 0 ? (
+        <p className="text-sm text-gray-200 leading-7 whitespace-pre-wrap break-words">
+          {descriptionSegments.map((segment, index) => {
+            if (segment?.type === 'image') {
+              return (
+                <img
+                  key={`seg-img-${index}`}
+                  src={segment.url}
+                  alt={segment.alt || 'Skill pattern arrow'}
+                  className="inline-block h-7 w-auto mx-0.5 align-middle"
+                />
+              );
+            }
+            return <span key={`seg-text-${index}`}>{segment?.text || ''}</span>;
+          })}
+        </p>
+      ) : (
+        <p className="text-sm text-gray-200 leading-7 whitespace-pre-wrap break-words">{descriptionText}</p>
+      )}
+
+      {patternImages.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-gray-500">Pattern arrows used in this skill description</p>
+          <div className="flex flex-wrap gap-2">
+            {patternImages.map((url) => (
+              <span key={url} className="inline-flex items-center justify-center rounded-lg border border-piu-border/60 bg-black/35 px-2 py-1.5">
+                <img src={url} alt="Skill pattern arrow" className="h-8 w-auto" />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SkillInfoModal({ open, loading, error, skill, chartCount, onClose }) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Skill Explainer</p>
+            <h3 className="text-sm sm:text-base font-display font-bold text-piu-accent break-words">
+              {skill?.name || 'Skill'}
+            </h3>
+            {Number.isFinite(chartCount) && (
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                {(chartCount || 0).toLocaleString()} chart{chartCount === 1 ? '' : 's'} tagged
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-gray-400 hover:text-white transition-colors shrink-0"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-3">
+          {loading ? (
+            <p className="text-sm text-gray-500">Loading skill details...</p>
+          ) : error ? (
+            <p className="text-sm text-red-300">{error}</p>
+          ) : (
+            <SkillDescriptionBody skill={skill} />
+          )}
+
+          {skill?.source_url && !loading && !error && (
+            <a
+              href={skill.source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              Source: PIU Center
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OptimisePage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('pumbility');
@@ -144,6 +254,11 @@ export default function OptimisePage() {
 
   const [trainingLoading, setTrainingLoading] = useState(false);
   const [trainingData, setTrainingData] = useState(null);
+  const [skillInfoOpen, setSkillInfoOpen] = useState(false);
+  const [skillInfoLoading, setSkillInfoLoading] = useState(false);
+  const [skillInfoError, setSkillInfoError] = useState('');
+  const [activeSkillSlug, setActiveSkillSlug] = useState('');
+  const [skillInfoCache, setSkillInfoCache] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -217,6 +332,35 @@ export default function OptimisePage() {
     if (pumbilityData.ranking) return `${base}  ·  #${pumbilityData.ranking}`;
     return base;
   }, [pumbilityData]);
+
+  const activeSkillInfo = activeSkillSlug ? skillInfoCache[activeSkillSlug] : null;
+
+  const handleOpenSkillInfo = async (slug) => {
+    const normalized = String(slug || '').trim().toLowerCase();
+    if (!normalized) return;
+
+    setActiveSkillSlug(normalized);
+    setSkillInfoOpen(true);
+    setSkillInfoError('');
+
+    if (skillInfoCache[normalized]) {
+      setSkillInfoLoading(false);
+      return;
+    }
+
+    setSkillInfoLoading(true);
+    try {
+      const payload = await getSongSkillInfo(normalized);
+      setSkillInfoCache((current) => ({
+        ...current,
+        [normalized]: payload || null,
+      }));
+    } catch (err) {
+      setSkillInfoError(err?.message || 'Failed to load skill details');
+    } finally {
+      setSkillInfoLoading(false);
+    }
+  };
 
   if (!user) {
     return (
@@ -332,9 +476,14 @@ export default function OptimisePage() {
                 {trainingData?.weak_skills?.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 mt-3">
                     {trainingData.weak_skills.map((skill) => (
-                      <span key={skill.slug} className="px-2 py-1 rounded-md text-[11px] bg-cyan-500/15 border border-cyan-500/30 text-cyan-200 font-display">
+                      <button
+                        key={skill.slug}
+                        type="button"
+                        onClick={() => handleOpenSkillInfo(skill.slug)}
+                        className="px-2 py-1 rounded-md text-[11px] bg-cyan-500/15 border border-cyan-500/30 text-cyan-200 font-display hover:bg-cyan-500/25 transition-colors"
+                      >
                         {skill.name} ({skill.count})
-                      </span>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -365,9 +514,14 @@ export default function OptimisePage() {
                           {Array.isArray(row.weak_skill_hits) && row.weak_skill_hits.length > 0 ? (
                             <div className="flex flex-wrap gap-1 mt-1">
                               {row.weak_skill_hits.map((hit) => (
-                                <span key={`${row.chart_id}-${hit.slug}`} className="px-1.5 py-0.5 rounded text-[9px] bg-cyan-500/15 border border-cyan-500/25 text-cyan-300 font-display">
+                                <button
+                                  key={`${row.chart_id}-${hit.slug}`}
+                                  type="button"
+                                  onClick={() => handleOpenSkillInfo(hit.slug)}
+                                  className="px-1.5 py-0.5 rounded text-[9px] bg-cyan-500/15 border border-cyan-500/25 text-cyan-300 font-display hover:bg-cyan-500/25 transition-colors"
+                                >
                                   {hit.name}
-                                </span>
+                                </button>
                               ))}
                             </div>
                           ) : null}
@@ -393,6 +547,19 @@ export default function OptimisePage() {
           )}
         </div>
       )}
+
+      <SkillInfoModal
+        open={skillInfoOpen}
+        loading={skillInfoLoading}
+        error={skillInfoError}
+        skill={activeSkillInfo?.skill || null}
+        chartCount={Number.isFinite(parseInt(activeSkillInfo?.chart_count, 10)) ? parseInt(activeSkillInfo.chart_count, 10) : null}
+        onClose={() => {
+          setSkillInfoOpen(false);
+          setSkillInfoError('');
+          setSkillInfoLoading(false);
+        }}
+      />
     </div>
   );
 }

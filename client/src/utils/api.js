@@ -123,6 +123,7 @@ export const getSongSkillCharts = (skillSlug, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/skill/${encodeURIComponent(skillSlug)}${qs ? `?${qs}` : ''}`);
 };
+export const getSongSkillInfo = (skillSlug) => request(`/songs/skill/${encodeURIComponent(skillSlug)}/info`);
 export const updateSongChartSkills = (chartId, skills = []) => request(`/songs/chart/${chartId}/skills`, {
   method: 'PUT',
   body: JSON.stringify({ skills }),

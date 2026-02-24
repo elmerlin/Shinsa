@@ -1256,6 +1256,34 @@ router.get('/skills/missing', (req, res) => {
 });
 
 // GET /api/songs/skill/:skillSlug — charts tagged with a specific skill
+router.get('/skill/:skillSlug/info', (req, res) => {
+  const db = getDb();
+  const skillSlug = normalizeSkillSlug(req.params.skillSlug);
+  if (!skillSlug) return res.status(400).json({ error: 'Invalid skill slug' });
+
+  const row = db.prepare(`
+    SELECT COUNT(DISTINCT cs.chart_id) AS chart_count
+    FROM chart_skills cs
+    JOIN songs s ON s.id = cs.chart_id
+    WHERE (cs.skill_slug = ? OR LOWER(cs.skill_slug) = ? OR cs.skill_slug LIKE ?)
+      AND ${SKILL_ELIGIBLE_WHERE_SQL}
+  `).get(skillSlug, skillSlug, `%/skill/${skillSlug}`) || { chart_count: 0 };
+
+  const skillMetadata = getSkillMetadata(skillSlug);
+  res.json({
+    skill: {
+      slug: skillSlug,
+      name: skillMetadata?.name || getSkillNameForSlug(skillSlug),
+      description_text: skillMetadata?.description_text || '',
+      description_segments: skillMetadata?.description_segments || [],
+      pattern_images: skillMetadata?.pattern_images || [],
+      source_url: skillMetadata?.source_url || `${PIUCENTER_SKILL_BASE_URL}/${skillSlug}`,
+    },
+    chart_count: parseInt(row.chart_count, 10) || 0,
+  });
+});
+
+// GET /api/songs/skill/:skillSlug — charts tagged with a specific skill
 router.get('/skill/:skillSlug', optionalAuth, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
