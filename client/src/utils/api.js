@@ -267,6 +267,26 @@ export async function createAdminShoeCatalogEntry({ make, model, colorway, photo
   return res.json();
 }
 
+export async function updateAdminShoeCatalogEntry(catalogId, { make, model, colorway, photoFile }) {
+  const formData = new FormData();
+  formData.append('make', String(make || '').trim());
+  formData.append('model', String(model || '').trim());
+  formData.append('colorway', String(colorway || '').trim());
+  if (photoFile) formData.append('photo', photoFile);
+
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/piugame/shoes/catalog/admin/${encodeURIComponent(catalogId)}`, {
+    method: 'PUT',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to update shoe catalog entry');
+  }
+  return res.json();
+}
+
 export async function updateProfileShoePhoto(shoeId, photoFile) {
   const formData = new FormData();
   if (photoFile) formData.append('photo', photoFile);

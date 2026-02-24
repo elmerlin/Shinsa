@@ -5,7 +5,7 @@ import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
   getNotices, createNotice, updateNotice, deleteNotice,
   getFunSettings, updateFunSettings,
-  getAdminShoeCatalog, createAdminShoeCatalogEntry, deleteAdminShoeCatalogEntry, setAdminShoeCatalogDisplay,
+  getAdminShoeCatalog, createAdminShoeCatalogEntry, updateAdminShoeCatalogEntry, deleteAdminShoeCatalogEntry, setAdminShoeCatalogDisplay,
 } from '../utils/api';
 
 const PHASE_LABELS = {
@@ -40,6 +40,8 @@ export default function AdminPanel() {
   const [shoeCatalogTotal, setShoeCatalogTotal] = useState(0);
   const [shoeCatalogRefreshKey, setShoeCatalogRefreshKey] = useState(0);
   const [shoeDeleteConfirmId, setShoeDeleteConfirmId] = useState(null);
+  const [shoeEditingId, setShoeEditingId] = useState(null);
+  const [shoePhotoInputKey, setShoePhotoInputKey] = useState(0);
   const [shoeForm, setShoeForm] = useState({
     make: '',
     model: '',
@@ -167,6 +169,12 @@ export default function AdminPanel() {
     await loadAll();
   };
 
+  const resetShoeForm = () => {
+    setShoeEditingId(null);
+    setShoeForm({ make: '', model: '', colorway: '', photoFile: null });
+    setShoePhotoInputKey((prev) => prev + 1);
+  };
+
   const handleAddCatalogShoe = async (e) => {
     e.preventDefault();
     if (shoeCatalogSaving) return;
@@ -182,21 +190,45 @@ export default function AdminPanel() {
     setShoeCatalogError('');
     setShoeCatalogMessage('');
     try {
-      const result = await createAdminShoeCatalogEntry({
-        make,
-        model,
-        colorway,
-        photoFile: shoeForm.photoFile || null,
-      });
-      setShoeForm({ make: '', model: '', colorway: '', photoFile: null });
-      setShoeCatalogMessage(result?.updated ? 'Catalog entry updated.' : 'Catalog entry added.');
-      setShoeCatalogPage(1);
+      if (shoeEditingId) {
+        await updateAdminShoeCatalogEntry(shoeEditingId, {
+          make,
+          model,
+          colorway,
+          photoFile: shoeForm.photoFile || null,
+        });
+        setShoeCatalogMessage('Catalog entry updated.');
+      } else {
+        const result = await createAdminShoeCatalogEntry({
+          make,
+          model,
+          colorway,
+          photoFile: shoeForm.photoFile || null,
+        });
+        setShoeCatalogMessage(result?.updated ? 'Catalog entry updated.' : 'Catalog entry added.');
+        setShoeCatalogPage(1);
+      }
+      resetShoeForm();
       setShoeCatalogRefreshKey((prev) => prev + 1);
     } catch (err) {
       setShoeCatalogError(err?.message || 'Failed to save shoe catalog entry');
     } finally {
       setShoeCatalogSaving(false);
     }
+  };
+
+  const handleEditCatalogShoe = (shoe) => {
+    setShoeDeleteConfirmId(null);
+    setShoeCatalogError('');
+    setShoeCatalogMessage('');
+    setShoeEditingId(shoe.id);
+    setShoeForm({
+      make: String(shoe.make || ''),
+      model: String(shoe.model || ''),
+      colorway: String(shoe.colorway || ''),
+      photoFile: null,
+    });
+    setShoePhotoInputKey((prev) => prev + 1);
   };
 
   const handleDeleteCatalogShoe = async (catalogId) => {
@@ -207,6 +239,9 @@ export default function AdminPanel() {
     try {
       await deleteAdminShoeCatalogEntry(catalogId);
       setShoeDeleteConfirmId(null);
+      if (parseInt(shoeEditingId, 10) === parseInt(catalogId, 10)) {
+        resetShoeForm();
+      }
       setShoeCatalogMessage('Catalog entry deleted.');
       if (shoeCatalog.length === 1 && shoeCatalogPage > 1) {
         setShoeCatalogPage((prev) => Math.max(1, prev - 1));
@@ -266,21 +301,21 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-display font-bold tracking-wider">ADMIN PANEL</h1>
+    <div className="max-w-5xl mx-auto px-4 py-8 overflow-x-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wider">ADMIN PANEL</h1>
         <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
           Back to site
         </Link>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-6">
         {['tournaments', 'archived', 'notices', 'shoes', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-lg font-display text-sm font-bold transition-colors ${
+            className={`px-3 sm:px-4 py-2 rounded-lg font-display text-sm font-bold whitespace-nowrap transition-colors ${
               tab === t ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
           >
@@ -472,9 +507,13 @@ export default function AdminPanel() {
       {tab === 'shoes' && (
         <div className="space-y-4">
           <form onSubmit={handleAddCatalogShoe} className="card space-y-3">
-            <h3 className="font-display font-bold text-piu-accent">Shoe Catalog</h3>
+            <h3 className="font-display font-bold text-piu-accent">
+              {shoeEditingId ? `Edit Catalog Entry #${shoeEditingId}` : 'Shoe Catalog'}
+            </h3>
             <p className="text-xs text-gray-500">
-              Add make, model, and colorway options for player shoe matching.
+              {shoeEditingId
+                ? 'Update make, model, colorway, and optional photo for this catalog entry.'
+                : 'Add make, model, and colorway options for player shoe matching.'}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -517,7 +556,11 @@ export default function AdminPanel() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[11px] text-gray-400">
+                {shoeEditingId ? 'New photo (optional)' : 'Photo (optional)'}
+              </span>
               <input
+                key={shoePhotoInputKey}
                 type="file"
                 accept="image/*"
                 onChange={(e) => setShoeForm((prev) => ({ ...prev, photoFile: e.target.files?.[0] || null }))}
@@ -525,8 +568,18 @@ export default function AdminPanel() {
                 disabled={shoeCatalogSaving}
               />
               <button type="submit" className="btn-primary text-sm" disabled={shoeCatalogSaving}>
-                {shoeCatalogSaving ? 'Saving...' : 'Add / Update Catalog Shoe'}
+                {shoeCatalogSaving ? 'Saving...' : shoeEditingId ? 'Save Changes' : 'Add Catalog Shoe'}
               </button>
+              {shoeEditingId && (
+                <button
+                  type="button"
+                  className="btn-secondary text-sm"
+                  onClick={resetShoeForm}
+                  disabled={shoeCatalogSaving}
+                >
+                  Cancel Edit
+                </button>
+              )}
             </div>
 
             {shoeCatalogError && (
@@ -578,8 +631,16 @@ export default function AdminPanel() {
                   const colorway = String(shoe.colorway || '').trim();
                   const isModelDisplay = !!shoe.is_model_display;
                   const isDeleteConfirm = shoeDeleteConfirmId === shoe.id;
+                  const isEditing = parseInt(shoeEditingId, 10) === parseInt(shoe.id, 10);
                   return (
-                    <div key={shoe.id} className="rounded-xl border border-piu-border/50 bg-piu-dark/35 p-3 space-y-2">
+                    <div
+                      key={shoe.id}
+                      className={`rounded-xl border p-3 space-y-2 ${
+                        isEditing
+                          ? 'border-piu-accent/70 bg-piu-accent/10'
+                          : 'border-piu-border/50 bg-piu-dark/35'
+                      }`}
+                    >
                       <div className="w-full h-24 rounded-lg bg-piu-dark/60 border border-piu-border/40 overflow-hidden flex items-center justify-center">
                         {shoe.image_data ? (
                           <img src={shoe.image_data} alt={label} className="w-full h-full object-contain p-1" />
@@ -611,6 +672,19 @@ export default function AdminPanel() {
                           {isModelDisplay ? 'Top Shoes Display' : 'Use for Top Shoes'}
                         </button>
                       </div>
+
+                      <button
+                        type="button"
+                        className={`w-full px-2 py-1 rounded text-[10px] font-display font-bold border disabled:opacity-60 ${
+                          isEditing
+                            ? 'text-piu-accent border-piu-accent/60 bg-piu-accent/10'
+                            : 'text-gray-200 border-piu-border/60 bg-piu-dark/80 hover:bg-piu-dark'
+                        }`}
+                        onClick={() => handleEditCatalogShoe(shoe)}
+                        disabled={shoeCatalogSaving}
+                      >
+                        {isEditing ? 'Editing This Entry' : 'Edit Entry'}
+                      </button>
 
                       {isDeleteConfirm ? (
                         <div className="space-y-1.5 pt-1 border-t border-red-500/30">

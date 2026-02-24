@@ -149,6 +149,75 @@ function getShoeCabinet(db, userId) {
   };
 }
 
+function syncShoeCatalogFromUserShoes(db) {
+  const candidates = db.prepare(`
+    SELECT
+      LOWER(TRIM(COALESCE(us.make, ''))) AS make_key,
+      LOWER(TRIM(COALESCE(us.model, ''))) AS model_key,
+      LOWER(TRIM(COALESCE(us.colorway, ''))) AS colorway_key,
+      TRIM(COALESCE(us.make, '')) AS make,
+      TRIM(COALESCE(us.model, '')) AS model,
+      TRIM(COALESCE(us.colorway, '')) AS colorway,
+      COALESCE((
+        SELECT us2.image_data
+        FROM user_shoes us2
+        WHERE LOWER(TRIM(COALESCE(us2.make, ''))) = LOWER(TRIM(COALESCE(us.make, '')))
+          AND LOWER(TRIM(COALESCE(us2.model, ''))) = LOWER(TRIM(COALESCE(us.model, '')))
+          AND LOWER(TRIM(COALESCE(us2.colorway, ''))) = LOWER(TRIM(COALESCE(us.colorway, '')))
+          AND TRIM(COALESCE(us2.image_data, '')) != ''
+        ORDER BY COALESCE(us2.updated_at, us2.created_at, datetime('now')) DESC, us2.id DESC
+        LIMIT 1
+      ), '') AS image_data
+    FROM user_shoes us
+    WHERE TRIM(COALESCE(us.make, '')) != ''
+      AND TRIM(COALESCE(us.model, '')) != ''
+    GROUP BY make_key, model_key, colorway_key
+  `).all();
+  if (candidates.length === 0) return 0;
+
+  const findExisting = db.prepare(`
+    SELECT id, image_data
+    FROM shoe_catalog
+    WHERE LOWER(TRIM(COALESCE(make, ''))) = ?
+      AND LOWER(TRIM(COALESCE(model, ''))) = ?
+      AND LOWER(TRIM(COALESCE(colorway, ''))) = ?
+    LIMIT 1
+  `);
+  const insertCatalog = db.prepare(`
+    INSERT INTO shoe_catalog (make, model, colorway, image_data, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+  `);
+  const fillMissingImage = db.prepare(`
+    UPDATE shoe_catalog
+    SET image_data = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `);
+
+  const sync = db.transaction((rows) => {
+    let insertedCount = 0;
+    for (const row of rows) {
+      const make = normalizeShoeText(row.make, 80);
+      const model = normalizeShoeText(row.model, 80);
+      const colorway = normalizeShoeColorway(row.colorway, 120);
+      if (!make || !model) continue;
+      const imageData = String(row.image_data || '').trim();
+      const existing = findExisting.get(make.toLowerCase(), model.toLowerCase(), colorway.toLowerCase());
+      if (!existing) {
+        insertCatalog.run(make, model, colorway, imageData);
+        insertedCount++;
+        continue;
+      }
+      const existingImage = String(existing.image_data || '').trim();
+      if (!existingImage && imageData) {
+        fillMissingImage.run(imageData, existing.id);
+      }
+    }
+    return insertedCount;
+  });
+
+  return sync(candidates);
+}
+
 // Auth middleware
 function requireAuth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -632,6 +701,11 @@ router.get('/sync/progress', requireAuth, (req, res) => {
 // GET /api/piugame/shoes/catalog/admin?q=...&limit=...&page=...
 router.get('/shoes/catalog/admin', requireAuth, requireAdmin, (req, res) => {
   const db = getDb();
+  try {
+    syncShoeCatalogFromUserShoes(db);
+  } catch (err) {
+    console.error('Sync admin shoe catalog error:', err.message);
+  }
   const q = normalizeShoeText(req.query?.q, 120).toLowerCase();
   const parsedLimit = parseInt(req.query?.limit, 10);
   const parsedPage = parseInt(req.query?.page, 10);
@@ -763,6 +837,103 @@ router.post('/shoes/catalog/admin', requireAuth, requireAdmin, SHOE_UPLOAD.singl
   } catch (err) {
     console.error('Create admin shoe catalog entry error:', err.message);
     res.status(500).json({ error: 'Failed to save shoe catalog entry' });
+  }
+});
+
+// PUT /api/piugame/shoes/catalog/admin/:catalogId
+router.put('/shoes/catalog/admin/:catalogId', requireAuth, requireAdmin, SHOE_UPLOAD.single('photo'), async (req, res) => {
+  try {
+    const db = getDb();
+    const catalogId = parseInt(req.params.catalogId, 10);
+    if (!Number.isInteger(catalogId) || catalogId <= 0) {
+      return res.status(400).json({ error: 'Invalid catalog entry ID' });
+    }
+
+    const existing = db.prepare(`
+      SELECT id, make, model, colorway, image_data, created_by, created_at, updated_at
+      FROM shoe_catalog
+      WHERE id = ?
+      LIMIT 1
+    `).get(catalogId);
+    if (!existing) return res.status(404).json({ error: 'Catalog entry not found' });
+
+    const make = normalizeShoeText(req.body?.make, 80);
+    const model = normalizeShoeText(req.body?.model, 80);
+    const colorway = normalizeShoeColorway(req.body?.colorway, 120);
+    if (!make || !model) {
+      return res.status(400).json({ error: 'Shoe make and model are required' });
+    }
+
+    let imageData = String(existing.image_data || '');
+    if (req.file) {
+      imageData = await encodeShoeImage(req.file);
+    }
+
+    const oldMakeKey = normalizeShoeText(existing.make, 80).toLowerCase();
+    const oldModelKey = normalizeShoeText(existing.model, 80).toLowerCase();
+    const nextMakeKey = make.toLowerCase();
+    const nextModelKey = model.toLowerCase();
+
+    const txn = db.transaction(() => {
+      db.prepare(`
+        UPDATE shoe_catalog
+        SET
+          make = ?,
+          model = ?,
+          colorway = ?,
+          image_data = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).run(make, model, colorway, imageData, catalogId);
+
+      if (oldMakeKey && oldModelKey && (oldMakeKey !== nextMakeKey || oldModelKey !== nextModelKey)) {
+        const mappedDisplay = db.prepare(`
+          SELECT catalog_id
+          FROM shoe_model_display
+          WHERE make_key = ? AND model_key = ? AND catalog_id = ?
+          LIMIT 1
+        `).get(oldMakeKey, oldModelKey, catalogId);
+        if (mappedDisplay) {
+          db.prepare(`
+            DELETE FROM shoe_model_display
+            WHERE make_key = ? AND model_key = ?
+          `).run(oldMakeKey, oldModelKey);
+          db.prepare(`
+            INSERT INTO shoe_model_display (make_key, model_key, catalog_id, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(make_key, model_key)
+            DO UPDATE SET
+              catalog_id = excluded.catalog_id,
+              updated_at = datetime('now')
+          `).run(nextMakeKey, nextModelKey, catalogId);
+        }
+      }
+    });
+    txn();
+
+    const entry = db.prepare(`
+      SELECT id, make, model, colorway, image_data, created_by, created_at, updated_at
+      FROM shoe_catalog
+      WHERE id = ?
+      LIMIT 1
+    `).get(catalogId);
+
+    res.json({
+      entry: {
+        id: parseInt(entry?.id, 10) || catalogId,
+        make: entry?.make || '',
+        model: entry?.model || '',
+        colorway: entry?.colorway || '',
+        image_data: entry?.image_data || '',
+        created_by: entry?.created_by || '',
+        created_at: entry?.created_at || '',
+        updated_at: entry?.updated_at || '',
+      },
+      updated: true,
+    });
+  } catch (err) {
+    console.error('Update admin shoe catalog entry error:', err.message);
+    res.status(500).json({ error: 'Failed to update shoe catalog entry' });
   }
 });
 
