@@ -9,7 +9,7 @@ import {
   getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
-  getPumbilityStats, getPumbilityRecommendations,
+  getPumbilityRecommendations,
   getProfileShoes, wearProfileShoe,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
@@ -702,7 +702,6 @@ export default function ProfilePage() {
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
-  const [pumbilityStats, setPumbilityStats] = useState(null);
   const [pumbilityRecs, setPumbilityRecs] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
@@ -986,7 +985,6 @@ export default function ProfilePage() {
       getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
       getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
       getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
-      getPumbilityStats(profileId).then(setPumbilityStats).catch(() => {});
       getPumbilityRecommendations(profileId).then(setPumbilityRecs).catch(() => {});
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
       getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
@@ -1020,7 +1018,6 @@ export default function ProfilePage() {
         getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
         getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
         getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
-        getPumbilityStats(profileId).then(setPumbilityStats).catch(() => {});
         getPumbilityRecommendations(profileId).then(setPumbilityRecs).catch(() => {});
       }).finally(() => setPiuSyncing(''));
     }
@@ -2567,16 +2564,16 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {pumbilityStats && pumbilityStats.pumbility_value > 0 && (
+            {piuPumbility && piuPumbility.pumbility_value > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 {/* Average Rating */}
                 <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Avg Rating</p>
-                  <p className="text-lg font-mono font-bold text-white">{pumbilityStats.average_rating.toLocaleString()}</p>
-                  {pumbilityStats.equivalent_level && pumbilityStats.equivalent_grade && (
+                  <p className="text-lg font-mono font-bold text-white">{piuPumbility.average_rating?.toLocaleString()}</p>
+                  {piuPumbility.equivalent_level && piuPumbility.equivalent_grade && (
                     <p className="text-[10px] text-gray-400 font-display mt-0.5">
-                      <span className="text-gray-500">~</span> Lv.{pumbilityStats.equivalent_level}{' '}
-                      <span className={getGradeColor(pumbilityStats.equivalent_grade)}>{pumbilityStats.equivalent_grade}</span>
+                      <span className="text-gray-500">~</span> Lv.{piuPumbility.equivalent_level}{' '}
+                      <span className={getGradeColor(piuPumbility.equivalent_grade)}>{piuPumbility.equivalent_grade}</span>
                     </p>
                   )}
                 </div>
@@ -2585,13 +2582,13 @@ export default function ProfilePage() {
                 <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Min Entry</p>
                   <p className="text-lg font-mono font-bold text-white">
-                    {pumbilityStats.min_entry_rating > 0 ? pumbilityStats.min_entry_rating.toLocaleString() : '--'}
+                    {piuPumbility.min_entry_rating > 0 ? piuPumbility.min_entry_rating.toLocaleString() : '--'}
                   </p>
-                  {pumbilityStats.min_entry_details && (
+                  {piuPumbility.min_entry_details && (
                     <p className="text-[10px] text-gray-400 font-display mt-0.5">
-                      Lv.{pumbilityStats.min_entry_details.level}{' '}
-                      <span className={getGradeColor(pumbilityStats.min_entry_details.grade)}>
-                        {pumbilityStats.min_entry_details.grade}
+                      Lv.{piuPumbility.min_entry_details.level}{' '}
+                      <span className={getGradeColor(piuPumbility.min_entry_details.grade)}>
+                        {piuPumbility.min_entry_details.grade}
                       </span>
                     </p>
                   )}
@@ -2601,14 +2598,14 @@ export default function ProfilePage() {
                 <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Top 1000 Threshold</p>
                   <p className="text-lg font-mono font-bold text-white">
-                    {pumbilityStats.threshold > 0 ? pumbilityStats.threshold.toLocaleString() : '--'}
+                    {piuPumbility.threshold > 0 ? piuPumbility.threshold.toLocaleString() : '--'}
                   </p>
-                  {pumbilityStats.threshold > 0 && pumbilityStats.pumbility_value > 0 && (
+                  {piuPumbility.threshold > 0 && piuPumbility.pumbility_value > 0 && (
                     <p className="text-[10px] font-display mt-0.5">
-                      {pumbilityStats.pumbility_value >= pumbilityStats.threshold ? (
+                      {piuPumbility.pumbility_value >= piuPumbility.threshold ? (
                         <span className="text-green-400">Qualified</span>
                       ) : (
-                        <span className="text-gray-500">{(pumbilityStats.threshold - pumbilityStats.pumbility_value).toLocaleString()} away</span>
+                        <span className="text-gray-500">{(piuPumbility.threshold - piuPumbility.pumbility_value).toLocaleString()} away</span>
                       )}
                     </p>
                   )}
@@ -2618,12 +2615,12 @@ export default function ProfilePage() {
                 <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Ranking</p>
                   <p className="text-lg font-mono font-bold text-white">
-                    {pumbilityStats.ranking ? `#${pumbilityStats.ranking}` : '--'}
+                    {piuPumbility.ranking ? `#${piuPumbility.ranking}` : '--'}
                   </p>
-                  {pumbilityStats.ranking && (
+                  {piuPumbility.ranking && (
                     <p className="text-[10px] text-piu-gold font-display mt-0.5">Top 1000</p>
                   )}
-                  {!pumbilityStats.ranking && pumbilityStats.threshold > 0 && (
+                  {!piuPumbility.ranking && piuPumbility.threshold > 0 && (
                     <p className="text-[10px] text-gray-500 font-display mt-0.5">Outside top 1000</p>
                   )}
                 </div>
@@ -2689,9 +2686,6 @@ export default function ProfilePage() {
               <div className="space-y-2">
                 {piuPumbility.scores.map((s, i) => {
                   const rank = getRank(s.score);
-                  const ratingInfo = pumbilityStats?.scores_with_ratings?.find(
-                    r => r.song_title === s.song_title && r.mode === s.mode && r.level === s.level
-                  );
                   return (
                     <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <span className="text-xs text-gray-500 font-mono w-6 shrink-0 text-right">#{s.rank_order}</span>
@@ -2701,9 +2695,9 @@ export default function ProfilePage() {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
-                        {ratingInfo && (
+                        {s.rating > 0 && (
                           <p className="text-[10px] text-gray-500 font-mono">
-                            Rating: {ratingInfo.rating.toLocaleString()}
+                            Rating: {s.rating.toLocaleString()}
                           </p>
                         )}
                       </div>

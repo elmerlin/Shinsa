@@ -1685,17 +1685,95 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
 
 // ─── Data Retrieval (public) ────────────────────────────
 
-// GET /api/piugame/pumbility/:userId
+// GET /api/piugame/pumbility/:userId — compute pumbility from local best scores
 router.get('/pumbility/:userId', (req, res) => {
   const db = getDb();
-  const scores = db.prepare(
-    'SELECT * FROM user_pumbility_scores WHERE user_id = ? ORDER BY rank_order ASC'
-  ).all(req.params.userId);
-  const sync = db.prepare('SELECT pumbility_value, last_pumbility_sync FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
+  const userId = req.params.userId;
+  const sync = db.prepare('SELECT pumbility_value, last_pumbility_sync, last_best_scores_sync, best_scores_imported FROM user_piugame_sync WHERE user_id = ?').get(userId);
+
+  // Get all best scores with rating >= some minimum (levels 10-28 only matter)
+  const bestScores = db.prepare(
+    'SELECT song_title, mode, level, score, grade, background_url FROM user_best_scores WHERE user_id = ? AND score > 0'
+  ).all(userId);
+
+  // Compute rating for each best score
+  const allRated = [];
+  for (const s of bestScores) {
+    const level = parseInt(s.level, 10) || 0;
+    const base = LEVEL_BASE_POINTS[level];
+    if (!base) continue;
+    const score = parseInt(s.score, 10) || 0;
+    if (score <= 0) continue;
+    const grade = s.grade || gradeFromScore(score);
+    const mult = GRADE_MULTIPLIER[grade];
+    if (!mult) continue;
+    const rating = Math.round(base * mult * 10) / 10;
+    if (rating <= 0) continue;
+    allRated.push({ ...s, score, grade, rating });
+  }
+
+  // Sort by rating descending, take top 50
+  allRated.sort((a, b) => b.rating - a.rating);
+  const top50 = allRated.slice(0, 50).map((s, i) => ({ ...s, rank_order: i + 1 }));
+  const pumbilityValue = Math.round(top50.reduce((sum, s) => sum + s.rating, 0) * 10) / 10;
+
+  // Stats: average rating
+  const averageRating = top50.length > 0 ? Math.round((pumbilityValue / 50) * 10) / 10 : 0;
+
+  // Find equivalent level + grade for the average rating
+  let equivalentLevel = null;
+  let equivalentGrade = null;
+  let closestDiff = Infinity;
+  const levels = Object.keys(LEVEL_BASE_POINTS).map(Number).sort((a, b) => a - b);
+  const grades = Object.keys(GRADE_MULTIPLIER);
+  for (const lvl of levels) {
+    const base = LEVEL_BASE_POINTS[lvl];
+    for (const g of grades) {
+      const r = Math.round(base * GRADE_MULTIPLIER[g] * 10) / 10;
+      const diff = Math.abs(r - averageRating);
+      if (diff < closestDiff) { closestDiff = diff; equivalentLevel = lvl; equivalentGrade = g; }
+    }
+  }
+
+  // Min entry rating (50th item, or 0 if fewer than 50)
+  const minEntryRating = top50.length >= 50 ? top50[top50.length - 1].rating : 0;
+  let minEntryDetails = null;
+  if (minEntryRating > 0 && top50.length >= 50) {
+    const me = top50[top50.length - 1];
+    minEntryDetails = { rating: minEntryRating, song_title: me.song_title, mode: me.mode, level: me.level, score: me.score, grade: me.grade };
+  }
+
+  // Leaderboard ranking
+  const meta = db.prepare('SELECT threshold FROM pumbility_leaderboard_meta WHERE id = 1').get();
+  const threshold = meta?.threshold || 0;
+  let ranking = null;
+  const officialPumbility = sync?.pumbility_value || 0;
+  const rankCheckValue = officialPumbility > 0 ? officialPumbility : pumbilityValue;
+
+  if (rankCheckValue > 0 && threshold > 0) {
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+    if (user?.username) {
+      const entry = db.prepare('SELECT rank FROM pumbility_leaderboard WHERE player_name = ? COLLATE NOCASE').get(user.username);
+      if (entry) ranking = entry.rank;
+    }
+    if (!ranking && rankCheckValue >= threshold) {
+      const higherCount = db.prepare('SELECT COUNT(*) as cnt FROM pumbility_leaderboard WHERE pumbility > ?').get(rankCheckValue);
+      ranking = (higherCount?.cnt || 0) + 1;
+    }
+  }
+
   res.json({
-    pumbility_value: sync?.pumbility_value || 0,
+    pumbility_value: pumbilityValue,
+    official_pumbility: officialPumbility,
     last_sync: sync?.last_pumbility_sync || null,
-    scores,
+    scores: top50,
+    average_rating: averageRating,
+    equivalent_level: equivalentLevel,
+    equivalent_grade: equivalentGrade,
+    min_entry_rating: minEntryRating,
+    min_entry_details: minEntryDetails,
+    ranking,
+    threshold,
   });
 });
 
@@ -1829,137 +1907,10 @@ router.get('/pumbility-ranking', (req, res) => {
   });
 });
 
-// GET /api/piugame/pumbility-stats/:userId — compute pumbility analytics
-router.get('/pumbility-stats/:userId', (req, res) => {
-  const db = getDb();
-  const userId = req.params.userId;
-
-  // Get pumbility scores
-  const scores = db.prepare(
-    'SELECT * FROM user_pumbility_scores WHERE user_id = ? ORDER BY rank_order ASC'
-  ).all(userId);
-
-  const sync = db.prepare('SELECT pumbility_value FROM user_piugame_sync WHERE user_id = ?').get(userId);
-  const pumbilityValue = sync?.pumbility_value || 0;
-
-  if (!scores.length || pumbilityValue <= 0) {
-    return res.json({
-      pumbility_value: pumbilityValue,
-      average_rating: 0,
-      equivalent_level: null,
-      equivalent_grade: null,
-      min_entry_rating: 0,
-      min_entry_score: null,
-      ranking: null,
-      threshold: 0,
-    });
-  }
-
-  // Compute per-song rating for each pumbility entry
-  const ratingsWithDetails = scores.map(s => {
-    const level = parseInt(s.level, 10) || 0;
-    const base = LEVEL_BASE_POINTS[level] || 0;
-    const grade = s.grade || gradeFromScore(s.score);
-    const multiplier = GRADE_MULTIPLIER[grade] || 0;
-    const rating = base > 0 && multiplier > 0 ? Math.round(base * multiplier * 10) / 10 : 0;
-    return { ...s, rating, base, grade, multiplier };
-  });
-
-  // Sort by rating desc to find actual top 50
-  const sortedByRating = [...ratingsWithDetails].sort((a, b) => b.rating - a.rating);
-  const top50 = sortedByRating.slice(0, 50);
-  const computedPumbility = top50.reduce((sum, s) => sum + s.rating, 0);
-
-  // Average rating = pumbility / 50
-  const averageRating = Math.round((pumbilityValue / 50) * 10) / 10;
-
-  // Find what level + grade this average equates to
-  // For each level, find the grade whose rating is closest to the average
-  let equivalentLevel = null;
-  let equivalentGrade = null;
-  let closestDiff = Infinity;
-
-  const levels = Object.keys(LEVEL_BASE_POINTS).map(Number).sort((a, b) => a - b);
-  const grades = Object.keys(GRADE_MULTIPLIER);
-
-  for (const level of levels) {
-    const base = LEVEL_BASE_POINTS[level];
-    for (const grade of grades) {
-      const mult = GRADE_MULTIPLIER[grade];
-      const rating = Math.round(base * mult * 10) / 10;
-      const diff = Math.abs(rating - averageRating);
-      if (diff < closestDiff) {
-        closestDiff = diff;
-        equivalentLevel = level;
-        equivalentGrade = grade;
-      }
-    }
-  }
-
-  // Minimum rating to enter top 50
-  const minEntryRating = top50.length >= 50 ? top50[top50.length - 1].rating : 0;
-
-  // Find what score/level would produce that min entry rating
-  let minEntryDetails = null;
-  if (minEntryRating > 0 && top50.length >= 50) {
-    const minEntry = top50[top50.length - 1];
-    minEntryDetails = {
-      rating: minEntryRating,
-      song_title: minEntry.song_title,
-      mode: minEntry.mode,
-      level: minEntry.level,
-      score: minEntry.score,
-      grade: minEntry.grade,
-    };
-  }
-
-  // Leaderboard ranking
-  const meta = db.prepare('SELECT threshold FROM pumbility_leaderboard_meta WHERE id = 1').get();
-  const threshold = meta?.threshold || 0;
-  let ranking = null;
-
-  if (pumbilityValue > 0 && threshold > 0) {
-    // Check if user is in the leaderboard by name or by pumbility value
-    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-    if (user?.username) {
-      const leaderboardEntry = db.prepare(
-        'SELECT rank FROM pumbility_leaderboard WHERE player_name = ? COLLATE NOCASE'
-      ).get(user.username);
-      if (leaderboardEntry) {
-        ranking = leaderboardEntry.rank;
-      }
-    }
-    // Also try by exact pumbility match to estimate position
-    if (!ranking && pumbilityValue >= threshold) {
-      const higherCount = db.prepare(
-        'SELECT COUNT(*) as cnt FROM pumbility_leaderboard WHERE pumbility > ?'
-      ).get(pumbilityValue);
-      ranking = (higherCount?.cnt || 0) + 1;
-    }
-  }
-
-  res.json({
-    pumbility_value: pumbilityValue,
-    average_rating: averageRating,
-    equivalent_level: equivalentLevel,
-    equivalent_grade: equivalentGrade,
-    min_entry_rating: minEntryRating,
-    min_entry_details: minEntryDetails,
-    ranking,
-    threshold,
-    scores_with_ratings: ratingsWithDetails,
-  });
-});
-
 // GET /api/piugame/pumbility-recommendations/:userId — smart recommendations
 router.get('/pumbility-recommendations/:userId', (req, res) => {
   const db = getDb();
   const userId = req.params.userId;
-
-  // Get pumbility scores (top 50)
-  const pumbilityScores = db.prepare(
-    'SELECT * FROM user_pumbility_scores WHERE user_id = ? ORDER BY rank_order ASC'
-  ).all(userId);
 
   // Get all best scores for the user
   const bestScores = db.prepare(
@@ -1970,16 +1921,24 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
     return res.json({ recommendations: [] });
   }
 
-  // Compute rating for each pumbility entry
-  const pumbilityRatings = pumbilityScores.map(s => {
+  // Compute rating for each best score to find the actual top 50
+  const allRated = [];
+  for (const s of bestScores) {
     const level = parseInt(s.level, 10) || 0;
-    const base = LEVEL_BASE_POINTS[level] || 0;
-    const grade = s.grade || gradeFromScore(s.score);
-    const multiplier = GRADE_MULTIPLIER[grade] || 0;
-    return Math.round(base * multiplier * 10) / 10;
-  }).sort((a, b) => b - a);
+    const base = LEVEL_BASE_POINTS[level];
+    if (!base) continue;
+    const score = parseInt(s.score, 10) || 0;
+    if (score <= 0) continue;
+    const grade = s.grade || gradeFromScore(score);
+    const mult = GRADE_MULTIPLIER[grade];
+    if (!mult) continue;
+    const rating = Math.round(base * mult * 10) / 10;
+    if (rating > 0) allRated.push({ ...s, score, grade, rating });
+  }
+  allRated.sort((a, b) => b.rating - a.rating);
+  const top50Ratings = allRated.slice(0, 50).map(s => s.rating);
 
-  const minPumbilityRating = pumbilityRatings.length >= 50 ? pumbilityRatings[49] : 0;
+  const minPumbilityRating = top50Ratings.length >= 50 ? top50Ratings[49] : 0;
 
   // For each best score, calculate current rating and potential next-grade rating
   const candidates = [];
@@ -2019,11 +1978,11 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
     // Only recommend if this would improve pumbility
     // Either the current rating is already in top 50, or the new rating would enter top 50
     const wouldReplace = currentRating >= minPumbilityRating || nextRating > minPumbilityRating;
-    if (!wouldReplace && pumbilityRatings.length >= 50) continue;
+    if (!wouldReplace && top50Ratings.length >= 50) continue;
 
     // Calculate actual pumbility gain
     let pumbilityGain = 0;
-    if (pumbilityRatings.length >= 50) {
+    if (top50Ratings.length >= 50) {
       // If current rating is already in top 50, gain is the rating increase
       if (currentRating >= minPumbilityRating) {
         pumbilityGain = ratingGain;
@@ -2067,7 +2026,7 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
   res.json({
     recommendations,
     min_pumbility_rating: minPumbilityRating,
-    pumbility_scores_count: pumbilityRatings.length,
+    pumbility_scores_count: top50Ratings.length,
   });
 });
 
