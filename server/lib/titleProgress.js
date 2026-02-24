@@ -337,6 +337,7 @@ function updateUserSkillTitleFromBestScores(db, userId) {
 module.exports = {
   LEVEL_BASE_POINTS,
   GRADE_MULTIPLIER,
+  SCORE_TO_GRADE,
   TITLE_REQUIREMENTS,
   normalizeGrade,
   gradeFromScore,

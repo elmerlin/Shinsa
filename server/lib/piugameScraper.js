@@ -970,6 +970,75 @@ async function scrapeRecentlyPlayed(client) {
   return plays;
 }
 
+/**
+ * Scrape pumbility ranking leaderboard (top 1000 players).
+ * This is a public page — no login required.
+ * Returns { rankings: [{ rank, player_name, pumbility }], threshold }
+ */
+async function scrapePumbilityRanking() {
+  const client = createClient();
+  const rankings = [];
+
+  // The leaderboard uses AJAX pagination similar to top songs
+  const pageUrl = `${PIU_BASE}/leaderboard/pumbility_ranking.php`;
+  await client.get(pageUrl);
+
+  const PAGE_SIZE = 50;
+  const MAX_PAGES = 20; // 20 pages × 50 = 1000 entries
+
+  for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
+    const pageOffset = pageIndex * PAGE_SIZE;
+
+    if (pageIndex > 0) {
+      await delay(200);
+    }
+
+    const params = new URLSearchParams();
+    params.append('page', String(pageOffset));
+
+    const res = await client.post(
+      `${PIU_BASE}/ajax/pumbility_ranking.php`,
+      params.toString(),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Requested-With': 'XMLHttpRequest',
+          Referer: pageUrl,
+        },
+      }
+    );
+
+    const html = typeof res.data === 'string' ? res.data : '';
+    const $ = cheerio.load(html);
+    const items = $('li');
+    if (!items.length) break;
+
+    items.each((idx, li) => {
+      const $li = $(li);
+      const rankText = collapseWhitespace($li.find('.num > i.tt').first().text());
+      const parsedRank = parseInt(rankText, 10);
+      const rank = Number.isFinite(parsedRank) ? parsedRank : pageOffset + idx + 1;
+
+      const playerName = collapseWhitespace($li.find('.profile_name .t1').first().text());
+      if (!playerName) return;
+
+      const pumbilityText = collapseWhitespace($li.find('.profile_name .t2, .score i.tt, .pumbility i.tt, .rating i.tt').first().text());
+      const pumbility = parseInt((pumbilityText || '').replace(/,/g, ''), 10) || 0;
+
+      rankings.push({ rank, player_name: playerName, pumbility });
+    });
+
+    if (items.length < PAGE_SIZE) break;
+  }
+
+  rankings.sort((a, b) => a.rank - b.rank);
+
+  // Threshold = pumbility of the 1000th place (or last entry if fewer)
+  const threshold = rankings.length > 0 ? rankings[rankings.length - 1].pumbility : 0;
+
+  return { rankings, threshold };
+}
+
 module.exports = {
   login,
   createClient,
@@ -978,4 +1047,5 @@ module.exports = {
   scrapeBestScores,
   scrapeTopSongs,
   scrapeRecentlyPlayed,
+  scrapePumbilityRanking,
 };

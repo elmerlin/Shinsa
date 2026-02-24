@@ -838,6 +838,20 @@ function initializeDb() {
       pumbility_value INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS pumbility_leaderboard (
+      rank INTEGER NOT NULL,
+      player_name TEXT NOT NULL,
+      pumbility INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (rank)
+    );
+
+    CREATE TABLE IF NOT EXISTS pumbility_leaderboard_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      threshold INTEGER NOT NULL DEFAULT 0,
+      total_entries INTEGER NOT NULL DEFAULT 0,
+      last_sync TEXT DEFAULT ''
+    );
+
     CREATE TABLE IF NOT EXISTS user_notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
