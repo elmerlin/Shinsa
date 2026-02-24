@@ -402,7 +402,6 @@ export default function MyAccountPage() {
   const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
   const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
-  const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -693,9 +692,9 @@ export default function MyAccountPage() {
                 </p>
               </div>
               <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Current Shoe</p>
-                <p className="font-display font-bold text-xs mt-1 truncate">
-                  {activeShoe ? `${activeShoe.make} ${activeShoe.model}`.trim() : 'Not set'}
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">No. of Shoes</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {cabinetShoes.length.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -841,7 +840,7 @@ export default function MyAccountPage() {
                   const label = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
                   const pendingFile = shoePhotoFiles[shoe.id] || null;
                   return (
-                    <div key={shoe.id} className="card space-y-3">
+                    <div key={shoe.id} className={`card space-y-3 ${shoe.is_current ? 'bg-emerald-500/10 border-emerald-400/50' : ''}`}>
                       <div className="flex items-start gap-3">
                         {shoe.image_data ? (
                           <img src={shoe.image_data} alt={label} className="w-28 h-16 rounded-lg object-contain bg-piu-dark/60 border border-piu-border/40 shrink-0 p-1" />
@@ -854,7 +853,7 @@ export default function MyAccountPage() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-display font-bold text-sm truncate">{label}</p>
                             {shoe.is_current ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-piu-accent/20 text-piu-accent border border-piu-accent/40">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/50">
                                 Current
                               </span>
                             ) : null}
