@@ -5,6 +5,7 @@ import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
   getNotices, createNotice, updateNotice, deleteNotice,
   getFunSettings, updateFunSettings,
+  getAdminShoeCatalog, createAdminShoeCatalogEntry, deleteAdminShoeCatalogEntry,
 } from '../utils/api';
 
 const PHASE_LABELS = {
@@ -13,18 +14,38 @@ const PHASE_LABELS = {
   COMPLETED: 'Completed',
 };
 
+function formatShoeLabel(shoe) {
+  return `${shoe?.make || ''} ${shoe?.model || ''}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+}
+
 export default function AdminPanel() {
   const [tab, setTab] = useState('tournaments');
   const [tournaments, setTournaments] = useState([]);
   const [archived, setArchived] = useState([]);
   const [notices, setNotices] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [funSettings, setFunSettings] = useState({ devit_start_platform_lag: 3, updated_at: '' });
   const [funLagInput, setFunLagInput] = useState('3');
   const [funLoading, setFunLoading] = useState(false);
   const [funSaving, setFunSaving] = useState(false);
   const [funError, setFunError] = useState('');
   const [funSuccess, setFunSuccess] = useState('');
+  const [shoeCatalog, setShoeCatalog] = useState([]);
+  const [shoeCatalogLoading, setShoeCatalogLoading] = useState(false);
+  const [shoeCatalogSaving, setShoeCatalogSaving] = useState(false);
+  const [shoeCatalogError, setShoeCatalogError] = useState('');
+  const [shoeCatalogMessage, setShoeCatalogMessage] = useState('');
+  const [shoeCatalogQuery, setShoeCatalogQuery] = useState('');
+  const [shoeCatalogPage, setShoeCatalogPage] = useState(1);
+  const [shoeCatalogTotalPages, setShoeCatalogTotalPages] = useState(0);
+  const [shoeCatalogTotal, setShoeCatalogTotal] = useState(0);
+  const [shoeCatalogRefreshKey, setShoeCatalogRefreshKey] = useState(0);
+  const [shoeDeleteConfirmId, setShoeDeleteConfirmId] = useState(null);
+  const [shoeForm, setShoeForm] = useState({
+    make: '',
+    model: '',
+    colorway: '',
+    photoFile: null,
+  });
 
   // Notice form
   const [noticeForm, setNoticeForm] = useState({ title: '', content: '', pinned: false });
@@ -35,10 +56,47 @@ export default function AdminPanel() {
     loadAll();
   }, []);
 
+  useEffect(() => {
+    if (tab !== 'shoes') return undefined;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setShoeCatalogLoading(true);
+      setShoeCatalogError('');
+      getAdminShoeCatalog({ q: shoeCatalogQuery.trim(), limit: 6, page: shoeCatalogPage })
+        .then((payload) => {
+          if (cancelled) return;
+          setShoeCatalog(Array.isArray(payload?.results) ? payload.results : []);
+          setShoeCatalogTotal(parseInt(payload?.total, 10) || 0);
+          setShoeCatalogTotalPages(parseInt(payload?.total_pages, 10) || 0);
+          setShoeDeleteConfirmId(null);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setShoeCatalog([]);
+          setShoeCatalogTotal(0);
+          setShoeCatalogTotalPages(0);
+          setShoeCatalogError(err?.message || 'Failed to load shoe catalog');
+        })
+        .finally(() => {
+          if (!cancelled) setShoeCatalogLoading(false);
+        });
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [tab, shoeCatalogQuery, shoeCatalogPage, shoeCatalogRefreshKey]);
+
   const loadAll = () => {
     getTournaments().then(setTournaments).catch(() => {});
     getArchivedTournaments().then(setArchived).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
+    getAdminShoeCatalog({ limit: 1, page: 1 })
+      .then((payload) => {
+        setShoeCatalogTotal(parseInt(payload?.total, 10) || 0);
+      })
+      .catch(() => {});
     setFunLoading(true);
     getFunSettings()
       .then((payload) => {
@@ -109,6 +167,59 @@ export default function AdminPanel() {
     await loadAll();
   };
 
+  const handleAddCatalogShoe = async (e) => {
+    e.preventDefault();
+    if (shoeCatalogSaving) return;
+    const make = String(shoeForm.make || '').trim();
+    const model = String(shoeForm.model || '').trim();
+    const colorway = String(shoeForm.colorway || '').trim();
+    if (!make || !model) {
+      setShoeCatalogError('Make and model are required.');
+      return;
+    }
+
+    setShoeCatalogSaving(true);
+    setShoeCatalogError('');
+    setShoeCatalogMessage('');
+    try {
+      const result = await createAdminShoeCatalogEntry({
+        make,
+        model,
+        colorway,
+        photoFile: shoeForm.photoFile || null,
+      });
+      setShoeForm({ make: '', model: '', colorway: '', photoFile: null });
+      setShoeCatalogMessage(result?.updated ? 'Catalog entry updated.' : 'Catalog entry added.');
+      setShoeCatalogPage(1);
+      setShoeCatalogRefreshKey((prev) => prev + 1);
+    } catch (err) {
+      setShoeCatalogError(err?.message || 'Failed to save shoe catalog entry');
+    } finally {
+      setShoeCatalogSaving(false);
+    }
+  };
+
+  const handleDeleteCatalogShoe = async (catalogId) => {
+    if (shoeCatalogSaving) return;
+    setShoeCatalogSaving(true);
+    setShoeCatalogError('');
+    setShoeCatalogMessage('');
+    try {
+      await deleteAdminShoeCatalogEntry(catalogId);
+      setShoeDeleteConfirmId(null);
+      setShoeCatalogMessage('Catalog entry deleted.');
+      if (shoeCatalog.length === 1 && shoeCatalogPage > 1) {
+        setShoeCatalogPage((prev) => Math.max(1, prev - 1));
+      } else {
+        setShoeCatalogRefreshKey((prev) => prev + 1);
+      }
+    } catch (err) {
+      setShoeCatalogError(err?.message || 'Failed to delete catalog entry');
+    } finally {
+      setShoeCatalogSaving(false);
+    }
+  };
+
   const handleSaveFunSettings = async (e) => {
     e.preventDefault();
     const parsedLag = Number.parseInt(funLagInput, 10);
@@ -149,7 +260,7 @@ export default function AdminPanel() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6">
-        {['tournaments', 'archived', 'notices', 'fun'].map(t => (
+        {['tournaments', 'archived', 'notices', 'shoes', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -160,6 +271,7 @@ export default function AdminPanel() {
             {t === 'tournaments' ? `Active (${tournaments.length})` :
              t === 'archived' ? `Archived (${archived.length})` :
              t === 'notices' ? `Notices (${notices.length})` :
+             t === 'shoes' ? `Shoes (${shoeCatalogTotal})` :
              'Fun Settings'}
           </button>
         ))}
@@ -336,6 +448,196 @@ export default function AdminPanel() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Shoes Tab */}
+      {tab === 'shoes' && (
+        <div className="space-y-4">
+          <form onSubmit={handleAddCatalogShoe} className="card space-y-3">
+            <h3 className="font-display font-bold text-piu-accent">Shoe Catalog</h3>
+            <p className="text-xs text-gray-500">
+              Add make, model, and colorway options for player shoe matching.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label className="block">
+                <span className="text-xs text-gray-400">Make</span>
+                <input
+                  type="text"
+                  className="input-field mt-1"
+                  maxLength={80}
+                  value={shoeForm.make}
+                  onChange={(e) => setShoeForm((prev) => ({ ...prev, make: e.target.value }))}
+                  placeholder="Nike"
+                  disabled={shoeCatalogSaving}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-gray-400">Model</span>
+                <input
+                  type="text"
+                  className="input-field mt-1"
+                  maxLength={80}
+                  value={shoeForm.model}
+                  onChange={(e) => setShoeForm((prev) => ({ ...prev, model: e.target.value }))}
+                  placeholder="Free RN 2018"
+                  disabled={shoeCatalogSaving}
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-gray-400">Colorway</span>
+                <input
+                  type="text"
+                  className="input-field mt-1"
+                  maxLength={120}
+                  value={shoeForm.colorway}
+                  onChange={(e) => setShoeForm((prev) => ({ ...prev, colorway: e.target.value }))}
+                  placeholder="Black / White"
+                  disabled={shoeCatalogSaving}
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setShoeForm((prev) => ({ ...prev, photoFile: e.target.files?.[0] || null }))}
+                className="text-xs text-gray-400 file:mr-3 file:px-3 file:py-1 file:rounded-lg file:border file:border-piu-border file:bg-piu-dark file:text-gray-300 file:cursor-pointer"
+                disabled={shoeCatalogSaving}
+              />
+              <button type="submit" className="btn-primary text-sm" disabled={shoeCatalogSaving}>
+                {shoeCatalogSaving ? 'Saving...' : 'Add / Update Catalog Shoe'}
+              </button>
+            </div>
+
+            {shoeCatalogError && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {shoeCatalogError}
+              </div>
+            )}
+            {shoeCatalogMessage && (
+              <div className="rounded-lg border border-piu-green/40 bg-piu-green/10 px-3 py-2 text-xs text-piu-green">
+                {shoeCatalogMessage}
+              </div>
+            )}
+          </form>
+
+          <div className="card space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-display font-bold text-sm text-gray-300">Catalog Entries</h4>
+              <button
+                type="button"
+                className="btn-secondary text-xs px-3 py-1.5"
+                onClick={() => setShoeCatalogRefreshKey((prev) => prev + 1)}
+                disabled={shoeCatalogLoading}
+              >
+                {shoeCatalogLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+
+            <input
+              type="text"
+              className="input-field"
+              value={shoeCatalogQuery}
+              onChange={(e) => {
+                setShoeCatalogQuery(e.target.value);
+                setShoeCatalogPage(1);
+              }}
+              maxLength={120}
+              placeholder="Search catalog by make, model, or colorway..."
+              disabled={shoeCatalogSaving}
+            />
+
+            {shoeCatalogLoading && shoeCatalog.length === 0 ? (
+              <p className="text-xs text-gray-500 py-3">Loading catalog...</p>
+            ) : shoeCatalog.length === 0 ? (
+              <p className="text-xs text-gray-500 py-3">No catalog shoes found.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {shoeCatalog.map((shoe) => {
+                  const label = formatShoeLabel(shoe);
+                  const colorway = String(shoe.colorway || '').trim();
+                  const isDeleteConfirm = shoeDeleteConfirmId === shoe.id;
+                  return (
+                    <div key={shoe.id} className="rounded-xl border border-piu-border/50 bg-piu-dark/35 p-3 space-y-2">
+                      <div className="w-full h-24 rounded-lg bg-piu-dark/60 border border-piu-border/40 overflow-hidden flex items-center justify-center">
+                        {shoe.image_data ? (
+                          <img src={shoe.image_data} alt={label} className="w-full h-full object-contain p-1" />
+                        ) : (
+                          <span className="text-[10px] text-gray-500">No image</span>
+                        )}
+                      </div>
+                      <p className="font-display font-bold text-xs leading-tight">{label}</p>
+                      {colorway ? (
+                        <p className="text-[10px] text-gray-400 leading-tight">{colorway}</p>
+                      ) : (
+                        <p className="text-[10px] text-gray-500 leading-tight">No colorway</p>
+                      )}
+                      <p className="text-[10px] text-gray-600">
+                        Updated {shoe.updated_at ? new Date(shoe.updated_at).toLocaleDateString() : '-'}
+                      </p>
+
+                      {isDeleteConfirm ? (
+                        <div className="space-y-1.5 pt-1 border-t border-red-500/30">
+                          <button
+                            type="button"
+                            className="w-full px-2 py-1.5 rounded text-[10px] font-display font-bold text-red-200 border border-red-500/60 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-60"
+                            onClick={() => handleDeleteCatalogShoe(shoe.id)}
+                            disabled={shoeCatalogSaving}
+                          >
+                            Confirm Delete
+                          </button>
+                          <button
+                            type="button"
+                            className="w-full px-2 py-1 rounded text-[10px] font-display font-bold text-gray-400 border border-piu-border bg-piu-dark hover:text-gray-200"
+                            onClick={() => setShoeDeleteConfirmId(null)}
+                            disabled={shoeCatalogSaving}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="w-full px-2 py-1 rounded text-[10px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
+                          onClick={() => setShoeDeleteConfirmId(shoe.id)}
+                          disabled={shoeCatalogSaving}
+                        >
+                          Delete...
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {shoeCatalogTotalPages > 1 && (
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded border border-piu-border bg-piu-dark text-[10px] text-gray-300 disabled:opacity-50"
+                  disabled={shoeCatalogLoading || shoeCatalogPage <= 1}
+                  onClick={() => setShoeCatalogPage((prev) => Math.max(1, prev - 1))}
+                >
+                  Prev
+                </button>
+                <span className="text-[10px] text-gray-500">
+                  Page {shoeCatalogPage} / {shoeCatalogTotalPages}
+                </span>
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded border border-piu-border bg-piu-dark text-[10px] text-gray-300 disabled:opacity-50"
+                  disabled={shoeCatalogLoading || shoeCatalogPage >= shoeCatalogTotalPages}
+                  onClick={() => setShoeCatalogPage((prev) => Math.min(shoeCatalogTotalPages, prev + 1))}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

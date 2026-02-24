@@ -196,22 +196,38 @@ export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`)
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
 export const getSyncProgress = () => request('/piugame/sync/progress');
 export const getProfileShoes = (userId) => request(`/piugame/shoes/${userId}`);
-export const searchProfileShoeCatalog = (q = '', limit = 12) => {
+export const getShoeTopStats = (limit = 24) => request(`/piugame/shoes/stats/top?limit=${encodeURIComponent(limit)}`);
+export const getShoeUsersByModel = (shoeId) => request(`/piugame/shoes/stats/top/${encodeURIComponent(shoeId)}/users`);
+export const searchProfileShoeCatalog = (q = '', limit = 6, page = 1) => {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (limit) params.set('limit', String(limit));
+  if (page) params.set('page', String(page));
   const query = params.toString();
   return request(`/piugame/shoes/catalog${query ? `?${query}` : ''}`);
 };
+export const getAdminShoeCatalog = (params = {}) => {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', String(params.q));
+  if (params.limit) query.set('limit', String(params.limit));
+  if (params.page) query.set('page', String(params.page));
+  const qs = query.toString();
+  return request(`/piugame/shoes/catalog/admin${qs ? `?${qs}` : ''}`);
+};
+export const deleteAdminShoeCatalogEntry = (catalogId) => request(`/piugame/shoes/catalog/admin/${encodeURIComponent(catalogId)}`, { method: 'DELETE' });
 export const wearProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/wear`, { method: 'POST' });
 export const retireProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/retire`, { method: 'POST' });
 export const deleteProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}`, { method: 'DELETE' });
 
-export async function createProfileShoe({ make, model, photoFile, setCurrent = true }) {
+export async function createProfileShoe({ make, model, colorway, photoFile, setCurrent = true, catalogId = null }) {
   const formData = new FormData();
   formData.append('make', String(make || '').trim());
   formData.append('model', String(model || '').trim());
+  formData.append('colorway', String(colorway || '').trim());
   formData.append('set_current', setCurrent ? 'true' : 'false');
+  if (catalogId !== null && catalogId !== undefined && String(catalogId).trim() !== '') {
+    formData.append('catalog_id', String(catalogId));
+  }
   if (photoFile) formData.append('photo', photoFile);
 
   const token = localStorage.getItem('token');
@@ -223,6 +239,26 @@ export async function createProfileShoe({ make, model, photoFile, setCurrent = t
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || 'Failed to create shoe');
+  }
+  return res.json();
+}
+
+export async function createAdminShoeCatalogEntry({ make, model, colorway, photoFile }) {
+  const formData = new FormData();
+  formData.append('make', String(make || '').trim());
+  formData.append('model', String(model || '').trim());
+  formData.append('colorway', String(colorway || '').trim());
+  if (photoFile) formData.append('photo', photoFile);
+
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/piugame/shoes/catalog/admin`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to create shoe catalog entry');
   }
   return res.json();
 }

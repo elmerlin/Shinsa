@@ -2334,7 +2334,8 @@ export default function ProfilePage() {
             ) : (
               <>
                 {activeCabinetShoes.map((shoe) => {
-                  const shoeLabel = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                  const shoeLabel = `${shoe.make} ${shoe.model}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+                  const shoeColorway = String(shoe.colorway || '').trim();
                   return (
                     <div
                       key={shoe.id}
@@ -2356,6 +2357,9 @@ export default function ProfilePage() {
                             </span>
                           ) : null}
                         </div>
+                        {shoeColorway ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{shoeColorway}</p>
+                        ) : null}
                         <p className="text-[11px] text-gray-500 mt-1">
                           {shoe.songs_logged?.toLocaleString() || 0} songs
                           <span className="mx-1.5 text-gray-700">|</span>
@@ -2385,7 +2389,8 @@ export default function ProfilePage() {
                 )}
 
                 {retiredCabinetShoes.map((shoe) => {
-                  const shoeLabel = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                  const shoeLabel = `${shoe.make} ${shoe.model}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+                  const shoeColorway = String(shoe.colorway || '').trim();
                   return (
                     <div key={shoe.id} className="card flex items-start gap-3">
                       {shoe.image_data ? (
@@ -2402,6 +2407,9 @@ export default function ProfilePage() {
                             Retired
                           </span>
                         </div>
+                        {shoeColorway ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{shoeColorway}</p>
+                        ) : null}
                         <p className="text-[11px] text-gray-500 mt-1">
                           {shoe.songs_logged?.toLocaleString() || 0} songs
                           <span className="mx-1.5 text-gray-700">|</span>

@@ -150,6 +150,9 @@ export default function SessionSummaryCard({
           {summary.sessionMachineName ? (
             <p className="text-[11px] text-cyan-300/90 mt-0.5">Machine: {summary.sessionMachineName}</p>
           ) : null}
+          {summary.sessionShoeLabel ? (
+            <p className="text-[11px] text-emerald-300/90 mt-0.5">Shoe: {summary.sessionShoeLabel}</p>
+          ) : null}
         </div>
         {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
       </div>

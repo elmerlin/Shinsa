@@ -64,8 +64,10 @@ export default function MyAccountPage() {
   const [shoeForm, setShoeForm] = useState({
     make: '',
     model: '',
+    colorway: '',
     setCurrent: true,
     photoFile: null,
+    catalogId: null,
   });
   const [shoePhotoFiles, setShoePhotoFiles] = useState({});
   const [shoeRetireConfirmId, setShoeRetireConfirmId] = useState(null);
@@ -74,6 +76,8 @@ export default function MyAccountPage() {
   const [shoeCatalogResults, setShoeCatalogResults] = useState([]);
   const [shoeCatalogLoading, setShoeCatalogLoading] = useState(false);
   const [shoeCatalogSelectedId, setShoeCatalogSelectedId] = useState(null);
+  const [shoeCatalogPage, setShoeCatalogPage] = useState(1);
+  const [shoeCatalogTotalPages, setShoeCatalogTotalPages] = useState(0);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -102,7 +106,9 @@ export default function MyAccountPage() {
     setShoeCatalogResults([]);
     setShoeCatalogLoading(false);
     setShoeCatalogSelectedId(null);
-    setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
+    setShoeCatalogPage(1);
+    setShoeCatalogTotalPages(0);
+    setShoeForm({ make: '', model: '', colorway: '', setCurrent: true, photoFile: null, catalogId: null });
     getInvitations().then(setInvitations).catch(() => {});
     getPiugameCredentialStatus().then(r => setPiuLinked(r.linked)).catch(() => {});
   }, [user]);
@@ -129,18 +135,27 @@ export default function MyAccountPage() {
 
   useEffect(() => {
     if (!user || tab !== 'shoes') return undefined;
+    const query = String(shoeCatalogQuery || '').trim();
+    if (!query) {
+      setShoeCatalogLoading(false);
+      setShoeCatalogResults([]);
+      setShoeCatalogTotalPages(0);
+      return undefined;
+    }
 
     let cancelled = false;
     const timer = setTimeout(() => {
       setShoeCatalogLoading(true);
-      searchProfileShoeCatalog(shoeCatalogQuery, 12)
+      searchProfileShoeCatalog(query, 6, shoeCatalogPage)
         .then((data) => {
           if (cancelled) return;
           setShoeCatalogResults(Array.isArray(data?.results) ? data.results : []);
+          setShoeCatalogTotalPages(parseInt(data?.total_pages, 10) || 0);
         })
         .catch(() => {
           if (cancelled) return;
           setShoeCatalogResults([]);
+          setShoeCatalogTotalPages(0);
         })
         .finally(() => {
           if (!cancelled) setShoeCatalogLoading(false);
@@ -151,7 +166,7 @@ export default function MyAccountPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [tab, user?.id, shoeCatalogQuery]);
+  }, [tab, user?.id, shoeCatalogQuery, shoeCatalogPage]);
 
   if (!user) return null;
 
@@ -290,11 +305,15 @@ export default function MyAccountPage() {
 
   const handleSelectCatalogShoe = (catalogShoe) => {
     if (!catalogShoe) return;
-    setShoeCatalogSelectedId(catalogShoe.id);
+    setShoeCatalogSelectedId(String(catalogShoe.catalog_key || catalogShoe.id || ''));
     setShoeForm((prev) => ({
       ...prev,
       make: String(catalogShoe.make || ''),
       model: String(catalogShoe.model || ''),
+      colorway: String(catalogShoe.colorway || ''),
+      catalogId: Number.isInteger(parseInt(catalogShoe.catalog_id, 10))
+        ? parseInt(catalogShoe.catalog_id, 10)
+        : null,
     }));
   };
 
@@ -303,8 +322,9 @@ export default function MyAccountPage() {
     if (shoeBusy) return;
     const make = String(shoeForm.make || '').trim();
     const model = String(shoeForm.model || '').trim();
-    if (!make && !model) {
-      setShoeMessage('Enter a shoe make or model.');
+    const colorway = String(shoeForm.colorway || '').trim();
+    if (!make || !model) {
+      setShoeMessage('Enter both shoe make and model.');
       return;
     }
 
@@ -314,14 +334,19 @@ export default function MyAccountPage() {
       const result = await createProfileShoe({
         make,
         model,
+        colorway,
         photoFile: shoeForm.photoFile || null,
         setCurrent: !!shoeForm.setCurrent,
+        catalogId: shoeForm.catalogId,
       });
       setShoeCabinet(result?.cabinet || shoeCabinet);
-      setShoeForm({ make: '', model: '', setCurrent: true, photoFile: null });
+      setShoeForm({ make: '', model: '', colorway: '', setCurrent: true, photoFile: null, catalogId: null });
       setShoeRetireConfirmId(null);
       setShoeDeleteConfirmId(null);
       setShoeCatalogSelectedId(null);
+      setShoeCatalogQuery('');
+      setShoeCatalogPage(1);
+      setShoeCatalogTotalPages(0);
       setShoeMessage('Shoe saved.');
     } catch (err) {
       setShoeMessage(err.message || 'Failed to add shoe.');
@@ -709,56 +734,89 @@ export default function MyAccountPage() {
                   className="input-field"
                   placeholder="Search make or model..."
                   value={shoeCatalogQuery}
-                  onChange={(e) => setShoeCatalogQuery(e.target.value)}
+                  onChange={(e) => {
+                    setShoeCatalogQuery(e.target.value);
+                    setShoeCatalogPage(1);
+                  }}
                   maxLength={80}
                   disabled={shoeBusy}
                 />
-                {shoeCatalogLoading ? (
-                  <p className="text-[11px] text-gray-500">Searching shared shoe models...</p>
+                {!String(shoeCatalogQuery || '').trim() ? (
+                  <p className="text-[11px] text-gray-500">Type a make or model to search.</p>
+                ) : shoeCatalogLoading ? (
+                  <p className="text-[11px] text-gray-500">Searching matching shoes...</p>
                 ) : shoeCatalogResults.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {shoeCatalogResults.map((catalogShoe) => {
-                      const catalogLabel = `${catalogShoe.make} ${catalogShoe.model}`.trim() || 'Unnamed Shoe';
-                      const isSelected = String(shoeCatalogSelectedId || '') === String(catalogShoe.id || '');
-                      return (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {shoeCatalogResults.map((catalogShoe) => {
+                        const catalogLabel = `${catalogShoe.make} ${catalogShoe.model}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+                        const colorway = String(catalogShoe.colorway || '').trim();
+                        const itemKey = String(catalogShoe.catalog_key || catalogShoe.id || '');
+                        const isSelected = String(shoeCatalogSelectedId || '') === itemKey;
+                        return (
+                          <button
+                            key={itemKey}
+                            type="button"
+                            onClick={() => handleSelectCatalogShoe(catalogShoe)}
+                            className={`rounded-lg border p-2 text-left transition-colors ${
+                              isSelected
+                                ? 'border-piu-accent/70 bg-piu-accent/10'
+                                : 'border-piu-border/40 bg-piu-dark/40 hover:border-piu-accent/50'
+                            }`}
+                            disabled={shoeBusy}
+                          >
+                            {catalogShoe.image_data ? (
+                              <img
+                                src={catalogShoe.image_data}
+                                alt={catalogLabel}
+                                className="w-full h-16 rounded-md object-contain bg-piu-dark/60 border border-piu-border/30 p-1"
+                              />
+                            ) : (
+                              <div className="w-full h-16 rounded-md bg-piu-dark/60 border border-piu-border/30 flex items-center justify-center text-[10px] text-gray-500">
+                                No Photo
+                              </div>
+                            )}
+                            <p className="font-display font-bold text-[11px] mt-1 leading-tight line-clamp-2">{catalogLabel}</p>
+                            {colorway ? (
+                              <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{colorway}</p>
+                            ) : null}
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              Used by {(catalogShoe.usage_count || 0).toLocaleString()} players
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {shoeCatalogTotalPages > 1 && (
+                      <div className="flex items-center justify-end gap-2">
                         <button
-                          key={catalogShoe.id}
                           type="button"
-                          onClick={() => handleSelectCatalogShoe(catalogShoe)}
-                          className={`rounded-lg border p-2 text-left transition-colors ${
-                            isSelected
-                              ? 'border-piu-accent/70 bg-piu-accent/10'
-                              : 'border-piu-border/40 bg-piu-dark/40 hover:border-piu-accent/50'
-                          }`}
-                          disabled={shoeBusy}
+                          className="px-2 py-1 rounded border border-piu-border bg-piu-dark text-[10px] text-gray-300 disabled:opacity-50"
+                          disabled={shoeBusy || shoeCatalogPage <= 1}
+                          onClick={() => setShoeCatalogPage((prev) => Math.max(1, prev - 1))}
                         >
-                          {catalogShoe.image_data ? (
-                            <img
-                              src={catalogShoe.image_data}
-                              alt={catalogLabel}
-                              className="w-full h-16 rounded-md object-contain bg-piu-dark/60 border border-piu-border/30 p-1"
-                            />
-                          ) : (
-                            <div className="w-full h-16 rounded-md bg-piu-dark/60 border border-piu-border/30 flex items-center justify-center text-[10px] text-gray-500">
-                              No Photo
-                            </div>
-                          )}
-                          <p className="font-display font-bold text-[11px] mt-1 leading-tight line-clamp-2">{catalogLabel}</p>
-                          <p className="text-[10px] text-gray-500 mt-0.5">
-                            Used by {(catalogShoe.usage_count || 0).toLocaleString()} players
-                          </p>
+                          Prev
                         </button>
-                      );
-                    })}
-                  </div>
+                        <span className="text-[10px] text-gray-500">
+                          Page {shoeCatalogPage} / {shoeCatalogTotalPages}
+                        </span>
+                        <button
+                          type="button"
+                          className="px-2 py-1 rounded border border-piu-border bg-piu-dark text-[10px] text-gray-300 disabled:opacity-50"
+                          disabled={shoeBusy || shoeCatalogPage >= shoeCatalogTotalPages}
+                          onClick={() => setShoeCatalogPage((prev) => Math.min(shoeCatalogTotalPages, prev + 1))}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <p className="text-[11px] text-gray-500">
-                    {shoeCatalogQuery ? 'No matching models found.' : 'Popular community models will appear here.'}
-                  </p>
+                  <p className="text-[11px] text-gray-500">No matching shoes found.</p>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Make</label>
                   <input
@@ -769,7 +827,7 @@ export default function MyAccountPage() {
                     value={shoeForm.make}
                     onChange={(e) => {
                       setShoeCatalogSelectedId(null);
-                      setShoeForm((prev) => ({ ...prev, make: e.target.value }));
+                      setShoeForm((prev) => ({ ...prev, make: e.target.value, catalogId: null }));
                     }}
                     disabled={shoeBusy}
                   />
@@ -784,7 +842,22 @@ export default function MyAccountPage() {
                     value={shoeForm.model}
                     onChange={(e) => {
                       setShoeCatalogSelectedId(null);
-                      setShoeForm((prev) => ({ ...prev, model: e.target.value }));
+                      setShoeForm((prev) => ({ ...prev, model: e.target.value, catalogId: null }));
+                    }}
+                    disabled={shoeBusy}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Colorway</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="e.g. Black / White"
+                    maxLength={120}
+                    value={shoeForm.colorway}
+                    onChange={(e) => {
+                      setShoeCatalogSelectedId(null);
+                      setShoeForm((prev) => ({ ...prev, colorway: e.target.value, catalogId: null }));
                     }}
                     disabled={shoeBusy}
                   />
@@ -837,7 +910,8 @@ export default function MyAccountPage() {
             ) : (
               <>
                 {activeCabinetShoes.map((shoe) => {
-                  const label = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                  const label = `${shoe.make} ${shoe.model}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+                  const colorway = String(shoe.colorway || '').trim();
                   const pendingFile = shoePhotoFiles[shoe.id] || null;
                   return (
                     <div key={shoe.id} className={`card space-y-3 ${shoe.is_current ? 'bg-emerald-500/10 border-emerald-400/50' : ''}`}>
@@ -858,6 +932,9 @@ export default function MyAccountPage() {
                               </span>
                             ) : null}
                           </div>
+                          {colorway ? (
+                            <p className="text-[10px] text-gray-400 mt-0.5">{colorway}</p>
+                          ) : null}
                           <p className="text-[11px] text-gray-500 mt-1">
                             {(shoe.songs_logged || 0).toLocaleString()} songs
                             <span className="mx-1.5 text-gray-700">|</span>
@@ -967,7 +1044,8 @@ export default function MyAccountPage() {
                 )}
 
                 {retiredCabinetShoes.map((shoe) => {
-                  const label = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                  const label = `${shoe.make} ${shoe.model}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+                  const colorway = String(shoe.colorway || '').trim();
                   const pendingFile = shoePhotoFiles[shoe.id] || null;
                   return (
                     <div key={shoe.id} className="card space-y-3">
@@ -986,6 +1064,9 @@ export default function MyAccountPage() {
                               Retired
                             </span>
                           </div>
+                          {colorway ? (
+                            <p className="text-[10px] text-gray-400 mt-0.5">{colorway}</p>
+                          ) : null}
                           <p className="text-[11px] text-gray-500 mt-1">
                             {(shoe.songs_logged || 0).toLocaleString()} songs
                             <span className="mx-1.5 text-gray-700">|</span>

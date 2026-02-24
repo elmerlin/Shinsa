@@ -13,6 +13,64 @@ function getDb() {
   return db;
 }
 
+function normalizeShoeText(value, max = 80) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function splitLegacyShoeModel(makeValue, modelValue) {
+  const make = normalizeShoeText(makeValue, 80);
+  const modelTextRaw = normalizeShoeText(modelValue, 80);
+  const modelText = make
+    ? normalizeShoeText(
+      modelTextRaw.replace(new RegExp(`^${escapeRegExp(make)}\\s+`, 'i'), ''),
+      80
+    )
+    : modelTextRaw;
+  if (!modelText) return { model: '', colorway: '' };
+
+  const parenMatch = modelText.match(/^(.+?)\s*\(([^()]{2,})\)\s*$/);
+  if (parenMatch) {
+    return {
+      model: normalizeShoeText(parenMatch[1], 80),
+      colorway: normalizeShoeText(parenMatch[2], 80),
+    };
+  }
+
+  for (const separator of [' - ', ' | ', ' / ', ' — ', ' – ']) {
+    const idx = modelText.indexOf(separator);
+    if (idx <= 0) continue;
+    const left = normalizeShoeText(modelText.slice(0, idx), 80);
+    const right = normalizeShoeText(modelText.slice(idx + separator.length), 80);
+    if (left && right) return { model: left, colorway: right };
+  }
+
+  const knownByMake = [
+    {
+      makeRegex: /^nike$/i,
+      models: ['Free RN 2018', 'Free Run 5.0'],
+    },
+  ];
+  const makeNormalized = make.toLowerCase();
+  for (const group of knownByMake) {
+    if (!group.makeRegex.test(makeNormalized)) continue;
+    for (const canonicalModel of group.models) {
+      const re = new RegExp(`^${escapeRegExp(canonicalModel)}\\s+(.+)$`, 'i');
+      const match = modelText.match(re);
+      if (!match) continue;
+      const colorway = normalizeShoeText(match[1], 80);
+      if (colorway) {
+        return { model: canonicalModel, colorway };
+      }
+    }
+  }
+
+  return { model: modelText, colorway: '' };
+}
+
 function chartModeLevelFromJson(chart) {
   if (!chart || typeof chart !== 'object') return null;
   const diffClass = String(chart.diffClass || '').trim().toUpperCase();
@@ -713,6 +771,7 @@ function initializeDb() {
       score INTEGER NOT NULL,
       grade TEXT DEFAULT '',
       plate TEXT DEFAULT '',
+      shoe_id INTEGER REFERENCES user_shoes(id) ON DELETE SET NULL,
       UNIQUE(user_id, song_title, mode, level)
     );
 
@@ -721,9 +780,21 @@ function initializeDb() {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       make TEXT NOT NULL DEFAULT '',
       model TEXT NOT NULL DEFAULT '',
+      colorway TEXT NOT NULL DEFAULT '',
       image_data TEXT DEFAULT '',
       is_current INTEGER DEFAULT 0,
       retired_at TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS shoe_catalog (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      make TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      colorway TEXT NOT NULL DEFAULT '',
+      image_data TEXT DEFAULT '',
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -865,7 +936,9 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_user_shoes_user ON user_shoes(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_shoes_make_model ON user_shoes(make, model);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_user_shoes_single_active ON user_shoes(user_id) WHERE is_current = 1;
+    CREATE INDEX IF NOT EXISTS idx_shoe_catalog_make_model ON shoe_catalog(make, model);
     CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON user_notifications(user_id);
     CREATE INDEX IF NOT EXISTS idx_activity_notif_subscriber ON user_activity_notification_subscriptions(subscriber_user_id);
@@ -1003,10 +1076,126 @@ function initializeDb() {
     db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_shoe ON user_recently_played(shoe_id)');
   }
 
+  // Migrations for user_shoes - add colorway and lookup index
+  const userShoeCols = db.prepare("PRAGMA table_info(user_shoes)").all().map(c => c.name);
+  if (!userShoeCols.includes('colorway')) {
+    db.exec("ALTER TABLE user_shoes ADD COLUMN colorway TEXT DEFAULT ''");
+  }
+  const userShoeIndexes = db.prepare("PRAGMA index_list(user_shoes)").all().map(i => i.name);
+  if (!userShoeIndexes.includes('idx_user_shoes_make_model')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_shoes_make_model ON user_shoes(make, model)');
+  }
+
+  // Migrations for shoe catalog
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shoe_catalog (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      make TEXT NOT NULL DEFAULT '',
+      model TEXT NOT NULL DEFAULT '',
+      colorway TEXT NOT NULL DEFAULT '',
+      image_data TEXT DEFAULT '',
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+  const shoeCatalogCols = db.prepare("PRAGMA table_info(shoe_catalog)").all().map(c => c.name);
+  const shoeCatalogMigrations = [
+    ['colorway', "TEXT DEFAULT ''"],
+    ['image_data', "TEXT DEFAULT ''"],
+    ['created_by', "TEXT DEFAULT NULL"],
+    ['created_at', "TEXT DEFAULT ''"],
+    ['updated_at', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of shoeCatalogMigrations) {
+    if (!shoeCatalogCols.includes(col)) {
+      db.exec(`ALTER TABLE shoe_catalog ADD COLUMN ${col} ${type}`);
+    }
+  }
+  const shoeCatalogIndexes = db.prepare("PRAGMA index_list(shoe_catalog)").all().map(i => i.name);
+  if (!shoeCatalogIndexes.includes('idx_shoe_catalog_make_model')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_shoe_catalog_make_model ON shoe_catalog(make, model)');
+  }
+
+  // Backfill legacy shoes where colorway was previously included inside model text.
+  const legacyShoes = db.prepare(`
+    SELECT id, make, model, colorway
+    FROM user_shoes
+    WHERE TRIM(COALESCE(model, '')) != ''
+      AND TRIM(COALESCE(colorway, '')) = ''
+  `).all();
+  if (legacyShoes.length > 0) {
+    const updateLegacyShoe = db.prepare(`
+      UPDATE user_shoes
+      SET model = ?, colorway = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `);
+    const migrateLegacyShoes = db.transaction((rows) => {
+      let updatedCount = 0;
+      for (const row of rows) {
+        const split = splitLegacyShoeModel(row.make, row.model);
+        const nextModel = normalizeShoeText(split.model || row.model, 80);
+        const nextColorway = normalizeShoeText(split.colorway || '', 120);
+        if (!nextModel) continue;
+        const sameModel = normalizeShoeText(row.model, 80) === nextModel;
+        const sameColorway = normalizeShoeText(row.colorway, 80) === nextColorway;
+        if (sameModel && sameColorway) continue;
+        updateLegacyShoe.run(nextModel, nextColorway, row.id);
+        updatedCount++;
+      }
+      return updatedCount;
+    });
+    const updatedCount = migrateLegacyShoes(legacyShoes);
+    if (updatedCount > 0) {
+      console.log(`Migrated ${updatedCount} legacy user_shoes rows to model+colorway format`);
+    }
+  }
+
+  // Backfill legacy catalog rows where colorway was previously included inside model text.
+  const legacyCatalogRows = db.prepare(`
+    SELECT id, make, model, colorway
+    FROM shoe_catalog
+    WHERE TRIM(COALESCE(model, '')) != ''
+      AND TRIM(COALESCE(colorway, '')) = ''
+  `).all();
+  if (legacyCatalogRows.length > 0) {
+    const updateLegacyCatalogRow = db.prepare(`
+      UPDATE shoe_catalog
+      SET model = ?, colorway = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `);
+    const migrateLegacyCatalogRows = db.transaction((rows) => {
+      let updatedCount = 0;
+      for (const row of rows) {
+        const split = splitLegacyShoeModel(row.make, row.model);
+        const nextModel = normalizeShoeText(split.model || row.model, 80);
+        const nextColorway = normalizeShoeText(split.colorway || '', 120);
+        if (!nextModel) continue;
+        const sameModel = normalizeShoeText(row.model, 80) === nextModel;
+        const sameColorway = normalizeShoeText(row.colorway, 80) === nextColorway;
+        if (sameModel && sameColorway) continue;
+        updateLegacyCatalogRow.run(nextModel, nextColorway, row.id);
+        updatedCount++;
+      }
+      return updatedCount;
+    });
+    const updatedCount = migrateLegacyCatalogRows(legacyCatalogRows);
+    if (updatedCount > 0) {
+      console.log(`Migrated ${updatedCount} legacy shoe_catalog rows to model+colorway format`);
+    }
+  }
+
   // Migrations for best scores - add background_url
   const bestScoreCols = db.prepare("PRAGMA table_info(user_best_scores)").all().map(c => c.name);
   if (!bestScoreCols.includes('background_url')) {
     db.exec("ALTER TABLE user_best_scores ADD COLUMN background_url TEXT DEFAULT ''");
+  }
+  if (!bestScoreCols.includes('shoe_id')) {
+    db.exec("ALTER TABLE user_best_scores ADD COLUMN shoe_id INTEGER DEFAULT NULL");
+  }
+  const bestScoreIndexes = db.prepare("PRAGMA index_list(user_best_scores)").all().map(i => i.name);
+  if (!bestScoreIndexes.includes('idx_best_scores_shoe')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_best_scores_shoe ON user_best_scores(shoe_id)');
   }
 
   // Migrations for user_posts - add youtube_url and comments_disabled

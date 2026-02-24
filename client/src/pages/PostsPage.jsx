@@ -274,6 +274,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
   let levelTotal = 0;
   let totalSteps = 0;
   let judgedSongCount = 0;
+  const shoeCounts = new Map();
 
   const judgmentTotals = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
 
@@ -309,6 +310,18 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     judgmentTotals.good += good;
     judgmentTotals.bad += bad;
     judgmentTotals.miss += miss;
+
+    const make = String(play?.shoe_make || '').trim();
+    const model = String(play?.shoe_model || '').trim();
+    const colorway = String(play?.shoe_colorway || '').trim();
+    const normalizedLabel = `${make} ${model}`.replace(/\s+/g, ' ').trim();
+    const fallbackLabel = play?.shoe_id ? `Shoe #${parseInt(play.shoe_id, 10) || play.shoe_id}` : '';
+    const shoeLabel = normalizedLabel
+      ? (colorway ? `${normalizedLabel} (${colorway})` : normalizedLabel)
+      : fallbackLabel;
+    if (shoeLabel) {
+      shoeCounts.set(shoeLabel, (shoeCounts.get(shoeLabel) || 0) + 1);
+    }
   }
 
   const songCount = enrichedRows.length;
@@ -346,6 +359,11 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
   const sessionMachineName = enrichedRows
     .map((play) => String(play?.machine_name || '').trim())
     .find(Boolean) || '';
+  const topShoe = [...shoeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])[0] || null;
+  const sessionShoeLabel = topShoe
+    ? (shoeCounts.size > 1 ? `${topShoe[0]} (+${shoeCounts.size - 1} more)` : topShoe[0])
+    : '';
 
   const modeTotal = Math.max(1, singleCount + doubleCount + otherCount);
   const singlePct = Math.round((singleCount / modeTotal) * 100);
@@ -359,6 +377,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     '📊 **Session Summary**',
     `🗓️ ${sessionDateLabel}${sessionTimeRange ? ` • ${sessionTimeRange}` : ''}${sessionDurationLabel ? ` • ${sessionDurationLabel}` : ''}`,
     sessionMachineName ? `🕹️ Machine: **${sessionMachineName}**` : '',
+    sessionShoeLabel ? `👟 Shoe: **${sessionShoeLabel}**` : '',
     `🎵 **${songCount} songs** | 🏁 Clears: **${clearCount}/${songCount}** (${clearRate}%)`,
     `🦶 Judged steps: **${totalSteps.toLocaleString()}**${judgmentCoverageLabel}`,
     `🔥 Estimated calories: **~${estimatedKcal.toLocaleString()} kcal**`,
@@ -407,6 +426,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     sessionDurationMinutes,
     sessionDurationLabel,
     sessionMachineName,
+    sessionShoeLabel,
     postText: postLines.join('\n'),
   };
 }

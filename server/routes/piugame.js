@@ -12,6 +12,18 @@ const { getUserTitleProgress, updateUserSkillTitleFromBestScores } = require('..
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
+const ADMIN_USERNAMES = new Set(
+  String(process.env.ADMIN_USERNAMES || 'elmer')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+);
+const ADMIN_USER_IDS = new Set(
+  String(process.env.ADMIN_USER_IDS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 const SHOE_UPLOAD = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 6 * 1024 * 1024 },
@@ -31,6 +43,18 @@ function parseBoolean(value) {
 
 function normalizeShoeText(value, max = 80) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function normalizeShoeColorway(value, max = 120) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function buildShoeCatalogKey(make, model, colorway) {
+  return [
+    normalizeShoeText(make, 80).toLowerCase(),
+    normalizeShoeText(model, 80).toLowerCase(),
+    normalizeShoeColorway(colorway, 120).toLowerCase(),
+  ].join('|');
 }
 
 async function encodeShoeImage(file) {
@@ -59,7 +83,7 @@ async function encodeShoeImage(file) {
 
 function getShoeCabinet(db, userId) {
   const shoes = db.prepare(`
-    SELECT id, user_id, make, model, image_data, is_current, retired_at, created_at, updated_at
+    SELECT id, user_id, make, model, colorway, image_data, is_current, retired_at, created_at, updated_at
     FROM user_shoes
     WHERE user_id = ?
     ORDER BY
@@ -135,6 +159,21 @@ function requireAuth(req, res, next) {
   } catch (e) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+function isAdminUser(user) {
+  if (!user) return false;
+  if (user.id && ADMIN_USER_IDS.has(String(user.id).trim())) return true;
+  const username = String(user.username || '').trim().toLowerCase();
+  if (!username) return false;
+  return ADMIN_USERNAMES.has(username);
+}
+
+function requireAdmin(req, res, next) {
+  if (!isAdminUser(req.user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 }
 
 // Encrypt/decrypt helpers using AES-256-GCM
@@ -421,20 +460,21 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       });
 
       const insertOrUpdate = db.prepare(`
-        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, background_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, background_url, shoe_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
           score = MAX(excluded.score, user_best_scores.score),
           grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
           plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END,
-          background_url = CASE WHEN excluded.background_url != '' THEN excluded.background_url ELSE user_best_scores.background_url END
+          background_url = CASE WHEN excluded.background_url != '' THEN excluded.background_url ELSE user_best_scores.background_url END,
+          shoe_id = CASE WHEN excluded.score > user_best_scores.score THEN excluded.shoe_id ELSE user_best_scores.shoe_id END
       `);
 
       // Capture old scores for upscore tracking before replacing
       const oldScores = {};
-      const existingScores = db.prepare('SELECT song_title, mode, level, score, grade FROM user_best_scores WHERE user_id = ?').all(userId);
+      const existingScores = db.prepare('SELECT song_title, mode, level, score, grade, shoe_id FROM user_best_scores WHERE user_id = ?').all(userId);
       for (const s of existingScores) {
-        oldScores[`${s.song_title}|${s.mode}|${s.level}`] = { score: s.score, grade: s.grade };
+        oldScores[`${s.song_title}|${s.mode}|${s.level}`] = { score: s.score, grade: s.grade, shoe_id: s.shoe_id ? parseInt(s.shoe_id, 10) : null };
       }
 
       let upscores = [];
@@ -445,7 +485,10 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       const txn = db.transaction(() => {
         db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(userId);
         for (const s of scores) {
-          insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate, s.background_url || '');
+          const key = `${s.song_title}|${s.mode}|${s.level}`;
+          const old = oldScores[key];
+          const preservedShoeId = old && old.score === s.score ? old.shoe_id : null;
+          insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate, s.background_url || '', preservedShoeId);
         }
 
         // Track upscores and new clears
@@ -559,15 +602,343 @@ router.get('/sync/progress', requireAuth, (req, res) => {
 
 // ─── Shoe Cabinet ───────────────────────────────────────
 
-// GET /api/piugame/shoes/catalog?q=...&limit=...
+// GET /api/piugame/shoes/catalog/admin?q=...&limit=...&page=...
+router.get('/shoes/catalog/admin', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const q = normalizeShoeText(req.query?.q, 120).toLowerCase();
+  const parsedLimit = parseInt(req.query?.limit, 10);
+  const parsedPage = parseInt(req.query?.page, 10);
+  const limit = Number.isInteger(parsedLimit)
+    ? Math.min(Math.max(parsedLimit, 1), 50)
+    : 12;
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const offset = (page - 1) * limit;
+  const like = q ? `%${q}%` : '';
+
+  const rows = db.prepare(`
+    SELECT
+      id,
+      make,
+      model,
+      colorway,
+      image_data,
+      created_by,
+      created_at,
+      updated_at
+    FROM shoe_catalog
+    WHERE
+      ? = ''
+      OR LOWER(TRIM(COALESCE(make, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(model, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(colorway, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(make, '') || ' ' || COALESCE(model, '') || ' ' || COALESCE(colorway, ''))) LIKE ?
+    ORDER BY COALESCE(updated_at, created_at, datetime('now')) DESC, id DESC
+    LIMIT ? OFFSET ?
+  `).all(q, like, like, like, like, limit, offset);
+
+  const totalRow = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM shoe_catalog
+    WHERE
+      ? = ''
+      OR LOWER(TRIM(COALESCE(make, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(model, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(colorway, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(make, '') || ' ' || COALESCE(model, '') || ' ' || COALESCE(colorway, ''))) LIKE ?
+  `).get(q, like, like, like, like) || { total: 0 };
+
+  const total = parseInt(totalRow.total, 10) || 0;
+  const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+  res.json({
+    q,
+    page,
+    limit,
+    total,
+    total_pages: totalPages,
+    results: rows.map((row) => ({
+      id: parseInt(row.id, 10),
+      make: row.make || '',
+      model: row.model || '',
+      colorway: row.colorway || '',
+      image_data: row.image_data || '',
+      created_by: row.created_by || '',
+      created_at: row.created_at || '',
+      updated_at: row.updated_at || '',
+    })),
+  });
+});
+
+// POST /api/piugame/shoes/catalog/admin
+router.post('/shoes/catalog/admin', requireAuth, requireAdmin, SHOE_UPLOAD.single('photo'), async (req, res) => {
+  try {
+    const db = getDb();
+    const make = normalizeShoeText(req.body?.make, 80);
+    const model = normalizeShoeText(req.body?.model, 80);
+    const colorway = normalizeShoeColorway(req.body?.colorway, 120);
+    if (!make || !model) {
+      return res.status(400).json({ error: 'Shoe make and model are required' });
+    }
+    const imageData = await encodeShoeImage(req.file);
+
+    const existing = db.prepare(`
+      SELECT id
+      FROM shoe_catalog
+      WHERE LOWER(TRIM(COALESCE(make, ''))) = ?
+        AND LOWER(TRIM(COALESCE(model, ''))) = ?
+        AND LOWER(TRIM(COALESCE(colorway, ''))) = ?
+      LIMIT 1
+    `).get(make.toLowerCase(), model.toLowerCase(), colorway.toLowerCase());
+
+    let catalogId = null;
+    if (existing) {
+      db.prepare(`
+        UPDATE shoe_catalog
+        SET
+          make = ?,
+          model = ?,
+          colorway = ?,
+          image_data = CASE WHEN ? != '' THEN ? ELSE image_data END,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).run(make, model, colorway, imageData, imageData, existing.id);
+      catalogId = parseInt(existing.id, 10);
+    } else {
+      const insert = db.prepare(`
+        INSERT INTO shoe_catalog (make, model, colorway, image_data, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `).run(make, model, colorway, imageData, req.user.id);
+      catalogId = parseInt(insert.lastInsertRowid, 10);
+    }
+
+    const entry = db.prepare(`
+      SELECT id, make, model, colorway, image_data, created_by, created_at, updated_at
+      FROM shoe_catalog
+      WHERE id = ?
+    `).get(catalogId);
+    res.status(existing ? 200 : 201).json({
+      entry: {
+        id: parseInt(entry?.id, 10) || catalogId,
+        make: entry?.make || '',
+        model: entry?.model || '',
+        colorway: entry?.colorway || '',
+        image_data: entry?.image_data || '',
+        created_by: entry?.created_by || '',
+        created_at: entry?.created_at || '',
+        updated_at: entry?.updated_at || '',
+      },
+      updated: !!existing,
+    });
+  } catch (err) {
+    console.error('Create admin shoe catalog entry error:', err.message);
+    res.status(500).json({ error: 'Failed to save shoe catalog entry' });
+  }
+});
+
+// DELETE /api/piugame/shoes/catalog/admin/:catalogId
+router.delete('/shoes/catalog/admin/:catalogId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const catalogId = parseInt(req.params.catalogId, 10);
+  if (!Number.isInteger(catalogId) || catalogId <= 0) {
+    return res.status(400).json({ error: 'Invalid catalog entry ID' });
+  }
+  const existing = db.prepare('SELECT id FROM shoe_catalog WHERE id = ?').get(catalogId);
+  if (!existing) return res.status(404).json({ error: 'Catalog entry not found' });
+  db.prepare('DELETE FROM shoe_catalog WHERE id = ?').run(catalogId);
+  res.json({ success: true });
+});
+
+// GET /api/piugame/shoes/catalog?q=...&limit=...&page=...
 router.get('/shoes/catalog', requireAuth, (req, res) => {
   const db = getDb();
-  const q = normalizeShoeText(req.query?.q, 80).toLowerCase();
+  const q = normalizeShoeText(req.query?.q, 120).toLowerCase();
+  const parsedLimit = parseInt(req.query?.limit, 10);
+  const parsedPage = parseInt(req.query?.page, 10);
+  const limit = Number.isInteger(parsedLimit)
+    ? Math.min(Math.max(parsedLimit, 1), 6)
+    : 6;
+  const page = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const offset = (page - 1) * limit;
+  if (!q) {
+    return res.json({
+      q: '',
+      page,
+      limit,
+      total: 0,
+      total_pages: 0,
+      results: [],
+    });
+  }
+  const like = `%${q}%`;
+
+  const rows = db.prepare(`
+    WITH catalog AS (
+      SELECT
+        printf('catalog:%d', c.id) AS id,
+        c.id AS catalog_id,
+        TRIM(COALESCE(c.make, '')) AS make,
+        TRIM(COALESCE(c.model, '')) AS model,
+        TRIM(COALESCE(c.colorway, '')) AS colorway,
+        COALESCE(c.image_data, '') AS image_data,
+        1 AS curated,
+        0 AS usage_count,
+        COALESCE(c.updated_at, c.created_at, datetime('now')) AS sort_time
+      FROM shoe_catalog c
+      WHERE
+        (TRIM(COALESCE(c.make, '')) != '' OR TRIM(COALESCE(c.model, '')) != '')
+        AND (
+          LOWER(TRIM(COALESCE(c.make, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(c.model, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(c.colorway, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(c.make, '') || ' ' || COALESCE(c.model, '') || ' ' || COALESCE(c.colorway, ''))) LIKE ?
+        )
+    ),
+    community_grouped AS (
+      SELECT
+        LOWER(TRIM(COALESCE(s.make, ''))) AS make_key,
+        LOWER(TRIM(COALESCE(s.model, ''))) AS model_key,
+        LOWER(TRIM(COALESCE(s.colorway, ''))) AS colorway_key,
+        MAX(TRIM(COALESCE(s.make, ''))) AS make,
+        MAX(TRIM(COALESCE(s.model, ''))) AS model,
+        MAX(TRIM(COALESCE(s.colorway, ''))) AS colorway,
+        COUNT(DISTINCT s.user_id) AS usage_count,
+        MAX(COALESCE(s.updated_at, s.created_at, datetime('now'))) AS sort_time,
+        COALESCE(
+          (
+            SELECT s2.id
+            FROM user_shoes s2
+            WHERE LOWER(TRIM(COALESCE(s2.make, ''))) = LOWER(TRIM(COALESCE(s.make, '')))
+              AND LOWER(TRIM(COALESCE(s2.model, ''))) = LOWER(TRIM(COALESCE(s.model, '')))
+              AND LOWER(TRIM(COALESCE(s2.colorway, ''))) = LOWER(TRIM(COALESCE(s.colorway, '')))
+              AND TRIM(COALESCE(s2.image_data, '')) != ''
+            ORDER BY COALESCE(s2.updated_at, s2.created_at) DESC, s2.id DESC
+            LIMIT 1
+          ),
+          (
+            SELECT s2.id
+            FROM user_shoes s2
+            WHERE LOWER(TRIM(COALESCE(s2.make, ''))) = LOWER(TRIM(COALESCE(s.make, '')))
+              AND LOWER(TRIM(COALESCE(s2.model, ''))) = LOWER(TRIM(COALESCE(s.model, '')))
+              AND LOWER(TRIM(COALESCE(s2.colorway, ''))) = LOWER(TRIM(COALESCE(s.colorway, '')))
+            ORDER BY COALESCE(s2.updated_at, s2.created_at) DESC, s2.id DESC
+            LIMIT 1
+          )
+        ) AS sample_shoe_id
+      FROM user_shoes s
+      WHERE
+        (TRIM(COALESCE(s.make, '')) != '' OR TRIM(COALESCE(s.model, '')) != '')
+        AND (
+          LOWER(TRIM(COALESCE(s.make, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(s.model, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(s.colorway, ''))) LIKE ?
+          OR LOWER(TRIM(COALESCE(s.make, '') || ' ' || COALESCE(s.model, '') || ' ' || COALESCE(s.colorway, ''))) LIKE ?
+        )
+      GROUP BY make_key, model_key, colorway_key
+    ),
+    community AS (
+      SELECT
+        printf('user:%d', cg.sample_shoe_id) AS id,
+        NULL AS catalog_id,
+        cg.make,
+        cg.model,
+        cg.colorway,
+        COALESCE((SELECT image_data FROM user_shoes WHERE id = cg.sample_shoe_id), '') AS image_data,
+        0 AS curated,
+        cg.usage_count AS usage_count,
+        cg.sort_time AS sort_time
+      FROM community_grouped cg
+    ),
+    combined AS (
+      SELECT * FROM catalog
+      UNION ALL
+      SELECT * FROM community
+    ),
+    dedup AS (
+      SELECT
+        LOWER(TRIM(COALESCE(make, ''))) AS make_key,
+        LOWER(TRIM(COALESCE(model, ''))) AS model_key,
+        LOWER(TRIM(COALESCE(colorway, ''))) AS colorway_key,
+        MAX(make) AS make,
+        MAX(model) AS model,
+        MAX(colorway) AS colorway,
+        MAX(catalog_id) AS catalog_id,
+        MAX(curated) AS curated,
+        MAX(usage_count) AS usage_count,
+        MAX(sort_time) AS sort_time,
+        MAX(CASE WHEN curated = 1 THEN id ELSE '' END) AS curated_id,
+        MAX(CASE WHEN curated = 0 THEN id ELSE '' END) AS community_id,
+        MAX(CASE WHEN curated = 1 AND TRIM(COALESCE(image_data, '')) != '' THEN image_data ELSE '' END) AS curated_image_data,
+        MAX(CASE WHEN TRIM(COALESCE(image_data, '')) != '' THEN image_data ELSE '' END) AS any_image_data
+      FROM combined
+      GROUP BY make_key, model_key, colorway_key
+    ),
+    ranked AS (
+      SELECT
+        CASE
+          WHEN curated_id != '' THEN curated_id
+          ELSE community_id
+        END AS id,
+        catalog_id,
+        make,
+        model,
+        colorway,
+        CASE
+          WHEN TRIM(COALESCE(curated_image_data, '')) != '' THEN curated_image_data
+          ELSE COALESCE(any_image_data, '')
+        END AS image_data,
+        curated,
+        usage_count,
+        sort_time
+      FROM dedup
+    )
+    SELECT
+      id,
+      catalog_id,
+      make,
+      model,
+      colorway,
+      image_data,
+      curated,
+      usage_count,
+      COUNT(*) OVER() AS total_count
+    FROM ranked
+    ORDER BY curated DESC, usage_count DESC, sort_time DESC, model ASC, colorway ASC, make ASC
+    LIMIT ? OFFSET ?
+  `).all(
+    like, like, like, like,
+    like, like, like, like,
+    limit, offset
+  );
+
+  const total = rows.length > 0 ? (parseInt(rows[0].total_count, 10) || 0) : 0;
+  const totalPages = total > 0 ? Math.ceil(total / limit) : 0;
+
+  res.json({
+    q,
+    page,
+    limit,
+    total,
+    total_pages: totalPages,
+    results: rows.map((row) => ({
+      id: row.id || '',
+      catalog_id: Number.isInteger(parseInt(row.catalog_id, 10)) ? parseInt(row.catalog_id, 10) : null,
+      make: row.make || '',
+      model: row.model || '',
+      colorway: row.colorway || '',
+      usage_count: parseInt(row.usage_count, 10) || 0,
+      curated: !!row.curated,
+      image_data: row.image_data || '',
+      catalog_key: buildShoeCatalogKey(row.make, row.model, row.colorway),
+    })),
+  });
+});
+
+// GET /api/piugame/shoes/stats/top?limit=...
+router.get('/shoes/stats/top', requireAuth, (req, res) => {
+  const db = getDb();
   const parsedLimit = parseInt(req.query?.limit, 10);
   const limit = Number.isInteger(parsedLimit)
-    ? Math.min(Math.max(parsedLimit, 1), 24)
-    : 12;
-  const like = q ? `%${q}%` : '';
+    ? Math.min(Math.max(parsedLimit, 1), 60)
+    : 24;
 
   const rows = db.prepare(`
     WITH grouped AS (
@@ -576,17 +947,12 @@ router.get('/shoes/catalog', requireAuth, (req, res) => {
         LOWER(TRIM(COALESCE(model, ''))) AS model_key,
         MAX(TRIM(COALESCE(make, ''))) AS make,
         MAX(TRIM(COALESCE(model, ''))) AS model,
-        COUNT(*) AS usage_count,
+        COUNT(*) AS shoe_entries,
+        COUNT(DISTINCT user_id) AS player_count,
+        COUNT(DISTINCT NULLIF(LOWER(TRIM(COALESCE(colorway, ''))), '')) AS colorway_count,
         MAX(COALESCE(updated_at, created_at, datetime('now'))) AS last_used_at
       FROM user_shoes
-      WHERE
-        (TRIM(COALESCE(make, '')) != '' OR TRIM(COALESCE(model, '')) != '')
-        AND (
-          ? = ''
-          OR LOWER(TRIM(COALESCE(make, ''))) LIKE ?
-          OR LOWER(TRIM(COALESCE(model, ''))) LIKE ?
-          OR LOWER(TRIM(COALESCE(make, '') || ' ' || COALESCE(model, ''))) LIKE ?
-        )
+      WHERE TRIM(COALESCE(make, '')) != '' OR TRIM(COALESCE(model, '')) != ''
       GROUP BY make_key, model_key
     ),
     picked AS (
@@ -617,20 +983,177 @@ router.get('/shoes/catalog', requireAuth, (req, res) => {
       p.sample_shoe_id AS id,
       p.make,
       p.model,
-      p.usage_count,
+      p.shoe_entries,
+      p.player_count,
+      p.colorway_count,
       COALESCE((SELECT image_data FROM user_shoes WHERE id = p.sample_shoe_id), '') AS image_data
     FROM picked p
-    ORDER BY p.usage_count DESC, p.last_used_at DESC, p.model ASC, p.make ASC
+    ORDER BY p.player_count DESC, p.shoe_entries DESC, p.last_used_at DESC, p.model ASC, p.make ASC
     LIMIT ?
-  `).all(q, like, like, like, limit);
+  `).all(limit);
+
+  const totals = db.prepare(`
+    SELECT
+      COUNT(*) AS total_shoe_entries,
+      COUNT(DISTINCT user_id) AS players_with_shoes
+    FROM user_shoes
+    WHERE TRIM(COALESCE(make, '')) != '' OR TRIM(COALESCE(model, '')) != ''
+  `).get() || { total_shoe_entries: 0, players_with_shoes: 0 };
+
+  const totalModels = db.prepare(`
+    SELECT COUNT(*) AS total_models
+    FROM (
+      SELECT
+        LOWER(TRIM(COALESCE(make, ''))) AS make_key,
+        LOWER(TRIM(COALESCE(model, ''))) AS model_key
+      FROM user_shoes
+      WHERE TRIM(COALESCE(make, '')) != '' OR TRIM(COALESCE(model, '')) != ''
+      GROUP BY make_key, model_key
+    ) m
+  `).get() || { total_models: 0 };
 
   res.json({
+    summary: {
+      total_models: parseInt(totalModels.total_models, 10) || 0,
+      players_with_shoes: parseInt(totals.players_with_shoes, 10) || 0,
+      total_shoe_entries: parseInt(totals.total_shoe_entries, 10) || 0,
+    },
     results: rows.map((row) => ({
       id: parseInt(row.id, 10),
       make: row.make || '',
       model: row.model || '',
-      usage_count: parseInt(row.usage_count, 10) || 0,
+      player_count: parseInt(row.player_count, 10) || 0,
+      shoe_entries: parseInt(row.shoe_entries, 10) || 0,
+      colorway_count: parseInt(row.colorway_count, 10) || 0,
       image_data: row.image_data || '',
+    })),
+  });
+});
+
+// GET /api/piugame/shoes/stats/top/:shoeId/users
+router.get('/shoes/stats/top/:shoeId/users', requireAuth, (req, res) => {
+  const db = getDb();
+  const shoeId = parseInt(req.params.shoeId, 10);
+  if (!Number.isInteger(shoeId) || shoeId <= 0) {
+    return res.status(400).json({ error: 'Invalid shoe ID' });
+  }
+
+  const target = db.prepare(`
+    SELECT
+      LOWER(TRIM(COALESCE(make, ''))) AS make_key,
+      LOWER(TRIM(COALESCE(model, ''))) AS model_key
+    FROM user_shoes
+    WHERE id = ?
+  `).get(shoeId);
+  if (!target) return res.status(404).json({ error: 'Shoe model not found' });
+
+  const makeKey = target.make_key || '';
+  const modelKey = target.model_key || '';
+  if (!makeKey && !modelKey) {
+    return res.json({
+      shoe: {
+        id: shoeId,
+        make: '',
+        model: '',
+        player_count: 0,
+        shoe_entries: 0,
+        image_data: '',
+      },
+      users: [],
+    });
+  }
+
+  const shoe = db.prepare(`
+    WITH grouped AS (
+      SELECT
+        MAX(TRIM(COALESCE(make, ''))) AS make,
+        MAX(TRIM(COALESCE(model, ''))) AS model,
+        COUNT(*) AS shoe_entries,
+        COUNT(DISTINCT user_id) AS player_count,
+        COUNT(DISTINCT NULLIF(LOWER(TRIM(COALESCE(colorway, ''))), '')) AS colorway_count,
+        MAX(COALESCE(updated_at, created_at, datetime('now'))) AS last_used_at
+      FROM user_shoes
+      WHERE LOWER(TRIM(COALESCE(make, ''))) = ?
+        AND LOWER(TRIM(COALESCE(model, ''))) = ?
+    ),
+    picked AS (
+      SELECT
+        g.*,
+        COALESCE(
+          (
+            SELECT s.id
+            FROM user_shoes s
+            WHERE LOWER(TRIM(COALESCE(s.make, ''))) = ?
+              AND LOWER(TRIM(COALESCE(s.model, ''))) = ?
+              AND TRIM(COALESCE(s.image_data, '')) != ''
+            ORDER BY COALESCE(s.updated_at, s.created_at) DESC, s.id DESC
+            LIMIT 1
+          ),
+          (
+            SELECT s.id
+            FROM user_shoes s
+            WHERE LOWER(TRIM(COALESCE(s.make, ''))) = ?
+              AND LOWER(TRIM(COALESCE(s.model, ''))) = ?
+            ORDER BY COALESCE(s.updated_at, s.created_at) DESC, s.id DESC
+            LIMIT 1
+          )
+        ) AS sample_shoe_id
+      FROM grouped g
+    )
+    SELECT
+      p.sample_shoe_id AS id,
+      p.make,
+      p.model,
+      p.player_count,
+      p.shoe_entries,
+      p.colorway_count,
+      COALESCE((SELECT image_data FROM user_shoes WHERE id = p.sample_shoe_id), '') AS image_data
+    FROM picked p
+  `).get(makeKey, modelKey, makeKey, modelKey, makeKey, modelKey);
+
+  const users = db.prepare(`
+    SELECT
+      u.id,
+      u.username,
+      COALESCE(u.avatar, '') AS avatar,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.nationality, '') AS nationality,
+      COUNT(s.id) AS matching_shoe_count,
+      GROUP_CONCAT(DISTINCT NULLIF(TRIM(COALESCE(s.colorway, '')), '')) AS colorways,
+      MAX(CASE WHEN s.retired_at IS NULL THEN 1 ELSE 0 END) AS has_active_pair,
+      MAX(CASE WHEN s.retired_at IS NULL AND s.is_current = 1 THEN 1 ELSE 0 END) AS is_current_pair
+    FROM user_shoes s
+    JOIN users u ON u.id = s.user_id
+    WHERE LOWER(TRIM(COALESCE(s.make, ''))) = ?
+      AND LOWER(TRIM(COALESCE(s.model, ''))) = ?
+    GROUP BY u.id, u.username, u.avatar, u.skill_title, u.nationality
+    ORDER BY is_current_pair DESC, has_active_pair DESC, u.username COLLATE NOCASE ASC
+    LIMIT 300
+  `).all(makeKey, modelKey);
+
+  res.json({
+    shoe: {
+      id: parseInt(shoe?.id, 10) || shoeId,
+      make: shoe?.make || '',
+      model: shoe?.model || '',
+      player_count: parseInt(shoe?.player_count, 10) || 0,
+      shoe_entries: parseInt(shoe?.shoe_entries, 10) || 0,
+      colorway_count: parseInt(shoe?.colorway_count, 10) || 0,
+      image_data: shoe?.image_data || '',
+    },
+    users: users.map((row) => ({
+      id: row.id,
+      username: row.username || '',
+      avatar: row.avatar || '',
+      skill_title: row.skill_title || '',
+      nationality: row.nationality || '',
+      matching_shoe_count: parseInt(row.matching_shoe_count, 10) || 0,
+      colorways: String(row.colorways || '')
+        .split(',')
+        .map((value) => normalizeShoeColorway(value, 120))
+        .filter(Boolean),
+      has_active_pair: !!row.has_active_pair,
+      is_current_pair: !!row.is_current_pair,
     })),
   });
 });
@@ -645,13 +1168,31 @@ router.get('/shoes/:userId', (req, res) => {
 router.post('/shoes', requireAuth, SHOE_UPLOAD.single('photo'), async (req, res) => {
   try {
     const db = getDb();
-    const make = normalizeShoeText(req.body?.make, 80);
-    const model = normalizeShoeText(req.body?.model, 80);
-    if (!make && !model) {
-      return res.status(400).json({ error: 'Shoe make or model is required' });
+    let make = normalizeShoeText(req.body?.make, 80);
+    let model = normalizeShoeText(req.body?.model, 80);
+    let colorway = normalizeShoeColorway(req.body?.colorway, 120);
+    const parsedCatalogId = parseInt(req.body?.catalog_id, 10);
+    const catalogId = Number.isInteger(parsedCatalogId) && parsedCatalogId > 0 ? parsedCatalogId : null;
+    const catalogEntry = catalogId
+      ? db.prepare(`
+        SELECT id, make, model, colorway, image_data
+        FROM shoe_catalog
+        WHERE id = ?
+      `).get(catalogId)
+      : null;
+    if (catalogEntry) {
+      if (!make) make = normalizeShoeText(catalogEntry.make, 80);
+      if (!model) model = normalizeShoeText(catalogEntry.model, 80);
+      if (!colorway) colorway = normalizeShoeColorway(catalogEntry.colorway, 120);
+    }
+    if (!make || !model) {
+      return res.status(400).json({ error: 'Shoe make and model are required' });
     }
 
-    const imageData = await encodeShoeImage(req.file);
+    let imageData = await encodeShoeImage(req.file);
+    if (!imageData && catalogEntry?.image_data) {
+      imageData = catalogEntry.image_data;
+    }
     const requestedCurrent = parseBoolean(req.body?.set_current);
     const existingCurrent = db.prepare(
       'SELECT id FROM user_shoes WHERE user_id = ? AND is_current = 1 AND retired_at IS NULL LIMIT 1'
@@ -667,14 +1208,14 @@ router.post('/shoes', requireAuth, SHOE_UPLOAD.single('photo'), async (req, res)
         `).run(req.user.id);
       }
       return db.prepare(`
-        INSERT INTO user_shoes (user_id, make, model, image_data, is_current, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-      `).run(req.user.id, make, model, imageData, shouldSetCurrent ? 1 : 0);
+        INSERT INTO user_shoes (user_id, make, model, colorway, image_data, is_current, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `).run(req.user.id, make, model, colorway, imageData, shouldSetCurrent ? 1 : 0);
     });
 
     const insert = txn();
     const shoe = db.prepare(`
-      SELECT id, user_id, make, model, image_data, is_current, retired_at, created_at, updated_at
+      SELECT id, user_id, make, model, colorway, image_data, is_current, retired_at, created_at, updated_at
       FROM user_shoes
       WHERE id = ?
     `).get(insert.lastInsertRowid);
@@ -880,11 +1421,15 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
 
     // Also update best scores if this play is better
     const updateBest = db.prepare(`
-      INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate)
-      VALUES (?, ?, ?, ?, ?, ?, '')
+      INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id)
+      VALUES (?, ?, ?, ?, ?, ?, '', ?)
       ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
         score = MAX(excluded.score, user_best_scores.score),
-        grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END
+        grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
+        shoe_id = CASE
+          WHEN excluded.score > user_best_scores.score THEN excluded.shoe_id
+          ELSE user_best_scores.shoe_id
+        END
     `);
 
     let updatedCount = 0;
@@ -983,7 +1528,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 perfect, great, good, bad, miss,
               });
             }
-            updateBest.run(req.user.id, songTitle, mode, level, score, grade);
+            updateBest.run(req.user.id, songTitle, mode, level, score, grade, activeShoeId);
             updatedCount++;
           }
         }
@@ -1098,7 +1643,15 @@ router.get('/best-scores/:userId', (req, res) => {
 router.get('/recently-played/:userId', (req, res) => {
   const db = getDb();
   const plays = db.prepare(
-    'SELECT * FROM user_recently_played WHERE user_id = ? ORDER BY id ASC'
+    `SELECT
+      p.*,
+      COALESCE(s.make, '') AS shoe_make,
+      COALESCE(s.model, '') AS shoe_model,
+      COALESCE(s.colorway, '') AS shoe_colorway
+    FROM user_recently_played p
+    LEFT JOIN user_shoes s ON s.id = p.shoe_id
+    WHERE p.user_id = ?
+    ORDER BY p.id ASC`
   ).all(req.params.userId);
   const sync = db.prepare('SELECT last_recently_played_sync FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
   res.json({

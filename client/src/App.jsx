@@ -29,6 +29,7 @@ import CommunitiesListPage from './pages/CommunitiesListPage';
 import WorldMaxPage from './pages/WorldMaxPage';
 import WorldMaxMachinePage from './pages/WorldMaxMachinePage';
 import SongsPage from './pages/SongsPage';
+import ShoesPage from './pages/ShoesPage';
 import SongChartPage from './pages/SongChartPage';
 import HeadToHeadPage from './pages/HeadToHeadPage';
 import TiersPage from './pages/TiersPage';
@@ -334,6 +335,17 @@ function UserMenu() {
             Songs
           </Link>
           <Link
+            to="/shoes"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 16h12M5 20h14M7 8c0-1.657 1.343-3 3-3h5v3a3 3 0 0 1-3 3H7V8Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 11h3a2 2 0 0 1 2 2v3h-5v-5Z" />
+            </svg>
+            Shoes
+          </Link>
+          <Link
             to="/tiers"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
@@ -496,6 +508,7 @@ export default function App() {
           <Route path="/world-max" element={<WorldMaxPage />} />
           <Route path="/world-max/machine/:id" element={<WorldMaxMachinePage />} />
           <Route path="/songs" element={<SongsPage />} />
+          <Route path="/shoes" element={<ShoesPage />} />
           <Route path="/songs/chart/:chartId" element={<SongChartPage />} />
           <Route path="/skill" element={<SkillsPage />} />
           <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
