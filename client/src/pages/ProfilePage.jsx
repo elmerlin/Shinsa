@@ -9,7 +9,7 @@ import {
   getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
-  getProfileShoes, wearProfileShoe, retireProfileShoe, deleteProfileShoe,
+  getProfileShoes, wearProfileShoe,
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
@@ -713,8 +713,6 @@ export default function ProfilePage() {
   const [shoesLoaded, setShoesLoaded] = useState(false);
   const [shoeBusy, setShoeBusy] = useState(false);
   const [shoeFeedback, setShoeFeedback] = useState('');
-  const [retireConfirmId, setRetireConfirmId] = useState(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   // Social state
   const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
@@ -763,8 +761,6 @@ export default function ProfilePage() {
     setShoesLoaded(false);
     setShoeBusy(false);
     setShoeFeedback('');
-    setRetireConfirmId(null);
-    setDeleteConfirmId(null);
     setFollowersLoaded(false);
     setTab('overview');
     setSelectedOverviewDateKey('');
@@ -1102,49 +1098,12 @@ export default function ProfilePage() {
     if (!isOwner || shoeBusy) return;
     setShoeBusy(true);
     setShoeFeedback('');
-    setRetireConfirmId(null);
-    setDeleteConfirmId(null);
     try {
       const data = await wearProfileShoe(shoeId);
       setShoeCabinet(data?.cabinet || null);
       setShoeFeedback('Current shoe updated');
     } catch (err) {
       setShoeFeedback(err?.message || 'Failed to set current shoe');
-    } finally {
-      setShoeBusy(false);
-    }
-  };
-
-  const handleRetireShoe = async (shoeId, label) => {
-    if (!isOwner || shoeBusy) return;
-    if (!confirm(`Retire ${label}?`)) return;
-    setShoeBusy(true);
-    setShoeFeedback('');
-    setDeleteConfirmId(null);
-    try {
-      const data = await retireProfileShoe(shoeId);
-      setShoeCabinet(data?.cabinet || null);
-      setRetireConfirmId(null);
-      setShoeFeedback('Shoe retired');
-    } catch (err) {
-      setShoeFeedback(err?.message || 'Failed to retire shoe');
-    } finally {
-      setShoeBusy(false);
-    }
-  };
-
-  const handleDeleteShoe = async (shoeId) => {
-    if (!isOwner || shoeBusy) return;
-    setShoeBusy(true);
-    setShoeFeedback('');
-    try {
-      const data = await deleteProfileShoe(shoeId);
-      setShoeCabinet(data?.cabinet || null);
-      setRetireConfirmId(null);
-      setDeleteConfirmId(null);
-      setShoeFeedback('Shoe deleted');
-    } catch (err) {
-      setShoeFeedback(err?.message || 'Failed to delete shoe');
     } finally {
       setShoeBusy(false);
     }
@@ -1562,8 +1521,9 @@ export default function ProfilePage() {
 
   const competitionsCount = aggregated ? aggregated.duelCount + aggregated.tournamentCount : 0;
   const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
+  const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
+  const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
   const activeShoe = cabinetShoes.find((shoe) => shoe.is_current) || null;
-  const retiredShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
@@ -2323,7 +2283,7 @@ export default function ProfilePage() {
           {isOwner && (
             <div className="card">
               <p className="text-[11px] text-gray-400">
-                Add shoes and upload or update shoe photos from account settings.
+                Add shoes, upload photos, and manage retire/delete actions in account settings.
               </p>
               <Link
                 to="/account"
@@ -2341,142 +2301,88 @@ export default function ProfilePage() {
                 {isOwner ? 'No shoes in your cabinet yet' : 'No shoes added yet'}
               </p>
             ) : (
-              cabinetShoes.map((shoe) => {
-                const shoeLabel = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
-                return (
-                  <div key={shoe.id} className="card flex items-start gap-3">
-                    {shoe.image_data ? (
-                      <img src={shoe.image_data} alt={shoeLabel} className="w-16 h-16 rounded-lg object-cover border border-piu-border/40 shrink-0" />
-                    ) : (
-                      <div className="w-16 h-16 rounded-lg border border-piu-border/40 bg-piu-dark/60 flex items-center justify-center text-[11px] text-gray-500 text-center shrink-0">
-                        No Photo
+              <>
+                {activeCabinetShoes.map((shoe) => {
+                  const shoeLabel = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                  return (
+                    <div key={shoe.id} className="card flex items-start gap-3">
+                      {shoe.image_data ? (
+                        <img src={shoe.image_data} alt={shoeLabel} className="w-28 h-16 rounded-lg object-contain bg-piu-dark/60 border border-piu-border/40 shrink-0 p-1" />
+                      ) : (
+                        <div className="w-28 h-16 rounded-lg border border-piu-border/40 bg-piu-dark/60 flex items-center justify-center text-[11px] text-gray-500 text-center shrink-0">
+                          No Photo
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-display font-bold text-sm truncate">{shoeLabel}</p>
+                          {shoe.is_current ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-piu-accent/20 text-piu-accent border border-piu-accent/40">
+                              Current
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {shoe.songs_logged?.toLocaleString() || 0} songs
+                          <span className="mx-1.5 text-gray-700">|</span>
+                          {shoe.steps_logged?.toLocaleString() || 0} steps
+                        </p>
                       </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-display font-bold text-sm truncate">{shoeLabel}</p>
-                        {shoe.retired_at ? (
+                      {isOwner && !shoe.is_current && (
+                        <div className="shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleWearShoe(shoe.id)}
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                            disabled={shoeBusy}
+                          >
+                            Wear
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {retiredCabinetShoes.length > 0 && (
+                  <div className="pt-1">
+                    <p className="text-[11px] font-display font-bold text-gray-400 uppercase tracking-wide">Retired Shoes</p>
+                  </div>
+                )}
+
+                {retiredCabinetShoes.map((shoe) => {
+                  const shoeLabel = `${shoe.make} ${shoe.model}`.trim() || 'Unnamed Shoe';
+                  return (
+                    <div key={shoe.id} className="card flex items-start gap-3">
+                      {shoe.image_data ? (
+                        <img src={shoe.image_data} alt={shoeLabel} className="w-28 h-16 rounded-lg object-contain bg-piu-dark/60 border border-piu-border/40 shrink-0 p-1" />
+                      ) : (
+                        <div className="w-28 h-16 rounded-lg border border-piu-border/40 bg-piu-dark/60 flex items-center justify-center text-[11px] text-gray-500 text-center shrink-0">
+                          No Photo
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-display font-bold text-sm truncate">{shoeLabel}</p>
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-gray-700/60 text-gray-300 border border-gray-500/40">
                             Retired
                           </span>
-                        ) : shoe.is_current ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-piu-accent/20 text-piu-accent border border-piu-accent/40">
-                            Current
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        {shoe.songs_logged?.toLocaleString() || 0} songs
-                        <span className="mx-1.5 text-gray-700">|</span>
-                        {shoe.steps_logged?.toLocaleString() || 0} steps
-                      </p>
-                      {shoe.retired_at && (
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {shoe.songs_logged?.toLocaleString() || 0} songs
+                          <span className="mx-1.5 text-gray-700">|</span>
+                          {shoe.steps_logged?.toLocaleString() || 0} steps
+                        </p>
                         <p className="text-[10px] text-gray-600 mt-1">
                           Retired {new Date(`${shoe.retired_at}Z`).toLocaleDateString()}
                         </p>
-                      )}
-                    </div>
-                    {isOwner && (
-                      <div className="flex flex-col items-end gap-2 shrink-0 min-w-[126px]">
-                        {!shoe.retired_at && (
-                          <>
-                            {!shoe.is_current && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setRetireConfirmId(null);
-                                  setDeleteConfirmId(null);
-                                  handleWearShoe(shoe.id);
-                                }}
-                                className="w-full px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
-                                disabled={shoeBusy}
-                              >
-                                Wear
-                              </button>
-                            )}
-                            <div className="w-full pt-1 border-t border-red-500/30">
-                              {retireConfirmId === shoe.id ? (
-                                <div className="space-y-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRetireShoe(shoe.id, shoeLabel)}
-                                    className="w-full px-3 py-1.5 rounded-lg text-[11px] font-display font-bold text-red-200 border border-red-500/60 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-60"
-                                    disabled={shoeBusy}
-                                  >
-                                    Confirm Retire
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setRetireConfirmId(null)}
-                                    className="w-full px-3 py-1 rounded-lg text-[10px] font-display font-bold bg-piu-dark text-gray-400 border border-piu-border hover:text-gray-200 disabled:opacity-60"
-                                    disabled={shoeBusy}
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setDeleteConfirmId(null);
-                                    setRetireConfirmId(shoe.id);
-                                  }}
-                                  className="w-full px-3 py-1 rounded-lg text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
-                                  disabled={shoeBusy}
-                                >
-                                  Retire...
-                                </button>
-                              )}
-                            </div>
-                          </>
-                        )}
-                        <div className="w-full pt-1 border-t border-red-500/30">
-                          {deleteConfirmId === shoe.id ? (
-                            <div className="space-y-1.5">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteShoe(shoe.id)}
-                                className="w-full px-3 py-1.5 rounded-lg text-[11px] font-display font-bold text-red-200 border border-red-500/60 bg-red-500/20 hover:bg-red-500/30 disabled:opacity-60"
-                                disabled={shoeBusy}
-                              >
-                                Confirm Delete
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteConfirmId(null)}
-                                className="w-full px-3 py-1 rounded-lg text-[10px] font-display font-bold bg-piu-dark text-gray-400 border border-piu-border hover:text-gray-200 disabled:opacity-60"
-                                disabled={shoeBusy}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRetireConfirmId(null);
-                                setDeleteConfirmId(shoe.id);
-                              }}
-                              className="w-full px-3 py-1 rounded-lg text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-60"
-                              disabled={shoeBusy}
-                            >
-                              Delete...
-                            </button>
-                          )}
-                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })
+                    </div>
+                  );
+                })}
+              </>
             )}
           </div>
-
-          {retiredShoes.length > 0 && (
-            <p className="text-[11px] text-gray-600">
-              Retired shoes stay in your cabinet with their logged songs and steps.
-            </p>
-          )}
         </div>
       )}
 
