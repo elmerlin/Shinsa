@@ -411,10 +411,16 @@ function requireAuth(req, res, next) {
 
 function isAdminUser(user) {
   if (!user) return false;
+  if (user.is_admin === true || parseInt(user.is_admin, 10) === 1) return true;
   if (user.id && ADMIN_USER_IDS.has(String(user.id).trim())) return true;
   const username = String(user.username || '').trim().toLowerCase();
-  if (!username) return false;
-  return ADMIN_USERNAMES.has(username);
+  if (username && ADMIN_USERNAMES.has(username)) return true;
+  if (user.id) {
+    const db = getDb();
+    const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (parseInt(row?.is_admin, 10) === 1) return true;
+  }
+  return false;
 }
 
 function requireAdmin(req, res, next) {

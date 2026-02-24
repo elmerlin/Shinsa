@@ -583,6 +583,7 @@ function initializeDb() {
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      is_admin INT DEFAULT 0,
       email TEXT DEFAULT '',
       avatar TEXT DEFAULT '',
       pumbility INT DEFAULT 0,
@@ -599,6 +600,15 @@ function initializeDb() {
       location_lat REAL DEFAULT NULL,
       location_lng REAL DEFAULT NULL,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_feature_permissions (
+      user_id TEXT NOT NULL,
+      feature_key TEXT NOT NULL,
+      granted_by TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, feature_key),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS invitations (
@@ -697,6 +707,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_matches_round ON matches(tournament_id, round_number);
     CREATE INDEX IF NOT EXISTS idx_songs_level ON songs(level);
     CREATE INDEX IF NOT EXISTS idx_songs_mode ON songs(mode);
+    CREATE INDEX IF NOT EXISTS idx_user_feature_permissions_feature ON user_feature_permissions(feature_key, user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_feature_permissions_user ON user_feature_permissions(user_id, feature_key);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_chart_tiers_unique_chart
       ON chart_tiers(tier_list_type, mode, level, chart_id);
     CREATE INDEX IF NOT EXISTS idx_chart_tiers_mode_level_rank
@@ -1578,6 +1590,7 @@ function initializeDb() {
   // Migrations for users table - add world map location fields
   const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
   const userMigrations = [
+    ['is_admin', 'INT DEFAULT 0'],
     ['location_country', "TEXT DEFAULT ''"],
     ['location_country_code', "TEXT DEFAULT ''"],
     ['location_city', "TEXT DEFAULT ''"],

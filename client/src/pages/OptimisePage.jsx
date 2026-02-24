@@ -354,6 +354,7 @@ export default function OptimisePage() {
   const [skillInfoError, setSkillInfoError] = useState('');
   const [activeSkillSlug, setActiveSkillSlug] = useState('');
   const [skillInfoCache, setSkillInfoCache] = useState({});
+  const hasOptimiseAccess = !!(user?.is_admin || user?.feature_access?.optimise);
 
   useEffect(() => {
     let cancelled = false;
@@ -628,6 +629,17 @@ export default function OptimisePage() {
           <h1 className="text-xl font-display font-bold">OPTIMISE</h1>
           <p className="text-sm text-gray-400 mt-2">This page is only available when logged in.</p>
           <Link to="/login" className="inline-flex mt-4 btn-primary">Login</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasOptimiseAccess) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <div className="card text-center">
+          <h1 className="text-xl font-display font-bold">OPTIMISE</h1>
+          <p className="text-sm text-gray-400 mt-2">This feature is invite-only.</p>
         </div>
       </div>
     );

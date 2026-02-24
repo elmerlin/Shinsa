@@ -157,6 +157,15 @@ export const getUserActivity = (id) => request(`/auth/user/${id}/activity`);
 export const getInvitations = () => request('/auth/invitations');
 export const respondInvitation = (id, status) => request(`/auth/invitations/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
 export const sendInvitation = (data) => request('/auth/invite', { method: 'POST', body: JSON.stringify(data) });
+export const getAdminFeatures = () => request('/auth/admin/features');
+export const getAdminFeatureUsers = (featureKey) => request(`/auth/admin/features/${encodeURIComponent(featureKey)}/users`);
+export const grantAdminFeatureUser = (featureKey, userId) => request(`/auth/admin/features/${encodeURIComponent(featureKey)}/users`, {
+  method: 'POST',
+  body: JSON.stringify({ user_id: userId }),
+});
+export const revokeAdminFeatureUser = (featureKey, userId) => request(`/auth/admin/features/${encodeURIComponent(featureKey)}/users/${encodeURIComponent(userId)}`, {
+  method: 'DELETE',
+});
 
 // Fun mini-game
 export const getFunLeaderboard = (limit = 10) => request(`/fun/leaderboard?limit=${encodeURIComponent(limit)}`);

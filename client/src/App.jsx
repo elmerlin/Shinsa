@@ -261,6 +261,8 @@ function UserMenu() {
 
   if (!user) return null;
   const myProfilePath = getProfilePath(user.id, user.username);
+  const canAccessOptimise = !!(user?.is_admin || user?.feature_access?.optimise);
+  const canAccessAdmin = !!user?.is_admin;
 
   return (
     <div className="relative" ref={ref}>
@@ -346,17 +348,19 @@ function UserMenu() {
             </svg>
             Shoes
           </Link>
-          <Link
-            to="/optimise"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M9 12h6M7.5 18h9" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h1m10 0h1a2 2 0 012 2v1m0 8v1a2 2 0 01-2 2h-1m-10 0H6a2 2 0 01-2-2v-1m0-8V7" />
-            </svg>
-            Optimise
-          </Link>
+          {canAccessOptimise && (
+            <Link
+              to="/optimise"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M9 12h6M7.5 18h9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h1m10 0h1a2 2 0 012 2v1m0 8v1a2 2 0 01-2 2h-1m-10 0H6a2 2 0 01-2-2v-1m0-8V7" />
+              </svg>
+              Optimise
+            </Link>
+          )}
           <Link
             to="/tiers"
             onClick={() => setOpen(false)}
@@ -400,6 +404,19 @@ function UserMenu() {
             </svg>
             Profile Settings
           </Link>
+          {canAccessAdmin && (
+            <Link
+              to="/admin"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l2 2 3-3" />
+              </svg>
+              Admin
+            </Link>
+          )}
           <div className="border-t border-piu-border/30 my-1" />
           <button
             onClick={() => { logout(); navigate('/'); setOpen(false); }}

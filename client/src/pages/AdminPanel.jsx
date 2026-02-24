@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import { useAuth } from '../contexts/AuthContext';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
   getNotices, createNotice, updateNotice, deleteNotice,
   getFunSettings, updateFunSettings,
   getAdminShoeCatalog, createAdminShoeCatalogEntry, updateAdminShoeCatalogEntry, deleteAdminShoeCatalogEntry, setAdminShoeCatalogDisplay,
+  searchUsers, getAdminFeatures, getAdminFeatureUsers, grantAdminFeatureUser, revokeAdminFeatureUser,
 } from '../utils/api';
 
 const PHASE_LABELS = {
@@ -19,6 +21,7 @@ function formatShoeLabel(shoe) {
 }
 
 export default function AdminPanel() {
+  const { user } = useAuth();
   const [tab, setTab] = useState('tournaments');
   const [tournaments, setTournaments] = useState([]);
   const [archived, setArchived] = useState([]);
@@ -29,6 +32,17 @@ export default function AdminPanel() {
   const [funSaving, setFunSaving] = useState(false);
   const [funError, setFunError] = useState('');
   const [funSuccess, setFunSuccess] = useState('');
+  const [features, setFeatures] = useState([{ key: 'optimise', label: 'Optimise' }]);
+  const [selectedFeature, setSelectedFeature] = useState('optimise');
+  const [permissionUsers, setPermissionUsers] = useState([]);
+  const [permissionLoading, setPermissionLoading] = useState(false);
+  const [permissionSaving, setPermissionSaving] = useState(false);
+  const [permissionError, setPermissionError] = useState('');
+  const [permissionMessage, setPermissionMessage] = useState('');
+  const [permissionSearchQuery, setPermissionSearchQuery] = useState('');
+  const [permissionSuggestions, setPermissionSuggestions] = useState([]);
+  const [permissionSearchOpen, setPermissionSearchOpen] = useState(false);
+  const permissionSearchRef = useRef(null);
   const [shoeCatalog, setShoeCatalog] = useState([]);
   const [shoeCatalogLoading, setShoeCatalogLoading] = useState(false);
   const [shoeCatalogSaving, setShoeCatalogSaving] = useState(false);
@@ -55,8 +69,9 @@ export default function AdminPanel() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!user?.is_admin) return;
     loadAll();
-  }, []);
+  }, [user?.is_admin]);
 
   useEffect(() => {
     if (tab !== 'shoes') return undefined;
@@ -90,7 +105,90 @@ export default function AdminPanel() {
     };
   }, [tab, shoeCatalogQuery, shoeCatalogPage, shoeCatalogRefreshKey]);
 
+  const permissionUserIdSet = useMemo(
+    () => new Set((Array.isArray(permissionUsers) ? permissionUsers : []).map((entry) => entry.id)),
+    [permissionUsers]
+  );
+
+  useEffect(() => {
+    if (tab !== 'permissions') return undefined;
+    let cancelled = false;
+    setPermissionLoading(true);
+    setPermissionError('');
+
+    Promise.all([
+      getAdminFeatures().catch(() => null),
+      getAdminFeatureUsers(selectedFeature).catch((err) => ({ error: err })),
+    ])
+      .then(([featurePayload, permissionPayload]) => {
+        if (cancelled) return;
+        const nextFeatures = Array.isArray(featurePayload?.features) && featurePayload.features.length > 0
+          ? featurePayload.features
+          : [{ key: 'optimise', label: 'Optimise' }];
+        setFeatures(nextFeatures);
+        if (!nextFeatures.some((item) => item.key === selectedFeature)) {
+          setSelectedFeature(nextFeatures[0].key);
+        }
+
+        if (permissionPayload?.error) {
+          setPermissionUsers([]);
+          setPermissionError(permissionPayload.error?.message || 'Failed to load permissions');
+          return;
+        }
+        setPermissionUsers(Array.isArray(permissionPayload?.users) ? permissionPayload.users : []);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPermissionUsers([]);
+        setPermissionError(err?.message || 'Failed to load permissions');
+      })
+      .finally(() => {
+        if (!cancelled) setPermissionLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [tab, selectedFeature]);
+
+  useEffect(() => {
+    if (tab !== 'permissions') return undefined;
+    const q = permissionSearchQuery.trim();
+    if (q.length < 2) {
+      setPermissionSuggestions([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const users = await searchUsers(q);
+        if (cancelled) return;
+        const list = Array.isArray(users) ? users : [];
+        setPermissionSuggestions(list.filter((entry) => entry.id !== user?.id && !permissionUserIdSet.has(entry.id)));
+      } catch (err) {
+        if (cancelled) return;
+        setPermissionSuggestions([]);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [tab, permissionSearchQuery, permissionUserIdSet, user?.id]);
+
+  useEffect(() => {
+    function handleDocClick(event) {
+      if (!permissionSearchRef.current) return;
+      if (!permissionSearchRef.current.contains(event.target)) {
+        setPermissionSearchOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleDocClick);
+    return () => document.removeEventListener('mousedown', handleDocClick);
+  }, []);
+
   const loadAll = () => {
+    if (!user?.is_admin) return;
     getTournaments().then(setTournaments).catch(() => {});
     getArchivedTournaments().then(setArchived).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
@@ -300,6 +398,76 @@ export default function AdminPanel() {
     }
   };
 
+  const reloadFeatureUsers = async () => {
+    const payload = await getAdminFeatureUsers(selectedFeature);
+    setPermissionUsers(Array.isArray(payload?.users) ? payload.users : []);
+  };
+
+  const handleGrantFeatureToUser = async (entry) => {
+    if (!entry?.id || permissionSaving) return;
+    setPermissionSaving(true);
+    setPermissionError('');
+    setPermissionMessage('');
+    try {
+      const result = await grantAdminFeatureUser(selectedFeature, entry.id);
+      await reloadFeatureUsers();
+      setPermissionSearchQuery('');
+      setPermissionSuggestions([]);
+      setPermissionSearchOpen(false);
+      setPermissionMessage(result?.added
+        ? `Granted ${selectedFeature} access to @${entry.username}.`
+        : `@${entry.username} already has ${selectedFeature} access.`);
+    } catch (err) {
+      setPermissionError(err?.message || 'Failed to grant access');
+    } finally {
+      setPermissionSaving(false);
+    }
+  };
+
+  const handleRevokeFeatureFromUser = async (entry) => {
+    if (!entry?.id || permissionSaving) return;
+    setPermissionSaving(true);
+    setPermissionError('');
+    setPermissionMessage('');
+    try {
+      await revokeAdminFeatureUser(selectedFeature, entry.id);
+      await reloadFeatureUsers();
+      setPermissionMessage(`Removed ${selectedFeature} access from @${entry.username}.`);
+    } catch (err) {
+      setPermissionError(err?.message || 'Failed to revoke access');
+    } finally {
+      setPermissionSaving(false);
+    }
+  };
+
+  const selectedFeatureLabel = useMemo(() => {
+    const found = features.find((item) => item.key === selectedFeature);
+    return found?.label || selectedFeature;
+  }, [features, selectedFeature]);
+
+  if (!user) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="card text-center">
+          <h1 className="text-2xl font-display font-bold">ADMIN PANEL</h1>
+          <p className="text-sm text-gray-400 mt-2">Login required.</p>
+          <Link to="/login" className="inline-flex mt-4 btn-primary">Login</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user?.is_admin) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="card text-center">
+          <h1 className="text-2xl font-display font-bold">ADMIN PANEL</h1>
+          <p className="text-sm text-red-300 mt-2">Admin access required.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 overflow-x-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -311,7 +479,7 @@ export default function AdminPanel() {
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-6">
-        {['tournaments', 'archived', 'notices', 'shoes', 'fun'].map(t => (
+        {['tournaments', 'archived', 'notices', 'shoes', 'permissions', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -323,6 +491,7 @@ export default function AdminPanel() {
              t === 'archived' ? `Archived (${archived.length})` :
              t === 'notices' ? `Notices (${notices.length})` :
              t === 'shoes' ? `Shoes (${shoeCatalogTotal})` :
+             t === 'permissions' ? 'Permissions' :
              'Fun Settings'}
           </button>
         ))}
@@ -742,6 +911,158 @@ export default function AdminPanel() {
                 >
                   Next
                 </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Permissions Tab */}
+      {tab === 'permissions' && (
+        <div className="space-y-4">
+          <div className="card space-y-3">
+            <h3 className="font-display font-bold text-piu-accent">Feature Permissions</h3>
+            <p className="text-xs text-gray-500">
+              Grant invite-only feature access per user. Admin users automatically have all feature access.
+            </p>
+            <label className="block max-w-sm">
+              <span className="text-xs text-gray-400">Feature</span>
+              <select
+                value={selectedFeature}
+                onChange={(e) => {
+                  setSelectedFeature(String(e.target.value || 'optimise'));
+                  setPermissionSearchQuery('');
+                  setPermissionSuggestions([]);
+                  setPermissionSearchOpen(false);
+                  setPermissionMessage('');
+                  setPermissionError('');
+                }}
+                className="input-field mt-1"
+              >
+                {features.map((feature) => (
+                  <option key={feature.key} value={feature.key}>{feature.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="card space-y-3">
+            <h4 className="font-display font-bold text-sm text-gray-200">Grant {selectedFeatureLabel} Access</h4>
+            <div ref={permissionSearchRef} className="relative">
+              <input
+                type="text"
+                className="input-field"
+                value={permissionSearchQuery}
+                onFocus={() => setPermissionSearchOpen(true)}
+                onChange={(e) => {
+                  setPermissionSearchQuery(e.target.value);
+                  setPermissionSearchOpen(true);
+                }}
+                placeholder="Search users to add..."
+                disabled={permissionSaving}
+              />
+              {permissionSearchOpen && permissionSuggestions.length > 0 && (
+                <div className="absolute z-20 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden max-h-72 overflow-y-auto">
+                  {permissionSuggestions.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="px-3 py-2 border-b border-piu-border/20 last:border-0 flex items-center gap-2"
+                    >
+                      {entry.avatar ? (
+                        <img src={getAvatarUrl(entry.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+                          {(entry.username || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-display font-bold truncate">{entry.username}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleGrantFeatureToUser(entry)}
+                        className="px-2 py-1 rounded text-[11px] font-display font-bold bg-piu-accent text-white disabled:opacity-50"
+                        disabled={permissionSaving}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {permissionError && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                {permissionError}
+              </div>
+            )}
+            {permissionMessage && (
+              <div className="rounded-lg border border-piu-green/40 bg-piu-green/10 px-3 py-2 text-xs text-piu-green">
+                {permissionMessage}
+              </div>
+            )}
+          </div>
+
+          <div className="card space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-display font-bold text-sm text-gray-200">
+                Users With {selectedFeatureLabel} Access ({permissionUsers.length})
+              </h4>
+              <button
+                type="button"
+                className="btn-secondary text-xs px-3 py-1.5"
+                onClick={() => {
+                  setPermissionLoading(true);
+                  setPermissionError('');
+                  setPermissionMessage('');
+                  reloadFeatureUsers()
+                    .catch((err) => setPermissionError(err?.message || 'Failed to refresh permissions'))
+                    .finally(() => setPermissionLoading(false));
+                }}
+                disabled={permissionLoading || permissionSaving}
+              >
+                {permissionLoading ? 'Refreshing...' : 'Refresh'}
+              </button>
+            </div>
+
+            {permissionLoading ? (
+              <p className="text-xs text-gray-500 py-2">Loading permission list...</p>
+            ) : permissionUsers.length === 0 ? (
+              <p className="text-xs text-gray-500 py-2">No users currently granted this feature.</p>
+            ) : (
+              <div className="space-y-2">
+                {permissionUsers.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-xl border border-piu-border/50 bg-piu-dark/35 px-3 py-2 flex items-center gap-2"
+                  >
+                    {entry.avatar ? (
+                      <img src={getAvatarUrl(entry.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+                        {(entry.username || '?')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-display font-bold truncate">
+                        {entry.username}
+                        {entry.is_admin ? <span className="text-[10px] text-piu-accent ml-2">ADMIN</span> : null}
+                      </p>
+                      <p className="text-[10px] text-gray-500">
+                        Granted {entry.granted_at ? new Date(entry.granted_at).toLocaleString() : '-'}
+                        {entry.granted_by_username ? ` by @${entry.granted_by_username}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded text-[11px] font-display font-bold text-red-300 border border-red-500/40 bg-red-500/10 hover:text-red-200 disabled:opacity-50"
+                      onClick={() => handleRevokeFeatureFromUser(entry)}
+                      disabled={permissionSaving}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

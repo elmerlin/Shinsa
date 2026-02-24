@@ -12,6 +12,20 @@ const { isInlineDataAvatar, normalizeUserAvatarForList } = require('../lib/avata
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
 const MAX_ACTIVITY_ITEMS = 200;
+const ADMIN_USERNAMES = new Set(
+  String(process.env.ADMIN_USERNAMES || 'elmer')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+);
+const ADMIN_USER_IDS = new Set(
+  String(process.env.ADMIN_USER_IDS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+const FEATURE_KEYS = ['optimise'];
+const FEATURE_KEY_SET = new Set(FEATURE_KEYS);
 
 function textSnippet(text, max = 90) {
   const compact = String(text || '').replace(/\s+/g, ' ').trim();
@@ -36,6 +50,63 @@ function makePublicUser(user) {
   return normalized;
 }
 
+function normalizeFeatureKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function defaultFeatureAccess() {
+  return {
+    optimise: false,
+  };
+}
+
+function isAdminUser(db, user) {
+  if (!user) return false;
+  if (user.is_admin === true || parseInt(user.is_admin, 10) === 1) return true;
+  if (user.id && ADMIN_USER_IDS.has(String(user.id).trim())) return true;
+  const username = String(user.username || '').trim().toLowerCase();
+  if (username && ADMIN_USERNAMES.has(username)) return true;
+  if (user.id) {
+    const row = db.prepare('SELECT is_admin FROM users WHERE id = ?').get(user.id);
+    if (parseInt(row?.is_admin, 10) === 1) return true;
+  }
+  return false;
+}
+
+function getFeatureAccessByUserId(db, userId, isAdmin) {
+  const access = defaultFeatureAccess();
+  if (!userId) return access;
+  if (isAdmin) {
+    for (const featureKey of FEATURE_KEYS) {
+      access[featureKey] = true;
+    }
+    return access;
+  }
+  const rows = db.prepare(`
+    SELECT feature_key
+    FROM user_feature_permissions
+    WHERE user_id = ?
+  `).all(userId);
+  for (const row of rows) {
+    const featureKey = normalizeFeatureKey(row?.feature_key);
+    if (!FEATURE_KEY_SET.has(featureKey)) continue;
+    access[featureKey] = true;
+  }
+  return access;
+}
+
+function toClientAuthUser(db, user, avatarSize = 96) {
+  if (!user) return null;
+  const admin = isAdminUser(db, user);
+  const { password_hash, ...safeUser } = user;
+  const normalized = normalizeClientUser(safeUser, avatarSize);
+  return {
+    ...normalized,
+    is_admin: !!admin,
+    feature_access: getFeatureAccessByUserId(db, user.id, admin),
+  };
+}
+
 // Middleware to extract user from token (optional auth)
 function optionalAuth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -58,6 +129,14 @@ function requireAuth(req, res, next) {
   } catch (e) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+}
+
+function requireAdmin(req, res, next) {
+  const db = getDb();
+  if (!isAdminUser(db, req.user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 }
 
 // POST /api/auth/register
@@ -102,15 +181,16 @@ router.post('/register', (req, res) => {
     Number.isFinite(Number(location_lng)) ? Number(location_lng) : null);
 
   const user = db.prepare(`
-    SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, is_admin, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
     FROM users WHERE id = ?
   `).get(id);
-  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  const clientUser = toClientAuthUser(db, user, 96);
+  const token = jwt.sign({ id: user.id, username: user.username, is_admin: !!clientUser?.is_admin }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 
-  res.status(201).json({ user: normalizeClientUser(user, 96), token });
+  res.status(201).json({ user: clientUser, token });
 });
 
 // POST /api/auth/login
@@ -127,23 +207,133 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid username or password' });
   }
 
-  const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
-  const { password_hash, ...safeUser } = user;
-  res.json({ user: normalizeClientUser(safeUser, 96), token });
+  const clientUser = toClientAuthUser(db, user, 96);
+  const token = jwt.sign({ id: user.id, username: user.username, is_admin: !!clientUser?.is_admin }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  res.json({ user: clientUser, token });
 });
 
 // GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
   const user = db.prepare(`
-    SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, is_admin, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
     FROM users WHERE id = ?
   `).get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(normalizeClientUser(user, 96));
+  res.json(toClientAuthUser(db, user, 96));
+});
+
+// GET /api/auth/admin/features
+router.get('/admin/features', requireAuth, requireAdmin, (req, res) => {
+  const features = FEATURE_KEYS.map((key) => ({
+    key,
+    label: key === 'optimise' ? 'Optimise' : key,
+  }));
+  res.json({ features });
+});
+
+// GET /api/auth/admin/features/:featureKey/users
+router.get('/admin/features/:featureKey/users', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const featureKey = normalizeFeatureKey(req.params.featureKey);
+  if (!FEATURE_KEY_SET.has(featureKey)) {
+    return res.status(400).json({ error: 'Unknown feature key' });
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      u.id,
+      u.username,
+      u.avatar,
+      u.pumbility,
+      u.skill_title,
+      u.is_admin,
+      p.created_at AS granted_at,
+      p.granted_by,
+      g.username AS granted_by_username
+    FROM user_feature_permissions p
+    JOIN users u ON u.id = p.user_id
+    LEFT JOIN users g ON g.id = p.granted_by
+    WHERE p.feature_key = ?
+    ORDER BY u.username COLLATE NOCASE ASC
+  `).all(featureKey);
+
+  res.json({
+    feature_key: featureKey,
+    users: rows.map((row) => {
+      const normalized = normalizeClientUser({
+        id: row.id,
+        username: row.username,
+        avatar: row.avatar,
+        pumbility: row.pumbility,
+        skill_title: row.skill_title,
+      }, 48);
+      return {
+        ...normalized,
+        is_admin: isAdminUser(db, row),
+        granted_at: row.granted_at || null,
+        granted_by: row.granted_by || '',
+        granted_by_username: row.granted_by_username || '',
+      };
+    }),
+  });
+});
+
+// POST /api/auth/admin/features/:featureKey/users
+router.post('/admin/features/:featureKey/users', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const featureKey = normalizeFeatureKey(req.params.featureKey);
+  const userId = String(req.body?.user_id || '').trim();
+  if (!FEATURE_KEY_SET.has(featureKey)) {
+    return res.status(400).json({ error: 'Unknown feature key' });
+  }
+  if (!userId) {
+    return res.status(400).json({ error: 'user_id is required' });
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!target) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const result = db.prepare(`
+    INSERT OR IGNORE INTO user_feature_permissions (user_id, feature_key, granted_by, created_at)
+    VALUES (?, ?, ?, datetime('now'))
+  `).run(userId, featureKey, String(req.user?.id || '').trim());
+
+  res.json({
+    success: true,
+    feature_key: featureKey,
+    user_id: userId,
+    added: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// DELETE /api/auth/admin/features/:featureKey/users/:userId
+router.delete('/admin/features/:featureKey/users/:userId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const featureKey = normalizeFeatureKey(req.params.featureKey);
+  const userId = String(req.params.userId || '').trim();
+  if (!FEATURE_KEY_SET.has(featureKey)) {
+    return res.status(400).json({ error: 'Unknown feature key' });
+  }
+  if (!userId) {
+    return res.status(400).json({ error: 'user_id is required' });
+  }
+
+  const result = db.prepare(`
+    DELETE FROM user_feature_permissions
+    WHERE user_id = ? AND feature_key = ?
+  `).run(userId, featureKey);
+
+  res.json({
+    success: true,
+    feature_key: featureKey,
+    user_id: userId,
+    removed: (parseInt(result?.changes, 10) || 0) > 0,
+  });
 });
 
 // GET /api/auth/avatar/:id - serve user avatar bytes (resized) for inline base64 avatars
@@ -237,13 +427,13 @@ router.put('/me', requireAuth, (req, res) => {
   );
 
   const user = db.prepare(`
-    SELECT id, username, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, is_admin, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
     FROM users WHERE id = ?
   `).get(req.user.id);
-  res.json(normalizeClientUser(user, 96));
+  res.json(toClientAuthUser(db, user, 96));
 });
 
 // PUT /api/auth/password
