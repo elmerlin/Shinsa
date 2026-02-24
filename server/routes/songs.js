@@ -2061,6 +2061,193 @@ router.get('/analytics/head-to-head', (req, res) => {
   });
 });
 
+// GET /api/songs/analytics/sniping
+// Query:
+// - user_a_id, user_b_id (required)
+// - level (optional)
+// - mode: Single | Double | Both (default Both)
+// - page (optional, default 1)
+// - limit (optional, default 50, max 100)
+// Returns only shared passed charts where user_b score is higher than user_a score.
+router.get('/analytics/sniping', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+
+  const userAId = String(req.query.user_a_id || '').trim();
+  const userBId = String(req.query.user_b_id || '').trim();
+  if (!userAId || !userBId) return res.status(400).json({ error: 'user_a_id and user_b_id are required' });
+  const userAExists = db.prepare('SELECT id FROM users WHERE id = ?').get(userAId);
+  const userBExists = db.prepare('SELECT id FROM users WHERE id = ?').get(userBId);
+  if (!userAExists || !userBExists) return res.status(404).json({ error: 'One or both users were not found' });
+
+  const modeList = expandMode(req.query.mode);
+  const level = parseLevelQuery(req.query.level);
+
+  const pageRaw = parseInt(req.query.page, 10);
+  const limitRaw = parseInt(req.query.limit, 10);
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : 50;
+
+  const userA = getUserAnalytics(db, userAId, aliases, songCatalog);
+  const userB = getUserAnalytics(db, userBId, aliases, songCatalog);
+
+  const inFilter = (record) => {
+    if (!record) return false;
+    if (!modeList.includes(record.mode)) return false;
+    if (level && record.level !== level) return false;
+    return true;
+  };
+
+  const aPass = new Map(
+    [...userA.passBestByChart.entries()].filter(([, record]) => inFilter(record))
+  );
+  const bPass = new Map(
+    [...userB.passBestByChart.entries()].filter(([, record]) => inFilter(record))
+  );
+
+  let sharedCount = 0;
+  let userAWins = 0;
+  let userBWins = 0;
+  let ties = 0;
+  const opponentWins = [];
+
+  for (const [key, aRecord] of aPass.entries()) {
+    const bRecord = bPass.get(key);
+    if (!aRecord || !bRecord) continue;
+
+    sharedCount += 1;
+    let winner = 'tie';
+    if (aRecord.score > bRecord.score) {
+      userAWins += 1;
+      winner = 'a';
+    } else if (bRecord.score > aRecord.score) {
+      userBWins += 1;
+      winner = 'b';
+    } else {
+      ties += 1;
+    }
+
+    if (winner !== 'b') continue;
+
+    const chart = songCatalog.chartsByKey.get(key);
+    const resolvedLevel = chart?.level || bRecord.level || aRecord.level;
+    opponentWins.push({
+      chart_id: chart?.chart_id || null,
+      title: chart?.title || aRecord.song_title || bRecord.song_title,
+      mode: chart?.mode || bRecord.mode || aRecord.mode,
+      level: resolvedLevel,
+      jacket_url: chart?.jacket_url || '',
+      score_a: aRecord.score,
+      grade_a: aRecord.grade || gradeFromScore(aRecord.score),
+      rating_a: calculateRating(resolvedLevel, aRecord.grade || gradeFromScore(aRecord.score), true),
+      score_b: bRecord.score,
+      grade_b: bRecord.grade || gradeFromScore(bRecord.score),
+      rating_b: calculateRating(resolvedLevel, bRecord.grade || gradeFromScore(bRecord.score), true),
+      winner,
+      score_diff: Math.max(0, (bRecord.score || 0) - (aRecord.score || 0)),
+    });
+  }
+
+  opponentWins.sort((a, b) => {
+    if ((b.score_diff || 0) !== (a.score_diff || 0)) return (b.score_diff || 0) - (a.score_diff || 0);
+    if ((b.level || 0) !== (a.level || 0)) return (b.level || 0) - (a.level || 0);
+    if ((b.score_b || 0) !== (a.score_b || 0)) return (b.score_b || 0) - (a.score_b || 0);
+    return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+  });
+
+  const modeLabel = modeList.length === 2 ? 'both' : (modeList[0] || '').toLowerCase();
+
+  const sourceFor = (analytics) => {
+    const source = modeLabel === 'single'
+      ? analytics?.levels?.single
+      : modeLabel === 'double'
+        ? analytics?.levels?.double
+        : analytics?.levels?.both;
+    return Array.isArray(source) ? source : [];
+  };
+
+  const ratingFor = (analytics) => {
+    const source = sourceFor(analytics);
+    if (!Array.isArray(source)) return 0;
+    if (!level) {
+      return source.reduce((sum, row) => sum + (parseInt(row.rating_total, 10) || 0), 0);
+    }
+    const row = source.find((entry) => entry.level === level);
+    return row ? parseInt(row.rating_total, 10) || 0 : 0;
+  };
+
+  const totalPassedFor = (analytics) => {
+    const source = sourceFor(analytics);
+    if (!Array.isArray(source)) return 0;
+    if (!level) {
+      return source.reduce((sum, row) => sum + (parseInt(row.cleared_charts, 10) || 0), 0);
+    }
+    const row = source.find((entry) => entry.level === level);
+    return row ? parseInt(row.cleared_charts, 10) || 0 : 0;
+  };
+
+  const ratingA = ratingFor(userA.analytics);
+  const ratingB = ratingFor(userB.analytics);
+  const totalPassedA = totalPassedFor(userA.analytics);
+  const totalPassedB = totalPassedFor(userB.analytics);
+
+  const metricWins = {
+    higher_score: userAWins > userBWins ? 'a' : userBWins > userAWins ? 'b' : null,
+    rating_total: ratingA > ratingB ? 'a' : ratingB > ratingA ? 'b' : null,
+    total_passed: totalPassedA > totalPassedB ? 'a' : totalPassedB > totalPassedA ? 'b' : null,
+  };
+
+  const userAMetricWins = Object.values(metricWins).filter((winner) => winner === 'a').length;
+  const userBMetricWins = Object.values(metricWins).filter((winner) => winner === 'b').length;
+
+  let clearCutWinner = null;
+  if (userAMetricWins >= 2 && userAMetricWins > userBMetricWins) clearCutWinner = userAId;
+  if (userBMetricWins >= 2 && userBMetricWins > userAMetricWins) clearCutWinner = userBId;
+
+  const totalItems = opponentWins.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * limit;
+  const rows = opponentWins.slice(start, start + limit);
+
+  res.json({
+    users: {
+      a: userA.analytics.user,
+      b: userB.analytics.user,
+    },
+    comparison: {
+      level,
+      mode: modeLabel,
+      shared_chart_count: sharedCount,
+      wins: {
+        a: userAWins,
+        b: userBWins,
+        ties,
+      },
+      rating: {
+        a: ratingA,
+        b: ratingB,
+      },
+      total_passed: {
+        a: totalPassedA,
+        b: totalPassedB,
+      },
+      metric_wins: metricWins,
+      clear_cut_winner: clearCutWinner,
+    },
+    pagination: {
+      page: currentPage,
+      limit,
+      total_items: totalItems,
+      total_pages: totalPages,
+      has_previous_page: currentPage > 1,
+      has_next_page: currentPage < totalPages,
+    },
+    top_song_diffs: rows,
+  });
+});
+
 // GET /api/songs/tiers/meta — available tier levels by mode
 router.get('/tiers/meta', (req, res) => {
   const db = getDb();

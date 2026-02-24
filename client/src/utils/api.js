@@ -106,6 +106,10 @@ export const getSongHeadToHead = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/head-to-head${qs ? `?${qs}` : ''}`);
 };
+export const getSongSniping = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/sniping${qs ? `?${qs}` : ''}`);
+};
 export const getSongTierMeta = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/tiers/meta${qs ? `?${qs}` : ''}`);

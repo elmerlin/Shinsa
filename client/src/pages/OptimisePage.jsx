@@ -1,12 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  getFollowing,
   getJacketMap,
   getPiugamePumbility,
   getPumbilityRecommendations,
+  getSongLibrary,
+  getSongSniping,
   getSongSkillInfo,
   getTrainingRecommendations,
+  searchUsers,
 } from '../utils/api';
 
 function getRank(score) {
@@ -38,6 +42,36 @@ function getGradeColor(grade) {
   if (g.includes('AA')) return 'text-piu-bronze';
   if (g.includes('A')) return 'text-amber-700';
   return 'text-gray-500';
+}
+
+function formatNumber(value) {
+  return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function getLevelOptionsFromLibrary(payload) {
+  const singles = new Set();
+  const doubles = new Set();
+
+  const songs = Array.isArray(payload?.songs) ? payload.songs : [];
+  for (const song of songs) {
+    const charts = Array.isArray(song?.charts) ? song.charts : [];
+    for (const chart of charts) {
+      const level = parseInt(chart?.level, 10);
+      if (!Number.isFinite(level) || level <= 0) continue;
+      if (chart.mode === 'Single') singles.add(level);
+      if (chart.mode === 'Double') doubles.add(level);
+    }
+  }
+
+  const singlesList = Array.from(singles).sort((a, b) => a - b);
+  const doublesList = Array.from(doubles).sort((a, b) => a - b);
+  const bothList = Array.from(new Set([...singlesList, ...doublesList])).sort((a, b) => a - b);
+
+  return {
+    Both: bothList,
+    Singles: singlesList,
+    Doubles: doublesList,
+  };
 }
 
 function SongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'sm' }) {
@@ -257,6 +291,22 @@ export default function OptimisePage() {
   const [trainingChartMode, setTrainingChartMode] = useState('single');
   const [trainingRangeA, setTrainingRangeA] = useState(null);
   const [trainingRangeB, setTrainingRangeB] = useState(null);
+
+  const [snipingInitLoading, setSnipingInitLoading] = useState(false);
+  const [snipingLoading, setSnipingLoading] = useState(false);
+  const [snipingFollowing, setSnipingFollowing] = useState([]);
+  const [snipingModeLevels, setSnipingModeLevels] = useState({ Both: [], Singles: [], Doubles: [] });
+  const [snipingInitialized, setSnipingInitialized] = useState(false);
+  const [snipingQuery, setSnipingQuery] = useState('');
+  const [snipingSuggestions, setSnipingSuggestions] = useState([]);
+  const [snipingShowSuggestions, setSnipingShowSuggestions] = useState(false);
+  const [snipingOpponent, setSnipingOpponent] = useState(null);
+  const [snipingMode, setSnipingMode] = useState('Both');
+  const [snipingLevel, setSnipingLevel] = useState('All');
+  const [snipingPage, setSnipingPage] = useState(1);
+  const [snipingResult, setSnipingResult] = useState(null);
+  const snipingSearchWrapRef = useRef(null);
+
   const [skillInfoOpen, setSkillInfoOpen] = useState(false);
   const [skillInfoLoading, setSkillInfoLoading] = useState(false);
   const [skillInfoError, setSkillInfoError] = useState('');
@@ -346,6 +396,121 @@ export default function OptimisePage() {
     fetchTrainingRecommendations({ chartMode: trainingChartMode }).catch(() => {});
   }, [activeTab, trainingData, trainingChartMode, user?.id]);
 
+  useEffect(() => {
+    if (!user?.id || activeTab !== 'sniping' || snipingInitialized) return;
+
+    let cancelled = false;
+    setSnipingInitLoading(true);
+    Promise.all([
+      getFollowing(user.id).catch(() => []),
+      getSongLibrary().catch(() => null),
+    ])
+      .then(([followList, library]) => {
+        if (cancelled) return;
+        setSnipingFollowing(Array.isArray(followList) ? followList : []);
+        if (library) {
+          setSnipingModeLevels(getLevelOptionsFromLibrary(library));
+        }
+        setSnipingInitialized(true);
+      })
+      .finally(() => {
+        if (!cancelled) setSnipingInitLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeTab, snipingInitialized, user?.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'sniping') return undefined;
+
+    let cancelled = false;
+    const q = snipingQuery.trim();
+    if (q.length < 2) {
+      setSnipingSuggestions([]);
+      return undefined;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const users = await searchUsers(q);
+        if (cancelled) return;
+        setSnipingSuggestions((Array.isArray(users) ? users : []).filter((item) => item.id !== user?.id));
+      } catch {
+        if (cancelled) return;
+        setSnipingSuggestions([]);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [activeTab, snipingQuery, user?.id]);
+
+  useEffect(() => {
+    function handleDocClick(event) {
+      if (!snipingSearchWrapRef.current) return;
+      if (!snipingSearchWrapRef.current.contains(event.target)) {
+        setSnipingShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleDocClick);
+    return () => document.removeEventListener('mousedown', handleDocClick);
+  }, []);
+
+  const snipingCompareLevels = useMemo(() => snipingModeLevels[snipingMode] || [], [snipingModeLevels, snipingMode]);
+
+  useEffect(() => {
+    if (snipingLevel === 'All') return;
+    const parsed = parseInt(snipingLevel, 10);
+    if (!snipingCompareLevels.includes(parsed)) {
+      setSnipingLevel('All');
+    }
+  }, [snipingCompareLevels, snipingLevel]);
+
+  const displayedSnipingSuggestions = useMemo(() => {
+    if (snipingQuery.trim().length >= 2) return snipingSuggestions;
+    return snipingFollowing.filter((item) => item.id !== user?.id).slice(0, 8);
+  }, [snipingFollowing, snipingQuery, snipingSuggestions, user?.id]);
+
+  const handleSelectSnipingOpponent = (entry) => {
+    setSnipingOpponent(entry);
+    setSnipingQuery(entry?.username || '');
+    setSnipingShowSuggestions(false);
+    setSnipingPage(1);
+    setSnipingResult(null);
+  };
+
+  const runSnipingComparison = async (targetPage = 1) => {
+    if (!user?.id) return;
+    if (!snipingOpponent?.id) {
+      setError('Choose a player to compare against.');
+      return;
+    }
+
+    setSnipingLoading(true);
+    setError('');
+    try {
+      const params = {
+        user_a_id: user.id,
+        user_b_id: snipingOpponent.id,
+        mode: snipingMode,
+        page: targetPage,
+        limit: 50,
+      };
+      if (snipingLevel !== 'All') params.level = snipingLevel;
+
+      const payload = await getSongSniping(params);
+      setSnipingResult(payload || null);
+      setSnipingPage(parseInt(payload?.pagination?.page, 10) || targetPage);
+    } catch (err) {
+      setSnipingResult(null);
+      setError(err?.message || 'Failed to load sniping comparison');
+    } finally {
+      setSnipingLoading(false);
+    }
+  };
+
   const headline = useMemo(() => {
     if (!pumbilityData || !pumbilityData.pumbility_value) return '';
     const base = `${(pumbilityData.pumbility_value || 0).toLocaleString()} PB`;
@@ -360,6 +525,14 @@ export default function OptimisePage() {
   const selectedTrainingMax = Number.isFinite(trainingRangeA) && Number.isFinite(trainingRangeB)
     ? Math.max(trainingRangeA, trainingRangeB)
     : null;
+  const snipingRows = Array.isArray(snipingResult?.top_song_diffs) ? snipingResult.top_song_diffs : [];
+  const snipingComparison = snipingResult?.comparison || null;
+  const snipingPagination = snipingResult?.pagination || {};
+  const snipingCurrentPage = parseInt(snipingPagination.page, 10) || snipingPage;
+  const snipingTotalPages = parseInt(snipingPagination.total_pages, 10) || 1;
+  const snipingTotalItems = parseInt(snipingPagination.total_items, 10) || 0;
+  const snipingUserA = snipingResult?.users?.a || user || null;
+  const snipingUserB = snipingResult?.users?.b || snipingOpponent || null;
 
   const handleOpenSkillInfo = async (slug) => {
     const normalized = String(slug || '').trim().toLowerCase();
@@ -429,6 +602,15 @@ export default function OptimisePage() {
             }`}
           >
             Training
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('sniping')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+              activeTab === 'sniping' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+            }`}
+          >
+            Sniping
           </button>
         </div>
       </div>
@@ -663,6 +845,237 @@ export default function OptimisePage() {
                 )}
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'sniping' && (
+        <div className="space-y-4">
+          <div className="card space-y-3">
+            <h3 className="font-display font-bold text-sm text-piu-accent">SNIPING OPTIONS</h3>
+            {snipingInitLoading && !snipingInitialized ? (
+              <p className="text-xs text-gray-500">Loading players and level options...</p>
+            ) : null}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div ref={snipingSearchWrapRef} className="relative sm:col-span-2">
+                <label className="text-[10px] text-gray-500 font-display uppercase mb-1 block">Friend</label>
+                <input
+                  value={snipingQuery}
+                  onFocus={() => setSnipingShowSuggestions(true)}
+                  onChange={(event) => {
+                    setSnipingQuery(event.target.value);
+                    setSnipingShowSuggestions(true);
+                  }}
+                  placeholder="Search player"
+                  className="input-field w-full"
+                />
+                {snipingShowSuggestions && displayedSnipingSuggestions.length > 0 && (
+                  <div className="absolute z-20 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden max-h-72 overflow-y-auto">
+                    {displayedSnipingSuggestions.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => handleSelectSnipingOpponent(entry)}
+                        className="w-full px-3 py-2 hover:bg-piu-dark/70 transition-colors border-b border-piu-border/20 last:border-0 text-left"
+                      >
+                        <p className="text-sm font-display font-bold truncate">{entry.username}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-500 font-display uppercase mb-1 block">Mode</label>
+                <select
+                  value={snipingMode}
+                  onChange={(event) => {
+                    setSnipingMode(event.target.value);
+                    setSnipingLevel('All');
+                    setSnipingPage(1);
+                    setSnipingResult(null);
+                  }}
+                  className="input-field w-full"
+                >
+                  <option>Both</option>
+                  <option>Singles</option>
+                  <option>Doubles</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-500 font-display uppercase mb-1 block">Level</label>
+                <select
+                  value={snipingLevel}
+                  onChange={(event) => {
+                    setSnipingLevel(event.target.value);
+                    setSnipingPage(1);
+                    setSnipingResult(null);
+                  }}
+                  className="input-field w-full"
+                >
+                  <option value="All">All Levels</option>
+                  {snipingCompareLevels.map((level) => (
+                    <option key={`sniping-level-${level}`} value={String(level)}>Lv.{level}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-gray-500">
+                {snipingOpponent ? `Comparing against @${snipingOpponent.username}` : 'Select a player to compare against'}
+              </p>
+              <button
+                type="button"
+                disabled={snipingLoading}
+                onClick={() => runSnipingComparison(1)}
+                className="px-3 py-1.5 rounded text-xs font-display font-bold bg-piu-accent text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {snipingLoading ? 'Comparing...' : 'Find Snipes'}
+              </button>
+            </div>
+          </div>
+
+          {snipingLoading ? (
+            <div className="card text-sm text-gray-500">Running sniping comparison...</div>
+          ) : null}
+
+          {snipingResult ? (
+            <>
+              <div className="card">
+                <h3 className="font-display font-bold text-sm text-piu-accent">LEVEL COMPARISON</h3>
+                <div className="overflow-x-auto mt-2 rounded-lg border border-piu-border/40">
+                  <table className="w-full text-xs sm:text-sm">
+                    <thead className="bg-[#0f172a] text-gray-400">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Metric</th>
+                        <th className="px-3 py-2 text-right">{snipingUserA?.username || 'You'}</th>
+                        <th className="px-3 py-2 text-right">{snipingUserB?.username || 'Opponent'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-t border-piu-border/30">
+                        <td className="px-3 py-2">Shared passed charts</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.shared_chart_count)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.shared_chart_count)}</td>
+                      </tr>
+                      <tr className="border-t border-piu-border/30">
+                        <td className="px-3 py-2">Higher score wins</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.wins?.a)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.wins?.b)}</td>
+                      </tr>
+                      <tr className="border-t border-piu-border/30">
+                        <td className="px-3 py-2">Total passed</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.total_passed?.a)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.total_passed?.b)}</td>
+                      </tr>
+                      <tr className="border-t border-piu-border/30">
+                        <td className="px-3 py-2">Rating total</td>
+                        <td className="px-3 py-2 text-right font-mono text-piu-gold">{formatNumber(snipingComparison?.rating?.a)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-piu-gold">{formatNumber(snipingComparison?.rating?.b)}</td>
+                      </tr>
+                      <tr className="border-t border-piu-border/30">
+                        <td className="px-3 py-2">Ties</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.wins?.ties)}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.wins?.ties)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-display font-bold text-sm text-piu-accent">TOP DIFFERENCES IN SHARED PASSED CHARTS</h3>
+                  <p className="text-xs text-gray-500">{formatNumber(snipingTotalItems)} charts</p>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Only songs where {snipingUserB?.username || 'your opponent'} has a higher score than you. Sorted by biggest score difference.
+                </p>
+                <div className="overflow-x-auto mt-2 rounded-lg border border-piu-border/40">
+                  <table className="min-w-[560px] w-full text-xs sm:text-sm">
+                    <thead className="bg-[#0f172a] text-gray-400">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Song</th>
+                        <th className="px-3 py-2 text-right">{snipingUserA?.username || 'You'}</th>
+                        <th className="px-3 py-2 text-right">{snipingUserB?.username || 'Opponent'}</th>
+                        <th className="px-3 py-2 text-right">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {snipingRows.map((row, index) => (
+                        <tr key={`${row.chart_id || row.title}-${index}`} className="border-t border-piu-border/30">
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <SongJacket
+                                title={row.title}
+                                mode={row.mode}
+                                level={row.level}
+                                bgUrl={row.jacket_url}
+                                jacketLookup={jacketLookup}
+                              />
+                              <div className="min-w-0">
+                                {row.chart_id ? (
+                                  <Link to={`/songs/chart/${row.chart_id}`} className="text-sm font-display font-bold hover:text-piu-accent transition-colors line-clamp-1">
+                                    {row.title}
+                                  </Link>
+                                ) : (
+                                  <p className="text-sm font-display font-bold line-clamp-1">{row.title}</p>
+                                )}
+                                <p className="text-[10px] text-gray-500">{row.mode} {row.level}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <p className="font-mono">{formatNumber(row.score_a)}</p>
+                            <p className={`text-[10px] font-display ${getGradeColor(row.grade_a)}`}>{row.grade_a || getRank(row.score_a).label}</p>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <p className="font-mono">{formatNumber(row.score_b)}</p>
+                            <p className={`text-[10px] font-display ${getGradeColor(row.grade_b)}`}>{row.grade_b || getRank(row.score_b).label}</p>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
+                            {formatNumber(row.score_diff || ((row.score_b || 0) - (row.score_a || 0)))}
+                          </td>
+                        </tr>
+                      ))}
+                      {snipingRows.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="text-center text-gray-500 py-8">No opponent wins found for this mode/level selection.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={snipingLoading || snipingCurrentPage <= 1}
+                    onClick={() => runSnipingComparison(snipingCurrentPage - 1)}
+                    className="px-2.5 py-1 rounded text-[11px] font-display font-bold bg-piu-dark text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Prev
+                  </button>
+                  <p className="text-[11px] text-gray-500 font-mono">
+                    Page {snipingCurrentPage} / {snipingTotalPages}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={snipingLoading || snipingCurrentPage >= snipingTotalPages}
+                    onClick={() => runSnipingComparison(snipingCurrentPage + 1)}
+                    className="px-2.5 py-1 rounded text-[11px] font-display font-bold bg-piu-dark text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="card text-xs text-gray-500">
+              Select a player, mode, and optional level, then run sniping to list charts where your opponent outscored you.
+            </div>
           )}
         </div>
       )}
