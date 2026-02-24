@@ -5,7 +5,7 @@ import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
   getNotices, createNotice, updateNotice, deleteNotice,
   getFunSettings, updateFunSettings,
-  getAdminShoeCatalog, createAdminShoeCatalogEntry, deleteAdminShoeCatalogEntry,
+  getAdminShoeCatalog, createAdminShoeCatalogEntry, deleteAdminShoeCatalogEntry, setAdminShoeCatalogDisplay,
 } from '../utils/api';
 
 const PHASE_LABELS = {
@@ -215,6 +215,22 @@ export default function AdminPanel() {
       }
     } catch (err) {
       setShoeCatalogError(err?.message || 'Failed to delete catalog entry');
+    } finally {
+      setShoeCatalogSaving(false);
+    }
+  };
+
+  const handleSetCatalogShoeDisplay = async (catalogId) => {
+    if (shoeCatalogSaving) return;
+    setShoeCatalogSaving(true);
+    setShoeCatalogError('');
+    setShoeCatalogMessage('');
+    try {
+      await setAdminShoeCatalogDisplay(catalogId);
+      setShoeCatalogMessage('Top Shoes display colorway updated.');
+      setShoeCatalogRefreshKey((prev) => prev + 1);
+    } catch (err) {
+      setShoeCatalogError(err?.message || 'Failed to update top shoes display colorway');
     } finally {
       setShoeCatalogSaving(false);
     }
@@ -560,6 +576,7 @@ export default function AdminPanel() {
                 {shoeCatalog.map((shoe) => {
                   const label = formatShoeLabel(shoe);
                   const colorway = String(shoe.colorway || '').trim();
+                  const isModelDisplay = !!shoe.is_model_display;
                   const isDeleteConfirm = shoeDeleteConfirmId === shoe.id;
                   return (
                     <div key={shoe.id} className="rounded-xl border border-piu-border/50 bg-piu-dark/35 p-3 space-y-2">
@@ -579,6 +596,21 @@ export default function AdminPanel() {
                       <p className="text-[10px] text-gray-600">
                         Updated {shoe.updated_at ? new Date(shoe.updated_at).toLocaleDateString() : '-'}
                       </p>
+
+                      <div className="pt-1 border-t border-piu-border/30">
+                        <button
+                          type="button"
+                          className={`w-full px-2 py-1 rounded text-[10px] font-display font-bold border disabled:opacity-60 ${
+                            isModelDisplay
+                              ? 'text-emerald-200 border-emerald-500/60 bg-emerald-500/20'
+                              : 'text-cyan-200 border-cyan-500/60 bg-cyan-500/20 hover:bg-cyan-500/30'
+                          }`}
+                          onClick={() => handleSetCatalogShoeDisplay(shoe.id)}
+                          disabled={shoeCatalogSaving}
+                        >
+                          {isModelDisplay ? 'Top Shoes Display' : 'Use for Top Shoes'}
+                        </button>
+                      </div>
 
                       {isDeleteConfirm ? (
                         <div className="space-y-1.5 pt-1 border-t border-red-500/30">

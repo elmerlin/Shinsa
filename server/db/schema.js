@@ -799,6 +799,14 @@ function initializeDb() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS shoe_model_display (
+      make_key TEXT NOT NULL,
+      model_key TEXT NOT NULL,
+      catalog_id INTEGER NOT NULL REFERENCES shoe_catalog(id) ON DELETE CASCADE,
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (make_key, model_key)
+    );
+
     CREATE TABLE IF NOT EXISTS user_recently_played (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -939,6 +947,7 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_user_shoes_make_model ON user_shoes(make, model);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_user_shoes_single_active ON user_shoes(user_id) WHERE is_current = 1;
     CREATE INDEX IF NOT EXISTS idx_shoe_catalog_make_model ON shoe_catalog(make, model);
+    CREATE INDEX IF NOT EXISTS idx_shoe_model_display_catalog ON shoe_model_display(catalog_id);
     CREATE INDEX IF NOT EXISTS idx_recently_played_user ON user_recently_played(user_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON user_notifications(user_id);
     CREATE INDEX IF NOT EXISTS idx_activity_notif_subscriber ON user_activity_notification_subscriptions(subscriber_user_id);
@@ -1116,6 +1125,16 @@ function initializeDb() {
   if (!shoeCatalogIndexes.includes('idx_shoe_catalog_make_model')) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_shoe_catalog_make_model ON shoe_catalog(make, model)');
   }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shoe_model_display (
+      make_key TEXT NOT NULL,
+      model_key TEXT NOT NULL,
+      catalog_id INTEGER NOT NULL REFERENCES shoe_catalog(id) ON DELETE CASCADE,
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (make_key, model_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_shoe_model_display_catalog ON shoe_model_display(catalog_id);
+  `);
 
   // Backfill legacy shoes where colorway was previously included inside model text.
   const legacyShoes = db.prepare(`

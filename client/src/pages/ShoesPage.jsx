@@ -10,11 +10,24 @@ function shoeLabel(shoe) {
   return `${shoe?.make || ''} ${shoe?.model || ''}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
 }
 
-function StatTile({ label, value }) {
+function SummaryStatStrip({ summary }) {
+  const items = [
+    { label: 'Models', value: summary?.total_models || 0 },
+    { label: 'Players', value: summary?.players_with_shoes || 0 },
+    { label: 'Shoes', value: summary?.total_shoe_entries || 0 },
+  ];
   return (
-    <div className="card py-3">
-      <p className="text-[11px] uppercase tracking-wide text-gray-500 font-display">{label}</p>
-      <p className="mt-1 text-xl font-display font-bold text-gray-100">{(parseInt(value, 10) || 0).toLocaleString()}</p>
+    <div className="card py-2.5 px-2 sm:px-3">
+      <div className="grid grid-cols-3 divide-x divide-piu-border/40">
+        {items.map((item) => (
+          <div key={item.label} className="px-1.5 sm:px-3 py-1 text-center">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500 font-display">{item.label}</p>
+            <p className="mt-0.5 text-lg sm:text-xl font-display font-bold text-gray-100">
+              {(parseInt(item.value, 10) || 0).toLocaleString()}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -99,19 +112,9 @@ export default function ShoesPage() {
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-4 py-6 space-y-4">
       <div className="card">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl font-bold">Shoes</h1>
-            <p className="text-sm text-gray-400 mt-1">Top shoe models by how many players use them.</p>
-          </div>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={loadTopShoes}
-            disabled={loading}
-          >
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
+        <div>
+          <h1 className="font-display text-2xl font-bold">Shoes</h1>
+          <p className="text-sm text-gray-400 mt-1">Top shoe models by how many players use them.</p>
         </div>
       </div>
 
@@ -119,11 +122,7 @@ export default function ShoesPage() {
         <div className="card border-red-500/40 bg-red-500/10 text-red-200 text-sm">{error}</div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatTile label="Tracked Models" value={summary.total_models || 0} />
-        <StatTile label="Players With Shoes" value={summary.players_with_shoes || 0} />
-        <StatTile label="Total Shoe Entries" value={summary.total_shoe_entries || 0} />
-      </div>
+      <SummaryStatStrip summary={summary} />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.65fr,1fr] gap-4">
         <section className="card">
@@ -166,6 +165,11 @@ export default function ShoesPage() {
                     {(parseInt(shoe.colorway_count, 10) || 0) > 0 ? (
                       <p className="text-[10px] text-gray-500">
                         {(parseInt(shoe.colorway_count, 10) || 0).toLocaleString()} colorway{(parseInt(shoe.colorway_count, 10) || 0) === 1 ? '' : 's'}
+                      </p>
+                    ) : null}
+                    {String(shoe.display_colorway || '').trim() ? (
+                      <p className="text-[10px] text-cyan-300 truncate">
+                        Display: {shoe.display_colorway}
                       </p>
                     ) : null}
                   </button>

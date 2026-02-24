@@ -215,6 +215,7 @@ export const getAdminShoeCatalog = (params = {}) => {
   return request(`/piugame/shoes/catalog/admin${qs ? `?${qs}` : ''}`);
 };
 export const deleteAdminShoeCatalogEntry = (catalogId) => request(`/piugame/shoes/catalog/admin/${encodeURIComponent(catalogId)}`, { method: 'DELETE' });
+export const setAdminShoeCatalogDisplay = (catalogId) => request(`/piugame/shoes/catalog/admin/${encodeURIComponent(catalogId)}/display`, { method: 'POST' });
 export const wearProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/wear`, { method: 'POST' });
 export const retireProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}/retire`, { method: 'POST' });
 export const deleteProfileShoe = (shoeId) => request(`/piugame/shoes/${shoeId}`, { method: 'DELETE' });

@@ -617,22 +617,26 @@ router.get('/shoes/catalog/admin', requireAuth, requireAdmin, (req, res) => {
 
   const rows = db.prepare(`
     SELECT
-      id,
-      make,
-      model,
-      colorway,
-      image_data,
-      created_by,
-      created_at,
-      updated_at
-    FROM shoe_catalog
+      c.id,
+      c.make,
+      c.model,
+      c.colorway,
+      c.image_data,
+      c.created_by,
+      c.created_at,
+      c.updated_at,
+      CASE WHEN md.catalog_id = c.id THEN 1 ELSE 0 END AS is_model_display
+    FROM shoe_catalog c
+    LEFT JOIN shoe_model_display md
+      ON md.make_key = LOWER(TRIM(COALESCE(c.make, '')))
+      AND md.model_key = LOWER(TRIM(COALESCE(c.model, '')))
     WHERE
       ? = ''
-      OR LOWER(TRIM(COALESCE(make, ''))) LIKE ?
-      OR LOWER(TRIM(COALESCE(model, ''))) LIKE ?
-      OR LOWER(TRIM(COALESCE(colorway, ''))) LIKE ?
-      OR LOWER(TRIM(COALESCE(make, '') || ' ' || COALESCE(model, '') || ' ' || COALESCE(colorway, ''))) LIKE ?
-    ORDER BY COALESCE(updated_at, created_at, datetime('now')) DESC, id DESC
+      OR LOWER(TRIM(COALESCE(c.make, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(c.model, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(c.colorway, ''))) LIKE ?
+      OR LOWER(TRIM(COALESCE(c.make, '') || ' ' || COALESCE(c.model, '') || ' ' || COALESCE(c.colorway, ''))) LIKE ?
+    ORDER BY COALESCE(c.updated_at, c.created_at, datetime('now')) DESC, c.id DESC
     LIMIT ? OFFSET ?
   `).all(q, like, like, like, like, limit, offset);
 
@@ -664,6 +668,7 @@ router.get('/shoes/catalog/admin', requireAuth, requireAdmin, (req, res) => {
       created_by: row.created_by || '',
       created_at: row.created_at || '',
       updated_at: row.updated_at || '',
+      is_model_display: !!row.is_model_display,
     })),
   });
 });
@@ -745,6 +750,49 @@ router.delete('/shoes/catalog/admin/:catalogId', requireAuth, requireAdmin, (req
   if (!existing) return res.status(404).json({ error: 'Catalog entry not found' });
   db.prepare('DELETE FROM shoe_catalog WHERE id = ?').run(catalogId);
   res.json({ success: true });
+});
+
+// POST /api/piugame/shoes/catalog/admin/:catalogId/display
+router.post('/shoes/catalog/admin/:catalogId/display', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const catalogId = parseInt(req.params.catalogId, 10);
+  if (!Number.isInteger(catalogId) || catalogId <= 0) {
+    return res.status(400).json({ error: 'Invalid catalog entry ID' });
+  }
+
+  const entry = db.prepare(`
+    SELECT id, make, model, colorway
+    FROM shoe_catalog
+    WHERE id = ?
+  `).get(catalogId);
+  if (!entry) return res.status(404).json({ error: 'Catalog entry not found' });
+
+  const makeKey = normalizeShoeText(entry.make, 80).toLowerCase();
+  const modelKey = normalizeShoeText(entry.model, 80).toLowerCase();
+  if (!makeKey || !modelKey) {
+    return res.status(400).json({ error: 'Catalog entry must include make and model' });
+  }
+
+  db.prepare(`
+    INSERT INTO shoe_model_display (make_key, model_key, catalog_id, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(make_key, model_key)
+    DO UPDATE SET
+      catalog_id = excluded.catalog_id,
+      updated_at = datetime('now')
+  `).run(makeKey, modelKey, catalogId);
+
+  res.json({
+    success: true,
+    model: {
+      make: entry.make || '',
+      model: entry.model || '',
+    },
+    display: {
+      catalog_id: catalogId,
+      colorway: entry.colorway || '',
+    },
+  });
 });
 
 // GET /api/piugame/shoes/catalog?q=...&limit=...&page=...
@@ -986,8 +1034,14 @@ router.get('/shoes/stats/top', requireAuth, (req, res) => {
       p.shoe_entries,
       p.player_count,
       p.colorway_count,
-      COALESCE((SELECT image_data FROM user_shoes WHERE id = p.sample_shoe_id), '') AS image_data
+      COALESCE(sc.image_data, (SELECT image_data FROM user_shoes WHERE id = p.sample_shoe_id), '') AS image_data,
+      COALESCE(sc.colorway, '') AS display_colorway
     FROM picked p
+    LEFT JOIN shoe_model_display md
+      ON md.make_key = p.make_key
+      AND md.model_key = p.model_key
+    LEFT JOIN shoe_catalog sc
+      ON sc.id = md.catalog_id
     ORDER BY p.player_count DESC, p.shoe_entries DESC, p.last_used_at DESC, p.model ASC, p.make ASC
     LIMIT ?
   `).all(limit);
@@ -1026,6 +1080,7 @@ router.get('/shoes/stats/top', requireAuth, (req, res) => {
       shoe_entries: parseInt(row.shoe_entries, 10) || 0,
       colorway_count: parseInt(row.colorway_count, 10) || 0,
       image_data: row.image_data || '',
+      display_colorway: row.display_colorway || '',
     })),
   });
 });
