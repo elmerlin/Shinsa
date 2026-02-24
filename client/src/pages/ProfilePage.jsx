@@ -2654,7 +2654,19 @@ export default function ProfilePage() {
                         size="sm"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-display font-bold truncate">{r.song_title}</p>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="text-sm font-display font-bold truncate">{r.song_title}</p>
+                          {(r.recommendation_type === 'easiest' || r.recommendation_type === 'easiest_and_best_impact') && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded border border-cyan-500/40 text-cyan-300 font-display shrink-0">
+                              Easiest
+                            </span>
+                          )}
+                          {(r.recommendation_type === 'best_impact_per_point' || r.recommendation_type === 'easiest_and_best_impact') && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-500/40 text-emerald-300 font-display shrink-0">
+                              Best Impact
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className={`text-[10px] font-display font-bold ${currentRank.color}`}>
                             {r.current_grade}

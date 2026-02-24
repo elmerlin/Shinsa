@@ -977,66 +977,45 @@ async function scrapeRecentlyPlayed(client) {
  */
 async function scrapePumbilityRanking() {
   const client = createClient();
-  const rankings = [];
-
-  // The leaderboard uses AJAX pagination similar to top songs
   const pageUrl = `${PIU_BASE}/leaderboard/pumbility_ranking.php`;
-  await client.get(pageUrl);
+  const res = await client.get(pageUrl);
 
-  const PAGE_SIZE = 50;
-  const MAX_PAGES = 20; // 20 pages × 50 = 1000 entries
+  const html = typeof res.data === 'string' ? res.data : '';
+  const $ = cheerio.load(html);
+  const listItems = $('.rating_ranking_wrap ul.list.pumbilitySt > li').length
+    ? $('.rating_ranking_wrap ul.list.pumbilitySt > li')
+    : $('.rating_ranking_wrap ul.list > li');
 
-  for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
-    const pageOffset = pageIndex * PAGE_SIZE;
+  const rankings = [];
+  listItems.each((idx, li) => {
+    const $li = $(li);
 
-    if (pageIndex > 0) {
-      await delay(200);
-    }
+    const rankText = collapseWhitespace($li.find('.num > i.tt, .num i.tt').first().text());
+    const parsedRank = parseInt(rankText, 10);
+    const rank = Number.isFinite(parsedRank) && parsedRank > 0 ? parsedRank : (idx + 1);
 
-    const params = new URLSearchParams();
-    params.append('page', String(pageOffset));
-
-    const res = await client.post(
-      `${PIU_BASE}/ajax/pumbility_ranking.php`,
-      params.toString(),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Requested-With': 'XMLHttpRequest',
-          Referer: pageUrl,
-        },
-      }
+    const playerName = collapseWhitespace(
+      $li.find('.name .name_w .profile_name').first().text()
+      || $li.find('.profile_name .t1').first().text()
+      || $li.find('.profile_name').first().text()
     );
+    if (!playerName || playerName.startsWith('#')) return;
 
-    const html = typeof res.data === 'string' ? res.data : '';
-    const $ = cheerio.load(html);
-    const items = $('li');
-    if (!items.length) break;
+    const pumbilityText = collapseWhitespace(
+      $li.find('.score i.tt, .profile_name .t2, .pumbility i.tt, .rating i.tt').first().text()
+    );
+    const pumbility = parseInt((pumbilityText || '').replace(/,/g, ''), 10) || 0;
 
-    items.each((idx, li) => {
-      const $li = $(li);
-      const rankText = collapseWhitespace($li.find('.num > i.tt').first().text());
-      const parsedRank = parseInt(rankText, 10);
-      const rank = Number.isFinite(parsedRank) ? parsedRank : pageOffset + idx + 1;
-
-      const playerName = collapseWhitespace($li.find('.profile_name .t1').first().text());
-      if (!playerName) return;
-
-      const pumbilityText = collapseWhitespace($li.find('.profile_name .t2, .score i.tt, .pumbility i.tt, .rating i.tt').first().text());
-      const pumbility = parseInt((pumbilityText || '').replace(/,/g, ''), 10) || 0;
-
-      rankings.push({ rank, player_name: playerName, pumbility });
-    });
-
-    if (items.length < PAGE_SIZE) break;
-  }
+    rankings.push({ rank, player_name: playerName, pumbility });
+  });
 
   rankings.sort((a, b) => a.rank - b.rank);
+  const top1000 = rankings.filter((row) => row.rank > 0).slice(0, 1000);
+  const threshold = top1000.length > 0
+    ? (parseInt(top1000[top1000.length - 1].pumbility, 10) || 0)
+    : 0;
 
-  // Threshold = pumbility of the 1000th place (or last entry if fewer)
-  const threshold = rankings.length > 0 ? rankings[rankings.length - 1].pumbility : 0;
-
-  return { rankings, threshold };
+  return { rankings: top1000, threshold };
 }
 
 module.exports = {
