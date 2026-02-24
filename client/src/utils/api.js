@@ -630,7 +630,13 @@ export async function streamChatbotAsk(message, history, onEvent) {
 
 // Song Recommendations
 export const getSongRecommendations = (data) => request('/songs/recommendations', { method: 'POST', body: JSON.stringify(data) });
-export const getTrainingRecommendations = (chartMode = 'both') => request(`/songs/recommendations/training?chart_mode=${encodeURIComponent(chartMode)}`);
+export const getTrainingRecommendations = (options = {}) => {
+  const params = new URLSearchParams();
+  params.set('chart_mode', String(options.chart_mode || 'single'));
+  if (options.min_level) params.set('min_level', String(options.min_level));
+  if (options.max_level) params.set('max_level', String(options.max_level));
+  return request(`/songs/recommendations/training?${params.toString()}`);
+};
 
 // Parser
 export async function parseScorePhoto(file) {

@@ -2434,29 +2434,31 @@ function filterChartsBySkills(charts, mustHaveSlugs, avoidSlugs) {
 
 function normalizeTrainingChartMode(value) {
   const raw = String(value || '').trim().toLowerCase();
-  if (!raw || raw === 'both' || raw === 'all') {
+  if (!raw || raw === 'single' || raw === 'singles' || raw === 's') {
+    return { ok: true, chartMode: 'single', allowedModes: ['Single'] };
+  }
+  if (raw === 'double' || raw === 'doubles' || raw === 'd') {
+    return { ok: true, chartMode: 'double', allowedModes: ['Double'] };
+  }
+  if (raw === 'both' || raw === 'all') {
     return { ok: true, chartMode: 'both', allowedModes: ['Single', 'Double'] };
   }
-  const normalized = normalizeMode(raw);
-  if (!normalized || normalized === 'CoOp') {
-    return { ok: false, chartMode: 'both', allowedModes: ['Single', 'Double'] };
-  }
-  return { ok: true, chartMode: normalized.toLowerCase(), allowedModes: [normalized] };
+  return { ok: false, chartMode: 'single', allowedModes: ['Single'] };
 }
 
 function buildTrainingRecommendations({
   songCatalog,
   bestByChart,
-  passingLevel,
-  scoringLevel,
+  minLevel,
+  maxLevel,
   limit = 10,
 }) {
-  const minLevel = Math.min(parseInt(passingLevel, 10) || 0, parseInt(scoringLevel, 10) || 0);
-  const maxLevel = Math.max(parseInt(passingLevel, 10) || 0, parseInt(scoringLevel, 10) || 0);
+  const normalizedMinLevel = parseInt(minLevel, 10) || 0;
+  const normalizedMaxLevel = parseInt(maxLevel, 10) || 0;
 
   const inRangeCharts = songCatalog.charts.filter((chart) => {
     const level = parseInt(chart.level, 10) || 0;
-    return level >= minLevel && level <= maxLevel;
+    return level >= normalizedMinLevel && level <= normalizedMaxLevel;
   });
 
   const lowScorePassed = [];
@@ -2614,8 +2616,8 @@ function buildTrainingRecommendations({
       return rest;
     }),
     weak_skills: weakSkills,
-    min_level: minLevel,
-    max_level: maxLevel,
+    min_level: normalizedMinLevel,
+    max_level: normalizedMaxLevel,
     source_low_score_passed_count: lowScorePassed.length,
   };
 }
@@ -2651,11 +2653,49 @@ router.get('/recommendations/training', optionalAuth, (req, res) => {
     validChartKeys: songCatalog.chartsByKey,
   });
 
+  let highestPassedLevel = 0;
+  for (const chart of songCatalog.charts) {
+    const best = bestByChart.get(chart.key);
+    if (!best || !best.is_pass) continue;
+    const level = parseInt(chart.level, 10) || 0;
+    if (level > highestPassedLevel) highestPassedLevel = level;
+  }
+
+  const rangeFloorCandidate = Math.max(1, (parseInt(scoringLevel, 10) || 0) - 5);
+  const rangeCeilCandidate = highestPassedLevel > 0
+    ? highestPassedLevel
+    : Math.max(rangeFloorCandidate, parseInt(scoringLevel, 10) || 0);
+  const rangeMinLevel = Math.min(rangeFloorCandidate, rangeCeilCandidate);
+  const rangeMaxLevel = Math.max(rangeFloorCandidate, rangeCeilCandidate);
+  const clampToSelectable = (level) => {
+    const parsed = parseInt(level, 10) || 0;
+    return Math.min(rangeMaxLevel, Math.max(rangeMinLevel, parsed));
+  };
+
+  const requestedMinLevel = parseLevelBound(req.query.min_level);
+  const requestedMaxLevel = parseLevelBound(req.query.max_level);
+  if (requestedMinLevel && requestedMaxLevel && requestedMinLevel > requestedMaxLevel) {
+    return res.status(400).json({ error: 'min_level cannot exceed max_level' });
+  }
+
+  let selectedMinLevel = requestedMinLevel ? clampToSelectable(requestedMinLevel) : rangeMinLevel;
+  let selectedMaxLevel = requestedMaxLevel ? clampToSelectable(requestedMaxLevel) : rangeMaxLevel;
+  if (selectedMinLevel > selectedMaxLevel) {
+    const tmp = selectedMinLevel;
+    selectedMinLevel = selectedMaxLevel;
+    selectedMaxLevel = tmp;
+  }
+
+  const levelOptions = [];
+  for (let level = rangeMinLevel; level <= rangeMaxLevel; level++) {
+    levelOptions.push(level);
+  }
+
   const training = buildTrainingRecommendations({
     songCatalog,
     bestByChart,
-    passingLevel,
-    scoringLevel,
+    minLevel: selectedMinLevel,
+    maxLevel: selectedMaxLevel,
     limit: 10,
   });
 
@@ -2665,6 +2705,12 @@ router.get('/recommendations/training', optionalAuth, (req, res) => {
     scoring_level: scoringLevel,
     passing_level: passingLevel,
     chart_mode: modeInfo.chartMode,
+    range_min_level: rangeMinLevel,
+    range_max_level: rangeMaxLevel,
+    selected_min_level: selectedMinLevel,
+    selected_max_level: selectedMaxLevel,
+    highest_passed_level: highestPassedLevel || null,
+    level_options: levelOptions,
     ...training,
   });
 });

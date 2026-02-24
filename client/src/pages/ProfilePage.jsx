@@ -701,6 +701,7 @@ export default function ProfilePage() {
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
+  const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
@@ -753,6 +754,7 @@ export default function ProfilePage() {
     setPiuRecentlyPlayed(null);
     setPiuTitles(null);
     setPiuDataLoaded(false);
+    setShowPumbilityThresholdModal(false);
     setSyncProgress({ in_progress: '', progress: 0, total: 0 });
     setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
     setActivityItems([]);
@@ -1549,6 +1551,7 @@ export default function ProfilePage() {
   const pumbilityAvgScore = pumbilityTopScores.length > 0
     ? Math.round(pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.score, 10) || 0), 0) / pumbilityTopScores.length)
     : 0;
+  const pumbilityAvgScoreRank = pumbilityAvgScore > 0 ? getRank(pumbilityAvgScore) : null;
   const pumbilityAvgLevel = pumbilityTopScores.length > 0
     ? Math.round((pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.level, 10) || 0), 0) / pumbilityTopScores.length) * 10) / 10
     : 0;
@@ -2567,13 +2570,21 @@ export default function ProfilePage() {
                       {piuPumbility.pumbility_value.toLocaleString()}
                     </span>
                     {piuPumbility.ranking ? (
-                      <span className="px-2 py-0.5 rounded border border-piu-gold/40 text-piu-gold text-xs font-display font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setShowPumbilityThresholdModal(true)}
+                        className="px-2 py-0.5 rounded border border-piu-gold/40 text-piu-gold text-xs font-display font-bold hover:bg-piu-gold/10 transition-colors"
+                      >
                         #{piuPumbility.ranking}
-                      </span>
+                      </button>
                     ) : (
-                      <span className="px-2 py-0.5 rounded border border-piu-border/40 text-gray-500 text-[10px] font-display">
+                      <button
+                        type="button"
+                        onClick={() => setShowPumbilityThresholdModal(true)}
+                        className="px-2 py-0.5 rounded border border-piu-border/40 text-gray-500 text-[10px] font-display hover:text-gray-300 transition-colors"
+                      >
                         Outside Top 1000
-                      </span>
+                      </button>
                     )}
                   </div>
                 )}
@@ -2617,8 +2628,8 @@ export default function ProfilePage() {
                     {pumbilityAvgScore > 0 ? pumbilityAvgScore.toLocaleString() : '--'}
                   </p>
                   {pumbilityAvgScore > 0 && (
-                    <p className="text-[10px] text-gray-500 font-display mt-0.5">
-                      Top 50 average
+                    <p className={`text-[10px] font-display mt-0.5 ${pumbilityAvgScoreRank?.color || 'text-gray-500'}`}>
+                      {pumbilityAvgScoreRank?.label || '--'}
                     </p>
                   )}
                 </div>
@@ -2635,23 +2646,6 @@ export default function ProfilePage() {
                     </p>
                   )}
                 </div>
-
-                {/* Leaderboard Threshold (1000th place) */}
-                <div className="bg-piu-dark/50 rounded-lg p-3 text-center col-start-2 sm:col-start-4">
-                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Top 1000 Threshold</p>
-                  <p className="text-lg font-mono font-bold text-white">
-                    {piuPumbility.threshold > 0 ? piuPumbility.threshold.toLocaleString() : '--'}
-                  </p>
-                  {piuPumbility.threshold > 0 && piuPumbility.pumbility_value > 0 && (
-                    <p className="text-[10px] font-display mt-0.5">
-                      {piuPumbility.pumbility_value >= piuPumbility.threshold ? (
-                        <span className="text-green-400">Qualified</span>
-                      ) : (
-                        <span className="text-gray-500">{(piuPumbility.threshold - piuPumbility.pumbility_value).toLocaleString()} away</span>
-                      )}
-                    </p>
-                  )}
-                </div>
               </div>
             )}
 
@@ -2661,6 +2655,53 @@ export default function ProfilePage() {
               </p>
             )}
           </div>
+
+          {showPumbilityThresholdModal && (
+            <div
+              className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setShowPumbilityThresholdModal(false)}
+            >
+              <div
+                className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl p-4"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Top 1000 Threshold</p>
+                    <p className="text-xl font-mono font-bold text-white mt-1">
+                      {piuPumbility?.threshold > 0 ? piuPumbility.threshold.toLocaleString() : '--'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPumbilityThresholdModal(false)}
+                    className="text-xs text-gray-400 hover:text-white transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-[11px] text-gray-400">
+                    Current ranking: {piuPumbility?.ranking ? `#${piuPumbility.ranking}` : 'Outside top 1000'}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    Current pumbility: {(piuPumbility?.pumbility_value || 0).toLocaleString()}
+                  </p>
+                  {piuPumbility?.threshold > 0 && piuPumbility?.pumbility_value > 0 ? (
+                    <p className="text-[11px] font-display">
+                      {piuPumbility.pumbility_value >= piuPumbility.threshold ? (
+                        <span className="text-green-400">Qualified for Top 1000</span>
+                      ) : (
+                        <span className="text-gray-400">
+                          {(piuPumbility.threshold - piuPumbility.pumbility_value).toLocaleString()} away from Top 1000
+                        </span>
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Top 50 Scores List */}
           <div className="card">

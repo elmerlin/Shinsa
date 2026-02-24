@@ -254,6 +254,9 @@ export default function OptimisePage() {
 
   const [trainingLoading, setTrainingLoading] = useState(false);
   const [trainingData, setTrainingData] = useState(null);
+  const [trainingChartMode, setTrainingChartMode] = useState('single');
+  const [trainingRangeA, setTrainingRangeA] = useState(null);
+  const [trainingRangeB, setTrainingRangeB] = useState(null);
   const [skillInfoOpen, setSkillInfoOpen] = useState(false);
   const [skillInfoLoading, setSkillInfoLoading] = useState(false);
   const [skillInfoError, setSkillInfoError] = useState('');
@@ -303,28 +306,45 @@ export default function OptimisePage() {
     return () => { cancelled = true; };
   }, [activeTab, pumbilityData, user?.id]);
 
-  useEffect(() => {
-    if (!user?.id || activeTab !== 'training' || trainingData) return;
-
-    let cancelled = false;
+  const fetchTrainingRecommendations = async ({
+    chartMode = trainingChartMode,
+    minLevel = null,
+    maxLevel = null,
+    preserveSelection = false,
+  } = {}) => {
     setTrainingLoading(true);
     setError('');
 
-    getTrainingRecommendations('both')
-      .then((data) => {
-        if (cancelled) return;
-        setTrainingData(data || null);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err?.message || 'Failed to load training recommendations');
-      })
-      .finally(() => {
-        if (!cancelled) setTrainingLoading(false);
+    try {
+      const payload = await getTrainingRecommendations({
+        chart_mode: chartMode,
+        min_level: minLevel,
+        max_level: maxLevel,
       });
+      setTrainingData(payload || null);
 
-    return () => { cancelled = true; };
-  }, [activeTab, trainingData, user?.id]);
+      if (!preserveSelection) {
+        const nextMin = parseInt(payload?.selected_min_level, 10);
+        const nextMax = parseInt(payload?.selected_max_level, 10);
+        if (Number.isFinite(nextMin) && Number.isFinite(nextMax)) {
+          setTrainingRangeA(nextMin);
+          setTrainingRangeB(nextMax);
+        } else {
+          setTrainingRangeA(null);
+          setTrainingRangeB(null);
+        }
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to load training recommendations');
+    } finally {
+      setTrainingLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.id || activeTab !== 'training' || trainingData) return;
+    fetchTrainingRecommendations({ chartMode: trainingChartMode }).catch(() => {});
+  }, [activeTab, trainingData, trainingChartMode, user?.id]);
 
   const headline = useMemo(() => {
     if (!pumbilityData || !pumbilityData.pumbility_value) return '';
@@ -334,6 +354,12 @@ export default function OptimisePage() {
   }, [pumbilityData]);
 
   const activeSkillInfo = activeSkillSlug ? skillInfoCache[activeSkillSlug] : null;
+  const selectedTrainingMin = Number.isFinite(trainingRangeA) && Number.isFinite(trainingRangeB)
+    ? Math.min(trainingRangeA, trainingRangeB)
+    : null;
+  const selectedTrainingMax = Number.isFinite(trainingRangeA) && Number.isFinite(trainingRangeB)
+    ? Math.max(trainingRangeA, trainingRangeB)
+    : null;
 
   const handleOpenSkillInfo = async (slug) => {
     const normalized = String(slug || '').trim().toLowerCase();
@@ -441,31 +467,118 @@ export default function OptimisePage() {
           ) : (
             <>
               <div className="card">
-                <h3 className="font-display font-bold text-sm text-piu-accent">TRAINING PROFILE</h3>
+                <h3 className="font-display font-bold text-sm text-piu-accent">TRAINING OPTIONS</h3>
                 {trainingData ? (
-                  <>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3">
-                      <div className="bg-piu-dark/50 rounded-lg p-2.5 text-center">
-                        <p className="text-[10px] text-gray-500 font-display uppercase">Pumbility</p>
-                        <p className="text-sm font-mono font-bold">{(trainingData.pumbility || 0).toLocaleString()}</p>
-                      </div>
-                      <div className="bg-piu-dark/50 rounded-lg p-2.5 text-center">
-                        <p className="text-[10px] text-gray-500 font-display uppercase">Avg Rating</p>
-                        <p className="text-sm font-mono font-bold">{(trainingData.avg_rating || 0).toFixed(2)}</p>
-                      </div>
-                      <div className="bg-piu-dark/50 rounded-lg p-2.5 text-center">
-                        <p className="text-[10px] text-gray-500 font-display uppercase">Scoring Lv</p>
-                        <p className="text-sm font-mono font-bold">{trainingData.scoring_level || '--'}</p>
-                      </div>
-                      <div className="bg-piu-dark/50 rounded-lg p-2.5 text-center">
-                        <p className="text-[10px] text-gray-500 font-display uppercase">Passing Lv</p>
-                        <p className="text-sm font-mono font-bold">{trainingData.passing_level || '--'}</p>
+                  <div className="space-y-3 mt-3">
+                    <div>
+                      <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Mode</p>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (trainingChartMode === 'single') return;
+                            setTrainingChartMode('single');
+                            setTrainingData(null);
+                            setTrainingRangeA(null);
+                            setTrainingRangeB(null);
+                          }}
+                          className={`px-3 py-1.5 rounded text-xs font-display font-bold transition-colors ${
+                            trainingChartMode === 'single' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Singles
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (trainingChartMode === 'double') return;
+                            setTrainingChartMode('double');
+                            setTrainingData(null);
+                            setTrainingRangeA(null);
+                            setTrainingRangeB(null);
+                          }}
+                          className={`px-3 py-1.5 rounded text-xs font-display font-bold transition-colors ${
+                            trainingChartMode === 'double' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Doubles
+                        </button>
                       </div>
                     </div>
-                    <p className="text-[11px] text-gray-500 mt-2">
-                      Recommendation level range: Lv.{trainingData.min_level || '--'} to Lv.{trainingData.max_level || '--'}
-                    </p>
-                  </>
+
+                    <div>
+                      <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Difficulty Range (select two levels)</p>
+                      <p className="text-[10px] text-gray-500 mb-2">
+                        Lowest selectable level is 5 below your scoring level. Highest selectable level is your highest passed level.
+                      </p>
+                      <p className="text-[10px] text-gray-500 mb-2">
+                        Scoring level: Lv.{trainingData.scoring_level || '--'} · Highest passed: {trainingData.highest_passed_level ? `Lv.${trainingData.highest_passed_level}` : '--'}
+                      </p>
+                      {Array.isArray(trainingData.level_options) && trainingData.level_options.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {trainingData.level_options.map((level) => {
+                            const selected = level === trainingRangeA || level === trainingRangeB;
+                            const inSelectedRange = selectedTrainingMin !== null && selectedTrainingMax !== null
+                              ? level >= selectedTrainingMin && level <= selectedTrainingMax
+                              : false;
+                            return (
+                              <button
+                                key={`level-option-${level}`}
+                                type="button"
+                                onClick={() => {
+                                  if (trainingRangeA === null || (trainingRangeA !== null && trainingRangeB !== null)) {
+                                    setTrainingRangeA(level);
+                                    setTrainingRangeB(null);
+                                    return;
+                                  }
+                                  if (trainingRangeA === level) {
+                                    setTrainingRangeA(null);
+                                    return;
+                                  }
+                                  setTrainingRangeB(level);
+                                }}
+                                className={`min-w-[34px] h-[30px] px-2 rounded-md text-xs font-display font-bold border transition-colors ${
+                                  selected
+                                    ? 'bg-piu-accent text-white border-piu-accent'
+                                    : inSelectedRange
+                                      ? 'bg-piu-accent/15 text-piu-accent border-piu-accent/40'
+                                      : 'bg-piu-dark text-gray-400 border-piu-border/60 hover:text-white'
+                                }`}
+                              >
+                                {level}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500">No selectable levels available yet.</p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[11px] text-gray-500">
+                        Selected range:{' '}
+                        {selectedTrainingMin !== null && selectedTrainingMax !== null
+                          ? `Lv.${selectedTrainingMin} to Lv.${selectedTrainingMax}`
+                          : 'Select two levels'}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={trainingLoading || selectedTrainingMin === null || selectedTrainingMax === null}
+                        onClick={() => {
+                          fetchTrainingRecommendations({
+                            chartMode: trainingChartMode,
+                            minLevel: selectedTrainingMin,
+                            maxLevel: selectedTrainingMax,
+                            preserveSelection: true,
+                          }).catch(() => {});
+                        }}
+                        className="px-3 py-1.5 rounded text-xs font-display font-bold bg-piu-accent text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Generate Training Songs
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <p className="text-xs text-gray-500 mt-2">No training data available.</p>
                 )}
@@ -493,6 +606,12 @@ export default function OptimisePage() {
 
               <div className="card">
                 <h3 className="font-display font-bold text-sm text-piu-accent">TRAINING SONGS (TOP 10)</h3>
+                <p className="text-[10px] text-gray-500 mt-1">
+                  {trainingChartMode === 'single' ? 'Singles' : 'Doubles'}
+                  {selectedTrainingMin !== null && selectedTrainingMax !== null
+                    ? ` · Lv.${selectedTrainingMin} to Lv.${selectedTrainingMax}`
+                    : ''}
+                </p>
                 {trainingData?.recommendations?.length > 0 ? (
                   <div className="space-y-1.5 mt-2">
                     {trainingData.recommendations.map((row, idx) => (
