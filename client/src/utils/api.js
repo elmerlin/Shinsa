@@ -194,6 +194,9 @@ export const getPiugameBestScores = (userId, mode) => request(`/piugame/best-sco
 export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-played/${userId}`);
 export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
+export const getPumbilityRecommendations = (userId) => request(`/piugame/pumbility-recommendations/${userId}`);
+export const getPumbilityRanking = () => request('/piugame/pumbility-ranking');
+export const syncPumbilityRanking = () => longRequest('/piugame/sync/pumbility-ranking', { method: 'POST' });
 export const getSyncProgress = () => request('/piugame/sync/progress');
 export const getProfileShoes = (userId) => request(`/piugame/shoes/${userId}`);
 export const getShoeTopStats = (limit = 24) => request(`/piugame/shoes/stats/top?limit=${encodeURIComponent(limit)}`);
