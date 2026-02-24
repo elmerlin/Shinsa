@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getAvatarUrl } from '../components/AvatarPicker';
 import {
   getFollowing,
   getJacketMap,
@@ -72,6 +73,33 @@ function getLevelOptionsFromLibrary(payload) {
     Singles: singlesList,
     Doubles: doublesList,
   };
+}
+
+function PlayerAvatar({ player, fallbackName, size = 'w-8 h-8' }) {
+  const name = player?.username || fallbackName || '?';
+  if (player?.avatar) {
+    return (
+      <img
+        src={getAvatarUrl(player.avatar)}
+        alt={name}
+        className={`${size} rounded-full object-cover border border-piu-border`}
+      />
+    );
+  }
+  return (
+    <div className={`${size} rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs`}>
+      {name[0].toUpperCase()}
+    </div>
+  );
+}
+
+function StarValue({ value, starred, className = '' }) {
+  return (
+    <span className={`inline-flex items-center gap-1 justify-end ${className}`}>
+      {starred && <span className="text-emerald-400">★</span>}
+      <span>{value}</span>
+    </span>
+  );
 }
 
 function SongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'sm' }) {
@@ -533,6 +561,22 @@ export default function OptimisePage() {
   const snipingTotalItems = parseInt(snipingPagination.total_items, 10) || 0;
   const snipingUserA = snipingResult?.users?.a || user || null;
   const snipingUserB = snipingResult?.users?.b || snipingOpponent || null;
+  const snipingMetricWinner = useMemo(() => {
+    const wins = snipingComparison?.metric_wins || {};
+    return {
+      higherScore: wins.higher_score || null,
+      totalPassed: wins.total_passed || null,
+      ratingTotal: wins.rating_total || null,
+    };
+  }, [snipingComparison]);
+  const displayedSnipingRows = useMemo(() => {
+    return [...snipingRows].sort((a, b) => {
+      const diffA = parseInt(a?.score_diff, 10) || Math.max(0, (parseInt(a?.score_b, 10) || 0) - (parseInt(a?.score_a, 10) || 0));
+      const diffB = parseInt(b?.score_diff, 10) || Math.max(0, (parseInt(b?.score_b, 10) || 0) - (parseInt(b?.score_a, 10) || 0));
+      if (diffB !== diffA) return diffB - diffA;
+      return (parseInt(b?.score_b, 10) || 0) - (parseInt(a?.score_b, 10) || 0);
+    });
+  }, [snipingRows]);
 
   const handleOpenSkillInfo = async (slug) => {
     const normalized = String(slug || '').trim().toLowerCase();
@@ -877,8 +921,9 @@ export default function OptimisePage() {
                         key={entry.id}
                         type="button"
                         onClick={() => handleSelectSnipingOpponent(entry)}
-                        className="w-full px-3 py-2 hover:bg-piu-dark/70 transition-colors border-b border-piu-border/20 last:border-0 text-left"
+                        className="w-full px-3 py-2 hover:bg-piu-dark/70 transition-colors border-b border-piu-border/20 last:border-0 text-left flex items-center gap-2"
                       >
+                        <PlayerAvatar player={entry} fallbackName={entry.username} size="w-8 h-8" />
                         <p className="text-sm font-display font-bold truncate">{entry.username}</p>
                       </button>
                     ))}
@@ -951,8 +996,18 @@ export default function OptimisePage() {
                     <thead className="bg-[#0f172a] text-gray-400">
                       <tr>
                         <th className="px-3 py-2 text-left">Metric</th>
-                        <th className="px-3 py-2 text-right">{snipingUserA?.username || 'You'}</th>
-                        <th className="px-3 py-2 text-right">{snipingUserB?.username || 'Opponent'}</th>
+                        <th className="px-3 py-2 text-right">
+                          <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                            <PlayerAvatar player={snipingUserA} fallbackName={snipingUserA?.username || 'You'} size="w-6 h-6" />
+                            <span>{snipingUserA?.username || 'You'}</span>
+                          </span>
+                        </th>
+                        <th className="px-3 py-2 text-right">
+                          <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                            <PlayerAvatar player={snipingUserB} fallbackName={snipingUserB?.username || 'Opponent'} size="w-6 h-6" />
+                            <span>{snipingUserB?.username || 'Opponent'}</span>
+                          </span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -963,18 +1018,30 @@ export default function OptimisePage() {
                       </tr>
                       <tr className="border-t border-piu-border/30">
                         <td className="px-3 py-2">Higher score wins</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.wins?.a)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.wins?.b)}</td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          <StarValue value={formatNumber(snipingComparison?.wins?.a)} starred={snipingMetricWinner.higherScore === 'a'} />
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          <StarValue value={formatNumber(snipingComparison?.wins?.b)} starred={snipingMetricWinner.higherScore === 'b'} />
+                        </td>
                       </tr>
                       <tr className="border-t border-piu-border/30">
                         <td className="px-3 py-2">Total passed</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.total_passed?.a)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatNumber(snipingComparison?.total_passed?.b)}</td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          <StarValue value={formatNumber(snipingComparison?.total_passed?.a)} starred={snipingMetricWinner.totalPassed === 'a'} />
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">
+                          <StarValue value={formatNumber(snipingComparison?.total_passed?.b)} starred={snipingMetricWinner.totalPassed === 'b'} />
+                        </td>
                       </tr>
                       <tr className="border-t border-piu-border/30">
                         <td className="px-3 py-2">Rating total</td>
-                        <td className="px-3 py-2 text-right font-mono text-piu-gold">{formatNumber(snipingComparison?.rating?.a)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-piu-gold">{formatNumber(snipingComparison?.rating?.b)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-piu-gold">
+                          <StarValue value={formatNumber(snipingComparison?.rating?.a)} starred={snipingMetricWinner.ratingTotal === 'a'} className="text-piu-gold" />
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-piu-gold">
+                          <StarValue value={formatNumber(snipingComparison?.rating?.b)} starred={snipingMetricWinner.ratingTotal === 'b'} className="text-piu-gold" />
+                        </td>
                       </tr>
                       <tr className="border-t border-piu-border/30">
                         <td className="px-3 py-2">Ties</td>
@@ -999,13 +1066,13 @@ export default function OptimisePage() {
                     <thead className="bg-[#0f172a] text-gray-400">
                       <tr>
                         <th className="px-3 py-2 text-left">Song</th>
-                        <th className="px-3 py-2 text-right">{snipingUserA?.username || 'You'}</th>
-                        <th className="px-3 py-2 text-right">{snipingUserB?.username || 'Opponent'}</th>
-                        <th className="px-3 py-2 text-right">Diff</th>
+                        <th className="px-3 py-2 text-right">You (Score / Grade)</th>
+                        <th className="px-3 py-2 text-right">Opponent (Score / Grade)</th>
+                        <th className="px-3 py-2 text-right">Score Diff</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {snipingRows.map((row, index) => (
+                      {displayedSnipingRows.map((row, index) => (
                         <tr key={`${row.chart_id || row.title}-${index}`} className="border-t border-piu-border/30">
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2 min-w-0">
