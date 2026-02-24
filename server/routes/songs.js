@@ -2467,6 +2467,10 @@ function buildTrainingRecommendations({
     if (!best || !best.is_pass) continue;
     const bestScore = scoreValue(best.score);
     if (bestScore <= 0) continue;
+    const bestGrade = getGrade(best);
+    const gradeIndex = GRADE_INDEX[bestGrade];
+    // Training "low score" definition: strictly below AAA.
+    if (!Number.isFinite(gradeIndex) || gradeIndex >= GRADE_INDEX.AAA) continue;
     lowScorePassed.push({ chart, best, bestScore });
   }
   lowScorePassed.sort((a, b) => {
@@ -2562,11 +2566,11 @@ function buildTrainingRecommendations({
   };
 
   const primary = lowScorePassed
-    .map((row) => buildRow({ chart: row.chart, best: row.best, reason: 'Low-score clears with recurring weak skills' }))
+    .map((row) => buildRow({ chart: row.chart, best: row.best, reason: 'Low-score clears (<AAA) with recurring weak skills' }))
     .filter((row) => row.skill_match_count > 0);
 
   const secondary = lowScorePassed
-    .map((row) => buildRow({ chart: row.chart, best: row.best, reason: 'Low-score clear in your current level range' }))
+    .map((row) => buildRow({ chart: row.chart, best: row.best, reason: 'Low-score clear (<AAA) in your current level range' }))
     .filter((row) => row.skill_match_count === 0);
 
   const tertiary = inRangeCharts
@@ -2618,6 +2622,7 @@ function buildTrainingRecommendations({
     weak_skills: weakSkills,
     min_level: normalizedMinLevel,
     max_level: normalizedMaxLevel,
+    low_score_max_grade: 'AA+',
     source_low_score_passed_count: lowScorePassed.length,
   };
 }
