@@ -75,7 +75,7 @@ function computeListStats(list, libraryMap) {
 
     const live = libraryMap[item.chartId];
     if (live) {
-      const liveScore = parseInt(live.score, 10) || 0;
+      const liveScore = parseInt(live.best_score, 10) || 0;
       if (item.target === 'PASS') {
         if (live.is_pass) completed++;
       } else if (liveScore >= targetScore) {
@@ -202,7 +202,7 @@ export default function ListsPage() {
       if (list.id !== listId) return list;
       // Avoid duplicates
       if (list.items.some(i => i.chartId === chart.chart_id)) return list;
-      const currentScore = parseInt(chart.score, 10) || 0;
+      const currentScore = parseInt(chart.best_score, 10) || 0;
       const currentGrade = gradeFromScore(currentScore).grade;
       const hasPass = !!chart.is_pass;
 
@@ -210,8 +210,11 @@ export default function ListsPage() {
       let defaultTarget = 'PASS';
       if (hasPass && currentScore > 0) {
         const currentIdx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
-        if (currentIdx < GRADE_THRESHOLDS.length - 1) {
+        if (currentIdx >= 0 && currentIdx < GRADE_THRESHOLDS.length - 1) {
           defaultTarget = GRADE_THRESHOLDS[currentIdx + 1].grade;
+        } else if (currentIdx === GRADE_THRESHOLDS.length - 1) {
+          // Already at max grade, keep it as current
+          defaultTarget = currentGrade;
         }
       }
 
@@ -474,6 +477,8 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                             onClick={() => {
                               if (!alreadyAdded) {
                                 onAddChart(list.id, chart, song);
+                                setSearch('');
+                                setShowSuggestions(false);
                               }
                             }}
                             disabled={alreadyAdded}
@@ -543,7 +548,7 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
 
 // ─── Individual List Item Row ──────────────────────────────────────
 function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
-  const liveScore = liveData ? (parseInt(liveData.score, 10) || 0) : (parseInt(item.originalScore, 10) || 0);
+  const liveScore = liveData ? (parseInt(liveData.best_score, 10) || 0) : (parseInt(item.originalScore, 10) || 0);
   const livePass = liveData ? !!liveData.is_pass : item.hadPass;
   const liveGrade = gradeFromScore(liveScore);
 
