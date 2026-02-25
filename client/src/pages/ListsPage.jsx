@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getSongLibrary } from '../utils/api';
+import {
+  getSongLibrary,
+  getUserLists,
+  createList,
+  deleteList,
+  addListItem,
+  removeListItem,
+  updateListItemTarget,
+} from '../utils/api';
 
 // ─── Grade thresholds (ascending) ─────────────────────────────────
 const GRADE_THRESHOLDS = [
@@ -30,46 +38,23 @@ function gradeFromScore(score) {
   return GRADE_THRESHOLDS[0];
 }
 
-function gradeColor(grade) {
-  const entry = GRADE_THRESHOLDS.find(g => g.grade === grade);
-  return entry?.color || 'text-gray-400';
-}
-
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
-}
-
-// ─── localStorage helpers ──────────────────────────────────────────
-const STORAGE_KEY = 'shinsa_lists';
-
-function loadLists() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLists(lists) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
-}
-
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
 // ─── Compute live stats for a list given current library data ──────
 function computeListStats(list, libraryMap) {
   const items = list.items || [];
-  if (items.length === 0) return { songCount: 0, completed: 0, pct: 0, avgLevel: 0, avgTargetScore: 0 };
+  if (items.length === 0) return { songCount: 0, completed: 0, pct: 0, avgLevel: 0, avgTargetScore: 0, totalAttempts: 0 };
 
   let completed = 0;
   let totalLevel = 0;
   let totalTargetScore = 0;
+  let totalAttempts = 0;
 
   for (const item of items) {
     totalLevel += item.level || 0;
+    totalAttempts += item.attempts || 0;
     const targetScore = getTargetMinScore(item.target);
     totalTargetScore += targetScore;
 
@@ -90,6 +75,7 @@ function computeListStats(list, libraryMap) {
     pct: items.length > 0 ? Math.round((completed / items.length) * 100) : 0,
     avgLevel: items.length > 0 ? Math.round(totalLevel / items.length) : 0,
     avgTargetScore: items.length > 0 ? Math.round(totalTargetScore / items.length) : 0,
+    totalAttempts,
   };
 }
 
@@ -128,30 +114,34 @@ function getTargetOptions(currentScore, hasPass) {
 export default function ListsPage() {
   const { user } = useAuth();
 
-  const [lists, setLists] = useState(() => loadLists());
+  const [lists, setLists] = useState([]);
   const [library, setLibrary] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedListId, setExpandedListId] = useState(null);
   const [newListName, setNewListName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // Persist lists on change
+  // Load song library + server-backed lists in parallel
   useEffect(() => {
-    saveLists(lists);
-  }, [lists]);
-
-  // Load song library
-  useEffect(() => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
-        const data = await getSongLibrary(user?.id ? { user_id: user.id } : {});
+        const [libraryData, listsData] = await Promise.all([
+          getSongLibrary({ user_id: user.id }),
+          getUserLists(),
+        ]);
         if (cancelled) return;
-        setLibrary(Array.isArray(data?.songs) ? data.songs : []);
+        setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
+        setLists(Array.isArray(listsData?.lists) ? listsData.lists : []);
       } catch {
         if (cancelled) return;
         setLibrary([]);
+        setLists([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -176,89 +166,97 @@ export default function ListsPage() {
     return map;
   }, [library]);
 
-  const handleCreateList = () => {
+  const handleCreateList = async () => {
     const name = newListName.trim();
     if (!name) return;
-    const newList = {
-      id: generateId(),
-      name,
-      createdAt: Date.now(),
-      items: [],
-    };
-    setLists(prev => [...prev, newList]);
-    setNewListName('');
-    setShowCreateForm(false);
-    setExpandedListId(newList.id);
+    try {
+      const newList = await createList(name);
+      setLists(prev => [...prev, { ...newList, items: newList.items || [] }]);
+      setNewListName('');
+      setShowCreateForm(false);
+      setExpandedListId(newList.id);
+    } catch { /* ignore */ }
   };
 
-  const handleDeleteList = (listId) => {
+  const handleDeleteList = async (listId) => {
     if (!confirm('Delete this list? This cannot be undone.')) return;
-    setLists(prev => prev.filter(l => l.id !== listId));
-    if (expandedListId === listId) setExpandedListId(null);
+    try {
+      await deleteList(listId);
+      setLists(prev => prev.filter(l => l.id !== listId));
+      if (expandedListId === listId) setExpandedListId(null);
+    } catch { /* ignore */ }
   };
 
-  const handleAddChart = (listId, chart, song) => {
-    setLists(prev => prev.map(list => {
-      if (list.id !== listId) return list;
-      // Avoid duplicates
-      if (list.items.some(i => i.chartId === chart.chart_id)) return list;
-      const currentScore = parseInt(chart.best_score, 10) || 0;
-      const currentGrade = gradeFromScore(currentScore).grade;
-      const hasPass = !!chart.is_pass;
+  const handleAddChart = async (listId, chart, song) => {
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+    if ((list.items || []).some(i => i.chartId === chart.chart_id)) return;
 
-      // Default target: next grade above current if they have a score, otherwise Pass
-      let defaultTarget = 'PASS';
-      if (hasPass && currentScore > 0) {
-        const currentIdx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
-        if (currentIdx >= 0 && currentIdx < GRADE_THRESHOLDS.length - 1) {
-          defaultTarget = GRADE_THRESHOLDS[currentIdx + 1].grade;
-        } else if (currentIdx === GRADE_THRESHOLDS.length - 1) {
-          // Already at max grade, keep it as current
-          defaultTarget = currentGrade;
-        }
+    const currentScore = parseInt(chart.best_score, 10) || 0;
+    const currentGrade = gradeFromScore(currentScore).grade;
+    const hasPass = !!chart.is_pass;
+
+    let defaultTarget = 'PASS';
+    if (hasPass && currentScore > 0) {
+      const currentIdx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
+      if (currentIdx >= 0 && currentIdx < GRADE_THRESHOLDS.length - 1) {
+        defaultTarget = GRADE_THRESHOLDS[currentIdx + 1].grade;
+      } else if (currentIdx === GRADE_THRESHOLDS.length - 1) {
+        defaultTarget = currentGrade;
       }
+    }
 
-      return {
-        ...list,
-        items: [...list.items, {
-          chartId: chart.chart_id,
-          songTitle: song.title,
-          artist: song.artist || '',
-          mode: chart.mode,
-          level: chart.level,
-          jacketUrl: song.jacket_url || '',
-          originalScore: currentScore,
-          originalGrade: currentGrade,
-          hadPass: hasPass,
-          target: defaultTarget,
-          addedAt: Date.now(),
-        }],
-      };
-    }));
+    const itemData = {
+      chartId: chart.chart_id,
+      songTitle: song.title,
+      artist: song.artist || '',
+      mode: chart.mode,
+      level: chart.level,
+      jacketUrl: song.jacket_url || '',
+      originalScore: currentScore,
+      originalGrade: currentGrade,
+      hadPass: hasPass,
+      target: defaultTarget,
+      addedAt: Date.now(),
+    };
+
+    try {
+      const result = await addListItem(listId, itemData);
+      setLists(prev => prev.map(l => {
+        if (l.id !== listId) return l;
+        return { ...l, items: [...(l.items || []), { ...itemData, id: result.id, attempts: 0 }] };
+      }));
+    } catch { /* ignore */ }
   };
 
-  const handleRemoveChart = (listId, chartId) => {
-    setLists(prev => prev.map(list => {
-      if (list.id !== listId) return list;
-      return { ...list, items: list.items.filter(i => i.chartId !== chartId) };
-    }));
+  const handleRemoveChart = async (listId, itemId) => {
+    try {
+      await removeListItem(listId, itemId);
+      setLists(prev => prev.map(l => {
+        if (l.id !== listId) return l;
+        return { ...l, items: l.items.filter(i => i.id !== itemId) };
+      }));
+    } catch { /* ignore */ }
   };
 
-  const handleSetTarget = (listId, chartId, target) => {
-    setLists(prev => prev.map(list => {
-      if (list.id !== listId) return list;
-      return {
-        ...list,
-        items: list.items.map(i => i.chartId === chartId ? { ...i, target } : i),
-      };
+  const handleSetTarget = async (listId, itemId, target) => {
+    // Optimistic update
+    setLists(prev => prev.map(l => {
+      if (l.id !== listId) return l;
+      return { ...l, items: l.items.map(i => i.id === itemId ? { ...i, target } : i) };
     }));
+    try {
+      await updateListItemTarget(listId, itemId, target);
+    } catch { /* ignore */ }
   };
+
+  if (!user) {
+    return <div className="max-w-6xl mx-auto px-4 py-10 text-center text-gray-500">Sign in to use Lists</div>;
+  }
 
   if (loading) {
     return <div className="max-w-6xl mx-auto px-4 py-10 text-center text-gray-500">Loading...</div>;
   }
-
-  const expandedList = lists.find(l => l.id === expandedListId) || null;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
@@ -353,6 +351,11 @@ export default function ListsPage() {
                         {stats.avgTargetScore > 0 && (
                           <span className="text-[11px] text-gray-400">
                             Avg target <span className="text-white font-bold">{formatNumber(stats.avgTargetScore)}</span>
+                          </span>
+                        )}
+                        {stats.totalAttempts > 0 && (
+                          <span className="text-[11px] text-gray-400">
+                            <span className="text-white font-bold">{stats.totalAttempts}</span> play{stats.totalAttempts !== 1 ? 's' : ''}
                           </span>
                         )}
                       </>
@@ -520,7 +523,7 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
           <div className="space-y-2">
             {list.items.map(item => (
               <ListItemRow
-                key={item.chartId}
+                key={item.id}
                 item={item}
                 liveData={libraryMap[item.chartId]}
                 listId={list.id}
@@ -575,7 +578,7 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
         {item.level}
       </span>
 
-      {/* Song info + score */}
+      {/* Song info + score + attempts */}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-display font-bold truncate leading-tight">{item.songTitle}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -589,6 +592,11 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
           )}
           {item.originalScore > 0 && liveScore > item.originalScore && (
             <span className="text-[10px] text-emerald-400">+{formatNumber(liveScore - item.originalScore)}</span>
+          )}
+          {item.attempts != null && (
+            <span className="text-[10px] text-gray-500" title="Attempts since added to list">
+              {item.attempts} attempt{item.attempts !== 1 ? 's' : ''}
+            </span>
           )}
         </div>
       </div>
@@ -604,7 +612,7 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
       <div className="shrink-0">
         <select
           value={item.target}
-          onChange={e => onSetTarget(listId, item.chartId, e.target.value)}
+          onChange={e => onSetTarget(listId, item.id, e.target.value)}
           className="bg-piu-dark border border-piu-border rounded-lg text-xs py-1 px-1.5 text-gray-200 focus:outline-none focus:border-violet-400/50 max-w-[110px]"
         >
           {targetOptions.map(opt => (
@@ -616,7 +624,7 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
       {/* Remove button */}
       <button
         type="button"
-        onClick={() => onRemove(listId, item.chartId)}
+        onClick={() => onRemove(listId, item.id)}
         className="text-gray-600 hover:text-red-400 transition-colors shrink-0 p-0.5"
         title="Remove from list"
       >

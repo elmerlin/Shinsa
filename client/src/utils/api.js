@@ -641,6 +641,14 @@ export async function streamChatbotAsk(message, history, onEvent) {
   }
 }
 
+// Lists (server-backed)
+export const getUserLists = () => request('/songs/lists');
+export const createList = (name) => request('/songs/lists', { method: 'POST', body: JSON.stringify({ name }) });
+export const deleteList = (listId) => request(`/songs/lists/${listId}`, { method: 'DELETE' });
+export const addListItem = (listId, data) => request(`/songs/lists/${listId}/items`, { method: 'POST', body: JSON.stringify(data) });
+export const removeListItem = (listId, itemId) => request(`/songs/lists/${listId}/items/${itemId}`, { method: 'DELETE' });
+export const updateListItemTarget = (listId, itemId, target) => request(`/songs/lists/${listId}/items/${itemId}/target`, { method: 'PUT', body: JSON.stringify({ target }) });
+
 // Song Recommendations
 export const getSongRecommendations = (data) => request('/songs/recommendations', { method: 'POST', body: JSON.stringify(data) });
 export const getTrainingRecommendations = (options = {}) => {

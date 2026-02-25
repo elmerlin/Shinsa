@@ -3,7 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { getDb } = require('../db/schema');
-const { optionalAuth } = require('./auth');
+const { optionalAuth, requireAuth } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 // Cache the jacket map in memory (loaded once from pump-phoenix.json)
@@ -1572,6 +1572,185 @@ router.get('/library', optionalAuth, (req, res) => {
     total_charts: songs.reduce((sum, song) => sum + song.charts.length, 0),
     songs,
   });
+});
+
+// POST /api/songs/list-attempt-counts — count attempts per chart since each addedAt timestamp
+router.post('/list-attempt-counts', optionalAuth, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const userId = String(req.body.user_id || req.user?.id || '').trim();
+  if (!userId) return res.status(400).json({ error: 'user_id is required' });
+
+  const items = req.body.items;
+  if (!Array.isArray(items) || items.length === 0) return res.json({ counts: {} });
+
+  // Fetch all recent plays for this user once
+  const allPlays = db.prepare(`
+    SELECT song_title, mode, level, date_played
+    FROM user_recently_played
+    WHERE user_id = ?
+  `).all(userId);
+
+  const counts = {};
+  for (const item of items) {
+    const title = String(item.song_title || '');
+    const mode = normalizeMode(item.mode);
+    const level = parseInt(item.level, 10) || 0;
+    const addedAtMs = parseInt(item.added_at, 10) || 0;
+    if (!title || !mode || !level || !addedAtMs) continue;
+
+    const chartKey = makeChartKey(title, mode, level, aliases);
+    if (!chartKey) continue;
+
+    let count = 0;
+    for (const play of allPlays) {
+      const playKey = makeChartKey(play.song_title, play.mode, play.level, aliases);
+      if (playKey !== chartKey) continue;
+      const playMs = parseDateMs(play.date_played);
+      if (playMs >= addedAtMs) count++;
+    }
+    counts[`${item.chart_id}`] = count;
+  }
+
+  res.json({ counts });
+});
+
+// ─── Server-backed Lists CRUD ────────────────────────────────────
+
+// GET /api/songs/lists — fetch all lists for the authenticated user (with items + attempt counts)
+router.get('/lists', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const aliases = loadSongAliases();
+
+  const lists = db.prepare('SELECT * FROM user_lists WHERE user_id = ? ORDER BY created_at ASC').all(userId);
+  const allItems = db.prepare(`
+    SELECT li.* FROM user_list_items li
+    JOIN user_lists l ON li.list_id = l.id
+    WHERE l.user_id = ?
+    ORDER BY li.id ASC
+  `).all(userId);
+
+  // Build attempt counts in one pass
+  const allPlays = db.prepare('SELECT song_title, mode, level, date_played FROM user_recently_played WHERE user_id = ?').all(userId);
+
+  const itemsByList = {};
+  for (const item of allItems) {
+    if (!itemsByList[item.list_id]) itemsByList[item.list_id] = [];
+
+    const chartKey = makeChartKey(item.song_title, item.mode, item.level, aliases);
+    let attempts = 0;
+    if (chartKey && item.added_at) {
+      for (const play of allPlays) {
+        if (makeChartKey(play.song_title, play.mode, play.level, aliases) !== chartKey) continue;
+        if (parseDateMs(play.date_played) >= item.added_at) attempts++;
+      }
+    }
+
+    itemsByList[item.list_id] = itemsByList[item.list_id] || [];
+    itemsByList[item.list_id].push({
+      id: item.id,
+      chartId: item.chart_id,
+      songTitle: item.song_title,
+      artist: item.artist,
+      mode: item.mode,
+      level: item.level,
+      jacketUrl: item.jacket_url,
+      originalScore: item.original_score,
+      originalGrade: item.original_grade,
+      hadPass: !!item.had_pass,
+      target: item.target,
+      addedAt: item.added_at,
+      attempts,
+    });
+  }
+
+  const result = lists.map(l => ({
+    id: l.id,
+    name: l.name,
+    createdAt: l.created_at,
+    items: itemsByList[l.id] || [],
+  }));
+
+  res.json({ lists: result });
+});
+
+// POST /api/songs/lists — create a new list
+router.post('/lists', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'List name is required' });
+
+  const result = db.prepare('INSERT INTO user_lists (user_id, name) VALUES (?, ?)').run(userId, name);
+  res.json({ id: result.lastInsertRowid, name, createdAt: new Date().toISOString(), items: [] });
+});
+
+// DELETE /api/songs/lists/:listId — delete a list
+router.delete('/lists/:listId', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+
+  const list = db.prepare('SELECT id FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  db.prepare('DELETE FROM user_lists WHERE id = ?').run(listId);
+  res.json({ ok: true });
+});
+
+// POST /api/songs/lists/:listId/items — add a chart to a list
+router.post('/lists/:listId/items', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+
+  const list = db.prepare('SELECT id FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  const { chartId, songTitle, artist, mode, level, jacketUrl, originalScore, originalGrade, hadPass, target, addedAt } = req.body;
+  if (!chartId || !songTitle || !mode || !level) return res.status(400).json({ error: 'Missing required fields' });
+
+  // Prevent duplicates
+  const existing = db.prepare('SELECT id FROM user_list_items WHERE list_id = ? AND chart_id = ?').get(listId, chartId);
+  if (existing) return res.status(409).json({ error: 'Chart already in list' });
+
+  const result = db.prepare(`
+    INSERT INTO user_list_items (list_id, chart_id, song_title, artist, mode, level, jacket_url, original_score, original_grade, had_pass, target, added_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(listId, chartId, songTitle, artist || '', mode, level, jacketUrl || '', originalScore || 0, originalGrade || '', hadPass ? 1 : 0, target || 'PASS', addedAt || Date.now());
+
+  res.json({ id: result.lastInsertRowid });
+});
+
+// DELETE /api/songs/lists/:listId/items/:itemId — remove a chart from a list
+router.delete('/lists/:listId/items/:itemId', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+  const itemId = parseInt(req.params.itemId, 10);
+
+  const list = db.prepare('SELECT id FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  db.prepare('DELETE FROM user_list_items WHERE id = ? AND list_id = ?').run(itemId, listId);
+  res.json({ ok: true });
+});
+
+// PUT /api/songs/lists/:listId/items/:itemId/target — update a list item's target
+router.put('/lists/:listId/items/:itemId/target', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+  const itemId = parseInt(req.params.itemId, 10);
+  const target = String(req.body.target || '').trim();
+  if (!target) return res.status(400).json({ error: 'Target is required' });
+
+  const list = db.prepare('SELECT id FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  db.prepare('UPDATE user_list_items SET target = ? WHERE id = ? AND list_id = ?').run(target, itemId, listId);
+  res.json({ ok: true });
 });
 
 // GET /api/songs/chart/:chartId/history — historical scores on a chart (includes fails)
