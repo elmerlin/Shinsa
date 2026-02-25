@@ -10,6 +10,9 @@ import {
   updateListItemTarget,
 } from '../utils/api';
 
+const LEGACY_LISTS_STORAGE_KEY = 'shinsa_lists';
+const LEGACY_LISTS_MIGRATION_KEY = 'shinsa_lists_migrated_to_server_v1';
+
 // ─── Grade thresholds (ascending) ─────────────────────────────────
 const GRADE_THRESHOLDS = [
   { min: 0,      grade: 'F',    color: 'text-gray-600' },
@@ -40,6 +43,84 @@ function gradeFromScore(score) {
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function loadLegacyLists() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(LEGACY_LISTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
+  } catch {
+    return [];
+  }
+}
+
+function normalizeLegacyItem(rawItem) {
+  const chartId = String(rawItem?.chartId || '').trim();
+  const songTitle = String(rawItem?.songTitle || '').trim();
+  const mode = String(rawItem?.mode || '').trim();
+  const level = parseInt(rawItem?.level, 10) || 0;
+  if (!chartId || !songTitle || !mode || !level) return null;
+
+  return {
+    chartId,
+    songTitle,
+    artist: String(rawItem?.artist || ''),
+    mode,
+    level,
+    jacketUrl: String(rawItem?.jacketUrl || ''),
+    originalScore: parseInt(rawItem?.originalScore, 10) || 0,
+    originalGrade: String(rawItem?.originalGrade || ''),
+    hadPass: !!rawItem?.hadPass,
+    target: String(rawItem?.target || 'PASS') || 'PASS',
+    addedAt: parseInt(rawItem?.addedAt, 10) || Date.now(),
+  };
+}
+
+async function migrateLegacyListsToServer(existingServerLists = []) {
+  if (typeof window === 'undefined') return { importedLists: 0, importedItems: 0 };
+  if (window.localStorage.getItem(LEGACY_LISTS_MIGRATION_KEY)) {
+    return { importedLists: 0, importedItems: 0 };
+  }
+
+  const legacyLists = loadLegacyLists();
+  if (legacyLists.length === 0) return { importedLists: 0, importedItems: 0 };
+
+  const existingNames = new Set(
+    (Array.isArray(existingServerLists) ? existingServerLists : [])
+      .map((list) => String(list?.name || '').trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  let importedLists = 0;
+  let importedItems = 0;
+
+  for (const rawList of legacyLists) {
+    const name = String(rawList?.name || '').trim();
+    if (!name) continue;
+    if (existingNames.has(name.toLowerCase())) continue;
+    const created = await createList(name);
+    importedLists++;
+    existingNames.add(name.toLowerCase());
+
+    const items = Array.isArray(rawList?.items) ? rawList.items : [];
+    for (const rawItem of items) {
+      const itemData = normalizeLegacyItem(rawItem);
+      if (!itemData) continue;
+      try {
+        await addListItem(created.id, itemData);
+        importedItems++;
+      } catch {
+        // Ignore invalid/duplicate items but continue importing.
+      }
+    }
+  }
+
+  window.localStorage.setItem(LEGACY_LISTS_MIGRATION_KEY, String(Date.now()));
+  return { importedLists, importedItems };
 }
 
 // ─── Compute live stats for a list given current library data ──────
@@ -120,6 +201,7 @@ export default function ListsPage() {
   const [expandedListId, setExpandedListId] = useState(null);
   const [newListName, setNewListName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [migrationNotice, setMigrationNotice] = useState('');
 
   // Load song library + server-backed lists in parallel
   useEffect(() => {
@@ -136,8 +218,20 @@ export default function ListsPage() {
           getUserLists(),
         ]);
         if (cancelled) return;
+        setMigrationNotice('');
         setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
-        setLists(Array.isArray(listsData?.lists) ? listsData.lists : []);
+        const serverLists = Array.isArray(listsData?.lists) ? listsData.lists : [];
+        setLists(serverLists);
+
+        // One-time migration path for pre-server localStorage lists.
+        const migration = await migrateLegacyListsToServer(serverLists);
+        if (cancelled) return;
+        if (migration.importedLists > 0) {
+          const refreshed = await getUserLists();
+          if (cancelled) return;
+          setLists(Array.isArray(refreshed?.lists) ? refreshed.lists : []);
+          setMigrationNotice(`Imported ${migration.importedLists} list${migration.importedLists === 1 ? '' : 's'} from browser storage (${migration.importedItems} item${migration.importedItems === 1 ? '' : 's'}).`);
+        }
       } catch {
         if (cancelled) return;
         setLibrary([]);
@@ -307,6 +401,12 @@ export default function ListsPage() {
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {migrationNotice && (
+        <div className="rounded-xl border border-emerald-500/35 bg-emerald-900/20 px-3 py-2 text-xs text-emerald-100">
+          {migrationNotice}
         </div>
       )}
 
