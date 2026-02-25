@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getSongChartDetail, getUserLists, addListItem } from '../utils/api';
+import { getSongChartDetail, getUserLists, addListItem, createList } from '../utils/api';
 
 const GRADE_THRESHOLDS = [
   { min: 0,      grade: 'F' },
@@ -268,6 +268,8 @@ export default function SongChartPage() {
   const [showListMenu, setShowListMenu] = useState(false);
   const [addedToast, setAddedToast] = useState('');
   const [userLists, setUserLists] = useState([]);
+  const [inlineCreateName, setInlineCreateName] = useState('');
+  const [showInlineCreate, setShowInlineCreate] = useState(false);
   const listMenuRef = useRef(null);
 
   useEffect(() => {
@@ -446,32 +448,80 @@ export default function SongChartPage() {
             </button>
             {showListMenu && (
               <div className="absolute right-0 z-30 mt-1 w-56 rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden">
-                {userLists.length === 0 ? (
-                  <div className="px-3 py-3 text-center">
-                    <p className="text-xs text-gray-500">No lists yet</p>
-                    <Link to="/lists" className="text-xs text-violet-400 hover:underline mt-1 inline-block">Create one</Link>
-                  </div>
-                ) : (
-                  userLists.map(list => {
-                    const alreadyIn = (list.items || []).some(i => i.chartId === chart.chart_id);
-                    return (
+                {userLists.map(list => {
+                  const alreadyIn = (list.items || []).some(i => i.chartId === chart.chart_id);
+                  return (
+                    <button
+                      key={list.id}
+                      type="button"
+                      onClick={() => !alreadyIn && handleAddToList(list.id, list.name)}
+                      disabled={alreadyIn}
+                      className={`w-full text-left px-3 py-2 text-sm font-display border-b border-piu-border/20 last:border-0 transition-colors ${
+                        alreadyIn
+                          ? 'text-gray-500 cursor-not-allowed'
+                          : 'hover:bg-piu-dark/70 text-white'
+                      }`}
+                    >
+                      <span className="truncate block">{list.name}</span>
+                      {alreadyIn && <span className="text-[10px] text-gray-600">Already added</span>}
+                    </button>
+                  );
+                })}
+                {/* Inline create new list */}
+                <div className="border-t border-piu-border/30 px-2 py-2">
+                  {showInlineCreate ? (
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={inlineCreateName}
+                        onChange={e => setInlineCreateName(e.target.value)}
+                        onKeyDown={async e => {
+                          if (e.key === 'Enter' && inlineCreateName.trim()) {
+                            try {
+                              const newList = await createList(inlineCreateName.trim());
+                              setUserLists(prev => [...prev, { ...newList, items: newList.items || [] }]);
+                              setInlineCreateName('');
+                              setShowInlineCreate(false);
+                              handleAddToList(newList.id, newList.name);
+                            } catch { /* ignore */ }
+                          }
+                          if (e.key === 'Escape') { setShowInlineCreate(false); setInlineCreateName(''); }
+                        }}
+                        placeholder="List name..."
+                        className="bg-piu-dark border border-piu-border rounded text-xs py-1 px-2 text-gray-200 focus:outline-none focus:border-violet-400/50 flex-1 min-w-0"
+                        autoFocus
+                      />
                       <button
-                        key={list.id}
                         type="button"
-                        onClick={() => !alreadyIn && handleAddToList(list.id, list.name)}
-                        disabled={alreadyIn}
-                        className={`w-full text-left px-3 py-2 text-sm font-display border-b border-piu-border/20 last:border-0 transition-colors ${
-                          alreadyIn
-                            ? 'text-gray-500 cursor-not-allowed'
-                            : 'hover:bg-piu-dark/70 text-white'
-                        }`}
+                        disabled={!inlineCreateName.trim()}
+                        onClick={async () => {
+                          if (!inlineCreateName.trim()) return;
+                          try {
+                            const newList = await createList(inlineCreateName.trim());
+                            setUserLists(prev => [...prev, { ...newList, items: newList.items || [] }]);
+                            setInlineCreateName('');
+                            setShowInlineCreate(false);
+                            handleAddToList(newList.id, newList.name);
+                          } catch { /* ignore */ }
+                        }}
+                        className="text-[11px] font-display font-bold text-violet-400 hover:text-violet-300 disabled:opacity-40 px-1"
                       >
-                        <span className="truncate block">{list.name}</span>
-                        {alreadyIn && <span className="text-[10px] text-gray-600">Already added</span>}
+                        Add
                       </button>
-                    );
-                  })
-                )}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowInlineCreate(true)}
+                      className="w-full text-left text-xs font-display text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1.5"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                      New list
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

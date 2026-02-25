@@ -648,6 +648,10 @@ export const deleteList = (listId) => request(`/songs/lists/${listId}`, { method
 export const addListItem = (listId, data) => request(`/songs/lists/${listId}/items`, { method: 'POST', body: JSON.stringify(data) });
 export const removeListItem = (listId, itemId) => request(`/songs/lists/${listId}/items/${itemId}`, { method: 'DELETE' });
 export const updateListItemTarget = (listId, itemId, target) => request(`/songs/lists/${listId}/items/${itemId}/target`, { method: 'PUT', body: JSON.stringify({ target }) });
+export const renameList = (listId, name) => request(`/songs/lists/${listId}`, { method: 'PUT', body: JSON.stringify({ name }) });
+export const cloneList = (listId, name) => request(`/songs/lists/${listId}/clone`, { method: 'POST', body: JSON.stringify({ name }) });
+export const reorderListItems = (listId, itemIds) => request(`/songs/lists/${listId}/reorder`, { method: 'PUT', body: JSON.stringify({ itemIds }) });
+export const bulkAddListItems = (listId, items) => request(`/songs/lists/${listId}/bulk-items`, { method: 'POST', body: JSON.stringify({ items }) });
 
 // Song Recommendations
 export const getSongRecommendations = (data) => request('/songs/recommendations', { method: 'POST', body: JSON.stringify(data) });

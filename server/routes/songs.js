@@ -1628,7 +1628,7 @@ router.get('/lists', requireAuth, (req, res) => {
     SELECT li.* FROM user_list_items li
     JOIN user_lists l ON li.list_id = l.id
     WHERE l.user_id = ?
-    ORDER BY li.id ASC
+    ORDER BY li.sort_order ASC, li.id ASC
   `).all(userId);
 
   // Build attempt counts in one pass
@@ -1661,6 +1661,7 @@ router.get('/lists', requireAuth, (req, res) => {
       hadPass: !!item.had_pass,
       target: item.target,
       addedAt: item.added_at,
+      sortOrder: item.sort_order || 0,
       attempts,
     });
   }
@@ -1715,12 +1716,15 @@ router.post('/lists/:listId/items', requireAuth, (req, res) => {
   const existing = db.prepare('SELECT id FROM user_list_items WHERE list_id = ? AND chart_id = ?').get(listId, chartId);
   if (existing) return res.status(409).json({ error: 'Chart already in list' });
 
-  const result = db.prepare(`
-    INSERT INTO user_list_items (list_id, chart_id, song_title, artist, mode, level, jacket_url, original_score, original_grade, had_pass, target, added_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(listId, chartId, songTitle, artist || '', mode, level, jacketUrl || '', originalScore || 0, originalGrade || '', hadPass ? 1 : 0, target || 'PASS', addedAt || Date.now());
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM user_list_items WHERE list_id = ?').get(listId);
+  const nextOrder = (maxOrder?.m || 0) + 1;
 
-  res.json({ id: result.lastInsertRowid });
+  const result = db.prepare(`
+    INSERT INTO user_list_items (list_id, chart_id, song_title, artist, mode, level, jacket_url, original_score, original_grade, had_pass, target, added_at, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(listId, chartId, songTitle, artist || '', mode, level, jacketUrl || '', originalScore || 0, originalGrade || '', hadPass ? 1 : 0, target || 'PASS', addedAt || Date.now(), nextOrder);
+
+  res.json({ id: result.lastInsertRowid, sortOrder: nextOrder });
 });
 
 // DELETE /api/songs/lists/:listId/items/:itemId — remove a chart from a list
@@ -1751,6 +1755,107 @@ router.put('/lists/:listId/items/:itemId/target', requireAuth, (req, res) => {
 
   db.prepare('UPDATE user_list_items SET target = ? WHERE id = ? AND list_id = ?').run(target, itemId, listId);
   res.json({ ok: true });
+});
+
+// PUT /api/songs/lists/:listId — rename a list
+router.put('/lists/:listId', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+  const name = String(req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'List name is required' });
+
+  const list = db.prepare('SELECT id FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  db.prepare('UPDATE user_lists SET name = ? WHERE id = ?').run(name, listId);
+  res.json({ ok: true, name });
+});
+
+// POST /api/songs/lists/:listId/clone — duplicate a list with all its items
+router.post('/lists/:listId/clone', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+
+  const list = db.prepare('SELECT * FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  const cloneName = String(req.body.name || '').trim() || `${list.name} (copy)`;
+  const newList = db.prepare('INSERT INTO user_lists (user_id, name) VALUES (?, ?)').run(userId, cloneName);
+  const newListId = newList.lastInsertRowid;
+
+  const items = db.prepare('SELECT * FROM user_list_items WHERE list_id = ? ORDER BY sort_order ASC, id ASC').all(listId);
+  const insertItem = db.prepare(`
+    INSERT INTO user_list_items (list_id, chart_id, song_title, artist, mode, level, jacket_url, original_score, original_grade, had_pass, target, added_at, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const cloneItems = db.transaction(() => {
+    for (const item of items) {
+      insertItem.run(newListId, item.chart_id, item.song_title, item.artist, item.mode, item.level, item.jacket_url, item.original_score, item.original_grade, item.had_pass, item.target, item.added_at, item.sort_order);
+    }
+  });
+  cloneItems();
+
+  res.json({ id: newListId, name: cloneName, createdAt: new Date().toISOString(), items: [] });
+});
+
+// PUT /api/songs/lists/:listId/reorder — reorder list items
+router.put('/lists/:listId/reorder', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+
+  const list = db.prepare('SELECT id FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  const itemIds = req.body.itemIds;
+  if (!Array.isArray(itemIds)) return res.status(400).json({ error: 'itemIds array is required' });
+
+  const updateOrder = db.prepare('UPDATE user_list_items SET sort_order = ? WHERE id = ? AND list_id = ?');
+  const reorder = db.transaction(() => {
+    for (let i = 0; i < itemIds.length; i++) {
+      updateOrder.run(i + 1, parseInt(itemIds[i], 10), listId);
+    }
+  });
+  reorder();
+
+  res.json({ ok: true });
+});
+
+// POST /api/songs/lists/:listId/bulk-items — add multiple charts to a list at once
+router.post('/lists/:listId/bulk-items', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const listId = parseInt(req.params.listId, 10);
+
+  const list = db.prepare('SELECT id FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  const items = req.body.items;
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'items array is required' });
+
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM user_list_items WHERE list_id = ?').get(listId);
+  let nextOrder = (maxOrder?.m || 0) + 1;
+
+  const insertItem = db.prepare(`
+    INSERT INTO user_list_items (list_id, chart_id, song_title, artist, mode, level, jacket_url, original_score, original_grade, had_pass, target, added_at, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const existingCheck = db.prepare('SELECT id FROM user_list_items WHERE list_id = ? AND chart_id = ?');
+
+  const added = [];
+  const bulkInsert = db.transaction(() => {
+    for (const item of items) {
+      if (!item.chartId || !item.songTitle || !item.mode || !item.level) continue;
+      if (existingCheck.get(listId, item.chartId)) continue;
+      const result = insertItem.run(listId, item.chartId, item.songTitle, item.artist || '', item.mode, item.level, item.jacketUrl || '', item.originalScore || 0, item.originalGrade || '', item.hadPass ? 1 : 0, item.target || 'PASS', item.addedAt || Date.now(), nextOrder++);
+      added.push({ id: result.lastInsertRowid, chartId: item.chartId });
+    }
+  });
+  bulkInsert();
+
+  res.json({ added });
 });
 
 // GET /api/songs/chart/:chartId/history — historical scores on a chart (includes fails)

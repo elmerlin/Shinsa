@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getSongLibrary,
@@ -8,6 +8,10 @@ import {
   addListItem,
   removeListItem,
   updateListItemTarget,
+  renameList,
+  cloneList,
+  reorderListItems,
+  bulkAddListItems,
 } from '../utils/api';
 
 // ─── Grade thresholds (ascending) ─────────────────────────────────
@@ -85,17 +89,32 @@ function getTargetMinScore(target) {
   return entry?.min || 0;
 }
 
+function isItemComplete(item, libraryMap) {
+  const live = libraryMap[item.chartId];
+  if (!live) return false;
+  const liveScore = parseInt(live.best_score, 10) || 0;
+  if (item.target === 'PASS') return !!live.is_pass;
+  return liveScore >= getTargetMinScore(item.target);
+}
+
+function getProgressToTarget(item, libraryMap) {
+  const live = libraryMap[item.chartId];
+  const liveScore = live ? (parseInt(live.best_score, 10) || 0) : (parseInt(item.originalScore, 10) || 0);
+  if (item.target === 'PASS') return live?.is_pass ? 1 : 0;
+  const targetMin = getTargetMinScore(item.target);
+  if (targetMin <= 0) return 0;
+  return Math.min(1, liveScore / targetMin);
+}
+
 // Returns the grade options available above the user's current grade
 function getTargetOptions(currentScore, hasPass) {
   const options = [];
 
-  // Always offer Pass if not cleared
   if (!hasPass) {
     options.push({ value: 'PASS', label: 'Pass' });
     return options;
   }
 
-  // If has a pass, offer Pass (already met) plus all grades above current
   options.push({ value: 'PASS', label: 'Pass' });
 
   const s = parseInt(currentScore, 10) || 0;
@@ -110,6 +129,80 @@ function getTargetOptions(currentScore, hasPass) {
   return options;
 }
 
+// Sort options
+const SORT_OPTIONS = [
+  { value: 'custom', label: 'Custom order' },
+  { value: 'incomplete', label: 'Incomplete first' },
+  { value: 'closest', label: 'Closest to target' },
+  { value: 'level-asc', label: 'Level (low to high)' },
+  { value: 'level-desc', label: 'Level (high to low)' },
+  { value: 'attempts-desc', label: 'Most attempts' },
+];
+
+function sortItems(items, sortBy, libraryMap) {
+  if (sortBy === 'custom') return items;
+  const sorted = [...items];
+  switch (sortBy) {
+    case 'incomplete':
+      sorted.sort((a, b) => {
+        const ac = isItemComplete(a, libraryMap) ? 1 : 0;
+        const bc = isItemComplete(b, libraryMap) ? 1 : 0;
+        return ac - bc;
+      });
+      break;
+    case 'closest':
+      sorted.sort((a, b) => {
+        const ac = isItemComplete(a, libraryMap);
+        const bc = isItemComplete(b, libraryMap);
+        if (ac !== bc) return ac ? 1 : -1;
+        return getProgressToTarget(b, libraryMap) - getProgressToTarget(a, libraryMap);
+      });
+      break;
+    case 'level-asc':
+      sorted.sort((a, b) => (a.level || 0) - (b.level || 0));
+      break;
+    case 'level-desc':
+      sorted.sort((a, b) => (b.level || 0) - (a.level || 0));
+      break;
+    case 'attempts-desc':
+      sorted.sort((a, b) => (b.attempts || 0) - (a.attempts || 0));
+      break;
+    default:
+      break;
+  }
+  return sorted;
+}
+
+// Suggest next tier of targets for a completed list
+function suggestNextTargets(items, libraryMap) {
+  const suggestions = [];
+  for (const item of items) {
+    if (!isItemComplete(item, libraryMap)) continue;
+    const live = libraryMap[item.chartId];
+    if (!live) continue;
+    const liveScore = parseInt(live.best_score, 10) || 0;
+    const livePass = !!live.is_pass;
+    if (item.target === 'PASS' && livePass) {
+      // Suggest first grade above current score
+      const currentGrade = gradeFromScore(liveScore);
+      const currentIdx = GRADE_THRESHOLDS.indexOf(currentGrade);
+      if (currentIdx >= 0 && currentIdx < GRADE_THRESHOLDS.length - 1) {
+        suggestions.push({ itemId: item.id, target: GRADE_THRESHOLDS[currentIdx + 1].grade });
+      }
+    } else {
+      // Suggest next grade up
+      const currentTarget = GRADE_THRESHOLDS.find(g => g.grade === item.target);
+      if (currentTarget) {
+        const idx = GRADE_THRESHOLDS.indexOf(currentTarget);
+        if (idx >= 0 && idx < GRADE_THRESHOLDS.length - 1) {
+          suggestions.push({ itemId: item.id, target: GRADE_THRESHOLDS[idx + 1].grade });
+        }
+      }
+    }
+  }
+  return suggestions;
+}
+
 // ─── Main Component ────────────────────────────────────────────────
 export default function ListsPage() {
   const { user } = useAuth();
@@ -117,38 +210,42 @@ export default function ListsPage() {
   const [lists, setLists] = useState([]);
   const [library, setLibrary] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedListId, setExpandedListId] = useState(null);
+  const [expandedListId, setExpandedListId] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('lists_expanded_id')); } catch { return null; }
+  });
   const [newListName, setNewListName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [undoState, setUndoState] = useState(null); // { listId, item, timerId }
+
+  // Persist expanded list id
+  useEffect(() => {
+    if (expandedListId != null) {
+      sessionStorage.setItem('lists_expanded_id', JSON.stringify(expandedListId));
+    } else {
+      sessionStorage.removeItem('lists_expanded_id');
+    }
+  }, [expandedListId]);
 
   // Load song library + server-backed lists in parallel
-  useEffect(() => {
-    if (!user?.id) {
+  const loadData = useCallback(async () => {
+    if (!user?.id) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const [libraryData, listsData] = await Promise.all([
+        getSongLibrary({ user_id: user.id }),
+        getUserLists(),
+      ]);
+      setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
+      setLists(Array.isArray(listsData?.lists) ? listsData.lists : []);
+    } catch {
+      setLibrary([]);
+      setLists([]);
+    } finally {
       setLoading(false);
-      return;
     }
-    let cancelled = false;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [libraryData, listsData] = await Promise.all([
-          getSongLibrary({ user_id: user.id }),
-          getUserLists(),
-        ]);
-        if (cancelled) return;
-        setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
-        setLists(Array.isArray(listsData?.lists) ? listsData.lists : []);
-      } catch {
-        if (cancelled) return;
-        setLibrary([]);
-        setLists([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
   }, [user?.id]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   // Build a map: chartId -> { score, is_pass, grade, ... }
   const libraryMap = useMemo(() => {
@@ -184,6 +281,23 @@ export default function ListsPage() {
       await deleteList(listId);
       setLists(prev => prev.filter(l => l.id !== listId));
       if (expandedListId === listId) setExpandedListId(null);
+    } catch { /* ignore */ }
+  };
+
+  const handleRenameList = async (listId, name) => {
+    try {
+      await renameList(listId, name);
+      setLists(prev => prev.map(l => l.id === listId ? { ...l, name } : l));
+    } catch { /* ignore */ }
+  };
+
+  const handleCloneList = async (listId) => {
+    try {
+      const result = await cloneList(listId);
+      // Refetch to get items with attempt counts
+      const listsData = await getUserLists();
+      setLists(Array.isArray(listsData?.lists) ? listsData.lists : []);
+      setExpandedListId(result.id);
     } catch { /* ignore */ }
   };
 
@@ -224,29 +338,138 @@ export default function ListsPage() {
       const result = await addListItem(listId, itemData);
       setLists(prev => prev.map(l => {
         if (l.id !== listId) return l;
-        return { ...l, items: [...(l.items || []), { ...itemData, id: result.id, attempts: 0 }] };
+        return { ...l, items: [...(l.items || []), { ...itemData, id: result.id, sortOrder: result.sortOrder || 0, attempts: 0 }] };
+      }));
+    } catch { /* ignore */ }
+  };
+
+  const handleBulkAdd = async (listId, chartsAndSongs) => {
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+    const existingIds = new Set((list.items || []).map(i => i.chartId));
+
+    const itemsToAdd = chartsAndSongs
+      .filter(({ chart }) => !existingIds.has(chart.chart_id))
+      .map(({ chart, song }) => {
+        const currentScore = parseInt(chart.best_score, 10) || 0;
+        const currentGrade = gradeFromScore(currentScore).grade;
+        const hasPass = !!chart.is_pass;
+        let defaultTarget = 'PASS';
+        if (hasPass && currentScore > 0) {
+          const currentIdx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
+          if (currentIdx >= 0 && currentIdx < GRADE_THRESHOLDS.length - 1) {
+            defaultTarget = GRADE_THRESHOLDS[currentIdx + 1].grade;
+          } else if (currentIdx === GRADE_THRESHOLDS.length - 1) {
+            defaultTarget = currentGrade;
+          }
+        }
+        return {
+          chartId: chart.chart_id,
+          songTitle: song.title,
+          artist: song.artist || '',
+          mode: chart.mode,
+          level: chart.level,
+          jacketUrl: song.jacket_url || '',
+          originalScore: currentScore,
+          originalGrade: currentGrade,
+          hadPass: hasPass,
+          target: defaultTarget,
+          addedAt: Date.now(),
+        };
+      });
+
+    if (itemsToAdd.length === 0) return;
+
+    try {
+      const result = await bulkAddListItems(listId, itemsToAdd);
+      const addedMap = new Map((result.added || []).map(a => [a.chartId, a.id]));
+      const newItems = itemsToAdd
+        .filter(item => addedMap.has(item.chartId))
+        .map(item => ({ ...item, id: addedMap.get(item.chartId), attempts: 0 }));
+      setLists(prev => prev.map(l => {
+        if (l.id !== listId) return l;
+        return { ...l, items: [...(l.items || []), ...newItems] };
       }));
     } catch { /* ignore */ }
   };
 
   const handleRemoveChart = async (listId, itemId) => {
-    try {
-      await removeListItem(listId, itemId);
-      setLists(prev => prev.map(l => {
-        if (l.id !== listId) return l;
-        return { ...l, items: l.items.filter(i => i.id !== itemId) };
-      }));
-    } catch { /* ignore */ }
+    // Find the item for undo
+    const list = lists.find(l => l.id === listId);
+    const removedItem = list?.items?.find(i => i.id === itemId);
+
+    // Optimistic remove
+    setLists(prev => prev.map(l => {
+      if (l.id !== listId) return l;
+      return { ...l, items: l.items.filter(i => i.id !== itemId) };
+    }));
+
+    // Clear any existing undo timer
+    if (undoState?.timerId) clearTimeout(undoState.timerId);
+
+    // Set undo state with a timer that actually deletes after 5 seconds
+    const timerId = setTimeout(async () => {
+      try {
+        await removeListItem(listId, itemId);
+      } catch { /* ignore */ }
+      setUndoState(prev => prev?.item?.id === itemId ? null : prev);
+    }, 5000);
+
+    setUndoState({ listId, item: removedItem, timerId });
+  };
+
+  const handleUndoRemove = () => {
+    if (!undoState) return;
+    const { listId, item, timerId } = undoState;
+    clearTimeout(timerId);
+    // Restore item
+    setLists(prev => prev.map(l => {
+      if (l.id !== listId) return l;
+      return { ...l, items: [...(l.items || []), item] };
+    }));
+    setUndoState(null);
   };
 
   const handleSetTarget = async (listId, itemId, target) => {
-    // Optimistic update
     setLists(prev => prev.map(l => {
       if (l.id !== listId) return l;
       return { ...l, items: l.items.map(i => i.id === itemId ? { ...i, target } : i) };
     }));
     try {
       await updateListItemTarget(listId, itemId, target);
+    } catch { /* ignore */ }
+  };
+
+  const handleBumpAllTargets = async (listId, suggestions) => {
+    // Optimistic update
+    setLists(prev => prev.map(l => {
+      if (l.id !== listId) return l;
+      const sugMap = new Map(suggestions.map(s => [s.itemId, s.target]));
+      return { ...l, items: l.items.map(i => sugMap.has(i.id) ? { ...i, target: sugMap.get(i.id) } : i) };
+    }));
+    // Fire updates
+    for (const s of suggestions) {
+      try { await updateListItemTarget(listId, s.itemId, s.target); } catch { /* ignore */ }
+    }
+  };
+
+  const handleReorder = async (listId, newItemIds) => {
+    // Optimistic reorder
+    setLists(prev => prev.map(l => {
+      if (l.id !== listId) return l;
+      const itemMap = new Map(l.items.map(i => [i.id, i]));
+      const reordered = newItemIds.map(id => itemMap.get(id)).filter(Boolean);
+      return { ...l, items: reordered };
+    }));
+    try {
+      await reorderListItems(listId, newItemIds);
+    } catch { /* ignore */ }
+  };
+
+  const handleRefreshLists = async () => {
+    try {
+      const listsData = await getUserLists();
+      setLists(Array.isArray(listsData?.lists) ? listsData.lists : []);
     } catch { /* ignore */ }
   };
 
@@ -265,16 +488,28 @@ export default function ListsPage() {
           <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">LISTS</h1>
           <p className="text-xs text-gray-500">Create song lists with targets to track your progress</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreateForm(true)}
-          className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-700 border border-violet-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-violet-900/30 hover:brightness-110 transition-all whitespace-nowrap"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          New List
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRefreshLists}
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-piu-border/60 text-gray-400 hover:text-white hover:border-violet-400/50 transition-all"
+            title="Refresh attempt counts"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCreateForm(true)}
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-700 border border-violet-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-violet-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New List
+          </button>
+        </div>
       </div>
 
       {/* Create List Form */}
@@ -307,6 +542,20 @@ export default function ListsPage() {
               Cancel
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Undo Toast */}
+      {undoState && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 rounded-lg bg-piu-card border border-piu-border px-4 py-2.5 shadow-xl flex items-center gap-3 animate-fade-in">
+          <span className="text-sm text-gray-200">Removed "{undoState.item?.songTitle}"</span>
+          <button
+            type="button"
+            onClick={handleUndoRemove}
+            className="text-sm font-display font-bold text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            Undo
+          </button>
         </div>
       )}
 
@@ -397,10 +646,17 @@ export default function ListsPage() {
                   list={list}
                   library={library}
                   libraryMap={libraryMap}
+                  stats={stats}
                   onAddChart={handleAddChart}
+                  onBulkAdd={handleBulkAdd}
                   onRemoveChart={handleRemoveChart}
                   onSetTarget={handleSetTarget}
                   onDelete={() => handleDeleteList(list.id)}
+                  onRename={(name) => handleRenameList(list.id, name)}
+                  onClone={() => handleCloneList(list.id)}
+                  onReorder={(ids) => handleReorder(list.id, ids)}
+                  onBumpAllTargets={(suggestions) => handleBumpAllTargets(list.id, suggestions)}
+                  onExport={() => exportList(list, libraryMap)}
                 />
               )}
             </div>
@@ -411,11 +667,41 @@ export default function ListsPage() {
   );
 }
 
+// ─── Export list as text to clipboard ──────────────────────────────
+function exportList(list, libraryMap) {
+  const stats = computeListStats(list, libraryMap);
+  const lines = [`${list.name}`, `${stats.songCount} songs | ${stats.pct}% complete | ${stats.totalAttempts} plays`, ''];
+
+  for (const item of (list.items || [])) {
+    const live = libraryMap[item.chartId];
+    const liveScore = live ? (parseInt(live.best_score, 10) || 0) : (parseInt(item.originalScore, 10) || 0);
+    const complete = isItemComplete(item, libraryMap);
+    const prefix = item.mode === 'Single' ? 'S' : 'D';
+    const status = complete ? '[x]' : '[ ]';
+    const scorePart = liveScore > 0 ? ` ${formatNumber(liveScore)}` : '';
+    const targetPart = item.target === 'PASS' ? 'Pass' : item.target;
+    lines.push(`${status} ${prefix}${item.level} ${item.songTitle}${scorePart} (target: ${targetPart})`);
+  }
+
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).catch(() => {});
+}
+
 // ─── List Detail (Expanded View) ───────────────────────────────────
-function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSetTarget, onDelete }) {
+function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, onRemoveChart, onSetTarget, onDelete, onRename, onClone, onReorder, onBumpAllTargets, onExport }) {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState(new Map()); // chartId -> { chart, song }
+  const [sortBy, setSortBy] = useState('custom');
+  const [filterText, setFilterText] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(list.name);
+  const [dragItemId, setDragItemId] = useState(null);
+  const [dragOverItemId, setDragOverItemId] = useState(null);
+  const [showExportToast, setShowExportToast] = useState(false);
   const searchWrapRef = useRef(null);
+  const renameInputRef = useRef(null);
 
   useEffect(() => {
     function handleDocClick(event) {
@@ -427,6 +713,13 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
     document.addEventListener('mousedown', handleDocClick);
     return () => document.removeEventListener('mousedown', handleDocClick);
   }, []);
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [isRenaming]);
 
   const filteredSongs = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -449,11 +742,154 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
     return new Set((list.items || []).map(i => i.chartId));
   }, [list.items]);
 
+  // Apply sort + filter to items
+  const displayedItems = useMemo(() => {
+    let items = sortItems(list.items || [], sortBy, libraryMap);
+    if (filterText.trim()) {
+      const q = filterText.trim().toLowerCase();
+      items = items.filter(item =>
+        item.songTitle.toLowerCase().includes(q) ||
+        `${item.mode} ${item.level}`.toLowerCase().includes(q)
+      );
+    }
+    return items;
+  }, [list.items, sortBy, filterText, libraryMap]);
+
+  const suggestions = useMemo(() => suggestNextTargets(list.items || [], libraryMap), [list.items, libraryMap]);
+
+  const handleSubmitRename = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== list.name) {
+      onRename(trimmed);
+    }
+    setIsRenaming(false);
+  };
+
+  const handleBulkToggle = (chart, song) => {
+    setBulkSelected(prev => {
+      const next = new Map(prev);
+      if (next.has(chart.chart_id)) {
+        next.delete(chart.chart_id);
+      } else {
+        next.set(chart.chart_id, { chart, song });
+      }
+      return next;
+    });
+  };
+
+  const handleBulkSubmit = () => {
+    if (bulkSelected.size === 0) return;
+    onBulkAdd(list.id, Array.from(bulkSelected.values()));
+    setBulkSelected(new Map());
+    setBulkMode(false);
+    setSearch('');
+    setShowSuggestions(false);
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (itemId) => {
+    if (sortBy !== 'custom') return;
+    setDragItemId(itemId);
+  };
+
+  const handleDragOver = (e, itemId) => {
+    e.preventDefault();
+    if (dragItemId == null || itemId === dragItemId) return;
+    setDragOverItemId(itemId);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (dragItemId == null || dragOverItemId == null || dragItemId === dragOverItemId) {
+      setDragItemId(null);
+      setDragOverItemId(null);
+      return;
+    }
+    const items = list.items || [];
+    const ids = items.map(i => i.id);
+    const fromIdx = ids.indexOf(dragItemId);
+    const toIdx = ids.indexOf(dragOverItemId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    ids.splice(fromIdx, 1);
+    ids.splice(toIdx, 0, dragItemId);
+    onReorder(ids);
+    setDragItemId(null);
+    setDragOverItemId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragItemId(null);
+    setDragOverItemId(null);
+  };
+
+  const handleExport = () => {
+    onExport();
+    setShowExportToast(true);
+    setTimeout(() => setShowExportToast(false), 2000);
+  };
+
   return (
     <div className="border-t border-piu-border/40 px-4 py-3 space-y-3">
+      {/* List actions bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {isRenaming ? (
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <input
+              ref={renameInputRef}
+              value={renameValue}
+              onChange={e => setRenameValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSubmitRename(); if (e.key === 'Escape') setIsRenaming(false); }}
+              onBlur={handleSubmitRename}
+              className="input-field flex-1 text-sm py-1"
+            />
+          </div>
+        ) : (
+          <>
+            <button onClick={() => { setRenameValue(list.name); setIsRenaming(true); }} className="text-[11px] text-gray-500 hover:text-white transition-colors" title="Rename list">
+              Rename
+            </button>
+            <span className="text-gray-700">|</span>
+            <button onClick={() => onClone()} className="text-[11px] text-gray-500 hover:text-white transition-colors" title="Duplicate list">
+              Duplicate
+            </button>
+            <span className="text-gray-700">|</span>
+            <button onClick={handleExport} className="text-[11px] text-gray-500 hover:text-white transition-colors" title="Copy list summary to clipboard">
+              Export
+            </button>
+            {suggestions.length > 0 && (
+              <>
+                <span className="text-gray-700">|</span>
+                <button
+                  onClick={() => onBumpAllTargets(suggestions)}
+                  className="text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
+                  title="Bump completed items to next grade target"
+                >
+                  Bump targets ({suggestions.length})
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {showExportToast && (
+        <div className="rounded-lg bg-violet-600/90 text-white text-xs font-display px-3 py-1.5 inline-block">
+          Copied to clipboard
+        </div>
+      )}
+
       {/* Search to add songs */}
       <div>
-        <h4 className="text-xs font-display font-bold text-piu-accent mb-2">ADD SONGS</h4>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-display font-bold text-piu-accent">ADD SONGS</h4>
+          <button
+            type="button"
+            onClick={() => { setBulkMode(!bulkMode); setBulkSelected(new Map()); }}
+            className={`text-[11px] font-display transition-colors ${bulkMode ? 'text-violet-400' : 'text-gray-500 hover:text-white'}`}
+          >
+            {bulkMode ? 'Cancel bulk' : 'Bulk add'}
+          </button>
+        </div>
         <div ref={searchWrapRef} className="relative">
           <input
             value={search}
@@ -473,12 +909,16 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                       {song.charts.map(chart => {
                         const isSingle = chart.mode === 'Single';
                         const alreadyAdded = existingChartIds.has(chart.chart_id);
+                        const isSelected = bulkSelected.has(chart.chart_id);
                         return (
                           <button
                             key={chart.chart_id}
                             type="button"
                             onClick={() => {
-                              if (!alreadyAdded) {
+                              if (alreadyAdded) return;
+                              if (bulkMode) {
+                                handleBulkToggle(chart, song);
+                              } else {
                                 onAddChart(list.id, chart, song);
                                 setSearch('');
                                 setShowSuggestions(false);
@@ -488,11 +928,13 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                             className={`inline-flex items-center justify-center min-w-[38px] h-[38px] text-xs rounded-full border font-display font-black shadow-sm transition-all ${
                               alreadyAdded
                                 ? 'opacity-30 cursor-not-allowed bg-gray-700 border-gray-600 text-gray-400'
-                                : isSingle
-                                  ? 'bg-gradient-to-b from-red-500 to-red-700 border-red-300/50 text-white hover:brightness-110'
-                                  : 'bg-gradient-to-b from-green-500 to-emerald-700 border-green-300/50 text-white hover:brightness-110'
+                                : isSelected
+                                  ? 'ring-2 ring-violet-400 bg-violet-600 border-violet-300/50 text-white'
+                                  : isSingle
+                                    ? 'bg-gradient-to-b from-red-500 to-red-700 border-red-300/50 text-white hover:brightness-110'
+                                    : 'bg-gradient-to-b from-green-500 to-emerald-700 border-green-300/50 text-white hover:brightness-110'
                             }`}
-                            title={alreadyAdded ? 'Already in list' : `Add ${isSingle ? 'S' : 'D'}${chart.level}`}
+                            title={alreadyAdded ? 'Already in list' : bulkMode ? (isSelected ? 'Deselect' : 'Select') : `Add ${isSingle ? 'S' : 'D'}${chart.level}`}
                           >
                             {chart.level}
                           </button>
@@ -502,6 +944,18 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                   </div>
                 </div>
               ))}
+              {bulkMode && bulkSelected.size > 0 && (
+                <div className="sticky bottom-0 bg-[#0b1324] border-t border-piu-border/40 px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs text-gray-400">{bulkSelected.size} selected</span>
+                  <button
+                    type="button"
+                    onClick={handleBulkSubmit}
+                    className="text-xs font-display font-bold text-violet-400 hover:text-violet-300"
+                  >
+                    Add all
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {showSuggestions && search.trim() && filteredSongs.length === 0 && (
@@ -512,16 +966,42 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
         </div>
       </div>
 
-      {/* Current songs in list */}
+      {/* Songs in list header with sort + filter */}
       <div>
-        <h4 className="text-xs font-display font-bold text-piu-accent mb-2">
-          SONGS IN LIST ({list.items.length})
-        </h4>
+        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+          <h4 className="text-xs font-display font-bold text-piu-accent">
+            SONGS IN LIST ({list.items.length})
+          </h4>
+          <div className="flex items-center gap-2">
+            {list.items.length > 3 && (
+              <input
+                value={filterText}
+                onChange={e => setFilterText(e.target.value)}
+                placeholder="Filter..."
+                className="bg-piu-dark border border-piu-border rounded-lg text-[11px] py-1 px-2 text-gray-200 focus:outline-none focus:border-violet-400/50 w-28"
+              />
+            )}
+            {list.items.length > 1 && (
+              <select
+                value={sortBy}
+                onChange={e => setSortBy(e.target.value)}
+                className="bg-piu-dark border border-piu-border rounded-lg text-[11px] py-1 px-1.5 text-gray-200 focus:outline-none focus:border-violet-400/50"
+              >
+                {SORT_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
         {list.items.length === 0 ? (
           <p className="text-sm text-gray-500 py-3 text-center">No songs added yet. Use the search above to add songs.</p>
+        ) : displayedItems.length === 0 ? (
+          <p className="text-sm text-gray-500 py-3 text-center">No songs match "{filterText}"</p>
         ) : (
-          <div className="space-y-2">
-            {list.items.map(item => (
+          <div className="space-y-2" onDragOver={e => e.preventDefault()} onDrop={handleDrop}>
+            {displayedItems.map(item => (
               <ListItemRow
                 key={item.id}
                 item={item}
@@ -529,6 +1009,12 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                 listId={list.id}
                 onSetTarget={onSetTarget}
                 onRemove={onRemoveChart}
+                isDragging={dragItemId === item.id}
+                isDragOver={dragOverItemId === item.id}
+                canDrag={sortBy === 'custom'}
+                onDragStart={() => handleDragStart(item.id)}
+                onDragOver={e => handleDragOver(e, item.id)}
+                onDragEnd={handleDragEnd}
               />
             ))}
           </div>
@@ -550,7 +1036,7 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
 }
 
 // ─── Individual List Item Row ──────────────────────────────────────
-function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
+function ListItemRow({ item, liveData, listId, onSetTarget, onRemove, isDragging, isDragOver, canDrag, onDragStart, onDragOver, onDragEnd }) {
   const liveScore = liveData ? (parseInt(liveData.best_score, 10) || 0) : (parseInt(item.originalScore, 10) || 0);
   const livePass = liveData ? !!liveData.is_pass : item.hadPass;
   const liveGrade = gradeFromScore(liveScore);
@@ -560,25 +1046,65 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
     ? livePass
     : liveScore >= targetMinScore;
 
+  // Progress toward target (for non-PASS targets)
+  const progressPct = useMemo(() => {
+    if (item.target === 'PASS') return isComplete ? 100 : 0;
+    if (targetMinScore <= 0) return 0;
+    return Math.min(100, Math.round((liveScore / targetMinScore) * 100));
+  }, [item.target, targetMinScore, liveScore, isComplete]);
+
   const isSingle = item.mode === 'Single';
   const targetOptions = getTargetOptions(liveScore, livePass);
 
-  return (
-    <div className={`rounded-lg border px-3 py-2 flex items-center gap-2 sm:gap-3 ${
-      isComplete
-        ? 'border-emerald-500/40 bg-emerald-900/15'
-        : 'border-piu-border/50 bg-piu-dark/40'
-    }`}>
-      {/* Level badge */}
-      <span className={`inline-flex items-center justify-center min-w-[34px] h-[34px] text-xs rounded-full border font-display font-black shrink-0 ${
-        isSingle
-          ? 'bg-gradient-to-b from-red-500 to-red-700 border-red-300/50'
-          : 'bg-gradient-to-b from-green-500 to-emerald-700 border-green-300/50'
-      } text-white`}>
-        {item.level}
-      </span>
+  const jacketUrl = liveData?.jacketUrl || item.jacketUrl;
 
-      {/* Song info + score + attempts */}
+  return (
+    <div
+      draggable={canDrag}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      className={`rounded-lg border px-3 py-2 flex items-center gap-2 sm:gap-3 transition-all ${
+        isDragging ? 'opacity-40' : ''
+      } ${isDragOver ? 'border-violet-400/70 bg-violet-900/20' : ''} ${
+        isComplete
+          ? 'border-emerald-500/40 bg-emerald-900/15'
+          : 'border-piu-border/50 bg-piu-dark/40'
+      }`}
+    >
+      {/* Drag handle */}
+      {canDrag && (
+        <span className="text-gray-600 cursor-grab active:cursor-grabbing shrink-0 select-none" title="Drag to reorder">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+            <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+            <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+            <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+          </svg>
+        </span>
+      )}
+
+      {/* Jacket thumbnail + Level badge overlay */}
+      <div className="relative shrink-0 w-[42px] h-[42px]">
+        {jacketUrl ? (
+          <img
+            src={jacketUrl}
+            alt=""
+            className="w-full h-full rounded-lg object-cover border border-piu-border/40"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full rounded-lg bg-piu-dark border border-piu-border/40" />
+        )}
+        <span className={`absolute -bottom-1 -right-1 inline-flex items-center justify-center min-w-[22px] h-[22px] text-[10px] rounded-full border font-display font-black ${
+          isSingle
+            ? 'bg-gradient-to-b from-red-500 to-red-700 border-red-300/50'
+            : 'bg-gradient-to-b from-green-500 to-emerald-700 border-green-300/50'
+        } text-white`}>
+          {item.level}
+        </span>
+      </div>
+
+      {/* Song info + score + attempts + progress bar */}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-display font-bold truncate leading-tight">{item.songTitle}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -599,6 +1125,15 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
             </span>
           )}
         </div>
+        {/* Progress bar toward target */}
+        {!isComplete && item.target !== 'PASS' && targetMinScore > 0 && (
+          <div className="mt-1.5 h-1 rounded-full bg-gray-700/60 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-violet-500/70 transition-all"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Completion indicator */}

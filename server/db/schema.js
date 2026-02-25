@@ -1673,6 +1673,14 @@ function initializeDb() {
   if (!onlineDuelCols.includes('best_of')) {
     db.exec("ALTER TABLE online_duels ADD COLUMN best_of INT DEFAULT 0");
   }
+
+  // Migrations for user_list_items - add sort_order for manual reordering
+  const listItemCols = db.prepare("PRAGMA table_info(user_list_items)").all().map(c => c.name);
+  if (!listItemCols.includes('sort_order')) {
+    db.exec("ALTER TABLE user_list_items ADD COLUMN sort_order INTEGER DEFAULT 0");
+    // Backfill sort_order based on existing id order
+    db.exec("UPDATE user_list_items SET sort_order = id WHERE sort_order = 0");
+  }
 }
 
 // Prevent route handlers from closing the shared connection
