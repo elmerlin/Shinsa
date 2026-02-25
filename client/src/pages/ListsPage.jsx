@@ -45,14 +45,16 @@ function formatNumber(value) {
 // ─── Compute live stats for a list given current library data ──────
 function computeListStats(list, libraryMap) {
   const items = list.items || [];
-  if (items.length === 0) return { songCount: 0, completed: 0, pct: 0, avgLevel: 0, avgTargetScore: 0 };
+  if (items.length === 0) return { songCount: 0, completed: 0, pct: 0, avgLevel: 0, avgTargetScore: 0, totalAttempts: 0 };
 
   let completed = 0;
   let totalLevel = 0;
   let totalTargetScore = 0;
+  let totalAttempts = 0;
 
   for (const item of items) {
     totalLevel += item.level || 0;
+    totalAttempts += item.attempts || 0;
     const targetScore = getTargetMinScore(item.target);
     totalTargetScore += targetScore;
 
@@ -73,6 +75,7 @@ function computeListStats(list, libraryMap) {
     pct: items.length > 0 ? Math.round((completed / items.length) * 100) : 0,
     avgLevel: items.length > 0 ? Math.round(totalLevel / items.length) : 0,
     avgTargetScore: items.length > 0 ? Math.round(totalTargetScore / items.length) : 0,
+    totalAttempts,
   };
 }
 
@@ -348,6 +351,11 @@ export default function ListsPage() {
                         {stats.avgTargetScore > 0 && (
                           <span className="text-[11px] text-gray-400">
                             Avg target <span className="text-white font-bold">{formatNumber(stats.avgTargetScore)}</span>
+                          </span>
+                        )}
+                        {stats.totalAttempts > 0 && (
+                          <span className="text-[11px] text-gray-400">
+                            <span className="text-white font-bold">{stats.totalAttempts}</span> play{stats.totalAttempts !== 1 ? 's' : ''}
                           </span>
                         )}
                       </>
