@@ -452,8 +452,8 @@ export default function HeadToHeadPage() {
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">HEAD TO HEAD</h1>
-          <p className="text-xs text-gray-500">Compare scores, rating, and level performance</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">RIVAL</h1>
+          <p className="text-xs text-gray-500">Compare scores, rating and level performance with your rivals</p>
         </div>
         <Link
           to="/songs"
