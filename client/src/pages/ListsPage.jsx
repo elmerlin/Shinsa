@@ -1144,11 +1144,17 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove, isDragging
     ? livePass
     : liveScore >= targetMinScore;
 
-  // Progress toward target (for non-PASS targets)
+  // Progress toward target — shown as % within the range from current grade floor to target
   const progressPct = useMemo(() => {
     if (item.target === 'PASS') return isComplete ? 100 : 0;
     if (targetMinScore <= 0) return 0;
-    return Math.min(100, Math.round((liveScore / targetMinScore) * 100));
+    // Use the player's current grade threshold as the floor
+    const currentGradeMin = gradeFromScore(liveScore).min;
+    const floorScore = Math.min(currentGradeMin, targetMinScore);
+    const range = targetMinScore - floorScore;
+    if (range <= 0) return liveScore >= targetMinScore ? 100 : 0;
+    const progress = liveScore - floorScore;
+    return Math.max(0, Math.min(100, Math.round((progress / range) * 100)));
   }, [item.target, targetMinScore, liveScore, isComplete]);
 
   const isSingle = item.mode === 'Single';
