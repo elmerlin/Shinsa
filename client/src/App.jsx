@@ -32,6 +32,7 @@ import SongsPage from './pages/SongsPage';
 import ShoesPage from './pages/ShoesPage';
 import SongChartPage from './pages/SongChartPage';
 import HeadToHeadPage from './pages/HeadToHeadPage';
+import ListsPage from './pages/ListsPage';
 import TiersPage from './pages/TiersPage';
 import SkillsPage from './pages/SkillsPage';
 import SkillChartsPage from './pages/SkillChartsPage';
@@ -338,6 +339,16 @@ function UserMenu() {
             Songs
           </Link>
           <Link
+            to="/lists"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            Lists
+          </Link>
+          <Link
             to="/shoes"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
@@ -477,6 +488,12 @@ export default function App() {
               </svg>
               <span>Songs</span>
             </Link>
+            <Link to="/lists" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              <span>Lists</span>
+            </Link>
             <Link to="/tiers" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h14M3 18h10" />
@@ -537,6 +554,7 @@ export default function App() {
           <Route path="/world-max" element={<WorldMaxPage />} />
           <Route path="/world-max/machine/:id" element={<WorldMaxMachinePage />} />
           <Route path="/songs" element={<SongsPage />} />
+          <Route path="/lists" element={<ListsPage />} />
           <Route path="/shoes" element={<ShoesPage />} />
           <Route path="/optimise" element={<OptimisePage />} />
           <Route path="/optimize" element={<OptimisePage />} />
