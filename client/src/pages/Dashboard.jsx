@@ -320,12 +320,12 @@ export default function Dashboard() {
         <h1 className="text-4xl font-display font-bold tracking-wider">
           <span className="text-piu-gold">PUMP</span> SHINSA
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <Link
             to="/world-max"
-            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 border border-sky-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-sky-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+            className="inline-flex items-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-1 sm:py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 border border-sky-200/30 text-white font-display font-bold text-[10px] sm:text-sm tracking-wide shadow-lg shadow-sky-900/30 hover:brightness-110 transition-all whitespace-nowrap"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
             </svg>
@@ -333,22 +333,31 @@ export default function Dashboard() {
           </Link>
           <Link
             to="/songs"
-            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border border-emerald-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-emerald-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+            className="inline-flex items-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-1 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-700 border border-emerald-200/30 text-white font-display font-bold text-[10px] sm:text-sm tracking-wide shadow-lg shadow-emerald-900/30 hover:brightness-110 transition-all whitespace-nowrap"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
             </svg>
             Songs
           </Link>
           <Link
-            to="/head-to-head"
-            className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+            to="/lists"
+            className="inline-flex items-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-1 sm:py-2 rounded-xl bg-gradient-to-r from-violet-500 to-purple-700 border border-violet-200/30 text-white font-display font-bold text-[10px] sm:text-sm tracking-wide shadow-lg shadow-violet-900/30 hover:brightness-110 transition-all whitespace-nowrap"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            Lists
+          </Link>
+          <Link
+            to="/head-to-head"
+            className="inline-flex items-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-1 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-700 border border-amber-200/30 text-white font-display font-bold text-[10px] sm:text-sm tracking-wide shadow-lg shadow-amber-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
             </svg>
-            Head to Head
+            H2H
           </Link>
         </div>
       </div>
