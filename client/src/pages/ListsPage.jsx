@@ -202,7 +202,7 @@ export default function ListsPage() {
       if (list.id !== listId) return list;
       // Avoid duplicates
       if (list.items.some(i => i.chartId === chart.chart_id)) return list;
-      const currentScore = parseInt(chart.score, 10) || 0;
+      const currentScore = parseInt(chart.best_score, 10) || 0;
       const currentGrade = gradeFromScore(currentScore).grade;
       const hasPass = !!chart.is_pass;
 
@@ -210,8 +210,11 @@ export default function ListsPage() {
       let defaultTarget = 'PASS';
       if (hasPass && currentScore > 0) {
         const currentIdx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
-        if (currentIdx < GRADE_THRESHOLDS.length - 1) {
+        if (currentIdx >= 0 && currentIdx < GRADE_THRESHOLDS.length - 1) {
           defaultTarget = GRADE_THRESHOLDS[currentIdx + 1].grade;
+        } else if (currentIdx === GRADE_THRESHOLDS.length - 1) {
+          // Already at max grade, keep it as current
+          defaultTarget = currentGrade;
         }
       }
 
@@ -467,6 +470,8 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                       {song.charts.map(chart => {
                         const isSingle = chart.mode === 'Single';
                         const alreadyAdded = existingChartIds.has(chart.chart_id);
+                        const chartScore = parseInt(chart.best_score, 10) || 0;
+                        const chartGrade = chartScore > 0 ? gradeFromScore(chartScore) : null;
                         return (
                           <button
                             key={chart.chart_id}
@@ -474,19 +479,24 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                             onClick={() => {
                               if (!alreadyAdded) {
                                 onAddChart(list.id, chart, song);
+                                setSearch('');
+                                setShowSuggestions(false);
                               }
                             }}
                             disabled={alreadyAdded}
-                            className={`inline-flex items-center justify-center min-w-[38px] h-[38px] text-xs rounded-full border font-display font-black shadow-sm transition-all ${
+                            className={`inline-flex items-center gap-1.5 px-2 h-[38px] text-xs rounded-full border font-display font-black shadow-sm transition-all ${
                               alreadyAdded
                                 ? 'opacity-30 cursor-not-allowed bg-gray-700 border-gray-600 text-gray-400'
                                 : isSingle
                                   ? 'bg-gradient-to-b from-red-500 to-red-700 border-red-300/50 text-white hover:brightness-110'
                                   : 'bg-gradient-to-b from-green-500 to-emerald-700 border-green-300/50 text-white hover:brightness-110'
                             }`}
-                            title={alreadyAdded ? 'Already in list' : `Add ${isSingle ? 'S' : 'D'}${chart.level}`}
+                            title={alreadyAdded ? 'Already in list' : `Add ${isSingle ? 'S' : 'D'}${chart.level}${chartGrade ? ` (${chartGrade.grade} – ${formatNumber(chartScore)})` : ''}`}
                           >
                             {chart.level}
+                            {chartGrade && (
+                              <span className={`text-[10px] font-bold ${chartGrade.color} opacity-90`}>{chartGrade.grade}</span>
+                            )}
                           </button>
                         );
                       })}
