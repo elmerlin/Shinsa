@@ -11,23 +11,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getSongChartDetail } from '../utils/api';
-
-// ─── localStorage list helpers (shared with ListsPage) ────────
-const LISTS_STORAGE_KEY = 'shinsa_lists';
-
-function loadLists() {
-  try {
-    const raw = localStorage.getItem(LISTS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLists(lists) {
-  localStorage.setItem(LISTS_STORAGE_KEY, JSON.stringify(lists));
-}
+import { getSongChartDetail, getUserLists, addListItem } from '../utils/api';
 
 const GRADE_THRESHOLDS = [
   { min: 0,      grade: 'F' },
@@ -283,6 +267,7 @@ export default function SongChartPage() {
   // ── Add-to-list state ──
   const [showListMenu, setShowListMenu] = useState(false);
   const [addedToast, setAddedToast] = useState('');
+  const [userLists, setUserLists] = useState([]);
   const listMenuRef = useRef(null);
 
   useEffect(() => {
@@ -295,20 +280,16 @@ export default function SongChartPage() {
     return () => document.removeEventListener('mousedown', handleDocClick);
   }, []);
 
-  const handleAddToList = (listId) => {
+  // Fetch user's lists when the dropdown opens
+  useEffect(() => {
+    if (!showListMenu || !user) return;
+    getUserLists().then(data => setUserLists(data.lists || [])).catch(() => {});
+  }, [showListMenu, user]);
+
+  const handleAddToList = async (listId, listName) => {
     const chart = detail?.chart;
     const personalBest = detail?.user_summary?.best || null;
     if (!chart) return;
-
-    const lists = loadLists();
-    const list = lists.find(l => l.id === listId);
-    if (!list) return;
-    if ((list.items || []).some(i => i.chartId === chart.chart_id)) {
-      setAddedToast('Already in this list');
-      setTimeout(() => setAddedToast(''), 2000);
-      setShowListMenu(false);
-      return;
-    }
 
     const currentScore = parseInt(personalBest?.score, 10) || 0;
     const currentGrade = gradeFromScore(currentScore);
@@ -324,22 +305,24 @@ export default function SongChartPage() {
       }
     }
 
-    list.items = [...(list.items || []), {
-      chartId: chart.chart_id,
-      songTitle: chart.title,
-      artist: chart.artist || '',
-      mode: chart.mode,
-      level: chart.level,
-      jacketUrl: chart.jacket_url || '',
-      originalScore: currentScore,
-      originalGrade: currentGrade,
-      hadPass: hasPass,
-      target: defaultTarget,
-      addedAt: Date.now(),
-    }];
-
-    saveLists(lists);
-    setAddedToast(`Added to "${list.name}"`);
+    try {
+      await addListItem(listId, {
+        chartId: chart.chart_id,
+        songTitle: chart.title,
+        artist: chart.artist || '',
+        mode: chart.mode,
+        level: chart.level,
+        jacketUrl: chart.jacket_url || '',
+        originalScore: currentScore,
+        originalGrade: currentGrade,
+        hadPass: hasPass,
+        target: defaultTarget,
+        addedAt: Date.now(),
+      });
+      setAddedToast(`Added to "${listName}"`);
+    } catch (err) {
+      setAddedToast(err.message === 'Chart already in list' ? 'Already in this list' : 'Failed to add');
+    }
     setTimeout(() => setAddedToast(''), 2000);
     setShowListMenu(false);
   };
@@ -461,39 +444,36 @@ export default function SongChartPage() {
               </svg>
               Add to List
             </button>
-            {showListMenu && (() => {
-              const lists = loadLists();
-              return (
-                <div className="absolute right-0 z-30 mt-1 w-56 rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden">
-                  {lists.length === 0 ? (
-                    <div className="px-3 py-3 text-center">
-                      <p className="text-xs text-gray-500">No lists yet</p>
-                      <Link to="/lists" className="text-xs text-violet-400 hover:underline mt-1 inline-block">Create one</Link>
-                    </div>
-                  ) : (
-                    lists.map(list => {
-                      const alreadyIn = (list.items || []).some(i => i.chartId === chart.chart_id);
-                      return (
-                        <button
-                          key={list.id}
-                          type="button"
-                          onClick={() => !alreadyIn && handleAddToList(list.id)}
-                          disabled={alreadyIn}
-                          className={`w-full text-left px-3 py-2 text-sm font-display border-b border-piu-border/20 last:border-0 transition-colors ${
-                            alreadyIn
-                              ? 'text-gray-500 cursor-not-allowed'
-                              : 'hover:bg-piu-dark/70 text-white'
-                          }`}
-                        >
-                          <span className="truncate block">{list.name}</span>
-                          {alreadyIn && <span className="text-[10px] text-gray-600">Already added</span>}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              );
-            })()}
+            {showListMenu && (
+              <div className="absolute right-0 z-30 mt-1 w-56 rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden">
+                {userLists.length === 0 ? (
+                  <div className="px-3 py-3 text-center">
+                    <p className="text-xs text-gray-500">No lists yet</p>
+                    <Link to="/lists" className="text-xs text-violet-400 hover:underline mt-1 inline-block">Create one</Link>
+                  </div>
+                ) : (
+                  userLists.map(list => {
+                    const alreadyIn = (list.items || []).some(i => i.chartId === chart.chart_id);
+                    return (
+                      <button
+                        key={list.id}
+                        type="button"
+                        onClick={() => !alreadyIn && handleAddToList(list.id, list.name)}
+                        disabled={alreadyIn}
+                        className={`w-full text-left px-3 py-2 text-sm font-display border-b border-piu-border/20 last:border-0 transition-colors ${
+                          alreadyIn
+                            ? 'text-gray-500 cursor-not-allowed'
+                            : 'hover:bg-piu-dark/70 text-white'
+                        }`}
+                      >
+                        <span className="truncate block">{list.name}</span>
+                        {alreadyIn && <span className="text-[10px] text-gray-600">Already added</span>}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

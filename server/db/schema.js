@@ -980,6 +980,32 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_activity_notif_target ON user_activity_notification_subscriptions(target_user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON user_push_subscriptions(user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON user_push_subscriptions(endpoint);
+
+    CREATE TABLE IF NOT EXISTS user_lists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_list_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      list_id INTEGER NOT NULL REFERENCES user_lists(id) ON DELETE CASCADE,
+      chart_id INTEGER NOT NULL,
+      song_title TEXT NOT NULL,
+      artist TEXT DEFAULT '',
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      jacket_url TEXT DEFAULT '',
+      original_score INTEGER DEFAULT 0,
+      original_grade TEXT DEFAULT '',
+      had_pass INTEGER DEFAULT 0,
+      target TEXT DEFAULT 'PASS',
+      added_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_lists_user ON user_lists(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_list_items_list ON user_list_items(list_id);
   `);
 
   // Migrations for players table - add user_id
