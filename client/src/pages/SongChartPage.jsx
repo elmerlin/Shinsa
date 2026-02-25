@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   CartesianGrid,
@@ -12,6 +12,49 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getSongChartDetail } from '../utils/api';
+
+// ─── localStorage list helpers (shared with ListsPage) ────────
+const LISTS_STORAGE_KEY = 'shinsa_lists';
+
+function loadLists() {
+  try {
+    const raw = localStorage.getItem(LISTS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLists(lists) {
+  localStorage.setItem(LISTS_STORAGE_KEY, JSON.stringify(lists));
+}
+
+const GRADE_THRESHOLDS = [
+  { min: 0,      grade: 'F' },
+  { min: 450000, grade: 'D' },
+  { min: 550000, grade: 'C' },
+  { min: 650000, grade: 'B' },
+  { min: 750000, grade: 'A' },
+  { min: 825000, grade: 'A+' },
+  { min: 900000, grade: 'AA' },
+  { min: 925000, grade: 'AA+' },
+  { min: 950000, grade: 'AAA' },
+  { min: 960000, grade: 'AAA+' },
+  { min: 970000, grade: 'S' },
+  { min: 975000, grade: 'S+' },
+  { min: 980000, grade: 'SS' },
+  { min: 985000, grade: 'SS+' },
+  { min: 990000, grade: 'SSS' },
+  { min: 995000, grade: 'SSS+' },
+];
+
+function gradeFromScore(score) {
+  const s = parseInt(score, 10) || 0;
+  for (let i = GRADE_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (s >= GRADE_THRESHOLDS[i].min) return GRADE_THRESHOLDS[i].grade;
+  }
+  return 'F';
+}
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -237,6 +280,70 @@ export default function SongChartPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedFriendRecord, setSelectedFriendRecord] = useState(null);
 
+  // ── Add-to-list state ──
+  const [showListMenu, setShowListMenu] = useState(false);
+  const [addedToast, setAddedToast] = useState('');
+  const listMenuRef = useRef(null);
+
+  useEffect(() => {
+    function handleDocClick(e) {
+      if (listMenuRef.current && !listMenuRef.current.contains(e.target)) {
+        setShowListMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleDocClick);
+    return () => document.removeEventListener('mousedown', handleDocClick);
+  }, []);
+
+  const handleAddToList = (listId) => {
+    const chart = detail?.chart;
+    const personalBest = detail?.user_summary?.best || null;
+    if (!chart) return;
+
+    const lists = loadLists();
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+    if ((list.items || []).some(i => i.chartId === chart.chart_id)) {
+      setAddedToast('Already in this list');
+      setTimeout(() => setAddedToast(''), 2000);
+      setShowListMenu(false);
+      return;
+    }
+
+    const currentScore = parseInt(personalBest?.score, 10) || 0;
+    const currentGrade = gradeFromScore(currentScore);
+    const hasPass = personalBest ? !personalBest.is_stage_break : false;
+
+    let defaultTarget = 'PASS';
+    if (hasPass && currentScore > 0) {
+      const currentIdx = GRADE_THRESHOLDS.findIndex(g => g.grade === currentGrade);
+      if (currentIdx >= 0 && currentIdx < GRADE_THRESHOLDS.length - 1) {
+        defaultTarget = GRADE_THRESHOLDS[currentIdx + 1].grade;
+      } else if (currentIdx === GRADE_THRESHOLDS.length - 1) {
+        defaultTarget = currentGrade;
+      }
+    }
+
+    list.items = [...(list.items || []), {
+      chartId: chart.chart_id,
+      songTitle: chart.title,
+      artist: chart.artist || '',
+      mode: chart.mode,
+      level: chart.level,
+      jacketUrl: chart.jacket_url || '',
+      originalScore: currentScore,
+      originalGrade: currentGrade,
+      hadPass: hasPass,
+      target: defaultTarget,
+      addedAt: Date.now(),
+    }];
+
+    saveLists(lists);
+    setAddedToast(`Added to "${list.name}"`);
+    setTimeout(() => setAddedToast(''), 2000);
+    setShowListMenu(false);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -342,7 +449,59 @@ export default function SongChartPage() {
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Link to="/songs" className="text-sm text-piu-accent hover:underline">Back to Songs</Link>
+        {user && (
+          <div ref={listMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowListMenu(prev => !prev)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-700 border border-violet-200/30 text-white font-display font-bold text-xs tracking-wide shadow-lg shadow-violet-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Add to List
+            </button>
+            {showListMenu && (() => {
+              const lists = loadLists();
+              return (
+                <div className="absolute right-0 z-30 mt-1 w-56 rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden">
+                  {lists.length === 0 ? (
+                    <div className="px-3 py-3 text-center">
+                      <p className="text-xs text-gray-500">No lists yet</p>
+                      <Link to="/lists" className="text-xs text-violet-400 hover:underline mt-1 inline-block">Create one</Link>
+                    </div>
+                  ) : (
+                    lists.map(list => {
+                      const alreadyIn = (list.items || []).some(i => i.chartId === chart.chart_id);
+                      return (
+                        <button
+                          key={list.id}
+                          type="button"
+                          onClick={() => !alreadyIn && handleAddToList(list.id)}
+                          disabled={alreadyIn}
+                          className={`w-full text-left px-3 py-2 text-sm font-display border-b border-piu-border/20 last:border-0 transition-colors ${
+                            alreadyIn
+                              ? 'text-gray-500 cursor-not-allowed'
+                              : 'hover:bg-piu-dark/70 text-white'
+                          }`}
+                        >
+                          <span className="truncate block">{list.name}</span>
+                          {alreadyIn && <span className="text-[10px] text-gray-600">Already added</span>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
+      {addedToast && (
+        <div className="fixed top-4 right-4 z-50 rounded-lg bg-violet-600 text-white text-sm font-display px-4 py-2 shadow-lg animate-fade-in">
+          {addedToast}
+        </div>
+      )}
 
       <section className="relative rounded-2xl overflow-hidden border border-piu-border/70 shadow-2xl">
         {chart.jacket_url ? (

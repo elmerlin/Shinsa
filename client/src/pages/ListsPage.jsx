@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getSongLibrary } from '../utils/api';
+import { getSongLibrary, getListAttemptCounts } from '../utils/api';
 
 // ─── Grade thresholds (ascending) ─────────────────────────────────
 const GRADE_THRESHOLDS = [
@@ -175,6 +175,36 @@ export default function ListsPage() {
     }
     return map;
   }, [library]);
+
+  // ── Attempt counts for expanded list ──
+  const [attemptCounts, setAttemptCounts] = useState({});
+
+  const fetchAttemptCounts = useCallback(async (list) => {
+    if (!user?.id || !list || (list.items || []).length === 0) {
+      setAttemptCounts({});
+      return;
+    }
+    try {
+      const data = await getListAttemptCounts({
+        user_id: user.id,
+        items: list.items.map(item => ({
+          chart_id: item.chartId,
+          song_title: item.songTitle,
+          mode: item.mode,
+          level: item.level,
+          added_at: item.addedAt,
+        })),
+      });
+      setAttemptCounts(data.counts || {});
+    } catch {
+      setAttemptCounts({});
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    const expanded = lists.find(l => l.id === expandedListId);
+    fetchAttemptCounts(expanded);
+  }, [expandedListId, lists, fetchAttemptCounts]);
 
   const handleCreateList = () => {
     const name = newListName.trim();
@@ -394,6 +424,7 @@ export default function ListsPage() {
                   list={list}
                   library={library}
                   libraryMap={libraryMap}
+                  attemptCounts={attemptCounts}
                   onAddChart={handleAddChart}
                   onRemoveChart={handleRemoveChart}
                   onSetTarget={handleSetTarget}
@@ -409,7 +440,7 @@ export default function ListsPage() {
 }
 
 // ─── List Detail (Expanded View) ───────────────────────────────────
-function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSetTarget, onDelete }) {
+function ListDetail({ list, library, libraryMap, attemptCounts, onAddChart, onRemoveChart, onSetTarget, onDelete }) {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchWrapRef = useRef(null);
@@ -524,6 +555,7 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
                 item={item}
                 liveData={libraryMap[item.chartId]}
                 listId={list.id}
+                attempts={attemptCounts[item.chartId] ?? null}
                 onSetTarget={onSetTarget}
                 onRemove={onRemoveChart}
               />
@@ -547,7 +579,7 @@ function ListDetail({ list, library, libraryMap, onAddChart, onRemoveChart, onSe
 }
 
 // ─── Individual List Item Row ──────────────────────────────────────
-function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
+function ListItemRow({ item, liveData, listId, attempts, onSetTarget, onRemove }) {
   const liveScore = liveData ? (parseInt(liveData.best_score, 10) || 0) : (parseInt(item.originalScore, 10) || 0);
   const livePass = liveData ? !!liveData.is_pass : item.hadPass;
   const liveGrade = gradeFromScore(liveScore);
@@ -575,7 +607,7 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
         {item.level}
       </span>
 
-      {/* Song info + score */}
+      {/* Song info + score + attempts */}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-display font-bold truncate leading-tight">{item.songTitle}</p>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -589,6 +621,11 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove }) {
           )}
           {item.originalScore > 0 && liveScore > item.originalScore && (
             <span className="text-[10px] text-emerald-400">+{formatNumber(liveScore - item.originalScore)}</span>
+          )}
+          {attempts != null && (
+            <span className="text-[10px] text-gray-500" title="Attempts since added to list">
+              {attempts} attempt{attempts !== 1 ? 's' : ''}
+            </span>
           )}
         </div>
       </div>

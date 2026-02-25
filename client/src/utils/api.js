@@ -641,6 +641,9 @@ export async function streamChatbotAsk(message, history, onEvent) {
   }
 }
 
+// List attempt counts
+export const getListAttemptCounts = (data) => request('/songs/list-attempt-counts', { method: 'POST', body: JSON.stringify(data) });
+
 // Song Recommendations
 export const getSongRecommendations = (data) => request('/songs/recommendations', { method: 'POST', body: JSON.stringify(data) });
 export const getTrainingRecommendations = (options = {}) => {

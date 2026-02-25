@@ -1574,6 +1574,47 @@ router.get('/library', optionalAuth, (req, res) => {
   });
 });
 
+// POST /api/songs/list-attempt-counts — count attempts per chart since each addedAt timestamp
+router.post('/list-attempt-counts', optionalAuth, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const userId = String(req.body.user_id || req.user?.id || '').trim();
+  if (!userId) return res.status(400).json({ error: 'user_id is required' });
+
+  const items = req.body.items;
+  if (!Array.isArray(items) || items.length === 0) return res.json({ counts: {} });
+
+  // Fetch all recent plays for this user once
+  const allPlays = db.prepare(`
+    SELECT song_title, mode, level, date_played
+    FROM user_recently_played
+    WHERE user_id = ?
+  `).all(userId);
+
+  const counts = {};
+  for (const item of items) {
+    const title = String(item.song_title || '');
+    const mode = normalizeMode(item.mode);
+    const level = parseInt(item.level, 10) || 0;
+    const addedAtMs = parseInt(item.added_at, 10) || 0;
+    if (!title || !mode || !level || !addedAtMs) continue;
+
+    const chartKey = makeChartKey(title, mode, level, aliases);
+    if (!chartKey) continue;
+
+    let count = 0;
+    for (const play of allPlays) {
+      const playKey = makeChartKey(play.song_title, play.mode, play.level, aliases);
+      if (playKey !== chartKey) continue;
+      const playMs = parseDateMs(play.date_played);
+      if (playMs >= addedAtMs) count++;
+    }
+    counts[`${item.chart_id}`] = count;
+  }
+
+  res.json({ counts });
+});
+
 // GET /api/songs/chart/:chartId/history — historical scores on a chart (includes fails)
 router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
   const db = getDb();
