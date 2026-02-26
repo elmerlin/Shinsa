@@ -787,7 +787,7 @@ router.get('/feed', requireAuth, (req, res) => {
 
   // Get upscores from followed users with pump/comment counts
   const upscores = db.prepare(`
-    SELECT us.id, us.user_id, us.upscores_json, us.created_at,
+    SELECT us.id, us.user_id, us.upscores_json, us.pumbility_gain, us.singles_pumbility_gain, us.created_at,
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM upscore_pumps WHERE upscore_id = us.id) as pump_count,
            (SELECT COUNT(*) FROM upscore_comments WHERE upscore_id = us.id) as comment_count,
@@ -807,7 +807,7 @@ router.get('/feed', requireAuth, (req, res) => {
 
   // Get new clears from followed users with pump/comment counts
   const clears = db.prepare(`
-    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.clears_json, nc.created_at,
+    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.clears_json, nc.pumbility_gain, nc.singles_pumbility_gain, nc.created_at,
            u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM new_clear_pumps WHERE clear_id = nc.id) as pump_count,
            (SELECT COUNT(*) FROM new_clear_comments WHERE clear_id = nc.id) as comment_count,

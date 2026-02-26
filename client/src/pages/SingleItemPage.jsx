@@ -48,6 +48,11 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString();
 }
 
+function parsePumbilityGain(value) {
+  const numeric = parseInt(value, 10) || 0;
+  return numeric > 0 ? numeric : 0;
+}
+
 function getClearItems(item) {
   const fallback = [{
     song_title: item.song_title || '',
@@ -379,6 +384,8 @@ export function SingleUpscorePage() {
 
   const upscores = (() => { try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; } })();
   const flag = getCountryFlag(item.nationality);
+  const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
+  const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -401,6 +408,12 @@ export function SingleUpscorePage() {
                 {item.username}
               </Link>
               <span className="text-piu-green font-display font-bold text-xs">upscores!</span>
+              {postPumbilityGain > 0 && (
+                <span className="text-cyan-300 font-display font-black text-[10px]">+{postPumbilityGain.toLocaleString()} PB</span>
+              )}
+              {postSinglesPumbilityGain > 0 && (
+                <span className="text-emerald-300 font-display font-black text-[10px]">+{postSinglesPumbilityGain.toLocaleString()} SPB</span>
+              )}
             </div>
             <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
           </div>
@@ -473,6 +486,8 @@ export function SingleClearPage() {
   const clears = getClearItems(item);
   const isGrouped = clears.length > 1;
   const flag = getCountryFlag(item.nationality);
+  const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
+  const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -495,6 +510,12 @@ export function SingleClearPage() {
                 {item.username}
               </Link>
               <span className="text-sky-400 font-display font-bold text-xs">{isGrouped ? 'new clears!' : 'new clear!'}</span>
+              {postPumbilityGain > 0 && (
+                <span className="text-cyan-300 font-display font-black text-[10px]">+{postPumbilityGain.toLocaleString()} PB</span>
+              )}
+              {postSinglesPumbilityGain > 0 && (
+                <span className="text-emerald-300 font-display font-black text-[10px]">+{postSinglesPumbilityGain.toLocaleString()} SPB</span>
+              )}
             </div>
             <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
           </div>

@@ -952,6 +952,8 @@ function initializeDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       upscores_json TEXT NOT NULL DEFAULT '[]',
+      pumbility_gain INT DEFAULT 0,
+      singles_pumbility_gain INT DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -1319,6 +1321,8 @@ function initializeDb() {
       plate TEXT DEFAULT '',
       background_url TEXT DEFAULT '',
       clears_json TEXT DEFAULT '',
+      pumbility_gain INT DEFAULT 0,
+      singles_pumbility_gain INT DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS new_clear_pumps (
@@ -1610,6 +1614,19 @@ function initializeDb() {
   const newClearCols = db.prepare("PRAGMA table_info(user_new_clears)").all().map(c => c.name);
   if (!newClearCols.includes('clears_json')) {
     db.exec("ALTER TABLE user_new_clears ADD COLUMN clears_json TEXT DEFAULT ''");
+  }
+  if (!newClearCols.includes('pumbility_gain')) {
+    db.exec("ALTER TABLE user_new_clears ADD COLUMN pumbility_gain INT DEFAULT 0");
+  }
+  if (!newClearCols.includes('singles_pumbility_gain')) {
+    db.exec("ALTER TABLE user_new_clears ADD COLUMN singles_pumbility_gain INT DEFAULT 0");
+  }
+  const upscoreCols = db.prepare("PRAGMA table_info(user_upscores)").all().map(c => c.name);
+  if (!upscoreCols.includes('pumbility_gain')) {
+    db.exec("ALTER TABLE user_upscores ADD COLUMN pumbility_gain INT DEFAULT 0");
+  }
+  if (!upscoreCols.includes('singles_pumbility_gain')) {
+    db.exec("ALTER TABLE user_upscores ADD COLUMN singles_pumbility_gain INT DEFAULT 0");
   }
   backfillLegacyGroupedNewClears();
 

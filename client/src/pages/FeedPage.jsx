@@ -43,6 +43,11 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString();
 }
 
+function parsePumbilityGain(value) {
+  const numeric = parseInt(value, 10) || 0;
+  return numeric > 0 ? numeric : 0;
+}
+
 function getClearItems(item) {
   const fallback = [{
     entry_type: 'song_clear',
@@ -477,6 +482,8 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
   const upscores = (() => {
     try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; }
   })();
+  const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
+  const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
   const hasMore = upscores.length > 5;
   const visibleUpscores = showAll ? upscores : upscores.slice(0, 5);
   const flag = getCountryFlag(item.nationality);
@@ -502,6 +509,12 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
               {item.username}
             </Link>
             <span className="text-piu-green font-display font-bold text-xs">upscores!</span>
+            {postPumbilityGain > 0 && (
+              <span className="text-cyan-300 font-display font-black text-[10px]">+{postPumbilityGain.toLocaleString()} PB</span>
+            )}
+            {postSinglesPumbilityGain > 0 && (
+              <span className="text-emerald-300 font-display font-black text-[10px]">+{postSinglesPumbilityGain.toLocaleString()} SPB</span>
+            )}
           </div>
           <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
         </div>
@@ -790,6 +803,8 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
 function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
   const [showAll, setShowAll] = useState(false);
   const clears = getClearItems(item);
+  const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
+  const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
   const hasMore = clears.length > 5;
   const visibleClears = showAll ? clears : clears.slice(0, 5);
   const isGrouped = clears.length > 1;
@@ -819,6 +834,12 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
                 ? (isGrouped ? 'earned new titles!' : 'earned a new title!')
                 : (isGrouped ? 'new clears!' : 'new clear!')}
             </span>
+            {postPumbilityGain > 0 && (
+              <span className="text-cyan-300 font-display font-black text-[10px]">+{postPumbilityGain.toLocaleString()} PB</span>
+            )}
+            {postSinglesPumbilityGain > 0 && (
+              <span className="text-emerald-300 font-display font-black text-[10px]">+{postSinglesPumbilityGain.toLocaleString()} SPB</span>
+            )}
           </div>
           <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
         </div>

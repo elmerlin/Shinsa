@@ -85,6 +85,105 @@ function isPassingScore(score, grade) {
   return !isFailGrade(grade);
 }
 
+function chartScoreKey(songTitle, mode, level) {
+  const title = String(songTitle || '').trim();
+  const chartMode = String(mode || '').trim();
+  const chartLevel = parseInt(level, 10) || 0;
+  if (!title || !chartMode || chartLevel <= 0) return '';
+  return `${title}|${chartMode}|${chartLevel}`;
+}
+
+function getChartRatingPoints(score, grade, level) {
+  const numericScore = parseInt(score, 10) || 0;
+  const numericLevel = parseInt(level, 10) || 0;
+  if (!isPassingScore(numericScore, grade)) return 0;
+  if (!LEVEL_BASE_POINTS[numericLevel]) return 0;
+  const resolvedGrade = grade || gradeFromScore(numericScore);
+  return calculateRatingPoints(numericLevel, resolvedGrade, numericScore);
+}
+
+function modeMatchesFilter(mode, modeFilter = '') {
+  if (!modeFilter) return true;
+  return String(mode || '').trim() === String(modeFilter || '').trim();
+}
+
+function buildPumbilityRatingMap(bestScores = [], modeFilter = '') {
+  const map = new Map();
+  for (const row of (Array.isArray(bestScores) ? bestScores : [])) {
+    if (!modeMatchesFilter(row?.mode, modeFilter)) continue;
+    const key = chartScoreKey(row?.song_title, row?.mode, row?.level);
+    if (!key) continue;
+    const rating = getChartRatingPoints(row?.score, row?.grade, row?.level);
+    if (rating <= 0) continue;
+    map.set(key, rating);
+  }
+  return map;
+}
+
+function applyChartScoreToPumbilityMap(ratingMap, row, modeFilter = '') {
+  if (!ratingMap || !(ratingMap instanceof Map)) return;
+  if (!modeMatchesFilter(row?.mode, modeFilter)) return;
+  const key = chartScoreKey(row?.song_title, row?.mode, row?.level);
+  if (!key) return;
+
+  const score = row?.new_score !== undefined ? row.new_score : row?.score;
+  const grade = row?.new_grade !== undefined ? row.new_grade : row?.grade;
+  const rating = getChartRatingPoints(score, grade, row?.level);
+  if (rating > 0) {
+    ratingMap.set(key, rating);
+  } else {
+    ratingMap.delete(key);
+  }
+}
+
+function computePumbilityFromRatingMap(ratingMap) {
+  if (!ratingMap || !(ratingMap instanceof Map) || ratingMap.size === 0) return 0;
+  const ratings = Array.from(ratingMap.values())
+    .map((value) => parseInt(value, 10) || 0)
+    .filter((value) => value > 0)
+    .sort((a, b) => b - a);
+  return ratings.slice(0, 50).reduce((sum, value) => sum + value, 0);
+}
+
+function computeMetricPumbilityGains(baseBestScores = [], upscores = [], clears = [], modeFilter = '') {
+  const ratingMap = buildPumbilityRatingMap(baseBestScores, modeFilter);
+  const before = computePumbilityFromRatingMap(ratingMap);
+
+  for (const row of (Array.isArray(upscores) ? upscores : [])) {
+    applyChartScoreToPumbilityMap(ratingMap, row, modeFilter);
+  }
+  const afterUpscores = computePumbilityFromRatingMap(ratingMap);
+
+  for (const row of (Array.isArray(clears) ? clears : [])) {
+    applyChartScoreToPumbilityMap(ratingMap, row, modeFilter);
+  }
+  const afterClears = computePumbilityFromRatingMap(ratingMap);
+
+  return {
+    before,
+    after_upscores: afterUpscores,
+    after_clears: afterClears,
+    upscore_gain: Math.max(0, afterUpscores - before),
+    clear_gain: Math.max(0, afterClears - afterUpscores),
+    total_gain: Math.max(0, afterClears - before),
+  };
+}
+
+function computePostPumbilityGains(baseBestScores = [], upscores = [], clears = []) {
+  const overall = computeMetricPumbilityGains(baseBestScores, upscores, clears, '');
+  const singles = computeMetricPumbilityGains(baseBestScores, upscores, clears, 'Single');
+
+  return {
+    ...overall,
+    singles_before: singles.before,
+    singles_after_upscores: singles.after_upscores,
+    singles_after_clears: singles.after_clears,
+    singles_upscore_gain: singles.upscore_gain,
+    singles_clear_gain: singles.clear_gain,
+    singles_total_gain: singles.total_gain,
+  };
+}
+
 function buildPumbilityRecommendations(bestScores, options = {}) {
   const modeFilter = String(options.modeFilter || '');
   const metric = String(options.metric || '').trim() || (modeFilter ? modeFilter.toLowerCase() : 'overall');
@@ -615,7 +714,7 @@ function findLeaderboardRankByName(db, name) {
   return { rank, player_name: String(entry.player_name || '').trim() };
 }
 
-function insertGroupedNewClearPost(db, userId, clears) {
+function insertGroupedNewClearPost(db, userId, clears, options = {}) {
   if (!Array.isArray(clears) || clears.length === 0) return null;
 
   const normalized = clears.map(c => ({
@@ -634,13 +733,23 @@ function insertGroupedNewClearPost(db, userId, clears) {
     title_level: c.title_level || 0,
     title_plate: c.title_plate || '',
     title_tier: c.title_tier || '',
+    pumbility_gain: Math.max(0, parseInt(c.pumbility_gain, 10) || 0),
+    singles_pumbility_gain: Math.max(0, parseInt(c.singles_pumbility_gain, 10) || 0),
   }));
   const first = normalized[0];
+  const explicitGain = options?.pumbilityGain;
+  const postPumbilityGain = Number.isFinite(Number(explicitGain))
+    ? Math.max(0, parseInt(explicitGain, 10) || 0)
+    : normalized.reduce((sum, row) => sum + (parseInt(row.pumbility_gain, 10) || 0), 0);
+  const explicitSinglesGain = options?.singlesPumbilityGain;
+  const postSinglesPumbilityGain = Number.isFinite(Number(explicitSinglesGain))
+    ? Math.max(0, parseInt(explicitSinglesGain, 10) || 0)
+    : normalized.reduce((sum, row) => sum + (parseInt(row.singles_pumbility_gain, 10) || 0), 0);
 
   const result = db.prepare(`
     INSERT INTO user_new_clears (
-      user_id, song_title, mode, level, score, grade, plate, background_url, clears_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      user_id, song_title, mode, level, score, grade, plate, background_url, clears_json, pumbility_gain, singles_pumbility_gain, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(
     userId,
     first.song_title,
@@ -650,7 +759,9 @@ function insertGroupedNewClearPost(db, userId, clears) {
     first.grade,
     first.plate,
     first.background_url,
-    JSON.stringify(normalized)
+    JSON.stringify(normalized),
+    postPumbilityGain,
+    postSinglesPumbilityGain
   );
 
   return result.lastInsertRowid;
@@ -832,6 +943,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       // Capture old scores for upscore tracking before replacing
       const oldScores = {};
       const existingScores = db.prepare('SELECT song_title, mode, level, score, grade, shoe_id FROM user_best_scores WHERE user_id = ?').all(userId);
+      const baselineBestScores = existingScores.filter((row) => isPassingScore(row.score, row.grade));
       for (const s of existingScores) {
         if (!isPassingScore(s.score, s.grade)) continue;
         oldScores[`${s.song_title}|${s.mode}|${s.level}`] = { score: s.score, grade: s.grade, shoe_id: s.shoe_id ? parseInt(s.shoe_id, 10) : null };
@@ -868,14 +980,19 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
             newClears.push(s);
           }
         }
+        const pumbilityGains = computePostPumbilityGains(baselineBestScores, upscores, newClears);
+
         if (upscores.length > 0) {
           const upscoreInsert = db.prepare(`
-            INSERT INTO user_upscores (user_id, upscores_json, created_at)
-            VALUES (?, ?, datetime('now'))
-          `).run(userId, JSON.stringify(upscores));
+            INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
+          `).run(userId, JSON.stringify(upscores), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
           upscorePostId = upscoreInsert.lastInsertRowid;
         }
-        newClearPostId = insertGroupedNewClearPost(db, userId, newClears);
+        newClearPostId = insertGroupedNewClearPost(db, userId, newClears, {
+          pumbilityGain: pumbilityGains.clear_gain,
+          singlesPumbilityGain: pumbilityGains.singles_clear_gain,
+        });
         db.prepare(`
           UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
           sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
@@ -1955,6 +2072,9 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     const newClearsFromRecent = [];
     let upscorePostId = null;
     let newClearPostId = null;
+    const baselineBestScores = db.prepare(
+      'SELECT song_title, mode, level, score, grade FROM user_best_scores WHERE user_id = ?'
+    ).all(req.user.id).filter((row) => isPassingScore(row.score, row.grade));
 
     const txn = db.transaction(() => {
       // Keep user_best_scores pass-only.
@@ -2070,16 +2190,20 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       db.prepare(`
         UPDATE user_piugame_sync SET last_recently_played_sync = datetime('now') WHERE user_id = ?
       `).run(req.user.id);
+      const pumbilityGains = computePostPumbilityGains(baselineBestScores, upscoresFromRecent, newClearsFromRecent);
 
       // Track upscores from recently played
       if (upscoresFromRecent.length > 0) {
         const upscoreInsert = db.prepare(`
-          INSERT INTO user_upscores (user_id, upscores_json, created_at)
-          VALUES (?, ?, datetime('now'))
-        `).run(req.user.id, JSON.stringify(upscoresFromRecent));
+          INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
+          VALUES (?, ?, ?, ?, datetime('now'))
+        `).run(req.user.id, JSON.stringify(upscoresFromRecent), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
         upscorePostId = upscoreInsert.lastInsertRowid;
       }
-      newClearPostId = insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent);
+      newClearPostId = insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent, {
+        pumbilityGain: pumbilityGains.clear_gain,
+        singlesPumbilityGain: pumbilityGains.singles_clear_gain,
+      });
     });
     txn();
     const progressAfterSync = updateUserSkillTitleFromBestScores(db, req.user.id);
