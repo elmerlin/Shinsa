@@ -578,9 +578,15 @@ export default function TiersPage() {
       .map((tier) => {
         const charts = Array.isArray(tier.charts) ? tier.charts : [];
         const visibleCharts = showUnplayed ? charts : charts.filter((chart) => chart.is_pass);
+        const sortedCharts = [...visibleCharts].sort((a, b) => {
+          const aCleared = a.is_pass ? 1 : 0;
+          const bCleared = b.is_pass ? 1 : 0;
+          if (aCleared !== bCleared) return bCleared - aCleared;
+          return (parseInt(b.best_score, 10) || 0) - (parseInt(a.best_score, 10) || 0);
+        });
         return {
           ...tier,
-          charts: visibleCharts,
+          charts: sortedCharts,
         };
       })
       .filter((tier) => showEmptyTiers || tier.charts.length > 0);
