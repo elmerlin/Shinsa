@@ -63,6 +63,8 @@ function getClearItems(item) {
     title_level: 0,
     title_plate: '',
     title_tier: '',
+    pumbility_gain: parsePumbilityGain(item.pumbility_gain),
+    singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
   }];
 
   try {
@@ -85,6 +87,8 @@ function getClearItems(item) {
       title_level: parseInt(c.title_level) || 0,
       title_plate: c.title_plate || '',
       title_tier: c.title_tier || '',
+      pumbility_gain: parsePumbilityGain(c.pumbility_gain),
+      singles_pumbility_gain: parsePumbilityGain(c.singles_pumbility_gain),
     }));
   } catch {
     return fallback;
@@ -527,6 +531,8 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
           const isSingle = u.mode === 'Single';
           const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400';
           const improvement = u.new_score - u.old_score;
+          const songPumbilityGain = parsePumbilityGain(u.pumbility_gain);
+          const songSinglesPumbilityGain = parsePumbilityGain(u.singles_pumbility_gain);
 
           const norm = (u.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
           const exactKey = `${norm}|${u.mode}|${u.level}`;
@@ -552,6 +558,16 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
                   <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
                     {isSingle ? 'S' : 'D'}{u.level}
                   </span>
+                  {songPumbilityGain > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
+                      +{songPumbilityGain.toLocaleString()} PB
+                    </span>
+                  )}
+                  {songSinglesPumbilityGain > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
+                      +{songSinglesPumbilityGain.toLocaleString()} SPB
+                    </span>
+                  )}
                 </div>
               </div>
               <button
@@ -847,6 +863,9 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
 
       <div className="space-y-2">
         {visibleClears.map((clear, i) => {
+          const songPumbilityGain = parsePumbilityGain(clear.pumbility_gain);
+          const songSinglesPumbilityGain = parsePumbilityGain(clear.singles_pumbility_gain);
+
           if (clear.entry_type === 'title_unlock') {
             const titleName = clear.title_name || clear.song_title || `Title Lv.${clear.title_level || clear.level || 1}`;
             const family = clear.title_family || '';
@@ -907,6 +926,16 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
                   </span>
                   {clear.plate && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>
+                  )}
+                  {songPumbilityGain > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
+                      +{songPumbilityGain.toLocaleString()} PB
+                    </span>
+                  )}
+                  {songSinglesPumbilityGain > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
+                      +{songSinglesPumbilityGain.toLocaleString()} SPB
+                    </span>
                   )}
                 </div>
               </div>

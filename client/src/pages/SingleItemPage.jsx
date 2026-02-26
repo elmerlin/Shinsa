@@ -62,6 +62,8 @@ function getClearItems(item) {
     grade: item.grade || '',
     plate: item.plate || '',
     background_url: item.background_url || '',
+    pumbility_gain: parsePumbilityGain(item.pumbility_gain),
+    singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
   }];
 
   try {
@@ -76,6 +78,8 @@ function getClearItems(item) {
       grade: c.grade || '',
       plate: c.plate || '',
       background_url: c.background_url || '',
+      pumbility_gain: parsePumbilityGain(c.pumbility_gain),
+      singles_pumbility_gain: parsePumbilityGain(c.singles_pumbility_gain),
     }));
   } catch {
     return fallback;
@@ -425,6 +429,8 @@ export function SingleUpscorePage() {
             const isSingle = u.mode === 'Single';
             const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400';
             const improvement = u.new_score - u.old_score;
+            const songPumbilityGain = parsePumbilityGain(u.pumbility_gain);
+            const songSinglesPumbilityGain = parsePumbilityGain(u.singles_pumbility_gain);
             const norm = (u.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
             const exactKey = `${norm}|${u.mode}|${u.level}`;
             const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
@@ -437,7 +443,19 @@ export function SingleUpscorePage() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-display font-bold truncate">{u.song_title}</p>
-                  <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>{isSingle ? 'S' : 'D'}{u.level}</span>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>{isSingle ? 'S' : 'D'}{u.level}</span>
+                    {songPumbilityGain > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
+                        +{songPumbilityGain.toLocaleString()} PB
+                      </span>
+                    )}
+                    {songSinglesPumbilityGain > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
+                        +{songSinglesPumbilityGain.toLocaleString()} SPB
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="flex items-center gap-1 justify-end">
@@ -529,6 +547,8 @@ export function SingleClearPage() {
               : clear.mode === 'Double'
                 ? 'bg-green-600/20 text-green-400'
                 : 'bg-blue-600/20 text-blue-400';
+            const songPumbilityGain = parsePumbilityGain(clear.pumbility_gain);
+            const songSinglesPumbilityGain = parsePumbilityGain(clear.singles_pumbility_gain);
             const norm = (clear.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
             const exactKey = `${norm}|${clear.mode}|${clear.level}`;
             const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
@@ -549,6 +569,16 @@ export function SingleClearPage() {
                       {isSingle ? 'S' : clear.mode === 'Double' ? 'D' : 'C'}{clear.level}
                     </span>
                     {clear.plate && <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>}
+                    {songPumbilityGain > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
+                        +{songPumbilityGain.toLocaleString()} PB
+                      </span>
+                    )}
+                    {songSinglesPumbilityGain > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
+                        +{songSinglesPumbilityGain.toLocaleString()} SPB
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-right shrink-0">

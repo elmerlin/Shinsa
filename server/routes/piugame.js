@@ -145,42 +145,56 @@ function computePumbilityFromRatingMap(ratingMap) {
   return ratings.slice(0, 50).reduce((sum, value) => sum + value, 0);
 }
 
-function computeMetricPumbilityGains(baseBestScores = [], upscores = [], clears = [], modeFilter = '') {
-  const ratingMap = buildPumbilityRatingMap(baseBestScores, modeFilter);
-  const before = computePumbilityFromRatingMap(ratingMap);
-
-  for (const row of (Array.isArray(upscores) ? upscores : [])) {
-    applyChartScoreToPumbilityMap(ratingMap, row, modeFilter);
-  }
-  const afterUpscores = computePumbilityFromRatingMap(ratingMap);
-
-  for (const row of (Array.isArray(clears) ? clears : [])) {
-    applyChartScoreToPumbilityMap(ratingMap, row, modeFilter);
-  }
-  const afterClears = computePumbilityFromRatingMap(ratingMap);
-
-  return {
-    before,
-    after_upscores: afterUpscores,
-    after_clears: afterClears,
-    upscore_gain: Math.max(0, afterUpscores - before),
-    clear_gain: Math.max(0, afterClears - afterUpscores),
-    total_gain: Math.max(0, afterClears - before),
-  };
-}
-
 function computePostPumbilityGains(baseBestScores = [], upscores = [], clears = []) {
-  const overall = computeMetricPumbilityGains(baseBestScores, upscores, clears, '');
-  const singles = computeMetricPumbilityGains(baseBestScores, upscores, clears, 'Single');
+  const overallMap = buildPumbilityRatingMap(baseBestScores, '');
+  const singlesMap = buildPumbilityRatingMap(baseBestScores, 'Single');
+
+  const overallBefore = computePumbilityFromRatingMap(overallMap);
+  const singlesBefore = computePumbilityFromRatingMap(singlesMap);
+  let overallCursor = overallBefore;
+  let singlesCursor = singlesBefore;
+
+  const annotate = (entry) => {
+    applyChartScoreToPumbilityMap(overallMap, entry, '');
+    const overallAfter = computePumbilityFromRatingMap(overallMap);
+    const overallGain = Math.max(0, overallAfter - overallCursor);
+    overallCursor = overallAfter;
+
+    applyChartScoreToPumbilityMap(singlesMap, entry, 'Single');
+    const singlesAfter = computePumbilityFromRatingMap(singlesMap);
+    const singlesGain = Math.max(0, singlesAfter - singlesCursor);
+    singlesCursor = singlesAfter;
+
+    return {
+      ...entry,
+      pumbility_gain: overallGain,
+      singles_pumbility_gain: singlesGain,
+    };
+  };
+
+  const upscoreEntries = (Array.isArray(upscores) ? upscores : []).map(annotate);
+  const overallAfterUpscores = overallCursor;
+  const singlesAfterUpscores = singlesCursor;
+
+  const clearEntries = (Array.isArray(clears) ? clears : []).map(annotate);
+  const overallAfterClears = overallCursor;
+  const singlesAfterClears = singlesCursor;
 
   return {
-    ...overall,
-    singles_before: singles.before,
-    singles_after_upscores: singles.after_upscores,
-    singles_after_clears: singles.after_clears,
-    singles_upscore_gain: singles.upscore_gain,
-    singles_clear_gain: singles.clear_gain,
-    singles_total_gain: singles.total_gain,
+    upscores: upscoreEntries,
+    clears: clearEntries,
+    before: overallBefore,
+    after_upscores: overallAfterUpscores,
+    after_clears: overallAfterClears,
+    upscore_gain: Math.max(0, overallAfterUpscores - overallBefore),
+    clear_gain: Math.max(0, overallAfterClears - overallAfterUpscores),
+    total_gain: Math.max(0, overallAfterClears - overallBefore),
+    singles_before: singlesBefore,
+    singles_after_upscores: singlesAfterUpscores,
+    singles_after_clears: singlesAfterClears,
+    singles_upscore_gain: Math.max(0, singlesAfterUpscores - singlesBefore),
+    singles_clear_gain: Math.max(0, singlesAfterClears - singlesAfterUpscores),
+    singles_total_gain: Math.max(0, singlesAfterClears - singlesBefore),
   };
 }
 
@@ -981,6 +995,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
           }
         }
         const pumbilityGains = computePostPumbilityGains(baselineBestScores, upscores, newClears);
+        upscores = pumbilityGains.upscores;
+        newClears = pumbilityGains.clears;
 
         if (upscores.length > 0) {
           const upscoreInsert = db.prepare(`
@@ -2191,16 +2207,18 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
         UPDATE user_piugame_sync SET last_recently_played_sync = datetime('now') WHERE user_id = ?
       `).run(req.user.id);
       const pumbilityGains = computePostPumbilityGains(baselineBestScores, upscoresFromRecent, newClearsFromRecent);
+      const upscoreRowsWithGains = pumbilityGains.upscores;
+      const clearRowsWithGains = pumbilityGains.clears;
 
       // Track upscores from recently played
-      if (upscoresFromRecent.length > 0) {
+      if (upscoreRowsWithGains.length > 0) {
         const upscoreInsert = db.prepare(`
           INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
           VALUES (?, ?, ?, ?, datetime('now'))
-        `).run(req.user.id, JSON.stringify(upscoresFromRecent), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
+        `).run(req.user.id, JSON.stringify(upscoreRowsWithGains), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
         upscorePostId = upscoreInsert.lastInsertRowid;
       }
-      newClearPostId = insertGroupedNewClearPost(db, req.user.id, newClearsFromRecent, {
+      newClearPostId = insertGroupedNewClearPost(db, req.user.id, clearRowsWithGains, {
         pumbilityGain: pumbilityGains.clear_gain,
         singlesPumbilityGain: pumbilityGains.singles_clear_gain,
       });
