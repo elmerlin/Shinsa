@@ -199,8 +199,8 @@ export default function OnlineDuelSetup() {
             <li>Both players must have registered accounts</li>
             <li>An invitation is sent to the opponent - they join when they accept</li>
             <li>Players take turns choosing mode + level, a song is drawn</li>
-            <li>Both players accept, then play the song on their own machine</li>
-            <li>Upload a photo of your result screen to submit your score</li>
+            <li>Play the song on your machine, then fetch your score from PIUGame</li>
+            <li>Link your PIUGame account in Settings to enable automatic score fetching</li>
             <li>The duel ends when both players agree, or auto-ends in Best-of-N format</li>
           </ul>
         </div>

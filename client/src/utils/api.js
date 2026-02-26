@@ -185,6 +185,7 @@ export const onlineDuelDraw = (id, data) => request(`/online-duels/${id}/draw`, 
 export const onlineDuelAccept = (id, songId) => request(`/online-duels/${id}/accept`, { method: 'POST', body: JSON.stringify({ song_id: songId }) });
 export const onlineDuelDecline = (id, songId) => request(`/online-duels/${id}/decline`, { method: 'POST', body: JSON.stringify({ song_id: songId }) });
 export const onlineDuelSubmitScore = (id, data) => request(`/online-duels/${id}/submit-score`, { method: 'POST', body: JSON.stringify(data) });
+export const onlineDuelFetchScore = (id) => longRequest(`/online-duels/${id}/fetch-score`, { method: 'POST' });
 export const onlineDuelEndRequest = (id) => request(`/online-duels/${id}/end-request`, { method: 'POST' });
 export const onlineDuelCancelEnd = (id) => request(`/online-duels/${id}/cancel-end`, { method: 'POST' });
 export const pumpPlayer = (id, player) => request(`/online-duels/${id}/pump`, { method: 'POST', body: JSON.stringify({ player }) });
