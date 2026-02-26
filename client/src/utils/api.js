@@ -102,6 +102,18 @@ export const getSongChartHistory = (chartId, params = {}) => {
   return request(`/songs/chart/${chartId}/history${qs ? `?${qs}` : ''}`);
 };
 export const getSongAnalytics = (userId) => request(`/songs/analytics/user/${userId}`);
+export const getGradeGoals = (userId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/grade-goals/${userId}${qs ? `?${qs}` : ''}`);
+};
+export const getSkillBreakdown = (userId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/skill-breakdown/${userId}${qs ? `?${qs}` : ''}`);
+};
+export const getUserRankings = (userId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/rankings/${userId}${qs ? `?${qs}` : ''}`);
+};
 export const getSongHeadToHead = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/head-to-head${qs ? `?${qs}` : ''}`);

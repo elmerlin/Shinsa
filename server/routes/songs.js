@@ -2156,6 +2156,398 @@ router.get('/analytics/user/:userId', (req, res) => {
   res.json(result.analytics);
 });
 
+// GET /api/songs/analytics/grade-goals/:userId — per-level grade goal tracker
+router.get('/analytics/grade-goals/:userId', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const userExists = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!userExists) return res.status(404).json({ error: 'User not found' });
+
+  const mode = normalizeMode(req.query.mode);
+  if (!mode || mode === 'CoOp') {
+    return res.status(400).json({ error: 'mode is required (Single or Double)' });
+  }
+
+  const level = parseLevelQuery(req.query.level);
+  if (!level) {
+    return res.status(400).json({ error: 'level is required and must be a positive integer' });
+  }
+
+  const targetGrade = normalizeGrade(req.query.target_grade);
+  if (!targetGrade || GRADE_INDEX[targetGrade] === undefined) {
+    return res.status(400).json({ error: 'Invalid target_grade' });
+  }
+
+  const targetRow = SCORE_TO_GRADE.find((row) => row.grade === targetGrade);
+  if (!targetRow) {
+    return res.status(400).json({ error: 'Could not determine score threshold for target grade' });
+  }
+  const targetScore = targetRow.min;
+
+  const songCatalog = getSongCatalog(db, aliases, [mode]);
+  const { bestByChart } = buildUserBestByChartMap({
+    bestScores: queryUserBestScores(db, userId),
+    recentScores: queryUserRecentScores(db, userId),
+    pumbilityScores: queryUserPumbilityScores(db, userId),
+    aliases,
+    validChartKeys: songCatalog.chartsByKey,
+  });
+
+  const charts = [];
+  let achievedCount = 0;
+  let playedCount = 0;
+
+  for (const chart of songCatalog.charts) {
+    if (chart.mode !== mode || chart.level !== level) continue;
+
+    const best = bestByChart.get(chart.key) || null;
+    const currentScore = best ? best.score : 0;
+    const currentGrade = best ? (best.grade || gradeFromScore(currentScore)) : '';
+    const isPass = best ? best.is_pass : false;
+    const hasPlayed = best && currentScore > 0;
+    const meetsGoal = currentScore >= targetScore;
+    const pointsNeeded = meetsGoal ? 0 : Math.max(0, targetScore - currentScore);
+
+    let closeness = 'unplayed';
+    if (meetsGoal) {
+      closeness = 'achieved';
+      achievedCount += 1;
+    } else if (!hasPlayed) {
+      closeness = 'unplayed';
+    } else if (pointsNeeded <= 5000) {
+      closeness = 'within_reach';
+    } else if (pointsNeeded <= 20000) {
+      closeness = 'close';
+    } else {
+      closeness = 'needs_work';
+    }
+
+    if (hasPlayed) playedCount += 1;
+
+    charts.push({
+      chart_id: chart.chart_id,
+      title: chart.title,
+      artist: chart.artist || '',
+      mode: chart.mode,
+      level: chart.level,
+      jacket_url: chart.jacket_url || '',
+      song_key: chart.song_key || '',
+      current_score: currentScore,
+      current_grade: currentGrade,
+      is_pass: isPass,
+      target_score: targetScore,
+      target_grade: targetGrade,
+      points_needed: pointsNeeded,
+      closeness,
+      skills: (chart.skills || []).map((s) => ({ slug: s.slug || s.skill_slug, name: s.name || s.skill_name })),
+    });
+  }
+
+  charts.sort((a, b) => {
+    const order = { within_reach: 0, close: 1, needs_work: 2, unplayed: 3, achieved: 4 };
+    const orderDiff = (order[a.closeness] || 99) - (order[b.closeness] || 99);
+    if (orderDiff !== 0) return orderDiff;
+    if (a.points_needed !== b.points_needed) return a.points_needed - b.points_needed;
+    return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+  });
+
+  const totalCharts = charts.length;
+
+  res.json({
+    user_id: userId,
+    mode,
+    level,
+    target_grade: targetGrade,
+    target_score: targetScore,
+    total_charts: totalCharts,
+    achieved_count: achievedCount,
+    played_count: playedCount,
+    progress_percent: totalCharts > 0
+      ? Number(((achievedCount / totalCharts) * 100).toFixed(1))
+      : 0,
+    charts,
+  });
+});
+
+// GET /api/songs/analytics/skill-breakdown/:userId — strengths & weaknesses by skill
+router.get('/analytics/skill-breakdown/:userId', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const userExists = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!userExists) return res.status(404).json({ error: 'User not found' });
+
+  const modeList = expandMode(req.query.mode);
+  const minLevel = parseLevelBound(req.query.min_level);
+  const maxLevel = parseLevelBound(req.query.max_level);
+
+  const songCatalog = getSongCatalog(db, aliases);
+  const { bestByChart } = buildUserBestByChartMap({
+    bestScores: queryUserBestScores(db, userId),
+    recentScores: queryUserRecentScores(db, userId),
+    pumbilityScores: queryUserPumbilityScores(db, userId),
+    aliases,
+    validChartKeys: songCatalog.chartsByKey,
+  });
+
+  const skillStats = new Map();
+
+  for (const chart of songCatalog.charts) {
+    if (!modeList.includes(chart.mode)) continue;
+    if (minLevel && chart.level < minLevel) continue;
+    if (maxLevel && chart.level > maxLevel) continue;
+    if (!chart.skills || chart.skills.length === 0) continue;
+
+    const best = bestByChart.get(chart.key) || null;
+
+    for (const skill of chart.skills) {
+      const slug = skill.slug || skill.skill_slug;
+      const name = skill.name || skill.skill_name || slug;
+      if (!slug) continue;
+
+      if (!skillStats.has(slug)) {
+        skillStats.set(slug, {
+          slug,
+          name,
+          total_charts: 0,
+          played_charts: 0,
+          passed_charts: 0,
+          score_sum: 0,
+          score_count: 0,
+          best_score: 0,
+          worst_score: Infinity,
+          best_chart: null,
+          worst_chart: null,
+        });
+      }
+      const entry = skillStats.get(slug);
+      entry.total_charts += 1;
+
+      if (best && best.score > 0) {
+        entry.played_charts += 1;
+        entry.score_sum += best.score;
+        entry.score_count += 1;
+
+        if (best.is_pass) entry.passed_charts += 1;
+
+        if (best.score > entry.best_score) {
+          entry.best_score = best.score;
+          entry.best_chart = {
+            chart_id: chart.chart_id,
+            title: chart.title,
+            mode: chart.mode,
+            level: chart.level,
+            score: best.score,
+            grade: best.grade,
+          };
+        }
+        if (best.score < entry.worst_score) {
+          entry.worst_score = best.score;
+          entry.worst_chart = {
+            chart_id: chart.chart_id,
+            title: chart.title,
+            mode: chart.mode,
+            level: chart.level,
+            score: best.score,
+            grade: best.grade,
+          };
+        }
+      }
+    }
+  }
+
+  const skills = [];
+  for (const entry of skillStats.values()) {
+    if (entry.total_charts === 0) continue;
+    const avgScore = entry.score_count > 0
+      ? Math.round(entry.score_sum / entry.score_count)
+      : 0;
+    const avgGrade = avgScore > 0 ? gradeFromScore(avgScore) : '';
+    const playRate = entry.total_charts > 0
+      ? Number(((entry.played_charts / entry.total_charts) * 100).toFixed(1))
+      : 0;
+    const passRate = entry.played_charts > 0
+      ? Number(((entry.passed_charts / entry.played_charts) * 100).toFixed(1))
+      : 0;
+
+    const normalizedAvgScore = avgScore > 0
+      ? Math.max(0, (avgScore - 700000) / 300000) * 100
+      : 0;
+    const performanceScore = entry.score_count > 0
+      ? Number((normalizedAvgScore * 0.7 + passRate * 0.3).toFixed(2))
+      : 0;
+
+    skills.push({
+      slug: entry.slug,
+      name: entry.name,
+      total_charts: entry.total_charts,
+      played_charts: entry.played_charts,
+      passed_charts: entry.passed_charts,
+      average_score: avgScore,
+      average_grade: avgGrade,
+      play_rate: playRate,
+      pass_rate: passRate,
+      performance_score: performanceScore,
+      best_chart: entry.best_score > 0 ? entry.best_chart : null,
+      worst_chart: entry.worst_score < Infinity ? entry.worst_chart : null,
+    });
+  }
+
+  skills.sort((a, b) => b.performance_score - a.performance_score);
+
+  const played = skills.filter((s) => s.played_charts > 0);
+  const strengths = played.slice(0, 3).map((s) => s.slug);
+  const weaknesses = played.length > 3 ? played.slice(-3).reverse().map((s) => s.slug) : [];
+
+  res.json({
+    user_id: userId,
+    mode: modeList.length === 2 ? 'both' : (modeList[0] || '').toLowerCase(),
+    min_level: minLevel,
+    max_level: maxLevel,
+    skills,
+    strengths,
+    weaknesses,
+  });
+});
+
+// GET /api/songs/analytics/rankings/:userId — percentile rankings among synced users
+router.get('/analytics/rankings/:userId', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const userExists = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
+  if (!userExists) return res.status(404).json({ error: 'User not found' });
+
+  const modeList = expandMode(req.query.mode);
+  const songCatalog = getSongCatalog(db, aliases);
+  const targetResult = getUserAnalytics(db, userId, aliases, songCatalog);
+  const targetAnalytics = targetResult.analytics;
+
+  // Pumbility percentile from leaderboard
+  const leaderboardMeta = db.prepare(
+    'SELECT total_entries, threshold FROM pumbility_leaderboard_meta WHERE id = 1'
+  ).get();
+  const totalLeaderboardEntries = parseInt(leaderboardMeta?.total_entries, 10) || 0;
+  const userPumbility = targetAnalytics.pumbility || 0;
+
+  let pumbilityPercentile = null;
+  if (totalLeaderboardEntries > 0 && userPumbility > 0) {
+    const belowCount = db.prepare(
+      'SELECT COUNT(*) as c FROM pumbility_leaderboard WHERE pumbility < ?'
+    ).get(userPumbility);
+    pumbilityPercentile = Number((((belowCount?.c || 0) / totalLeaderboardEntries) * 100).toFixed(1));
+  }
+
+  // Per-level percentile among synced Shinsa users
+  const placeholders = modeList.map(() => '?').join(', ');
+  const allUserLevelStats = db.prepare(`
+    SELECT
+      ubs.user_id,
+      ubs.mode,
+      ubs.level,
+      COUNT(*) as chart_count,
+      AVG(ubs.score) as avg_score
+    FROM user_best_scores ubs
+    INNER JOIN user_piugame_sync ups ON ups.user_id = ubs.user_id AND ups.best_scores_imported = 1
+    WHERE ubs.mode IN (${placeholders})
+    GROUP BY ubs.user_id, ubs.mode, ubs.level
+  `).all(...modeList);
+
+  const syncedUserCount = new Set(allUserLevelStats.map((r) => r.user_id)).size;
+
+  const levelUserScores = new Map();
+  for (const row of allUserLevelStats) {
+    const mode = normalizeMode(row.mode);
+    const lvl = parseInt(row.level, 10) || 0;
+    if (!mode || lvl <= 0) continue;
+    const lk = `${mode}|${lvl}`;
+    if (!levelUserScores.has(lk)) levelUserScores.set(lk, []);
+    levelUserScores.get(lk).push({
+      user_id: row.user_id,
+      avg_score: Math.round(parseFloat(row.avg_score) || 0),
+    });
+  }
+
+  for (const users of levelUserScores.values()) {
+    users.sort((a, b) => b.avg_score - a.avg_score);
+  }
+
+  const levelPercentiles = [];
+
+  const levelsToCheck = [];
+  const singleLevels = targetAnalytics.levels?.single || [];
+  const doubleLevels = targetAnalytics.levels?.double || [];
+  if (modeList.includes('Single')) {
+    for (const lr of singleLevels) {
+      if (lr.cleared_charts > 0) levelsToCheck.push({ mode: 'Single', level: lr.level });
+    }
+  }
+  if (modeList.includes('Double')) {
+    for (const lr of doubleLevels) {
+      if (lr.cleared_charts > 0) levelsToCheck.push({ mode: 'Double', level: lr.level });
+    }
+  }
+
+  for (const { mode, level: lvl } of levelsToCheck) {
+    const lk = `${mode}|${lvl}`;
+    const users = levelUserScores.get(lk);
+    if (!users || users.length === 0) continue;
+
+    const userIdx = users.findIndex((u) => u.user_id === userId);
+    if (userIdx < 0) continue;
+
+    const totalUsers = users.length;
+    const rank = userIdx + 1;
+    const percentile = Number((((totalUsers - rank) / totalUsers) * 100).toFixed(1));
+
+    let badge = null;
+    if (percentile >= 95) badge = 'top5';
+    else if (percentile >= 90) badge = 'top10';
+    else if (percentile >= 75) badge = 'top25';
+    else if (percentile >= 50) badge = 'top50';
+
+    levelPercentiles.push({
+      mode,
+      level: lvl,
+      rank,
+      total_users: totalUsers,
+      percentile,
+      avg_score: users[userIdx].avg_score,
+      badge,
+    });
+  }
+
+  levelPercentiles.sort((a, b) => {
+    if (a.level !== b.level) return a.level - b.level;
+    return a.mode.localeCompare(b.mode);
+  });
+
+  let overallBadge = null;
+  if (pumbilityPercentile !== null) {
+    if (pumbilityPercentile >= 95) overallBadge = 'top5';
+    else if (pumbilityPercentile >= 90) overallBadge = 'top10';
+    else if (pumbilityPercentile >= 75) overallBadge = 'top25';
+    else if (pumbilityPercentile >= 50) overallBadge = 'top50';
+  }
+
+  res.json({
+    user_id: userId,
+    pumbility: userPumbility,
+    pumbility_percentile: pumbilityPercentile,
+    pumbility_badge: overallBadge,
+    leaderboard_total: totalLeaderboardEntries,
+    synced_user_count: syncedUserCount,
+    level_percentiles: levelPercentiles,
+  });
+});
+
 // GET /api/songs/analytics/head-to-head
 // Query:
 // - user_a_id, user_b_id (required)

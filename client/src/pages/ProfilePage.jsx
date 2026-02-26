@@ -18,6 +18,9 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import PostCard, { timeAgo } from '../components/PostCard';
 import SongAnalyticsPanel from '../components/SongAnalyticsPanel';
+import SkillBreakdownPanel from '../components/SkillBreakdownPanel';
+import RankingsPanel from '../components/RankingsPanel';
+import GradeGoalTracker from '../components/GradeGoalTracker';
 import TitleProgressTab from '../components/TitleProgressTab';
 import { getProfilePath } from '../utils/profile';
 
@@ -1814,6 +1817,12 @@ export default function ProfilePage() {
         <div className="space-y-4">
           {songAnalytics && (
             <SongAnalyticsPanel analytics={songAnalytics} />
+          )}
+
+          <SkillBreakdownPanel userId={profileId} />
+          <RankingsPanel userId={profileId} />
+          {isOwner && songAnalytics && (
+            <GradeGoalTracker userId={profileId} analyticsLevels={songAnalytics.levels} />
           )}
 
           {(overviewPlayHeatmap.weeks.length > 0 || hasPiuData) && (
