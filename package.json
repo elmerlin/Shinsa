@@ -10,6 +10,7 @@
     "build": "cd client && npx vite build",
     "seed": "node server/db/seed.js",
     "piu:aliases": "node server/scripts/generatePiugameSongAliases.js --date=202602 --mode=total",
+    "piu:jackets:sync": "node server/scripts/syncPiugameJackets.js --date=202602 --mode=total",
     "piu:tiers:import": "node server/scripts/importPiuScoresTierLists.js --tier-list-type=Pass",
     "piu:skills:import": "node server/scripts/importPiuCenterSkills.js",
     "piu:skills:metadata": "node server/scripts/scrapePiuCenterSkillMetadata.js",
