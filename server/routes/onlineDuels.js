@@ -296,12 +296,12 @@ router.post('/:id/draw', requireAuth, (req, res) => {
 
   const songId = uuidv4();
   db.prepare(`
-    INSERT INTO online_duel_songs (id, duel_id, song_id, song_title, song_artist, song_mode, song_level, song_jacket_url, song_bpm, chosen_by, played_order, status, player1_accepted, player2_accepted)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'playing', 1, 1)
+    INSERT INTO online_duel_songs (id, duel_id, song_id, song_title, song_artist, song_mode, song_level, song_jacket_url, song_bpm, chosen_by, played_order, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'drawn')
   `).run(songId, duel.id, song.id, song.title, song.artist, song.mode, song.level, song.jacket_url || '', song.bpm || '', playerSlot, order);
 
   const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
-  addSystemMessage(db, duel.id, `${user.username} drew ${song.title} (${song.mode} Lv.${song.level}) - Play it and fetch your scores!`);
+  addSystemMessage(db, duel.id, `${user.username} drew ${song.title} (${song.mode} Lv.${song.level})`);
 
   const drawn = db.prepare('SELECT * FROM online_duel_songs WHERE id = ?').get(songId);
   res.json(drawn);

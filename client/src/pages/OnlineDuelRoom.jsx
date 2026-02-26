@@ -679,17 +679,26 @@ export default function OnlineDuelRoom() {
                         <h3 className="font-display font-bold">{currentSong.song_title}</h3>
                         <p className="text-xs text-gray-500">{currentSong.song_artist} | {currentSong.song_mode} Lv.{currentSong.song_level}</p>
                         <p className="text-xs text-piu-accent font-display mt-1">
-                          {currentSong.status === 'playing' && 'Play this song, then fetch your score!'}
                           {currentSong.status === 'drawn' && 'Waiting for players to accept...'}
+                          {currentSong.status === 'playing' && 'Play this song, then fetch your score!'}
                         </p>
                       </div>
                       <div className="flex gap-1">
-                        <span className={`w-3 h-3 rounded-full ${currentSong.player1_submitted ? 'bg-piu-green' : 'bg-gray-600 animate-pulse'}`} title={`${duel.player1_name} ${currentSong.player1_submitted ? 'submitted' : 'pending'}`} />
-                        <span className={`w-3 h-3 rounded-full ${currentSong.player2_submitted ? 'bg-piu-green' : 'bg-gray-600 animate-pulse'}`} title={`${duel.player2_name} ${currentSong.player2_submitted ? 'submitted' : 'pending'}`} />
+                        {currentSong.status === 'drawn' ? (
+                          <>
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player1_accepted ? 'bg-piu-green' : currentSong.player1_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player1_name} ${currentSong.player1_accepted ? 'accepted' : currentSong.player1_declined ? 'declined' : 'pending'}`} />
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player2_accepted ? 'bg-piu-green' : currentSong.player2_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player2_name} ${currentSong.player2_accepted ? 'accepted' : currentSong.player2_declined ? 'declined' : 'pending'}`} />
+                          </>
+                        ) : (
+                          <>
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player1_submitted ? 'bg-piu-green' : 'bg-gray-600 animate-pulse'}`} title={`${duel.player1_name} ${currentSong.player1_submitted ? 'submitted' : 'pending'}`} />
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player2_submitted ? 'bg-piu-green' : 'bg-gray-600 animate-pulse'}`} title={`${duel.player2_name} ${currentSong.player2_submitted ? 'submitted' : 'pending'}`} />
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {/* Accept / Decline buttons — only shown for legacy 'drawn' state songs */}
+                    {/* Accept / Decline buttons */}
                     {currentSong.status === 'drawn' && isParticipant && (() => {
                       const myAccepted = playerSlot === 'player1' ? currentSong.player1_accepted : currentSong.player2_accepted;
                       const myDeclined = playerSlot === 'player1' ? currentSong.player1_declined : currentSong.player2_declined;
