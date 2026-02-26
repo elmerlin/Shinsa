@@ -8,7 +8,7 @@ const { getDb } = require('../db/schema');
 const { login, scrapePumbility, scrapeBestScores, scrapeRecentlyPlayed, scrapePumbilityRanking } = require('../lib/piugameScraper');
 const { createUserNotification } = require('../lib/notifications');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
-const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore } = require('../lib/titleProgress');
+const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
@@ -72,6 +72,19 @@ function normalizeRecommendationMetric(metricRaw, modeRaw) {
   return { metric: 'overall', modeFilter: '' };
 }
 
+function isFailGrade(grade) {
+  const raw = String(grade || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!raw) return false;
+  if (raw.startsWith('X_')) return true;
+  return normalizeGrade(raw) === 'F';
+}
+
+function isPassingScore(score, grade) {
+  const numeric = parseInt(score, 10) || 0;
+  if (numeric <= 0) return false;
+  return !isFailGrade(grade);
+}
+
 function buildPumbilityRecommendations(bestScores, options = {}) {
   const modeFilter = String(options.modeFilter || '');
   const metric = String(options.metric || '').trim() || (modeFilter ? modeFilter.toLowerCase() : 'overall');
@@ -97,8 +110,9 @@ function buildPumbilityRecommendations(bestScores, options = {}) {
     const score = parseInt(s.score, 10) || 0;
     if (score <= 0) continue;
 
-    const currentGrade = gradeFromScore(score);
+    const currentGrade = s.grade || gradeFromScore(score);
     const currentRating = calculateRatingPoints(level, currentGrade, score);
+    if (currentRating <= 0) continue;
     ratedEntries.push({
       song_title: s.song_title,
       mode: s.mode,
@@ -801,6 +815,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         db.prepare('UPDATE user_piugame_sync SET sync_progress = ?, sync_total = ? WHERE user_id = ?')
           .run(progress, total, userId);
       });
+      const passScores = scores.filter((row) => isPassingScore(row.score, row.grade));
+      const ignoredFailCount = scores.length - passScores.length;
 
       const insertOrUpdate = db.prepare(`
         INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, background_url, shoe_id)
@@ -817,6 +833,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       const oldScores = {};
       const existingScores = db.prepare('SELECT song_title, mode, level, score, grade, shoe_id FROM user_best_scores WHERE user_id = ?').all(userId);
       for (const s of existingScores) {
+        if (!isPassingScore(s.score, s.grade)) continue;
         oldScores[`${s.song_title}|${s.mode}|${s.level}`] = { score: s.score, grade: s.grade, shoe_id: s.shoe_id ? parseInt(s.shoe_id, 10) : null };
       }
 
@@ -827,7 +844,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
 
       const txn = db.transaction(() => {
         db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(userId);
-        for (const s of scores) {
+        for (const s of passScores) {
           const key = `${s.song_title}|${s.mode}|${s.level}`;
           const old = oldScores[key];
           const preservedShoeId = old && old.score === s.score ? old.shoe_id : null;
@@ -837,7 +854,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         // Track upscores and new clears
         upscores = [];
         newClears = [];
-        for (const s of scores) {
+        for (const s of passScores) {
           const key = `${s.song_title}|${s.mode}|${s.level}`;
           const old = oldScores[key];
           if (old && s.score > old.score) {
@@ -847,7 +864,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
               old_grade: old.grade, new_grade: s.grade,
               background_url: s.background_url || '',
             });
-          } else if (!old && s.score > 0) {
+          } else if (!old) {
             newClears.push(s);
           }
         }
@@ -873,12 +890,15 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
       const actorUsername = profile?.username || 'Someone';
       const profileLink = buildProfilePath(profile?.username) || `/profile/${userId}`;
+      const syncMessage = ignoredFailCount > 0
+        ? `${passScores.length} passing scores imported (${ignoredFailCount} failed scores ignored).`
+        : `${passScores.length} scores imported successfully!`;
       createUserNotification(
         db,
         userId,
         'sync_complete',
         'Best Scores Synced',
-        `${scores.length} scores imported successfully!`,
+        syncMessage,
         profileLink
       );
 
@@ -920,7 +940,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         });
       }
 
-      console.log(`Background best scores sync complete for ${userId}: ${scores.length} scores`);
+      console.log(`Background best scores sync complete for ${userId}: ${passScores.length} passing scores (${ignoredFailCount} failed ignored)`);
     } catch (err) {
       console.error('Background best scores sync error:', err.message);
       db.prepare(`
@@ -1919,17 +1939,15 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
       WHERE id = ?
     `);
 
-    // Also update best scores if this play is better
-    const updateBest = db.prepare(`
+    // Also update best scores for passing runs only.
+    const insertBest = db.prepare(`
       INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id)
       VALUES (?, ?, ?, ?, ?, ?, '', ?)
-      ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
-        score = MAX(excluded.score, user_best_scores.score),
-        grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
-        shoe_id = CASE
-          WHEN excluded.score > user_best_scores.score THEN excluded.shoe_id
-          ELSE user_best_scores.shoe_id
-        END
+    `);
+    const replaceBest = db.prepare(`
+      UPDATE user_best_scores
+      SET score = ?, grade = ?, plate = '', shoe_id = ?
+      WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?
     `);
 
     let updatedCount = 0;
@@ -1939,6 +1957,17 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     let newClearPostId = null;
 
     const txn = db.transaction(() => {
+      // Keep user_best_scores pass-only.
+      db.prepare(`
+        DELETE FROM user_best_scores
+        WHERE user_id = ?
+          AND (
+            score <= 0
+            OR UPPER(REPLACE(TRIM(COALESCE(grade, '')), ' ', '')) IN ('F', 'STAGEBREAK', 'STAGE_BREAK')
+            OR UPPER(REPLACE(TRIM(COALESCE(grade, '')), ' ', '')) LIKE 'X_%'
+          )
+      `).run(req.user.id);
+
       for (const p of plays) {
         const songTitle = p.song_title;
         const mode = p.mode;
@@ -2001,13 +2030,14 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
           );
         }
 
-        // Only update best scores if this was a real play (not stage break)
-        if (score > 0) {
+        // Best scores / upscores are pass-only.
+        if (isPassingScore(score, grade)) {
           const existing = db.prepare(
             'SELECT score, grade FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
           ).get(req.user.id, songTitle, mode, level);
-          if (!existing || score > existing.score) {
-            if (existing && score > existing.score) {
+          const existingPass = existing ? isPassingScore(existing.score, existing.grade) : false;
+          if (!existing || !existingPass || score > existing.score) {
+            if (existing && existingPass && score > existing.score) {
               upscoresFromRecent.push({
                 song_title: songTitle, mode, level,
                 old_score: existing.score, new_score: score,
@@ -2015,8 +2045,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 background_url: backgroundUrl || '',
                 perfect, great, good, bad, miss,
               });
-            } else if (!existing) {
-              // New clear - first time playing this song
+            } else {
+              // New clear - first pass on this chart
               newClearsFromRecent.push({
                 song_title: songTitle,
                 mode,
@@ -2028,7 +2058,11 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 perfect, great, good, bad, miss,
               });
             }
-            updateBest.run(req.user.id, songTitle, mode, level, score, grade, activeShoeId);
+            if (!existing) {
+              insertBest.run(req.user.id, songTitle, mode, level, score, grade, activeShoeId);
+            } else {
+              replaceBest.run(score, grade, activeShoeId, req.user.id, songTitle, mode, level);
+            }
             updatedCount++;
           }
         }
@@ -2112,7 +2146,7 @@ router.get('/pumbility/:userId', async (req, res) => {
 
     const bestScores = db.prepare(
       'SELECT song_title, mode, level, score, grade, background_url FROM user_best_scores WHERE user_id = ? AND score > 0'
-    ).all(userId);
+    ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
 
     const allRated = [];
     for (const s of bestScores) {
@@ -2233,6 +2267,7 @@ router.get('/best-scores/:userId', (req, res) => {
       'SELECT * FROM user_best_scores WHERE user_id = ? ORDER BY mode ASC, level ASC, score DESC'
     ).all(req.params.userId);
   }
+  scores = scores.filter((row) => isPassingScore(row.score, row.grade));
   const sync = db.prepare('SELECT last_best_scores_sync, best_scores_imported FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
   res.json({
     last_sync: sync?.last_best_scores_sync || null,
@@ -2275,14 +2310,22 @@ router.get('/sync-status/:userId', (req, res) => {
   const sync = db.prepare('SELECT * FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
   const hasCreds = !!db.prepare('SELECT 1 FROM user_piugame_credentials WHERE user_id = ?').get(req.params.userId);
 
-  // Highest clears for Singles and Doubles (from best scores where score > 0)
+  // Highest clears for Singles and Doubles (pass-only best scores).
   let highest_single = null;
   let highest_double = null;
   try {
-    const hs = db.prepare("SELECT MAX(level) as max_level FROM user_best_scores WHERE user_id = ? AND mode = 'Single' AND score > 0").get(req.params.userId);
-    highest_single = hs?.max_level || null;
-    const hd = db.prepare("SELECT MAX(level) as max_level FROM user_best_scores WHERE user_id = ? AND mode = 'Double' AND score > 0").get(req.params.userId);
-    highest_double = hd?.max_level || null;
+    const passBest = db.prepare(
+      'SELECT mode, level, score, grade FROM user_best_scores WHERE user_id = ?'
+    ).all(req.params.userId).filter((row) => isPassingScore(row.score, row.grade));
+
+    for (const row of passBest) {
+      const level = parseInt(row.level, 10) || 0;
+      if (String(row.mode || '') === 'Single') {
+        highest_single = highest_single === null ? level : Math.max(highest_single, level);
+      } else if (String(row.mode || '') === 'Double') {
+        highest_double = highest_double === null ? level : Math.max(highest_double, level);
+      }
+    }
   } catch {}
 
   res.json({
@@ -2334,7 +2377,7 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
 
   const bestScores = db.prepare(
     'SELECT song_title, mode, level, score, grade, background_url FROM user_best_scores WHERE user_id = ? AND score > 0 ORDER BY level DESC, score DESC'
-  ).all(userId);
+  ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
   const payload = buildPumbilityRecommendations(bestScores, { metric, modeFilter });
   res.json(payload);
 });

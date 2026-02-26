@@ -18,11 +18,6 @@ const GRADE_MAP = {
   s_p: 'S+', s: 'S', aaa_p: 'AAA+', aaa: 'AAA',
   aa_p: 'AA+', aa: 'AA', a_p: 'A+', a: 'A',
   b: 'B', c: 'C', d: 'D', f: 'F',
-  // Broken grades (prefixed with X_)
-  X_sss_p: 'SSS+', X_sss: 'SSS', X_ss_p: 'SS+', X_ss: 'SS',
-  X_s_p: 'S+', X_s: 'S', X_aaa_p: 'AAA+', X_aaa: 'AAA',
-  X_aa_p: 'AA+', X_aa: 'AA', X_a_p: 'A+', X_a: 'A',
-  X_b: 'B', X_c: 'C', X_d: 'D', X_f: 'F',
 };
 
 // Plate mapping
@@ -256,7 +251,9 @@ function parseLevelFromImages($, container) {
  */
 function parseGradeFromUrl(src) {
   const match = src.match(/\/l_img\/grade\/(\w+)\.png/);
-  return match ? (GRADE_MAP[match[1]] || match[1]) : '';
+  if (!match) return '';
+  const code = match[1];
+  return GRADE_MAP[code] || GRADE_MAP[code.toLowerCase()] || code;
 }
 
 /**
