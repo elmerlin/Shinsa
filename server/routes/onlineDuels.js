@@ -1,9 +1,38 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const { login, scrapeRecentlyPlayed } = require('../lib/piugameScraper');
+
+const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
+
+function decrypt(encrypted, ivHex, authTagHex) {
+  const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, Buffer.from(ivHex, 'hex'));
+  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+function getCredentials(userId) {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM user_piugame_credentials WHERE user_id = ?').get(userId);
+  if (!row) return null;
+  const [userIv, passIv] = row.iv.split(':');
+  const [userTag, passTag] = row.auth_tag.split(':');
+  const username = decrypt(row.encrypted_username, userIv, userTag);
+  const password = decrypt(row.encrypted_password, passIv, passTag);
+  return { username, password };
+}
+
+async function loginWithStoredCredentials(userId) {
+  const creds = getCredentials(userId);
+  if (!creds) throw new Error('No PIUGame credentials linked');
+  return login(creds.username, creds.password);
+}
 
 function normalizeOnlineDuelAvatars(duel, size = 64) {
   if (!duel) return duel;
@@ -450,6 +479,111 @@ router.post('/:id/submit-score', requireAuth, (req, res) => {
   }
 
   res.json({ success: true });
+});
+
+// POST /api/online-duels/:id/fetch-score - fetch score from PIUGame recent plays and auto-submit
+router.post('/:id/fetch-score', requireAuth, async (req, res) => {
+  try {
+    const db = getDb();
+    const duel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(req.params.id);
+    if (!duel) return res.status(404).json({ error: 'Duel not found' });
+
+    const playerSlot = getPlayerSlot(duel, req.user.id);
+    if (!playerSlot) return res.status(403).json({ error: 'Not a participant' });
+
+    const song = db.prepare("SELECT * FROM online_duel_songs WHERE duel_id = ? AND status = 'playing'").get(duel.id);
+    if (!song) return res.status(400).json({ error: 'No song in playing state' });
+
+    // Check if already submitted
+    const submittedCol = playerSlot === 'player1' ? 'player1_submitted' : 'player2_submitted';
+    if (song[submittedCol]) return res.status(400).json({ error: 'Score already submitted' });
+
+    // Login to PIUGame and scrape recent plays
+    const client = await loginWithStoredCredentials(req.user.id);
+    const plays = await scrapeRecentlyPlayed(client);
+
+    // Normalize song title for matching: lowercase, trim, collapse whitespace
+    const normalize = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+    const targetTitle = normalize(song.song_title);
+    const targetMode = normalize(song.song_mode);
+    const targetLevel = parseInt(song.song_level, 10) || 0;
+
+    // Find matching play - match on title, mode, and level
+    const match = plays.find(p => {
+      return normalize(p.song_title) === targetTitle
+        && normalize(p.mode) === targetMode
+        && (parseInt(p.level, 10) || 0) === targetLevel;
+    });
+
+    if (!match) {
+      return res.status(404).json({
+        error: `Could not find a recent play for "${song.song_title}" (${song.song_mode} Lv.${song.song_level}). Make sure you've played the song and the score screen has appeared on the machine.`
+      });
+    }
+
+    // Submit the score
+    const prefix = playerSlot;
+    const score = parseInt(match.score, 10) || 0;
+    const perfect = parseInt(match.perfect, 10) || 0;
+    const great = parseInt(match.great, 10) || 0;
+    const good = parseInt(match.good, 10) || 0;
+    const bad = parseInt(match.bad, 10) || 0;
+    const miss = parseInt(match.miss, 10) || 0;
+    const maxCombo = parseInt(match.max_combo, 10) || 0;
+    const kcal = parseFloat(match.kcal) || 0;
+
+    db.prepare(`
+      UPDATE online_duel_songs SET
+        ${prefix}_score = ?, ${prefix}_perfect = ?, ${prefix}_great = ?,
+        ${prefix}_good = ?, ${prefix}_bad = ?, ${prefix}_miss = ?,
+        ${prefix}_max_combo = ?, ${prefix}_kcal = ?, ${prefix}_submitted = 1
+      WHERE id = ?
+    `).run(score, perfect, great, good, bad, miss, maxCombo, kcal, song.id);
+
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    addSystemMessage(db, duel.id, `${user.username} fetched their score from PIUGame: ${score.toLocaleString()}`);
+
+    // Check if both submitted
+    const updated = db.prepare('SELECT * FROM online_duel_songs WHERE id = ?').get(song.id);
+    if (updated.player1_submitted && updated.player2_submitted) {
+      let winner = 'draw';
+      if (updated.player1_score > updated.player2_score) winner = 'player1';
+      else if (updated.player2_score > updated.player1_score) winner = 'player2';
+
+      db.prepare("UPDATE online_duel_songs SET status = 'completed', winner = ? WHERE id = ?").run(winner, song.id);
+
+      const nextTurn = duel.current_turn === 'player1' ? 'player2' : 'player1';
+      db.prepare('UPDATE online_duels SET current_turn = ? WHERE id = ?').run(nextTurn, duel.id);
+
+      const p1 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.creator_user_id);
+      const p2 = db.prepare('SELECT username FROM users WHERE id = ?').get(duel.opponent_user_id);
+
+      if (winner === 'draw') {
+        addSystemMessage(db, duel.id, `It's a draw! ${p1.username}: ${updated.player1_score.toLocaleString()} vs ${p2.username}: ${updated.player2_score.toLocaleString()}`);
+      } else {
+        const winnerName = winner === 'player1' ? p1.username : p2.username;
+        addSystemMessage(db, duel.id, `${winnerName} wins! ${p1.username}: ${updated.player1_score.toLocaleString()} vs ${p2.username}: ${updated.player2_score.toLocaleString()}`);
+      }
+
+      const freshDuel = db.prepare('SELECT * FROM online_duels WHERE id = ?').get(duel.id);
+      checkBestOfComplete(db, freshDuel);
+    }
+
+    res.json({
+      success: true,
+      score,
+      judgments: { perfect, great, good, bad, miss },
+      max_combo: maxCombo,
+      kcal,
+    });
+  } catch (err) {
+    if (err.message.includes('No PIUGame credentials')) {
+      return res.status(400).json({ error: 'No PIUGame credentials linked. Link your account in Settings first.' });
+    }
+    console.error('Fetch score error:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch score from PIUGame' });
+  }
 });
 
 // POST /api/online-duels/:id/end-request - request to end duel

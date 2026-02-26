@@ -5,10 +5,12 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getOnlineDuel, getOnlineDuelChat, sendChatMessage, joinOnlineDuel,
   onlineDuelDraw, onlineDuelAccept, onlineDuelDecline, onlineDuelSubmitScore,
+  onlineDuelFetchScore,
   onlineDuelEndRequest, onlineDuelCancelEnd,
   pumpPlayer, getMyPump,
   onlineDuelRematch, onlineDuelForfeit, sendSpectateHeartbeat,
   predictDuelWinner, getDuelPredictions, createPost,
+  getPiugameCredentialStatus,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -62,6 +64,8 @@ export default function OnlineDuelRoom() {
   const [floatingReactions, setFloatingReactions] = useState([]);
   const [myPrediction, setMyPrediction] = useState(null);
   const [sharing, setSharing] = useState(false);
+  const [fetchingScore, setFetchingScore] = useState(false);
+  const [hasPiugameCreds, setHasPiugameCreds] = useState(null);
   const chatEndRef = useRef(null);
   const lastChatTime = useRef('');
   const reactionIdRef = useRef(0);
@@ -128,11 +132,12 @@ export default function OnlineDuelRoom() {
     }
   }, [currentSong]);
 
-  // Fetch user's pump choice and prediction
+  // Fetch user's pump choice, prediction, and PIUGame credential status
   useEffect(() => {
     if (user) {
       getMyPump(id).then(r => setMyPump(r.player)).catch(() => {});
       getDuelPredictions(id).then(r => setMyPrediction(r.myPick)).catch(() => {});
+      getPiugameCredentialStatus().then(r => setHasPiugameCreds(r.linked)).catch(() => setHasPiugameCreds(false));
     }
   }, [id, user]);
 
@@ -227,6 +232,14 @@ export default function OnlineDuelRoom() {
       });
       setScoreEntry(null);
     } catch (err) { alert(err.message); }
+  };
+
+  const handleFetchScore = async () => {
+    setFetchingScore(true);
+    try {
+      await onlineDuelFetchScore(id);
+    } catch (err) { alert(err.message); }
+    finally { setFetchingScore(false); }
   };
 
   const handleEndRequest = async () => {
@@ -667,12 +680,21 @@ export default function OnlineDuelRoom() {
                         <p className="text-xs text-gray-500">{currentSong.song_artist} | {currentSong.song_mode} Lv.{currentSong.song_level}</p>
                         <p className="text-xs text-piu-accent font-display mt-1">
                           {currentSong.status === 'drawn' && 'Waiting for players to accept...'}
-                          {currentSong.status === 'playing' && 'Players are Pumping it Up right now..'}
+                          {currentSong.status === 'playing' && 'Play this song, then fetch your score!'}
                         </p>
                       </div>
                       <div className="flex gap-1">
-                        <span className={`w-3 h-3 rounded-full ${currentSong.player1_accepted ? 'bg-piu-green' : currentSong.player1_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player1_name} ${currentSong.player1_accepted ? 'accepted' : currentSong.player1_declined ? 'declined' : 'pending'}`} />
-                        <span className={`w-3 h-3 rounded-full ${currentSong.player2_accepted ? 'bg-piu-green' : currentSong.player2_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player2_name} ${currentSong.player2_accepted ? 'accepted' : currentSong.player2_declined ? 'declined' : 'pending'}`} />
+                        {currentSong.status === 'drawn' ? (
+                          <>
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player1_accepted ? 'bg-piu-green' : currentSong.player1_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player1_name} ${currentSong.player1_accepted ? 'accepted' : currentSong.player1_declined ? 'declined' : 'pending'}`} />
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player2_accepted ? 'bg-piu-green' : currentSong.player2_declined ? 'bg-red-500' : 'bg-gray-600'}`} title={`${duel.player2_name} ${currentSong.player2_accepted ? 'accepted' : currentSong.player2_declined ? 'declined' : 'pending'}`} />
+                          </>
+                        ) : (
+                          <>
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player1_submitted ? 'bg-piu-green' : 'bg-gray-600 animate-pulse'}`} title={`${duel.player1_name} ${currentSong.player1_submitted ? 'submitted' : 'pending'}`} />
+                            <span className={`w-3 h-3 rounded-full ${currentSong.player2_submitted ? 'bg-piu-green' : 'bg-gray-600 animate-pulse'}`} title={`${duel.player2_name} ${currentSong.player2_submitted ? 'submitted' : 'pending'}`} />
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -698,17 +720,36 @@ export default function OnlineDuelRoom() {
                       );
                     })()}
 
-                    {/* Score submission — manual entry only */}
+                    {/* Score submission — fetch from PIUGame or manual fallback */}
                     {currentSong.status === 'playing' && isParticipant && (
                       !(playerSlot === 'player1' ? currentSong.player1_submitted : currentSong.player2_submitted) ? (
                         <div className="space-y-2 pt-2 border-t border-piu-border/50">
-                          <p className="text-sm text-gray-400 font-display">Enter your score</p>
+                          <p className="text-sm text-gray-400 font-display">Play the song, then fetch your score</p>
+                          {hasPiugameCreds ? (
+                            <button
+                              onClick={handleFetchScore}
+                              disabled={fetchingScore}
+                              className="btn-primary w-full text-sm flex items-center justify-center gap-2"
+                            >
+                              {fetchingScore ? (
+                                <>
+                                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                                  Fetching from PIUGame...
+                                </>
+                              ) : 'Fetch My Score'}
+                            </button>
+                          ) : (
+                            <div className="text-center space-y-2">
+                              <p className="text-[10px] text-gray-500">Link your PIUGame account in Settings to auto-fetch scores.</p>
+                            </div>
+                          )}
+                          {/* Manual entry fallback */}
                           {!scoreEntry ? (
                             <button
                               onClick={() => setScoreEntry({ score: '' })}
-                              className="btn-primary w-full text-sm"
+                              className={`w-full text-sm px-4 py-2 rounded-lg font-display font-bold transition-colors ${hasPiugameCreds ? 'bg-piu-card text-gray-400 hover:text-white' : 'btn-primary'}`}
                             >
-                              Submit Score
+                              Enter Score Manually
                             </button>
                           ) : (
                             <div className="bg-piu-dark/50 rounded-lg p-3 space-y-2">
@@ -1168,6 +1209,15 @@ export default function OnlineDuelRoom() {
                   </p>
                   <span className={`text-sm font-display font-bold px-2 py-0.5 rounded border ${p1Rank.bg} ${p1Rank.color}`}>{p1Rank.label}</span>
                   <p className={`font-mono font-bold text-lg mt-1 ${p1Won ? 'text-piu-green' : 'text-white'}`}>{selectedBreakdown.player1_score.toLocaleString()}</p>
+                  {(selectedBreakdown.player1_perfect > 0 || selectedBreakdown.player1_great > 0 || selectedBreakdown.player1_miss > 0) && (
+                    <div className="mt-2 space-y-0.5 text-[10px] font-mono">
+                      <div className="flex justify-between"><span className="text-yellow-400">PERFECT</span><span>{selectedBreakdown.player1_perfect.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-green-400">GREAT</span><span>{selectedBreakdown.player1_great.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-cyan-400">GOOD</span><span>{selectedBreakdown.player1_good.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-orange-400">BAD</span><span>{selectedBreakdown.player1_bad.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-red-400">MISS</span><span>{selectedBreakdown.player1_miss.toLocaleString()}</span></div>
+                    </div>
+                  )}
                 </div>
                 <div className={`rounded-lg border p-3 text-center ${p2Won ? 'border-piu-green/40 bg-piu-green/5' : 'border-piu-border/30 bg-piu-dark/30'}`}>
                   <p className={`text-[10px] font-display font-bold mb-2 ${p2Won ? 'text-piu-green' : 'text-gray-400'}`}>
@@ -1175,6 +1225,15 @@ export default function OnlineDuelRoom() {
                   </p>
                   <span className={`text-sm font-display font-bold px-2 py-0.5 rounded border ${p2Rank.bg} ${p2Rank.color}`}>{p2Rank.label}</span>
                   <p className={`font-mono font-bold text-lg mt-1 ${p2Won ? 'text-piu-green' : 'text-white'}`}>{selectedBreakdown.player2_score.toLocaleString()}</p>
+                  {(selectedBreakdown.player2_perfect > 0 || selectedBreakdown.player2_great > 0 || selectedBreakdown.player2_miss > 0) && (
+                    <div className="mt-2 space-y-0.5 text-[10px] font-mono">
+                      <div className="flex justify-between"><span className="text-yellow-400">PERFECT</span><span>{selectedBreakdown.player2_perfect.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-green-400">GREAT</span><span>{selectedBreakdown.player2_great.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-cyan-400">GOOD</span><span>{selectedBreakdown.player2_good.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-orange-400">BAD</span><span>{selectedBreakdown.player2_bad.toLocaleString()}</span></div>
+                      <div className="flex justify-between"><span className="text-red-400">MISS</span><span>{selectedBreakdown.player2_miss.toLocaleString()}</span></div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
