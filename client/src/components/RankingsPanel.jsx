@@ -20,6 +20,23 @@ function percentileBarColor(percentile) {
   return 'bg-gray-500';
 }
 
+function getGradeFromScore(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  return { label: '', color: 'text-gray-500' };
+}
+
 export default function RankingsPanel({ userId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -133,15 +150,33 @@ export default function RankingsPanel({ userId }) {
       {/* Per-level percentiles */}
       {hasLevelData && (
         <div>
-          <p className="text-[10px] text-gray-500 font-display mb-2">
+          <p className="text-[10px] text-gray-500 font-display mb-1">
             PER-LEVEL RANKING
             <span className="text-gray-600 ml-1">({data.synced_user_count} synced users)</span>
           </p>
+          <p className="text-[10px] text-gray-600 mb-2">
+            Your avg score at each level vs. other players. Bar = percentile.
+          </p>
+
+          {/* Column headers */}
+          <div className="flex items-center gap-3 px-2.5 mb-1">
+            <span className="w-8 shrink-0 text-[9px] text-gray-600 font-display">LVL</span>
+            <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
+              <span className="text-[9px] text-gray-600 font-display">RANK</span>
+              <div className="flex items-center gap-3">
+                <span className="text-[9px] text-gray-600 font-display">AVG SCORE</span>
+                <span className="text-[9px] text-gray-600 font-display w-14 text-right">PERCENTILE</span>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-1 max-h-[340px] overflow-y-auto">
             {filteredPercentiles.map((p) => {
               const isSingle = p.mode === 'Single';
               const label = `${isSingle ? 'S' : 'D'}${p.level}`;
               const levelBadge = p.badge ? badgeStyle(p.badge) : null;
+              const grade = getGradeFromScore(p.avg_score);
+              const topPercent = (100 - p.percentile).toFixed(1);
 
               return (
                 <div
@@ -155,26 +190,36 @@ export default function RankingsPanel({ userId }) {
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="text-[11px] text-gray-400">
-                        Rank <span className="font-mono text-gray-200">#{p.rank}</span>
+                        <span className="font-mono text-gray-200">#{p.rank}</span>
                         <span className="text-gray-600"> / {p.total_users}</span>
                       </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[11px] font-display font-bold ${grade.color}`}>{grade.label}</span>
                         <span className="text-[11px] font-mono text-gray-400">{formatNumber(p.avg_score)}</span>
-                        {levelBadge && (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-display font-bold border ${levelBadge.bg} ${levelBadge.color}`}>
-                            {levelBadge.text}
-                          </span>
-                        )}
+                        <span className={`text-[11px] font-mono w-14 text-right ${
+                          p.percentile >= 90 ? 'text-sky-300' : p.percentile >= 75 ? 'text-piu-gold' : p.percentile >= 50 ? 'text-amber-400' : 'text-gray-400'
+                        }`}>
+                          top {topPercent}%
+                        </span>
                       </div>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-piu-dark/80 border border-piu-border/20 overflow-hidden">
+                    <div className="w-full h-1.5 rounded-full bg-piu-dark/80 border border-piu-border/20 overflow-hidden"
+                      title={`Percentile: ${p.percentile.toFixed(1)}% — you outperform ${p.percentile.toFixed(1)}% of players at ${label}`}
+                    >
                       <div
                         className={`h-full rounded-full transition-all duration-300 ${percentileBarColor(p.percentile)}`}
                         style={{ width: `${Math.min(100, p.percentile)}%` }}
                       />
                     </div>
+                    {levelBadge && (
+                      <div className="mt-1">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-display font-bold border ${levelBadge.bg} ${levelBadge.color}`}>
+                          {levelBadge.text}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
