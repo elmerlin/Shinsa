@@ -114,6 +114,10 @@ export const getUserRankings = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/rankings/${userId}${qs ? `?${qs}` : ''}`);
 };
+export const getLevelLeaderboard = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/level-leaderboard${qs ? `?${qs}` : ''}`);
+};
 export const getSongHeadToHead = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/head-to-head${qs ? `?${qs}` : ''}`);

@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { getUserRankings } from '../utils/api';
+import { Link } from 'react-router-dom';
+import { getUserRankings, getLevelLeaderboard } from '../utils/api';
+import { getProfilePath } from '../utils/profile';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -13,11 +15,160 @@ function badgeStyle(badge) {
   return null;
 }
 
-function percentileBarColor(percentile) {
-  if (percentile >= 90) return 'bg-sky-400';
-  if (percentile >= 75) return 'bg-piu-gold';
-  if (percentile >= 50) return 'bg-amber-400';
+function rankBarColor(rank, total) {
+  if (total < 3) return 'bg-gray-500';
+  const ratio = (total - rank) / (total - 1);
+  if (ratio >= 0.9) return 'bg-sky-400';
+  if (ratio >= 0.75) return 'bg-piu-gold';
+  if (ratio >= 0.5) return 'bg-amber-400';
   return 'bg-gray-500';
+}
+
+function getGradeFromScore(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  return { label: '', color: 'text-gray-500' };
+}
+
+function getGradeColor(grade) {
+  const g = String(grade || '').toUpperCase();
+  if (g.includes('SSS')) return 'text-sky-300';
+  if (g.includes('SS')) return 'text-piu-gold';
+  if (g.includes('S')) return 'text-amber-400';
+  if (g.includes('AAA')) return 'text-piu-silver';
+  if (g.includes('AA')) return 'text-piu-bronze';
+  if (g === 'A+' || g === 'A') return 'text-amber-700';
+  return 'text-gray-500';
+}
+
+function rankMedalColor(rank) {
+  if (rank === 1) return 'text-piu-gold';
+  if (rank === 2) return 'text-piu-silver';
+  if (rank === 3) return 'text-piu-bronze';
+  return 'text-gray-500';
+}
+
+function LeaderboardModal({ open, mode, level, highlightUserId, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !mode || !level) {
+      setData(null);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    getLevelLeaderboard({ mode, level: String(level) })
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [open, mode, level]);
+
+  if (!open) return null;
+
+  const isSingle = mode === 'Single';
+  const label = `${isSingle ? 'S' : 'D'}${level}`;
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
+          <h3 className="font-display font-bold tracking-wide text-sm">
+            <span className={isSingle ? 'text-red-400' : 'text-green-400'}>{label}</span>
+            {' '}Leaderboard
+          </h3>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+
+        <div className="max-h-[60vh] overflow-y-auto p-3 space-y-1.5">
+          {loading && (
+            <p className="text-center text-gray-500 py-6 text-xs animate-pulse">Loading leaderboard...</p>
+          )}
+
+          {!loading && data && data.leaderboard.map((entry) => {
+            const isMe = entry.user_id === highlightUserId;
+            const grade = getGradeFromScore(entry.avg_score);
+
+            return (
+              <div
+                key={entry.user_id}
+                className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${
+                  isMe
+                    ? 'border-piu-accent/50 bg-piu-accent/10'
+                    : 'border-piu-border/40 bg-piu-dark/45'
+                }`}
+              >
+                <span className={`w-6 shrink-0 text-sm font-display font-black text-center ${rankMedalColor(entry.rank)}`}>
+                  {entry.rank}
+                </span>
+
+                {entry.avatar && (
+                  <img
+                    src={entry.avatar}
+                    alt=""
+                    className="w-7 h-7 rounded-full border border-piu-border/40 shrink-0 object-cover"
+                  />
+                )}
+
+                <div className="min-w-0 flex-1">
+                  <Link
+                    to={getProfilePath(entry.user_id, entry.username)}
+                    className="text-xs font-body text-gray-100 hover:text-piu-accent transition-colors truncate block"
+                    onClick={onClose}
+                  >
+                    {entry.username}
+                    {isMe && <span className="text-piu-accent ml-1">(you)</span>}
+                  </Link>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs font-display font-bold ${grade.color}`}>{grade.label}</span>
+                  <span className="text-[11px] font-mono text-gray-400">{formatNumber(entry.avg_score)}</span>
+                </div>
+              </div>
+            );
+          })}
+
+          {!loading && data && data.leaderboard.length === 0 && (
+            <p className="text-center text-gray-500 py-6 text-xs">No players have synced scores at this level.</p>
+          )}
+        </div>
+
+        {!loading && data && (
+          <div className="px-4 py-2 border-t border-piu-border/40 text-center">
+            <p className="text-[10px] text-gray-600">
+              {data.total_users} player{data.total_users === 1 ? '' : 's'} ranked by avg best score
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function RankingsPanel({ userId }) {
@@ -25,6 +176,7 @@ export default function RankingsPanel({ userId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedMode, setSelectedMode] = useState('Both');
+  const [leaderboardModal, setLeaderboardModal] = useState(null); // { mode, level }
 
   useEffect(() => {
     if (!userId) return;
@@ -133,20 +285,39 @@ export default function RankingsPanel({ userId }) {
       {/* Per-level percentiles */}
       {hasLevelData && (
         <div>
-          <p className="text-[10px] text-gray-500 font-display mb-2">
+          <p className="text-[10px] text-gray-500 font-display mb-1">
             PER-LEVEL RANKING
             <span className="text-gray-600 ml-1">({data.synced_user_count} synced users)</span>
           </p>
+          <p className="text-[10px] text-gray-600 mb-2">
+            Your avg score rank at each level vs. other players. Tap a row to see the leaderboard.
+          </p>
+
+          {/* Column headers */}
+          <div className="flex items-center gap-3 px-2.5 mb-1">
+            <span className="w-8 shrink-0 text-[9px] text-gray-600 font-display">LVL</span>
+            <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
+              <span className="text-[9px] text-gray-600 font-display">RANK</span>
+              <span className="text-[9px] text-gray-600 font-display">AVG SCORE</span>
+            </div>
+          </div>
+
           <div className="space-y-1 max-h-[340px] overflow-y-auto">
             {filteredPercentiles.map((p) => {
               const isSingle = p.mode === 'Single';
               const label = `${isSingle ? 'S' : 'D'}${p.level}`;
               const levelBadge = p.badge ? badgeStyle(p.badge) : null;
+              const grade = getGradeFromScore(p.avg_score);
+              const rankBarPercent = p.total_users > 1
+                ? ((p.total_users - p.rank) / (p.total_users - 1)) * 100
+                : 100;
 
               return (
-                <div
+                <button
+                  type="button"
                   key={`${p.mode}-${p.level}`}
-                  className="rounded-lg border border-piu-border/40 bg-piu-dark/45 px-2.5 py-1.5 flex items-center gap-3"
+                  onClick={() => setLeaderboardModal({ mode: p.mode, level: p.level })}
+                  className="w-full rounded-lg border border-piu-border/40 bg-piu-dark/45 px-2.5 py-1.5 flex items-center gap-3 hover:border-piu-accent/40 transition-colors text-left"
                 >
                   <span className={`font-display font-black text-sm w-8 shrink-0 ${
                     isSingle ? 'text-red-400' : 'text-green-400'
@@ -155,33 +326,43 @@ export default function RankingsPanel({ userId }) {
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className="text-[11px] text-gray-400">
-                        Rank <span className="font-mono text-gray-200">#{p.rank}</span>
-                        <span className="text-gray-600"> / {p.total_users}</span>
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[11px] font-mono text-gray-400">{formatNumber(p.avg_score)}</span>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`font-mono font-bold text-xs ${rankMedalColor(p.rank)}`}>#{p.rank}</span>
+                        <span className="text-[11px] text-gray-600">/ {p.total_users}</span>
                         {levelBadge && (
                           <span className={`px-1.5 py-0.5 rounded text-[9px] font-display font-bold border ${levelBadge.bg} ${levelBadge.color}`}>
                             {levelBadge.text}
                           </span>
                         )}
                       </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[11px] font-display font-bold ${grade.color}`}>{grade.label}</span>
+                        <span className="text-[11px] font-mono text-gray-400">{formatNumber(p.avg_score)}</span>
+                      </div>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-piu-dark/80 border border-piu-border/20 overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ${percentileBarColor(p.percentile)}`}
-                        style={{ width: `${Math.min(100, p.percentile)}%` }}
+                        className={`h-full rounded-full transition-all duration-300 ${rankBarColor(p.rank, p.total_users)}`}
+                        style={{ width: `${Math.min(100, rankBarPercent)}%` }}
                       />
                     </div>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
       )}
+
+      {/* Leaderboard modal */}
+      <LeaderboardModal
+        open={!!leaderboardModal}
+        mode={leaderboardModal?.mode}
+        level={leaderboardModal?.level}
+        highlightUserId={userId}
+        onClose={() => setLeaderboardModal(null)}
+      />
     </div>
   );
 }

@@ -25,7 +25,100 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
-function SkillCard({ title, borderClass, skills, allSkills }) {
+function SkillDetailModal({ skill, onClose }) {
+  if (!skill) return null;
+
+  const statRows = [
+    { label: 'Average Score', value: formatNumber(skill.average_score), extra: skill.average_grade, extraColor: getGradeColor(skill.average_grade) },
+    { label: 'Performance Score', value: `${skill.performance_score}/100` },
+    { label: 'Charts Played', value: `${skill.played_charts} / ${skill.total_charts}` },
+    { label: 'Charts Passed', value: `${skill.passed_charts} / ${skill.played_charts}` },
+    { label: 'Play Rate', value: `${skill.play_rate}%` },
+    { label: 'Pass Rate', value: `${skill.pass_rate}%` },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
+          <h3 className="font-display font-bold tracking-wide text-sm text-white">{skill.name}</h3>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+
+        {/* Stats */}
+        <div className="px-4 py-3 space-y-2">
+          {statRows.map((row) => (
+            <div key={row.label} className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">{row.label}</span>
+              <div className="flex items-center gap-1.5">
+                {row.extra && (
+                  <span className={`text-xs font-display font-bold ${row.extraColor || 'text-gray-300'}`}>{row.extra}</span>
+                )}
+                <span className="text-xs font-mono text-gray-200">{row.value}</span>
+              </div>
+            </div>
+          ))}
+
+          {/* Performance bar */}
+          <div className="pt-1">
+            <div className="w-full h-2 rounded-full bg-piu-dark/80 border border-piu-border/20 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-piu-accent/70 transition-all duration-300"
+                style={{ width: `${Math.min(100, skill.performance_score)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Best & Worst charts */}
+        {(skill.best_chart || skill.worst_chart) && (
+          <div className="px-4 pb-3 space-y-2">
+            <div className="border-t border-piu-border/40 pt-2">
+              <p className="text-[10px] font-display font-bold tracking-wide text-gray-500 mb-1.5">NOTABLE CHARTS</p>
+              {skill.best_chart && (
+                <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-3 py-2 mb-1.5">
+                  <p className="text-[10px] text-emerald-400/70 font-display mb-0.5">BEST</p>
+                  <p className="text-xs text-gray-200 truncate">{skill.best_chart.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`text-[10px] font-display font-bold ${
+                      skill.best_chart.mode === 'Single' ? 'text-red-400' : 'text-green-400'
+                    }`}>
+                      {skill.best_chart.mode === 'Single' ? 'S' : 'D'}{skill.best_chart.level}
+                    </span>
+                    <span className="text-[11px] font-mono text-gray-400">{formatNumber(skill.best_chart.score)}</span>
+                  </div>
+                </div>
+              )}
+              {skill.worst_chart && (
+                <div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2">
+                  <p className="text-[10px] text-red-400/70 font-display mb-0.5">WORST</p>
+                  <p className="text-xs text-gray-200 truncate">{skill.worst_chart.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`text-[10px] font-display font-bold ${
+                      skill.worst_chart.mode === 'Single' ? 'text-red-400' : 'text-green-400'
+                    }`}>
+                      {skill.worst_chart.mode === 'Single' ? 'S' : 'D'}{skill.worst_chart.level}
+                    </span>
+                    <span className="text-[11px] font-mono text-gray-400">{formatNumber(skill.worst_chart.score)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SkillCard({ title, borderClass, skills, allSkills, onSkillClick }) {
   if (!skills || skills.length === 0) return null;
   const items = skills.map((slug) => allSkills.find((s) => s.slug === slug)).filter(Boolean);
 
@@ -34,7 +127,12 @@ function SkillCard({ title, borderClass, skills, allSkills }) {
       <p className="text-[11px] font-display font-bold tracking-wide text-gray-400 mb-2">{title}</p>
       <div className="space-y-1.5">
         {items.map((s) => (
-          <div key={s.slug} className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            key={s.slug}
+            onClick={() => onSkillClick(s)}
+            className="w-full flex items-center justify-between gap-2 hover:bg-white/5 rounded px-1 py-0.5 -mx-1 transition-colors text-left"
+          >
             <span className="text-xs text-gray-200 truncate">{s.name}</span>
             <div className="flex items-center gap-1.5 shrink-0">
               <span className={`text-xs font-display font-bold ${getGradeColor(s.average_grade)}`}>
@@ -42,7 +140,7 @@ function SkillCard({ title, borderClass, skills, allSkills }) {
               </span>
               <span className="text-[11px] font-mono text-gray-400">{formatNumber(s.average_score)}</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -55,6 +153,7 @@ export default function SkillBreakdownPanel({ userId }) {
   const [error, setError] = useState(null);
   const [selectedMode, setSelectedMode] = useState('Both');
   const [viewMode, setViewMode] = useState('radar');
+  const [selectedSkill, setSelectedSkill] = useState(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -213,12 +312,14 @@ export default function SkillBreakdownPanel({ userId }) {
             borderClass="border-emerald-400/40"
             skills={data.strengths}
             allSkills={data.skills}
+            onSkillClick={setSelectedSkill}
           />
           <SkillCard
             title="WEAKNESSES"
             borderClass="border-red-400/40"
             skills={data.weaknesses}
             allSkills={data.skills}
+            onSkillClick={setSelectedSkill}
           />
         </div>
       )}
@@ -227,9 +328,11 @@ export default function SkillBreakdownPanel({ userId }) {
       {viewMode === 'list' && (
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
           {data.skills.map((s) => (
-            <div
+            <button
+              type="button"
               key={s.slug}
-              className="rounded-lg border border-piu-border/40 bg-piu-dark/45 px-2.5 py-2 flex items-center gap-3"
+              onClick={() => setSelectedSkill(s)}
+              className="w-full rounded-lg border border-piu-border/40 bg-piu-dark/45 px-2.5 py-2 flex items-center gap-3 hover:border-piu-accent/40 transition-colors text-left"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
@@ -259,10 +362,16 @@ export default function SkillBreakdownPanel({ userId }) {
                   </div>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
+
+      {/* Skill detail modal */}
+      <SkillDetailModal
+        skill={selectedSkill}
+        onClose={() => setSelectedSkill(null)}
+      />
     </div>
   );
 }
