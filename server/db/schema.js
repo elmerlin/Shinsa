@@ -1639,6 +1639,7 @@ function initializeDb() {
     ['location_city', "TEXT DEFAULT ''"],
     ['location_lat', 'REAL DEFAULT NULL'],
     ['location_lng', 'REAL DEFAULT NULL'],
+    ['avatar_v', 'INT DEFAULT 0'],
   ];
   for (const [col, type] of userMigrations) {
     if (!userCols.includes(col)) {

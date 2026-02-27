@@ -37,7 +37,7 @@ function normalizeClientUser(user, avatarSize = 96) {
   if (!user) return null;
   return {
     ...user,
-    avatar: normalizeUserAvatarForList(user.avatar, user.id, avatarSize),
+    avatar: normalizeUserAvatarForList(user.avatar, user.id, avatarSize, user.avatar_v),
   };
 }
 
@@ -181,7 +181,7 @@ router.post('/register', (req, res) => {
     Number.isFinite(Number(location_lng)) ? Number(location_lng) : null);
 
   const user = db.prepare(`
-    SELECT id, username, is_admin, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
@@ -216,7 +216,7 @@ router.post('/login', (req, res) => {
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
   const user = db.prepare(`
-    SELECT id, username, is_admin, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
@@ -248,6 +248,7 @@ router.get('/admin/features/:featureKey/users', requireAuth, requireAdmin, (req,
       u.id,
       u.username,
       u.avatar,
+      u.avatar_v,
       u.pumbility,
       u.skill_title,
       u.is_admin,
@@ -268,6 +269,7 @@ router.get('/admin/features/:featureKey/users', requireAuth, requireAdmin, (req,
         id: row.id,
         username: row.username,
         avatar: row.avatar,
+        avatar_v: row.avatar_v,
         pumbility: row.pumbility,
         skill_title: row.skill_title,
       }, 48);
@@ -426,8 +428,12 @@ router.put('/me', requireAuth, (req, res) => {
     req.user.id
   );
 
+  if (avatar != null) {
+    db.prepare('UPDATE users SET avatar_v = COALESCE(avatar_v, 0) + 1 WHERE id = ?').run(req.user.id);
+  }
+
   const user = db.prepare(`
-    SELECT id, username, is_admin, email, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
@@ -464,7 +470,7 @@ router.get('/search', (req, res) => {
   if (q.length < 1) return res.json([]);
 
   const users = db.prepare(`
-    SELECT id, username, avatar, pumbility, skill_title, skill_level, gender, nationality, description
+    SELECT id, username, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality, description
     FROM users
     WHERE username LIKE ?
     ORDER BY
@@ -487,7 +493,7 @@ router.get('/user/username/:username', (req, res) => {
   if (!username) return res.status(400).json({ error: 'Username is required' });
 
   const user = db.prepare(`
-    SELECT id, username, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
@@ -502,7 +508,7 @@ router.get('/user/username/:username', (req, res) => {
 router.get('/user/:id', (req, res) => {
   const db = getDb();
   const user = db.prepare(`
-    SELECT id, username, avatar, pumbility, skill_title, skill_level, gender, nationality,
+    SELECT id, username, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
