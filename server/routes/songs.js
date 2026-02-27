@@ -2507,11 +2507,13 @@ router.get('/analytics/rankings/:userId', (req, res) => {
     const rank = userIdx + 1;
     const percentile = Number((((totalUsers - rank) / totalUsers) * 100).toFixed(1));
 
+    // Badge based on rank position (not raw percentile) so rank 1 always gets top badge
     let badge = null;
-    if (percentile >= 95) badge = 'top5';
-    else if (percentile >= 90) badge = 'top10';
-    else if (percentile >= 75) badge = 'top25';
-    else if (percentile >= 50) badge = 'top50';
+    if (totalUsers >= 3 && rank === 1) badge = 'top5';
+    else if (totalUsers >= 5 && rank <= Math.max(1, Math.ceil(totalUsers * 0.05))) badge = 'top5';
+    else if (totalUsers >= 5 && rank <= Math.max(1, Math.ceil(totalUsers * 0.10))) badge = 'top10';
+    else if (totalUsers >= 4 && rank <= Math.max(1, Math.ceil(totalUsers * 0.25))) badge = 'top25';
+    else if (totalUsers >= 3 && rank <= Math.max(1, Math.ceil(totalUsers * 0.50))) badge = 'top50';
 
     levelPercentiles.push({
       mode,
@@ -2545,6 +2547,66 @@ router.get('/analytics/rankings/:userId', (req, res) => {
     leaderboard_total: totalLeaderboardEntries,
     synced_user_count: syncedUserCount,
     level_percentiles: levelPercentiles,
+  });
+});
+
+// GET /api/songs/analytics/level-leaderboard — top players for a specific mode+level
+router.get('/analytics/level-leaderboard', (req, res) => {
+  const db = getDb();
+
+  const mode = normalizeMode(req.query.mode);
+  if (!mode || mode === 'CoOp') {
+    return res.status(400).json({ error: 'mode is required (Single or Double)' });
+  }
+  const level = parseLevelQuery(req.query.level);
+  if (!level) {
+    return res.status(400).json({ error: 'level is required and must be a positive integer' });
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      ubs.user_id,
+      AVG(ubs.score) as avg_score,
+      COUNT(*) as chart_count
+    FROM user_best_scores ubs
+    INNER JOIN user_piugame_sync ups ON ups.user_id = ubs.user_id AND ups.best_scores_imported = 1
+    WHERE ubs.mode = ? AND ubs.level = ?
+    GROUP BY ubs.user_id
+    ORDER BY avg_score DESC
+  `).all(mode, level);
+
+  const userIds = rows.map((r) => r.user_id);
+  const userMap = new Map();
+  if (userIds.length > 0) {
+    const placeholders = userIds.map(() => '?').join(', ');
+    const users = db.prepare(`SELECT id, username, avatar FROM users WHERE id IN (${placeholders})`).all(...userIds);
+    for (const u of users) {
+      userMap.set(u.id, {
+        username: u.username || 'Unknown',
+        avatar: normalizeUserAvatarForList(u.avatar, u.id, 48),
+      });
+    }
+  }
+
+  const leaderboard = rows.map((row, idx) => {
+    const user = userMap.get(row.user_id) || { username: 'Unknown', avatar: '' };
+    const avgScore = Math.round(parseFloat(row.avg_score) || 0);
+    return {
+      rank: idx + 1,
+      user_id: row.user_id,
+      username: user.username,
+      avatar: user.avatar,
+      avg_score: avgScore,
+      grade: gradeFromScore(avgScore),
+      chart_count: parseInt(row.chart_count, 10) || 0,
+    };
+  });
+
+  res.json({
+    mode,
+    level,
+    total_users: leaderboard.length,
+    leaderboard,
   });
 });
 
