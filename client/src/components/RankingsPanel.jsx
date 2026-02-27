@@ -155,7 +155,7 @@ export default function RankingsPanel({ userId }) {
             <span className="text-gray-600 ml-1">({data.synced_user_count} synced users)</span>
           </p>
           <p className="text-[10px] text-gray-600 mb-2">
-            Your avg score at each level vs. other players. Bar = percentile.
+            Your avg score rank at each level vs. other players.
           </p>
 
           {/* Column headers */}
@@ -176,7 +176,10 @@ export default function RankingsPanel({ userId }) {
               const label = `${isSingle ? 'S' : 'D'}${p.level}`;
               const levelBadge = p.badge ? badgeStyle(p.badge) : null;
               const grade = getGradeFromScore(p.avg_score);
-              const topPercent = (100 - p.percentile).toFixed(1);
+              // Bar shows rank position: rank 1 = 100%, last place = near 0%
+              const rankBarPercent = p.total_users > 1
+                ? ((p.total_users - p.rank) / (p.total_users - 1)) * 100
+                : 100;
 
               return (
                 <div
@@ -193,24 +196,19 @@ export default function RankingsPanel({ userId }) {
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="text-[11px] text-gray-400">
                         <span className="font-mono text-gray-200">#{p.rank}</span>
-                        <span className="text-gray-600"> / {p.total_users}</span>
+                        <span className="text-gray-600"> / {p.total_users} players</span>
                       </span>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className={`text-[11px] font-display font-bold ${grade.color}`}>{grade.label}</span>
                         <span className="text-[11px] font-mono text-gray-400">{formatNumber(p.avg_score)}</span>
-                        <span className={`text-[11px] font-mono w-14 text-right ${
-                          p.percentile >= 90 ? 'text-sky-300' : p.percentile >= 75 ? 'text-piu-gold' : p.percentile >= 50 ? 'text-amber-400' : 'text-gray-400'
-                        }`}>
-                          top {topPercent}%
-                        </span>
                       </div>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-piu-dark/80 border border-piu-border/20 overflow-hidden"
-                      title={`Percentile: ${p.percentile.toFixed(1)}% — you outperform ${p.percentile.toFixed(1)}% of players at ${label}`}
+                      title={`Rank #${p.rank} of ${p.total_users} — avg score ${formatNumber(p.avg_score)}`}
                     >
                       <div
                         className={`h-full rounded-full transition-all duration-300 ${percentileBarColor(p.percentile)}`}
-                        style={{ width: `${Math.min(100, p.percentile)}%` }}
+                        style={{ width: `${Math.min(100, rankBarPercent)}%` }}
                       />
                     </div>
                     {levelBadge && (
