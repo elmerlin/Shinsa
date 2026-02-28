@@ -82,6 +82,12 @@ export const createNotice = (data) => request('/notices', { method: 'POST', body
 export const updateNotice = (id, data) => request(`/notices/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteNotice = (id) => request(`/notices/${id}`, { method: 'DELETE' });
 
+// Changelog
+export const getChangelogEntries = () => request('/changelog');
+export const createChangelogEntry = (data) => request('/changelog', { method: 'POST', body: JSON.stringify(data) });
+export const updateChangelogEntry = (id, data) => request(`/changelog/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteChangelogEntry = (id) => request(`/changelog/${id}`, { method: 'DELETE' });
+
 // Songs
 export const getSongs = (params = {}) => {
   const qs = new URLSearchParams(params).toString();

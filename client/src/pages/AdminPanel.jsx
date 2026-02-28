@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
   getNotices, createNotice, updateNotice, deleteNotice,
+  getChangelogEntries, createChangelogEntry, updateChangelogEntry, deleteChangelogEntry,
   getFunSettings, updateFunSettings,
   getAdminShoeCatalog, createAdminShoeCatalogEntry, updateAdminShoeCatalogEntry, deleteAdminShoeCatalogEntry, setAdminShoeCatalogDisplay,
   searchUsers, getAdminFeatures, getAdminFeatureUsers, grantAdminFeatureUser, revokeAdminFeatureUser,
@@ -26,6 +27,7 @@ export default function AdminPanel() {
   const [tournaments, setTournaments] = useState([]);
   const [archived, setArchived] = useState([]);
   const [notices, setNotices] = useState([]);
+  const [changelogEntries, setChangelogEntries] = useState([]);
   const [funSettings, setFunSettings] = useState({ devit_start_platform_lag: 3, updated_at: '' });
   const [funLagInput, setFunLagInput] = useState('3');
   const [funLoading, setFunLoading] = useState(false);
@@ -67,6 +69,9 @@ export default function AdminPanel() {
   const [noticeForm, setNoticeForm] = useState({ title: '', content: '', pinned: false });
   const [editingNotice, setEditingNotice] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [changelogForm, setChangelogForm] = useState({ title: '', content: '', pinned: false });
+  const [editingChangelog, setEditingChangelog] = useState(null);
+  const [changelogSaving, setChangelogSaving] = useState(false);
 
   useEffect(() => {
     if (!user?.is_admin) return;
@@ -192,6 +197,7 @@ export default function AdminPanel() {
     getTournaments().then(setTournaments).catch(() => {});
     getArchivedTournaments().then(setArchived).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
+    getChangelogEntries().then(setChangelogEntries).catch(() => {});
     getAdminShoeCatalog({ limit: 1, page: 1 })
       .then((payload) => {
         setShoeCatalogTotal(parseInt(payload?.total, 10) || 0);
@@ -264,6 +270,46 @@ export default function AdminPanel() {
 
   const handleTogglePin = async (notice) => {
     await updateNotice(notice.id, { pinned: !notice.pinned });
+    await loadAll();
+  };
+
+  const handleChangelogSubmit = async (e) => {
+    e.preventDefault();
+    if (!changelogForm.title.trim() || !changelogForm.content.trim()) return;
+    setChangelogSaving(true);
+    try {
+      if (editingChangelog) {
+        await updateChangelogEntry(editingChangelog.id, changelogForm);
+      } else {
+        await createChangelogEntry(changelogForm);
+      }
+      setChangelogForm({ title: '', content: '', pinned: false });
+      setEditingChangelog(null);
+      await loadAll();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setChangelogSaving(false);
+    }
+  };
+
+  const handleEditChangelog = (entry) => {
+    setEditingChangelog(entry);
+    setChangelogForm({
+      title: entry.title || '',
+      content: entry.content || '',
+      pinned: !!entry.pinned,
+    });
+  };
+
+  const handleDeleteChangelog = async (id) => {
+    if (!confirm('Delete this changelog entry?')) return;
+    await deleteChangelogEntry(id);
+    await loadAll();
+  };
+
+  const handleToggleChangelogPin = async (entry) => {
+    await updateChangelogEntry(entry.id, { pinned: !entry.pinned });
     await loadAll();
   };
 
@@ -478,21 +524,24 @@ export default function AdminPanel() {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        {['tournaments', 'archived', 'notices', 'shoes', 'permissions', 'fun'].map(t => (
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-6">
+        {['tournaments', 'archived', 'notices', 'changelog', 'shoes', 'permissions', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-3 sm:px-4 py-2 rounded-lg font-display text-sm font-bold whitespace-nowrap transition-colors ${
+            className={`w-full sm:w-auto min-w-0 px-3 sm:px-4 py-2 rounded-lg font-display text-sm font-bold transition-colors ${
               tab === t ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
           >
-            {t === 'tournaments' ? `Active (${tournaments.length})` :
-             t === 'archived' ? `Archived (${archived.length})` :
-             t === 'notices' ? `Notices (${notices.length})` :
-             t === 'shoes' ? `Shoes (${shoeCatalogTotal})` :
-             t === 'permissions' ? 'Permissions' :
-             'Fun Settings'}
+            <span className="block truncate">
+              {t === 'tournaments' ? `Active (${tournaments.length})` :
+               t === 'archived' ? `Archived (${archived.length})` :
+               t === 'notices' ? `Notices (${notices.length})` :
+               t === 'changelog' ? `Changelog (${changelogEntries.length})` :
+               t === 'shoes' ? `Shoes (${shoeCatalogTotal})` :
+               t === 'permissions' ? 'Permissions' :
+               'Fun Settings'}
+            </span>
           </button>
         ))}
       </div>
@@ -660,6 +709,101 @@ export default function AdminPanel() {
                     </button>
                     <button
                       onClick={() => handleDeleteNotice(n.id)}
+                      className="text-xs px-2 py-1 rounded text-gray-500 hover:text-red-400 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Changelog Tab */}
+      {tab === 'changelog' && (
+        <div className="space-y-6">
+          <form onSubmit={handleChangelogSubmit} className="card space-y-3">
+            <h3 className="font-display font-bold text-piu-accent">
+              {editingChangelog ? 'Edit Changelog Entry' : 'Post New Changelog Entry'}
+            </h3>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Entry title"
+              value={changelogForm.title}
+              onChange={(e) => setChangelogForm((prev) => ({ ...prev, title: e.target.value }))}
+              required
+            />
+            <textarea
+              className="input-field min-h-[100px] resize-y"
+              placeholder="Entry details"
+              value={changelogForm.content}
+              onChange={(e) => setChangelogForm((prev) => ({ ...prev, content: e.target.value }))}
+              required
+            />
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={changelogForm.pinned}
+                  onChange={(e) => setChangelogForm((prev) => ({ ...prev, pinned: e.target.checked }))}
+                  className="rounded"
+                />
+                Pin to top
+              </label>
+              <div className="flex gap-2">
+                {editingChangelog && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingChangelog(null); setChangelogForm({ title: '', content: '', pinned: false }); }}
+                    className="btn-secondary text-sm"
+                  >
+                    Cancel
+                  </button>
+                )}
+                <button type="submit" className="btn-primary text-sm" disabled={changelogSaving}>
+                  {changelogSaving ? 'Saving...' : editingChangelog ? 'Update Entry' : 'Post Entry'}
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div className="space-y-3">
+            {changelogEntries.length === 0 ? (
+              <p className="text-gray-500 text-center py-10">No changelog entries posted</p>
+            ) : changelogEntries.map((entry) => (
+              <div key={entry.id} className={`card ${entry.pinned ? 'border-piu-accent/30' : ''}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      {entry.pinned ? <span className="text-xs text-piu-accent font-display">PINNED</span> : null}
+                      <h4 className="font-display font-bold truncate">{entry.title}</h4>
+                    </div>
+                    <p className="text-sm text-gray-400 mt-1 line-clamp-3 whitespace-pre-wrap">{entry.content}</p>
+                    <p className="text-xs text-gray-600 mt-2">
+                      {entry.created_at ? new Date(entry.created_at).toLocaleDateString() : ''}
+                    </p>
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      onClick={() => handleToggleChangelogPin(entry)}
+                      className={`text-xs px-2 py-1 rounded transition-colors ${
+                        entry.pinned ? 'text-piu-accent bg-piu-accent/10' : 'text-gray-500 hover:text-piu-accent'
+                      }`}
+                      title={entry.pinned ? 'Unpin' : 'Pin'}
+                    >
+                      {entry.pinned ? 'Unpin' : 'Pin'}
+                    </button>
+                    <button
+                      onClick={() => handleEditChangelog(entry)}
+                      className="text-xs px-2 py-1 rounded text-gray-500 hover:text-white transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteChangelog(entry.id)}
                       className="text-xs px-2 py-1 rounded text-gray-500 hover:text-red-400 transition-colors"
                     >
                       Delete

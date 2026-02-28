@@ -39,6 +39,7 @@ import SkillChartsPage from './pages/SkillChartsPage';
 import ChatPage from './pages/ChatPage';
 import FunPage from './pages/FunPage';
 import OptimisePage from './pages/OptimisePage';
+import ChangeLogPage from './pages/ChangeLogPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -405,6 +406,18 @@ function UserMenu() {
             Fun
           </Link>
           <Link
+            to="/changelog"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M9 8h6" />
+            </svg>
+            Changelog
+          </Link>
+          <Link
             to="/account"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
@@ -565,6 +578,7 @@ export default function App() {
           <Route path="/head-to-head" element={<HeadToHeadPage />} />
           <Route path="/fun" element={<FunPage />} />
           <Route path="/chat" element={<ChatPage />} />
+          <Route path="/changelog" element={<ChangeLogPage />} />
         </Routes>
       </main>
 

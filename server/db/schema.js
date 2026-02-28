@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const { randomUUID } = require('crypto');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'shinsa.db');
 
@@ -442,6 +443,55 @@ function backfillLegacyGroupedNewClears() {
   }
 }
 
+function bootstrapChangelogEntriesIfEmpty() {
+  let count = 0;
+  try {
+    count = db.prepare('SELECT COUNT(*) AS c FROM changelog_entries').get()?.c || 0;
+  } catch {
+    return;
+  }
+  if (count > 0) return;
+
+  const seedEntries = [
+    {
+      title: 'Profile rankings now highlight both people correctly',
+      content: '(you) now always points to your own account, even on someone else\'s profile. The profile owner is still highlighted separately so both positions are clear.',
+      pinned: 1,
+    },
+    {
+      title: 'Skill Breakdown radar chart now uses better scaling',
+      content: 'Radar values are now normalized from AA (900,000) to 1,000,000 so high-level score differences are easier to see.',
+      pinned: 0,
+    },
+    {
+      title: 'List song suggestions now scroll properly on mobile',
+      content: 'The suggestion box now adapts to available viewport space and stays above the bottom mobile nav, so lower chart options remain selectable.',
+      pinned: 0,
+    },
+    {
+      title: 'Pass target behavior in Lists is fixed',
+      content: 'If a song was already passed before being added with target Pass, it no longer auto-completes at 0 attempts. It now completes only after a new pass while in the list.',
+      pinned: 0,
+    },
+    {
+      title: 'Shoes tab now has an empty-state call to action',
+      content: 'When your shoe cabinet is empty on your profile, you now see an Add your first shoe button.',
+      pinned: 0,
+    },
+  ];
+
+  const insert = db.prepare(`
+    INSERT INTO changelog_entries (id, title, content, pinned, created_at, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+  `);
+  const applySeed = db.transaction((rows) => {
+    rows.forEach((entry) => {
+      insert.run(randomUUID(), entry.title, entry.content, entry.pinned ? 1 : 0);
+    });
+  });
+  applySeed(seedEntries);
+}
+
 function initializeDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tournaments (
@@ -542,6 +592,15 @@ function initializeDb() {
       content TEXT NOT NULL,
       pinned INT DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS changelog_entries (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      pinned INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS duels (
@@ -1699,6 +1758,8 @@ function initializeDb() {
     // Backfill sort_order based on existing id order
     db.exec("UPDATE user_list_items SET sort_order = id WHERE sort_order = 0");
   }
+
+  bootstrapChangelogEntriesIfEmpty();
 }
 
 // Prevent route handlers from closing the shared connection

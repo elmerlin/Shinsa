@@ -836,7 +836,7 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
     const viewportHeight = window.visualViewport?.height || window.innerHeight;
     const viewportOffsetTop = window.visualViewport?.offsetTop || 0;
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
-    const bottomNavGuard = isMobile ? 104 : 20;
+    const bottomNavGuard = isMobile ? 156 : 20;
     const availableSpace = Math.floor((viewportOffsetTop + viewportHeight) - rect.bottom - bottomNavGuard);
     const nextMax = Math.max(96, Math.min(480, availableSpace));
     setSuggestionsMaxHeight(nextMax);
@@ -1039,7 +1039,7 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
           />
           {showSuggestions && search.trim() && filteredSongs.length > 0 && (
             <div
-              className="absolute z-40 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-y-auto overscroll-contain"
+              className="absolute z-40 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-y-auto overscroll-contain pb-24 sm:pb-2"
               style={{ maxHeight: `${suggestionsMaxHeight}px` }}
             >
               {filteredSongs.map(song => (
