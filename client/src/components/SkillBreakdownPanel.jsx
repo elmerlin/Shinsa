@@ -25,6 +25,15 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
+const AA_BASE_SCORE = 900000;
+const RADAR_MAX_SCORE = 1000000;
+
+function toAaRelativeRadarValue(score) {
+  const numericScore = parseInt(score, 10) || 0;
+  const normalized = ((numericScore - AA_BASE_SCORE) / (RADAR_MAX_SCORE - AA_BASE_SCORE)) * 100;
+  return Math.max(0, Math.min(100, normalized));
+}
+
 function SkillDetailModal({ skill, onClose }) {
   if (!skill) return null;
 
@@ -182,12 +191,16 @@ export default function SkillBreakdownPanel({ userId }) {
 
   const radarData = useMemo(() => {
     // Cap at 12 for readability
-    return playedSkills.slice(0, 12).map((s) => ({
-      skill: s.name,
-      value: s.performance_score,
-      score: s.average_score,
-      grade: s.average_grade,
-    }));
+    return playedSkills.slice(0, 12).map((s) => {
+      const aaRelativePct = toAaRelativeRadarValue(s.average_score);
+      return {
+        skill: s.name,
+        value: aaRelativePct,
+        score: s.average_score,
+        grade: s.average_grade,
+        aaRelativePct,
+      };
+    });
   }, [playedSkills]);
 
   if (loading && !data) {
@@ -285,16 +298,20 @@ export default function SkillBreakdownPanel({ userId }) {
                   fontSize: '11px',
                   fontFamily: 'Inter, sans-serif',
                 }}
-                formatter={(value, _name, props) => {
+                formatter={(_value, _name, props) => {
                   const { payload } = props;
+                  const aaScale = Number.isFinite(payload?.aaRelativePct) ? payload.aaRelativePct.toFixed(1) : '0.0';
                   return [
-                    `${payload.grade || '-'} (${formatNumber(payload.score)})`,
+                    `${payload?.grade || '-'} (${formatNumber(payload?.score)}) • AA scale ${aaScale}%`,
                     payload.skill,
                   ];
                 }}
               />
             </RadarChart>
           </ResponsiveContainer>
+          <p className="mt-1 text-center text-[10px] text-gray-600">
+            Radar scale is normalized from AA (900,000) to 1,000,000.
+          </p>
         </div>
       )}
 

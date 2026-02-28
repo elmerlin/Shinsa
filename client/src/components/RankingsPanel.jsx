@@ -59,7 +59,12 @@ function rankMedalColor(rank) {
   return 'text-gray-500';
 }
 
-function LeaderboardModal({ open, mode, level, highlightUserId, onClose }) {
+function sameUserId(a, b) {
+  if (a == null || b == null) return false;
+  return String(a) === String(b);
+}
+
+function LeaderboardModal({ open, mode, level, profileUserId, viewerUserId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -111,16 +116,23 @@ function LeaderboardModal({ open, mode, level, highlightUserId, onClose }) {
           )}
 
           {!loading && data && data.leaderboard.map((entry) => {
-            const isMe = entry.user_id === highlightUserId;
+            const isProfileUser = sameUserId(entry.user_id, profileUserId);
+            const isViewerUser = sameUserId(entry.user_id, viewerUserId);
+            const isBothHighlights = isProfileUser && isViewerUser;
+            const showProfileTag = isProfileUser && viewerUserId && !isViewerUser;
             const grade = getGradeFromScore(entry.avg_score);
 
             return (
               <div
                 key={entry.user_id}
                 className={`rounded-lg border px-3 py-2 flex items-center gap-3 ${
-                  isMe
-                    ? 'border-piu-accent/50 bg-piu-accent/10'
-                    : 'border-piu-border/40 bg-piu-dark/45'
+                  isBothHighlights
+                    ? 'border-violet-400/60 bg-violet-500/15'
+                    : isViewerUser
+                      ? 'border-piu-accent/60 bg-piu-accent/12'
+                      : isProfileUser
+                        ? 'border-sky-400/50 bg-sky-500/10'
+                        : 'border-piu-border/40 bg-piu-dark/45'
                 }`}
               >
                 <span className={`w-6 shrink-0 text-sm font-display font-black text-center ${rankMedalColor(entry.rank)}`}>
@@ -142,7 +154,8 @@ function LeaderboardModal({ open, mode, level, highlightUserId, onClose }) {
                     onClick={onClose}
                   >
                     {entry.username}
-                    {isMe && <span className="text-piu-accent ml-1">(you)</span>}
+                    {isViewerUser && <span className="text-piu-accent ml-1">(you)</span>}
+                    {showProfileTag && <span className="text-sky-300 ml-1">(profile)</span>}
                   </Link>
                 </div>
 
@@ -171,7 +184,7 @@ function LeaderboardModal({ open, mode, level, highlightUserId, onClose }) {
   );
 }
 
-export default function RankingsPanel({ userId }) {
+export default function RankingsPanel({ userId, viewerUserId = null }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -360,7 +373,8 @@ export default function RankingsPanel({ userId }) {
         open={!!leaderboardModal}
         mode={leaderboardModal?.mode}
         level={leaderboardModal?.level}
-        highlightUserId={userId}
+        profileUserId={userId}
+        viewerUserId={viewerUserId}
         onClose={() => setLeaderboardModal(null)}
       />
     </div>

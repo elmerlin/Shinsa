@@ -143,15 +143,7 @@ function computeListStats(list, libraryMap) {
     const targetScore = getTargetMinScore(item.target);
     totalTargetScore += targetScore;
 
-    const live = libraryMap[item.chartId];
-    if (live) {
-      const liveScore = parseInt(live.best_score, 10) || 0;
-      if (item.target === 'PASS') {
-        if (live.is_pass) completed++;
-      } else if (liveScore >= targetScore) {
-        completed++;
-      }
-    }
+    if (isItemComplete(item, libraryMap)) completed++;
   }
 
   return {
@@ -170,18 +162,31 @@ function getTargetMinScore(target) {
   return entry?.min || 0;
 }
 
+function isPassTargetComplete(item, live) {
+  if (!live?.is_pass) return false;
+  if (!item?.hadPass) return true;
+
+  const passesSinceAdded = parseInt(item?.passesSinceAdded, 10);
+  if (Number.isFinite(passesSinceAdded)) {
+    return passesSinceAdded > 0;
+  }
+
+  // Fallback for older payloads that do not include pass counts.
+  return (parseInt(item?.attempts, 10) || 0) > 0;
+}
+
 function isItemComplete(item, libraryMap) {
   const live = libraryMap[item.chartId];
   if (!live) return false;
   const liveScore = parseInt(live.best_score, 10) || 0;
-  if (item.target === 'PASS') return !!live.is_pass;
+  if (item.target === 'PASS') return isPassTargetComplete(item, live);
   return liveScore >= getTargetMinScore(item.target);
 }
 
 function getProgressToTarget(item, libraryMap) {
   const live = libraryMap[item.chartId];
   const liveScore = live ? (parseInt(live.best_score, 10) || 0) : (parseInt(item.originalScore, 10) || 0);
-  if (item.target === 'PASS') return live?.is_pass ? 1 : 0;
+  if (item.target === 'PASS') return isPassTargetComplete(item, live) ? 1 : 0;
   const targetMin = getTargetMinScore(item.target);
   if (targetMin <= 0) return 0;
   return Math.min(1, liveScore / targetMin);
@@ -424,13 +429,14 @@ export default function ListsPage() {
       hadPass: hasPass,
       target: defaultTarget,
       addedAt: Date.now(),
+      passesSinceAdded: 0,
     };
 
     try {
       const result = await addListItem(listId, itemData);
       setLists(prev => prev.map(l => {
         if (l.id !== listId) return l;
-        return { ...l, items: [...(l.items || []), { ...itemData, id: result.id, sortOrder: result.sortOrder || 0, attempts: 0 }] };
+        return { ...l, items: [...(l.items || []), { ...itemData, id: result.id, sortOrder: result.sortOrder || 0, attempts: 0, passesSinceAdded: 0 }] };
       }));
     } catch { /* ignore */ }
   };
@@ -467,6 +473,7 @@ export default function ListsPage() {
           hadPass: hasPass,
           target: defaultTarget,
           addedAt: Date.now(),
+          passesSinceAdded: 0,
         };
       });
 
@@ -477,7 +484,7 @@ export default function ListsPage() {
       const addedMap = new Map((result.added || []).map(a => [a.chartId, a.id]));
       const newItems = itemsToAdd
         .filter(item => addedMap.has(item.chartId))
-        .map(item => ({ ...item, id: addedMap.get(item.chartId), attempts: 0 }));
+        .map(item => ({ ...item, id: addedMap.get(item.chartId), attempts: 0, passesSinceAdded: 0 }));
       setLists(prev => prev.map(l => {
         if (l.id !== listId) return l;
         return { ...l, items: [...(l.items || []), ...newItems] };
@@ -674,7 +681,10 @@ export default function ListsPage() {
           const isExpanded = expandedListId === list.id;
 
           return (
-            <div key={list.id} className="rounded-xl border border-piu-border/60 bg-piu-card/70 overflow-hidden">
+            <div
+              key={list.id}
+              className={`relative rounded-xl border border-piu-border/60 bg-piu-card/70 ${isExpanded ? 'overflow-visible' : 'overflow-hidden'}`}
+            >
               {/* Card Header */}
               <button
                 type="button"
@@ -988,7 +998,7 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
             {bulkMode ? 'Cancel bulk' : 'Bulk add'}
           </button>
         </div>
-        <div ref={searchWrapRef} className="relative">
+        <div ref={searchWrapRef} className="relative z-30">
           <input
             value={search}
             onFocus={() => setShowSuggestions(true)}
@@ -997,7 +1007,10 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
             className="input-field w-full"
           />
           {showSuggestions && search.trim() && filteredSongs.length > 0 && (
-            <div className="absolute z-20 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden max-h-80 overflow-y-auto">
+            <div
+              className="absolute z-40 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-y-auto overscroll-contain"
+              style={{ maxHeight: 'min(20rem, 50vh)' }}
+            >
               {filteredSongs.map(song => (
                 <div key={song.song_group_key} className="border-b border-piu-border/20 last:border-0">
                   <div className="px-3 py-2">
@@ -1141,7 +1154,7 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove, isDragging
 
   const targetMinScore = getTargetMinScore(item.target);
   const isComplete = item.target === 'PASS'
-    ? livePass
+    ? isPassTargetComplete(item, liveData)
     : liveScore >= targetMinScore;
 
   // Progress toward target — shown as % within the range from current grade floor to target
@@ -1227,6 +1240,9 @@ function ListItemRow({ item, liveData, listId, onSetTarget, onRemove, isDragging
             <span className="text-[10px] text-gray-500" title="Attempts since added to list">
               {item.attempts} attempt{item.attempts !== 1 ? 's' : ''}
             </span>
+          )}
+          {item.target === 'PASS' && item.hadPass && !isComplete && (
+            <span className="text-[10px] text-violet-300">Pass again to complete</span>
           )}
         </div>
         {/* Progress bar toward target */}

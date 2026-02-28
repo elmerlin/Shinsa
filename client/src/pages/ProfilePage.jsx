@@ -1820,7 +1820,7 @@ export default function ProfilePage() {
           )}
 
           <SkillBreakdownPanel userId={profileId} />
-          <RankingsPanel userId={profileId} />
+          <RankingsPanel userId={profileId} viewerUserId={authUser?.id || null} />
           {isOwner && songAnalytics && (
             <GradeGoalTracker userId={profileId} analyticsLevels={songAnalytics.levels} />
           )}

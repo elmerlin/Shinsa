@@ -1633,7 +1633,7 @@ router.get('/lists', requireAuth, (req, res) => {
   `).all(userId);
 
   // Build attempt counts in one pass
-  const allPlays = db.prepare('SELECT song_title, mode, level, date_played FROM user_recently_played WHERE user_id = ?').all(userId);
+  const allPlays = db.prepare('SELECT song_title, mode, level, score, grade, date_played FROM user_recently_played WHERE user_id = ?').all(userId);
 
   const itemsByList = {};
   for (const item of allItems) {
@@ -1641,10 +1641,15 @@ router.get('/lists', requireAuth, (req, res) => {
 
     const chartKey = makeChartKey(item.song_title, item.mode, item.level, aliases);
     let attempts = 0;
+    let passesSinceAdded = 0;
     if (chartKey && item.added_at) {
       for (const play of allPlays) {
         if (makeChartKey(play.song_title, play.mode, play.level, aliases) !== chartKey) continue;
-        if (parseDateMs(play.date_played) >= item.added_at) attempts++;
+        if (parseDateMs(play.date_played) < item.added_at) continue;
+        attempts++;
+        if (isPassRecord(play)) {
+          passesSinceAdded++;
+        }
       }
     }
 
@@ -1664,6 +1669,7 @@ router.get('/lists', requireAuth, (req, res) => {
       addedAt: item.added_at,
       sortOrder: item.sort_order || 0,
       attempts,
+      passesSinceAdded,
     });
   }
 
