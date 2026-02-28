@@ -799,6 +799,7 @@ function exportList(list, libraryMap) {
 function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, onRemoveChart, onSetTarget, onDelete, onRename, onClone, onReorder, onBumpAllTargets, onExport }) {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsMaxHeight, setSuggestionsMaxHeight] = useState(320);
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkSelected, setBulkSelected] = useState(new Map()); // chartId -> { chart, song }
   const [sortBy, setSortBy] = useState('custom');
@@ -828,6 +829,36 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
       renameInputRef.current.select();
     }
   }, [isRenaming]);
+
+  const updateSuggestionsMaxHeight = useCallback(() => {
+    if (!searchWrapRef.current) return;
+    const rect = searchWrapRef.current.getBoundingClientRect();
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const viewportOffsetTop = window.visualViewport?.offsetTop || 0;
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const bottomNavGuard = isMobile ? 104 : 20;
+    const availableSpace = Math.floor((viewportOffsetTop + viewportHeight) - rect.bottom - bottomNavGuard);
+    const nextMax = Math.max(96, Math.min(480, availableSpace));
+    setSuggestionsMaxHeight(nextMax);
+  }, []);
+
+  useEffect(() => {
+    if (!showSuggestions) return undefined;
+    updateSuggestionsMaxHeight();
+
+    const handleViewportUpdate = () => updateSuggestionsMaxHeight();
+    window.addEventListener('resize', handleViewportUpdate);
+    window.addEventListener('scroll', handleViewportUpdate, true);
+    window.visualViewport?.addEventListener('resize', handleViewportUpdate);
+    window.visualViewport?.addEventListener('scroll', handleViewportUpdate);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportUpdate);
+      window.removeEventListener('scroll', handleViewportUpdate, true);
+      window.visualViewport?.removeEventListener('resize', handleViewportUpdate);
+      window.visualViewport?.removeEventListener('scroll', handleViewportUpdate);
+    };
+  }, [showSuggestions, updateSuggestionsMaxHeight]);
 
   const filteredSongs = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1009,7 +1040,7 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
           {showSuggestions && search.trim() && filteredSongs.length > 0 && (
             <div
               className="absolute z-40 top-full mt-1 w-full rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-y-auto overscroll-contain"
-              style={{ maxHeight: 'min(20rem, 50vh)' }}
+              style={{ maxHeight: `${suggestionsMaxHeight}px` }}
             >
               {filteredSongs.map(song => (
                 <div key={song.song_group_key} className="border-b border-piu-border/20 last:border-0">
