@@ -686,6 +686,18 @@ export const getTrainingRecommendations = (options = {}) => {
   return request(`/songs/recommendations/training?${params.toString()}`);
 };
 
+// Checkins & Venues
+export const getVenues = () => request('/checkins/venues');
+export const getVenueBySlug = (slug) => request(`/checkins/venue/${encodeURIComponent(slug)}`);
+export const getActiveCheckins = (venueSlug) => request(`/checkins/active/${encodeURIComponent(venueSlug)}`);
+export const checkin = (venue_id, machine_id) => request('/checkins/checkin', { method: 'POST', body: JSON.stringify({ venue_id, machine_id }) });
+export const checkout = () => request('/checkins/checkout', { method: 'POST' });
+export const getMyCheckinStatus = () => request('/checkins/my-status');
+export const getCheckinHistory = () => request('/checkins/history');
+export const getUserCheckinHistory = (userId) => request(`/checkins/user/${userId}/history`);
+export const setPlayingStatus = (status) => request('/checkins/playing-status', { method: 'PUT', body: JSON.stringify({ status }) });
+export const clearPlayingStatus = () => request('/checkins/playing-status', { method: 'DELETE' });
+
 // Parser
 export async function parseScorePhoto(file) {
   const formData = new FormData();

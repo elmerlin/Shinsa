@@ -184,7 +184,7 @@ router.post('/register', (req, res) => {
     SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
-           created_at
+           playing_status, created_at
     FROM users WHERE id = ?
   `).get(id);
   const clientUser = toClientAuthUser(db, user, 96);
@@ -219,7 +219,7 @@ router.get('/me', requireAuth, (req, res) => {
     SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
-           created_at
+           playing_status, created_at
     FROM users WHERE id = ?
   `).get(req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -496,7 +496,7 @@ router.get('/user/username/:username', (req, res) => {
     SELECT id, username, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
-           created_at
+           playing_status, created_at
     FROM users WHERE LOWER(username) = LOWER(?)
   `).get(username);
 
@@ -511,7 +511,7 @@ router.get('/user/:id', (req, res) => {
     SELECT id, username, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
-           created_at
+           playing_status, created_at
     FROM users WHERE id = ?
   `).get(req.params.id);
 

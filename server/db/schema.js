@@ -1635,6 +1635,47 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_fun_scores_created ON fun_scores(created_at DESC);
   `);
 
+  // Venues, machines, and check-ins
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS venues (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL UNIQUE,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS venue_machines (
+      id TEXT PRIMARY KEY,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      position TEXT DEFAULT 'left',
+      sort_order INT DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_machines_venue ON venue_machines(venue_id);
+
+    CREATE TABLE IF NOT EXISTS checkins (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      machine_id TEXT NOT NULL REFERENCES venue_machines(id) ON DELETE CASCADE,
+      checked_in_at TEXT DEFAULT (datetime('now')),
+      checked_out_at TEXT DEFAULT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_checkins_user ON checkins(user_id, checked_in_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_checkins_venue ON checkins(venue_id, checked_out_at);
+    CREATE INDEX IF NOT EXISTS idx_checkins_active ON checkins(checked_out_at) WHERE checked_out_at IS NULL;
+  `);
+
+  // Seed default venue and machines if empty
+  const venueCount = db.prepare('SELECT COUNT(*) AS cnt FROM venues').get().cnt;
+  if (venueCount === 0) {
+    const venueId = randomUUID();
+    db.prepare("INSERT INTO venues (id, name, slug) VALUES (?, ?, ?)").run(venueId, 'London Pump Dojo', 'london-pump-dojo');
+    db.prepare("INSERT INTO venue_machines (id, venue_id, name, position, sort_order) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), venueId, 'London Pump Dojo 1', 'left', 0);
+    db.prepare("INSERT INTO venue_machines (id, venue_id, name, position, sort_order) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), venueId, 'London Pump Dojo 2', 'right', 1);
+  }
+
   bootstrapSongsFromJsonIfEmpty();
   ensureCoOpChartsFromJson();
   bootstrapChartTiersFromSnapshotIfEmpty();
@@ -1699,6 +1740,7 @@ function initializeDb() {
     ['location_lat', 'REAL DEFAULT NULL'],
     ['location_lng', 'REAL DEFAULT NULL'],
     ['avatar_v', 'INT DEFAULT 0'],
+    ['playing_status', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of userMigrations) {
     if (!userCols.includes(col)) {
