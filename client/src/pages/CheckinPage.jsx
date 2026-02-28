@@ -77,16 +77,26 @@ function MachineUnit({ machine, players, isMyMachine, onSelect }) {
             <div className="text-[9px] sm:text-[10px] font-display font-bold text-blue-300/90 tracking-wide uppercase">
               Pump It Up
             </div>
-            <div className="text-[8px] text-blue-400/60 mt-0.5">XX</div>
+            <div className="text-[8px] text-blue-400/60 mt-0.5">Phoenix</div>
           </div>
         </div>
 
-        {/* Pad area */}
-        <div className="absolute inset-x-3 bottom-2 top-[65%] rounded-md bg-slate-700/50 border border-slate-600/30 flex items-center justify-center gap-1">
-          {/* 5 arrow pads */}
-          {[0, 1, 2, 3, 4].map(i => (
-            <div key={i} className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm ${i % 2 === 0 ? 'bg-red-500/30 border-red-500/20' : 'bg-blue-500/30 border-blue-500/20'} border`} />
-          ))}
+        {/* Pad area – PIU 5-panel diamond */}
+        <div className="absolute inset-x-3 bottom-2 top-[65%] rounded-md bg-slate-700/50 border border-slate-600/30 flex items-center justify-center">
+          <div className="grid grid-cols-3 gap-[2px]">
+            {/* Row 1: ↖ · ↗ */}
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm bg-blue-500/40 border border-blue-400/30" />
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm bg-red-500/40 border border-red-400/30" />
+            {/* Row 2: · ● · */}
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm bg-yellow-500/40 border border-yellow-400/30" />
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+            {/* Row 3: ↙ · ↘ */}
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm bg-red-500/40 border border-red-400/30" />
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+            <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm bg-blue-500/40 border border-blue-400/30" />
+          </div>
         </div>
 
         {/* Status indicator */}
