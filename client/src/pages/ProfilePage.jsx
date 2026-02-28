@@ -2347,9 +2347,19 @@ export default function ProfilePage() {
             {shoeLoading && cabinetShoes.length === 0 ? (
               <p className="text-center text-gray-500 text-sm py-6">Loading shoes...</p>
             ) : cabinetShoes.length === 0 ? (
-              <p className="text-center text-gray-500 text-sm py-6">
-                {isOwner ? 'No shoes in your cabinet yet' : 'No shoes added yet'}
-              </p>
+              <div className="rounded-lg border border-piu-border/40 bg-piu-dark/30 p-4 text-center">
+                <p className="text-gray-500 text-sm">
+                  {isOwner ? 'No shoes in your cabinet yet' : 'No shoes added yet'}
+                </p>
+                {isOwner && (
+                  <Link
+                    to="/account"
+                    className="inline-flex items-center mt-3 px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-accent/20 text-piu-accent border border-piu-accent/40 hover:bg-piu-accent/30 transition-colors"
+                  >
+                    Add your first shoe
+                  </Link>
+                )}
+              </div>
             ) : (
               <>
                 {activeCabinetShoes.map((shoe) => {
