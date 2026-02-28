@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getChangelogEntries } from '../utils/api';
+import MarkdownContent from '../components/MarkdownContent';
 
 export default function ChangeLogPage() {
   const [entries, setEntries] = useState([]);
@@ -66,7 +67,7 @@ export default function ChangeLogPage() {
                   ) : null}
                 </div>
                 <h2 className="text-sm sm:text-base font-display font-bold text-gray-100 mt-1">{entry.title}</h2>
-                <p className="text-xs sm:text-sm text-gray-400 mt-1 leading-relaxed whitespace-pre-wrap">{entry.content}</p>
+                <MarkdownContent text={entry.content} className="mt-1" />
               </div>
             );
           })}

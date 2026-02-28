@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import MarkdownContent from '../components/MarkdownContent';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
@@ -72,6 +73,7 @@ export default function AdminPanel() {
   const [changelogForm, setChangelogForm] = useState({ title: '', content: '', pinned: false });
   const [editingChangelog, setEditingChangelog] = useState(null);
   const [changelogSaving, setChangelogSaving] = useState(false);
+  const changelogContentRef = useRef(null);
 
   useEffect(() => {
     if (!user?.is_admin) return;
@@ -311,6 +313,63 @@ export default function AdminPanel() {
   const handleToggleChangelogPin = async (entry) => {
     await updateChangelogEntry(entry.id, { pinned: !entry.pinned });
     await loadAll();
+  };
+
+  const applyChangelogInlineFormat = (prefix, suffix = prefix, placeholder = 'text') => {
+    const input = changelogContentRef.current;
+    if (!input) return;
+
+    const content = changelogForm.content || '';
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? start;
+    const selected = content.slice(start, end);
+    const useText = selected || placeholder;
+    const replacement = `${prefix}${useText}${suffix}`;
+    const updated = `${content.slice(0, start)}${replacement}${content.slice(end)}`;
+    const selectStart = start + prefix.length;
+    const selectEnd = selectStart + useText.length;
+
+    setChangelogForm((prev) => ({ ...prev, content: updated }));
+    window.requestAnimationFrame(() => {
+      if (!changelogContentRef.current) return;
+      changelogContentRef.current.focus();
+      changelogContentRef.current.setSelectionRange(selectStart, selectEnd);
+    });
+  };
+
+  const applyChangelogLineFormat = (mode) => {
+    const input = changelogContentRef.current;
+    if (!input) return;
+
+    const content = changelogForm.content || '';
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? start;
+    const blockStart = content.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const nextBreak = content.indexOf('\n', end);
+    const blockEnd = nextBreak === -1 ? content.length : nextBreak;
+    const selectedBlock = content.slice(blockStart, blockEnd);
+    const lines = selectedBlock.split('\n');
+
+    let transformed = lines;
+    if (mode === 'bullet') {
+      transformed = lines.map((line) => (line.trim() ? `- ${line.replace(/^\s*([-*]|\d+\.)\s+/, '')}` : line));
+    } else if (mode === 'number') {
+      transformed = lines.map((line, idx) => (line.trim() ? `${idx + 1}. ${line.replace(/^\s*([-*]|\d+\.)\s+/, '')}` : line));
+    } else if (mode === 'heading') {
+      transformed = lines.map((line) => (line.trim() ? `## ${line.replace(/^\s*#{1,3}\s+/, '')}` : line));
+    } else if (mode === 'quote') {
+      transformed = lines.map((line) => (line.trim() ? `> ${line.replace(/^\s*>\s?/, '')}` : line));
+    }
+
+    const replacement = transformed.join('\n');
+    const updated = `${content.slice(0, blockStart)}${replacement}${content.slice(blockEnd)}`;
+
+    setChangelogForm((prev) => ({ ...prev, content: updated }));
+    window.requestAnimationFrame(() => {
+      if (!changelogContentRef.current) return;
+      changelogContentRef.current.focus();
+      changelogContentRef.current.setSelectionRange(blockStart, blockStart + replacement.length);
+    });
   };
 
   const resetShoeForm = () => {
@@ -737,12 +796,82 @@ export default function AdminPanel() {
               required
             />
             <textarea
+              ref={changelogContentRef}
               className="input-field min-h-[100px] resize-y"
-              placeholder="Entry details"
+              placeholder="Entry details (supports Markdown styling)"
               value={changelogForm.content}
               onChange={(e) => setChangelogForm((prev) => ({ ...prev, content: e.target.value }))}
               required
             />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => applyChangelogInlineFormat('**', '**', 'bold text')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Bold
+              </button>
+              <button
+                type="button"
+                onClick={() => applyChangelogInlineFormat('*', '*', 'italic text')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Italic
+              </button>
+              <button
+                type="button"
+                onClick={() => applyChangelogInlineFormat('`', '`', 'code')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Code
+              </button>
+              <button
+                type="button"
+                onClick={() => applyChangelogLineFormat('heading')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Heading
+              </button>
+              <button
+                type="button"
+                onClick={() => applyChangelogLineFormat('bullet')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Bullet list
+              </button>
+              <button
+                type="button"
+                onClick={() => applyChangelogLineFormat('number')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Number list
+              </button>
+              <button
+                type="button"
+                onClick={() => applyChangelogLineFormat('quote')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Quote
+              </button>
+              <button
+                type="button"
+                onClick={() => applyChangelogInlineFormat('[', '](https://example.com)', 'link text')}
+                className="rounded border border-piu-border px-2 py-1 text-[11px] text-gray-300 hover:text-white hover:border-piu-accent/40 transition-colors"
+              >
+                Link
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Markdown supported: <span className="font-mono">**bold**</span>, <span className="font-mono">*italic*</span>, lists, headings, links, quotes, and code.
+            </p>
+            <div className="rounded-lg border border-piu-border/40 bg-piu-dark/30 p-3">
+              <p className="text-[11px] font-display font-bold text-gray-400 uppercase tracking-wide">Preview</p>
+              {changelogForm.content.trim() ? (
+                <MarkdownContent text={changelogForm.content} className="mt-2" compact />
+              ) : (
+                <p className="text-xs text-gray-500 mt-2">Formatting preview appears here.</p>
+              )}
+            </div>
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
                 <input
@@ -781,7 +910,9 @@ export default function AdminPanel() {
                       {entry.pinned ? <span className="text-xs text-piu-accent font-display">PINNED</span> : null}
                       <h4 className="font-display font-bold truncate">{entry.title}</h4>
                     </div>
-                    <p className="text-sm text-gray-400 mt-1 line-clamp-3 whitespace-pre-wrap">{entry.content}</p>
+                    <div className="mt-1 max-h-20 overflow-hidden">
+                      <MarkdownContent text={entry.content} compact />
+                    </div>
                     <p className="text-xs text-gray-600 mt-2">
                       {entry.created_at ? new Date(entry.created_at).toLocaleDateString() : ''}
                     </p>
