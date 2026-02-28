@@ -1591,6 +1591,12 @@ export default function ProfilePage() {
                 <span className="text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
             </div>
+            {profile.playing_status && (
+              <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs sm:text-sm font-display font-bold text-green-400">{profile.playing_status}</span>
+              </div>
+            )}
             {profile.description && (
               <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
             )}

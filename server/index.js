@@ -20,6 +20,7 @@ const worldMaxRoutes = require('./routes/worldMax');
 const chatbotRoutes = require('./routes/chatbot');
 const funRoutes = require('./routes/fun');
 const changelogRoutes = require('./routes/changelog');
+const checkinRoutes = require('./routes/checkins');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -61,6 +62,7 @@ app.use('/api/world-max', worldMaxRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/fun', funRoutes);
 app.use('/api/changelog', changelogRoutes);
+app.use('/api/checkins', checkinRoutes);
 
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
