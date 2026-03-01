@@ -121,6 +121,22 @@ function getUserGroupBadges(db, userId) {
   }));
 }
 
+function getUserGroups(db, userId) {
+  if (!db || !userId) return [];
+  const rows = db.prepare(`
+    SELECT g.id, g.name
+    FROM admin_user_group_members gm
+    JOIN admin_user_groups g ON g.id = gm.group_id
+    WHERE gm.user_id = ?
+    ORDER BY g.name COLLATE NOCASE ASC
+  `).all(userId);
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name || '',
+  }));
+}
+
 function makePublicUser(db, user) {
   if (!user) return null;
   const normalized = normalizeClientUser(user, 128);
@@ -218,6 +234,7 @@ function toClientAuthUser(db, user, avatarSize = 96) {
     ...normalized,
     is_admin: !!admin,
     feature_access: getFeatureAccessByUserId(db, user.id, admin),
+    groups: getUserGroups(db, user.id),
     group_badges: getUserGroupBadges(db, user.id),
   };
 }

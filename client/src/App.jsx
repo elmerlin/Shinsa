@@ -44,6 +44,61 @@ import ChangeLogPage from './pages/ChangeLogPage';
 import CheckinPage from './pages/CheckinPage';
 import DojoPage from './pages/DojoPage';
 
+const DOJO_TARGET_GROUP = 'pump dojo';
+const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
+const DOJO_RECHECK_DEFAULT_MS = 60 * 60 * 1000;
+const DOJO_RECHECK_NEARBY_MS = 10 * 60 * 1000;
+const DOJO_NEARBY_RADIUS_METERS = 3000;
+const DOJO_GEO_TIMEOUT_MS = 10000;
+const DOJO_GEO_MAX_AGE_MS = 120000;
+const DOJO_GEOFENCE = {
+  name: 'London Pump Dojo',
+  address: 'Unit 5, 2 Wadsworth Rd, Perivale, Greenford UB6 7JD',
+  lat: 51.53639,
+  lng: -0.31489,
+  radiusMeters: 180,
+  maxAccuracyMeters: 120,
+};
+
+function normalizeGroupName(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isPumpDojoMember(user) {
+  if (!user) return false;
+  const groups = Array.isArray(user.groups) ? user.groups : [];
+  return groups.some((group) => normalizeGroupName(group?.name) === DOJO_TARGET_GROUP);
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
+  const earthRadius = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadius * c;
+}
+
+function todayLocalKey() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function msUntilNextLocalDay() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  return Math.max(1000, next.getTime() - now.getTime());
+}
+
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
   const [open, setOpen] = useState(false);
@@ -572,14 +627,65 @@ function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
   );
 }
 
+function DojoProximityPopupModal({ onClose, onOpenCheckin }) {
+  return (
+    <div className="fixed inset-0 z-[96] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl border border-piu-border bg-[#0b1324] shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Nearby Dojo</p>
+            <h3 className="text-base font-display font-bold text-piu-accent truncate">
+              You are near {DOJO_GEOFENCE.name}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            Close
+          </button>
+        </div>
+        <div className="px-4 py-4 space-y-4">
+          <p className="text-sm text-gray-300">
+            Open check-in now?
+          </p>
+          <p className="text-xs text-gray-500">
+            {DOJO_GEOFENCE.address}
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn-secondary text-sm"
+              onClick={onClose}
+            >
+              Not now
+            </button>
+            <button
+              type="button"
+              className="btn-primary text-sm"
+              onClick={onOpenCheckin}
+            >
+              Open Check In
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [groupPopup, setGroupPopup] = useState(null);
   const [groupPopupSlide, setGroupPopupSlide] = useState(0);
+  const [showDojoPopup, setShowDojoPopup] = useState(false);
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin);
+  const canShowDojoPopup = canAccessCheckin && isPumpDojoMember(user);
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -613,6 +719,118 @@ export default function App() {
         setGroupPopupSlide(0);
       });
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !canShowDojoPopup) {
+      setShowDojoPopup(false);
+      return;
+    }
+    if (typeof window === 'undefined' || !window.isSecureContext || !navigator.geolocation) {
+      return;
+    }
+
+    const storageKey = `${DOJO_POPUP_STORAGE_PREFIX}:${user.id}`;
+    let cancelled = false;
+    let running = false;
+    let timeoutId = null;
+
+    const getStoredDay = () => {
+      try {
+        return localStorage.getItem(storageKey) || '';
+      } catch {
+        return '';
+      }
+    };
+
+    const markShownToday = () => {
+      try {
+        localStorage.setItem(storageKey, todayLocalKey());
+      } catch {
+        // Ignore storage failures.
+      }
+    };
+
+    const scheduleNext = (delayMs) => {
+      if (cancelled) return;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        runCheck();
+      }, Math.max(1000, Math.round(delayMs || 0)));
+    };
+
+    const runCheck = () => {
+      if (cancelled || running) return;
+      if (document.visibilityState === 'hidden') return;
+
+      if (getStoredDay() === todayLocalKey()) {
+        // Popup already shown today; resume checking tomorrow.
+        scheduleNext(msUntilNextLocalDay());
+        return;
+      }
+
+      running = true;
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          running = false;
+          if (cancelled) return;
+          const lat = Number(position?.coords?.latitude);
+          const lng = Number(position?.coords?.longitude);
+          const accuracy = Number(position?.coords?.accuracy);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+            return;
+          }
+
+          const distanceMeters = haversineDistanceMeters(lat, lng, DOJO_GEOFENCE.lat, DOJO_GEOFENCE.lng);
+          const accuracyOk = !Number.isFinite(accuracy) || accuracy <= DOJO_GEOFENCE.maxAccuracyMeters;
+          if (accuracyOk && distanceMeters <= DOJO_GEOFENCE.radiusMeters) {
+            markShownToday();
+            setShowDojoPopup(true);
+            scheduleNext(msUntilNextLocalDay());
+            return;
+          }
+
+          const nextDelay = distanceMeters <= DOJO_NEARBY_RADIUS_METERS
+            ? DOJO_RECHECK_NEARBY_MS
+            : DOJO_RECHECK_DEFAULT_MS;
+          scheduleNext(nextDelay);
+        },
+        () => {
+          running = false;
+          if (cancelled) return;
+          // Denied or unavailable: back off to sparse checks.
+          scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: DOJO_GEO_TIMEOUT_MS,
+          maximumAge: DOJO_GEO_MAX_AGE_MS,
+        }
+      );
+    };
+
+    const handleVisibility = () => {
+      if (cancelled) return;
+      if (document.visibilityState === 'visible') {
+        runCheck();
+      }
+    };
+
+    runCheck();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      running = false;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [canShowDojoPopup, user?.id]);
+
+  const handleOpenDojoCheckin = () => {
+    setShowDojoPopup(false);
+    navigate('/checkin');
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -751,6 +969,12 @@ export default function App() {
             setGroupPopup(null);
             setGroupPopupSlide(0);
           }}
+        />
+      )}
+      {showDojoPopup && !groupPopup && (
+        <DojoProximityPopupModal
+          onClose={() => setShowDojoPopup(false)}
+          onOpenCheckin={handleOpenDojoCheckin}
         />
       )}
 
