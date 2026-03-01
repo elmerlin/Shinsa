@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getSongChartDetail, getUserLists, addListItem, createList } from '../utils/api';
+import { getSongChartDetail, getUserLists, addListItem, createList, setChartYoutubeLink, removeChartYoutubeLink } from '../utils/api';
 
 const GRADE_THRESHOLDS = [
   { min: 0,      grade: 'F' },
@@ -264,6 +264,12 @@ export default function SongChartPage() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedFriendRecord, setSelectedFriendRecord] = useState(null);
 
+  // ── YouTube link state ──
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [showYoutubeInput, setShowYoutubeInput] = useState(false);
+  const [youtubeInputValue, setYoutubeInputValue] = useState('');
+  const [youtubeSaving, setYoutubeSaving] = useState(false);
+
   // ── Add-to-list state ──
   const [showListMenu, setShowListMenu] = useState(false);
   const [addedToast, setAddedToast] = useState('');
@@ -329,6 +335,34 @@ export default function SongChartPage() {
     setShowListMenu(false);
   };
 
+  const handleSaveYoutube = async () => {
+    const url = youtubeInputValue.trim();
+    if (!url || !detail?.chart) return;
+    setYoutubeSaving(true);
+    try {
+      await setChartYoutubeLink(detail.chart.chart_id, url);
+      setYoutubeUrl(url);
+      setShowYoutubeInput(false);
+      setYoutubeInputValue('');
+    } catch {
+      setAddedToast('Invalid YouTube URL');
+      setTimeout(() => setAddedToast(''), 2000);
+    } finally {
+      setYoutubeSaving(false);
+    }
+  };
+
+  const handleRemoveYoutube = async () => {
+    if (!detail?.chart) return;
+    setYoutubeSaving(true);
+    try {
+      await removeChartYoutubeLink(detail.chart.chart_id);
+      setYoutubeUrl('');
+    } catch { /* ignore */ } finally {
+      setYoutubeSaving(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -341,6 +375,7 @@ export default function SongChartPage() {
         });
         if (cancelled) return;
         setDetail(payload);
+        setYoutubeUrl(payload.user_youtube_url || '');
       } catch (err) {
         if (cancelled) return;
         setError(err.message || 'Failed to load chart data');
@@ -598,16 +633,89 @@ export default function SongChartPage() {
           <p className="text-[10px] text-gray-500">Rating</p>
           <p className="font-mono text-base text-piu-gold">{formatNumber(personalBest?.rating || 0)}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowHistoryModal(true)}
-          className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-emerald-400/40 transition-colors flex items-center"
-        >
-          <span className="inline-flex items-center justify-center rounded-md border border-emerald-300/45 bg-emerald-500/15 text-emerald-200 px-2 py-1 text-[11px] font-display font-bold w-fit">
-            Clear History
-          </span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHistoryModal(true)}
+            className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 text-left hover:border-emerald-400/40 transition-colors flex items-center flex-1"
+          >
+            <span className="inline-flex items-center justify-center rounded-md border border-emerald-300/45 bg-emerald-500/15 text-emerald-200 px-2 py-1 text-[11px] font-display font-bold w-fit">
+              Clear History
+            </span>
+          </button>
+          {user && (
+            youtubeUrl ? (
+              <div className="flex items-center gap-1">
+                <a
+                  href={youtubeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-red-400/40 bg-red-500/15 hover:bg-red-500/30 transition-colors"
+                  title="Watch on YouTube"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                </a>
+                <button
+                  type="button"
+                  onClick={handleRemoveYoutube}
+                  disabled={youtubeSaving}
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-piu-border/50 bg-piu-dark/60 hover:border-red-400/40 hover:text-red-400 text-gray-500 transition-colors"
+                  title="Remove YouTube link"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setShowYoutubeInput(true); setYoutubeInputValue(''); }}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-piu-border/50 bg-piu-dark/60 hover:border-red-400/40 hover:text-red-400 text-gray-500 transition-colors"
+                title="Add YouTube link"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+              </button>
+            )
+          )}
+        </div>
       </section>
+
+      {showYoutubeInput && (
+        <section className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-3">
+          <p className="text-[11px] font-display font-bold text-gray-400 mb-2">YouTube Link</p>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={youtubeInputValue}
+              onChange={(e) => setYoutubeInputValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveYoutube(); if (e.key === 'Escape') setShowYoutubeInput(false); }}
+              placeholder="https://youtube.com/watch?v=..."
+              className="flex-1 min-w-0 bg-black/40 border border-piu-border rounded-lg text-sm py-1.5 px-3 text-gray-200 focus:outline-none focus:border-red-400/50"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={handleSaveYoutube}
+              disabled={!youtubeInputValue.trim() || youtubeSaving}
+              className="px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-400/40 text-red-300 text-xs font-display font-bold hover:bg-red-500/30 disabled:opacity-40 transition-colors"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowYoutubeInput(false)}
+              className="px-2 py-1.5 text-gray-500 hover:text-white text-xs transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="flex items-center justify-between mb-2">
@@ -668,25 +776,40 @@ export default function SongChartPage() {
                       <p className="text-[10px] text-gray-500 truncate">{entry.best.date_played || 'Unknown date'}</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    {hasJudgments(entry.best) ? (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedFriendRecord({
-                          ...entry.best,
-                          username: entry.user.username,
-                        })}
-                        className={`text-sm font-display font-bold ${entry.best.is_stage_break ? 'text-red-400' : 'text-white'} hover:text-piu-accent transition-colors`}
-                        title="View judgment details"
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      {hasJudgments(entry.best) ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFriendRecord({
+                            ...entry.best,
+                            username: entry.user.username,
+                          })}
+                          className={`text-sm font-display font-bold ${entry.best.is_stage_break ? 'text-red-400' : 'text-white'} hover:text-piu-accent transition-colors`}
+                          title="View judgment details"
+                        >
+                          {entry.best.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.best.score)}
+                        </button>
+                      ) : (
+                        <p className={`text-sm font-display font-bold ${entry.best.is_stage_break ? 'text-red-400' : 'text-white'}`}>
+                          {entry.best.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.best.score)}
+                        </p>
+                      )}
+                      <p className={`text-xs font-display font-bold ${getGradeColor(grade, entry.best.score)}`}>{grade}</p>
+                    </div>
+                    {entry.youtube_url && (
+                      <a
+                        href={entry.youtube_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-red-400/30 bg-red-500/10 hover:bg-red-500/25 transition-colors"
+                        title="Watch on YouTube"
                       >
-                        {entry.best.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.best.score)}
-                      </button>
-                    ) : (
-                      <p className={`text-sm font-display font-bold ${entry.best.is_stage_break ? 'text-red-400' : 'text-white'}`}>
-                        {entry.best.is_stage_break ? 'STAGE BREAK' : formatNumber(entry.best.score)}
-                      </p>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                        </svg>
+                      </a>
                     )}
-                    <p className={`text-xs font-display font-bold ${getGradeColor(grade, entry.best.score)}`}>{grade}</p>
                   </div>
                 </div>
               );
