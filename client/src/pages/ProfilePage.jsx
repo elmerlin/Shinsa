@@ -1560,6 +1560,7 @@ export default function ProfilePage() {
   const pumbilityAvgLevel = pumbilityTopScores.length > 0
     ? Math.round((pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.level, 10) || 0), 0) / pumbilityTopScores.length) * 10) / 10
     : 0;
+  const hasGroupBadges = Array.isArray(profile.group_badges) && profile.group_badges.length > 0;
   const hasCompactPiuSummary = profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
 
   return (
@@ -1594,28 +1595,6 @@ export default function ProfilePage() {
                 <span className="text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
             </div>
-            {Array.isArray(profile.group_badges) && profile.group_badges.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                {profile.group_badges.map((badge) => (
-                  <button
-                    key={`${badge.id || badge.name}-${badge.group_id || ''}`}
-                    type="button"
-                    className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-md border border-piu-border/60 bg-piu-dark/55 hover:border-piu-accent/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-accent/70"
-                    title={badge.description || badge.name || 'Group Badge'}
-                    aria-label={badge.name || 'Group Badge'}
-                    onClick={() => setSelectedGroupBadge(badge)}
-                  >
-                    {badge.image ? (
-                      <img src={badge.image} alt={badge.name || 'Badge'} className="w-full h-full rounded-md object-contain p-0.5" />
-                    ) : (
-                      <span className="text-[11px] font-display font-bold text-gray-200">
-                        {String((badge.name || 'B')[0] || 'B').toUpperCase()}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
             {profile.playing_status && (
               <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
@@ -1732,44 +1711,54 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-          {hasCompactPiuSummary && (
+          {(hasCompactPiuSummary || hasGroupBadges) && (
             <div className="shrink-0 self-start w-[140px] sm:w-[220px]">
-              <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-1.5 sm:px-3 sm:py-2 flex flex-col gap-0.5 sm:gap-1">
-                {profile.pumbility > 0 && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] sm:text-[11px] text-gray-400 font-display">Pumbility</span>
-                    <span className="text-[11px] sm:text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
+              {hasCompactPiuSummary && (
+                <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-1.5 sm:px-3 sm:py-2 flex flex-col gap-0.5 sm:gap-1">
+                  {profile.pumbility > 0 && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] sm:text-[11px] text-gray-400 font-display">Pumbility</span>
+                      <span className="text-[11px] sm:text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
+                    </div>
+                  )}
+                  {(piuStatus?.highest_single || piuStatus?.highest_double) && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[9px] sm:text-[11px] text-gray-400 font-display">Best Clears</span>
+                      <span className="text-[11px] sm:text-sm font-mono font-bold">
+                        {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
+                        {piuStatus.highest_single && piuStatus.highest_double && <span className="text-gray-500 mx-0.5 sm:mx-1">/</span>}
+                        {piuStatus.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {hasGroupBadges && (
+                <div className={`${hasCompactPiuSummary ? 'mt-2' : ''} rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-2 sm:px-3 sm:py-2.5`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {profile.group_badges.map((badge) => (
+                      <button
+                        key={`${badge.id || badge.name}-${badge.group_id || ''}`}
+                        type="button"
+                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-piu-border/60 bg-piu-dark/55 hover:border-piu-accent/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-accent/70"
+                        title={badge.description || badge.name || 'Group Badge'}
+                        aria-label={badge.name || 'Group Badge'}
+                        onClick={() => setSelectedGroupBadge(badge)}
+                      >
+                        {badge.image ? (
+                          <img src={badge.image} alt={badge.name || 'Badge'} className="w-full h-full rounded-md object-contain p-0.5" />
+                        ) : (
+                          <span className="text-[11px] font-display font-bold text-gray-200">
+                            {String((badge.name || 'B')[0] || 'B').toUpperCase()}
+                          </span>
+                        )}
+                      </button>
+                    ))}
                   </div>
-                )}
-                {(piuStatus?.highest_single || piuStatus?.highest_double) && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] sm:text-[11px] text-gray-400 font-display">Best Clears</span>
-                    <span className="text-[11px] sm:text-sm font-mono font-bold">
-                      {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
-                      {piuStatus.highest_single && piuStatus.highest_double && <span className="text-gray-500 mx-0.5 sm:mx-1">/</span>}
-                      {piuStatus.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
-                    </span>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-
-        {/* Tabs */}
-        <div className={`mt-2 sm:mt-3 flex gap-1.5 flex-wrap ${hasCompactPiuSummary ? 'justify-end' : 'justify-start'}`}>
-          {tabs.map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-display font-bold transition-colors ${
-                tab === t
-                  ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
-              }`}
-            >
-              {tabLabels[t]}
-            </button>
-          ))}
         </div>
 
         {/* Stats integrated into profile card */}
@@ -1802,6 +1791,22 @@ export default function ProfilePage() {
             <p className="text-[10px] text-gray-500 font-display">Competitions</p>
           </div>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1.5 mb-3 flex-wrap">
+        {tabs.map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+              tab === t
+                ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+            }`}
+          >
+            {tabLabels[t]}
+          </button>
+        ))}
       </div>
 
       {/* Syncing indicator */}
