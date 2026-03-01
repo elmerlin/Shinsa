@@ -1067,6 +1067,15 @@ function initializeDb() {
 
     CREATE INDEX IF NOT EXISTS idx_user_lists_user ON user_lists(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_list_items_list ON user_list_items(list_id);
+
+    CREATE TABLE IF NOT EXISTS user_chart_youtube_links (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      chart_id INTEGER NOT NULL,
+      youtube_url TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, chart_id)
+    );
   `);
 
   // Migrations for players table - add user_id

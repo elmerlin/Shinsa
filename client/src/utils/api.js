@@ -107,6 +107,10 @@ export const getSongChartHistory = (chartId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/chart/${chartId}/history${qs ? `?${qs}` : ''}`);
 };
+export const setChartYoutubeLink = (chartId, youtubeUrl) =>
+  request(`/songs/chart/${chartId}/youtube`, { method: 'PUT', body: JSON.stringify({ youtube_url: youtubeUrl }) });
+export const removeChartYoutubeLink = (chartId) =>
+  request(`/songs/chart/${chartId}/youtube`, { method: 'DELETE' });
 export const getSongAnalytics = (userId) => request(`/songs/analytics/user/${userId}`);
 export const getGradeGoals = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
