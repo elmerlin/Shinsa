@@ -3,7 +3,8 @@ import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext';
 import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
-import { searchUsers } from './utils/api';
+import MarkdownContent from './components/MarkdownContent';
+import { searchUsers, consumeGroupPopup } from './utils/api';
 import { getProfilePath } from './utils/profile';
 import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
@@ -265,6 +266,7 @@ function UserMenu() {
   if (!user) return null;
   const myProfilePath = getProfilePath(user.id, user.username);
   const canAccessOptimise = !!(user?.is_admin || user?.feature_access?.optimise);
+  const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin);
   const canAccessAdmin = !!user?.is_admin;
 
   return (
@@ -406,17 +408,19 @@ function UserMenu() {
             </svg>
             Fun
           </Link>
-          <Link
-            to="/checkin"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Check In
-          </Link>
+          {canAccessCheckin && (
+            <Link
+              to="/checkin"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Check In
+            </Link>
+          )}
           <Link
             to="/changelog"
             onClick={() => setOpen(false)}
@@ -469,13 +473,127 @@ function UserMenu() {
   );
 }
 
+function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
+  if (!popup) return null;
+  const slides = Array.isArray(popup.slides) ? popup.slides : [];
+  if (slides.length === 0) return null;
+
+  const safeIndex = Math.max(0, Math.min(slides.length - 1, slideIndex || 0));
+  const slide = slides[safeIndex] || {};
+
+  return (
+    <div className="fixed inset-0 z-[95] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-piu-border bg-[#0b1324] shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Announcement</p>
+            <h3 className="text-base font-display font-bold text-piu-accent truncate">
+              {popup.title || 'Group Update'}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-400 font-display">
+              Slide {safeIndex + 1} of {slides.length}
+            </p>
+            <div className="h-1.5 w-28 rounded-full bg-piu-dark/70 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-piu-accent to-pink-500"
+                style={{ width: `${((safeIndex + 1) / slides.length) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {slide.title ? (
+            <h4 className="text-lg font-display font-bold text-white">{slide.title}</h4>
+          ) : null}
+
+          <div className="rounded-xl border border-piu-border/40 bg-piu-dark/30 p-3 max-h-[50vh] overflow-y-auto">
+            {slide.content ? (
+              <MarkdownContent text={slide.content} />
+            ) : (
+              <p className="text-sm text-gray-500">No content on this slide.</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              className="btn-secondary text-sm"
+              onClick={() => onSlideChange(Math.max(0, safeIndex - 1))}
+              disabled={safeIndex <= 0}
+            >
+              Previous
+            </button>
+            {safeIndex < slides.length - 1 ? (
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                onClick={() => onSlideChange(Math.min(slides.length - 1, safeIndex + 1))}
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary text-sm"
+                onClick={onClose}
+              >
+                Done
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const location = useLocation();
   const { user } = useAuth();
+  const [groupPopup, setGroupPopup] = useState(null);
+  const [groupPopupSlide, setGroupPopupSlide] = useState(0);
+  const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    if (!user?.id) {
+      consumedPopupUserRef.current = '';
+      setGroupPopup(null);
+      setGroupPopupSlide(0);
+      return;
+    }
+    if (consumedPopupUserRef.current === user.id) return;
+    consumedPopupUserRef.current = user.id;
+    consumeGroupPopup()
+      .then((payload) => {
+        const popup = payload?.popup || null;
+        if (!popup || !Array.isArray(popup.slides) || popup.slides.length === 0) {
+          setGroupPopup(null);
+          setGroupPopupSlide(0);
+          return;
+        }
+        setGroupPopup(popup);
+        setGroupPopupSlide(0);
+      })
+      .catch(() => {
+        setGroupPopup(null);
+        setGroupPopupSlide(0);
+      });
+  }, [user?.id]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -594,6 +712,18 @@ export default function App() {
           <Route path="/checkin" element={<CheckinPage />} />
         </Routes>
       </main>
+
+      {groupPopup && (
+        <GroupLoginPopupModal
+          popup={groupPopup}
+          slideIndex={groupPopupSlide}
+          onSlideChange={setGroupPopupSlide}
+          onClose={() => {
+            setGroupPopup(null);
+            setGroupPopupSlide(0);
+          }}
+        />
+      )}
 
       {/* Footer — hidden on mobile when logged in (bottom nav takes its place) */}
       <footer className={`border-t border-piu-border py-3 sm:py-4 text-center text-xs text-gray-600 ${user ? 'hidden sm:block' : ''}`}>

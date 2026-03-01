@@ -192,6 +192,100 @@ export const grantAdminFeatureUser = (featureKey, userId) => request(`/auth/admi
 export const revokeAdminFeatureUser = (featureKey, userId) => request(`/auth/admin/features/${encodeURIComponent(featureKey)}/users/${encodeURIComponent(userId)}`, {
   method: 'DELETE',
 });
+export const getAdminGroups = () => request('/auth/admin/groups');
+export const createAdminGroup = (data) => request('/auth/admin/groups', { method: 'POST', body: JSON.stringify(data) });
+export const updateAdminGroup = (groupId, data) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}`, {
+  method: 'PUT',
+  body: JSON.stringify(data),
+});
+export const deleteAdminGroup = (groupId) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' });
+export const getAdminGroupMembers = (groupId) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}/members`);
+export const addAdminGroupMember = (groupId, userId) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}/members`, {
+  method: 'POST',
+  body: JSON.stringify({ user_id: userId }),
+});
+export const removeAdminGroupMember = (groupId, userId) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}`, {
+  method: 'DELETE',
+});
+export const moveAdminGroupMember = (groupId, userId, targetGroupId) => request(
+  `/auth/admin/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}/move`,
+  {
+    method: 'POST',
+    body: JSON.stringify({ target_group_id: targetGroupId }),
+  }
+);
+export const getAdminGroupPermissions = (groupId) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}/permissions`);
+export const setAdminGroupPermission = (groupId, featureKey, enabled) => request(
+  `/auth/admin/groups/${encodeURIComponent(groupId)}/permissions/${encodeURIComponent(featureKey)}`,
+  {
+    method: 'PUT',
+    body: JSON.stringify({ enabled: !!enabled }),
+  }
+);
+export const notifyAdminGroup = (groupId, data) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}/notify`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const pushAdminGroupPopup = (groupId, data) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}/popup`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const getAdminGroupBadges = (groupId) => request(`/auth/admin/groups/${encodeURIComponent(groupId)}/badges`);
+export async function createAdminGroupBadge(groupId, { name, description, imageFile }) {
+  const formData = new FormData();
+  formData.append('name', String(name || '').trim());
+  formData.append('description', String(description || '').trim());
+  if (imageFile) formData.append('image', imageFile);
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/auth/admin/groups/${encodeURIComponent(groupId)}/badges`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to create group badge');
+  }
+  return res.json();
+}
+export async function updateAdminGroupBadge(groupId, badgeId, { name, description, imageFile }) {
+  const formData = new FormData();
+  if (name !== undefined) formData.append('name', String(name || '').trim());
+  if (description !== undefined) formData.append('description', String(description || '').trim());
+  if (imageFile) formData.append('image', imageFile);
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/auth/admin/groups/${encodeURIComponent(groupId)}/badges/${encodeURIComponent(badgeId)}`, {
+    method: 'PUT',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to update group badge');
+  }
+  return res.json();
+}
+export const deleteAdminGroupBadge = (groupId, badgeId) => request(
+  `/auth/admin/groups/${encodeURIComponent(groupId)}/badges/${encodeURIComponent(badgeId)}`,
+  { method: 'DELETE' }
+);
+export const assignAdminGroupBadgeToAll = (groupId, badgeId) => request(
+  `/auth/admin/groups/${encodeURIComponent(groupId)}/badges/${encodeURIComponent(badgeId)}/assign-all`,
+  { method: 'POST' }
+);
+export const removeAdminGroupBadgeFromAll = (groupId, badgeId) => request(
+  `/auth/admin/groups/${encodeURIComponent(groupId)}/badges/${encodeURIComponent(badgeId)}/assign-all`,
+  { method: 'DELETE' }
+);
+export const assignAdminGroupBadgeToUser = (groupId, badgeId, userId) => request(
+  `/auth/admin/groups/${encodeURIComponent(groupId)}/badges/${encodeURIComponent(badgeId)}/assign/${encodeURIComponent(userId)}`,
+  { method: 'POST' }
+);
+export const removeAdminGroupBadgeFromUser = (groupId, badgeId, userId) => request(
+  `/auth/admin/groups/${encodeURIComponent(groupId)}/badges/${encodeURIComponent(badgeId)}/assign/${encodeURIComponent(userId)}`,
+  { method: 'DELETE' }
+);
+export const consumeGroupPopup = () => request('/auth/group-popups/consume', { method: 'POST' });
 
 // Fun mini-game
 export const getFunLeaderboard = (limit = 10) => request(`/fun/leaderboard?limit=${encodeURIComponent(limit)}`);

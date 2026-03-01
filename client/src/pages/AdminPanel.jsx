@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import MarkdownContent from '../components/MarkdownContent';
+import AdminGroupsTab from '../components/AdminGroupsTab';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
@@ -35,7 +36,10 @@ export default function AdminPanel() {
   const [funSaving, setFunSaving] = useState(false);
   const [funError, setFunError] = useState('');
   const [funSuccess, setFunSuccess] = useState('');
-  const [features, setFeatures] = useState([{ key: 'optimise', label: 'Optimise' }]);
+  const [features, setFeatures] = useState([
+    { key: 'optimise', label: 'Optimise' },
+    { key: 'checkin', label: 'Check In' },
+  ]);
   const [selectedFeature, setSelectedFeature] = useState('optimise');
   const [permissionUsers, setPermissionUsers] = useState([]);
   const [permissionLoading, setPermissionLoading] = useState(false);
@@ -131,7 +135,10 @@ export default function AdminPanel() {
         if (cancelled) return;
         const nextFeatures = Array.isArray(featurePayload?.features) && featurePayload.features.length > 0
           ? featurePayload.features
-          : [{ key: 'optimise', label: 'Optimise' }];
+          : [
+            { key: 'optimise', label: 'Optimise' },
+            { key: 'checkin', label: 'Check In' },
+          ];
         setFeatures(nextFeatures);
         if (!nextFeatures.some((item) => item.key === selectedFeature)) {
           setSelectedFeature(nextFeatures[0].key);
@@ -584,7 +591,7 @@ export default function AdminPanel() {
 
       {/* Tabs */}
       <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-6">
-        {['tournaments', 'archived', 'notices', 'changelog', 'shoes', 'permissions', 'fun'].map(t => (
+        {['tournaments', 'archived', 'notices', 'changelog', 'shoes', 'permissions', 'groups', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -599,6 +606,7 @@ export default function AdminPanel() {
                t === 'changelog' ? `Changelog (${changelogEntries.length})` :
                t === 'shoes' ? `Shoes (${shoeCatalogTotal})` :
                t === 'permissions' ? 'Permissions' :
+               t === 'groups' ? 'Groups' :
                'Fun Settings'}
             </span>
           </button>
@@ -1342,6 +1350,11 @@ export default function AdminPanel() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Groups Tab */}
+      {tab === 'groups' && (
+        <AdminGroupsTab />
       )}
 
       {/* Fun Settings Tab */}

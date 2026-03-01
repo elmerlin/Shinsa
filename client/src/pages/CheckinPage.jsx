@@ -313,6 +313,7 @@ function QRCheckinHandler({ venues, onCheckin }) {
 // ─── Main Page ────────────────────────────────────────────────────────
 export default function CheckinPage() {
   const { user } = useAuth();
+  const hasCheckinAccess = !!(user?.is_admin || user?.feature_access?.checkin);
   const [venues, setVenues] = useState([]);
   const [activeCheckins, setActiveCheckins] = useState([]);
   const [myStatus, setMyStatus] = useState(null);
@@ -324,6 +325,13 @@ export default function CheckinPage() {
   const [error, setError] = useState('');
 
   const loadData = useCallback(async () => {
+    if (!user || !hasCheckinAccess) {
+      setVenues([]);
+      setActiveCheckins([]);
+      setMyStatus(null);
+      setLoading(false);
+      return;
+    }
     try {
       const venueData = await getVenues();
       setVenues(venueData);
@@ -334,17 +342,19 @@ export default function CheckinPage() {
         setActiveCheckins(active.activeCheckins || []);
       }
 
-      if (user) {
-        const status = await getMyCheckinStatus();
-        setMyStatus(status);
-      }
+      const status = await getMyCheckinStatus();
+      setMyStatus(status);
     } catch (e) {
       setError(e.message);
     }
     setLoading(false);
-  }, [user]);
+  }, [hasCheckinAccess, user]);
 
   useEffect(() => {
+    if (!user || !hasCheckinAccess) {
+      setLoading(false);
+      return undefined;
+    }
     loadData();
     // Poll for updates every 15 seconds
     const interval = setInterval(async () => {
@@ -353,14 +363,35 @@ export default function CheckinPage() {
           const active = await getActiveCheckins(venues[0].slug);
           setActiveCheckins(active.activeCheckins || []);
         }
-        if (user) {
-          const status = await getMyCheckinStatus();
-          setMyStatus(status);
-        }
+        const status = await getMyCheckinStatus();
+        setMyStatus(status);
       } catch { /* ignore */ }
     }, 15000);
     return () => clearInterval(interval);
-  }, [loadData, venues.length > 0 ? venues[0]?.slug : '']);
+  }, [hasCheckinAccess, loadData, user, venues.length > 0 ? venues[0]?.slug : '']);
+
+  if (!user) {
+    return (
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-8">
+        <div className="card text-center">
+          <h1 className="text-xl font-display font-bold">Check In</h1>
+          <p className="text-sm text-gray-400 mt-2">Login required.</p>
+          <Link to="/login" className="inline-flex mt-4 btn-primary">Login</Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasCheckinAccess) {
+    return (
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-8">
+        <div className="card text-center">
+          <h1 className="text-xl font-display font-bold">Check In</h1>
+          <p className="text-sm text-red-300 mt-2">Check In access has not been granted for your account.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleSelectMachine = (machine) => {
     if (!user) return;

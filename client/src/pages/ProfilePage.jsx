@@ -1591,6 +1591,22 @@ export default function ProfilePage() {
                 <span className="text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
             </div>
+            {Array.isArray(profile.group_badges) && profile.group_badges.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                {profile.group_badges.map((badge) => (
+                  <span
+                    key={`${badge.id || badge.name}-${badge.group_id || ''}`}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-piu-border/60 bg-piu-dark/55 px-1.5 py-1"
+                    title={badge.description || badge.name || 'Group Badge'}
+                  >
+                    {badge.image ? (
+                      <img src={badge.image} alt={badge.name || 'Badge'} className="w-4 h-4 rounded-sm object-contain" />
+                    ) : null}
+                    <span className="text-[10px] font-display font-bold text-gray-200">{badge.name || 'Badge'}</span>
+                  </span>
+                ))}
+              </div>
+            )}
             {profile.playing_status && (
               <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />

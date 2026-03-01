@@ -670,6 +670,86 @@ function initializeDb() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS admin_user_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT DEFAULT '',
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_members (
+      group_id TEXT NOT NULL REFERENCES admin_user_groups(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      added_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (group_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_feature_permissions (
+      group_id TEXT NOT NULL REFERENCES admin_user_groups(id) ON DELETE CASCADE,
+      feature_key TEXT NOT NULL,
+      granted_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (group_id, feature_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_badges (
+      id TEXT PRIMARY KEY,
+      group_id TEXT NOT NULL REFERENCES admin_user_groups(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      image_data TEXT NOT NULL DEFAULT '',
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_badge_assignments (
+      badge_id TEXT NOT NULL REFERENCES admin_user_group_badges(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      assigned_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (badge_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_badge_group_assignments (
+      badge_id TEXT NOT NULL REFERENCES admin_user_group_badges(id) ON DELETE CASCADE,
+      group_id TEXT NOT NULL REFERENCES admin_user_groups(id) ON DELETE CASCADE,
+      assigned_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (badge_id, group_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_popups (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL DEFAULT '',
+      slides_json TEXT NOT NULL DEFAULT '[]',
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_popup_targets (
+      popup_id TEXT NOT NULL REFERENCES admin_user_group_popups(id) ON DELETE CASCADE,
+      group_id TEXT NOT NULL REFERENCES admin_user_groups(id) ON DELETE CASCADE,
+      PRIMARY KEY (popup_id, group_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_popup_recipients (
+      popup_id TEXT NOT NULL REFERENCES admin_user_group_popups(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (popup_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS admin_user_group_popup_seen (
+      popup_id TEXT NOT NULL REFERENCES admin_user_group_popups(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seen_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (popup_id, user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS invitations (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -768,6 +848,16 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_songs_mode ON songs(mode);
     CREATE INDEX IF NOT EXISTS idx_user_feature_permissions_feature ON user_feature_permissions(feature_key, user_id);
     CREATE INDEX IF NOT EXISTS idx_user_feature_permissions_user ON user_feature_permissions(user_id, feature_key);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_groups_name ON admin_user_groups(name);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_members_user ON admin_user_group_members(user_id, group_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_members_group ON admin_user_group_members(group_id, user_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_feature_permissions_group ON admin_user_group_feature_permissions(group_id, feature_key);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_badges_group ON admin_user_group_badges(group_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_badge_assignments_user ON admin_user_group_badge_assignments(user_id, badge_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_badge_group_assignments_group ON admin_user_group_badge_group_assignments(group_id, badge_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_popup_targets_group ON admin_user_group_popup_targets(group_id, popup_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_popup_recipients_user ON admin_user_group_popup_recipients(user_id, popup_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_user_group_popup_seen_user ON admin_user_group_popup_seen(user_id, popup_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_chart_tiers_unique_chart
       ON chart_tiers(tier_list_type, mode, level, chart_id);
     CREATE INDEX IF NOT EXISTS idx_chart_tiers_mode_level_rank
