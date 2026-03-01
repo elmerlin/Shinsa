@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
-const { requireAuth, optionalAuth } = require('./auth');
+const { requireAuth, hasFeatureAccess } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 function normalizeCheckinUser(row, size = 48) {
@@ -13,8 +13,16 @@ function normalizeCheckinUser(row, size = 48) {
   };
 }
 
+function requireCheckinFeature(req, res, next) {
+  const db = getDb();
+  if (!hasFeatureAccess(db, req.user, 'checkin')) {
+    return res.status(403).json({ error: 'Check In access not granted' });
+  }
+  return next();
+}
+
 // GET /api/checkins/venues — list all venues with their machines
-router.get('/venues', (req, res) => {
+router.get('/venues', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const venues = db.prepare('SELECT * FROM venues ORDER BY name').all();
   const machines = db.prepare('SELECT * FROM venue_machines ORDER BY sort_order, name').all();
@@ -27,7 +35,7 @@ router.get('/venues', (req, res) => {
 });
 
 // GET /api/checkins/venue/:slug — single venue with machines and active checkins
-router.get('/venue/:slug', (req, res) => {
+router.get('/venue/:slug', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const venue = db.prepare('SELECT * FROM venues WHERE slug = ?').get(req.params.slug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
@@ -52,7 +60,7 @@ router.get('/venue/:slug', (req, res) => {
 });
 
 // POST /api/checkins/checkin — check in to a machine
-router.post('/checkin', requireAuth, (req, res) => {
+router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const { venue_id, machine_id } = req.body;
   const userId = req.user.id;
@@ -85,7 +93,7 @@ router.post('/checkin', requireAuth, (req, res) => {
 });
 
 // POST /api/checkins/checkout — check out (clear status)
-router.post('/checkout', requireAuth, (req, res) => {
+router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const userId = req.user.id;
 
@@ -99,7 +107,7 @@ router.post('/checkout', requireAuth, (req, res) => {
 });
 
 // GET /api/checkins/my-status — get current user's checkin status
-router.get('/my-status', requireAuth, (req, res) => {
+router.get('/my-status', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const active = db.prepare(`
     SELECT c.id, c.venue_id, c.machine_id, c.checked_in_at,
@@ -121,7 +129,7 @@ router.get('/my-status', requireAuth, (req, res) => {
 });
 
 // GET /api/checkins/active/:venueSlug — get active checkins for a venue (live status)
-router.get('/active/:venueSlug', (req, res) => {
+router.get('/active/:venueSlug', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const venue = db.prepare('SELECT * FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
@@ -146,7 +154,7 @@ router.get('/active/:venueSlug', (req, res) => {
 });
 
 // GET /api/checkins/history — current user's checkin history with stats
-router.get('/history', requireAuth, (req, res) => {
+router.get('/history', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const userId = req.user.id;
 
@@ -216,7 +224,7 @@ router.get('/history', requireAuth, (req, res) => {
 });
 
 // GET /api/checkins/user/:userId/history — view another user's checkin history
-router.get('/user/:userId/history', (req, res) => {
+router.get('/user/:userId/history', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const userId = req.params.userId;
 
@@ -287,7 +295,7 @@ router.get('/user/:userId/history', (req, res) => {
 });
 
 // PUT /api/checkins/playing-status — manually set playing status
-router.put('/playing-status', requireAuth, (req, res) => {
+router.put('/playing-status', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const status = String(req.body.status || '').trim().slice(0, 100);
   db.prepare("UPDATE users SET playing_status = ? WHERE id = ?").run(status, req.user.id);
@@ -295,7 +303,7 @@ router.put('/playing-status', requireAuth, (req, res) => {
 });
 
 // DELETE /api/checkins/playing-status — clear playing status
-router.delete('/playing-status', requireAuth, (req, res) => {
+router.delete('/playing-status', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   db.prepare("UPDATE users SET playing_status = '' WHERE id = ?").run(req.user.id);
   res.json({ playing_status: '' });

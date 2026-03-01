@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
+const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sharp = require('sharp');
@@ -24,8 +25,16 @@ const ADMIN_USER_IDS = new Set(
     .map((value) => value.trim())
     .filter(Boolean)
 );
-const FEATURE_KEYS = ['optimise'];
+const FEATURE_KEYS = ['optimise', 'checkin'];
 const FEATURE_KEY_SET = new Set(FEATURE_KEYS);
+const GROUP_BADGE_UPLOAD = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 6 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/x-png', 'image/heic', 'image/heif', 'image/avif'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 function textSnippet(text, max = 90) {
   const compact = String(text || '').replace(/\s+/g, ' ').trim();
@@ -41,22 +50,111 @@ function normalizeClientUser(user, avatarSize = 96) {
   };
 }
 
-function makePublicUser(user) {
+function normalizeGroupName(value, max = 80) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function normalizeGroupText(value, max = 300) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function normalizePopupSlides(rawSlides) {
+  const rows = Array.isArray(rawSlides) ? rawSlides : [];
+  const slides = [];
+  for (const raw of rows) {
+    const title = String(raw?.title || '').trim().slice(0, 120);
+    const content = String(raw?.content || '').trim().slice(0, 4000);
+    if (!title && !content) continue;
+    slides.push({ title, content });
+    if (slides.length >= 20) break;
+  }
+  return slides;
+}
+
+async function compressGroupBadgeImage(buffer) {
+  let result = await sharp(buffer)
+    .rotate()
+    .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 64 })
+    .toBuffer();
+  if (result.length > 120 * 1024) {
+    result = await sharp(buffer)
+      .rotate()
+      .resize(220, 220, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 50 })
+      .toBuffer();
+  }
+  return `data:image/webp;base64,${result.toString('base64')}`;
+}
+
+function getUserGroupBadges(db, userId) {
+  if (!db || !userId) return [];
+  const rows = db.prepare(`
+    SELECT DISTINCT
+      b.id,
+      b.group_id,
+      g.name AS group_name,
+      b.name,
+      b.description,
+      b.image_data
+    FROM admin_user_group_badges b
+    JOIN admin_user_groups g ON g.id = b.group_id
+    LEFT JOIN admin_user_group_badge_assignments ua
+      ON ua.badge_id = b.id
+      AND ua.user_id = ?
+    LEFT JOIN admin_user_group_badge_group_assignments ga
+      ON ga.badge_id = b.id
+    LEFT JOIN admin_user_group_members gm
+      ON gm.group_id = ga.group_id
+      AND gm.user_id = ?
+    WHERE ua.badge_id IS NOT NULL OR gm.group_id IS NOT NULL
+    ORDER BY b.created_at ASC, b.name COLLATE NOCASE ASC
+  `).all(userId, userId);
+
+  return rows.map((row) => ({
+    id: row.id,
+    group_id: row.group_id,
+    group_name: row.group_name || '',
+    name: row.name || '',
+    description: row.description || '',
+    image: row.image_data || '',
+  }));
+}
+
+function makePublicUser(db, user) {
   if (!user) return null;
   const normalized = normalizeClientUser(user, 128);
+  const groupBadges = getUserGroupBadges(db, normalized.id);
+  const withBadges = {
+    ...normalized,
+    group_badges: groupBadges,
+  };
   if (!normalized.show_age) {
-    return { ...normalized, date_of_birth: '' };
+    return { ...withBadges, date_of_birth: '' };
   }
-  return normalized;
+  return withBadges;
 }
 
 function normalizeFeatureKey(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function parseBooleanInput(value) {
+  if (value === true || value === 1 || value === '1' || value === 'true') return true;
+  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
+
+function featureLabelFromKey(key) {
+  if (key === 'optimise') return 'Optimise';
+  if (key === 'checkin') return 'Check In';
+  return key;
+}
+
 function defaultFeatureAccess() {
   return {
     optimise: false,
+    checkin: false,
   };
 }
 
@@ -86,13 +184,29 @@ function getFeatureAccessByUserId(db, userId, isAdmin) {
     SELECT feature_key
     FROM user_feature_permissions
     WHERE user_id = ?
-  `).all(userId);
+    UNION ALL
+    SELECT gfp.feature_key
+    FROM admin_user_group_feature_permissions gfp
+    JOIN admin_user_group_members gm ON gm.group_id = gfp.group_id
+    WHERE gm.user_id = ?
+  `).all(userId, userId);
   for (const row of rows) {
     const featureKey = normalizeFeatureKey(row?.feature_key);
     if (!FEATURE_KEY_SET.has(featureKey)) continue;
     access[featureKey] = true;
   }
   return access;
+}
+
+function hasFeatureAccess(db, user, featureKey) {
+  if (!db || !user) return false;
+  const normalized = normalizeFeatureKey(featureKey);
+  if (!FEATURE_KEY_SET.has(normalized)) return false;
+  if (isAdminUser(db, user)) return true;
+  const userId = String(user.id || '').trim();
+  if (!userId) return false;
+  const access = getFeatureAccessByUserId(db, userId, false);
+  return !!access[normalized];
 }
 
 function toClientAuthUser(db, user, avatarSize = 96) {
@@ -104,6 +218,7 @@ function toClientAuthUser(db, user, avatarSize = 96) {
     ...normalized,
     is_admin: !!admin,
     feature_access: getFeatureAccessByUserId(db, user.id, admin),
+    group_badges: getUserGroupBadges(db, user.id),
   };
 }
 
@@ -230,7 +345,7 @@ router.get('/me', requireAuth, (req, res) => {
 router.get('/admin/features', requireAuth, requireAdmin, (req, res) => {
   const features = FEATURE_KEYS.map((key) => ({
     key,
-    label: key === 'optimise' ? 'Optimise' : key,
+    label: featureLabelFromKey(key),
   }));
   res.json({ features });
 });
@@ -335,6 +450,762 @@ router.delete('/admin/features/:featureKey/users/:userId', requireAuth, requireA
     feature_key: featureKey,
     user_id: userId,
     removed: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+function getAdminGroupById(db, groupId) {
+  if (!db || !groupId) return null;
+  return db.prepare(`
+    SELECT
+      g.id,
+      g.name,
+      g.description,
+      g.created_by,
+      g.created_at,
+      g.updated_at,
+      (SELECT COUNT(*) FROM admin_user_group_members gm WHERE gm.group_id = g.id) AS member_count,
+      (SELECT COUNT(*) FROM admin_user_group_badges b WHERE b.group_id = g.id) AS badge_count
+    FROM admin_user_groups g
+    WHERE g.id = ?
+  `).get(groupId);
+}
+
+function getAdminGroupPermissionKeys(db, groupId) {
+  if (!db || !groupId) return [];
+  return db.prepare(`
+    SELECT feature_key
+    FROM admin_user_group_feature_permissions
+    WHERE group_id = ?
+    ORDER BY feature_key ASC
+  `).all(groupId)
+    .map((row) => normalizeFeatureKey(row?.feature_key))
+    .filter((key) => FEATURE_KEY_SET.has(key));
+}
+
+function getAdminGroupBadges(db, groupId) {
+  if (!db || !groupId) return [];
+  const badges = db.prepare(`
+    SELECT id, group_id, name, description, image_data, created_at, updated_at
+    FROM admin_user_group_badges
+    WHERE group_id = ?
+    ORDER BY datetime(created_at) ASC, name COLLATE NOCASE ASC
+  `).all(groupId);
+  if (!badges.length) return [];
+
+  const badgeIds = badges.map((badge) => badge.id);
+  const badgePlaceholders = badgeIds.map(() => '?').join(',');
+  const groupAssignments = db.prepare(`
+    SELECT badge_id
+    FROM admin_user_group_badge_group_assignments
+    WHERE group_id = ? AND badge_id IN (${badgePlaceholders})
+  `).all(groupId, ...badgeIds);
+  const groupAssignedSet = new Set(groupAssignments.map((row) => row.badge_id));
+
+  const individualAssignments = db.prepare(`
+    SELECT badge_id, user_id
+    FROM admin_user_group_badge_assignments
+    WHERE badge_id IN (${badgePlaceholders})
+  `).all(...badgeIds);
+  const userMap = new Map();
+  for (const row of individualAssignments) {
+    if (!userMap.has(row.badge_id)) userMap.set(row.badge_id, []);
+    userMap.get(row.badge_id).push(row.user_id);
+  }
+
+  return badges.map((badge) => ({
+    id: badge.id,
+    group_id: badge.group_id,
+    name: badge.name || '',
+    description: badge.description || '',
+    image: badge.image_data || '',
+    created_at: badge.created_at || '',
+    updated_at: badge.updated_at || '',
+    group_assigned: groupAssignedSet.has(badge.id),
+    assigned_user_ids: userMap.get(badge.id) || [],
+  }));
+}
+
+// GET /api/auth/admin/groups
+router.get('/admin/groups', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groups = db.prepare(`
+    SELECT
+      g.id,
+      g.name,
+      g.description,
+      g.created_by,
+      g.created_at,
+      g.updated_at,
+      (SELECT COUNT(*) FROM admin_user_group_members gm WHERE gm.group_id = g.id) AS member_count,
+      (SELECT COUNT(*) FROM admin_user_group_badges b WHERE b.group_id = g.id) AS badge_count
+    FROM admin_user_groups g
+    ORDER BY g.name COLLATE NOCASE ASC
+  `).all();
+
+  const permissions = db.prepare(`
+    SELECT group_id, feature_key
+    FROM admin_user_group_feature_permissions
+    ORDER BY feature_key ASC
+  `).all();
+  const permissionMap = new Map();
+  for (const row of permissions) {
+    const featureKey = normalizeFeatureKey(row?.feature_key);
+    if (!FEATURE_KEY_SET.has(featureKey)) continue;
+    if (!permissionMap.has(row.group_id)) permissionMap.set(row.group_id, []);
+    permissionMap.get(row.group_id).push(featureKey);
+  }
+
+  res.json({
+    groups: groups.map((group) => ({
+      ...group,
+      permission_keys: permissionMap.get(group.id) || [],
+    })),
+  });
+});
+
+// POST /api/auth/admin/groups
+router.post('/admin/groups', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const name = normalizeGroupName(req.body?.name, 80);
+  const description = normalizeGroupText(req.body?.description, 300);
+  if (name.length < 2) {
+    return res.status(400).json({ error: 'Group name must be at least 2 characters' });
+  }
+
+  const exists = db.prepare('SELECT id FROM admin_user_groups WHERE LOWER(name) = LOWER(?)').get(name);
+  if (exists) {
+    return res.status(400).json({ error: 'A group with this name already exists' });
+  }
+
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO admin_user_groups (id, name, description, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(id, name, description, String(req.user?.id || '').trim());
+
+  const group = getAdminGroupById(db, id);
+  res.status(201).json({
+    ...group,
+    permission_keys: [],
+  });
+});
+
+// PUT /api/auth/admin/groups/:groupId
+router.put('/admin/groups/:groupId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const existing = getAdminGroupById(db, groupId);
+  if (!existing) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  const nextName = req.body?.name !== undefined
+    ? normalizeGroupName(req.body?.name, 80)
+    : String(existing.name || '');
+  const nextDescription = req.body?.description !== undefined
+    ? normalizeGroupText(req.body?.description, 300)
+    : String(existing.description || '');
+
+  if (nextName.length < 2) {
+    return res.status(400).json({ error: 'Group name must be at least 2 characters' });
+  }
+  const duplicate = db.prepare(
+    'SELECT id FROM admin_user_groups WHERE LOWER(name) = LOWER(?) AND id != ?'
+  ).get(nextName, groupId);
+  if (duplicate) {
+    return res.status(400).json({ error: 'A group with this name already exists' });
+  }
+
+  db.prepare(`
+    UPDATE admin_user_groups
+    SET name = ?, description = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(nextName, nextDescription, groupId);
+
+  const group = getAdminGroupById(db, groupId);
+  res.json({
+    ...group,
+    permission_keys: getAdminGroupPermissionKeys(db, groupId),
+  });
+});
+
+// DELETE /api/auth/admin/groups/:groupId
+router.delete('/admin/groups/:groupId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const existing = getAdminGroupById(db, groupId);
+  if (!existing) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+  db.prepare('DELETE FROM admin_user_groups WHERE id = ?').run(groupId);
+  res.json({ success: true });
+});
+
+// GET /api/auth/admin/groups/:groupId/members
+router.get('/admin/groups/:groupId/members', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      u.id,
+      u.username,
+      u.avatar,
+      u.avatar_v,
+      u.pumbility,
+      u.skill_title,
+      u.is_admin,
+      gm.created_at AS joined_at
+    FROM admin_user_group_members gm
+    JOIN users u ON u.id = gm.user_id
+    WHERE gm.group_id = ?
+    ORDER BY u.username COLLATE NOCASE ASC
+  `).all(groupId);
+
+  const badgeAssignments = db.prepare(`
+    SELECT a.user_id, a.badge_id
+    FROM admin_user_group_badge_assignments a
+    JOIN admin_user_group_badges b ON b.id = a.badge_id
+    WHERE b.group_id = ?
+  `).all(groupId);
+  const userBadgeMap = new Map();
+  for (const row of badgeAssignments) {
+    if (!userBadgeMap.has(row.user_id)) userBadgeMap.set(row.user_id, []);
+    userBadgeMap.get(row.user_id).push(row.badge_id);
+  }
+
+  res.json({
+    group,
+    members: rows.map((row) => {
+      const normalized = normalizeClientUser({
+        id: row.id,
+        username: row.username,
+        avatar: row.avatar,
+        avatar_v: row.avatar_v,
+        pumbility: row.pumbility,
+        skill_title: row.skill_title,
+      }, 48);
+      return {
+        ...normalized,
+        is_admin: isAdminUser(db, row),
+        joined_at: row.joined_at || null,
+        badge_ids: userBadgeMap.get(row.id) || [],
+      };
+    }),
+  });
+});
+
+// POST /api/auth/admin/groups/:groupId/members
+router.post('/admin/groups/:groupId/members', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const userId = String(req.body?.user_id || '').trim();
+  if (!groupId || !userId) {
+    return res.status(400).json({ error: 'group_id and user_id are required' });
+  }
+
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  const result = db.prepare(`
+    INSERT OR IGNORE INTO admin_user_group_members (group_id, user_id, added_by, created_at)
+    VALUES (?, ?, ?, datetime('now'))
+  `).run(groupId, userId, String(req.user?.id || '').trim());
+
+  res.json({
+    success: true,
+    group_id: groupId,
+    user_id: userId,
+    added: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// DELETE /api/auth/admin/groups/:groupId/members/:userId
+router.delete('/admin/groups/:groupId/members/:userId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const userId = String(req.params.userId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+
+  const removeMembership = db.prepare(`
+    DELETE FROM admin_user_group_members
+    WHERE group_id = ? AND user_id = ?
+  `);
+  const removeIndividualBadges = db.prepare(`
+    DELETE FROM admin_user_group_badge_assignments
+    WHERE user_id = ?
+      AND badge_id IN (
+        SELECT id
+        FROM admin_user_group_badges
+        WHERE group_id = ?
+      )
+  `);
+  const apply = db.transaction(() => {
+    const membership = removeMembership.run(groupId, userId);
+    removeIndividualBadges.run(userId, groupId);
+    return membership;
+  });
+  const result = apply();
+
+  res.json({
+    success: true,
+    group_id: groupId,
+    user_id: userId,
+    removed: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// POST /api/auth/admin/groups/:groupId/members/:userId/move
+router.post('/admin/groups/:groupId/members/:userId/move', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const sourceGroupId = String(req.params.groupId || '').trim();
+  const userId = String(req.params.userId || '').trim();
+  const targetGroupId = String(req.body?.target_group_id || '').trim();
+  if (!targetGroupId) return res.status(400).json({ error: 'target_group_id is required' });
+  if (targetGroupId === sourceGroupId) {
+    return res.status(400).json({ error: 'target_group_id must be different from the source group' });
+  }
+
+  const sourceGroup = getAdminGroupById(db, sourceGroupId);
+  if (!sourceGroup) return res.status(404).json({ error: 'Source group not found' });
+  const targetGroup = getAdminGroupById(db, targetGroupId);
+  if (!targetGroup) return res.status(404).json({ error: 'Target group not found' });
+
+  const membership = db.prepare(`
+    SELECT 1
+    FROM admin_user_group_members
+    WHERE group_id = ? AND user_id = ?
+  `).get(sourceGroupId, userId);
+  if (!membership) return res.status(404).json({ error: 'User is not a member of the source group' });
+
+  const moveTx = db.transaction(() => {
+    db.prepare(`
+      INSERT OR IGNORE INTO admin_user_group_members (group_id, user_id, added_by, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).run(targetGroupId, userId, String(req.user?.id || '').trim());
+
+    db.prepare(`
+      DELETE FROM admin_user_group_members
+      WHERE group_id = ? AND user_id = ?
+    `).run(sourceGroupId, userId);
+
+    db.prepare(`
+      DELETE FROM admin_user_group_badge_assignments
+      WHERE user_id = ?
+        AND badge_id IN (
+          SELECT id
+          FROM admin_user_group_badges
+          WHERE group_id = ?
+        )
+    `).run(userId, sourceGroupId);
+  });
+  moveTx();
+
+  res.json({
+    success: true,
+    user_id: userId,
+    source_group_id: sourceGroupId,
+    target_group_id: targetGroupId,
+  });
+});
+
+// GET /api/auth/admin/groups/:groupId/permissions
+router.get('/admin/groups/:groupId/permissions', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+
+  const granted = new Set(getAdminGroupPermissionKeys(db, groupId));
+  const features = FEATURE_KEYS.map((key) => ({
+    key,
+    label: featureLabelFromKey(key),
+    enabled: granted.has(key),
+  }));
+  res.json({ group_id: groupId, features });
+});
+
+// PUT /api/auth/admin/groups/:groupId/permissions/:featureKey
+router.put('/admin/groups/:groupId/permissions/:featureKey', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const featureKey = normalizeFeatureKey(req.params.featureKey);
+  const enabled = parseBooleanInput(req.body?.enabled);
+  if (!FEATURE_KEY_SET.has(featureKey)) {
+    return res.status(400).json({ error: 'Unknown feature key' });
+  }
+  if (enabled === null) {
+    return res.status(400).json({ error: 'enabled must be a boolean' });
+  }
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+
+  if (enabled) {
+    db.prepare(`
+      INSERT OR IGNORE INTO admin_user_group_feature_permissions (group_id, feature_key, granted_by, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).run(groupId, featureKey, String(req.user?.id || '').trim());
+  } else {
+    db.prepare(`
+      DELETE FROM admin_user_group_feature_permissions
+      WHERE group_id = ? AND feature_key = ?
+    `).run(groupId, featureKey);
+  }
+
+  res.json({
+    success: true,
+    group_id: groupId,
+    feature_key: featureKey,
+    enabled,
+  });
+});
+
+// POST /api/auth/admin/groups/:groupId/notify
+router.post('/admin/groups/:groupId/notify', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+
+  const title = normalizeGroupName(req.body?.title || '', 90);
+  const message = normalizeGroupText(req.body?.message || '', 260);
+  const link = String(req.body?.link || '').trim().slice(0, 260);
+  if (!title) return res.status(400).json({ error: 'title is required' });
+  if (!message) return res.status(400).json({ error: 'message is required' });
+
+  const members = db.prepare(`
+    SELECT user_id
+    FROM admin_user_group_members
+    WHERE group_id = ?
+  `).all(groupId);
+
+  let notified = 0;
+  for (const member of members) {
+    if (!member?.user_id) continue;
+    createUserNotification(db, member.user_id, 'admin_group_notice', title, message, link);
+    notified += 1;
+  }
+
+  res.json({
+    success: true,
+    group_id: groupId,
+    notified_count: notified,
+  });
+});
+
+// POST /api/auth/admin/groups/:groupId/popup
+router.post('/admin/groups/:groupId/popup', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+
+  const title = normalizeGroupName(req.body?.title || '', 120);
+  const slides = normalizePopupSlides(req.body?.slides);
+  if (!slides.length) {
+    return res.status(400).json({ error: 'At least one slide is required' });
+  }
+
+  const popupId = uuidv4();
+  const actorId = String(req.user?.id || '').trim();
+
+  const createPopup = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO admin_user_group_popups (id, title, slides_json, created_by, created_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `).run(popupId, title, JSON.stringify(slides), actorId);
+
+    db.prepare(`
+      INSERT INTO admin_user_group_popup_targets (popup_id, group_id)
+      VALUES (?, ?)
+    `).run(popupId, groupId);
+
+    const members = db.prepare(`
+      SELECT user_id
+      FROM admin_user_group_members
+      WHERE group_id = ?
+    `).all(groupId);
+    const insertRecipient = db.prepare(`
+      INSERT OR IGNORE INTO admin_user_group_popup_recipients (popup_id, user_id, created_at)
+      VALUES (?, ?, datetime('now'))
+    `);
+    for (const member of members) {
+      if (!member?.user_id) continue;
+      insertRecipient.run(popupId, member.user_id);
+    }
+    return members.length;
+  });
+  const recipientCount = createPopup();
+
+  res.status(201).json({
+    success: true,
+    popup_id: popupId,
+    group_id: groupId,
+    slide_count: slides.length,
+    recipient_count: recipientCount,
+  });
+});
+
+// GET /api/auth/admin/groups/:groupId/badges
+router.get('/admin/groups/:groupId/badges', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+  res.json({
+    group_id: groupId,
+    badges: getAdminGroupBadges(db, groupId),
+  });
+});
+
+// POST /api/auth/admin/groups/:groupId/badges
+router.post('/admin/groups/:groupId/badges', requireAuth, requireAdmin, GROUP_BADGE_UPLOAD.single('image'), async (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+
+  const name = normalizeGroupName(req.body?.name || '', 64);
+  const description = normalizeGroupText(req.body?.description || '', 200);
+  if (!name) return res.status(400).json({ error: 'Badge name is required' });
+  if (!req.file) return res.status(400).json({ error: 'Badge image is required' });
+
+  let imageData = '';
+  try {
+    imageData = await compressGroupBadgeImage(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ error: err?.message || 'Failed to process badge image' });
+  }
+
+  const badgeId = uuidv4();
+  db.prepare(`
+    INSERT INTO admin_user_group_badges (id, group_id, name, description, image_data, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(badgeId, groupId, name, description, imageData, String(req.user?.id || '').trim());
+
+  const badge = db.prepare(`
+    SELECT id, group_id, name, description, image_data, created_at, updated_at
+    FROM admin_user_group_badges
+    WHERE id = ?
+  `).get(badgeId);
+
+  res.status(201).json({
+    id: badge.id,
+    group_id: badge.group_id,
+    name: badge.name || '',
+    description: badge.description || '',
+    image: badge.image_data || '',
+    created_at: badge.created_at || '',
+    updated_at: badge.updated_at || '',
+    group_assigned: false,
+    assigned_user_ids: [],
+  });
+});
+
+// PUT /api/auth/admin/groups/:groupId/badges/:badgeId
+router.put('/admin/groups/:groupId/badges/:badgeId', requireAuth, requireAdmin, GROUP_BADGE_UPLOAD.single('image'), async (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const badgeId = String(req.params.badgeId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+  const badge = db.prepare(`
+    SELECT id, group_id, name, description, image_data
+    FROM admin_user_group_badges
+    WHERE id = ? AND group_id = ?
+  `).get(badgeId, groupId);
+  if (!badge) return res.status(404).json({ error: 'Badge not found' });
+
+  const nextName = req.body?.name !== undefined
+    ? normalizeGroupName(req.body?.name, 64)
+    : String(badge.name || '');
+  const nextDescription = req.body?.description !== undefined
+    ? normalizeGroupText(req.body?.description, 200)
+    : String(badge.description || '');
+  if (!nextName) return res.status(400).json({ error: 'Badge name is required' });
+
+  let nextImageData = badge.image_data || '';
+  if (req.file) {
+    try {
+      nextImageData = await compressGroupBadgeImage(req.file.buffer);
+    } catch (err) {
+      return res.status(400).json({ error: err?.message || 'Failed to process badge image' });
+    }
+  }
+
+  db.prepare(`
+    UPDATE admin_user_group_badges
+    SET name = ?, description = ?, image_data = ?, updated_at = datetime('now')
+    WHERE id = ? AND group_id = ?
+  `).run(nextName, nextDescription, nextImageData, badgeId, groupId);
+
+  const updated = getAdminGroupBadges(db, groupId).find((row) => row.id === badgeId);
+  res.json(updated || null);
+});
+
+// DELETE /api/auth/admin/groups/:groupId/badges/:badgeId
+router.delete('/admin/groups/:groupId/badges/:badgeId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const badgeId = String(req.params.badgeId || '').trim();
+  const group = getAdminGroupById(db, groupId);
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+  const result = db.prepare(`
+    DELETE FROM admin_user_group_badges
+    WHERE id = ? AND group_id = ?
+  `).run(badgeId, groupId);
+  res.json({
+    success: true,
+    removed: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// POST /api/auth/admin/groups/:groupId/badges/:badgeId/assign-all
+router.post('/admin/groups/:groupId/badges/:badgeId/assign-all', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const badgeId = String(req.params.badgeId || '').trim();
+  const badge = db.prepare(`
+    SELECT id
+    FROM admin_user_group_badges
+    WHERE id = ? AND group_id = ?
+  `).get(badgeId, groupId);
+  if (!badge) return res.status(404).json({ error: 'Badge not found' });
+
+  const result = db.prepare(`
+    INSERT OR IGNORE INTO admin_user_group_badge_group_assignments (badge_id, group_id, assigned_by, created_at)
+    VALUES (?, ?, ?, datetime('now'))
+  `).run(badgeId, groupId, String(req.user?.id || '').trim());
+
+  res.json({
+    success: true,
+    group_id: groupId,
+    badge_id: badgeId,
+    assigned: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// DELETE /api/auth/admin/groups/:groupId/badges/:badgeId/assign-all
+router.delete('/admin/groups/:groupId/badges/:badgeId/assign-all', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const badgeId = String(req.params.badgeId || '').trim();
+  const result = db.prepare(`
+    DELETE FROM admin_user_group_badge_group_assignments
+    WHERE badge_id = ? AND group_id = ?
+  `).run(badgeId, groupId);
+
+  res.json({
+    success: true,
+    group_id: groupId,
+    badge_id: badgeId,
+    removed: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// POST /api/auth/admin/groups/:groupId/badges/:badgeId/assign/:userId
+router.post('/admin/groups/:groupId/badges/:badgeId/assign/:userId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const groupId = String(req.params.groupId || '').trim();
+  const badgeId = String(req.params.badgeId || '').trim();
+  const userId = String(req.params.userId || '').trim();
+
+  const badge = db.prepare(`
+    SELECT id
+    FROM admin_user_group_badges
+    WHERE id = ? AND group_id = ?
+  `).get(badgeId, groupId);
+  if (!badge) return res.status(404).json({ error: 'Badge not found' });
+
+  const member = db.prepare(`
+    SELECT 1
+    FROM admin_user_group_members
+    WHERE group_id = ? AND user_id = ?
+  `).get(groupId, userId);
+  if (!member) return res.status(404).json({ error: 'User is not in this group' });
+
+  const result = db.prepare(`
+    INSERT OR IGNORE INTO admin_user_group_badge_assignments (badge_id, user_id, assigned_by, created_at)
+    VALUES (?, ?, ?, datetime('now'))
+  `).run(badgeId, userId, String(req.user?.id || '').trim());
+
+  res.json({
+    success: true,
+    group_id: groupId,
+    badge_id: badgeId,
+    user_id: userId,
+    assigned: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// DELETE /api/auth/admin/groups/:groupId/badges/:badgeId/assign/:userId
+router.delete('/admin/groups/:groupId/badges/:badgeId/assign/:userId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const badgeId = String(req.params.badgeId || '').trim();
+  const userId = String(req.params.userId || '').trim();
+  const result = db.prepare(`
+    DELETE FROM admin_user_group_badge_assignments
+    WHERE badge_id = ? AND user_id = ?
+  `).run(badgeId, userId);
+
+  res.json({
+    success: true,
+    badge_id: badgeId,
+    user_id: userId,
+    removed: (parseInt(result?.changes, 10) || 0) > 0,
+  });
+});
+
+// POST /api/auth/group-popups/consume - fetch one pending popup and mark it seen
+router.post('/group-popups/consume', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = String(req.user?.id || '').trim();
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const popup = db.prepare(`
+    SELECT p.id, p.title, p.slides_json, p.created_at
+    FROM admin_user_group_popups p
+    JOIN admin_user_group_popup_recipients r ON r.popup_id = p.id
+    LEFT JOIN admin_user_group_popup_seen s
+      ON s.popup_id = p.id
+      AND s.user_id = ?
+    WHERE r.user_id = ?
+      AND s.popup_id IS NULL
+    ORDER BY datetime(p.created_at) DESC
+    LIMIT 1
+  `).get(userId, userId);
+
+  if (!popup) {
+    return res.json({ popup: null });
+  }
+
+  db.prepare(`
+    INSERT OR IGNORE INTO admin_user_group_popup_seen (popup_id, user_id, seen_at)
+    VALUES (?, ?, datetime('now'))
+  `).run(popup.id, userId);
+
+  let slides = [];
+  try {
+    const parsed = JSON.parse(popup.slides_json || '[]');
+    slides = normalizePopupSlides(parsed);
+  } catch {
+    slides = [];
+  }
+
+  res.json({
+    popup: {
+      id: popup.id,
+      title: popup.title || '',
+      slides,
+      created_at: popup.created_at || '',
+    },
   });
 });
 
@@ -501,7 +1372,7 @@ router.get('/user/username/:username', (req, res) => {
   `).get(username);
 
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(makePublicUser(user));
+  res.json(makePublicUser(db, user));
 });
 
 // GET /api/auth/user/:id - get public user profile
@@ -516,7 +1387,7 @@ router.get('/user/:id', (req, res) => {
   `).get(req.params.id);
 
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(makePublicUser(user));
+  res.json(makePublicUser(db, user));
 });
 
 // GET /api/auth/user/:id/stats - get user's competition history
@@ -1114,3 +1985,5 @@ router.delete('/notifications/:id', requireAuth, (req, res) => {
 module.exports = router;
 module.exports.requireAuth = requireAuth;
 module.exports.optionalAuth = optionalAuth;
+module.exports.isAdminUser = isAdminUser;
+module.exports.hasFeatureAccess = hasFeatureAccess;
