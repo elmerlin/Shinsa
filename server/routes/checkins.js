@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth, hasFeatureAccess } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const { createUserNotification } = require('../lib/notifications');
 
 function normalizeCheckinUser(row, size = 48) {
   if (!row) return null;
@@ -57,6 +58,43 @@ function requireCheckinFeature(req, res, next) {
     return res.status(403).json({ error: 'Check In access not granted' });
   }
   return next();
+}
+
+function notifyAdminsAboutCheckinEvent(db, {
+  actorUserId,
+  actorUsername,
+  eventType,
+  venueName,
+  machineName,
+}) {
+  if (!db || !actorUserId || !eventType) return 0;
+
+  const normalizedType = String(eventType).toLowerCase() === 'checkout' ? 'checkout' : 'checkin';
+  const safeUsername = String(actorUsername || '').trim() || 'Someone';
+  const safeVenueName = String(venueName || '').trim() || 'Unknown venue';
+  const safeMachineName = String(machineName || '').trim() || 'Unknown machine';
+
+  const notificationType = normalizedType === 'checkout' ? 'dojo_checkout' : 'dojo_checkin';
+  const title = normalizedType === 'checkout' ? 'Dojo Check Out' : 'Dojo Check In';
+  const message = normalizedType === 'checkout'
+    ? `${safeUsername} checked out from ${safeMachineName} at ${safeVenueName}`
+    : `${safeUsername} checked in at ${safeMachineName} (${safeVenueName})`;
+  const link = '/dojo';
+
+  const admins = db.prepare(`
+    SELECT id
+    FROM users
+    WHERE is_admin = 1
+  `).all();
+
+  let notified = 0;
+  for (const admin of admins) {
+    const adminId = String(admin?.id || '').trim();
+    if (!adminId || adminId === String(actorUserId)) continue;
+    createUserNotification(db, adminId, notificationType, title, message, link);
+    notified += 1;
+  }
+  return notified;
 }
 
 // GET /api/checkins/venues — list all venues with their machines
@@ -127,6 +165,15 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   const status = `Playing at ${machine.name}`;
   db.prepare("UPDATE users SET playing_status = ? WHERE id = ?").run(status, userId);
 
+  const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+  notifyAdminsAboutCheckinEvent(db, {
+    actorUserId: userId,
+    actorUsername: actor?.username || req.user?.username || 'Someone',
+    eventType: 'checkin',
+    venueName: venue.name,
+    machineName: machine.name,
+  });
+
   res.json({ id, status, machine_name: machine.name });
 });
 
@@ -135,11 +182,28 @@ router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const userId = req.user.id;
 
-  const active = db.prepare('SELECT id FROM checkins WHERE user_id = ? AND checked_out_at IS NULL').get(userId);
+  const active = db.prepare(`
+    SELECT c.id,
+           v.name AS venue_name,
+           m.name AS machine_name
+    FROM checkins c
+    JOIN venues v ON v.id = c.venue_id
+    JOIN venue_machines m ON m.id = c.machine_id
+    WHERE c.user_id = ? AND c.checked_out_at IS NULL
+  `).get(userId);
   if (!active) return res.status(400).json({ error: 'Not currently checked in' });
 
   db.prepare("UPDATE checkins SET checked_out_at = datetime('now') WHERE id = ?").run(active.id);
   db.prepare("UPDATE users SET playing_status = '' WHERE id = ?").run(userId);
+
+  const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+  notifyAdminsAboutCheckinEvent(db, {
+    actorUserId: userId,
+    actorUsername: actor?.username || req.user?.username || 'Someone',
+    eventType: 'checkout',
+    venueName: active.venue_name,
+    machineName: active.machine_name,
+  });
 
   res.json({ success: true });
 });
