@@ -8,6 +8,8 @@ const MODE_ORDER = ['Single', 'Double', 'CoOp'];
 const MODE_PREFIX = { Single: 'S', Double: 'D', CoOp: 'C' };
 const OVERLAY_MIN = 20;
 const OVERLAY_MAX = 100;
+const JACKET_OPACITY_MIN = 10;
+const JACKET_OPACITY_MAX = 100;
 const SONGS_PER_ROW_OPTIONS = [4, 5, 6, 7];
 
 const TIER_STYLE = {
@@ -51,6 +53,11 @@ function clampOverlaySize(value) {
 function clampSongsPerRow(value) {
   const parsed = parseIntSafe(value, 4);
   return SONGS_PER_ROW_OPTIONS.includes(parsed) ? parsed : 4;
+}
+
+function clampJacketOpacity(value) {
+  const parsed = parseIntSafe(value, 90);
+  return Math.min(JACKET_OPACITY_MAX, Math.max(JACKET_OPACITY_MIN, parsed));
 }
 
 function getRank(score) {
@@ -112,6 +119,8 @@ function SettingsModal({
   setDisplayMode,
   overlaySize,
   setOverlaySize,
+  jacketOpacity,
+  setJacketOpacity,
   showUnplayed,
   setShowUnplayed,
   showEmptyTiers,
@@ -174,6 +183,23 @@ function SettingsModal({
             className="w-full accent-piu-accent"
           />
           <p className="text-[10px] text-gray-500">20% minimum, 100% maximum.</p>
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-gray-400 font-display">Jacket Opacity</p>
+            <span className="text-[11px] font-display text-gray-300">{jacketOpacity}%</span>
+          </div>
+          <input
+            type="range"
+            min={JACKET_OPACITY_MIN}
+            max={JACKET_OPACITY_MAX}
+            step={1}
+            value={jacketOpacity}
+            onChange={(event) => setJacketOpacity(clampJacketOpacity(event.target.value))}
+            className="w-full accent-piu-accent"
+          />
+          <p className="text-[10px] text-gray-500">Lower values make grade overlays easier to read.</p>
         </div>
 
         <label className="flex items-center justify-between text-xs text-gray-300">
@@ -375,6 +401,7 @@ export default function TiersPage() {
   const [showEmptyTiers, setShowEmptyTiers] = useState(() => localStorage.getItem('tiers_show_empty') === '1');
   const [hideCoOp, setHideCoOp] = useState(() => localStorage.getItem('tiers_hide_coop') !== '0');
   const [overlaySize, setOverlaySize] = useState(() => clampOverlaySize(localStorage.getItem('tiers_overlay_size')));
+  const [jacketOpacity, setJacketOpacity] = useState(() => clampJacketOpacity(localStorage.getItem('tiers_jacket_opacity')));
   const [defaultMode, setDefaultMode] = useState(() => {
     const stored = normalizeMode(localStorage.getItem('tiers_default_mode'));
     return stored === 'Single' || stored === 'Double' ? stored : 'Double';
@@ -403,6 +430,10 @@ export default function TiersPage() {
   useEffect(() => {
     localStorage.setItem('tiers_overlay_size', String(overlaySize));
   }, [overlaySize]);
+
+  useEffect(() => {
+    localStorage.setItem('tiers_jacket_opacity', String(jacketOpacity));
+  }, [jacketOpacity]);
 
   useEffect(() => {
     localStorage.setItem('tiers_default_mode', defaultMode);
@@ -768,7 +799,12 @@ export default function TiersPage() {
                       title={`${chart.title} (${MODE_PREFIX[chart.mode] || '?'}${chart.level})`}
                     >
                       {chart.jacket_url ? (
-                        <img src={chart.jacket_url} alt={chart.title} className="w-full aspect-[16/10] object-cover opacity-90" />
+                        <img
+                          src={chart.jacket_url}
+                          alt={chart.title}
+                          className="w-full aspect-[16/10] object-cover"
+                          style={{ opacity: jacketOpacity / 100 }}
+                        />
                       ) : (
                         <div className="w-full aspect-[16/10] bg-piu-dark" />
                       )}
@@ -796,6 +832,8 @@ export default function TiersPage() {
         setDisplayMode={setDisplayMode}
         overlaySize={overlaySize}
         setOverlaySize={setOverlaySize}
+        jacketOpacity={jacketOpacity}
+        setJacketOpacity={setJacketOpacity}
         showUnplayed={showUnplayed}
         setShowUnplayed={setShowUnplayed}
         showEmptyTiers={showEmptyTiers}
