@@ -1735,25 +1735,27 @@ export default function ProfilePage() {
               )}
               {hasGroupBadges && (
                 <div className={`${hasCompactPiuSummary ? 'mt-2' : ''} rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-2 sm:px-3 sm:py-2.5`}>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {profile.group_badges.map((badge) => (
-                      <button
-                        key={`${badge.id || badge.name}-${badge.group_id || ''}`}
-                        type="button"
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-piu-border/60 bg-piu-dark/55 hover:border-piu-accent/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-accent/70"
-                        title={badge.description || badge.name || 'Group Badge'}
-                        aria-label={badge.name || 'Group Badge'}
-                        onClick={() => setSelectedGroupBadge(badge)}
-                      >
-                        {badge.image ? (
-                          <img src={badge.image} alt={badge.name || 'Badge'} className="w-full h-full rounded-md object-contain p-0.5" />
-                        ) : (
-                          <span className="text-[11px] font-display font-bold text-gray-200">
-                            {String((badge.name || 'B')[0] || 'B').toUpperCase()}
-                          </span>
-                        )}
-                      </button>
-                    ))}
+                  <div className="overflow-x-auto touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="inline-flex min-w-full justify-end gap-2">
+                      {profile.group_badges.map((badge) => (
+                        <button
+                          key={`${badge.id || badge.name}-${badge.group_id || ''}`}
+                          type="button"
+                          className="inline-flex shrink-0 items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-piu-border/60 bg-piu-dark/55 hover:border-piu-accent/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-accent/70"
+                          title={badge.description || badge.name || 'Group Badge'}
+                          aria-label={badge.name || 'Group Badge'}
+                          onClick={() => setSelectedGroupBadge(badge)}
+                        >
+                          {badge.image ? (
+                            <img src={badge.image} alt={badge.name || 'Badge'} className="w-full h-full rounded-md object-contain p-0.5" />
+                          ) : (
+                            <span className="text-[11px] font-display font-bold text-gray-200">
+                              {String((badge.name || 'B')[0] || 'B').toUpperCase()}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
