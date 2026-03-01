@@ -42,6 +42,7 @@ import FunPage from './pages/FunPage';
 import OptimisePage from './pages/OptimisePage';
 import ChangeLogPage from './pages/ChangeLogPage';
 import CheckinPage from './pages/CheckinPage';
+import DojoPage from './pages/DojoPage';
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
@@ -421,6 +422,19 @@ function UserMenu() {
               Check In
             </Link>
           )}
+          {canAccessCheckin && (
+            <Link
+              to="/dojo"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
+              </svg>
+              Dojo
+            </Link>
+          )}
           <Link
             to="/changelog"
             onClick={() => setOpen(false)}
@@ -565,9 +579,14 @@ export default function App() {
   const [groupPopupSlide, setGroupPopupSlide] = useState(0);
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
+  const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin);
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -643,6 +662,15 @@ export default function App() {
               </svg>
               <span>Tiers</span>
             </Link>
+            {canAccessCheckin && (
+              <Link to="/dojo" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
+                </svg>
+                <span>Dojo</span>
+              </Link>
+            )}
             <Link to="/head-to-head" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
@@ -710,6 +738,7 @@ export default function App() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/changelog" element={<ChangeLogPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
+          <Route path="/dojo" element={<DojoPage />} />
         </Routes>
       </main>
 
@@ -790,7 +819,7 @@ function MobileBottomNav() {
         </Link>
 
         {/* Profile */}
-        <Link to={profilePath} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${profileActive ? 'text-piu-accent' : 'text-gray-500'}`}>
+        <Link to={profilePath} onClick={scrollToTop} className={`flex flex-col items-center justify-center gap-0.5 flex-1 py-1 ${profileActive ? 'text-piu-accent' : 'text-gray-500'}`}>
           {user.avatar ? (
             <img src={getAvatarUrl(user.avatar)} alt="" className={`w-5 h-5 rounded-full object-cover ${profileActive ? 'ring-1 ring-piu-accent' : ''}`} />
           ) : (

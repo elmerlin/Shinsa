@@ -8,6 +8,7 @@ import PostCard, { ShareButton } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
+import { parseGrade } from '../utils/grades';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -96,7 +97,7 @@ function getClearItems(item) {
 }
 
 function getGradeColor(grade, score = 0) {
-  const normalized = String(grade || '').toUpperCase();
+  const normalized = parseGrade(grade).normalized;
   if (normalized) {
     if (normalized.includes('SSS')) return 'text-sky-300';
     if (normalized.includes('SS')) return 'text-piu-gold';
@@ -147,9 +148,11 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
   if (!score) return null;
   const rank = getRank(score.new_score ?? score.score ?? 0);
   const displayScore = score.new_score ?? score.score ?? 0;
-  const grade = score.new_grade || score.grade || rank.label;
+  const parsedGrade = parseGrade(score.new_grade || score.grade, rank.label);
+  const grade = parsedGrade.display || rank.label;
   const plateName = PLATE_NAMES[score.plate] || score.plate || '';
   const plateColor = PLATE_COLORS[score.plate] || 'text-gray-400';
+  const parsedOldGrade = parseGrade(score.old_grade, getRank(score.old_score).label);
   const hasJudgments = (score.perfect > 0 || score.great > 0 || score.good > 0 || score.bad > 0 || score.miss > 0);
   const judgments = [
     { label: 'PERFECT', value: score.perfect || 0, textColor: 'text-sky-400' },
@@ -197,7 +200,10 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
             </div>
             <div className="text-center flex-1">
               {displayScore > 0 ? (
-                <p className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)}`}>
+                <p
+                  className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                  data-grade={grade}
+                >
                   {grade}
                 </p>
               ) : (
@@ -216,7 +222,15 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
 
           {isUpscore && score.old_score > 0 && (
             <div className="text-center mt-2 space-y-0.5">
-              <p className="text-[10px] text-gray-500">Previous: <span className="font-mono">{score.old_score.toLocaleString()}</span> {score.old_grade || getRank(score.old_score).label}</p>
+              <p className="text-[10px] text-gray-500">
+                Previous:
+                {' '}
+                <span className="font-mono">{score.old_score.toLocaleString()}</span>
+                {' '}
+                <span className={parsedOldGrade.isBroken ? 'grade-broken' : ''} data-grade={parsedOldGrade.display}>
+                  {parsedOldGrade.display}
+                </span>
+              </p>
               <p className="text-xs text-piu-green font-mono font-bold">+{(displayScore - score.old_score).toLocaleString()}</p>
             </div>
           )}
@@ -528,6 +542,8 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
         {visibleUpscores.map((u, i) => {
           const oldRank = getRank(u.old_score);
           const newRank = getRank(u.new_score);
+          const oldGrade = parseGrade(u.old_grade, oldRank.label);
+          const newGrade = parseGrade(u.new_grade, newRank.label);
           const isSingle = u.mode === 'Single';
           const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400';
           const improvement = u.new_score - u.old_score;
@@ -577,10 +593,20 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
               >
                 <div className="flex items-center gap-1 justify-end">
                   <span className={`text-[10px] font-mono ${oldRank.color}`}>{u.old_score.toLocaleString()}</span>
-                  <span className={`text-[10px] font-display ${oldRank.color}`}>{oldRank.label}</span>
+                  <span
+                    className={`text-[10px] font-display ${getGradeColor(oldGrade.display, u.old_score)} ${oldGrade.isBroken ? 'grade-broken' : ''}`}
+                    data-grade={oldGrade.display}
+                  >
+                    {oldGrade.display}
+                  </span>
                   <span className="text-gray-500 text-[10px]">&#8594;</span>
                   <span className={`text-xs font-mono font-bold ${newRank.color}`}>{u.new_score.toLocaleString()}</span>
-                  <span className={`text-xs font-display font-bold ${newRank.color}`}>{newRank.label}</span>
+                  <span
+                    className={`text-xs font-display font-bold ${getGradeColor(newGrade.display, u.new_score)} ${newGrade.isBroken ? 'grade-broken' : ''}`}
+                    data-grade={newGrade.display}
+                  >
+                    {newGrade.display}
+                  </span>
                 </div>
                 <p className="text-[10px] text-piu-green font-mono">+{improvement.toLocaleString()}</p>
               </button>
@@ -894,6 +920,7 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
           }
 
           const rank = getRank(clear.score);
+          const parsedGrade = parseGrade(clear.grade, rank.label);
           const isSingle = clear.mode === 'Single';
           const badgeColor = isSingle
             ? 'bg-red-600/20 text-red-400'
@@ -944,7 +971,12 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
                 className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
                 onClick={() => onScoreClick && onScoreClick({ ...clear, _jacketUrl: jacketUrl, _chartLink: chartLink })}
               >
-                <span className={`text-xs font-display font-bold ${rank.color}`}>{rank.label}</span>
+                <span
+                  className={`text-xs font-display font-bold ${getGradeColor(parsedGrade.display, clear.score)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                  data-grade={parsedGrade.display}
+                >
+                  {parsedGrade.display}
+                </span>
                 <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
               </button>
             </div>

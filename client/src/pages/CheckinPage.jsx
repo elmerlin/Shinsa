@@ -3,10 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getVenues, getActiveCheckins, checkin, checkout, getMyCheckinStatus,
-  getCheckinHistory, getUserCheckinHistory,
+  getCheckinHistory, getUserCheckinHistory, getDojoOverview,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getProfilePath } from '../utils/profile';
+import DojoActivityPanel from '../components/DojoActivityPanel';
 
 function formatDuration(minutes) {
   if (!minutes || minutes < 1) return '< 1 min';
@@ -323,29 +324,46 @@ export default function CheckinPage() {
   const [checkinLoading, setCheckinLoading] = useState(false);
   const [tab, setTab] = useState('live');
   const [error, setError] = useState('');
+  const [dojoOverview, setDojoOverview] = useState(null);
+  const [dojoLoading, setDojoLoading] = useState(true);
+  const [dojoError, setDojoError] = useState('');
 
   const loadData = useCallback(async () => {
     if (!user || !hasCheckinAccess) {
       setVenues([]);
       setActiveCheckins([]);
       setMyStatus(null);
+      setDojoOverview(null);
+      setDojoError('');
+      setDojoLoading(false);
       setLoading(false);
       return;
     }
+    setDojoLoading(true);
+    setDojoError('');
     try {
       const venueData = await getVenues();
       setVenues(venueData);
 
       // Load active checkins for the first (default) venue
       if (venueData.length > 0) {
-        const active = await getActiveCheckins(venueData[0].slug);
+        const [active, overview] = await Promise.all([
+          getActiveCheckins(venueData[0].slug),
+          getDojoOverview(venueData[0].slug),
+        ]);
         setActiveCheckins(active.activeCheckins || []);
+        setDojoOverview(overview || null);
+      } else {
+        setDojoOverview(null);
       }
 
       const status = await getMyCheckinStatus();
       setMyStatus(status);
     } catch (e) {
       setError(e.message);
+      setDojoError(e.message);
+    } finally {
+      setDojoLoading(false);
     }
     setLoading(false);
   }, [hasCheckinAccess, user]);
@@ -360,8 +378,13 @@ export default function CheckinPage() {
     const interval = setInterval(async () => {
       try {
         if (venues.length > 0) {
-          const active = await getActiveCheckins(venues[0].slug);
+          const [active, overview] = await Promise.all([
+            getActiveCheckins(venues[0].slug),
+            getDojoOverview(venues[0].slug),
+          ]);
           setActiveCheckins(active.activeCheckins || []);
+          setDojoOverview(overview || null);
+          setDojoError('');
         }
         const status = await getMyCheckinStatus();
         setMyStatus(status);
@@ -537,6 +560,15 @@ export default function CheckinPage() {
           </Link>
         </div>
       )}
+
+      <div className="mt-4">
+        <DojoActivityPanel
+          overview={dojoOverview}
+          loading={dojoLoading}
+          error={dojoError}
+          onRefresh={loadData}
+        />
+      </div>
 
       {/* Checkin confirmation modal */}
       {selectedMachine && (

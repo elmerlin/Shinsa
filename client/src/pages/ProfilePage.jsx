@@ -23,6 +23,7 @@ import RankingsPanel from '../components/RankingsPanel';
 import GradeGoalTracker from '../components/GradeGoalTracker';
 import TitleProgressTab from '../components/TitleProgressTab';
 import { getProfilePath } from '../utils/profile';
+import { parseGrade } from '../utils/grades';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -55,7 +56,7 @@ function getRank(score) {
 }
 
 function getGradeColor(grade) {
-  const g = (grade || '').replace('+', '_p').toUpperCase();
+  const g = parseGrade(grade).normalized.replace('+', '_P');
   if (g.includes('SSS')) return 'text-sky-300';
   if (g.includes('SS')) return 'text-piu-gold';
   if (g.includes('S')) return 'text-amber-400';
@@ -1960,6 +1961,7 @@ export default function ProfilePage() {
                       <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
                         {selectedOverviewDay.plays.map((play, idx) => {
                           const rank = getRank(play.score);
+                          const displayGrade = parseGrade(play.grade, rank.label);
                           const isBreak = isStageBreakPlay(play);
                           const playNorm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
                           const playChartKey = `${playNorm}|${play.mode}|${play.level}`;
@@ -1995,8 +1997,11 @@ export default function ProfilePage() {
                                   <span className="text-xs leading-none font-display font-bold text-red-500">STAGE BREAK</span>
                                 ) : (
                                   <>
-                                    <span className={`text-xs leading-none font-display font-bold ${play.grade ? getGradeColor(play.grade) : rank.color}`}>
-                                      {play.grade || rank.label}
+                                    <span
+                                      className={`text-xs leading-none font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                                      data-grade={displayGrade.display}
+                                    >
+                                      {displayGrade.display}
                                     </span>
                                     <p className="text-[11px] leading-none font-mono font-bold mt-0.5">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
                                   </>
@@ -2636,7 +2641,17 @@ export default function ProfilePage() {
                   {piuPumbility.equivalent_level && piuPumbility.equivalent_grade && (
                     <p className="text-[10px] text-gray-400 font-display mt-0.5">
                       <span className="text-gray-500">~</span> Lv.{piuPumbility.equivalent_level}{' '}
-                      <span className={getGradeColor(piuPumbility.equivalent_grade)}>{piuPumbility.equivalent_grade}</span>
+                      {(() => {
+                        const equivalentGrade = parseGrade(piuPumbility.equivalent_grade);
+                        return (
+                          <span
+                            className={`${getGradeColor(equivalentGrade.display)} ${equivalentGrade.isBroken ? 'grade-broken' : ''}`}
+                            data-grade={equivalentGrade.display}
+                          >
+                            {equivalentGrade.display}
+                          </span>
+                        );
+                      })()}
                     </p>
                   )}
                 </div>
@@ -2650,9 +2665,17 @@ export default function ProfilePage() {
                   {piuPumbility.min_entry_details && (
                     <p className="text-[10px] text-gray-400 font-display mt-0.5">
                       Lv.{piuPumbility.min_entry_details.level}{' '}
-                      <span className={getGradeColor(piuPumbility.min_entry_details.grade)}>
-                        {piuPumbility.min_entry_details.grade}
-                      </span>
+                      {(() => {
+                        const minEntryGrade = parseGrade(piuPumbility.min_entry_details.grade);
+                        return (
+                          <span
+                            className={`${getGradeColor(minEntryGrade.display)} ${minEntryGrade.isBroken ? 'grade-broken' : ''}`}
+                            data-grade={minEntryGrade.display}
+                          >
+                            {minEntryGrade.display}
+                          </span>
+                        );
+                      })()}
                     </p>
                   )}
                 </div>
@@ -2746,6 +2769,7 @@ export default function ProfilePage() {
               <div className="space-y-2">
                 {piuPumbility.scores.map((s, i) => {
                   const rank = getRank(s.score);
+                  const displayGrade = parseGrade(s.grade, rank.label);
                   return (
                     <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <span className="text-xs text-gray-500 font-mono w-6 shrink-0 text-right">#{s.rank_order}</span>
@@ -2762,8 +2786,11 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <span className={`text-xs font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
-                          {s.grade || rank.label}
+                        <span
+                          className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                          data-grade={displayGrade.display}
+                        >
+                          {displayGrade.display}
                         </span>
                         <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
                       </div>
@@ -2904,6 +2931,7 @@ export default function ProfilePage() {
               <div className="space-y-1.5">
                 {filteredBestScores.map((s, i) => {
                   const rank = getRank(s.score);
+                  const displayGrade = parseGrade(s.grade, rank.label);
                   return (
                     <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <PiuSongJacket
@@ -2926,8 +2954,11 @@ export default function ProfilePage() {
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <span className={`text-xs font-display font-bold ${s.grade ? getGradeColor(s.grade) : rank.color}`}>
-                          {s.grade || rank.label}
+                        <span
+                          className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                          data-grade={displayGrade.display}
+                        >
+                          {displayGrade.display}
                         </span>
                         <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
                       </div>
@@ -2973,6 +3004,7 @@ export default function ProfilePage() {
             <div className="space-y-2">
               {recentlyPlayedRows.map((p, i) => {
                 const rank = getRank(p.score);
+                const displayGrade = parseGrade(p.grade, rank.label);
                 return (
                   <div
                     key={i}
@@ -2989,8 +3021,11 @@ export default function ProfilePage() {
                     <div className="text-right shrink-0">
                       {p.score > 0 ? (
                         <>
-                          <span className={`text-xs font-display font-bold ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
-                            {p.grade || rank.label}
+                          <span
+                            className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                            data-grade={displayGrade.display}
+                          >
+                            {displayGrade.display}
                           </span>
                           <p className="font-mono text-xs font-bold">{p.score.toLocaleString()}</p>
                         </>
@@ -3067,6 +3102,7 @@ export default function ProfilePage() {
       {selectedPlay && (() => {
         const p = selectedPlay;
         const rank = getRank(p.score);
+        const displayGrade = parseGrade(p.grade, rank.label);
         const hasBreakdown = p.perfect > 0 || p.great > 0 || p.good > 0 || p.bad > 0 || p.miss > 0;
         const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
         const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
@@ -3115,8 +3151,11 @@ export default function ProfilePage() {
                   </div>
                   <div className="text-center flex-1">
                     {p.score > 0 ? (
-                      <p className={`text-3xl font-display font-black ${p.grade ? getGradeColor(p.grade) : rank.color}`}>
-                        {p.grade || rank.label}
+                      <p
+                        className={`text-3xl font-display font-black ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                        data-grade={displayGrade.display}
+                      >
+                        {displayGrade.display}
                       </p>
                     ) : (
                       <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>

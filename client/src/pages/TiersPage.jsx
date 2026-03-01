@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getSongTierMeta, getSongTiers } from '../utils/api';
+import { parseGrade } from '../utils/grades';
 
 const TIER_LIST_TYPE = 'Pass';
 const MODE_ORDER = ['Single', 'Double', 'CoOp'];
@@ -81,7 +82,7 @@ function getRank(score) {
 }
 
 function getGradeColor(grade, score = 0) {
-  const normalized = String(grade || '').toUpperCase();
+  const normalized = parseGrade(grade).normalized;
   if (normalized) {
     if (normalized.includes('SSS')) return 'text-sky-300';
     if (normalized.includes('SS')) return 'text-piu-gold';
@@ -292,6 +293,7 @@ function JacketOverlayText({
   baseFontRem,
   overlaySize,
   fitTemplate,
+  isBroken = false,
 }) {
   const frameRef = useRef(null);
   const widthRef = useRef(null);
@@ -369,7 +371,8 @@ function JacketOverlayText({
           {fitTemplate}
         </span>
         <span
-          className={`inline-flex items-center justify-center whitespace-nowrap text-center font-display font-black ${colorClass}`}
+          className={`inline-flex items-center justify-center whitespace-nowrap text-center font-display font-black ${colorClass} ${isBroken ? 'grade-broken' : ''}`}
+          data-grade={text}
           style={{
             fontSize: `${baseFontRem}rem`,
             transform: `scale(${fitScale})`,
@@ -781,12 +784,12 @@ export default function TiersPage() {
             <div className="p-2 sm:p-3 bg-[#061327]">
               <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${songsPerRow}, minmax(0, 1fr))` }}>
                 {tier.charts.map((chart) => {
-                  const overlayGrade = chart.best_grade || getRank(chart.best_score).label;
+                  const parsedGrade = parseGrade(chart.best_grade, getRank(chart.best_score).label);
                   const overlayText = displayMode === 'score'
                     ? formatOverlayScore(chart.best_score)
-                    : overlayGrade;
+                    : parsedGrade.display;
                   const overlayTemplate = displayMode === 'score' ? '100.0' : 'SSS+';
-                  const overlayColor = getGradeColor(overlayGrade, chart.best_score);
+                  const overlayColor = getGradeColor(parsedGrade.display, chart.best_score);
                   const overlayBaseRem = displayMode === 'score' ? 1.2 : 1.45;
                   const overlayScale = overlaySize / 65;
                   const overlayFontRem = Math.max(0.7, Math.min(2.2, overlayBaseRem * overlayScale));
@@ -815,6 +818,7 @@ export default function TiersPage() {
                           baseFontRem={overlayFontRem}
                           overlaySize={overlaySize}
                           fitTemplate={overlayTemplate}
+                          isBroken={displayMode === 'grade' && parsedGrade.isBroken}
                         />
                       )}
                     </Link>
