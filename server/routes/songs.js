@@ -1917,6 +1917,39 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
   });
 });
 
+// PUT /api/songs/chart/:chartId/youtube — set YouTube link for a chart
+router.put('/chart/:chartId/youtube', requireAuth, (req, res) => {
+  const db = getDb();
+  const youtubeUrl = String(req.body.youtube_url || '').trim();
+  if (!youtubeUrl) return res.status(400).json({ error: 'youtube_url is required' });
+  if (!/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(youtubeUrl)) {
+    return res.status(400).json({ error: 'Must be a valid YouTube URL' });
+  }
+  const chartId = parseInt(req.params.chartId, 10);
+  if (!chartId) return res.status(400).json({ error: 'Invalid chart ID' });
+
+  db.prepare(`
+    INSERT INTO user_chart_youtube_links (user_id, chart_id, youtube_url, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id, chart_id)
+    DO UPDATE SET youtube_url = excluded.youtube_url, updated_at = datetime('now')
+  `).run(req.user.id, chartId, youtubeUrl);
+
+  res.json({ youtube_url: youtubeUrl });
+});
+
+// DELETE /api/songs/chart/:chartId/youtube — remove YouTube link for a chart
+router.delete('/chart/:chartId/youtube', requireAuth, (req, res) => {
+  const db = getDb();
+  const chartId = parseInt(req.params.chartId, 10);
+  if (!chartId) return res.status(400).json({ error: 'Invalid chart ID' });
+
+  db.prepare('DELETE FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ?')
+    .run(req.user.id, chartId);
+
+  res.json({ ok: true });
+});
+
 // GET /api/songs/chart/:chartId — chart page payload
 router.get('/chart/:chartId', optionalAuth, (req, res) => {
   const db = getDb();
@@ -2134,9 +2167,33 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
     }
   }
 
+  // Look up YouTube links for this chart
+  let userYoutubeUrl = '';
+  if (targetUserId) {
+    const ytRow = db.prepare(
+      'SELECT youtube_url FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ?'
+    ).get(targetUserId, chart.chart_id);
+    if (ytRow) userYoutubeUrl = ytRow.youtube_url;
+  }
+
+  // Attach YouTube links to friend records
+  if (friendRecords.length > 0) {
+    const friendIds = friendRecords.map((r) => r.user.id);
+    const ytPlaceholders = friendIds.map(() => '?').join(', ');
+    const friendYtRows = db.prepare(`
+      SELECT user_id, youtube_url FROM user_chart_youtube_links
+      WHERE user_id IN (${ytPlaceholders}) AND chart_id = ?
+    `).all(...friendIds, chart.chart_id);
+    const ytByUser = new Map(friendYtRows.map((r) => [r.user_id, r.youtube_url]));
+    for (const record of friendRecords) {
+      record.youtube_url = ytByUser.get(record.user.id) || '';
+    }
+  }
+
   res.json({
     chart,
     user_summary: userSummary,
+    user_youtube_url: userYoutubeUrl,
     progression,
     history: history.sort((a, b) => {
       const dt = parseDateMs(b.date_played) - parseDateMs(a.date_played);
