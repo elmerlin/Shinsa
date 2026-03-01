@@ -19,6 +19,11 @@ async function request(url, options = {}) {
       throw new Error(err.error || 'Request failed');
     }
     return res.json();
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out — please try again');
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }
@@ -39,6 +44,11 @@ async function longRequest(url, options = {}) {
       throw new Error(err.error || 'Request failed');
     }
     return res.json();
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Request timed out — please try again');
+    }
+    throw err;
   } finally {
     clearTimeout(timeout);
   }

@@ -34,7 +34,10 @@ export default function DojoPage() {
       setOverview(data || null);
       setError('');
     } catch (err) {
-      setError(err?.message || 'Failed to load dojo status');
+      // Only show errors on initial load; suppress timeout errors during polling if we already have data
+      if (!overview) {
+        setError(err?.message || 'Failed to load dojo status');
+      }
     } finally {
       setLoading(false);
     }
