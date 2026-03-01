@@ -7,9 +7,10 @@ const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 function normalizeCheckinUser(row, size = 48) {
   if (!row) return null;
+  const ownerUserId = row.user_id || row.id || '';
   return {
     ...row,
-    avatar: normalizeUserAvatarForList(row.avatar, row.id || row.user_id || '', size, row.avatar_v),
+    avatar: normalizeUserAvatarForList(row.avatar, ownerUserId, size, row.avatar_v),
   };
 }
 
