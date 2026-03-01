@@ -39,9 +39,9 @@ app.use(express.json({ limit: '50mb' }));
 app.get('/api/dashboard', (req, res) => {
   const db = getDb();
   let tournaments = [], duels = [], notices = [];
-  try { tournaments = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC').all(); } catch (e) { console.error('Dashboard tournaments:', e.message); }
-  try { duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC').all(); } catch (e) { console.error('Dashboard duels:', e.message); }
-  try { notices = db.prepare('SELECT * FROM notices ORDER BY pinned DESC, created_at DESC').all(); } catch (e) { console.error('Dashboard notices:', e.message); }
+  try { tournaments = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC LIMIT 50').all(); } catch (e) { console.error('Dashboard tournaments:', e.message); }
+  try { duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC LIMIT 50').all(); } catch (e) { console.error('Dashboard duels:', e.message); }
+  try { notices = db.prepare('SELECT * FROM notices ORDER BY pinned DESC, created_at DESC LIMIT 50').all(); } catch (e) { console.error('Dashboard notices:', e.message); }
   res.json({ tournaments, duels, notices });
 });
 

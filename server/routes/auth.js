@@ -1421,18 +1421,35 @@ router.get('/user/:id/stats', (req, res) => {
     ORDER BY t.created_at DESC
   `).all(userId);
 
-  // Get match results for each tournament player
+  // Get match results for all tournament players in one query
   const matchResults = [];
-  for (const tp of tournamentPlayers) {
-    const matches = db.prepare(`
+  if (tournamentPlayers.length > 0) {
+    const playerIds = tournamentPlayers.map(tp => tp.id);
+    const tournamentIds = [...new Set(tournamentPlayers.map(tp => tp.tournament_id))];
+    const tPlaceholders = tournamentIds.map(() => '?').join(',');
+    const pPlaceholders = playerIds.map(() => '?').join(',');
+    const allMatches = db.prepare(`
       SELECT m.*, p1.name as player1_name, p2.name as player2_name
       FROM matches m
       LEFT JOIN players p1 ON m.player1_id = p1.id
       LEFT JOIN players p2 ON m.player2_id = p2.id
-      WHERE m.tournament_id = ? AND (m.player1_id = ? OR m.player2_id = ?)
+      WHERE m.tournament_id IN (${tPlaceholders})
+        AND (m.player1_id IN (${pPlaceholders}) OR m.player2_id IN (${pPlaceholders}))
       ORDER BY m.round_number ASC
-    `).all(tp.tournament_id, tp.id, tp.id);
-    matchResults.push({ tournament: tp, matches });
+    `).all(...tournamentIds, ...playerIds, ...playerIds);
+    const matchesByTournamentPlayer = {};
+    for (const m of allMatches) {
+      for (const tp of tournamentPlayers) {
+        if (m.tournament_id === tp.tournament_id && (m.player1_id === tp.id || m.player2_id === tp.id)) {
+          const key = `${tp.tournament_id}-${tp.id}`;
+          if (!matchesByTournamentPlayer[key]) matchesByTournamentPlayer[key] = [];
+          matchesByTournamentPlayer[key].push(m);
+        }
+      }
+    }
+    for (const tp of tournamentPlayers) {
+      matchResults.push({ tournament: tp, matches: matchesByTournamentPlayer[`${tp.tournament_id}-${tp.id}`] || [] });
+    }
   }
 
   // Duel participation
@@ -1442,11 +1459,22 @@ router.get('/user/:id/stats', (req, res) => {
     ORDER BY created_at DESC
   `).all(userId, userId);
 
-  // Get duel songs for scoring data
+  // Get duel songs for scoring data (batch instead of N+1)
   const duelStats = [];
-  for (const d of duels) {
-    const songs = db.prepare('SELECT * FROM duel_songs WHERE duel_id = ? ORDER BY played_order ASC').all(d.id);
-    duelStats.push({ duel: d, songs });
+  if (duels.length > 0) {
+    const duelIds = duels.map(d => d.id);
+    const dPlaceholders = duelIds.map(() => '?').join(',');
+    const allDuelSongs = db.prepare(
+      `SELECT * FROM duel_songs WHERE duel_id IN (${dPlaceholders}) ORDER BY played_order ASC`
+    ).all(...duelIds);
+    const songsByDuel = {};
+    for (const s of allDuelSongs) {
+      if (!songsByDuel[s.duel_id]) songsByDuel[s.duel_id] = [];
+      songsByDuel[s.duel_id].push(s);
+    }
+    for (const d of duels) {
+      duelStats.push({ duel: d, songs: songsByDuel[d.id] || [] });
+    }
   }
 
   // Online duel participation
@@ -1459,10 +1487,22 @@ router.get('/user/:id/stats', (req, res) => {
     ORDER BY od.created_at DESC
   `).all(userId, userId);
 
+  // Batch online duel songs
   const onlineDuelStats = [];
-  for (const od of onlineDuels) {
-    const songs = db.prepare('SELECT * FROM online_duel_songs WHERE duel_id = ? ORDER BY created_at ASC').all(od.id);
-    onlineDuelStats.push({ duel: od, songs });
+  if (onlineDuels.length > 0) {
+    const odIds = onlineDuels.map(od => od.id);
+    const odPlaceholders = odIds.map(() => '?').join(',');
+    const allOnlineSongs = db.prepare(
+      `SELECT * FROM online_duel_songs WHERE duel_id IN (${odPlaceholders}) ORDER BY created_at ASC`
+    ).all(...odIds);
+    const onlineSongsByDuel = {};
+    for (const s of allOnlineSongs) {
+      if (!onlineSongsByDuel[s.duel_id]) onlineSongsByDuel[s.duel_id] = [];
+      onlineSongsByDuel[s.duel_id].push(s);
+    }
+    for (const od of onlineDuels) {
+      onlineDuelStats.push({ duel: od, songs: onlineSongsByDuel[od.id] || [] });
+    }
   }
 
   res.json({ tournamentPlayers: matchResults, duelStats, onlineDuelStats });

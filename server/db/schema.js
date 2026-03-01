@@ -1108,6 +1108,8 @@ function initializeDb() {
 
     CREATE INDEX IF NOT EXISTS idx_follows_follower ON user_follows(follower_id);
     CREATE INDEX IF NOT EXISTS idx_follows_following ON user_follows(following_id);
+    CREATE INDEX IF NOT EXISTS idx_follows_follower_time ON user_follows(follower_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_follows_following_time ON user_follows(following_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_posts_user ON user_posts(user_id);
     CREATE INDEX IF NOT EXISTS idx_posts_created ON user_posts(created_at);
     CREATE INDEX IF NOT EXISTS idx_post_pumps ON post_pumps(post_id);
