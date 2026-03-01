@@ -567,6 +567,7 @@ export default function CheckinPage() {
           loading={dojoLoading}
           error={dojoError}
           onRefresh={loadData}
+          logOnly
         />
       </div>
 
