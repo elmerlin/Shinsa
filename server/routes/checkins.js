@@ -292,21 +292,36 @@ router.get('/dojo/:slug/overview', requireAuth, requireCheckinFeature, (req, res
     };
   });
 
-  const recentRows = db.prepare(`
+  const now = new Date();
+  const weekStart = startOfWeekMonday(now);
+  const weekEnd = addDays(weekStart, 7);
+  const weekStartStr = weekStart.toISOString().replace('T', ' ').slice(0, 19);
+
+  // Query 1: Only this week's checkins for weekly stats (much smaller than LIMIT 1200)
+  const weekRows = db.prepare(`
     SELECT c.id, c.user_id, c.machine_id, c.checked_in_at, c.checked_out_at,
-           m.name AS machine_name, m.position AS machine_position,
-           u.username, u.avatar, u.avatar_v, u.gender, u.skill_title, u.pumbility
+           m.name AS machine_name,
+           u.username, u.avatar, u.avatar_v
+    FROM checkins c
+    JOIN venue_machines m ON m.id = c.machine_id
+    JOIN users u ON u.id = c.user_id
+    WHERE c.venue_id = ? AND c.checked_in_at >= ?
+    ORDER BY c.checked_in_at DESC
+  `).all(venue.id, weekStartStr);
+
+  // Query 2: Recent checkins for activity log only (need 100 rows to produce ~200 events)
+  const logRows = db.prepare(`
+    SELECT c.id, c.user_id, c.machine_id, c.checked_in_at, c.checked_out_at,
+           m.name AS machine_name,
+           u.username, u.avatar, u.avatar_v
     FROM checkins c
     JOIN venue_machines m ON m.id = c.machine_id
     JOIN users u ON u.id = c.user_id
     WHERE c.venue_id = ?
     ORDER BY c.checked_in_at DESC
-    LIMIT 1200
+    LIMIT 120
   `).all(venue.id);
 
-  const now = new Date();
-  const weekStart = startOfWeekMonday(now);
-  const weekEnd = addDays(weekStart, 7);
   const dayBuckets = [];
   const dayLookup = {};
   for (let i = 0; i < 7; i += 1) {
@@ -326,9 +341,55 @@ router.get('/dojo/:slug/overview', requireAuth, requireCheckinFeature, (req, res
   }
 
   const weeklyUsers = new Map();
-  const activityLog = [];
 
-  for (const row of recentRows) {
+  // Process week rows for stats
+  for (const row of weekRows) {
+    const start = parseUtcDate(row.checked_in_at);
+    const end = parseUtcDate(row.checked_out_at);
+    if (!start || start < weekStart || start >= weekEnd) continue;
+
+    const normalizedUser = normalizeCheckinUser(row, 48);
+    const duration = Math.round(sessionMinutes(start, end, now));
+    const isActive = !row.checked_out_at;
+    const dayKey = toDayKey(start);
+    const dayBucket = dayLookup[dayKey];
+    if (!dayBucket) continue;
+
+    dayBucket.sessions += 1;
+    dayBucket.total_minutes += duration;
+    dayBucket._visitor_ids.add(row.user_id);
+    dayBucket.entries.push({
+      checkin_id: row.id,
+      user_id: row.user_id,
+      username: normalizedUser.username,
+      avatar: normalizedUser.avatar,
+      machine_name: row.machine_name,
+      checked_in_at: row.checked_in_at,
+      checked_out_at: row.checked_out_at || null,
+      session_minutes: duration,
+      active: isActive,
+    });
+
+    let userWeek = weeklyUsers.get(row.user_id);
+    if (!userWeek) {
+      userWeek = {
+        user_id: row.user_id,
+        username: normalizedUser.username,
+        avatar: normalizedUser.avatar,
+        week_sessions: 0,
+        week_minutes: 0,
+        active: false,
+      };
+      weeklyUsers.set(row.user_id, userWeek);
+    }
+    userWeek.week_sessions += 1;
+    userWeek.week_minutes += duration;
+    if (isActive) userWeek.active = true;
+  }
+
+  // Build activity log from the smaller recent-only query
+  const activityLog = [];
+  for (const row of logRows) {
     const start = parseUtcDate(row.checked_in_at);
     const end = parseUtcDate(row.checked_out_at);
     if (!start) continue;
@@ -366,52 +427,16 @@ router.get('/dojo/:slug/overview', requireAuth, requireCheckinFeature, (req, res
         active: false,
       });
     }
-
-    if (start < weekStart || start >= weekEnd) continue;
-    const dayKey = toDayKey(start);
-    const dayBucket = dayLookup[dayKey];
-    if (!dayBucket) continue;
-
-    dayBucket.sessions += 1;
-    dayBucket.total_minutes += duration;
-    dayBucket._visitor_ids.add(row.user_id);
-    dayBucket.entries.push({
-      checkin_id: row.id,
-      user_id: row.user_id,
-      username: normalizedUser.username,
-      avatar: normalizedUser.avatar,
-      machine_name: row.machine_name,
-      checked_in_at: row.checked_in_at,
-      checked_out_at: row.checked_out_at || null,
-      session_minutes: duration,
-      active: isActive,
-    });
-
-    let userWeek = weeklyUsers.get(row.user_id);
-    if (!userWeek) {
-      userWeek = {
-        user_id: row.user_id,
-        username: normalizedUser.username,
-        avatar: normalizedUser.avatar,
-        week_sessions: 0,
-        week_minutes: 0,
-        active: false,
-      };
-      weeklyUsers.set(row.user_id, userWeek);
-    }
-    userWeek.week_sessions += 1;
-    userWeek.week_minutes += duration;
-    if (isActive) userWeek.active = true;
   }
 
   for (const day of dayBuckets) {
     day.visitors = day._visitor_ids.size;
     day.total_minutes = Math.round(day.total_minutes);
-    day.entries.sort((a, b) => new Date(b.checked_in_at) - new Date(a.checked_in_at));
+    day.entries.sort((a, b) => (b.checked_in_at > a.checked_in_at ? 1 : -1));
     delete day._visitor_ids;
   }
 
-  activityLog.sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+  activityLog.sort((a, b) => (b.occurred_at > a.occurred_at ? 1 : -1));
   const weekUsers = Array.from(weeklyUsers.values())
     .map((u) => ({
       ...u,

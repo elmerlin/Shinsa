@@ -1763,6 +1763,7 @@ function initializeDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_checkins_user ON checkins(user_id, checked_in_at DESC);
     CREATE INDEX IF NOT EXISTS idx_checkins_venue ON checkins(venue_id, checked_out_at);
+    CREATE INDEX IF NOT EXISTS idx_checkins_venue_time ON checkins(venue_id, checked_in_at DESC);
     CREATE INDEX IF NOT EXISTS idx_checkins_active ON checkins(checked_out_at) WHERE checked_out_at IS NULL;
   `);
 
