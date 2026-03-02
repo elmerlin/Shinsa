@@ -1525,6 +1525,23 @@ export default function ProfilePage() {
     return activityItems;
   }, [activityItems, activitySubTab]);
 
+  // Group achievements by series, keeping only the highest tier per series for display.
+  const achievementSeriesDisplay = useMemo(() => {
+    const badges = Array.isArray(profile?.achievement_badges) ? profile.achievement_badges : [];
+    if (badges.length === 0) return [];
+    const seriesMap = {};
+    for (const badge of badges) {
+      const sid = badge.series_id;
+      if (!seriesMap[sid]) seriesMap[sid] = { tiers: [], highest: badge };
+      seriesMap[sid].tiers.push(badge);
+      if (badge.threshold > seriesMap[sid].highest.threshold) seriesMap[sid].highest = badge;
+    }
+    return Object.values(seriesMap).map(({ highest, tiers }) => ({
+      ...highest,
+      allTiers: tiers.sort((a, b) => b.threshold - a.threshold),
+    }));
+  }, [profile?.achievement_badges]);
+
   if (!profile) {
     if (loadError) {
       return <div className="text-center py-20 text-gray-500">{loadError}</div>;
@@ -1565,21 +1582,6 @@ export default function ProfilePage() {
     : 0;
   const hasGroupBadges = Array.isArray(profile.group_badges) && profile.group_badges.length > 0;
   const hasAchievementBadges = Array.isArray(profile.achievement_badges) && profile.achievement_badges.length > 0;
-  // Group achievements by series, keeping only the highest tier per series for display
-  const achievementSeriesDisplay = useMemo(() => {
-    if (!hasAchievementBadges) return [];
-    const seriesMap = {};
-    for (const badge of profile.achievement_badges) {
-      const sid = badge.series_id;
-      if (!seriesMap[sid]) seriesMap[sid] = { tiers: [], highest: badge };
-      seriesMap[sid].tiers.push(badge);
-      if (badge.threshold > seriesMap[sid].highest.threshold) seriesMap[sid].highest = badge;
-    }
-    return Object.values(seriesMap).map(({ highest, tiers }) => ({
-      ...highest,
-      allTiers: tiers.sort((a, b) => b.threshold - a.threshold),
-    }));
-  }, [hasAchievementBadges, profile.achievement_badges]);
   const hasAnyBadges = hasGroupBadges || hasAchievementBadges;
   const hasCompactPiuSummary = profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
 
