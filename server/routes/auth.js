@@ -121,6 +121,39 @@ function getUserGroupBadges(db, userId) {
   }));
 }
 
+function getUserAchievementBadges(db, userId) {
+  if (!db || !userId) return [];
+  const rows = db.prepare(`
+    SELECT
+      t.id AS tier_id,
+      s.id AS series_id,
+      s.key AS series_key,
+      s.name AS series_name,
+      t.name,
+      t.description,
+      t.image_data,
+      t.threshold,
+      a.awarded_at
+    FROM achievement_awards a
+    JOIN achievement_tiers t ON t.id = a.tier_id
+    JOIN achievement_series s ON s.id = t.series_id
+    WHERE a.user_id = ?
+    ORDER BY s.name COLLATE NOCASE ASC, t.sort_order ASC
+  `).all(userId);
+
+  return rows.map((row) => ({
+    tier_id: row.tier_id,
+    series_id: row.series_id,
+    series_key: row.series_key,
+    series_name: row.series_name,
+    name: row.name || '',
+    description: row.description || '',
+    image: row.image_data || '',
+    threshold: row.threshold,
+    awarded_at: row.awarded_at || '',
+  }));
+}
+
 function getUserGroups(db, userId) {
   if (!db || !userId) return [];
   const rows = db.prepare(`
@@ -141,9 +174,11 @@ function makePublicUser(db, user) {
   if (!user) return null;
   const normalized = normalizeClientUser(user, 128);
   const groupBadges = getUserGroupBadges(db, normalized.id);
+  const achievementBadges = getUserAchievementBadges(db, normalized.id);
   const withBadges = {
     ...normalized,
     group_badges: groupBadges,
+    achievement_badges: achievementBadges,
   };
   if (!normalized.show_age) {
     return { ...withBadges, date_of_birth: '' };
@@ -236,6 +271,7 @@ function toClientAuthUser(db, user, avatarSize = 96) {
     feature_access: getFeatureAccessByUserId(db, user.id, admin),
     groups: getUserGroups(db, user.id),
     group_badges: getUserGroupBadges(db, user.id),
+    achievement_badges: getUserAchievementBadges(db, user.id),
   };
 }
 
@@ -1178,6 +1214,311 @@ router.delete('/admin/groups/:groupId/badges/:badgeId/assign/:userId', requireAu
     user_id: userId,
     removed: (parseInt(result?.changes, 10) || 0) > 0,
   });
+});
+
+// ─── Achievement System ─────────────────────────────────────────────────────
+
+const ACHIEVEMENT_BADGE_UPLOAD = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 6 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/x-png', 'image/heic', 'image/heif', 'image/avif'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
+
+async function compressAchievementBadgeImage(buffer) {
+  let result = await sharp(buffer)
+    .rotate()
+    .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 64 })
+    .toBuffer();
+  if (result.length > 120 * 1024) {
+    result = await sharp(buffer)
+      .rotate()
+      .resize(220, 220, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 50 })
+      .toBuffer();
+  }
+  return `data:image/webp;base64,${result.toString('base64')}`;
+}
+
+// GET /api/auth/admin/achievements — list all achievement series with tiers
+router.get('/admin/achievements', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const series = db.prepare(`
+    SELECT id, key, name, description, created_at, updated_at
+    FROM achievement_series
+    ORDER BY name COLLATE NOCASE ASC
+  `).all();
+
+  const tiers = db.prepare(`
+    SELECT id, series_id, threshold, name, description, image_data, sort_order, created_at, updated_at
+    FROM achievement_tiers
+    ORDER BY sort_order ASC, threshold ASC
+  `).all();
+
+  const awardCounts = db.prepare(`
+    SELECT tier_id, COUNT(*) AS cnt
+    FROM achievement_awards
+    GROUP BY tier_id
+  `).all();
+  const awardCountMap = {};
+  for (const row of awardCounts) awardCountMap[row.tier_id] = row.cnt;
+
+  const tiersBySeries = {};
+  for (const tier of tiers) {
+    if (!tiersBySeries[tier.series_id]) tiersBySeries[tier.series_id] = [];
+    tiersBySeries[tier.series_id].push({
+      id: tier.id,
+      series_id: tier.series_id,
+      threshold: tier.threshold,
+      name: tier.name || '',
+      description: tier.description || '',
+      image: tier.image_data || '',
+      sort_order: tier.sort_order,
+      award_count: awardCountMap[tier.id] || 0,
+      created_at: tier.created_at || '',
+      updated_at: tier.updated_at || '',
+    });
+  }
+
+  res.json({
+    series: series.map((s) => ({
+      id: s.id,
+      key: s.key,
+      name: s.name || '',
+      description: s.description || '',
+      tiers: tiersBySeries[s.id] || [],
+      created_at: s.created_at || '',
+      updated_at: s.updated_at || '',
+    })),
+  });
+});
+
+// POST /api/auth/admin/achievements — create achievement series
+router.post('/admin/achievements', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const key = String(req.body?.key || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 64);
+  const name = normalizeGroupName(req.body?.name || '', 80);
+  const description = normalizeGroupText(req.body?.description || '', 300);
+  if (!key) return res.status(400).json({ error: 'Series key is required' });
+  if (!name) return res.status(400).json({ error: 'Series name is required' });
+
+  const existing = db.prepare('SELECT id FROM achievement_series WHERE key = ?').get(key);
+  if (existing) return res.status(409).json({ error: 'A series with this key already exists' });
+
+  const seriesId = uuidv4();
+  db.prepare(`
+    INSERT INTO achievement_series (id, key, name, description, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(seriesId, key, name, description, String(req.user?.id || '').trim());
+
+  res.status(201).json({
+    id: seriesId,
+    key,
+    name,
+    description,
+    tiers: [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+});
+
+// PUT /api/auth/admin/achievements/:seriesId — update achievement series
+router.put('/admin/achievements/:seriesId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const seriesId = String(req.params.seriesId || '').trim();
+  const series = db.prepare('SELECT * FROM achievement_series WHERE id = ?').get(seriesId);
+  if (!series) return res.status(404).json({ error: 'Series not found' });
+
+  const name = req.body?.name !== undefined ? normalizeGroupName(req.body.name, 80) : series.name;
+  const description = req.body?.description !== undefined ? normalizeGroupText(req.body.description, 300) : series.description;
+  if (!name) return res.status(400).json({ error: 'Series name is required' });
+
+  db.prepare(`
+    UPDATE achievement_series SET name = ?, description = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(name, description, seriesId);
+
+  res.json({ id: seriesId, key: series.key, name, description });
+});
+
+// DELETE /api/auth/admin/achievements/:seriesId — delete achievement series
+router.delete('/admin/achievements/:seriesId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const seriesId = String(req.params.seriesId || '').trim();
+  const result = db.prepare('DELETE FROM achievement_series WHERE id = ?').run(seriesId);
+  res.json({ success: true, removed: (parseInt(result?.changes, 10) || 0) > 0 });
+});
+
+// POST /api/auth/admin/achievements/:seriesId/tiers — create tier
+router.post('/admin/achievements/:seriesId/tiers', requireAuth, requireAdmin, ACHIEVEMENT_BADGE_UPLOAD.single('image'), async (req, res) => {
+  const db = getDb();
+  const seriesId = String(req.params.seriesId || '').trim();
+  const series = db.prepare('SELECT id FROM achievement_series WHERE id = ?').get(seriesId);
+  if (!series) return res.status(404).json({ error: 'Series not found' });
+
+  const name = normalizeGroupName(req.body?.name || '', 64);
+  const description = normalizeGroupText(req.body?.description || '', 200);
+  const threshold = parseInt(req.body?.threshold, 10);
+  if (!name) return res.status(400).json({ error: 'Tier name is required' });
+  if (isNaN(threshold) || threshold < 1) return res.status(400).json({ error: 'Threshold must be a positive number' });
+  if (!req.file) return res.status(400).json({ error: 'Badge image is required' });
+
+  let imageData = '';
+  try {
+    imageData = await compressAchievementBadgeImage(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ error: err?.message || 'Failed to process badge image' });
+  }
+
+  // Auto-assign sort_order based on threshold
+  const maxOrder = db.prepare('SELECT MAX(sort_order) AS m FROM achievement_tiers WHERE series_id = ?').get(seriesId);
+  const sortOrder = (maxOrder?.m ?? -1) + 1;
+
+  const tierId = uuidv4();
+  db.prepare(`
+    INSERT INTO achievement_tiers (id, series_id, threshold, name, description, image_data, sort_order, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).run(tierId, seriesId, threshold, name, description, imageData, sortOrder, String(req.user?.id || '').trim());
+
+  const tier = db.prepare('SELECT * FROM achievement_tiers WHERE id = ?').get(tierId);
+  const awardCount = db.prepare('SELECT COUNT(*) AS cnt FROM achievement_awards WHERE tier_id = ?').get(tierId)?.cnt || 0;
+
+  res.status(201).json({
+    id: tier.id,
+    series_id: tier.series_id,
+    threshold: tier.threshold,
+    name: tier.name || '',
+    description: tier.description || '',
+    image: tier.image_data || '',
+    sort_order: tier.sort_order,
+    award_count: awardCount,
+    created_at: tier.created_at || '',
+    updated_at: tier.updated_at || '',
+  });
+});
+
+// PUT /api/auth/admin/achievements/:seriesId/tiers/:tierId — update tier
+router.put('/admin/achievements/:seriesId/tiers/:tierId', requireAuth, requireAdmin, ACHIEVEMENT_BADGE_UPLOAD.single('image'), async (req, res) => {
+  const db = getDb();
+  const seriesId = String(req.params.seriesId || '').trim();
+  const tierId = String(req.params.tierId || '').trim();
+  const tier = db.prepare('SELECT * FROM achievement_tiers WHERE id = ? AND series_id = ?').get(tierId, seriesId);
+  if (!tier) return res.status(404).json({ error: 'Tier not found' });
+
+  const nextName = req.body?.name !== undefined ? normalizeGroupName(req.body.name, 64) : tier.name;
+  const nextDescription = req.body?.description !== undefined ? normalizeGroupText(req.body.description, 200) : tier.description;
+  const nextThreshold = req.body?.threshold !== undefined ? parseInt(req.body.threshold, 10) : tier.threshold;
+  if (!nextName) return res.status(400).json({ error: 'Tier name is required' });
+  if (isNaN(nextThreshold) || nextThreshold < 1) return res.status(400).json({ error: 'Threshold must be a positive number' });
+
+  let nextImageData = tier.image_data || '';
+  if (req.file) {
+    try {
+      nextImageData = await compressAchievementBadgeImage(req.file.buffer);
+    } catch (err) {
+      return res.status(400).json({ error: err?.message || 'Failed to process badge image' });
+    }
+  }
+
+  db.prepare(`
+    UPDATE achievement_tiers
+    SET name = ?, description = ?, threshold = ?, image_data = ?, updated_at = datetime('now')
+    WHERE id = ? AND series_id = ?
+  `).run(nextName, nextDescription, nextThreshold, nextImageData, tierId, seriesId);
+
+  const updated = db.prepare('SELECT * FROM achievement_tiers WHERE id = ?').get(tierId);
+  const awardCount = db.prepare('SELECT COUNT(*) AS cnt FROM achievement_awards WHERE tier_id = ?').get(tierId)?.cnt || 0;
+
+  res.json({
+    id: updated.id,
+    series_id: updated.series_id,
+    threshold: updated.threshold,
+    name: updated.name || '',
+    description: updated.description || '',
+    image: updated.image_data || '',
+    sort_order: updated.sort_order,
+    award_count: awardCount,
+    created_at: updated.created_at || '',
+    updated_at: updated.updated_at || '',
+  });
+});
+
+// DELETE /api/auth/admin/achievements/:seriesId/tiers/:tierId — delete tier
+router.delete('/admin/achievements/:seriesId/tiers/:tierId', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const seriesId = String(req.params.seriesId || '').trim();
+  const tierId = String(req.params.tierId || '').trim();
+  const result = db.prepare('DELETE FROM achievement_tiers WHERE id = ? AND series_id = ?').run(tierId, seriesId);
+  res.json({ success: true, removed: (parseInt(result?.changes, 10) || 0) > 0 });
+});
+
+// POST /api/auth/admin/achievements/evaluate/:seriesKey — evaluate and award achievements for a series
+router.post('/admin/achievements/evaluate/:seriesKey', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const seriesKey = String(req.params.seriesKey || '').trim().toLowerCase();
+  const series = db.prepare('SELECT * FROM achievement_series WHERE key = ?').get(seriesKey);
+  if (!series) return res.status(404).json({ error: 'Series not found' });
+
+  const tiers = db.prepare(`
+    SELECT id, threshold FROM achievement_tiers
+    WHERE series_id = ?
+    ORDER BY threshold ASC
+  `).all(series.id);
+
+  if (!tiers.length) return res.json({ evaluated: 0, awarded: 0 });
+
+  let awarded = 0;
+
+  if (seriesKey === 'pumps_received') {
+    // Get all users and their total pump counts (all pump types)
+    const users = db.prepare('SELECT id FROM users').all();
+    const pumpQuery = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM post_pumps pp JOIN user_posts up ON pp.post_id = up.id WHERE up.user_id = ?) +
+        (SELECT COUNT(*) FROM upscore_pumps usp JOIN user_upscores us ON usp.upscore_id = us.id WHERE us.user_id = ?) +
+        (SELECT COUNT(*) FROM new_clear_pumps ncp JOIN user_new_clears nc ON ncp.clear_id = nc.id WHERE nc.user_id = ?) +
+        (SELECT COUNT(*) FROM comment_pumps cp JOIN post_comments pc ON cp.comment_type = 'post' AND cp.comment_id = pc.id WHERE pc.user_id = ?) +
+        (SELECT COUNT(*) FROM comment_pumps cp JOIN upscore_comments uc ON cp.comment_type = 'upscore' AND cp.comment_id = uc.id WHERE uc.user_id = ?) +
+        (SELECT COUNT(*) FROM comment_pumps cp JOIN new_clear_comments ncc ON cp.comment_type = 'clear' AND cp.comment_id = ncc.id WHERE ncc.user_id = ?) +
+        (SELECT COUNT(*) FROM community_post_pumps cpp JOIN community_posts cpo ON cpp.post_id = cpo.id WHERE cpo.user_id = ?) +
+        (SELECT COUNT(*) FROM community_comment_pumps ccp JOIN community_post_comments cpc ON ccp.comment_id = cpc.id WHERE cpc.user_id = ?)
+        AS total
+    `);
+
+    const insertAward = db.prepare(`
+      INSERT OR IGNORE INTO achievement_awards (tier_id, user_id, awarded_at)
+      VALUES (?, ?, datetime('now'))
+    `);
+
+    const evalTransaction = db.transaction(() => {
+      for (const user of users) {
+        const result = pumpQuery.get(user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id);
+        const totalPumps = result?.total || 0;
+        for (const tier of tiers) {
+          if (totalPumps >= tier.threshold) {
+            const ins = insertAward.run(tier.id, user.id);
+            awarded += ins.changes;
+          }
+        }
+      }
+    });
+    evalTransaction();
+  }
+
+  res.json({ evaluated: seriesKey, awarded });
+});
+
+// GET /api/auth/user/:id/achievements — get a user's achievement badges
+router.get('/user/:id/achievements', (req, res) => {
+  const db = getDb();
+  const userId = String(req.params.id || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  res.json({ achievements: getUserAchievementBadges(db, userId) });
 });
 
 // POST /api/auth/group-popups/consume - fetch one pending popup and mark it seen

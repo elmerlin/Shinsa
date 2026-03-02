@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import MarkdownContent from '../components/MarkdownContent';
 import AdminGroupsTab from '../components/AdminGroupsTab';
+import AdminAchievementsTab from '../components/AdminAchievementsTab';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
@@ -591,7 +592,7 @@ export default function AdminPanel() {
 
       {/* Tabs */}
       <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-6">
-        {['tournaments', 'archived', 'notices', 'changelog', 'shoes', 'permissions', 'groups', 'fun'].map(t => (
+        {['tournaments', 'archived', 'notices', 'changelog', 'shoes', 'permissions', 'groups', 'achievements', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -607,6 +608,7 @@ export default function AdminPanel() {
                t === 'shoes' ? `Shoes (${shoeCatalogTotal})` :
                t === 'permissions' ? 'Permissions' :
                t === 'groups' ? 'Groups' :
+               t === 'achievements' ? 'Achievements' :
                'Fun Settings'}
             </span>
           </button>
@@ -1355,6 +1357,11 @@ export default function AdminPanel() {
       {/* Groups Tab */}
       {tab === 'groups' && (
         <AdminGroupsTab />
+      )}
+
+      {/* Achievements Tab */}
+      {tab === 'achievements' && (
+        <AdminAchievementsTab />
       )}
 
       {/* Fun Settings Tab */}

@@ -13,6 +13,7 @@ const {
   buildProfilePath,
 } = require('../lib/activitySubscriptions');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const { checkPumpAchievements } = require('../lib/achievements');
 
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
@@ -495,6 +496,7 @@ router.post('/posts/:id/pump', requireAuth, (req, res) => {
     createNotification(db, post.user_id, 'post_pump', 'New Pump', `${me.username} pumped your post`, `/post/${postId}`);
   }
 
+  checkPumpAchievements(db, post.user_id);
   res.json({ pumped: true, pump_count: count });
 });
 
@@ -868,6 +870,7 @@ router.post('/upscores/:id/pump', requireAuth, (req, res) => {
     createNotification(db, upscore.user_id, 'upscore_pump', 'New Pump', `${me.username} pumped your upscore!`, `/upscore/${upscoreId}`);
   }
 
+  checkPumpAchievements(db, upscore.user_id);
   res.json({ pumped: true, pump_count: count });
 });
 
@@ -1044,6 +1047,7 @@ router.post('/clears/:id/pump', requireAuth, (req, res) => {
     createNotification(db, clear.user_id, 'clear_pump', 'New Pump', `${me.username} pumped your new clear!`, `/clear/${clearId}`);
   }
 
+  checkPumpAchievements(db, clear.user_id);
   res.json({ pumped: true, pump_count: count });
 });
 
@@ -1237,6 +1241,7 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
     createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, link);
   }
 
+  checkPumpAchievements(db, comment.user_id);
   res.json({ pumped: true, pump_count: count });
 });
 
