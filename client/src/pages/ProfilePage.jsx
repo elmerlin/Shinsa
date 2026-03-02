@@ -1565,6 +1565,21 @@ export default function ProfilePage() {
     : 0;
   const hasGroupBadges = Array.isArray(profile.group_badges) && profile.group_badges.length > 0;
   const hasAchievementBadges = Array.isArray(profile.achievement_badges) && profile.achievement_badges.length > 0;
+  // Group achievements by series, keeping only the highest tier per series for display
+  const achievementSeriesDisplay = useMemo(() => {
+    if (!hasAchievementBadges) return [];
+    const seriesMap = {};
+    for (const badge of profile.achievement_badges) {
+      const sid = badge.series_id;
+      if (!seriesMap[sid]) seriesMap[sid] = { tiers: [], highest: badge };
+      seriesMap[sid].tiers.push(badge);
+      if (badge.threshold > seriesMap[sid].highest.threshold) seriesMap[sid].highest = badge;
+    }
+    return Object.values(seriesMap).map(({ highest, tiers }) => ({
+      ...highest,
+      allTiers: tiers.sort((a, b) => b.threshold - a.threshold),
+    }));
+  }, [hasAchievementBadges, profile.achievement_badges]);
   const hasAnyBadges = hasGroupBadges || hasAchievementBadges;
   const hasCompactPiuSummary = profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
 
@@ -1742,9 +1757,9 @@ export default function ProfilePage() {
                 <div className={`${hasCompactPiuSummary ? 'mt-2' : ''} rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-2 sm:px-3 sm:py-2.5`}>
                   <div className="overflow-x-auto touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                     <div className="inline-flex min-w-full justify-end gap-2">
-                      {hasAchievementBadges && profile.achievement_badges.map((badge) => (
+                      {achievementSeriesDisplay.map((badge) => (
                         <button
-                          key={`ach-${badge.tier_id}`}
+                          key={`ach-${badge.series_id}`}
                           type="button"
                           className="inline-flex shrink-0 items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-piu-gold/40 bg-piu-dark/55 hover:border-piu-gold/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-gold/70"
                           title={badge.description || badge.name || 'Achievement'}
@@ -3130,7 +3145,7 @@ export default function ProfilePage() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
-              <p className="text-[10px] text-piu-gold/70 font-display uppercase tracking-wide">Achievement</p>
+              <p className="text-[10px] text-piu-gold/70 font-display uppercase tracking-wide">{selectedAchievementBadge.series_name || 'Achievement'}</p>
               <button
                 type="button"
                 onClick={() => setSelectedAchievementBadge(null)}
@@ -3159,10 +3174,31 @@ export default function ProfilePage() {
               <p className="mt-1 text-sm text-gray-400 break-words">
                 {selectedAchievementBadge.description || 'No description provided.'}
               </p>
-              <p className="mt-2 text-[11px] text-piu-gold/60 font-display">
-                {selectedAchievementBadge.series_name}
-              </p>
             </div>
+            {selectedAchievementBadge.allTiers && selectedAchievementBadge.allTiers.length > 1 && (
+              <div className="mt-4 pt-3 border-t border-piu-gold/15">
+                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-2">Earned Tiers</p>
+                <div className="space-y-2">
+                  {selectedAchievementBadge.allTiers.map((tier) => (
+                    <div key={tier.tier_id} className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 shrink-0 rounded-md border border-piu-gold/25 bg-piu-dark/55 flex items-center justify-center overflow-hidden">
+                        {tier.image ? (
+                          <img src={tier.image} alt={tier.name || 'Badge'} className="w-full h-full object-contain p-0.5" />
+                        ) : (
+                          <span className="text-[10px] font-display font-bold text-piu-gold">
+                            {String((tier.name || 'A')[0] || 'A').toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-xs font-display font-semibold text-white truncate">{tier.name}</p>
+                        <p className="text-[10px] text-gray-500">{tier.threshold} pumps</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@ const { requireAuth, optionalAuth } = require('./auth');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const { createUserNotification } = require('../lib/notifications');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const { checkPumpAchievements } = require('../lib/achievements');
 
 // Multer config for image uploads
 const upload = multer({
@@ -1195,6 +1196,8 @@ router.post('/:id/posts/:postId/pump', requireAuth, (req, res) => {
     db.prepare('DELETE FROM community_post_pumps WHERE post_id = ? AND user_id = ?').run(req.params.postId, req.user.id);
   } else {
     db.prepare('INSERT INTO community_post_pumps (post_id, user_id) VALUES (?, ?)').run(req.params.postId, req.user.id);
+    const post = db.prepare('SELECT user_id FROM community_posts WHERE id = ?').get(req.params.postId);
+    if (post) checkPumpAchievements(db, post.user_id);
   }
 
   const count = db.prepare('SELECT COUNT(*) as c FROM community_post_pumps WHERE post_id = ?').get(req.params.postId);
@@ -1410,6 +1413,8 @@ router.post('/:id/comments/:commentId/pump', requireAuth, (req, res) => {
     db.prepare('DELETE FROM community_comment_pumps WHERE comment_id = ? AND user_id = ?').run(req.params.commentId, req.user.id);
   } else {
     db.prepare('INSERT INTO community_comment_pumps (comment_id, user_id) VALUES (?, ?)').run(req.params.commentId, req.user.id);
+    const comment = db.prepare('SELECT user_id FROM community_post_comments WHERE id = ?').get(req.params.commentId);
+    if (comment) checkPumpAchievements(db, comment.user_id);
   }
 
   const count = db.prepare('SELECT COUNT(*) as c FROM community_comment_pumps WHERE comment_id = ?').get(req.params.commentId);
