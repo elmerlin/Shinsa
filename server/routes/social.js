@@ -30,6 +30,32 @@ function stripSessionSummaryMarkers(text) {
   return String(text || '').replace(/\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '').trim();
 }
 
+// Check and award pump-received achievements for a user after they get a pump
+function checkPumpAchievements(db, contentOwnerId) {
+  try {
+    const series = db.prepare("SELECT id FROM achievement_series WHERE key = 'pumps_received'").get();
+    if (!series) return;
+
+    const tiers = db.prepare('SELECT id, threshold FROM achievement_tiers WHERE series_id = ? ORDER BY threshold ASC').all(series.id);
+    if (!tiers.length) return;
+
+    const pumpResult = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM post_pumps pp JOIN user_posts up ON pp.post_id = up.id WHERE up.user_id = ?) +
+        (SELECT COUNT(*) FROM upscore_pumps usp JOIN user_upscores us ON usp.upscore_id = us.id WHERE us.user_id = ?) +
+        (SELECT COUNT(*) FROM new_clear_pumps ncp JOIN user_new_clears nc ON ncp.clear_id = nc.id WHERE nc.user_id = ?)
+        AS total
+    `).get(contentOwnerId, contentOwnerId, contentOwnerId);
+    const totalPumps = pumpResult?.total || 0;
+
+    for (const tier of tiers) {
+      if (totalPumps >= tier.threshold) {
+        db.prepare('INSERT OR IGNORE INTO achievement_awards (tier_id, user_id, awarded_at) VALUES (?, ?, datetime(\'now\'))').run(tier.id, contentOwnerId);
+      }
+    }
+  } catch { /* achievement check should never break pump flow */ }
+}
+
 function textSnippet(text, max = 80) {
   const compact = stripSessionSummaryMarkers(text).replace(/\s+/g, ' ').trim();
   if (!compact) return '';
@@ -495,6 +521,7 @@ router.post('/posts/:id/pump', requireAuth, (req, res) => {
     createNotification(db, post.user_id, 'post_pump', 'New Pump', `${me.username} pumped your post`, `/post/${postId}`);
   }
 
+  checkPumpAchievements(db, post.user_id);
   res.json({ pumped: true, pump_count: count });
 });
 
@@ -868,6 +895,7 @@ router.post('/upscores/:id/pump', requireAuth, (req, res) => {
     createNotification(db, upscore.user_id, 'upscore_pump', 'New Pump', `${me.username} pumped your upscore!`, `/upscore/${upscoreId}`);
   }
 
+  checkPumpAchievements(db, upscore.user_id);
   res.json({ pumped: true, pump_count: count });
 });
 
@@ -1044,6 +1072,7 @@ router.post('/clears/:id/pump', requireAuth, (req, res) => {
     createNotification(db, clear.user_id, 'clear_pump', 'New Pump', `${me.username} pumped your new clear!`, `/clear/${clearId}`);
   }
 
+  checkPumpAchievements(db, clear.user_id);
   res.json({ pumped: true, pump_count: count });
 });
 

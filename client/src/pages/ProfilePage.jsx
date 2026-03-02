@@ -707,6 +707,7 @@ export default function ProfilePage() {
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
   const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
   const [selectedGroupBadge, setSelectedGroupBadge] = useState(null);
+  const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
@@ -761,6 +762,7 @@ export default function ProfilePage() {
     setPiuDataLoaded(false);
     setShowPumbilityThresholdModal(false);
     setSelectedGroupBadge(null);
+    setSelectedAchievementBadge(null);
     setSyncProgress({ in_progress: '', progress: 0, total: 0 });
     setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
     setActivityItems([]);
@@ -1562,6 +1564,8 @@ export default function ProfilePage() {
     ? Math.round((pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.level, 10) || 0), 0) / pumbilityTopScores.length) * 10) / 10
     : 0;
   const hasGroupBadges = Array.isArray(profile.group_badges) && profile.group_badges.length > 0;
+  const hasAchievementBadges = Array.isArray(profile.achievement_badges) && profile.achievement_badges.length > 0;
+  const hasAnyBadges = hasGroupBadges || hasAchievementBadges;
   const hasCompactPiuSummary = profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
 
   return (
@@ -1712,7 +1716,7 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-          {(hasCompactPiuSummary || hasGroupBadges) && (
+          {(hasCompactPiuSummary || hasAnyBadges) && (
             <div className="shrink-0 self-start w-[140px] sm:w-[220px]">
               {hasCompactPiuSummary && (
                 <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-1.5 sm:px-3 sm:py-2 flex flex-col gap-0.5 sm:gap-1">
@@ -1734,11 +1738,29 @@ export default function ProfilePage() {
                   )}
                 </div>
               )}
-              {hasGroupBadges && (
+              {hasAnyBadges && (
                 <div className={`${hasCompactPiuSummary ? 'mt-2' : ''} rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-2 sm:px-3 sm:py-2.5`}>
                   <div className="overflow-x-auto touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                     <div className="inline-flex min-w-full justify-end gap-2">
-                      {profile.group_badges.map((badge) => (
+                      {hasAchievementBadges && profile.achievement_badges.map((badge) => (
+                        <button
+                          key={`ach-${badge.tier_id}`}
+                          type="button"
+                          className="inline-flex shrink-0 items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-piu-gold/40 bg-piu-dark/55 hover:border-piu-gold/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-gold/70"
+                          title={badge.description || badge.name || 'Achievement'}
+                          aria-label={badge.name || 'Achievement'}
+                          onClick={() => setSelectedAchievementBadge(badge)}
+                        >
+                          {badge.image ? (
+                            <img src={badge.image} alt={badge.name || 'Badge'} className="w-full h-full rounded-md object-contain p-0.5" />
+                          ) : (
+                            <span className="text-[11px] font-display font-bold text-piu-gold">
+                              {String((badge.name || 'A')[0] || 'A').toUpperCase()}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                      {hasGroupBadges && profile.group_badges.map((badge) => (
                         <button
                           key={`${badge.id || badge.name}-${badge.group_id || ''}`}
                           type="button"
@@ -3092,6 +3114,53 @@ export default function ProfilePage() {
               </p>
               <p className="mt-1 text-sm text-gray-400 break-words">
                 {selectedGroupBadge.description || 'No description provided.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedAchievementBadge && (
+        <div
+          className="fixed inset-0 z-[95] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedAchievementBadge(null)}
+        >
+          <div
+            className="w-full max-w-xs rounded-2xl border border-piu-gold/30 bg-[#0b1220] shadow-2xl p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[10px] text-piu-gold/70 font-display uppercase tracking-wide">Achievement</p>
+              <button
+                type="button"
+                onClick={() => setSelectedAchievementBadge(null)}
+                className="text-xs text-gray-400 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-3 flex flex-col items-center text-center">
+              <div className="w-24 h-24 rounded-xl border border-piu-gold/30 bg-piu-dark/55 flex items-center justify-center overflow-hidden">
+                {selectedAchievementBadge.image ? (
+                  <img
+                    src={selectedAchievementBadge.image}
+                    alt={selectedAchievementBadge.name || 'Badge'}
+                    className="w-full h-full object-contain p-1"
+                  />
+                ) : (
+                  <span className="text-2xl font-display font-bold text-piu-gold">
+                    {String((selectedAchievementBadge.name || 'A')[0] || 'A').toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-lg font-display font-bold text-white break-words">
+                {selectedAchievementBadge.name || 'Achievement'}
+              </p>
+              <p className="mt-1 text-sm text-gray-400 break-words">
+                {selectedAchievementBadge.description || 'No description provided.'}
+              </p>
+              <p className="mt-2 text-[11px] text-piu-gold/60 font-display">
+                {selectedAchievementBadge.series_name}
               </p>
             </div>
           </div>

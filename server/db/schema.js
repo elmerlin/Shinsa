@@ -750,6 +750,42 @@ function initializeDb() {
       PRIMARY KEY (popup_id, user_id)
     );
 
+    -- Achievement system: series define categories (e.g. "Pumps Received"),
+    -- tiers define thresholds within a series (e.g. 10 / 50 / 100 pumps),
+    -- and awards track which users have earned which tier.
+    CREATE TABLE IF NOT EXISTS achievement_series (
+      id TEXT PRIMARY KEY,
+      key TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS achievement_tiers (
+      id TEXT PRIMARY KEY,
+      series_id TEXT NOT NULL REFERENCES achievement_series(id) ON DELETE CASCADE,
+      threshold INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      image_data TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS achievement_awards (
+      tier_id TEXT NOT NULL REFERENCES achievement_tiers(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      awarded_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (tier_id, user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_achievement_tiers_series ON achievement_tiers(series_id, sort_order);
+    CREATE INDEX IF NOT EXISTS idx_achievement_awards_user ON achievement_awards(user_id, tier_id);
+
     CREATE TABLE IF NOT EXISTS invitations (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

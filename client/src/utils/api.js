@@ -297,6 +297,48 @@ export const removeAdminGroupBadgeFromUser = (groupId, badgeId, userId) => reque
 );
 export const consumeGroupPopup = () => request('/auth/group-popups/consume', { method: 'POST' });
 
+// Achievements
+export const getAdminAchievements = () => request('/auth/admin/achievements');
+export const createAdminAchievementSeries = (data) => request('/auth/admin/achievements', { method: 'POST', body: JSON.stringify(data) });
+export const updateAdminAchievementSeries = (seriesId, data) => request(`/auth/admin/achievements/${encodeURIComponent(seriesId)}`, {
+  method: 'PUT', body: JSON.stringify(data),
+});
+export const deleteAdminAchievementSeries = (seriesId) => request(`/auth/admin/achievements/${encodeURIComponent(seriesId)}`, { method: 'DELETE' });
+export async function createAdminAchievementTier(seriesId, { name, description, threshold, imageFile }) {
+  const formData = new FormData();
+  formData.append('name', String(name || '').trim());
+  formData.append('description', String(description || '').trim());
+  formData.append('threshold', String(threshold || ''));
+  if (imageFile) formData.append('image', imageFile);
+  const res = await fetch(`${API_BASE}/auth/admin/achievements/${encodeURIComponent(seriesId)}/tiers`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() },
+    body: formData,
+  });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to create tier'); }
+  return res.json();
+}
+export async function updateAdminAchievementTier(seriesId, tierId, { name, description, threshold, imageFile }) {
+  const formData = new FormData();
+  if (name !== undefined) formData.append('name', String(name || '').trim());
+  if (description !== undefined) formData.append('description', String(description || '').trim());
+  if (threshold !== undefined) formData.append('threshold', String(threshold || ''));
+  if (imageFile) formData.append('image', imageFile);
+  const res = await fetch(`${API_BASE}/auth/admin/achievements/${encodeURIComponent(seriesId)}/tiers/${encodeURIComponent(tierId)}`, {
+    method: 'PUT',
+    headers: { ...getAuthHeaders() },
+    body: formData,
+  });
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || 'Failed to update tier'); }
+  return res.json();
+}
+export const deleteAdminAchievementTier = (seriesId, tierId) => request(
+  `/auth/admin/achievements/${encodeURIComponent(seriesId)}/tiers/${encodeURIComponent(tierId)}`,
+  { method: 'DELETE' }
+);
+export const evaluateAchievements = (seriesKey) => request(`/auth/admin/achievements/evaluate/${encodeURIComponent(seriesKey)}`, { method: 'POST' });
+export const getUserAchievements = (userId) => request(`/auth/user/${encodeURIComponent(userId)}/achievements`);
+
 // Fun mini-game
 export const getFunLeaderboard = (limit = 10) => request(`/fun/leaderboard?limit=${encodeURIComponent(limit)}`);
 export const submitFunScore = (score) => request('/fun/score', { method: 'POST', body: JSON.stringify({ score }) });
