@@ -126,6 +126,7 @@ const MANUAL_CANONICAL_OVERRIDES = {
   'Paradoxx - SHORT CUT -': 'PARADOXX',
   'God Mode 2.0 feat. Skizzo': 'God Mode 2.0',
   'GOOD NIGHT - FULL SONG -': 'GOOD NIGHT',
+  'Canon D - FULL SONG -': 'Canon D FULL Song MIX',
   'Stardream -Eurobeat Remix- - SHORT CUT -': 'Stardream -Eurobeat Remix-',
   'Bemera - SHORT CUT -': 'BEMERA',
   'CHICKEN WING - SHORT CUT -': 'CHICKEN WING',
