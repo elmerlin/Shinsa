@@ -121,12 +121,15 @@ router.delete('/follow/:userId', requireAuth, (req, res) => {
 router.get('/following/:userId', (req, res) => {
   const db = getDb();
   const following = db.prepare(`
-    SELECT u.id, u.username, u.avatar, u.pumbility, u.skill_title, u.nationality
+    SELECT u.id, u.username, u.avatar, u.avatar_v, u.pumbility, u.skill_title, u.nationality
     FROM user_follows f
     JOIN users u ON f.following_id = u.id
     WHERE f.follower_id = ?
     ORDER BY f.created_at DESC
   `).all(req.params.userId);
+  for (const u of following) {
+    u.avatar = normalizeUserAvatarForList(u.avatar, u.id, 48, u.avatar_v);
+  }
   res.json(following);
 });
 
@@ -134,12 +137,15 @@ router.get('/following/:userId', (req, res) => {
 router.get('/followers/:userId', (req, res) => {
   const db = getDb();
   const followers = db.prepare(`
-    SELECT u.id, u.username, u.avatar, u.pumbility, u.skill_title, u.nationality
+    SELECT u.id, u.username, u.avatar, u.avatar_v, u.pumbility, u.skill_title, u.nationality
     FROM user_follows f
     JOIN users u ON f.follower_id = u.id
     WHERE f.following_id = ?
     ORDER BY f.created_at DESC
   `).all(req.params.userId);
+  for (const u of followers) {
+    u.avatar = normalizeUserAvatarForList(u.avatar, u.id, 48, u.avatar_v);
+  }
   res.json(followers);
 });
 
@@ -148,19 +154,18 @@ router.get('/follow-status/:userId', optionalAuth, (req, res) => {
   const db = getDb();
   if (!req.user) return res.json({ following: false, followers_count: 0, following_count: 0 });
 
-  const isFollowing = !!db.prepare(
-    'SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = ?'
-  ).get(req.user.id, req.params.userId);
+  const result = db.prepare(`
+    SELECT
+      (SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = ?) as is_following,
+      (SELECT COUNT(*) FROM user_follows WHERE following_id = ?) as followers_count,
+      (SELECT COUNT(*) FROM user_follows WHERE follower_id = ?) as following_count
+  `).get(req.user.id, req.params.userId, req.params.userId, req.params.userId);
 
-  const followersCount = db.prepare(
-    'SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?'
-  ).get(req.params.userId).count;
-
-  const followingCount = db.prepare(
-    'SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?'
-  ).get(req.params.userId).count;
-
-  res.json({ following: isFollowing, followers_count: followersCount, following_count: followingCount });
+  res.json({
+    following: !!result.is_following,
+    followers_count: result.followers_count,
+    following_count: result.following_count,
+  });
 });
 
 // GET /api/social/activity-notifications/:userId — get current user's activity notif prefs for target user
@@ -232,20 +237,18 @@ router.get('/counts/:userId', (req, res) => {
   const followingCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?').get(userId).count;
   const postsCount = db.prepare('SELECT COUNT(*) as count FROM user_posts WHERE user_id = ?').get(userId).count;
 
-  // Total pumps received across all content types
-  const postPumps = db.prepare('SELECT COUNT(*) as c FROM post_pumps pp JOIN user_posts up ON pp.post_id = up.id WHERE up.user_id = ?').get(userId).c;
-  const upscorePumps = db.prepare('SELECT COUNT(*) as c FROM upscore_pumps usp JOIN user_upscores us ON usp.upscore_id = us.id WHERE us.user_id = ?').get(userId).c;
-  const clearPumps = db.prepare('SELECT COUNT(*) as c FROM new_clear_pumps ncp JOIN user_new_clears nc ON ncp.clear_id = nc.id WHERE nc.user_id = ?').get(userId).c;
-  let commentPumps = 0;
+  // Total pumps received across all content types (single query instead of 4)
+  let totalPumps = 0;
   try {
-    commentPumps = db.prepare(`
-      SELECT COUNT(*) as c FROM comment_pumps cp WHERE
-        (cp.comment_type = 'post' AND cp.comment_id IN (SELECT id FROM post_comments WHERE user_id = ?)) OR
-        (cp.comment_type = 'upscore' AND cp.comment_id IN (SELECT id FROM upscore_comments WHERE user_id = ?)) OR
-        (cp.comment_type = 'clear' AND cp.comment_id IN (SELECT id FROM new_clear_comments WHERE user_id = ?))
-    `).get(userId, userId, userId).c;
+    const pumpResult = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM post_pumps pp JOIN user_posts up ON pp.post_id = up.id WHERE up.user_id = ?) +
+        (SELECT COUNT(*) FROM upscore_pumps usp JOIN user_upscores us ON usp.upscore_id = us.id WHERE us.user_id = ?) +
+        (SELECT COUNT(*) FROM new_clear_pumps ncp JOIN user_new_clears nc ON ncp.clear_id = nc.id WHERE nc.user_id = ?)
+        as total
+    `).get(userId, userId, userId);
+    totalPumps = pumpResult.total || 0;
   } catch {}
-  const totalPumps = postPumps + upscorePumps + clearPumps + commentPumps;
 
   // Follower trend: snapshot today, compare to yesterday
   const today = new Date().toISOString().split('T')[0];
@@ -361,12 +364,16 @@ router.get('/posts/user/:userId', optionalAuth, (req, res) => {
     LIMIT ? OFFSET ?
   `).all(req.params.userId, limit, offset);
 
-  // Attach user's pump status if authenticated
-  if (req.user) {
+  // Attach user's pump status if authenticated (batch query instead of N+1)
+  if (req.user && posts.length > 0) {
+    const postIds = posts.map(p => p.id);
+    const placeholders = postIds.map(() => '?').join(',');
+    const pumped = db.prepare(
+      `SELECT post_id FROM post_pumps WHERE user_id = ? AND post_id IN (${placeholders})`
+    ).all(req.user.id, ...postIds);
+    const pumpedSet = new Set(pumped.map(r => r.post_id));
     for (const post of posts) {
-      post.user_pumped = !!db.prepare(
-        'SELECT 1 FROM post_pumps WHERE post_id = ? AND user_id = ?'
-      ).get(post.id, req.user.id);
+      post.user_pumped = pumpedSet.has(post.id);
     }
   }
 
@@ -825,9 +832,9 @@ router.get('/feed', requireAuth, (req, res) => {
     c.avatar = normalizeUserAvatarForList(c.avatar, c.user_id, 64);
   }
 
-  // Merge and sort by created_at
+  // Merge and sort by created_at (string comparison works for ISO timestamps)
   const feed = [...posts, ...upscores, ...clears]
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .sort((a, b) => (b.created_at > a.created_at ? 1 : b.created_at < a.created_at ? -1 : 0))
     .slice(0, limit);
 
   res.json(feed);

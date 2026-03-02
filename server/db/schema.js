@@ -1108,6 +1108,8 @@ function initializeDb() {
 
     CREATE INDEX IF NOT EXISTS idx_follows_follower ON user_follows(follower_id);
     CREATE INDEX IF NOT EXISTS idx_follows_following ON user_follows(following_id);
+    CREATE INDEX IF NOT EXISTS idx_follows_follower_time ON user_follows(follower_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_follows_following_time ON user_follows(following_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_posts_user ON user_posts(user_id);
     CREATE INDEX IF NOT EXISTS idx_posts_created ON user_posts(created_at);
     CREATE INDEX IF NOT EXISTS idx_post_pumps ON post_pumps(post_id);
@@ -1763,6 +1765,7 @@ function initializeDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_checkins_user ON checkins(user_id, checked_in_at DESC);
     CREATE INDEX IF NOT EXISTS idx_checkins_venue ON checkins(venue_id, checked_out_at);
+    CREATE INDEX IF NOT EXISTS idx_checkins_venue_time ON checkins(venue_id, checked_in_at DESC);
     CREATE INDEX IF NOT EXISTS idx_checkins_active ON checkins(checked_out_at) WHERE checked_out_at IS NULL;
   `);
 
