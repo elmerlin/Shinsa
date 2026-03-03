@@ -402,10 +402,14 @@ function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' })
 
 // Grade distribution bar chart for a single level — grades on x-axis
 // showModeFilter: only show when top-level tab is "All"
-function GradeDistributionChart({ scores, rankRanges, showModeFilter = false }) {
-  const [chartMode, setChartMode] = useState('');
-
-  const filtered = chartMode ? scores.filter(s => s.mode === chartMode) : scores;
+function GradeDistributionChart({
+  scores,
+  rankRanges,
+  showModeFilter = false,
+  modeFilter = '',
+  onModeFilterChange = null,
+}) {
+  const filtered = modeFilter ? scores.filter(s => s.mode === modeFilter) : scores;
 
   // Build distribution, grouping B and below into one bucket
   const groupedRanges = [
@@ -451,9 +455,9 @@ function GradeDistributionChart({ scores, rankRanges, showModeFilter = false }) 
             ].map(m => (
               <button
                 key={m.key}
-                onClick={() => setChartMode(m.key)}
+                onClick={() => onModeFilterChange?.(m.key)}
                 className={`px-2 py-1 rounded text-[10px] font-display font-bold transition-colors ${
-                  chartMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                  modeFilter === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
                 }`}
               >
                 {m.label}
@@ -703,6 +707,7 @@ export default function ProfilePage() {
   const [piuRecentlyPlayed, setPiuRecentlyPlayed] = useState(null);
   const [piuTitles, setPiuTitles] = useState(null);
   const [piuScoreMode, setPiuScoreMode] = useState('');  // '' = All
+  const [piuAllSubMode, setPiuAllSubMode] = useState(''); // '', 'Single', 'Double' when piuScoreMode is ''
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
@@ -1461,11 +1466,16 @@ export default function ProfilePage() {
   }, [overviewPlayHeatmap.doubleLegend]);
 
   // Filtered + sorted best scores
+  const effectiveBestScoreMode = useMemo(
+    () => (piuScoreMode || piuAllSubMode || ''),
+    [piuScoreMode, piuAllSubMode]
+  );
+
   const filteredBestScores = useMemo(() => {
     if (!piuBestScores?.scores) return [];
     let filtered = piuBestScores.scores;
-    if (piuScoreMode) {
-      filtered = filtered.filter(s => s.mode === piuScoreMode);
+    if (effectiveBestScoreMode) {
+      filtered = filtered.filter(s => s.mode === effectiveBestScoreMode);
     }
     if (piuScoreLevel) {
       filtered = filtered.filter(s => s.level === parseInt(piuScoreLevel));
@@ -1480,11 +1490,17 @@ export default function ProfilePage() {
       filtered = [...filtered].sort((a, b) => b.score - a.score);
     }
     return filtered;
-  }, [piuBestScores, piuScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
+  }, [piuBestScores, effectiveBestScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
 
   useEffect(() => {
     setBestScorePage(1);
-  }, [piuScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
+  }, [effectiveBestScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
+
+  useEffect(() => {
+    if (piuScoreMode) {
+      setPiuAllSubMode('');
+    }
+  }, [piuScoreMode]);
 
   const bestScorePagination = useMemo(() => {
     const total = filteredBestScores.length;
@@ -1512,15 +1528,19 @@ export default function ProfilePage() {
   const availableLevels = useMemo(() => {
     if (!piuBestScores?.scores) return [];
     const levels = new Set();
-    const modeFiltered = piuScoreMode ? piuBestScores.scores.filter(s => s.mode === piuScoreMode) : piuBestScores.scores;
+    const modeFiltered = effectiveBestScoreMode
+      ? piuBestScores.scores.filter(s => s.mode === effectiveBestScoreMode)
+      : piuBestScores.scores;
     modeFiltered.forEach(s => levels.add(s.level));
     return [...levels].sort((a, b) => a - b);
-  }, [piuBestScores, piuScoreMode]);
+  }, [piuBestScores, effectiveBestScoreMode]);
 
   // Level distribution data for chart
   const levelDistribution = useMemo(() => {
     if (!piuBestScores?.scores) return { levels: [], maxCount: 0 };
-    const modeFiltered = piuScoreMode ? piuBestScores.scores.filter(s => s.mode === piuScoreMode) : piuBestScores.scores;
+    const modeFiltered = effectiveBestScoreMode
+      ? piuBestScores.scores.filter(s => s.mode === effectiveBestScoreMode)
+      : piuBestScores.scores;
 
     const levelMap = {};
     let maxCount = 0;
@@ -1541,7 +1561,7 @@ export default function ProfilePage() {
       .sort((a, b) => a.level - b.level);
 
     return { levels, maxCount };
-  }, [piuBestScores, piuScoreMode]);
+  }, [piuBestScores, effectiveBestScoreMode]);
 
   const filteredActivity = useMemo(() => {
     if (!Array.isArray(activityItems)) return [];
@@ -2903,7 +2923,11 @@ export default function ProfilePage() {
                 ].map(m => (
                   <button
                     key={m.key}
-                    onClick={() => { setPiuScoreMode(m.key); setPiuScoreLevel(''); }}
+                    onClick={() => {
+                      setPiuScoreMode(m.key);
+                      setPiuAllSubMode('');
+                      setPiuScoreLevel('');
+                    }}
                     className={`px-3 py-1.5 rounded text-xs font-display font-bold transition-colors ${
                       piuScoreMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
                     }`}
@@ -2913,6 +2937,29 @@ export default function ProfilePage() {
                 ))}
               </div>
 
+              {piuScoreMode === '' && (
+                <div className="flex gap-1">
+                  {[
+                    { key: '', label: 'All' },
+                    { key: 'Single', label: 'Singles' },
+                    { key: 'Double', label: 'Doubles' },
+                  ].map(m => (
+                    <button
+                      key={m.key}
+                      onClick={() => {
+                        setPiuAllSubMode(m.key);
+                        setPiuScoreLevel('');
+                      }}
+                      className={`px-3 py-1.5 rounded text-xs font-display font-bold transition-colors ${
+                        piuAllSubMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Level filter */}
               {availableLevels.length > 0 && (
                 <select
@@ -2920,9 +2967,11 @@ export default function ProfilePage() {
                   value={piuScoreLevel}
                   onChange={e => setPiuScoreLevel(e.target.value)}
                 >
-                  <option value="">All Levels ({(piuScoreMode ? piuBestScores?.scores?.filter(s => s.mode === piuScoreMode) : piuBestScores?.scores)?.length || 0})</option>
+                  <option value="">All Levels ({(effectiveBestScoreMode ? piuBestScores?.scores?.filter(s => s.mode === effectiveBestScoreMode) : piuBestScores?.scores)?.length || 0})</option>
                   {availableLevels.map(l => {
-                    const count = (piuScoreMode ? piuBestScores?.scores?.filter(s => s.mode === piuScoreMode && s.level === l) : piuBestScores?.scores?.filter(s => s.level === l))?.length || 0;
+                    const count = (effectiveBestScoreMode
+                      ? piuBestScores?.scores?.filter(s => s.mode === effectiveBestScoreMode && s.level === l)
+                      : piuBestScores?.scores?.filter(s => s.level === l))?.length || 0;
                     return <option key={l} value={l}>Lv.{l} ({count})</option>;
                   })}
                 </select>
@@ -2959,6 +3008,8 @@ export default function ProfilePage() {
                 scores={piuBestScores.scores.filter(s => s.level === parseInt(piuScoreLevel))}
                 rankRanges={RANK_RANGES}
                 showModeFilter={piuScoreMode === ''}
+                modeFilter={piuAllSubMode}
+                onModeFilterChange={setPiuAllSubMode}
               />
             )}
 
