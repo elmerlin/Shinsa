@@ -75,6 +75,10 @@ const PIUCENTER_SKILL_BASE_URL = 'https://www.piucenter.com/skill';
 const SKILL_METADATA_PATH = path.join(__dirname, '..', 'data', 'piucenter-skill-metadata.json');
 const SKILL_ELIGIBLE_WHERE_SQL = "((s.mode = 'Single' AND s.level > 6) OR (s.mode = 'Double' AND s.level > 9))";
 const SKILL_SORTS = new Set(['level_asc', 'level_desc', 'score_asc', 'score_desc']);
+const SONG_ALIAS_OVERRIDES = {
+  'papasito (feat. kutina)': 'papasito feat. kutina',
+  '파파시토 (feat. kutina)': 'papasito feat. kutina',
+};
 
 const LEVEL_BASE_RATING = {
   10: 100,
@@ -1035,6 +1039,13 @@ function loadSongAliases() {
       const canonicalNorm = normalizeSongName(canonical);
       if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
       if (!normalizedAliases[aliasNorm]) normalizedAliases[aliasNorm] = canonicalNorm;
+    }
+
+    for (const [alias, canonical] of Object.entries(SONG_ALIAS_OVERRIDES)) {
+      const aliasNorm = normalizeSongName(alias);
+      const canonicalNorm = normalizeSongName(canonical);
+      if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
+      normalizedAliases[aliasNorm] = canonicalNorm;
     }
 
     cachedSongAliases = normalizedAliases;
