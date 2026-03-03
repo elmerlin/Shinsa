@@ -106,9 +106,32 @@ const SINGLE_MAX_LEVEL = 26;
 const DOUBLE_MAX_LEVEL = 28;
 const BEST_SCORES_PAGE_SIZE = 40;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const OVERVIEW_CARD_IDS = ['song-analytics', 'skill-breakdown', 'rankings', 'grade-goals', 'play-heatmap'];
+const OVERVIEW_LAYOUT_STORAGE_KEY_PREFIX = 'profile-overview-layout-v1';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeOverviewCardOrder(order) {
+  const fromInput = Array.isArray(order) ? order.filter((id) => OVERVIEW_CARD_IDS.includes(id)) : [];
+  return [...new Set([...fromInput, ...OVERVIEW_CARD_IDS])];
+}
+
+function reorderOverviewCards(order, dragId, overId) {
+  if (!dragId || !overId || dragId === overId) return order;
+  const normalized = normalizeOverviewCardOrder(order);
+  const fromIndex = normalized.indexOf(dragId);
+  const toIndex = normalized.indexOf(overId);
+  if (fromIndex < 0 || toIndex < 0) return normalized;
+  const next = [...normalized];
+  next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, dragId);
+  return next;
+}
+
+function getOverviewLayoutStorageKey(profileId) {
+  return `${OVERVIEW_LAYOUT_STORAGE_KEY_PREFIX}:${profileId}`;
 }
 
 function pad2(value) {
@@ -737,6 +760,8 @@ export default function ProfilePage() {
   const [piuAllSubMode, setPiuAllSubMode] = useState(''); // '', 'Single', 'Double' when piuScoreMode is ''
   const [piuScoreLevel, setPiuScoreLevel] = useState('');
   const [piuSyncing, setPiuSyncing] = useState('');
+  const [recentlyPlayedSyncing, setRecentlyPlayedSyncing] = useState(false);
+  const [recentlyPlayedSyncFeedback, setRecentlyPlayedSyncFeedback] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
   const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
   const [selectedGroupBadge, setSelectedGroupBadge] = useState(null);
@@ -760,7 +785,9 @@ export default function ProfilePage() {
   const [socialCounts, setSocialCounts] = useState({ followers_count: 0, following_count: 0, posts_count: 0 });
   const [followLoading, setFollowLoading] = useState(false);
   const [notifyMenuOpen, setNotifyMenuOpen] = useState(false);
+  const [piuTabsMenuOpen, setPiuTabsMenuOpen] = useState(false);
   const notifyMenuRef = useRef(null);
+  const piuTabsMenuRef = useRef(null);
   const [activityNotifyPrefs, setActivityNotifyPrefs] = useState({
     loading: false,
     saving: false,
@@ -777,10 +804,78 @@ export default function ProfilePage() {
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
   const [songAnalytics, setSongAnalytics] = useState(null);
+  const [overviewCardOrder, setOverviewCardOrder] = useState(OVERVIEW_CARD_IDS);
+  const [collapsedOverviewCards, setCollapsedOverviewCards] = useState({});
+  const [dragOverviewCardId, setDragOverviewCardId] = useState('');
+  const [dragOverOverviewCardId, setDragOverOverviewCardId] = useState('');
+  const overviewTouchDragRef = useRef({
+    cardId: '',
+    active: false,
+    startX: 0,
+    startY: 0,
+    lastOverId: '',
+  });
+  const overviewTouchHoldTimerRef = useRef(null);
+  const overviewStorageProfileRef = useRef('');
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
+
+  useEffect(() => {
+    if (!profileId) {
+      overviewStorageProfileRef.current = '';
+      setOverviewCardOrder(normalizeOverviewCardOrder([]));
+      setCollapsedOverviewCards({});
+      return;
+    }
+    let loadedOrder = normalizeOverviewCardOrder([]);
+    let loadedCollapsed = {};
+    try {
+      const raw = localStorage.getItem(getOverviewLayoutStorageKey(profileId));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        loadedOrder = normalizeOverviewCardOrder(parsed?.order);
+        if (parsed?.collapsed && typeof parsed.collapsed === 'object') {
+          loadedCollapsed = OVERVIEW_CARD_IDS.reduce((acc, cardId) => {
+            if (parsed.collapsed[cardId]) acc[cardId] = true;
+            return acc;
+          }, {});
+        }
+      }
+    } catch {
+      loadedOrder = normalizeOverviewCardOrder([]);
+      loadedCollapsed = {};
+    }
+    setOverviewCardOrder(loadedOrder);
+    setCollapsedOverviewCards(loadedCollapsed);
+  }, [profileId]);
+
+  useEffect(() => {
+    if (!profileId) return;
+    if (overviewStorageProfileRef.current !== profileId) {
+      overviewStorageProfileRef.current = profileId;
+      return;
+    }
+    try {
+      localStorage.setItem(
+        getOverviewLayoutStorageKey(profileId),
+        JSON.stringify({
+          order: normalizeOverviewCardOrder(overviewCardOrder),
+          collapsed: collapsedOverviewCards,
+        })
+      );
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [profileId, overviewCardOrder, collapsedOverviewCards]);
+
+  useEffect(() => () => {
+    if (overviewTouchHoldTimerRef.current) {
+      clearTimeout(overviewTouchHoldTimerRef.current);
+      overviewTouchHoldTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -793,6 +888,9 @@ export default function ProfilePage() {
     setPiuBestScores(null);
     setPiuRecentlyPlayed(null);
     setPiuTitles(null);
+    setPiuSyncing('');
+    setRecentlyPlayedSyncing(false);
+    setRecentlyPlayedSyncFeedback('');
     setPiuDataLoaded(false);
     setShowPumbilityThresholdModal(false);
     setSelectedGroupBadge(null);
@@ -819,6 +917,7 @@ export default function ProfilePage() {
     });
     setActivityNotifyError('');
     setNotifyMenuOpen(false);
+    setPiuTabsMenuOpen(false);
 
     const load = async () => {
       try {
@@ -1003,20 +1102,23 @@ export default function ProfilePage() {
   }, [tab, profileId]);
 
   useEffect(() => {
-    if (!notifyMenuOpen) return undefined;
+    if (!notifyMenuOpen && !piuTabsMenuOpen) return undefined;
 
     function handleDocumentClick(e) {
-      if (notifyMenuRef.current && !notifyMenuRef.current.contains(e.target)) {
+      if (notifyMenuOpen && notifyMenuRef.current && !notifyMenuRef.current.contains(e.target)) {
         setNotifyMenuOpen(false);
+      }
+      if (piuTabsMenuOpen && piuTabsMenuRef.current && !piuTabsMenuRef.current.contains(e.target)) {
+        setPiuTabsMenuOpen(false);
       }
     }
 
     document.addEventListener('mousedown', handleDocumentClick);
     return () => document.removeEventListener('mousedown', handleDocumentClick);
-  }, [notifyMenuOpen]);
+  }, [notifyMenuOpen, piuTabsMenuOpen]);
 
   // Load PIUGame data + jacket lookup when any PIU tab is active
-  const piuTabs = ['pumbility', 'best-scores', 'titles', 'recently-played'];
+  const piuTabs = ['pumbility', 'best-scores', 'recently-played', 'titles'];
   const isPiuTab = piuTabs.includes(tab);
   const hasJacketLookup = Object.keys(jacketLookup).length > 0;
 
@@ -1185,6 +1287,26 @@ export default function ProfilePage() {
       if (profileId) getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleSyncRecentlyPlayedShortcut = async () => {
+    if (!isOwner || !profileId || !piuStatus?.linked || recentlyPlayedSyncing) return;
+    setRecentlyPlayedSyncing(true);
+    setRecentlyPlayedSyncFeedback('');
+    try {
+      await syncRecentlyPlayed();
+      await Promise.all([
+        getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {}),
+        getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {}),
+      ]);
+      setRecentlyPlayedSyncFeedback('Recently Played synced');
+      setTimeout(() => setRecentlyPlayedSyncFeedback(''), 4500);
+    } catch (err) {
+      setRecentlyPlayedSyncFeedback(err?.message || 'Failed to sync recently played');
+      setTimeout(() => setRecentlyPlayedSyncFeedback(''), 6000);
+    } finally {
+      setRecentlyPlayedSyncing(false);
     }
   };
 
@@ -1640,14 +1762,19 @@ export default function ProfilePage() {
 
   const tabs = ['overview', 'posts', 'competitions', 'shoes'];
   if (hasPiuData) {
-    tabs.push(...piuTabs);
+    tabs.push('piu');
   }
   tabs.push('activity');
 
   const tabLabels = {
     overview: 'Overview', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
+    piu: 'PIU',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', titles: 'Titles', 'recently-played': 'Recently Played',
   };
+  const piuDropdownOptions = piuTabs.map((piuTab) => ({
+    key: piuTab,
+    label: tabLabels[piuTab],
+  }));
 
   const competitionsCount = aggregated ? aggregated.duelCount + aggregated.tournamentCount : 0;
   const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
@@ -1665,6 +1792,322 @@ export default function ProfilePage() {
   const hasAchievementBadges = Array.isArray(profile.achievement_badges) && profile.achievement_badges.length > 0;
   const hasAnyBadges = hasGroupBadges || hasAchievementBadges;
   const hasCompactPiuSummary = profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
+  const showOwnerRecentSyncShortcut = Boolean(isOwner && piuStatus?.linked);
+  const activePiuTabLabel = isPiuTab ? tabLabels[tab] : 'Select';
+
+  const resetOverviewTouchDrag = () => {
+    if (overviewTouchHoldTimerRef.current) {
+      clearTimeout(overviewTouchHoldTimerRef.current);
+      overviewTouchHoldTimerRef.current = null;
+    }
+    overviewTouchDragRef.current = {
+      cardId: '',
+      active: false,
+      startX: 0,
+      startY: 0,
+      lastOverId: '',
+    };
+    setDragOverviewCardId('');
+    setDragOverOverviewCardId('');
+  };
+
+  const handleOverviewToggleCollapse = (cardId) => {
+    setCollapsedOverviewCards((prev) => ({
+      ...prev,
+      [cardId]: !prev[cardId],
+    }));
+  };
+
+  const handleOverviewDragStart = (cardId) => {
+    if (!isOwner) return;
+    setDragOverviewCardId(cardId);
+    setDragOverOverviewCardId(cardId);
+  };
+
+  const handleOverviewDragOver = (event, cardId) => {
+    event.preventDefault();
+    if (!isOwner || !dragOverviewCardId || dragOverviewCardId === cardId) return;
+    setDragOverOverviewCardId(cardId);
+  };
+
+  const handleOverviewDrop = (event) => {
+    event.preventDefault();
+    if (!isOwner || !dragOverviewCardId || !dragOverOverviewCardId || dragOverviewCardId === dragOverOverviewCardId) {
+      setDragOverviewCardId('');
+      setDragOverOverviewCardId('');
+      return;
+    }
+    setOverviewCardOrder((prev) => reorderOverviewCards(prev, dragOverviewCardId, dragOverOverviewCardId));
+    setDragOverviewCardId('');
+    setDragOverOverviewCardId('');
+  };
+
+  const handleOverviewDragEnd = () => {
+    setDragOverviewCardId('');
+    setDragOverOverviewCardId('');
+  };
+
+  const handleOverviewTouchStart = (cardId, event) => {
+    if (!isOwner || !event.touches || event.touches.length !== 1) return;
+    if (overviewTouchHoldTimerRef.current) {
+      clearTimeout(overviewTouchHoldTimerRef.current);
+      overviewTouchHoldTimerRef.current = null;
+    }
+    const touch = event.touches[0];
+    overviewTouchDragRef.current = {
+      cardId,
+      active: false,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      lastOverId: '',
+    };
+    overviewTouchHoldTimerRef.current = window.setTimeout(() => {
+      overviewTouchHoldTimerRef.current = null;
+      overviewTouchDragRef.current.active = true;
+      setDragOverviewCardId(cardId);
+      setDragOverOverviewCardId(cardId);
+    }, 170);
+  };
+
+  const handleOverviewTouchMove = (event) => {
+    if (!isOwner) return;
+    const state = overviewTouchDragRef.current;
+    if (!state.cardId || !event.touches || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+
+    if (!state.active) {
+      const deltaX = Math.abs(touch.clientX - state.startX);
+      const deltaY = Math.abs(touch.clientY - state.startY);
+      if (deltaX > 10 || deltaY > 10) {
+        resetOverviewTouchDrag();
+      }
+      return;
+    }
+
+    event.preventDefault();
+    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+    const overCardId = target?.closest?.('[data-overview-card-id]')?.getAttribute?.('data-overview-card-id') || '';
+    if (!overCardId || overCardId === state.cardId || overCardId === state.lastOverId) return;
+
+    setOverviewCardOrder((prev) => reorderOverviewCards(prev, state.cardId, overCardId));
+    setDragOverOverviewCardId(overCardId);
+    overviewTouchDragRef.current.lastOverId = overCardId;
+  };
+
+  const handleOverviewTouchEnd = () => {
+    resetOverviewTouchDrag();
+  };
+
+  const showOverviewHeatmapCard = overviewPlayHeatmap.weeks.length > 0 || hasPiuData;
+  const overviewCardsById = {
+    ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
+    'skill-breakdown': { title: 'Skill Breakdown' },
+    rankings: { title: 'Rankings' },
+    ...(isOwner && songAnalytics ? { 'grade-goals': { title: 'Grade Goals' } } : {}),
+    ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
+  };
+
+  const orderedOverviewCardIds = [
+    ...overviewCardOrder.filter((cardId) => overviewCardsById[cardId]),
+    ...Object.keys(overviewCardsById).filter((cardId) => !overviewCardOrder.includes(cardId)),
+  ];
+
+  const renderOverviewCardBody = (cardId) => {
+    if (cardId === 'song-analytics') {
+      return songAnalytics ? <SongAnalyticsPanel analytics={songAnalytics} /> : null;
+    }
+    if (cardId === 'skill-breakdown') {
+      return <SkillBreakdownPanel userId={profileId} />;
+    }
+    if (cardId === 'rankings') {
+      return <RankingsPanel userId={profileId} viewerUserId={authUser?.id || null} />;
+    }
+    if (cardId === 'grade-goals') {
+      return isOwner && songAnalytics
+        ? <GradeGoalTracker userId={profileId} analyticsLevels={songAnalytics.levels} />
+        : null;
+    }
+    if (cardId !== 'play-heatmap') return null;
+
+    return (
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-display font-bold text-sm text-piu-accent">Play Activity Heatmap</h3>
+          {overviewPlayHeatmap.activeDays > 0 && (
+            <span className="text-[10px] text-gray-500">
+              {overviewPlayHeatmap.activeDays} active day{overviewPlayHeatmap.activeDays === 1 ? '' : 's'} | {overviewPlayHeatmap.totalPlays} plays
+            </span>
+          )}
+        </div>
+
+        {overviewPlayHeatmap.weeks.length > 0 ? (
+          <>
+            <div className="overflow-x-auto pb-2">
+              <div className="inline-block min-w-max">
+                <div className="flex mb-1">
+                  <div className="w-8 shrink-0" />
+                  <div className="flex gap-1">
+                    {overviewPlayHeatmap.monthLabels.map((label, idx) => (
+                      <div key={`${label}-${idx}`} className="w-4 text-[9px] text-gray-500">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-start gap-1">
+                  <div className="w-8 shrink-0 flex flex-col gap-1 text-[9px] text-gray-600">
+                    <div className="h-4 flex items-center">S</div>
+                    <div className="h-4 flex items-center">M</div>
+                    <div className="h-4 flex items-center">T</div>
+                    <div className="h-4 flex items-center">W</div>
+                    <div className="h-4 flex items-center">T</div>
+                    <div className="h-4 flex items-center">F</div>
+                    <div className="h-4 flex items-center">S</div>
+                  </div>
+                  <div className="flex gap-1">
+                    {overviewPlayHeatmap.weeks.map((week, weekIndex) => (
+                      <div key={weekIndex} className="flex flex-col gap-1">
+                        {week.map((cell, dayIdx) => (
+                          <button
+                            key={`${cell.key}-${dayIdx}`}
+                            onClick={() => cell.data && setSelectedOverviewDateKey(cell.key)}
+                            className={`w-4 h-4 rounded-[3px] border transition-all ${
+                              cell.data
+                                ? selectedOverviewDateKey === cell.key
+                                  ? 'border-white/80 ring-1 ring-piu-accent/70'
+                                  : 'border-piu-border/30 hover:border-white/60'
+                                : 'border-piu-border/20'
+                            }`}
+                            style={{ background: cell.data ? cell.fill : '#111827' }}
+                            title={
+                              cell.data
+                                ? `${cell.label} | ${cell.data.total} plays (${Math.round(cell.data.doubleRatio * 100)}% Double / ${Math.round(cell.data.singleRatio * 100)}% Single)`
+                                : cell.label
+                            }
+                            disabled={!cell.data}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-1.5 flex flex-col items-end">
+              {overviewPlayHeatmap.singleLegend && (
+                <div className="flex items-center justify-end gap-2 w-full">
+                  <span className="text-[10px] font-display font-bold text-red-300 shrink-0">Singles</span>
+                  <div className="flex items-center gap-[2px] justify-end">
+                    {singleLegendLevels.map((level) => (
+                      <span
+                        key={`single-${level}`}
+                        className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                        style={{ backgroundColor: getSingleLevelColor(level) }}
+                        title={`S${level}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-gray-500 shrink-0">
+                    S{overviewPlayHeatmap.singleLegend.min} - S{overviewPlayHeatmap.singleLegend.max}
+                  </span>
+                </div>
+              )}
+              {overviewPlayHeatmap.doubleLegend && (
+                <div className="flex items-center justify-end gap-2 w-full">
+                  <span className="text-[10px] font-display font-bold text-green-300 shrink-0">Doubles</span>
+                  <div className="flex items-center gap-[2px] justify-end">
+                    {doubleLegendLevels.map((level) => (
+                      <span
+                        key={`double-${level}`}
+                        className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                        style={{ backgroundColor: getDoubleLevelColor(level) }}
+                        title={`D${level}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-gray-500 shrink-0">
+                    D{overviewPlayHeatmap.doubleLegend.min} - D{overviewPlayHeatmap.doubleLegend.max}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {selectedOverviewDay && (
+              <div className="mt-4 pt-4 border-t border-piu-border/30">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-display font-bold text-xs text-piu-accent">
+                    {parseDayKey(selectedOverviewDateKey)?.toLocaleDateString(undefined, {
+                      weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
+                    }) || selectedOverviewDateKey}
+                  </h4>
+                  <span className="text-[10px] text-gray-500">{selectedOverviewDay.total} plays</span>
+                </div>
+
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {selectedOverviewDay.plays.map((play, idx) => {
+                    const rank = getRank(play.score);
+                    const displayGrade = parseGrade(play.grade, rank.label);
+                    const isBreak = isStageBreakPlay(play);
+                    const playNorm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                    const playChartKey = `${playNorm}|${play.mode}|${play.level}`;
+                    const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[playNorm];
+                    const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
+                    return (
+                      <div key={`${play.song_title}-${play.mode}-${play.level}-${idx}`} className="flex items-center gap-2 py-1 border-b border-piu-border/20 last:border-0">
+                        <Link to={playChartLink}>
+                          <PiuSongJacket
+                            title={play.song_title}
+                            mode={play.mode}
+                            level={play.level}
+                            bgUrl={play.background_url}
+                            jacketLookup={jacketLookup}
+                            size="sm"
+                          />
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-display font-bold truncate">{play.song_title}</p>
+                          <p className="text-[10px] text-gray-500">
+                            {play.mode === 'Single' ? 'S' : play.mode === 'Double' ? 'D' : 'C'}{play.level}
+                            {play.date_played && (
+                              <span className="ml-1.5 text-gray-600">{String(play.date_played).split(' ').slice(1).join(' ') || ''}</span>
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                          onClick={() => setSelectedPlay(play)}
+                        >
+                          {isBreak ? (
+                            <span className="text-xs leading-none font-display font-bold text-red-500">STAGE BREAK</span>
+                          ) : (
+                            <>
+                              <span
+                                className={`text-xs leading-none font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                                data-grade={displayGrade.display}
+                              >
+                                {displayGrade.display}
+                              </span>
+                              <p className="text-[11px] leading-none font-mono font-bold mt-0.5">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <DailyLevelGradeChart plays={selectedOverviewDay.plays} />
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-center text-gray-500 text-sm py-4">No recently played data synced yet</p>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
@@ -1814,7 +2257,7 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-          {(hasCompactPiuSummary || hasAnyBadges) && (
+          {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut) && (
             <div className="shrink-0 self-start w-[140px] sm:w-[220px]">
               {hasCompactPiuSummary && (
                 <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-1.5 sm:px-3 sm:py-2 flex flex-col gap-0.5 sm:gap-1">
@@ -1880,6 +2323,38 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+              {showOwnerRecentSyncShortcut && (
+                <div className={`${hasAnyBadges || hasCompactPiuSummary ? 'mt-2' : ''} flex items-center justify-end gap-2`}>
+                  <button
+                    type="button"
+                    onClick={handleSyncRecentlyPlayedShortcut}
+                    disabled={recentlyPlayedSyncing}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-piu-border/50 bg-piu-dark/60 text-gray-300 hover:text-white hover:border-piu-accent/70 transition-colors disabled:opacity-60"
+                    title="Sync recently played"
+                    aria-label="Sync recently played"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      className={`w-4 h-4 ${recentlyPlayedSyncing ? 'animate-spin' : ''}`}
+                    >
+                      <path d="M20 12a8 8 0 1 1-2.35-5.65" strokeLinecap="round" />
+                      <path d="M20 4v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {recentlyPlayedSyncFeedback && (
+                    <span
+                      className={`text-[10px] ${
+                        recentlyPlayedSyncFeedback.toLowerCase().includes('fail') ? 'text-red-400' : 'text-gray-400'
+                      }`}
+                    >
+                      {recentlyPlayedSyncFeedback}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1917,19 +2392,81 @@ export default function ProfilePage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1.5 mb-3 flex-wrap">
-        {tabs.map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-              tab === t
-                ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
-            }`}
-          >
-            {tabLabels[t]}
-          </button>
-        ))}
+      <div className="mb-3" ref={piuTabsMenuRef}>
+        <div className="overflow-x-auto touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max min-w-full gap-1.5">
+            {tabs.map((t) => {
+              if (t === 'piu') {
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPiuTabsMenuOpen((prev) => !prev)}
+                    className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors inline-flex items-center gap-1.5 ${
+                      isPiuTab
+                        ? 'bg-piu-accent text-white'
+                        : 'bg-piu-card text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <span>{tabLabels[t]}</span>
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className={`w-3 h-3 transition-transform ${piuTabsMenuOpen ? 'rotate-180' : ''}`}
+                    >
+                      <path d="m5 7 5 6 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setTab(t);
+                    setPiuTabsMenuOpen(false);
+                  }}
+                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                    tab === t
+                      ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {tabLabels[t]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {hasPiuData && piuTabsMenuOpen && (
+          <div className="mt-2 rounded-lg border border-piu-border/70 bg-piu-card/95 p-1.5 backdrop-blur">
+            <div className="flex items-center justify-between px-1.5 pb-1">
+              <span className="text-[10px] uppercase tracking-wide text-gray-500 font-display font-bold">PIU Sections</span>
+              <span className="text-[10px] text-gray-500">{activePiuTabLabel}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+              {piuDropdownOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => {
+                    setTab(option.key);
+                    setPiuTabsMenuOpen(false);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-md text-[11px] font-display font-bold transition-colors ${
+                    tab === option.key
+                      ? 'bg-piu-accent text-white'
+                      : 'bg-piu-dark/70 text-gray-300 hover:text-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Syncing indicator */}
@@ -1952,196 +2489,68 @@ export default function ProfilePage() {
 
       {/* Tab Content */}
       {tab === 'overview' && (
-        <div className="space-y-4">
-          {songAnalytics && (
-            <SongAnalyticsPanel analytics={songAnalytics} />
-          )}
-
-          <SkillBreakdownPanel userId={profileId} />
-          <RankingsPanel userId={profileId} viewerUserId={authUser?.id || null} />
-          {isOwner && songAnalytics && (
-            <GradeGoalTracker userId={profileId} analyticsLevels={songAnalytics.levels} />
-          )}
-
-          {(overviewPlayHeatmap.weeks.length > 0 || hasPiuData) && (
-            <div className="card">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display font-bold text-sm text-piu-accent">Play Activity Heatmap</h3>
-                {overviewPlayHeatmap.activeDays > 0 && (
-                  <span className="text-[10px] text-gray-500">
-                    {overviewPlayHeatmap.activeDays} active day{overviewPlayHeatmap.activeDays === 1 ? '' : 's'} | {overviewPlayHeatmap.totalPlays} plays
+        <div className="space-y-4" onDragOver={isOwner ? (event) => event.preventDefault() : undefined} onDrop={isOwner ? handleOverviewDrop : undefined}>
+          {orderedOverviewCardIds.map((cardId) => {
+            const card = overviewCardsById[cardId];
+            if (!card) return null;
+            const collapsed = !!collapsedOverviewCards[cardId];
+            const body = renderOverviewCardBody(cardId);
+            if (!body) return null;
+            return (
+              <div
+                key={cardId}
+                data-overview-card-id={cardId}
+                onDragOver={isOwner ? (event) => handleOverviewDragOver(event, cardId) : undefined}
+                className={`${dragOverviewCardId === cardId ? 'opacity-60' : ''} ${
+                  dragOverOverviewCardId === cardId && dragOverviewCardId && dragOverviewCardId !== cardId
+                    ? 'rounded-xl ring-1 ring-piu-accent/70'
+                    : ''
+                }`}
+              >
+                <div className="flex items-center justify-between px-1 mb-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-gray-500 font-display font-bold">
+                    {card.title}
                   </span>
+                  <div className="flex items-center gap-1.5">
+                    {isOwner && (
+                      <button
+                        type="button"
+                        className="text-gray-500 hover:text-gray-200 transition-colors cursor-grab active:cursor-grabbing select-none"
+                        title="Press and hold to move"
+                        aria-label={`Move ${card.title}`}
+                        draggable
+                        onDragStart={() => handleOverviewDragStart(cardId)}
+                        onDragEnd={handleOverviewDragEnd}
+                        onTouchStart={(event) => handleOverviewTouchStart(cardId, event)}
+                        onTouchMove={handleOverviewTouchMove}
+                        onTouchEnd={handleOverviewTouchEnd}
+                        onTouchCancel={handleOverviewTouchEnd}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                          <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                          <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                        </svg>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleOverviewToggleCollapse(cardId)}
+                      className="text-[10px] text-gray-500 hover:text-white transition-colors font-display font-bold"
+                    >
+                      {collapsed ? 'Expand' : 'Collapse'}
+                    </button>
+                  </div>
+                </div>
+
+                {collapsed ? (
+                  <div className="card py-3 text-center text-xs text-gray-500">Collapsed</div>
+                ) : (
+                  body
                 )}
               </div>
-
-              {overviewPlayHeatmap.weeks.length > 0 ? (
-                <>
-                  <div className="overflow-x-auto pb-2">
-                    <div className="inline-block min-w-max">
-                      <div className="flex mb-1">
-                        <div className="w-8 shrink-0" />
-                        <div className="flex gap-1">
-                          {overviewPlayHeatmap.monthLabels.map((label, idx) => (
-                            <div key={`${label}-${idx}`} className="w-4 text-[9px] text-gray-500">
-                              {label}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-1">
-                        <div className="w-8 shrink-0 flex flex-col gap-1 text-[9px] text-gray-600">
-                          <div className="h-4 flex items-center">S</div>
-                          <div className="h-4 flex items-center">M</div>
-                          <div className="h-4 flex items-center">T</div>
-                          <div className="h-4 flex items-center">W</div>
-                          <div className="h-4 flex items-center">T</div>
-                          <div className="h-4 flex items-center">F</div>
-                          <div className="h-4 flex items-center">S</div>
-                        </div>
-                        <div className="flex gap-1">
-                          {overviewPlayHeatmap.weeks.map((week, weekIndex) => (
-                            <div key={weekIndex} className="flex flex-col gap-1">
-                              {week.map((cell, dayIdx) => (
-                                <button
-                                  key={`${cell.key}-${dayIdx}`}
-                                  onClick={() => cell.data && setSelectedOverviewDateKey(cell.key)}
-                                  className={`w-4 h-4 rounded-[3px] border transition-all ${
-                                    cell.data
-                                      ? selectedOverviewDateKey === cell.key
-                                        ? 'border-white/80 ring-1 ring-piu-accent/70'
-                                        : 'border-piu-border/30 hover:border-white/60'
-                                      : 'border-piu-border/20'
-                                  }`}
-                                  style={{ background: cell.data ? cell.fill : '#111827' }}
-                                  title={
-                                    cell.data
-                                      ? `${cell.label} | ${cell.data.total} plays (${Math.round(cell.data.doubleRatio * 100)}% Double / ${Math.round(cell.data.singleRatio * 100)}% Single)`
-                                      : cell.label
-                                  }
-                                  disabled={!cell.data}
-                                />
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-1.5 flex flex-col items-end">
-                    {overviewPlayHeatmap.singleLegend && (
-                      <div className="flex items-center justify-end gap-2 w-full">
-                        <span className="text-[10px] font-display font-bold text-red-300 shrink-0">Singles</span>
-                        <div className="flex items-center gap-[2px] justify-end">
-                          {singleLegendLevels.map((level) => (
-                            <span
-                              key={`single-${level}`}
-                              className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
-                              style={{ backgroundColor: getSingleLevelColor(level) }}
-                              title={`S${level}`}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-[10px] text-gray-500 shrink-0">
-                          S{overviewPlayHeatmap.singleLegend.min} - S{overviewPlayHeatmap.singleLegend.max}
-                        </span>
-                      </div>
-                    )}
-                    {overviewPlayHeatmap.doubleLegend && (
-                      <div className="flex items-center justify-end gap-2 w-full">
-                        <span className="text-[10px] font-display font-bold text-green-300 shrink-0">Doubles</span>
-                        <div className="flex items-center gap-[2px] justify-end">
-                          {doubleLegendLevels.map((level) => (
-                            <span
-                              key={`double-${level}`}
-                              className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
-                              style={{ backgroundColor: getDoubleLevelColor(level) }}
-                              title={`D${level}`}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-[10px] text-gray-500 shrink-0">
-                          D{overviewPlayHeatmap.doubleLegend.min} - D{overviewPlayHeatmap.doubleLegend.max}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedOverviewDay && (
-                    <div className="mt-4 pt-4 border-t border-piu-border/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-display font-bold text-xs text-piu-accent">
-                          {parseDayKey(selectedOverviewDateKey)?.toLocaleDateString(undefined, {
-                            weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
-                          }) || selectedOverviewDateKey}
-                        </h4>
-                        <span className="text-[10px] text-gray-500">{selectedOverviewDay.total} plays</span>
-                      </div>
-
-                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                        {selectedOverviewDay.plays.map((play, idx) => {
-                          const rank = getRank(play.score);
-                          const displayGrade = parseGrade(play.grade, rank.label);
-                          const isBreak = isStageBreakPlay(play);
-                          const playNorm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-                          const playChartKey = `${playNorm}|${play.mode}|${play.level}`;
-                          const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[playNorm];
-                          const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
-                          return (
-                            <div key={`${play.song_title}-${play.mode}-${play.level}-${idx}`} className="flex items-center gap-2 py-1 border-b border-piu-border/20 last:border-0">
-                              <Link to={playChartLink}>
-                                <PiuSongJacket
-                                  title={play.song_title}
-                                  mode={play.mode}
-                                  level={play.level}
-                                  bgUrl={play.background_url}
-                                  jacketLookup={jacketLookup}
-                                  size="sm"
-                                />
-                              </Link>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-display font-bold truncate">{play.song_title}</p>
-                                <p className="text-[10px] text-gray-500">
-                                  {play.mode === 'Single' ? 'S' : play.mode === 'Double' ? 'D' : 'C'}{play.level}
-                                  {play.date_played && (
-                                    <span className="ml-1.5 text-gray-600">{String(play.date_played).split(' ').slice(1).join(' ') || ''}</span>
-                                  )}
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                                onClick={() => setSelectedPlay(play)}
-                              >
-                                {isBreak ? (
-                                  <span className="text-xs leading-none font-display font-bold text-red-500">STAGE BREAK</span>
-                                ) : (
-                                  <>
-                                    <span
-                                      className={`text-xs leading-none font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
-                                      data-grade={displayGrade.display}
-                                    >
-                                      {displayGrade.display}
-                                    </span>
-                                    <p className="text-[11px] leading-none font-mono font-bold mt-0.5">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <DailyLevelGradeChart plays={selectedOverviewDay.plays} />
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-center text-gray-500 text-sm py-4">No recently played data synced yet</p>
-              )}
-            </div>
-          )}
-
+            );
+          })}
         </div>
       )}
 
