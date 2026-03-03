@@ -96,6 +96,7 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
   );
 
   const [selectedDayKey, setSelectedDayKey] = useState('');
+  const [expandedVisitors, setExpandedVisitors] = useState({});
 
   useEffect(() => {
     if (days.length === 0) {
@@ -113,6 +114,45 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
   }, [days, selectedDayKey]);
 
   const selectedDay = days.find((d) => d.day_key === selectedDayKey) || null;
+  const groupedSelectedEntries = useMemo(() => {
+    const rows = Array.isArray(selectedDay?.entries) ? selectedDay.entries : [];
+    const groups = new Map();
+
+    for (const entry of rows) {
+      const userKey = String(entry?.user_id || `${entry?.username || 'unknown'}:${entry?.checkin_id || ''}`);
+      if (!groups.has(userKey)) {
+        groups.set(userKey, {
+          key: userKey,
+          user_id: entry?.user_id || '',
+          username: entry?.username || 'Unknown',
+          avatar: entry?.avatar || '',
+          total_minutes: 0,
+          active: false,
+          sessions: [],
+        });
+      }
+      const group = groups.get(userKey);
+      group.total_minutes += Number(entry?.session_minutes) || 0;
+      if (entry?.active) group.active = true;
+      group.sessions.push(entry);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        session_count: group.sessions.length,
+        sessions: group.sessions.sort((a, b) => (b.checked_in_at > a.checked_in_at ? 1 : -1)),
+      }))
+      .sort((a, b) => {
+        if (a.active !== b.active) return a.active ? -1 : 1;
+        if (b.total_minutes !== a.total_minutes) return b.total_minutes - a.total_minutes;
+        return String(a.username || '').localeCompare(String(b.username || ''));
+      });
+  }, [selectedDay]);
+
+  useEffect(() => {
+    setExpandedVisitors({});
+  }, [selectedDayKey]);
 
   return (
     <div className="bg-piu-card border border-piu-border rounded-2xl p-4 sm:p-5 space-y-4">
@@ -196,32 +236,64 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
                       {selectedDay.visitors || 0} visitors, {selectedDay.sessions || 0} sessions, {formatDuration(selectedDay.total_minutes)} total
                     </p>
                     <div className="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1">
-                      {(selectedDay.entries || []).length === 0 ? (
+                      {groupedSelectedEntries.length === 0 ? (
                         <p className="text-xs text-gray-500">No sessions logged for this day.</p>
                       ) : (
-                        selectedDay.entries.map((entry) => (
-                          <div key={`${entry.checkin_id}-${entry.user_id}`} className="flex items-center gap-2 border-b border-piu-border/25 pb-1.5 last:border-0 last:pb-0">
-                            <Link to={getProfilePath(entry.user_id, entry.username)} className="shrink-0">
-                              {entry.avatar ? (
-                                <img src={getAvatarUrl(entry.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border/60" />
-                              ) : (
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center text-[10px] font-display font-bold">
-                                  {(entry.username || '?')[0]?.toUpperCase()}
+                        groupedSelectedEntries.map((entry) => {
+                          const expanded = !!expandedVisitors[entry.key];
+                          const profileLink = getProfilePath(entry.user_id, entry.username);
+                          return (
+                            <div key={entry.key} className="rounded-lg border border-piu-border/25 bg-piu-dark/25">
+                              <div className="flex items-center gap-2 px-2 py-1.5">
+                                <Link to={profileLink} className="shrink-0" onClick={(event) => event.stopPropagation()}>
+                                  {entry.avatar ? (
+                                    <img src={getAvatarUrl(entry.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border/60" />
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center text-[10px] font-display font-bold">
+                                      {(entry.username || '?')[0]?.toUpperCase()}
+                                    </div>
+                                  )}
+                                </Link>
+                                <div className="min-w-0 flex-1">
+                                  <Link
+                                    to={profileLink}
+                                    className="text-xs font-display font-bold hover:text-piu-accent truncate block"
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    {entry.username}
+                                  </Link>
+                                  <p className="text-[10px] text-gray-500">
+                                    {entry.session_count} session{entry.session_count === 1 ? '' : 's'}
+                                    {entry.active ? ' • Active now' : ''}
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-mono text-gray-300 shrink-0">{formatDuration(entry.total_minutes)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedVisitors((prev) => ({ ...prev, [entry.key]: !prev[entry.key] }))}
+                                  className="text-[10px] text-gray-500 hover:text-white shrink-0"
+                                >
+                                  {expanded ? 'Hide' : 'View'}
+                                </button>
+                              </div>
+                              {expanded && (
+                                <div className="border-t border-piu-border/20 px-2 pb-2 pt-1.5 space-y-1.5">
+                                  {entry.sessions.map((session) => (
+                                    <div key={session.checkin_id} className="flex items-center gap-2 rounded border border-piu-border/20 bg-piu-dark/35 px-2 py-1">
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] text-gray-300 truncate">{session.machine_name}</p>
+                                        <p className="text-[10px] text-gray-500">
+                                          {formatShortTime(session.checked_in_at)} - {session.active ? 'Now' : formatShortTime(session.checked_out_at)}
+                                        </p>
+                                      </div>
+                                      <span className="text-[10px] font-mono text-gray-300 shrink-0">{formatDuration(session.session_minutes)}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
-                            </Link>
-                            <div className="min-w-0 flex-1">
-                              <Link to={getProfilePath(entry.user_id, entry.username)} className="text-xs font-display font-bold hover:text-piu-accent truncate block">
-                                {entry.username}
-                              </Link>
-                              <p className="text-[10px] text-gray-500 truncate">{entry.machine_name}</p>
-                              <p className="text-[10px] text-gray-500">
-                                {formatShortTime(entry.checked_in_at)} - {entry.active ? 'Now' : formatShortTime(entry.checked_out_at)}
-                              </p>
                             </div>
-                            <span className="text-[10px] font-mono text-gray-300 shrink-0">{formatDuration(entry.session_minutes)}</span>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>

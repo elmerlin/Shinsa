@@ -18,13 +18,13 @@ function formatCheckinTime(value) {
 
 export default function DojoPage() {
   const { user } = useAuth();
-  const hasCheckinAccess = !!(user?.is_admin || user?.feature_access?.checkin);
+  const hasDojoAccess = !!user?.feature_access?.dojo_admin;
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const loadOverview = useCallback(async () => {
-    if (!user || !hasCheckinAccess) {
+    if (!user || !hasDojoAccess) {
       setOverview(null);
       setLoading(false);
       return;
@@ -41,19 +41,19 @@ export default function DojoPage() {
     } finally {
       setLoading(false);
     }
-  }, [hasCheckinAccess, user]);
+  }, [hasDojoAccess, user]);
 
   useEffect(() => {
     loadOverview();
   }, [loadOverview]);
 
   useEffect(() => {
-    if (!user || !hasCheckinAccess) return undefined;
+    if (!user || !hasDojoAccess) return undefined;
     const id = window.setInterval(() => {
       loadOverview();
     }, 20000);
     return () => window.clearInterval(id);
-  }, [hasCheckinAccess, loadOverview, user]);
+  }, [hasDojoAccess, loadOverview, user]);
 
   if (!user) {
     return (
@@ -67,12 +67,12 @@ export default function DojoPage() {
     );
   }
 
-  if (!hasCheckinAccess) {
+  if (!hasDojoAccess) {
     return (
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-8">
         <div className="card text-center">
           <h1 className="text-xl font-display font-bold">Dojo</h1>
-          <p className="text-sm text-red-300 mt-2">Check In access has not been granted for your account.</p>
+          <p className="text-sm text-red-300 mt-2">Dojo Admin access has not been granted for your account.</p>
         </div>
       </div>
     );

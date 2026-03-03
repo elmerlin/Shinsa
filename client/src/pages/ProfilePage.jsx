@@ -104,6 +104,7 @@ const GRADE_BARS = [
 
 const SINGLE_MAX_LEVEL = 26;
 const DOUBLE_MAX_LEVEL = 28;
+const BEST_SCORES_PAGE_SIZE = 40;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function clamp(value, min, max) {
@@ -714,6 +715,7 @@ export default function ProfilePage() {
   const [chartKeyMap, setChartKeyMap] = useState({});
   const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
   const [bestScoreSearch, setBestScoreSearch] = useState('');
+  const [bestScorePage, setBestScorePage] = useState(1);
   const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
   const [profilePosts, setProfilePosts] = useState([]);
   const [shoeCabinet, setShoeCabinet] = useState(null);
@@ -1479,6 +1481,32 @@ export default function ProfilePage() {
     }
     return filtered;
   }, [piuBestScores, piuScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
+
+  useEffect(() => {
+    setBestScorePage(1);
+  }, [piuScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
+
+  const bestScorePagination = useMemo(() => {
+    const total = filteredBestScores.length;
+    const totalPages = Math.max(1, Math.ceil(total / BEST_SCORES_PAGE_SIZE));
+    const page = clamp(bestScorePage, 1, totalPages);
+    const startIndex = (page - 1) * BEST_SCORES_PAGE_SIZE;
+    const endIndex = Math.min(total, startIndex + BEST_SCORES_PAGE_SIZE);
+    return {
+      page,
+      total,
+      totalPages,
+      startIndex,
+      endIndex,
+      rows: filteredBestScores.slice(startIndex, endIndex),
+    };
+  }, [filteredBestScores, bestScorePage]);
+
+  useEffect(() => {
+    if (bestScorePage !== bestScorePagination.page) {
+      setBestScorePage(bestScorePagination.page);
+    }
+  }, [bestScorePage, bestScorePagination.page]);
 
   // Available levels for filtering
   const availableLevels = useMemo(() => {
@@ -2866,13 +2894,11 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Mode filter: All, Single, Double, Co-op */}
+            {/* Mode filter: All, Co-op */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex gap-1">
                 {[
                   { key: '', label: 'All' },
-                  { key: 'Single', label: 'Single' },
-                  { key: 'Double', label: 'Double' },
                   { key: 'Co-op', label: 'Co-op' },
                 ].map(m => (
                   <button
@@ -2965,14 +2991,20 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {filteredBestScores.length > 0 && (
+              <p className="text-[11px] text-gray-500 mb-2">
+                Showing {bestScorePagination.startIndex + 1}-{bestScorePagination.endIndex} of {bestScorePagination.total} scores
+              </p>
+            )}
+
             {/* Song list */}
             {filteredBestScores.length > 0 ? (
               <div className="space-y-1.5">
-                {filteredBestScores.map((s, i) => {
+                {bestScorePagination.rows.map((s, i) => {
                   const rank = getRank(s.score);
                   const displayGrade = parseGrade(s.grade, rank.label);
                   return (
-                    <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
+                    <div key={`${s.song_title}-${s.mode}-${s.level}-${bestScorePagination.startIndex + i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <PiuSongJacket
                         title={s.song_title} mode={s.mode} level={s.level}
                         bgUrl={s.background_url || ''} jacketLookup={jacketLookup}
@@ -3011,6 +3043,30 @@ export default function ProfilePage() {
                   ? `No scores found${bestScoreSearch ? ` matching "${bestScoreSearch}"` : ''}`
                   : 'No best scores imported yet'}
               </p>
+            )}
+
+            {filteredBestScores.length > 0 && bestScorePagination.totalPages > 1 && (
+              <div className="flex items-center justify-between gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setBestScorePage((prev) => Math.max(1, prev - 1))}
+                  disabled={bestScorePagination.page <= 1}
+                  className="px-2.5 py-1.5 rounded text-[10px] font-display font-bold bg-piu-dark text-gray-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <p className="text-[11px] text-gray-500">
+                  Page {bestScorePagination.page} of {bestScorePagination.totalPages}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBestScorePage((prev) => Math.min(bestScorePagination.totalPages, prev + 1))}
+                  disabled={bestScorePagination.page >= bestScorePagination.totalPages}
+                  className="px-2.5 py-1.5 rounded text-[10px] font-display font-bold bg-piu-dark text-gray-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
             )}
 
             {piuBestScores?.last_sync && (

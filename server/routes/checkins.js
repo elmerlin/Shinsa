@@ -60,6 +60,14 @@ function requireCheckinFeature(req, res, next) {
   return next();
 }
 
+function requireDojoAdminFeature(req, res, next) {
+  const db = getDb();
+  if (!hasFeatureAccess(db, req.user, 'dojo_admin')) {
+    return res.status(403).json({ error: 'Dojo admin access not granted' });
+  }
+  return next();
+}
+
 function notifyAdminsAboutCheckinEvent(db, {
   actorUserId,
   actorUsername,
@@ -81,16 +89,24 @@ function notifyAdminsAboutCheckinEvent(db, {
     : `${safeUsername} checked in at ${safeMachineName} (${safeVenueName})`;
   const link = '/dojo';
 
-  const admins = db.prepare(`
-    SELECT id
-    FROM users
-    WHERE is_admin = 1
+  const dojoAdmins = db.prepare(`
+    SELECT DISTINCT user_id
+    FROM (
+      SELECT user_id
+      FROM user_feature_permissions
+      WHERE feature_key = 'dojo_admin'
+      UNION
+      SELECT gm.user_id
+      FROM admin_user_group_feature_permissions gfp
+      JOIN admin_user_group_members gm ON gm.group_id = gfp.group_id
+      WHERE gfp.feature_key = 'dojo_admin'
+    )
   `).all();
 
   let notified = 0;
-  for (const admin of admins) {
-    const adminId = String(admin?.id || '').trim();
-    if (!adminId || adminId === String(actorUserId)) continue;
+  for (const admin of dojoAdmins) {
+    const adminId = String(admin?.user_id || '').trim();
+    if (!adminId || adminId === String(actorUserId || '').trim()) continue;
     createUserNotification(db, adminId, notificationType, title, message, link);
     notified += 1;
   }
@@ -256,7 +272,7 @@ router.get('/active/:venueSlug', requireAuth, requireCheckinFeature, (req, res) 
 });
 
 // GET /api/checkins/dojo/:slug/overview — dojo machine status + weekly activity summary
-router.get('/dojo/:slug/overview', requireAuth, requireCheckinFeature, (req, res) => {
+router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, res) => {
   const db = getDb();
   const venue = db.prepare('SELECT * FROM venues WHERE slug = ?').get(req.params.slug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });

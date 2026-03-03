@@ -323,6 +323,7 @@ function UserMenu() {
   const myProfilePath = getProfilePath(user.id, user.username);
   const canAccessOptimise = !!(user?.is_admin || user?.feature_access?.optimise);
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin);
+  const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canAccessAdmin = !!user?.is_admin;
 
   return (
@@ -477,7 +478,7 @@ function UserMenu() {
               Check In
             </Link>
           )}
-          {canAccessCheckin && (
+          {canAccessDojo && (
             <Link
               to="/dojo"
               onClick={() => setOpen(false)}
@@ -685,6 +686,7 @@ export default function App() {
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin);
+  const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canShowDojoPopup = canAccessCheckin && isPumpDojoMember(user);
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -880,7 +882,7 @@ export default function App() {
               </svg>
               <span>Tiers</span>
             </Link>
-            {canAccessCheckin && (
+            {canAccessDojo && (
               <Link to="/dojo" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />

@@ -25,7 +25,7 @@ const ADMIN_USER_IDS = new Set(
     .map((value) => value.trim())
     .filter(Boolean)
 );
-const FEATURE_KEYS = ['optimise', 'checkin'];
+const FEATURE_KEYS = ['optimise', 'checkin', 'dojo_admin'];
 const FEATURE_KEY_SET = new Set(FEATURE_KEYS);
 const GROUP_BADGE_UPLOAD = multer({
   storage: multer.memoryStorage(),
@@ -199,6 +199,7 @@ function parseBooleanInput(value) {
 function featureLabelFromKey(key) {
   if (key === 'optimise') return 'Optimise';
   if (key === 'checkin') return 'Check In';
+  if (key === 'dojo_admin') return 'Dojo Admin';
   return key;
 }
 
@@ -206,6 +207,7 @@ function defaultFeatureAccess() {
   return {
     optimise: false,
     checkin: false,
+    dojo_admin: false,
   };
 }
 
@@ -225,12 +227,6 @@ function isAdminUser(db, user) {
 function getFeatureAccessByUserId(db, userId, isAdmin) {
   const access = defaultFeatureAccess();
   if (!userId) return access;
-  if (isAdmin) {
-    for (const featureKey of FEATURE_KEYS) {
-      access[featureKey] = true;
-    }
-    return access;
-  }
   const rows = db.prepare(`
     SELECT feature_key
     FROM user_feature_permissions
@@ -246,6 +242,13 @@ function getFeatureAccessByUserId(db, userId, isAdmin) {
     if (!FEATURE_KEY_SET.has(featureKey)) continue;
     access[featureKey] = true;
   }
+  if (isAdmin) {
+    // Full admins keep blanket access except Dojo Admin, which is explicitly assigned.
+    for (const featureKey of FEATURE_KEYS) {
+      if (featureKey === 'dojo_admin') continue;
+      access[featureKey] = true;
+    }
+  }
   return access;
 }
 
@@ -253,10 +256,11 @@ function hasFeatureAccess(db, user, featureKey) {
   if (!db || !user) return false;
   const normalized = normalizeFeatureKey(featureKey);
   if (!FEATURE_KEY_SET.has(normalized)) return false;
-  if (isAdminUser(db, user)) return true;
+  const admin = isAdminUser(db, user);
+  if (admin && normalized !== 'dojo_admin') return true;
   const userId = String(user.id || '').trim();
   if (!userId) return false;
-  const access = getFeatureAccessByUserId(db, userId, false);
+  const access = getFeatureAccessByUserId(db, userId, admin);
   return !!access[normalized];
 }
 
