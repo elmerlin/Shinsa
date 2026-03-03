@@ -45,6 +45,7 @@ export default function MyAccountPage() {
   const [form, setForm] = useState({
     email: '', avatar: '', pumbility: '', skill_title: 'Beginner', skill_level: 1,
     gender: '', nationality: '', date_of_birth: '', show_age: false, description: '',
+    age: '', height_cm: '', weight_kg: '',
     location_country: '', location_city: '',
   });
   const [avatarDirty, setAvatarDirty] = useState(false);
@@ -92,6 +93,9 @@ export default function MyAccountPage() {
       nationality: user.nationality || '',
       date_of_birth: user.date_of_birth || '',
       show_age: !!user.show_age,
+      age: user.age === null || user.age === undefined ? '' : String(user.age),
+      height_cm: user.height_cm === null || user.height_cm === undefined ? '' : String(user.height_cm),
+      weight_kg: user.weight_kg === null || user.weight_kg === undefined ? '' : String(user.weight_kg),
       description: user.description || '',
       location_country: user.location_country || '',
       location_city: user.location_city || '',
@@ -184,6 +188,9 @@ export default function MyAccountPage() {
         nationality: form.nationality,
         date_of_birth: form.date_of_birth,
         show_age: form.show_age,
+        age: form.age,
+        height_cm: form.height_cm,
+        weight_kg: form.weight_kg,
         description: form.description,
       };
       if (avatarDirty) payload.avatar = form.avatar;
@@ -224,6 +231,25 @@ export default function MyAccountPage() {
       });
       setPassForm({ current_password: '', new_password: '', confirm: '' });
       setMessage('Password changed!');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveHealth = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage('');
+    try {
+      await updateMe({
+        age: form.age,
+        height_cm: form.height_cm,
+        weight_kg: form.weight_kg,
+      });
+      await refreshUser();
+      setMessage('Health updated!');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -479,6 +505,7 @@ export default function MyAccountPage() {
       <div className="flex gap-2 mb-6 flex-wrap">
         {[
           { key: 'profile', label: 'Edit Profile' },
+          { key: 'health', label: 'Health' },
           { key: 'password', label: 'Change Password' },
           { key: 'piugame', label: 'PIUGame Link' },
           { key: 'shoes', label: 'Shoes' },
@@ -644,6 +671,79 @@ export default function MyAccountPage() {
 
           <button type="submit" className="btn-primary w-full" disabled={saving}>
             {saving ? 'Saving...' : 'Save Profile'}
+          </button>
+        </form>
+      ) : tab === 'health' ? (
+        <form onSubmit={handleSaveHealth} className="card space-y-4">
+          <div>
+            <h3 className="font-display font-bold text-sm text-piu-accent mb-1">Health Profile</h3>
+            <p className="text-xs text-gray-500">
+              Used for session calorie estimates (MET 11.8, 2 minutes per song).
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Age</label>
+              <input
+                type="number"
+                min="1"
+                max="120"
+                step="1"
+                className="input-field"
+                placeholder="e.g. 29"
+                value={form.age}
+                onChange={e => setForm(f => ({ ...f, age: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Height (cm)</label>
+              <input
+                type="number"
+                min="50"
+                max="280"
+                step="0.1"
+                className="input-field"
+                placeholder="e.g. 175"
+                value={form.height_cm}
+                onChange={e => setForm(f => ({ ...f, height_cm: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Weight (kg)</label>
+              <input
+                type="number"
+                min="20"
+                max="350"
+                step="0.1"
+                className="input-field"
+                placeholder="e.g. 72.5"
+                value={form.weight_kg}
+                onChange={e => setForm(f => ({ ...f, weight_kg: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {(() => {
+            const weight = Number(form.weight_kg);
+            const hasWeight = Number.isFinite(weight) && weight > 0;
+            if (!hasWeight) {
+              return (
+                <p className="text-xs text-gray-500">
+                  Add your weight to see personalized kcal/hour estimates in session summaries.
+                </p>
+              );
+            }
+            const kcalPerHour = Math.round((11.8 * 3.5 * weight / 200) * 60);
+            return (
+              <p className="text-xs text-cyan-300">
+                Estimated burn rate while playing: <span className="font-display font-bold">~{kcalPerHour.toLocaleString()} kcal/hour</span>
+              </p>
+            );
+          })()}
+
+          <button type="submit" className="btn-primary w-full" disabled={saving}>
+            {saving ? 'Saving...' : 'Save Health'}
           </button>
         </form>
       ) : tab === 'password' ? (

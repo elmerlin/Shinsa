@@ -196,6 +196,22 @@ function parseBooleanInput(value) {
   return null;
 }
 
+function parseOptionalHealthNumber(value, { min = null, max = null, integer = false } = {}) {
+  if (value === undefined) return { provided: false, valid: true, value: null };
+  if (value === null) return { provided: true, valid: true, value: null };
+
+  const raw = String(value).trim();
+  if (!raw) return { provided: true, valid: true, value: null };
+
+  const numeric = integer ? parseInt(raw, 10) : Number(raw);
+  if (!Number.isFinite(numeric)) return { provided: true, valid: false, value: null };
+
+  const normalized = integer ? Math.trunc(numeric) : Math.round(numeric * 10) / 10;
+  if (min !== null && normalized < min) return { provided: true, valid: false, value: null };
+  if (max !== null && normalized > max) return { provided: true, valid: false, value: null };
+  return { provided: true, valid: true, value: normalized };
+}
+
 function featureLabelFromKey(key) {
   if (key === 'optimise') return 'Optimise';
   if (key === 'checkin') return 'Check In';
@@ -315,6 +331,7 @@ router.post('/register', (req, res) => {
   const {
     username, password, email, avatar, pumbility, skill_title, skill_level,
     gender, nationality, date_of_birth, show_age, description,
+    age, height_cm, weight_kg,
     location_country, location_country_code, location_city, location_lat, location_lng,
   } = req.body;
 
@@ -335,24 +352,30 @@ router.post('/register', (req, res) => {
 
   const id = uuidv4();
   const password_hash = bcrypt.hashSync(password, 10);
+  const parsedAge = parseOptionalHealthNumber(age, { min: 1, max: 120, integer: true });
+  const parsedHeightCm = parseOptionalHealthNumber(height_cm, { min: 50, max: 280 });
+  const parsedWeightKg = parseOptionalHealthNumber(weight_kg, { min: 20, max: 350 });
+  if (!parsedAge.valid) return res.status(400).json({ error: 'Age must be between 1 and 120' });
+  if (!parsedHeightCm.valid) return res.status(400).json({ error: 'Height must be between 50 and 280 cm' });
+  if (!parsedWeightKg.valid) return res.status(400).json({ error: 'Weight must be between 20 and 350 kg' });
 
   db.prepare(`
     INSERT INTO users (
       id, username, password_hash, email, avatar, pumbility, skill_title, skill_level,
-      gender, nationality, date_of_birth, show_age, description,
+      gender, nationality, date_of_birth, show_age, age, height_cm, weight_kg, description,
       location_country, location_country_code, location_city, location_lat, location_lng
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, username.trim(), password_hash, email || '', avatar || '', pumbility || 0,
     skill_title || '', skill_level || 1, gender || '', nationality || '', date_of_birth || '',
-    show_age ? 1 : 0, description || '',
+    show_age ? 1 : 0, parsedAge.value, parsedHeightCm.value, parsedWeightKg.value, description || '',
     location_country || '', location_country_code || '', location_city || '',
     Number.isFinite(Number(location_lat)) ? Number(location_lat) : null,
     Number.isFinite(Number(location_lng)) ? Number(location_lng) : null);
 
   const user = db.prepare(`
     SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
-           date_of_birth, show_age, description,
+           date_of_birth, show_age, age, height_cm, weight_kg, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            playing_status, created_at
     FROM users WHERE id = ?
@@ -387,7 +410,7 @@ router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
   const user = db.prepare(`
     SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
-           date_of_birth, show_age, description,
+           date_of_birth, show_age, age, height_cm, weight_kg, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            playing_status, created_at
     FROM users WHERE id = ?
@@ -1619,8 +1642,15 @@ router.put('/me', requireAuth, (req, res) => {
   const {
     email, avatar, pumbility, skill_title, skill_level, gender, nationality,
     date_of_birth, show_age, description,
+    age, height_cm, weight_kg,
     location_country, location_country_code, location_city, location_lat, location_lng,
   } = req.body;
+  const parsedAge = parseOptionalHealthNumber(age, { min: 1, max: 120, integer: true });
+  const parsedHeightCm = parseOptionalHealthNumber(height_cm, { min: 50, max: 280 });
+  const parsedWeightKg = parseOptionalHealthNumber(weight_kg, { min: 20, max: 350 });
+  if (!parsedAge.valid) return res.status(400).json({ error: 'Age must be between 1 and 120' });
+  if (!parsedHeightCm.valid) return res.status(400).json({ error: 'Height must be between 50 and 280 cm' });
+  if (!parsedWeightKg.valid) return res.status(400).json({ error: 'Weight must be between 20 and 350 kg' });
 
   db.prepare(`
     UPDATE users SET
@@ -1633,6 +1663,9 @@ router.put('/me', requireAuth, (req, res) => {
       nationality = COALESCE(?, nationality),
       date_of_birth = COALESCE(?, date_of_birth),
       show_age = COALESCE(?, show_age),
+      age = CASE WHEN ? THEN ? ELSE age END,
+      height_cm = CASE WHEN ? THEN ? ELSE height_cm END,
+      weight_kg = CASE WHEN ? THEN ? ELSE weight_kg END,
       description = COALESCE(?, description),
       location_country = COALESCE(?, location_country),
       location_country_code = COALESCE(?, location_country_code),
@@ -1650,6 +1683,12 @@ router.put('/me', requireAuth, (req, res) => {
     nationality,
     date_of_birth,
     show_age !== undefined ? (show_age ? 1 : 0) : null,
+    parsedAge.provided ? 1 : 0,
+    parsedAge.value,
+    parsedHeightCm.provided ? 1 : 0,
+    parsedHeightCm.value,
+    parsedWeightKg.provided ? 1 : 0,
+    parsedWeightKg.value,
     description,
     location_country,
     location_country_code,
@@ -1665,7 +1704,7 @@ router.put('/me', requireAuth, (req, res) => {
 
   const user = db.prepare(`
     SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
-           date_of_birth, show_age, description,
+           date_of_birth, show_age, age, height_cm, weight_kg, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
            created_at
     FROM users WHERE id = ?

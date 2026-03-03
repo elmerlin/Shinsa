@@ -4,6 +4,12 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
+function formatDecimal(value, maximumFractionDigits = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  return n.toLocaleString(undefined, { maximumFractionDigits });
+}
+
 function modeShort(mode) {
   if (mode === 'Single') return 'S';
   if (mode === 'Double') return 'D';
@@ -24,11 +30,12 @@ function getGradeColorClass(grade) {
   return 'text-gray-300';
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, subvalue = '' }) {
   return (
     <div className="rounded-lg border border-piu-border/30 bg-piu-dark/50 px-2.5 py-2">
       <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{label}</p>
       <p className="text-sm font-display font-bold text-gray-100">{value}</p>
+      {subvalue ? <p className="text-[10px] text-gray-500 mt-0.5">{subvalue}</p> : null}
     </div>
   );
 }
@@ -137,6 +144,13 @@ export default function SessionSummaryCard({
 }) {
   const [topPlaysExpanded, setTopPlaysExpanded] = useState(false);
   if (!summary) return null;
+  const kcalPerHour = parseInt(summary.estimatedKcalPerHour, 10) || 0;
+  const calorieWeightKg = Number(summary.calorieWeightKg);
+  const hasWeight = Number.isFinite(calorieWeightKg) && calorieWeightKg > 0;
+  const personalized = !!summary.calorieEstimatePersonalized;
+  const calorieSubvalue = kcalPerHour > 0
+    ? `${formatNumber(kcalPerHour)} kcal/hour${hasWeight ? ` @ ${formatDecimal(calorieWeightKg)}kg` : ''}${!personalized ? ' (default)' : ''}`
+    : '';
   return (
     <div className={`rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3 ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -161,7 +175,11 @@ export default function SessionSummaryCard({
         <Stat label="Songs" value={summary.songCount} />
         <Stat label="Clears" value={`${summary.clearCount} (${summary.clearRate}%)`} />
         <Stat label="Steps" value={formatNumber(summary.totalSteps)} />
-        <Stat label="Estimated Calories" value={`~${formatNumber(summary.estimatedKcal)} kcal`} />
+        <Stat
+          label="Estimated Calories"
+          value={`~${formatNumber(summary.estimatedKcal)} kcal`}
+          subvalue={calorieSubvalue}
+        />
       </div>
 
       <div className="mt-3 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">

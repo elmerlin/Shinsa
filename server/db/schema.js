@@ -652,6 +652,9 @@ function initializeDb() {
       nationality TEXT DEFAULT '',
       date_of_birth TEXT DEFAULT '',
       show_age INT DEFAULT 0,
+      age INT DEFAULT NULL,
+      height_cm REAL DEFAULT NULL,
+      weight_kg REAL DEFAULT NULL,
       description TEXT DEFAULT '',
       location_country TEXT DEFAULT '',
       location_country_code TEXT DEFAULT '',
@@ -1872,6 +1875,9 @@ function initializeDb() {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
   const userMigrations = [
     ['is_admin', 'INT DEFAULT 0'],
+    ['age', 'INT DEFAULT NULL'],
+    ['height_cm', 'REAL DEFAULT NULL'],
+    ['weight_kg', 'REAL DEFAULT NULL'],
     ['location_country', "TEXT DEFAULT ''"],
     ['location_country_code', "TEXT DEFAULT ''"],
     ['location_city', "TEXT DEFAULT ''"],

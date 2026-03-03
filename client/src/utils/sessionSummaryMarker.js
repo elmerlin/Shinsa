@@ -26,6 +26,11 @@ function toNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function toBoolean(value) {
+  if (value === true || value === 1 || value === '1' || value === 'true') return true;
+  return false;
+}
+
 function formatDurationLabel(totalMinutes) {
   const minutes = Math.max(0, parseInt(totalMinutes, 10) || 0);
   const hours = Math.floor(minutes / 60);
@@ -68,6 +73,9 @@ function sanitizeSummary(summary) {
     clearRate: toInt(src.clearRate),
     totalSteps: toInt(src.totalSteps),
     estimatedKcal: toInt(src.estimatedKcal),
+    estimatedKcalPerHour: toInt(src.estimatedKcalPerHour),
+    calorieWeightKg: toNumber(src.calorieWeightKg),
+    calorieEstimatePersonalized: toBoolean(src.calorieEstimatePersonalized),
     singleCount: toInt(src.singleCount),
     doubleCount: toInt(src.doubleCount),
     otherCount: toInt(src.otherCount),

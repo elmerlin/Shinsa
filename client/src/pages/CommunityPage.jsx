@@ -20,6 +20,7 @@ import {
 } from '../utils/api';
 import { calculateClearRating } from '../utils/clearRating';
 import { serializeSessionSummaryMarker, splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
+import { buildSessionCalorieEstimate } from '../utils/calorieEstimate';
 
 // Common emoji sets for quick insert (same as PostsPage)
 const EMOJI_GROUPS = [
@@ -69,7 +70,6 @@ const SLASH_COMMANDS = {
 };
 
 const SUMMARY_SESSION_GAP_MS = 90 * 60 * 1000;
-const SUMMARY_KCAL_PER_SONG = 18;
 const SUMMARY_TOP_SONGS = 3;
 
 function getRankLabel(score) {
@@ -282,7 +282,7 @@ function getPlayRating(play) {
   return calculateClearRating(play?.level, play?.grade, play?.score);
 }
 
-function buildSessionSummary(sessionRows, jacketLookup = {}) {
+function buildSessionSummary(sessionRows, jacketLookup = {}, userProfile = null) {
   if (!Array.isArray(sessionRows) || sessionRows.length === 0) return null;
 
   const enrichedRows = sessionRows.map((play) => {
@@ -364,7 +364,11 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
   const clearRate = songCount > 0 ? Math.round((clearCount / songCount) * 100) : 0;
   const averageScore = scoredCount > 0 ? Math.round(scoreTotal / scoredCount) : 0;
   const averageLevel = levelCount > 0 ? (levelTotal / levelCount) : 0;
-  const estimatedKcal = songCount * SUMMARY_KCAL_PER_SONG;
+  const calorieEstimate = buildSessionCalorieEstimate(songCount, userProfile?.weight_kg);
+  const estimatedKcal = calorieEstimate.estimatedKcal;
+  const estimatedKcalPerHour = calorieEstimate.kcalPerHour;
+  const calorieWeightKg = calorieEstimate.weightKgUsed;
+  const calorieEstimatePersonalized = calorieEstimate.personalized;
   const perfectRate = totalSteps > 0 ? Math.round((judgmentTotals.perfect / totalSteps) * 100) : 0;
 
   const sortedByScore = [...enrichedRows]
@@ -416,6 +420,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     `🎵 **${songCount} songs** | 🏁 Clears: **${clearCount}/${songCount}** (${clearRate}%)`,
     `🦶 Judged steps: **${totalSteps.toLocaleString()}**${judgmentCoverageLabel}`,
     `🔥 Estimated calories: **~${estimatedKcal.toLocaleString()} kcal**`,
+    `⚡ Burn rate: **~${estimatedKcalPerHour.toLocaleString()} kcal/hour**${calorieEstimatePersonalized ? ` @ ${calorieWeightKg.toLocaleString()} kg` : ' (fallback 70 kg; set your weight in Health)'}`,
     '',
     `🎛️ Mode split: S ${singleCount} | D ${doubleCount}${otherCount > 0 ? ` | X ${otherCount}` : ''}`,
     averageLevel > 0 ? `📈 Avg level: **Lv.${averageLevel.toFixed(1)}**` : '',
@@ -443,6 +448,9 @@ function buildSessionSummary(sessionRows, jacketLookup = {}) {
     clearRate,
     totalSteps,
     estimatedKcal,
+    estimatedKcalPerHour,
+    calorieWeightKg,
+    calorieEstimatePersonalized,
     singleCount,
     doubleCount,
     otherCount,
@@ -795,7 +803,7 @@ export default function CommunityPage() {
       if (sessionRows.length === 0) {
         throw new Error('No recently played data found. Sync recently played first.');
       }
-      const summary = buildSessionSummary(sessionRows, jacketLookup || {});
+      const summary = buildSessionSummary(sessionRows, jacketLookup || {}, user || null);
       if (!summary) {
         throw new Error('Failed to build session summary from recently played data.');
       }
