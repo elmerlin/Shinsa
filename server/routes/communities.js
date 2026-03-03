@@ -100,6 +100,13 @@ function normalizePumpUserRows(rows = []) {
   }));
 }
 
+function normalizeCommunityCommentUserRows(rows = [], size = 40) {
+  return rows.map((row) => ({
+    ...row,
+    user_avatar: normalizeUserAvatarForList(row.user_avatar, row.user_id, size, row.avatar_v),
+  }));
+}
+
 // Helper: get member role in a community
 function getMemberRole(db, communityId, userId) {
   if (!userId) return null;
@@ -1231,7 +1238,7 @@ router.get('/:id/posts/:postId/comments', optionalAuth, (req, res) => {
   if (!access.ok) return res.status(access.status).json({ error: access.error });
 
   const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar as user_avatar
+    SELECT c.*, u.username, u.avatar as user_avatar, u.avatar_v
     FROM community_post_comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.post_id = ?
@@ -1297,7 +1304,7 @@ router.get('/:id/posts/:postId/comments', optionalAuth, (req, res) => {
     c.author_badges = badgeMap[c.user_id] || [];
   }
 
-  res.json(comments);
+  res.json(normalizeCommunityCommentUserRows(comments, 40));
 });
 
 // POST /api/communities/:id/posts/:postId/comments — add comment
@@ -1327,7 +1334,7 @@ router.post('/:id/posts/:postId/comments', requireAuth, (req, res) => {
   ).run(id, req.params.postId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
-    SELECT c.*, u.username, u.avatar as user_avatar
+    SELECT c.*, u.username, u.avatar as user_avatar, u.avatar_v
     FROM community_post_comments c JOIN users u ON c.user_id = u.id
     WHERE c.id = ?
   `).get(id);
@@ -1345,6 +1352,7 @@ router.post('/:id/posts/:postId/comments', requireAuth, (req, res) => {
     JOIN community_role_badges rb ON cmb.badge_id = rb.id
     WHERE cmb.community_id = ? AND cmb.user_id = ?
   `).all(req.params.id, req.user.id);
+  comment.user_avatar = normalizeUserAvatarForList(comment.user_avatar, comment.user_id, 40, comment.avatar_v);
 
   const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
   const community = db.prepare(

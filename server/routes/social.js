@@ -67,6 +67,13 @@ function normalizePumpUserRows(rows = []) {
   }));
 }
 
+function normalizeCommentUserRows(rows = [], size = 40) {
+  return rows.map((row) => ({
+    ...row,
+    avatar: normalizeUserAvatarForList(row.avatar, row.user_id, size, row.avatar_v),
+  }));
+}
+
 // Multer config for image uploads (memory-only, images stored as base64 in DB)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -548,7 +555,7 @@ router.get('/posts/:id/comments', optionalAuth, (req, res) => {
 
   // Fetch all comments (parents + replies) in a single query
   const allComments = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar, u.avatar_v
     FROM post_comments c
     JOIN users u ON c.user_id = u.id
     WHERE c.post_id = ?
@@ -586,17 +593,18 @@ router.get('/posts/:id/comments', optionalAuth, (req, res) => {
     c.pump_count = pumpMap[c.id] || 0;
     c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
   }
+  const normalizedComments = normalizeCommentUserRows(allComments, 40);
 
   const topLevel = [];
   const replyMap = {};
-  for (const c of allComments) {
+  for (const c of normalizedComments) {
     if (!c.parent_id) {
       c.replies = [];
       topLevel.push(c);
       replyMap[c.id] = c.replies;
     }
   }
-  for (const c of allComments) {
+  for (const c of normalizedComments) {
     if (c.parent_id && replyMap[c.parent_id]) {
       replyMap[c.parent_id].push(c);
     }
@@ -631,12 +639,13 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
   ).run(postId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar, u.avatar_v
     FROM post_comments c JOIN users u ON c.user_id = u.id
     WHERE c.id = ?
   `).get(result.lastInsertRowid);
 
-  comment.replies = [];
+  const normalizedComment = normalizeCommentUserRows([comment], 40)[0];
+  normalizedComment.replies = [];
   const commentLink = `/post/${postId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   // Notifications
@@ -663,7 +672,7 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
     link: commentLink,
   });
 
-  res.status(201).json(comment);
+  res.status(201).json(normalizedComment);
 });
 
 // DELETE /api/social/posts/comments/:id — delete a comment (author or post author)
@@ -908,7 +917,7 @@ router.get('/upscores/:id/comments', optionalAuth, (req, res) => {
   const upscoreId = parseInt(req.params.id);
 
   const allComments = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar, u.avatar_v
     FROM upscore_comments c JOIN users u ON c.user_id = u.id
     WHERE c.upscore_id = ?
     ORDER BY c.created_at ASC
@@ -940,13 +949,14 @@ router.get('/upscores/:id/comments', optionalAuth, (req, res) => {
     c.pump_count = pumpMap[c.id] || 0;
     c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
   }
+  const normalizedComments = normalizeCommentUserRows(allComments, 40);
 
   const topLevel = [];
   const replyMap = {};
-  for (const c of allComments) {
+  for (const c of normalizedComments) {
     if (!c.parent_id) { c.replies = []; topLevel.push(c); replyMap[c.id] = c.replies; }
   }
-  for (const c of allComments) {
+  for (const c of normalizedComments) {
     if (c.parent_id && replyMap[c.parent_id]) replyMap[c.parent_id].push(c);
   }
 
@@ -974,11 +984,12 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
   ).run(upscoreId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar, u.avatar_v
     FROM upscore_comments c JOIN users u ON c.user_id = u.id
     WHERE c.id = ?
   `).get(result.lastInsertRowid);
-  comment.replies = [];
+  const normalizedComment = normalizeCommentUserRows([comment], 40)[0];
+  normalizedComment.replies = [];
   const commentLink = `/upscore/${upscoreId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   // Notify upscore owner
@@ -1005,7 +1016,7 @@ router.post('/upscores/:id/comments', requireAuth, (req, res) => {
     link: commentLink,
   });
 
-  res.status(201).json(comment);
+  res.status(201).json(normalizedComment);
 });
 
 // DELETE /api/social/upscores/comments/:id
@@ -1085,7 +1096,7 @@ router.get('/clears/:id/comments', optionalAuth, (req, res) => {
   const clearId = parseInt(req.params.id);
 
   const allComments = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar, u.avatar_v
     FROM new_clear_comments c JOIN users u ON c.user_id = u.id
     WHERE c.clear_id = ?
     ORDER BY c.created_at ASC
@@ -1117,13 +1128,14 @@ router.get('/clears/:id/comments', optionalAuth, (req, res) => {
     c.pump_count = pumpMap[c.id] || 0;
     c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
   }
+  const normalizedComments = normalizeCommentUserRows(allComments, 40);
 
   const topLevel = [];
   const replyMap = {};
-  for (const c of allComments) {
+  for (const c of normalizedComments) {
     if (!c.parent_id) { c.replies = []; topLevel.push(c); replyMap[c.id] = c.replies; }
   }
-  for (const c of allComments) {
+  for (const c of normalizedComments) {
     if (c.parent_id && replyMap[c.parent_id]) replyMap[c.parent_id].push(c);
   }
 
@@ -1151,11 +1163,12 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
   ).run(clearId, req.user.id, parent_id || null, trimmedContent);
 
   const comment = db.prepare(`
-    SELECT c.*, u.username, u.avatar
+    SELECT c.*, u.username, u.avatar, u.avatar_v
     FROM new_clear_comments c JOIN users u ON c.user_id = u.id
     WHERE c.id = ?
   `).get(result.lastInsertRowid);
-  comment.replies = [];
+  const normalizedComment = normalizeCommentUserRows([comment], 40)[0];
+  normalizedComment.replies = [];
   const commentLink = `/clear/${clearId}?comment=${encodeURIComponent(String(comment.id))}`;
 
   const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
@@ -1180,7 +1193,7 @@ router.post('/clears/:id/comments', requireAuth, (req, res) => {
     link: commentLink,
   });
 
-  res.status(201).json(comment);
+  res.status(201).json(normalizedComment);
 });
 
 // DELETE /api/social/clears/comments/:id
