@@ -227,6 +227,12 @@ function isAdminUser(db, user) {
 function getFeatureAccessByUserId(db, userId, isAdmin) {
   const access = defaultFeatureAccess();
   if (!userId) return access;
+  if (isAdmin) {
+    for (const featureKey of FEATURE_KEYS) {
+      access[featureKey] = true;
+    }
+    return access;
+  }
   const rows = db.prepare(`
     SELECT feature_key
     FROM user_feature_permissions
@@ -242,13 +248,6 @@ function getFeatureAccessByUserId(db, userId, isAdmin) {
     if (!FEATURE_KEY_SET.has(featureKey)) continue;
     access[featureKey] = true;
   }
-  if (isAdmin) {
-    // Full admins keep blanket access except Dojo Admin, which is explicitly assigned.
-    for (const featureKey of FEATURE_KEYS) {
-      if (featureKey === 'dojo_admin') continue;
-      access[featureKey] = true;
-    }
-  }
   return access;
 }
 
@@ -256,11 +255,10 @@ function hasFeatureAccess(db, user, featureKey) {
   if (!db || !user) return false;
   const normalized = normalizeFeatureKey(featureKey);
   if (!FEATURE_KEY_SET.has(normalized)) return false;
-  const admin = isAdminUser(db, user);
-  if (admin && normalized !== 'dojo_admin') return true;
+  if (isAdminUser(db, user)) return true;
   const userId = String(user.id || '').trim();
   if (!userId) return false;
-  const access = getFeatureAccessByUserId(db, userId, admin);
+  const access = getFeatureAccessByUserId(db, userId, false);
   return !!access[normalized];
 }
 

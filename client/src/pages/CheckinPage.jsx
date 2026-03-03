@@ -314,7 +314,8 @@ function QRCheckinHandler({ venues, onCheckin }) {
 // ─── Main Page ────────────────────────────────────────────────────────
 export default function CheckinPage() {
   const { user } = useAuth();
-  const hasCheckinAccess = !!(user?.is_admin || user?.feature_access?.checkin);
+  const hasDojoAccess = !!user?.feature_access?.dojo_admin;
+  const hasCheckinAccess = !!(user?.is_admin || user?.feature_access?.checkin || hasDojoAccess);
   const [venues, setVenues] = useState([]);
   const [activeCheckins, setActiveCheckins] = useState([]);
   const [myStatus, setMyStatus] = useState(null);
@@ -339,7 +340,7 @@ export default function CheckinPage() {
       setLoading(false);
       return;
     }
-    setDojoLoading(true);
+    setDojoLoading(hasDojoAccess);
     setDojoError('');
     try {
       const venueData = await getVenues();
@@ -347,12 +348,18 @@ export default function CheckinPage() {
 
       // Load active checkins for the first (default) venue
       if (venueData.length > 0) {
-        const [active, overview] = await Promise.all([
-          getActiveCheckins(venueData[0].slug),
-          getDojoOverview(venueData[0].slug),
-        ]);
-        setActiveCheckins(active.activeCheckins || []);
-        setDojoOverview(overview || null);
+        if (hasDojoAccess) {
+          const [active, overview] = await Promise.all([
+            getActiveCheckins(venueData[0].slug),
+            getDojoOverview(venueData[0].slug),
+          ]);
+          setActiveCheckins(active.activeCheckins || []);
+          setDojoOverview(overview || null);
+        } else {
+          const active = await getActiveCheckins(venueData[0].slug);
+          setActiveCheckins(active.activeCheckins || []);
+          setDojoOverview(null);
+        }
       } else {
         setDojoOverview(null);
       }
@@ -361,12 +368,12 @@ export default function CheckinPage() {
       setMyStatus(status);
     } catch (e) {
       setError(e.message);
-      setDojoError(e.message);
+      if (hasDojoAccess) setDojoError(e.message);
     } finally {
       setDojoLoading(false);
     }
     setLoading(false);
-  }, [hasCheckinAccess, user]);
+  }, [hasCheckinAccess, hasDojoAccess, user]);
 
   useEffect(() => {
     if (!user || !hasCheckinAccess) {
@@ -378,20 +385,26 @@ export default function CheckinPage() {
     const interval = setInterval(async () => {
       try {
         if (venues.length > 0) {
-          const [active, overview] = await Promise.all([
-            getActiveCheckins(venues[0].slug),
-            getDojoOverview(venues[0].slug),
-          ]);
-          setActiveCheckins(active.activeCheckins || []);
-          setDojoOverview(overview || null);
-          setDojoError('');
+          if (hasDojoAccess) {
+            const [active, overview] = await Promise.all([
+              getActiveCheckins(venues[0].slug),
+              getDojoOverview(venues[0].slug),
+            ]);
+            setActiveCheckins(active.activeCheckins || []);
+            setDojoOverview(overview || null);
+            setDojoError('');
+          } else {
+            const active = await getActiveCheckins(venues[0].slug);
+            setActiveCheckins(active.activeCheckins || []);
+            setDojoOverview(null);
+          }
         }
         const status = await getMyCheckinStatus();
         setMyStatus(status);
       } catch { /* ignore */ }
     }, 15000);
     return () => clearInterval(interval);
-  }, [hasCheckinAccess, loadData, user, venues.length > 0 ? venues[0]?.slug : '']);
+  }, [hasCheckinAccess, hasDojoAccess, loadData, user, venues.length > 0 ? venues[0]?.slug : '']);
 
   if (!user) {
     return (
@@ -561,15 +574,17 @@ export default function CheckinPage() {
         </div>
       )}
 
-      <div className="mt-4">
-        <DojoActivityPanel
-          overview={dojoOverview}
-          loading={dojoLoading}
-          error={dojoError}
-          onRefresh={loadData}
-          logOnly
-        />
-      </div>
+      {hasDojoAccess && (
+        <div className="mt-4">
+          <DojoActivityPanel
+            overview={dojoOverview}
+            loading={dojoLoading}
+            error={dojoError}
+            onRefresh={loadData}
+            logOnly
+          />
+        </div>
+      )}
 
       {/* Checkin confirmation modal */}
       {selectedMachine && (

@@ -40,6 +40,7 @@ export default function AdminPanel() {
   const [features, setFeatures] = useState([
     { key: 'optimise', label: 'Optimise' },
     { key: 'checkin', label: 'Check In' },
+    { key: 'dojo_admin', label: 'Dojo Admin' },
   ]);
   const [selectedFeature, setSelectedFeature] = useState('optimise');
   const [permissionUsers, setPermissionUsers] = useState([]);
@@ -139,6 +140,7 @@ export default function AdminPanel() {
           : [
             { key: 'optimise', label: 'Optimise' },
             { key: 'checkin', label: 'Check In' },
+            { key: 'dojo_admin', label: 'Dojo Admin' },
           ];
         setFeatures(nextFeatures);
         if (!nextFeatures.some((item) => item.key === selectedFeature)) {

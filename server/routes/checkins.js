@@ -54,7 +54,9 @@ function sessionMinutes(startDate, endDate, now = new Date()) {
 
 function requireCheckinFeature(req, res, next) {
   const db = getDb();
-  if (!hasFeatureAccess(db, req.user, 'checkin')) {
+  const canUseCheckin = hasFeatureAccess(db, req.user, 'checkin')
+    || hasFeatureAccess(db, req.user, 'dojo_admin');
+  if (!canUseCheckin) {
     return res.status(403).json({ error: 'Check In access not granted' });
   }
   return next();
@@ -92,6 +94,10 @@ function notifyAdminsAboutCheckinEvent(db, {
   const dojoAdmins = db.prepare(`
     SELECT DISTINCT user_id
     FROM (
+      SELECT id AS user_id
+      FROM users
+      WHERE is_admin = 1
+      UNION
       SELECT user_id
       FROM user_feature_permissions
       WHERE feature_key = 'dojo_admin'

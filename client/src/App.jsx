@@ -322,7 +322,7 @@ function UserMenu() {
   if (!user) return null;
   const myProfilePath = getProfilePath(user.id, user.username);
   const canAccessOptimise = !!(user?.is_admin || user?.feature_access?.optimise);
-  const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin);
+  const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canAccessAdmin = !!user?.is_admin;
 
@@ -685,7 +685,7 @@ export default function App() {
   const [showDojoPopup, setShowDojoPopup] = useState(false);
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
-  const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin);
+  const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canShowDojoPopup = canAccessCheckin && isPumpDojoMember(user);
   const scrollToTop = () => {
