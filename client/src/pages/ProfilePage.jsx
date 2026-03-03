@@ -1494,8 +1494,8 @@ export default function ProfilePage() {
 
   // Filtered + sorted best scores
   const effectiveBestScoreMode = useMemo(
-    () => (piuScoreMode || piuAllSubMode || ''),
-    [piuScoreMode, piuAllSubMode]
+    () => (piuScoreMode || (piuScoreLevel ? piuAllSubMode : '') || ''),
+    [piuScoreMode, piuScoreLevel, piuAllSubMode]
   );
 
   const filteredBestScores = useMemo(() => {
@@ -1528,6 +1528,12 @@ export default function ProfilePage() {
       setPiuAllSubMode('');
     }
   }, [piuScoreMode]);
+
+  useEffect(() => {
+    if (!piuScoreLevel) {
+      setPiuAllSubMode('');
+    }
+  }, [piuScoreLevel]);
 
   const bestScorePagination = useMemo(() => {
     const total = filteredBestScores.length;
@@ -2963,29 +2969,6 @@ export default function ProfilePage() {
                   </button>
                 ))}
               </div>
-
-              {piuScoreMode === '' && (
-                <div className="flex gap-1">
-                  {[
-                    { key: '', label: 'All' },
-                    { key: 'Single', label: 'Singles' },
-                    { key: 'Double', label: 'Doubles' },
-                  ].map(m => (
-                    <button
-                      key={m.key}
-                      onClick={() => {
-                        setPiuAllSubMode(m.key);
-                        setPiuScoreLevel('');
-                      }}
-                      className={`px-3 py-1.5 rounded text-xs font-display font-bold transition-colors ${
-                        piuAllSubMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-              )}
 
               {/* Level filter */}
               {availableLevels.length > 0 && (
