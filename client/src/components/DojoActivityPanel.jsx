@@ -24,6 +24,29 @@ function formatDateTime(value) {
   return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function toDayKey(value) {
+  const d = parseUtc(value);
+  if (!d) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatDayLabel(dayKey) {
+  if (!dayKey) return 'Unknown day';
+  const d = new Date(`${dayKey}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dayKey;
+  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function sessionMinutes(startValue, endValue) {
+  const start = parseUtc(startValue);
+  if (!start) return 0;
+  const end = parseUtc(endValue) || new Date();
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+}
+
 function formatDuration(minutes) {
   const mins = Math.max(0, Math.round(Number(minutes) || 0));
   if (mins < 1) return '< 1m';
@@ -55,7 +78,154 @@ function DayBusyBadge({ visitors, maxVisitors }) {
   return <span className={`inline-block w-2.5 h-2.5 rounded-full ${className}`} />;
 }
 
-function ActivityLogSection({ activityLog }) {
+function ActivityLogSection({ activityLog, groupByUserDay = false }) {
+  const [expandedGroups, setExpandedGroups] = useState({});
+
+  useEffect(() => {
+    setExpandedGroups({});
+  }, [groupByUserDay, activityLog]);
+
+  const groupedRows = useMemo(() => {
+    if (!groupByUserDay) return [];
+
+    const groups = new Map();
+    for (const event of activityLog) {
+      const dayKey = toDayKey(event?.checked_in_at || event?.occurred_at);
+      const userKey = String(event?.user_id || event?.username || 'unknown');
+      const groupKey = `${dayKey || 'unknown'}:${userKey}`;
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          key: groupKey,
+          day_key: dayKey,
+          user_id: event?.user_id || '',
+          username: event?.username || 'Unknown',
+          avatar: event?.avatar || '',
+          latest_at: event?.occurred_at || event?.checked_in_at || '',
+          sessions: new Map(),
+        });
+      }
+
+      const group = groups.get(groupKey);
+      const occurredAt = String(event?.occurred_at || event?.checked_in_at || '');
+      if (occurredAt > String(group.latest_at || '')) {
+        group.latest_at = occurredAt;
+      }
+
+      const sessionKey = [
+        String(event?.user_id || ''),
+        String(event?.machine_id || ''),
+        String(event?.checked_in_at || ''),
+        String(event?.machine_name || ''),
+      ].join(':');
+
+      if (!group.sessions.has(sessionKey)) {
+        group.sessions.set(sessionKey, {
+          key: sessionKey,
+          machine_name: event?.machine_name || 'Unknown machine',
+          checked_in_at: event?.checked_in_at || event?.occurred_at || '',
+          checked_out_at: event?.checked_out_at || null,
+        });
+      } else if (event?.checked_out_at) {
+        const existing = group.sessions.get(sessionKey);
+        existing.checked_out_at = event.checked_out_at;
+      }
+    }
+
+    return Array.from(groups.values())
+      .map((group) => {
+        const sessions = Array.from(group.sessions.values())
+          .map((session) => ({
+            ...session,
+            active: !session.checked_out_at,
+            session_minutes: sessionMinutes(session.checked_in_at, session.checked_out_at),
+          }))
+          .sort((a, b) => (b.checked_in_at > a.checked_in_at ? 1 : -1));
+        const machineCount = new Set(sessions.map((session) => session.machine_name)).size;
+        return {
+          ...group,
+          sessions,
+          session_count: sessions.length,
+          machine_count: machineCount,
+          total_minutes: sessions.reduce((sum, session) => sum + session.session_minutes, 0),
+          active: sessions.some((session) => session.active),
+        };
+      })
+      .sort((a, b) => {
+        if (a.day_key !== b.day_key) return String(b.day_key || '').localeCompare(String(a.day_key || ''));
+        if (a.active !== b.active) return a.active ? -1 : 1;
+        if (b.total_minutes !== a.total_minutes) return b.total_minutes - a.total_minutes;
+        return String(a.username || '').localeCompare(String(b.username || ''));
+      });
+  }, [activityLog, groupByUserDay]);
+
+  if (groupByUserDay) {
+    return (
+      <div className="bg-piu-dark/35 border border-piu-border/35 rounded-xl p-3">
+        <h5 className="text-xs font-display font-bold text-gray-300 uppercase tracking-wide">Check-in Activity (Grouped by Day)</h5>
+        <div className="mt-2 space-y-2 max-h-64 overflow-y-auto pr-1">
+          {groupedRows.length === 0 ? (
+            <p className="text-xs text-gray-500">No activity logged yet.</p>
+          ) : (
+            groupedRows.map((entry) => {
+              const expanded = !!expandedGroups[entry.key];
+              return (
+                <div key={entry.key} className="rounded-lg border border-piu-border/25 bg-piu-dark/25">
+                  <div className="flex items-center gap-2 px-2 py-1.5">
+                    <Link to={getProfilePath(entry.user_id, entry.username)} className="shrink-0" onClick={(event) => event.stopPropagation()}>
+                      {entry.avatar ? (
+                        <img src={getAvatarUrl(entry.avatar)} alt="" className="w-7 h-7 rounded-full object-cover border border-piu-border/60" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center text-[10px] font-display font-bold">
+                          {(entry.username || '?')[0]?.toUpperCase()}
+                        </div>
+                      )}
+                    </Link>
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={getProfilePath(entry.user_id, entry.username)}
+                        className="text-xs font-display font-bold hover:text-piu-accent truncate block"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {entry.username}
+                      </Link>
+                      <p className="text-[10px] text-gray-500">
+                        {formatDayLabel(entry.day_key)} • {entry.session_count} session{entry.session_count === 1 ? '' : 's'} across {entry.machine_count} machine{entry.machine_count === 1 ? '' : 's'}
+                        {entry.active ? ' • Active now' : ''}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-300 shrink-0">{formatDuration(entry.total_minutes)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedGroups((prev) => ({ ...prev, [entry.key]: !prev[entry.key] }))}
+                      className="text-[10px] text-gray-500 hover:text-white shrink-0"
+                    >
+                      {expanded ? 'Hide' : 'View'}
+                    </button>
+                  </div>
+                  {expanded ? (
+                    <div className="border-t border-piu-border/20 px-2 pb-2 pt-1.5 space-y-1.5">
+                      {entry.sessions.map((session) => (
+                        <div key={session.key} className="flex items-center gap-2 rounded border border-piu-border/20 bg-piu-dark/35 px-2 py-1">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] text-gray-300 truncate">{session.machine_name}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {formatShortTime(session.checked_in_at)} - {session.active ? 'Now' : formatShortTime(session.checked_out_at)}
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-mono text-gray-300 shrink-0">{formatDuration(session.session_minutes)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-piu-dark/35 border border-piu-border/35 rounded-xl p-3">
       <h5 className="text-xs font-display font-bold text-gray-300 uppercase tracking-wide">Check-in / Check-out Log</h5>
@@ -335,12 +505,12 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
             </>
           ) : null}
 
-          <ActivityLogSection activityLog={activityLog} />
+          <ActivityLogSection activityLog={activityLog} groupByUserDay={logOnly} />
         </>
       ) : null}
 
       {!loading && !error && !week ? (
-        <ActivityLogSection activityLog={activityLog} />
+        <ActivityLogSection activityLog={activityLog} groupByUserDay={logOnly} />
       ) : null}
     </div>
   );
