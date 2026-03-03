@@ -409,6 +409,7 @@ function GradeDistributionChart({
   modeFilter = '',
   onModeFilterChange = null,
 }) {
+  const barsContainerRef = useRef(null);
   const filtered = modeFilter ? scores.filter(s => s.mode === modeFilter) : scores;
 
   // Build distribution, grouping B and below into one bucket
@@ -441,6 +442,27 @@ function GradeDistributionChart({
 
   const maxCount = Math.max(1, ...displayDistribution.map(d => d.count));
   const totalCount = displayDistribution.reduce((s, d) => s + d.count, 0);
+  const peakIndex = useMemo(() => {
+    let bestIdx = 0;
+    let bestCount = -1;
+    for (let i = 0; i < displayDistribution.length; i++) {
+      const count = Number(displayDistribution[i]?.count) || 0;
+      if (count > bestCount) {
+        bestCount = count;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
+  }, [displayDistribution]);
+
+  useEffect(() => {
+    const container = barsContainerRef.current;
+    if (!container) return;
+    const peakBar = container.querySelector('[data-peak-grade="true"]');
+    if (!peakBar) return;
+    const target = peakBar.offsetLeft - (container.clientWidth / 2) + (peakBar.clientWidth / 2);
+    container.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+  }, [peakIndex, totalCount, modeFilter]);
 
   return (
     <div className="card mb-4">
@@ -466,20 +488,25 @@ function GradeDistributionChart({
           </div>
         )}
       </div>
-      <div className="flex items-end gap-1" style={{ minHeight: '100px' }}>
-        {displayDistribution.map((d, i) => (
-          <div key={i} className="flex flex-col items-center flex-1 min-w-0">
-            <div
-              className={`w-full rounded-t ${d.bg} transition-all`}
-              style={{ height: `${d.count > 0 ? Math.max((d.count / maxCount) * 90, 4) : 0}px` }}
-              title={`${d.label}: ${d.count}`}
-            />
-            {d.count > 0 && (
-              <span className="text-[8px] font-mono text-gray-400 mt-0.5">{d.count}</span>
-            )}
-            <span className="text-[7px] font-display font-bold text-gray-500 leading-tight mt-0.5 truncate w-full text-center">{d.label}</span>
-          </div>
-        ))}
+      <div
+        ref={barsContainerRef}
+        className="overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="flex items-end gap-1 min-w-max px-1" style={{ minHeight: '100px' }}>
+          {displayDistribution.map((d, i) => (
+            <div key={i} data-peak-grade={i === peakIndex ? 'true' : undefined} className="flex flex-col items-center w-8 shrink-0">
+              <div
+                className={`w-full rounded-t ${d.bg} transition-all`}
+                style={{ height: `${d.count > 0 ? Math.max((d.count / maxCount) * 90, 4) : 0}px` }}
+                title={`${d.label}: ${d.count}`}
+              />
+              {d.count > 0 && (
+                <span className="text-[8px] font-mono text-gray-400 mt-0.5">{d.count}</span>
+              )}
+              <span className="text-[7px] font-display font-bold text-gray-500 leading-tight mt-0.5 truncate w-full text-center">{d.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
