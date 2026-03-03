@@ -561,9 +561,9 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
               <Link to={chartLink} className="shrink-0">
                 {jacketUrl ? (
-                  <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover hover:brightness-110 transition-all" />
+                  <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover hover:brightness-110 transition-all" />
                 ) : (
-                  <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500 hover:brightness-110 transition-all">
+                  <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 hover:brightness-110 transition-all">
                     {(u.song_title || '?')[0]}
                   </div>
                 )}
