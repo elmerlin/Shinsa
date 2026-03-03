@@ -27,10 +27,18 @@ function formatNumber(value) {
 
 const AA_BASE_SCORE = 900000;
 const RADAR_MAX_SCORE = 1000000;
+const RADAR_SKILL_LIMIT = 12;
 
 function toAaRelativeRadarValue(score) {
   const numericScore = parseInt(score, 10) || 0;
   const normalized = ((numericScore - AA_BASE_SCORE) / (RADAR_MAX_SCORE - AA_BASE_SCORE)) * 100;
+  return Math.max(0, Math.min(100, normalized));
+}
+
+function toRelativeRadarValue(score, minScore, maxScore) {
+  const numericScore = parseInt(score, 10) || 0;
+  if (maxScore <= minScore) return 50;
+  const normalized = ((numericScore - minScore) / (maxScore - minScore)) * 100;
   return Math.max(0, Math.min(100, normalized));
 }
 
@@ -162,6 +170,7 @@ export default function SkillBreakdownPanel({ userId }) {
   const [error, setError] = useState(null);
   const [selectedMode, setSelectedMode] = useState('Both');
   const [viewMode, setViewMode] = useState('radar');
+  const [radarScaleMode, setRadarScaleMode] = useState('relative');
   const [selectedSkill, setSelectedSkill] = useState(null);
 
   useEffect(() => {
@@ -189,19 +198,40 @@ export default function SkillBreakdownPanel({ userId }) {
     return data.skills.filter((s) => s.played_charts > 0);
   }, [data]);
 
+  const radarSkills = useMemo(() => {
+    if (playedSkills.length <= RADAR_SKILL_LIMIT) return playedSkills;
+    const topCount = Math.floor(RADAR_SKILL_LIMIT / 2);
+    const bottomCount = RADAR_SKILL_LIMIT - topCount;
+    const top = playedSkills.slice(0, topCount);
+    const bottom = playedSkills.slice(-bottomCount);
+    return [...top, ...bottom];
+  }, [playedSkills]);
+
+  const radarScoreRange = useMemo(() => {
+    const scores = radarSkills
+      .map((s) => parseInt(s.average_score, 10) || 0)
+      .filter((score) => score > 0);
+    if (scores.length === 0) return { min: 0, max: 0 };
+    return {
+      min: Math.min(...scores),
+      max: Math.max(...scores),
+    };
+  }, [radarSkills]);
+
   const radarData = useMemo(() => {
-    // Cap at 12 for readability
-    return playedSkills.slice(0, 12).map((s) => {
+    return radarSkills.map((s) => {
       const aaRelativePct = toAaRelativeRadarValue(s.average_score);
+      const relativePct = toRelativeRadarValue(s.average_score, radarScoreRange.min, radarScoreRange.max);
       return {
         skill: s.name,
-        value: aaRelativePct,
+        value: radarScaleMode === 'relative' ? relativePct : aaRelativePct,
         score: s.average_score,
         grade: s.average_grade,
         aaRelativePct,
+        relativePct,
       };
     });
-  }, [playedSkills]);
+  }, [radarSkills, radarScaleMode, radarScoreRange.max, radarScoreRange.min]);
 
   if (loading && !data) {
     return (
@@ -264,6 +294,26 @@ export default function SkillBreakdownPanel({ userId }) {
               </button>
             ))}
           </div>
+          {viewMode === 'radar' && (
+            <div className="flex rounded-md overflow-hidden border border-piu-border/40">
+              {[
+                { key: 'relative', label: 'Rel' },
+                { key: 'absolute', label: 'Abs' },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setRadarScaleMode(key)}
+                  className={`px-2 py-0.5 text-[10px] font-display font-bold transition-colors ${
+                    radarScaleMode === key
+                      ? 'bg-piu-accent/20 text-piu-accent'
+                      : 'bg-piu-dark text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -301,8 +351,9 @@ export default function SkillBreakdownPanel({ userId }) {
                 formatter={(_value, _name, props) => {
                   const { payload } = props;
                   const aaScale = Number.isFinite(payload?.aaRelativePct) ? payload.aaRelativePct.toFixed(1) : '0.0';
+                  const relativeScale = Number.isFinite(payload?.relativePct) ? payload.relativePct.toFixed(1) : '0.0';
                   return [
-                    `${payload?.grade || '-'} (${formatNumber(payload?.score)}) • AA scale ${aaScale}%`,
+                    `${payload?.grade || '-'} (${formatNumber(payload?.score)}) • Rel ${relativeScale}% • AA ${aaScale}%`,
                     payload.skill,
                   ];
                 }}
@@ -310,7 +361,13 @@ export default function SkillBreakdownPanel({ userId }) {
             </RadarChart>
           </ResponsiveContainer>
           <p className="mt-1 text-center text-[10px] text-gray-600">
-            Radar scale is normalized from AA (900,000) to 1,000,000.
+            {playedSkills.length > RADAR_SKILL_LIMIT
+              ? `Showing top 6 strengths + bottom 6 weaknesses (${radarSkills.length} skills).`
+              : `Showing all played skills (${radarSkills.length}).`}
+            {' '}
+            {radarScaleMode === 'relative'
+              ? `Relative scale ${formatNumber(radarScoreRange.min)}-${formatNumber(radarScoreRange.max)}.`
+              : 'Absolute scale AA (900,000) to 1,000,000.'}
           </p>
         </div>
       )}
