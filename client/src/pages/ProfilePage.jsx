@@ -106,32 +106,9 @@ const SINGLE_MAX_LEVEL = 26;
 const DOUBLE_MAX_LEVEL = 28;
 const BEST_SCORES_PAGE_SIZE = 40;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const OVERVIEW_CARD_IDS = ['song-analytics', 'skill-breakdown', 'rankings', 'grade-goals', 'play-heatmap'];
-const OVERVIEW_LAYOUT_STORAGE_KEY_PREFIX = 'profile-overview-layout-v1';
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function normalizeOverviewCardOrder(order) {
-  const fromInput = Array.isArray(order) ? order.filter((id) => OVERVIEW_CARD_IDS.includes(id)) : [];
-  return [...new Set([...fromInput, ...OVERVIEW_CARD_IDS])];
-}
-
-function reorderOverviewCards(order, dragId, overId) {
-  if (!dragId || !overId || dragId === overId) return order;
-  const normalized = normalizeOverviewCardOrder(order);
-  const fromIndex = normalized.indexOf(dragId);
-  const toIndex = normalized.indexOf(overId);
-  if (fromIndex < 0 || toIndex < 0) return normalized;
-  const next = [...normalized];
-  next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, dragId);
-  return next;
-}
-
-function getOverviewLayoutStorageKey(profileId) {
-  return `${OVERVIEW_LAYOUT_STORAGE_KEY_PREFIX}:${profileId}`;
 }
 
 function pad2(value) {
@@ -804,78 +781,10 @@ export default function ProfilePage() {
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
   const [songAnalytics, setSongAnalytics] = useState(null);
-  const [overviewCardOrder, setOverviewCardOrder] = useState(OVERVIEW_CARD_IDS);
-  const [collapsedOverviewCards, setCollapsedOverviewCards] = useState({});
-  const [dragOverviewCardId, setDragOverviewCardId] = useState('');
-  const [dragOverOverviewCardId, setDragOverOverviewCardId] = useState('');
-  const overviewTouchDragRef = useRef({
-    cardId: '',
-    active: false,
-    startX: 0,
-    startY: 0,
-    lastOverId: '',
-  });
-  const overviewTouchHoldTimerRef = useRef(null);
-  const overviewStorageProfileRef = useRef('');
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
-
-  useEffect(() => {
-    if (!profileId) {
-      overviewStorageProfileRef.current = '';
-      setOverviewCardOrder(normalizeOverviewCardOrder([]));
-      setCollapsedOverviewCards({});
-      return;
-    }
-    let loadedOrder = normalizeOverviewCardOrder([]);
-    let loadedCollapsed = {};
-    try {
-      const raw = localStorage.getItem(getOverviewLayoutStorageKey(profileId));
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        loadedOrder = normalizeOverviewCardOrder(parsed?.order);
-        if (parsed?.collapsed && typeof parsed.collapsed === 'object') {
-          loadedCollapsed = OVERVIEW_CARD_IDS.reduce((acc, cardId) => {
-            if (parsed.collapsed[cardId]) acc[cardId] = true;
-            return acc;
-          }, {});
-        }
-      }
-    } catch {
-      loadedOrder = normalizeOverviewCardOrder([]);
-      loadedCollapsed = {};
-    }
-    setOverviewCardOrder(loadedOrder);
-    setCollapsedOverviewCards(loadedCollapsed);
-  }, [profileId]);
-
-  useEffect(() => {
-    if (!profileId) return;
-    if (overviewStorageProfileRef.current !== profileId) {
-      overviewStorageProfileRef.current = profileId;
-      return;
-    }
-    try {
-      localStorage.setItem(
-        getOverviewLayoutStorageKey(profileId),
-        JSON.stringify({
-          order: normalizeOverviewCardOrder(overviewCardOrder),
-          collapsed: collapsedOverviewCards,
-        })
-      );
-    } catch {
-      // Ignore storage write failures.
-    }
-  }, [profileId, overviewCardOrder, collapsedOverviewCards]);
-
-  useEffect(() => () => {
-    if (overviewTouchHoldTimerRef.current) {
-      clearTimeout(overviewTouchHoldTimerRef.current);
-      overviewTouchHoldTimerRef.current = null;
-    }
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1760,11 +1669,9 @@ export default function ProfilePage() {
   const computedSkillTitle = piuTitles?.imported ? (piuTitles?.summary?.current_title?.name || '') : '';
   const displaySkillTitle = computedSkillTitle || profile.skill_title;
 
-  const tabs = ['overview', 'posts', 'competitions', 'shoes'];
-  if (hasPiuData) {
-    tabs.push('piu');
-  }
-  tabs.push('activity');
+  const tabs = hasPiuData
+    ? ['overview', 'piu', 'posts', 'shoes', 'competitions', 'activity']
+    : ['overview', 'posts', 'shoes', 'competitions', 'activity'];
 
   const tabLabels = {
     overview: 'Overview', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
@@ -1795,109 +1702,6 @@ export default function ProfilePage() {
   const showOwnerRecentSyncShortcut = Boolean(isOwner && piuStatus?.linked);
   const activePiuTabLabel = isPiuTab ? tabLabels[tab] : 'Select';
 
-  const resetOverviewTouchDrag = () => {
-    if (overviewTouchHoldTimerRef.current) {
-      clearTimeout(overviewTouchHoldTimerRef.current);
-      overviewTouchHoldTimerRef.current = null;
-    }
-    overviewTouchDragRef.current = {
-      cardId: '',
-      active: false,
-      startX: 0,
-      startY: 0,
-      lastOverId: '',
-    };
-    setDragOverviewCardId('');
-    setDragOverOverviewCardId('');
-  };
-
-  const handleOverviewToggleCollapse = (cardId) => {
-    setCollapsedOverviewCards((prev) => ({
-      ...prev,
-      [cardId]: !prev[cardId],
-    }));
-  };
-
-  const handleOverviewDragStart = (cardId) => {
-    if (!isOwner) return;
-    setDragOverviewCardId(cardId);
-    setDragOverOverviewCardId(cardId);
-  };
-
-  const handleOverviewDragOver = (event, cardId) => {
-    event.preventDefault();
-    if (!isOwner || !dragOverviewCardId || dragOverviewCardId === cardId) return;
-    setDragOverOverviewCardId(cardId);
-  };
-
-  const handleOverviewDrop = (event) => {
-    event.preventDefault();
-    if (!isOwner || !dragOverviewCardId || !dragOverOverviewCardId || dragOverviewCardId === dragOverOverviewCardId) {
-      setDragOverviewCardId('');
-      setDragOverOverviewCardId('');
-      return;
-    }
-    setOverviewCardOrder((prev) => reorderOverviewCards(prev, dragOverviewCardId, dragOverOverviewCardId));
-    setDragOverviewCardId('');
-    setDragOverOverviewCardId('');
-  };
-
-  const handleOverviewDragEnd = () => {
-    setDragOverviewCardId('');
-    setDragOverOverviewCardId('');
-  };
-
-  const handleOverviewTouchStart = (cardId, event) => {
-    if (!isOwner || !event.touches || event.touches.length !== 1) return;
-    if (overviewTouchHoldTimerRef.current) {
-      clearTimeout(overviewTouchHoldTimerRef.current);
-      overviewTouchHoldTimerRef.current = null;
-    }
-    const touch = event.touches[0];
-    overviewTouchDragRef.current = {
-      cardId,
-      active: false,
-      startX: touch.clientX,
-      startY: touch.clientY,
-      lastOverId: '',
-    };
-    overviewTouchHoldTimerRef.current = window.setTimeout(() => {
-      overviewTouchHoldTimerRef.current = null;
-      overviewTouchDragRef.current.active = true;
-      setDragOverviewCardId(cardId);
-      setDragOverOverviewCardId(cardId);
-    }, 170);
-  };
-
-  const handleOverviewTouchMove = (event) => {
-    if (!isOwner) return;
-    const state = overviewTouchDragRef.current;
-    if (!state.cardId || !event.touches || event.touches.length !== 1) return;
-    const touch = event.touches[0];
-
-    if (!state.active) {
-      const deltaX = Math.abs(touch.clientX - state.startX);
-      const deltaY = Math.abs(touch.clientY - state.startY);
-      if (deltaX > 10 || deltaY > 10) {
-        resetOverviewTouchDrag();
-      }
-      return;
-    }
-
-    event.preventDefault();
-    const target = document.elementFromPoint(touch.clientX, touch.clientY);
-    const overCardId = target?.closest?.('[data-overview-card-id]')?.getAttribute?.('data-overview-card-id') || '';
-    if (!overCardId || overCardId === state.cardId || overCardId === state.lastOverId) return;
-
-    setOverviewCardOrder((prev) => reorderOverviewCards(prev, state.cardId, overCardId));
-    setDragOverOverviewCardId(overCardId);
-    overviewTouchDragRef.current.lastOverId = overCardId;
-  };
-
-  const handleOverviewTouchEnd = () => {
-    resetOverviewTouchDrag();
-  };
-
   const showOverviewHeatmapCard = overviewPlayHeatmap.weeks.length > 0 || hasPiuData;
   const overviewCardsById = {
     ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
@@ -1907,10 +1711,8 @@ export default function ProfilePage() {
     ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
   };
 
-  const orderedOverviewCardIds = [
-    ...overviewCardOrder.filter((cardId) => overviewCardsById[cardId]),
-    ...Object.keys(overviewCardsById).filter((cardId) => !overviewCardOrder.includes(cardId)),
-  ];
+  const orderedOverviewCardIds = ['song-analytics', 'skill-breakdown', 'rankings', 'grade-goals', 'play-heatmap']
+    .filter((cardId) => overviewCardsById[cardId]);
 
   const renderOverviewCardBody = (cardId) => {
     if (cardId === 'song-analytics') {
@@ -2325,6 +2127,15 @@ export default function ProfilePage() {
               )}
               {showOwnerRecentSyncShortcut && (
                 <div className={`${hasAnyBadges || hasCompactPiuSummary ? 'mt-2' : ''} flex items-center justify-end gap-2`}>
+                  {recentlyPlayedSyncFeedback && (
+                    <span
+                      className={`text-[10px] ${
+                        recentlyPlayedSyncFeedback.toLowerCase().includes('fail') ? 'text-red-400' : 'text-gray-400'
+                      }`}
+                    >
+                      {recentlyPlayedSyncFeedback}
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={handleSyncRecentlyPlayedShortcut}
@@ -2344,15 +2155,6 @@ export default function ProfilePage() {
                       <path d="M20 4v5h-5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
-                  {recentlyPlayedSyncFeedback && (
-                    <span
-                      className={`text-[10px] ${
-                        recentlyPlayedSyncFeedback.toLowerCase().includes('fail') ? 'text-red-400' : 'text-gray-400'
-                      }`}
-                    >
-                      {recentlyPlayedSyncFeedback}
-                    </span>
-                  )}
                 </div>
               )}
             </div>
@@ -2489,67 +2291,10 @@ export default function ProfilePage() {
 
       {/* Tab Content */}
       {tab === 'overview' && (
-        <div className="space-y-4" onDragOver={isOwner ? (event) => event.preventDefault() : undefined} onDrop={isOwner ? handleOverviewDrop : undefined}>
+        <div className="space-y-4">
           {orderedOverviewCardIds.map((cardId) => {
-            const card = overviewCardsById[cardId];
-            if (!card) return null;
-            const collapsed = !!collapsedOverviewCards[cardId];
             const body = renderOverviewCardBody(cardId);
-            if (!body) return null;
-            return (
-              <div
-                key={cardId}
-                data-overview-card-id={cardId}
-                onDragOver={isOwner ? (event) => handleOverviewDragOver(event, cardId) : undefined}
-                className={`${dragOverviewCardId === cardId ? 'opacity-60' : ''} ${
-                  dragOverOverviewCardId === cardId && dragOverviewCardId && dragOverviewCardId !== cardId
-                    ? 'rounded-xl ring-1 ring-piu-accent/70'
-                    : ''
-                }`}
-              >
-                <div className="flex items-center justify-between px-1 mb-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-gray-500 font-display font-bold">
-                    {card.title}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {isOwner && (
-                      <button
-                        type="button"
-                        className="text-gray-500 hover:text-gray-200 transition-colors cursor-grab active:cursor-grabbing select-none"
-                        title="Press and hold to move"
-                        aria-label={`Move ${card.title}`}
-                        draggable
-                        onDragStart={() => handleOverviewDragStart(cardId)}
-                        onDragEnd={handleOverviewDragEnd}
-                        onTouchStart={(event) => handleOverviewTouchStart(cardId, event)}
-                        onTouchMove={handleOverviewTouchMove}
-                        onTouchEnd={handleOverviewTouchEnd}
-                        onTouchCancel={handleOverviewTouchEnd}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                          <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-                          <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-                          <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-                        </svg>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleOverviewToggleCollapse(cardId)}
-                      className="text-[10px] text-gray-500 hover:text-white transition-colors font-display font-bold"
-                    >
-                      {collapsed ? 'Expand' : 'Collapse'}
-                    </button>
-                  </div>
-                </div>
-
-                {collapsed ? (
-                  <div className="card py-3 text-center text-xs text-gray-500">Collapsed</div>
-                ) : (
-                  body
-                )}
-              </div>
-            );
+            return body ? <React.Fragment key={cardId}>{body}</React.Fragment> : null;
           })}
         </div>
       )}
