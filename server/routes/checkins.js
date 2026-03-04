@@ -70,10 +70,11 @@ function requireDojoAdminFeature(req, res, next) {
   return next();
 }
 
-function notifyAdminsAboutCheckinEvent(db, {
+function notifyUsersAboutCheckinEvent(db, {
   actorUserId,
   actorUsername,
   eventType,
+  venueId,
   venueName,
   machineName,
 }) {
@@ -89,7 +90,7 @@ function notifyAdminsAboutCheckinEvent(db, {
   const message = normalizedType === 'checkout'
     ? `${safeUsername} checked out from ${safeMachineName} at ${safeVenueName}`
     : `${safeUsername} checked in at ${safeMachineName} (${safeVenueName})`;
-  const link = '/dojo';
+  const link = '/checkin';
 
   const dojoAdmins = db.prepare(`
     SELECT DISTINCT user_id
@@ -109,11 +110,34 @@ function notifyAdminsAboutCheckinEvent(db, {
     )
   `).all();
 
-  let notified = 0;
+  const subscriberRows = venueId
+    ? db.prepare(`
+      SELECT subscriber_user_id AS user_id, notify_checkins, notify_checkouts
+      FROM venue_checkin_notification_subscriptions
+      WHERE venue_id = ?
+    `).all(venueId)
+    : [];
+
+  const recipientIds = new Set();
   for (const admin of dojoAdmins) {
     const adminId = String(admin?.user_id || '').trim();
-    if (!adminId || adminId === String(actorUserId || '').trim()) continue;
-    createUserNotification(db, adminId, notificationType, title, message, link);
+    if (adminId) recipientIds.add(adminId);
+  }
+  for (const row of subscriberRows) {
+    const subscriberId = String(row?.user_id || '').trim();
+    if (!subscriberId) continue;
+    const allowCheckin = !!row?.notify_checkins;
+    const allowCheckout = !!row?.notify_checkouts;
+    if (normalizedType === 'checkout' ? allowCheckout : allowCheckin) {
+      recipientIds.add(subscriberId);
+    }
+  }
+
+  let notified = 0;
+  const actorId = String(actorUserId || '').trim();
+  for (const recipientId of recipientIds) {
+    if (!recipientId || recipientId === actorId) continue;
+    createUserNotification(db, recipientId, notificationType, title, message, link);
     notified += 1;
   }
   return notified;
@@ -130,6 +154,104 @@ router.get('/venues', requireAuth, requireCheckinFeature, (req, res) => {
     machinesByVenue[m.venue_id].push(m);
   }
   res.json(venues.map(v => ({ ...v, machines: machinesByVenue[v.id] || [] })));
+});
+
+// GET /api/checkins/notifications/:venueSlug — get current user's check-in/check-out notification preference for a venue
+router.get('/notifications/:venueSlug', requireAuth, requireCheckinFeature, (req, res) => {
+  const db = getDb();
+  const venue = db.prepare('SELECT id, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
+  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+
+  const row = db.prepare(`
+    SELECT notify_checkins, notify_checkouts
+    FROM venue_checkin_notification_subscriptions
+    WHERE subscriber_user_id = ? AND venue_id = ?
+  `).get(req.user.id, venue.id);
+
+  const notifyCheckins = !!row?.notify_checkins;
+  const notifyCheckouts = !!row?.notify_checkouts;
+  res.json({
+    venue_id: venue.id,
+    venue_slug: venue.slug,
+    subscribed: notifyCheckins || notifyCheckouts,
+    notify_checkins: notifyCheckins,
+    notify_checkouts: notifyCheckouts,
+  });
+});
+
+// PUT /api/checkins/notifications/:venueSlug — set current user's check-in/check-out notification preference for a venue
+router.put('/notifications/:venueSlug', requireAuth, requireCheckinFeature, (req, res) => {
+  const db = getDb();
+  const venue = db.prepare('SELECT id, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
+  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+
+  const payload = req.body || {};
+  const hasSubscribed = Object.prototype.hasOwnProperty.call(payload, 'subscribed');
+  const hasNotifyCheckins = Object.prototype.hasOwnProperty.call(payload, 'notify_checkins');
+  const hasNotifyCheckouts = Object.prototype.hasOwnProperty.call(payload, 'notify_checkouts');
+  if (!hasSubscribed && !hasNotifyCheckins && !hasNotifyCheckouts) {
+    return res.status(400).json({ error: 'At least one notification field must be provided' });
+  }
+
+  const existing = db.prepare(`
+    SELECT notify_checkins, notify_checkouts
+    FROM venue_checkin_notification_subscriptions
+    WHERE subscriber_user_id = ? AND venue_id = ?
+  `).get(req.user.id, venue.id);
+
+  if (hasSubscribed && !payload.subscribed) {
+    db.prepare(`
+      DELETE FROM venue_checkin_notification_subscriptions
+      WHERE subscriber_user_id = ? AND venue_id = ?
+    `).run(req.user.id, venue.id);
+    return res.json({
+      venue_id: venue.id,
+      venue_slug: venue.slug,
+      subscribed: false,
+      notify_checkins: false,
+      notify_checkouts: false,
+    });
+  }
+
+  let notifyCheckins = hasNotifyCheckins ? !!payload.notify_checkins : !!existing?.notify_checkins;
+  let notifyCheckouts = hasNotifyCheckouts ? !!payload.notify_checkouts : !!existing?.notify_checkouts;
+
+  if (hasSubscribed && !!payload.subscribed && !hasNotifyCheckins && !hasNotifyCheckouts && !existing) {
+    notifyCheckins = true;
+    notifyCheckouts = true;
+  }
+
+  if (!notifyCheckins && !notifyCheckouts) {
+    db.prepare(`
+      DELETE FROM venue_checkin_notification_subscriptions
+      WHERE subscriber_user_id = ? AND venue_id = ?
+    `).run(req.user.id, venue.id);
+    return res.json({
+      venue_id: venue.id,
+      venue_slug: venue.slug,
+      subscribed: false,
+      notify_checkins: false,
+      notify_checkouts: false,
+    });
+  }
+
+  db.prepare(`
+    INSERT INTO venue_checkin_notification_subscriptions
+      (subscriber_user_id, venue_id, notify_checkins, notify_checkouts, created_at, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(subscriber_user_id, venue_id) DO UPDATE SET
+      notify_checkins = excluded.notify_checkins,
+      notify_checkouts = excluded.notify_checkouts,
+      updated_at = datetime('now')
+  `).run(req.user.id, venue.id, notifyCheckins ? 1 : 0, notifyCheckouts ? 1 : 0);
+
+  return res.json({
+    venue_id: venue.id,
+    venue_slug: venue.slug,
+    subscribed: notifyCheckins || notifyCheckouts,
+    notify_checkins: notifyCheckins,
+    notify_checkouts: notifyCheckouts,
+  });
 });
 
 // GET /api/checkins/venue/:slug — single venue with machines and active checkins
@@ -188,10 +310,11 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   db.prepare("UPDATE users SET playing_status = ? WHERE id = ?").run(status, userId);
 
   const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-  notifyAdminsAboutCheckinEvent(db, {
+  notifyUsersAboutCheckinEvent(db, {
     actorUserId: userId,
     actorUsername: actor?.username || req.user?.username || 'Someone',
     eventType: 'checkin',
+    venueId: venue.id,
     venueName: venue.name,
     machineName: machine.name,
   });
@@ -206,6 +329,7 @@ router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
 
   const active = db.prepare(`
     SELECT c.id,
+           c.venue_id,
            v.name AS venue_name,
            m.name AS machine_name
     FROM checkins c
@@ -219,10 +343,11 @@ router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
   db.prepare("UPDATE users SET playing_status = '' WHERE id = ?").run(userId);
 
   const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
-  notifyAdminsAboutCheckinEvent(db, {
+  notifyUsersAboutCheckinEvent(db, {
     actorUserId: userId,
     actorUsername: actor?.username || req.user?.username || 'Someone',
     eventType: 'checkout',
+    venueId: active.venue_id,
     venueName: active.venue_name,
     machineName: active.machine_name,
   });

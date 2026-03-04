@@ -4,12 +4,6 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
-function formatDecimal(value, maximumFractionDigits = 1) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return '';
-  return n.toLocaleString(undefined, { maximumFractionDigits });
-}
-
 function modeShort(mode) {
   if (mode === 'Single') return 'S';
   if (mode === 'Double') return 'D';
@@ -144,13 +138,6 @@ export default function SessionSummaryCard({
 }) {
   const [topPlaysExpanded, setTopPlaysExpanded] = useState(false);
   if (!summary) return null;
-  const kcalPerHour = parseInt(summary.estimatedKcalPerHour, 10) || 0;
-  const calorieWeightKg = Number(summary.calorieWeightKg);
-  const hasWeight = Number.isFinite(calorieWeightKg) && calorieWeightKg > 0;
-  const personalized = !!summary.calorieEstimatePersonalized;
-  const calorieSubvalue = kcalPerHour > 0
-    ? `${formatNumber(kcalPerHour)} kcal/hour${hasWeight ? ` @ ${formatDecimal(calorieWeightKg)}kg` : ''}${!personalized ? ' (default)' : ''}`
-    : '';
   return (
     <div className={`rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3 ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -175,55 +162,53 @@ export default function SessionSummaryCard({
         <Stat label="Songs" value={summary.songCount} />
         <Stat label="Clears" value={`${summary.clearCount} (${summary.clearRate}%)`} />
         <Stat label="Steps" value={formatNumber(summary.totalSteps)} />
-        <Stat
-          label="Estimated Calories"
-          value={`~${formatNumber(summary.estimatedKcal)} kcal`}
-          subvalue={calorieSubvalue}
-        />
+        <Stat label="Estimated Calories" value={`~${formatNumber(summary.estimatedKcal)} kcal`} />
       </div>
 
-      <div className="mt-3 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-        <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Mode split</p>
-        <div className="mt-1 flex items-center gap-2">
-          <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-red-500/20 border border-red-500/40">
-            <span className="text-[10px] text-red-300 font-display font-bold">Singles</span>
-            <span className="min-w-[20px] h-[18px] px-1 rounded bg-red-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-              {summary.singleCount || 0}
-            </span>
-          </div>
-          <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-green-500/20 border border-green-500/40">
-            <span className="text-[10px] text-green-300 font-display font-bold">Doubles</span>
-            <span className="min-w-[20px] h-[18px] px-1 rounded bg-green-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-              {summary.doubleCount || 0}
-            </span>
-          </div>
-          {(summary.otherCount || 0) > 0 ? (
-            <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-blue-500/20 border border-blue-500/40">
-              <span className="text-[10px] text-blue-300 font-display font-bold">Other</span>
-              <span className="min-w-[20px] h-[18px] px-1 rounded bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
-                {summary.otherCount}
+      <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="col-span-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
+          <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Mode split</p>
+          <div className="mt-1 flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-red-500/20 border border-red-500/40">
+              <span className="text-[10px] text-red-300 font-display font-bold">Singles</span>
+              <span className="min-w-[20px] h-[18px] px-1 rounded bg-red-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+                {summary.singleCount || 0}
               </span>
             </div>
-          ) : null}
+            <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-green-500/20 border border-green-500/40">
+              <span className="text-[10px] text-green-300 font-display font-bold">Doubles</span>
+              <span className="min-w-[20px] h-[18px] px-1 rounded bg-green-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+                {summary.doubleCount || 0}
+              </span>
+            </div>
+            {(summary.otherCount || 0) > 0 ? (
+              <div className="inline-flex items-center gap-1.5 rounded px-2 py-1 bg-blue-500/20 border border-blue-500/40">
+                <span className="text-[10px] text-blue-300 font-display font-bold">Other</span>
+                <span className="min-w-[20px] h-[18px] px-1 rounded bg-blue-600 text-white text-[10px] font-mono font-bold flex items-center justify-center">
+                  {summary.otherCount}
+                </span>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
 
-      <div className="mt-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
-        <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Judgment totals</p>
-        <p className="mt-1 text-xs">
-          <span className="text-sky-400">P {formatNumber(summary?.judgmentTotals?.perfect)}</span>
-          <span className="text-gray-500"> | </span>
-          <span className="text-green-400">G {formatNumber(summary?.judgmentTotals?.great)}</span>
-          <span className="text-gray-500"> | </span>
-          <span className="text-yellow-400">Good {formatNumber(summary?.judgmentTotals?.good)}</span>
-          <span className="text-gray-500"> | </span>
-          <span className="text-purple-400">Bad {formatNumber(summary?.judgmentTotals?.bad)}</span>
-          <span className="text-gray-500"> | </span>
-          <span className="text-red-400">Miss {formatNumber(summary?.judgmentTotals?.miss)}</span>
-        </p>
-        <p className="text-xs font-display font-bold text-emerald-300 mt-1">
-          {parseInt(summary?.perfectRate, 10) || 0}% Perfects!
-        </p>
+        <div className="col-span-2 rounded-lg border border-piu-border/35 bg-piu-dark/30 px-3 py-2">
+          <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Judgment totals</p>
+          <p className="mt-1 text-xs">
+            <span className="text-sky-400">P {formatNumber(summary?.judgmentTotals?.perfect)}</span>
+            <span className="text-gray-500"> | </span>
+            <span className="text-green-400">G {formatNumber(summary?.judgmentTotals?.great)}</span>
+            <span className="text-gray-500"> | </span>
+            <span className="text-yellow-400">Good {formatNumber(summary?.judgmentTotals?.good)}</span>
+            <span className="text-gray-500"> | </span>
+            <span className="text-purple-400">Bad {formatNumber(summary?.judgmentTotals?.bad)}</span>
+            <span className="text-gray-500"> | </span>
+            <span className="text-red-400">Miss {formatNumber(summary?.judgmentTotals?.miss)}</span>
+          </p>
+          <p className="text-xs font-display font-bold text-emerald-300 mt-1">
+            {parseInt(summary?.perfectRate, 10) || 0}% Perfects!
+          </p>
+        </div>
       </div>
 
       <div className="mt-3 rounded-xl border border-cyan-400/25 bg-black/15 p-2.5">

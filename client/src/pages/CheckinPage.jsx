@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getVenues, getActiveCheckins, checkin, checkout, getMyCheckinStatus,
   getCheckinHistory, getUserCheckinHistory, getDojoOverview,
+  getCheckinNotificationPreferences, updateCheckinNotificationPreferences,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getProfilePath } from '../utils/profile';
@@ -328,6 +329,14 @@ export default function CheckinPage() {
   const [dojoOverview, setDojoOverview] = useState(null);
   const [dojoLoading, setDojoLoading] = useState(true);
   const [dojoError, setDojoError] = useState('');
+  const [checkinNotifyPrefs, setCheckinNotifyPrefs] = useState({
+    loading: false,
+    saving: false,
+    subscribed: false,
+    notify_checkins: false,
+    notify_checkouts: false,
+  });
+  const [checkinNotifyError, setCheckinNotifyError] = useState('');
 
   const loadData = useCallback(async () => {
     if (!user || !hasCheckinAccess) {
@@ -336,27 +345,38 @@ export default function CheckinPage() {
       setMyStatus(null);
       setDojoOverview(null);
       setDojoError('');
+      setCheckinNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: false,
+        notify_checkins: false,
+        notify_checkouts: false,
+      });
+      setCheckinNotifyError('');
       setDojoLoading(false);
       setLoading(false);
       return;
     }
     setDojoLoading(hasDojoAccess);
     setDojoError('');
+    setCheckinNotifyError('');
+    setCheckinNotifyPrefs((prev) => ({ ...prev, loading: true, saving: false }));
     try {
       const venueData = await getVenues();
       setVenues(venueData);
+      const primaryVenueSlug = venueData[0]?.slug || '';
 
       // Load active checkins for the first (default) venue
-      if (venueData.length > 0) {
+      if (primaryVenueSlug) {
         if (hasDojoAccess) {
           const [active, overview] = await Promise.all([
-            getActiveCheckins(venueData[0].slug),
-            getDojoOverview(venueData[0].slug),
+            getActiveCheckins(primaryVenueSlug),
+            getDojoOverview(primaryVenueSlug),
           ]);
           setActiveCheckins(active.activeCheckins || []);
           setDojoOverview(overview || null);
         } else {
-          const active = await getActiveCheckins(venueData[0].slug);
+          const active = await getActiveCheckins(primaryVenueSlug);
           setActiveCheckins(active.activeCheckins || []);
           setDojoOverview(null);
         }
@@ -366,9 +386,34 @@ export default function CheckinPage() {
 
       const status = await getMyCheckinStatus();
       setMyStatus(status);
+
+      if (primaryVenueSlug) {
+        try {
+          const prefs = await getCheckinNotificationPreferences(primaryVenueSlug);
+          setCheckinNotifyPrefs({
+            loading: false,
+            saving: false,
+            subscribed: !!prefs?.subscribed,
+            notify_checkins: !!prefs?.notify_checkins,
+            notify_checkouts: !!prefs?.notify_checkouts,
+          });
+        } catch (prefErr) {
+          setCheckinNotifyPrefs((prev) => ({ ...prev, loading: false, saving: false }));
+          setCheckinNotifyError(prefErr?.message || 'Failed to load venue notification settings');
+        }
+      } else {
+        setCheckinNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: false,
+          notify_checkins: false,
+          notify_checkouts: false,
+        });
+      }
     } catch (e) {
       setError(e.message);
       if (hasDojoAccess) setDojoError(e.message);
+      setCheckinNotifyPrefs((prev) => ({ ...prev, loading: false, saving: false }));
     } finally {
       setDojoLoading(false);
     }
@@ -462,6 +507,36 @@ export default function CheckinPage() {
     }
   };
 
+  const handleToggleVenueNotifications = async () => {
+    const primaryVenueSlug = venues[0]?.slug;
+    if (!primaryVenueSlug || checkinNotifyPrefs.loading || checkinNotifyPrefs.saving) return;
+
+    const previous = checkinNotifyPrefs;
+    const nextSubscribed = !previous.subscribed;
+    setCheckinNotifyError('');
+    setCheckinNotifyPrefs({
+      ...previous,
+      saving: true,
+      subscribed: nextSubscribed,
+      notify_checkins: nextSubscribed,
+      notify_checkouts: nextSubscribed,
+    });
+
+    try {
+      const saved = await updateCheckinNotificationPreferences(primaryVenueSlug, { subscribed: nextSubscribed });
+      setCheckinNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: !!saved?.subscribed,
+        notify_checkins: !!saved?.notify_checkins,
+        notify_checkouts: !!saved?.notify_checkouts,
+      });
+    } catch (err) {
+      setCheckinNotifyPrefs({ ...previous, loading: false, saving: false });
+      setCheckinNotifyError(err?.message || 'Failed to update venue notification settings');
+    }
+  };
+
   const handleQRCheckin = (venue, machine) => {
     if (!user) return;
     setSelectedMachine(machine);
@@ -519,6 +594,41 @@ export default function CheckinPage() {
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4 text-xs text-red-400">{error}</div>
+      )}
+
+      {venue && (
+        <div className="card mb-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-display font-bold text-white">Venue Notifications</div>
+              <div className="text-[11px] text-gray-400 mt-1">
+                Notify me when users check in or check out at {venue.name}.
+              </div>
+              <div className="text-[10px] text-gray-500 mt-1">
+                Your own check-ins and check-outs are excluded.
+              </div>
+            </div>
+            <button
+              onClick={handleToggleVenueNotifications}
+              disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
+              className={`px-3 py-2 rounded-lg text-xs font-display font-bold transition-colors ${
+                checkinNotifyPrefs.subscribed
+                  ? 'bg-piu-green/20 text-piu-green border border-piu-green/40 hover:bg-piu-green/30'
+                  : 'bg-piu-dark/80 text-gray-300 border border-piu-border hover:border-piu-accent/60 hover:text-white'
+              } ${(checkinNotifyPrefs.loading || checkinNotifyPrefs.saving) ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              {checkinNotifyPrefs.saving
+                ? 'Saving...'
+                : (checkinNotifyPrefs.subscribed ? 'On' : 'Off')}
+            </button>
+          </div>
+          {checkinNotifyPrefs.loading && (
+            <p className="text-[10px] text-gray-500 mt-2">Loading notification setting...</p>
+          )}
+          {checkinNotifyError && (
+            <p className="text-[10px] text-red-300 mt-2">{checkinNotifyError}</p>
+          )}
+        </div>
       )}
 
       {/* Tabs */}

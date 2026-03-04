@@ -846,6 +846,8 @@ export const getMyCheckinStatus = () => request('/checkins/my-status');
 export const getCheckinHistory = () => request('/checkins/history');
 export const getUserCheckinHistory = (userId) => request(`/checkins/user/${userId}/history`);
 export const getDojoOverview = (venueSlug = 'london-pump-dojo') => request(`/checkins/dojo/${encodeURIComponent(venueSlug)}/overview`);
+export const getCheckinNotificationPreferences = (venueSlug) => request(`/checkins/notifications/${encodeURIComponent(venueSlug)}`);
+export const updateCheckinNotificationPreferences = (venueSlug, data) => request(`/checkins/notifications/${encodeURIComponent(venueSlug)}`, { method: 'PUT', body: JSON.stringify(data) });
 export const setPlayingStatus = (status) => request('/checkins/playing-status', { method: 'PUT', body: JSON.stringify({ status }) });
 export const clearPlayingStatus = () => request('/checkins/playing-status', { method: 'DELETE' });
 

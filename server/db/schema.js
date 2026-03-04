@@ -1806,6 +1806,18 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_checkins_venue ON checkins(venue_id, checked_out_at);
     CREATE INDEX IF NOT EXISTS idx_checkins_venue_time ON checkins(venue_id, checked_in_at DESC);
     CREATE INDEX IF NOT EXISTS idx_checkins_active ON checkins(checked_out_at) WHERE checked_out_at IS NULL;
+
+    CREATE TABLE IF NOT EXISTS venue_checkin_notification_subscriptions (
+      subscriber_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      notify_checkins INT DEFAULT 1,
+      notify_checkouts INT DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (subscriber_user_id, venue_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_checkin_notif_subscriber ON venue_checkin_notification_subscriptions(subscriber_user_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_checkin_notif_venue ON venue_checkin_notification_subscriptions(venue_id);
   `);
 
   // Seed default venue and machines if empty
