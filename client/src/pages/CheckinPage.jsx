@@ -10,6 +10,27 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { getProfilePath } from '../utils/profile';
 import DojoActivityPanel from '../components/DojoActivityPanel';
 
+const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
+
+function todayLocalKey() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function markDojoPopupHandledToday(userId) {
+  const safeUserId = String(userId || '').trim();
+  if (!safeUserId || typeof window === 'undefined') return;
+  try {
+    const storageKey = `${DOJO_POPUP_STORAGE_PREFIX}:${safeUserId}`;
+    localStorage.setItem(storageKey, todayLocalKey());
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 function formatDuration(minutes) {
   if (!minutes || minutes < 1) return '< 1 min';
   if (minutes < 60) return `${Math.round(minutes)} min`;
@@ -389,6 +410,9 @@ export default function CheckinPage() {
 
       const status = await getMyCheckinStatus();
       setMyStatus(status);
+      if (status?.checked_in) {
+        markDojoPopupHandledToday(user?.id);
+      }
 
       if (primaryVenueSlug) {
         try {
@@ -502,6 +526,7 @@ export default function CheckinPage() {
     setError('');
     try {
       await checkin(selectedVenue.id, selectedMachine.id);
+      markDojoPopupHandledToday(user?.id);
       setSelectedMachine(null);
       setSelectedVenue(null);
       await loadData();
