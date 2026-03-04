@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -337,6 +337,8 @@ export default function CheckinPage() {
     notify_checkouts: false,
   });
   const [checkinNotifyError, setCheckinNotifyError] = useState('');
+  const [checkinNotifyMenuOpen, setCheckinNotifyMenuOpen] = useState(false);
+  const checkinNotifyMenuRef = useRef(null);
 
   const loadData = useCallback(async () => {
     if (!user || !hasCheckinAccess) {
@@ -353,6 +355,7 @@ export default function CheckinPage() {
         notify_checkouts: false,
       });
       setCheckinNotifyError('');
+      setCheckinNotifyMenuOpen(false);
       setDojoLoading(false);
       setLoading(false);
       return;
@@ -419,6 +422,17 @@ export default function CheckinPage() {
     }
     setLoading(false);
   }, [hasCheckinAccess, hasDojoAccess, user]);
+
+  useEffect(() => {
+    if (!checkinNotifyMenuOpen) return undefined;
+    const handleClickOutside = (event) => {
+      if (checkinNotifyMenuRef.current && !checkinNotifyMenuRef.current.contains(event.target)) {
+        setCheckinNotifyMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [checkinNotifyMenuOpen]);
 
   useEffect(() => {
     if (!user || !hasCheckinAccess) {
@@ -507,23 +521,27 @@ export default function CheckinPage() {
     }
   };
 
-  const handleToggleVenueNotifications = async () => {
+  const handleSaveVenueNotificationPrefs = async (nextPrefs) => {
     const primaryVenueSlug = venues[0]?.slug;
     if (!primaryVenueSlug || checkinNotifyPrefs.loading || checkinNotifyPrefs.saving) return;
 
     const previous = checkinNotifyPrefs;
-    const nextSubscribed = !previous.subscribed;
-    setCheckinNotifyError('');
-    setCheckinNotifyPrefs({
+    const optimistic = {
       ...previous,
       saving: true,
-      subscribed: nextSubscribed,
-      notify_checkins: nextSubscribed,
-      notify_checkouts: nextSubscribed,
-    });
+      loading: false,
+      notify_checkins: !!nextPrefs.notify_checkins,
+      notify_checkouts: !!nextPrefs.notify_checkouts,
+      subscribed: !!(nextPrefs.notify_checkins || nextPrefs.notify_checkouts),
+    };
+    setCheckinNotifyError('');
+    setCheckinNotifyPrefs(optimistic);
 
     try {
-      const saved = await updateCheckinNotificationPreferences(primaryVenueSlug, { subscribed: nextSubscribed });
+      const saved = await updateCheckinNotificationPreferences(primaryVenueSlug, {
+        notify_checkins: optimistic.notify_checkins,
+        notify_checkouts: optimistic.notify_checkouts,
+      });
       setCheckinNotifyPrefs({
         loading: false,
         saving: false,
@@ -535,6 +553,23 @@ export default function CheckinPage() {
       setCheckinNotifyPrefs({ ...previous, loading: false, saving: false });
       setCheckinNotifyError(err?.message || 'Failed to update venue notification settings');
     }
+  };
+
+  const handleToggleVenueNotificationField = async (field) => {
+    if (checkinNotifyPrefs.loading || checkinNotifyPrefs.saving) return;
+    const nextPrefs = {
+      notify_checkins: field === 'notify_checkins' ? !checkinNotifyPrefs.notify_checkins : checkinNotifyPrefs.notify_checkins,
+      notify_checkouts: field === 'notify_checkouts' ? !checkinNotifyPrefs.notify_checkouts : checkinNotifyPrefs.notify_checkouts,
+    };
+    await handleSaveVenueNotificationPrefs(nextPrefs);
+  };
+
+  const handleSetAllVenueNotificationPrefs = async (enabled) => {
+    if (checkinNotifyPrefs.loading || checkinNotifyPrefs.saving) return;
+    await handleSaveVenueNotificationPrefs({
+      notify_checkins: !!enabled,
+      notify_checkouts: !!enabled,
+    });
   };
 
   const handleQRCheckin = (venue, machine) => {
@@ -597,36 +632,87 @@ export default function CheckinPage() {
       )}
 
       {venue && (
-        <div className="card mb-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-display font-bold text-white">Venue Notifications</div>
-              <div className="text-[11px] text-gray-400 mt-1">
-                Notify me when users check in or check out at {venue.name}.
+        <div className="mb-3 relative w-fit" ref={checkinNotifyMenuRef}>
+          <button
+            onClick={() => setCheckinNotifyMenuOpen(v => !v)}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
+              checkinNotifyPrefs.subscribed
+                ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
+                : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <span>Notify</span>
+              {checkinNotifyPrefs.subscribed && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
+            </span>
+          </button>
+
+          {checkinNotifyMenuOpen && (
+            <div className="absolute left-0 top-full mt-2 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                  Venue Alerts
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleSetAllVenueNotificationPrefs(true)}
+                    disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
+                    className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => handleSetAllVenueNotificationPrefs(false)}
+                    disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
+                    className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                  >
+                    None
+                  </button>
+                </div>
               </div>
-              <div className="text-[10px] text-gray-500 mt-1">
-                Your own check-ins and check-outs are excluded.
+
+              <p className="text-[10px] text-gray-500 mt-1">
+                {venue.name}. Your own events are excluded.
+              </p>
+
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {[
+                  { key: 'notify_checkins', label: 'Check-ins' },
+                  { key: 'notify_checkouts', label: 'Check-outs' },
+                ].map(opt => {
+                  const enabled = !!checkinNotifyPrefs[opt.key];
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => handleToggleVenueNotificationField(opt.key)}
+                      disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
+                      className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                        enabled
+                          ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
+                          : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {enabled && <span className="text-emerald-400">✓</span>}
+                        <span>{opt.label}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+
+              <p className="text-[10px] text-gray-500 mt-1.5">
+                {checkinNotifyPrefs.loading && 'Loading venue notification settings...'}
+                {!checkinNotifyPrefs.loading && checkinNotifyPrefs.saving && 'Saving venue notification settings...'}
+                {!checkinNotifyPrefs.loading && !checkinNotifyPrefs.saving && checkinNotifyPrefs.subscribed && 'You will get notified for selected events.'}
+                {!checkinNotifyPrefs.loading && !checkinNotifyPrefs.saving && !checkinNotifyPrefs.subscribed && 'Venue notifications are off.'}
+              </p>
+              {checkinNotifyError && (
+                <p className="text-[10px] text-red-400 mt-1">{checkinNotifyError}</p>
+              )}
             </div>
-            <button
-              onClick={handleToggleVenueNotifications}
-              disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
-              className={`px-3 py-2 rounded-lg text-xs font-display font-bold transition-colors ${
-                checkinNotifyPrefs.subscribed
-                  ? 'bg-piu-green/20 text-piu-green border border-piu-green/40 hover:bg-piu-green/30'
-                  : 'bg-piu-dark/80 text-gray-300 border border-piu-border hover:border-piu-accent/60 hover:text-white'
-              } ${(checkinNotifyPrefs.loading || checkinNotifyPrefs.saving) ? 'opacity-70 cursor-not-allowed' : ''}`}
-            >
-              {checkinNotifyPrefs.saving
-                ? 'Saving...'
-                : (checkinNotifyPrefs.subscribed ? 'On' : 'Off')}
-            </button>
-          </div>
-          {checkinNotifyPrefs.loading && (
-            <p className="text-[10px] text-gray-500 mt-2">Loading notification setting...</p>
-          )}
-          {checkinNotifyError && (
-            <p className="text-[10px] text-red-300 mt-2">{checkinNotifyError}</p>
           )}
         </div>
       )}
