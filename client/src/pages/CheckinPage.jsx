@@ -596,14 +596,102 @@ export default function CheckinPage() {
       {/* Page header */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="font-display font-bold text-lg sm:text-xl text-white">Check In</h1>
-        {myStatus?.checked_in && (
-          <button
-            onClick={handleCheckout}
-            className="px-3 py-1.5 text-xs font-display font-bold text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
-          >
-            Check Out
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {myStatus?.checked_in && (
+            <button
+              onClick={handleCheckout}
+              className="px-3 py-1.5 text-xs font-display font-bold text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+            >
+              Check Out
+            </button>
+          )}
+
+          {venue && (
+            <div className="relative" ref={checkinNotifyMenuRef}>
+              <button
+                onClick={() => setCheckinNotifyMenuOpen(v => !v)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
+                  checkinNotifyPrefs.subscribed
+                    ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
+                    : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <span>Notify</span>
+                  {checkinNotifyPrefs.subscribed && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  )}
+                </span>
+              </button>
+
+              {checkinNotifyMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                      Venue Alerts
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleSetAllVenueNotificationPrefs(true)}
+                        disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
+                        className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                      >
+                        All
+                      </button>
+                      <button
+                        onClick={() => handleSetAllVenueNotificationPrefs(false)}
+                        disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
+                        className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                      >
+                        None
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    {venue.name}. Your own events are excluded.
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[
+                      { key: 'notify_checkins', label: 'Check-ins' },
+                      { key: 'notify_checkouts', label: 'Check-outs' },
+                    ].map(opt => {
+                      const enabled = !!checkinNotifyPrefs[opt.key];
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => handleToggleVenueNotificationField(opt.key)}
+                          disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
+                          className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                            enabled
+                              ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
+                              : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {enabled && <span className="text-emerald-400">✓</span>}
+                            <span>{opt.label}</span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[10px] text-gray-500 mt-1.5">
+                    {checkinNotifyPrefs.loading && 'Loading venue notification settings...'}
+                    {!checkinNotifyPrefs.loading && checkinNotifyPrefs.saving && 'Saving venue notification settings...'}
+                    {!checkinNotifyPrefs.loading && !checkinNotifyPrefs.saving && checkinNotifyPrefs.subscribed && 'You will get notified for selected events.'}
+                    {!checkinNotifyPrefs.loading && !checkinNotifyPrefs.saving && !checkinNotifyPrefs.subscribed && 'Venue notifications are off.'}
+                  </p>
+                  {checkinNotifyError && (
+                    <p className="text-[10px] text-red-400 mt-1">{checkinNotifyError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Current status banner */}
@@ -629,92 +717,6 @@ export default function CheckinPage() {
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4 text-xs text-red-400">{error}</div>
-      )}
-
-      {venue && (
-        <div className="mb-3 relative w-fit" ref={checkinNotifyMenuRef}>
-          <button
-            onClick={() => setCheckinNotifyMenuOpen(v => !v)}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
-              checkinNotifyPrefs.subscribed
-                ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
-                : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
-            }`}
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <span>Notify</span>
-              {checkinNotifyPrefs.subscribed && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              )}
-            </span>
-          </button>
-
-          {checkinNotifyMenuOpen && (
-            <div className="absolute left-0 top-full mt-2 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
-                  Venue Alerts
-                </p>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => handleSetAllVenueNotificationPrefs(true)}
-                    disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
-                    className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
-                  >
-                    All
-                  </button>
-                  <button
-                    onClick={() => handleSetAllVenueNotificationPrefs(false)}
-                    disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
-                    className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
-                  >
-                    None
-                  </button>
-                </div>
-              </div>
-
-              <p className="text-[10px] text-gray-500 mt-1">
-                {venue.name}. Your own events are excluded.
-              </p>
-
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {[
-                  { key: 'notify_checkins', label: 'Check-ins' },
-                  { key: 'notify_checkouts', label: 'Check-outs' },
-                ].map(opt => {
-                  const enabled = !!checkinNotifyPrefs[opt.key];
-                  return (
-                    <button
-                      key={opt.key}
-                      onClick={() => handleToggleVenueNotificationField(opt.key)}
-                      disabled={checkinNotifyPrefs.loading || checkinNotifyPrefs.saving}
-                      className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
-                        enabled
-                          ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
-                          : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
-                      }`}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {enabled && <span className="text-emerald-400">✓</span>}
-                        <span>{opt.label}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <p className="text-[10px] text-gray-500 mt-1.5">
-                {checkinNotifyPrefs.loading && 'Loading venue notification settings...'}
-                {!checkinNotifyPrefs.loading && checkinNotifyPrefs.saving && 'Saving venue notification settings...'}
-                {!checkinNotifyPrefs.loading && !checkinNotifyPrefs.saving && checkinNotifyPrefs.subscribed && 'You will get notified for selected events.'}
-                {!checkinNotifyPrefs.loading && !checkinNotifyPrefs.saving && !checkinNotifyPrefs.subscribed && 'Venue notifications are off.'}
-              </p>
-              {checkinNotifyError && (
-                <p className="text-[10px] text-red-400 mt-1">{checkinNotifyError}</p>
-              )}
-            </div>
-          )}
-        </div>
       )}
 
       {/* Tabs */}
