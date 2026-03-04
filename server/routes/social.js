@@ -28,7 +28,11 @@ function parseBooleanInput(value) {
 }
 
 function stripSessionSummaryMarkers(text) {
-  return String(text || '').replace(/\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '').trim();
+  return String(text || '')
+    .replace(/\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
+    .replace(/\[\[SHINSA_SHARE_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
+    .replace(/\[\[SHINSA_SESSION_PLAN_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
+    .trim();
 }
 
 function textSnippet(text, max = 80) {

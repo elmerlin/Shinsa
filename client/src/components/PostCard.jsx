@@ -8,8 +8,10 @@ import { getProfilePath } from '../utils/profile';
 import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePostComments, editPost, pumpComment, searchUsers, getPostPumpers } from '../utils/api';
 import PumpersModal from './PumpersModal';
 import SessionSummaryCard from './SessionSummaryCard';
+import SessionShareCard from './SessionShareCard';
 import SessionPlanCard from './SessionPlanCard';
 import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
+import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 
 function timeAgo(dateStr) {
@@ -831,19 +833,22 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 // Full Post Card used in Feed and Profile
 export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false, focusCommentId = null }) {
   const { user } = useAuth();
-  const initialSplit = useMemo(() => splitSessionSummaryContent(post.content || ''), [post.content]);
+  const initialSummarySplit = useMemo(() => splitSessionSummaryContent(post.content || ''), [post.content]);
+  const initialShareSplit = useMemo(() => splitSessionShareContent(initialSummarySplit.text || ''), [initialSummarySplit.text]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(initialSplit.text || '');
+  const [editContent, setEditContent] = useState(initialShareSplit.text || '');
   const [editYoutubeUrl, setEditYoutubeUrl] = useState(post.youtube_url || '');
   const [saving, setSaving] = useState(false);
   const [currentContent, setCurrentContent] = useState(post.content || '');
   const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
-  const parsedCurrent = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
-  const planParsed = useMemo(() => splitSessionPlanContent(parsedCurrent.text || ''), [parsedCurrent.text]);
+  const parsedSummary = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
+  const parsedShare = useMemo(() => splitSessionShareContent(parsedSummary.text || ''), [parsedSummary.text]);
+  const planParsed = useMemo(() => splitSessionPlanContent(parsedShare.text || ''), [parsedShare.text]);
   const visibleContent = planParsed.text || '';
-  const currentSummary = parsedCurrent.summary;
+  const currentSummary = parsedSummary.summary;
+  const currentShare = parsedShare.share;
   const currentPlan = planParsed.plan;
 
   const images = (() => {
@@ -863,8 +868,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
     setSaving(true);
     try {
       const summaryMarker = currentSummary ? serializeSessionSummaryMarker(currentSummary) : '';
+      const shareMarker = currentShare ? serializeSessionShareMarker(currentShare) : '';
       const planMarker = currentPlan ? serializeSessionPlanMarker(currentPlan) : '';
-      const contentToSave = [editContent.trim(), summaryMarker, planMarker].filter(Boolean).join('\n\n');
+      const contentToSave = [editContent.trim(), summaryMarker, shareMarker, planMarker].filter(Boolean).join('\n\n');
       const updated = await editPost(post.id, { content: contentToSave, youtube_url: editYoutubeUrl });
       setCurrentContent(updated.content || '');
       setCurrentYoutubeUrl(updated.youtube_url || '');
@@ -982,6 +988,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           )}
           {currentSummary && (
             <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
+          )}
+          {currentShare && (
+            <SessionShareCard share={currentShare} title="Session Share" className="mb-3" />
           )}
           {currentPlan && (
             <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} />

@@ -8,6 +8,7 @@ import { getProfilePath } from '../utils/profile';
 import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
 import SessionSummaryCard from '../components/SessionSummaryCard';
+import SessionShareCard from '../components/SessionShareCard';
 import { ImageGrid, Lightbox, YouTubeEmbed, ShareButton, timeAgo as postCardTimeAgo } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
 import ImageEditor from '../components/ImageEditor';
@@ -20,7 +21,9 @@ import {
 } from '../utils/api';
 import { calculateClearRating } from '../utils/clearRating';
 import { serializeSessionSummaryMarker, splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
+import { serializeSessionShareMarker, splitSessionShareContent } from '../utils/sessionShareMarker';
 import { buildSessionCalorieEstimate } from '../utils/calorieEstimate';
+import { buildSessionShareCard, getSessionLevelOptions, SHARE_MIN_GRADE_OPTIONS } from '../utils/sessionShare';
 
 // Common emoji sets for quick insert (same as PostsPage)
 const EMOJI_GROUPS = [
@@ -66,6 +69,10 @@ const SLASH_COMMANDS = {
   summary: {
     trigger: '/summary',
     buttonLabel: 'Generate session summary',
+  },
+  share: {
+    trigger: '/share',
+    buttonLabel: 'Generate session share',
   },
 };
 
@@ -188,6 +195,13 @@ function stripSlashCommand(text, trigger) {
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function stripSlashCommands(text, triggers = []) {
+  return (Array.isArray(triggers) ? triggers : []).reduce(
+    (acc, trigger) => stripSlashCommand(acc, trigger),
+    String(text || '')
+  );
 }
 
 function sortRecentPlays(plays) {
@@ -603,11 +617,27 @@ export default function CommunityPage() {
   const [postSummaryPreview, setPostSummaryPreview] = useState(null);
   const [postSummaryLoading, setPostSummaryLoading] = useState(false);
   const [postSummaryError, setPostSummaryError] = useState('');
+  const [postSharePreview, setPostSharePreview] = useState(null);
+  const [postShareLoading, setPostShareLoading] = useState(false);
+  const [postShareError, setPostShareError] = useState('');
+  const [postShareSessionRows, setPostShareSessionRows] = useState([]);
+  const [postShareJacketLookup, setPostShareJacketLookup] = useState({});
+  const [postShareMode, setPostShareMode] = useState('Both');
+  const [postShareMinGrade, setPostShareMinGrade] = useState('PASS');
+  const [postShareRangeA, setPostShareRangeA] = useState(null);
+  const [postShareRangeB, setPostShareRangeB] = useState(null);
 
   // Comment state
   const [expandedComments, setExpandedComments] = useState({});
   const [commentTexts, setCommentTexts] = useState({});
   const [replyTo, setReplyTo] = useState({});
+  const postShareLevelOptions = getSessionLevelOptions(postShareSessionRows);
+  const selectedPostShareMin = Number.isFinite(postShareRangeA) && Number.isFinite(postShareRangeB)
+    ? Math.min(postShareRangeA, postShareRangeB)
+    : null;
+  const selectedPostShareMax = Number.isFinite(postShareRangeA) && Number.isFinite(postShareRangeB)
+    ? Math.max(postShareRangeA, postShareRangeB)
+    : null;
 
   const loadCommunity = useCallback(async () => {
     setPosts([]);
@@ -816,11 +846,90 @@ export default function CommunityPage() {
     }
   };
 
+  const hydratePostShareSession = async () => {
+    const [data, jacketLookup] = await Promise.all([
+      getPiugameRecentlyPlayed(user.id),
+      getJacketMap().catch(() => ({})),
+    ]);
+    const sortedRows = sortRecentPlays(data?.plays || []);
+    const sessionRows = getMostRecentSession(sortedRows);
+    if (sessionRows.length === 0) {
+      throw new Error('No recently played data found. Sync recently played first.');
+    }
+    const levels = getSessionLevelOptions(sessionRows);
+    setPostShareSessionRows(sessionRows);
+    setPostShareJacketLookup(jacketLookup || {});
+    setPostShareMode('Both');
+    setPostShareMinGrade('PASS');
+    if (levels.length > 0) {
+      setPostShareRangeA(levels[0]);
+      setPostShareRangeB(levels[levels.length - 1]);
+    } else {
+      setPostShareRangeA(null);
+      setPostShareRangeB(null);
+    }
+    return { sessionRows, jacketLookup: jacketLookup || {}, levels };
+  };
+
+  const handleLoadPostShareSession = async () => {
+    if (!user?.id || postShareLoading) return;
+    setPostShareError('');
+    setPostShareLoading(true);
+    try {
+      await hydratePostShareSession();
+    } catch (err) {
+      setPostShareError(err.message || 'Failed to load share filters.');
+    } finally {
+      setPostShareLoading(false);
+    }
+  };
+
+  const handleGeneratePostShare = async ({ reloadSession = false } = {}) => {
+    if (!user?.id || postShareLoading) return;
+    setPostShareError('');
+    setPostShareLoading(true);
+    try {
+      let sessionRows = postShareSessionRows;
+      let jacketLookup = postShareJacketLookup;
+
+      if (reloadSession || sessionRows.length === 0) {
+        const hydrated = await hydratePostShareSession();
+        sessionRows = hydrated.sessionRows;
+        jacketLookup = hydrated.jacketLookup;
+      }
+
+      const levels = getSessionLevelOptions(sessionRows);
+      const minLevel = selectedPostShareMin ?? levels[0] ?? null;
+      const maxLevel = selectedPostShareMax ?? levels[levels.length - 1] ?? null;
+      if (minLevel === null || maxLevel === null) {
+        throw new Error('Select a level range before generating the share card.');
+      }
+
+      const share = buildSessionShareCard(sessionRows, {
+        mode: postShareMode,
+        minGrade: postShareMinGrade,
+        minLevel,
+        maxLevel,
+      }, jacketLookup || {});
+      if (!share) {
+        throw new Error('No results matched your filters. Try widening the selection.');
+      }
+
+      setPostSharePreview(share);
+      setNewPostContent((prev) => stripSlashCommand(prev, SLASH_COMMANDS.share.trigger));
+    } catch (err) {
+      setPostShareError(err.message || 'Failed to generate share card.');
+    } finally {
+      setPostShareLoading(false);
+    }
+  };
+
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    const sanitizedContent = stripSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
+    const sanitizedContent = stripSlashCommands(newPostContent, [SLASH_COMMANDS.summary.trigger, SLASH_COMMANDS.share.trigger]);
     const summaryMarker = postSummaryPreview ? serializeSessionSummaryMarker(postSummaryPreview) : '';
-    const finalContent = [sanitizedContent.trim(), summaryMarker].filter(Boolean).join('\n\n');
+    const shareMarker = postSharePreview ? serializeSessionShareMarker(postSharePreview) : '';
+    const finalContent = [sanitizedContent.trim(), summaryMarker, shareMarker].filter(Boolean).join('\n\n');
     if (!finalContent && newPostImages.length === 0 && !newPostYoutube) return;
     setPosting(true);
     try {
@@ -835,6 +944,14 @@ export default function CommunityPage() {
       setNewPostYoutube('');
       setPostSummaryPreview(null);
       setPostSummaryError('');
+      setPostSharePreview(null);
+      setPostShareError('');
+      setPostShareSessionRows([]);
+      setPostShareJacketLookup({});
+      setPostShareMode('Both');
+      setPostShareMinGrade('PASS');
+      setPostShareRangeA(null);
+      setPostShareRangeB(null);
     } catch (err) { setError(err.message); }
     finally { setPosting(false); }
   };
@@ -1171,8 +1288,26 @@ export default function CommunityPage() {
             postSummaryPreview={postSummaryPreview}
             postSummaryLoading={postSummaryLoading}
             postSummaryError={postSummaryError}
+            postSharePreview={postSharePreview}
+            postShareLoading={postShareLoading}
+            postShareError={postShareError}
+            postShareSessionRows={postShareSessionRows}
+            postShareMode={postShareMode}
+            setPostShareMode={setPostShareMode}
+            postShareMinGrade={postShareMinGrade}
+            setPostShareMinGrade={setPostShareMinGrade}
+            postShareRangeA={postShareRangeA}
+            setPostShareRangeA={setPostShareRangeA}
+            postShareRangeB={postShareRangeB}
+            setPostShareRangeB={setPostShareRangeB}
+            postShareLevelOptions={postShareLevelOptions}
+            selectedPostShareMin={selectedPostShareMin}
+            selectedPostShareMax={selectedPostShareMax}
             onGeneratePostSummary={handleGeneratePostSummary}
             onClearPostSummary={() => { setPostSummaryPreview(null); setPostSummaryError(''); }}
+            onLoadPostShareSession={handleLoadPostShareSession}
+            onGeneratePostShare={handleGeneratePostShare}
+            onClearPostShare={() => { setPostSharePreview(null); setPostShareError(''); }}
             onCreatePost={handleCreatePost}
             onDeletePost={handleDeletePost}
             onPinPost={handlePinPost}
@@ -1212,14 +1347,20 @@ function PostsTab({
   newPostContent, setNewPostContent, newPostImages, setNewPostImages,
   newPostYoutube, setNewPostYoutube, posting,
   postSummaryPreview, postSummaryLoading, postSummaryError,
-  onGeneratePostSummary, onClearPostSummary, onCreatePost,
+  postSharePreview, postShareLoading, postShareError,
+  postShareSessionRows, postShareMode, setPostShareMode, postShareMinGrade, setPostShareMinGrade,
+  postShareRangeA, setPostShareRangeA, postShareRangeB, setPostShareRangeB,
+  postShareLevelOptions, selectedPostShareMin, selectedPostShareMax,
+  onGeneratePostSummary, onClearPostSummary,
+  onLoadPostShareSession, onGeneratePostShare, onClearPostShare, onCreatePost,
   onDeletePost, onPinPost, onPumpPost,
   expandedComments, toggleComments, commentTexts, setCommentTexts,
   replyTo, setReplyTo, onAddComment, onDeleteComment,
 }) {
   const hasSummaryCommand = hasSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
-  const sanitizedContent = stripSlashCommand(newPostContent, SLASH_COMMANDS.summary.trigger);
-  const canSubmit = !!(sanitizedContent.trim() || newPostImages.length > 0 || newPostYoutube || postSummaryPreview);
+  const hasShareCommand = hasSlashCommand(newPostContent, SLASH_COMMANDS.share.trigger);
+  const sanitizedContent = stripSlashCommands(newPostContent, [SLASH_COMMANDS.summary.trigger, SLASH_COMMANDS.share.trigger]);
+  const canSubmit = !!(sanitizedContent.trim() || newPostImages.length > 0 || newPostYoutube || postSummaryPreview || postSharePreview);
 
   const [showYoutubeInput, setShowYoutubeInput] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
@@ -1365,7 +1506,7 @@ function PostsTab({
               onChange={handleComposerChange}
               className="input-field flex-1 resize-none min-h-[44px] max-h-[220px] overflow-y-auto"
               rows={1}
-              placeholder="Share something"
+              placeholder="Share something (try /summary or /share)"
               maxLength={5000}
             />
           </div>
@@ -1414,8 +1555,154 @@ function PostsTab({
             />
           )}
 
+          {hasShareCommand && !postSharePreview && (
+            <div className="mt-2 rounded-lg border border-cyan-400/30 bg-cyan-500/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-display font-bold text-cyan-300">{SLASH_COMMANDS.share.trigger} command detected</p>
+                  <p className="text-[11px] text-gray-400">Choose which results from your latest session to post.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onLoadPostShareSession}
+                  disabled={postShareLoading}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-500/80 hover:bg-cyan-500 text-[11px] font-display font-bold text-white disabled:opacity-50"
+                >
+                  {postShareLoading ? 'Loading...' : (postShareSessionRows.length > 0 ? 'Refresh Session' : 'Load Session')}
+                </button>
+              </div>
+
+              {postShareSessionRows.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Mode</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {['Single', 'Double', 'Both'].map((mode) => (
+                        <button
+                          key={`community-share-mode-${mode}`}
+                          type="button"
+                          onClick={() => setPostShareMode(mode)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-display font-bold border transition-colors ${
+                            postShareMode === mode
+                              ? 'bg-cyan-500 text-white border-cyan-400'
+                              : 'bg-piu-dark text-gray-400 border-piu-border/60 hover:text-white'
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Minimum Grade</p>
+                    <select
+                      value={postShareMinGrade}
+                      onChange={(e) => setPostShareMinGrade(String(e.target.value || 'PASS').toUpperCase())}
+                      className="input-field text-xs py-1.5"
+                    >
+                      {SHARE_MIN_GRADE_OPTIONS.map((option) => (
+                        <option key={`community-share-grade-${option.value}`} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Level Range (select two levels)</p>
+                    {postShareLevelOptions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {postShareLevelOptions.map((level) => {
+                          const selected = level === postShareRangeA || level === postShareRangeB;
+                          const inSelectedRange = selectedPostShareMin !== null && selectedPostShareMax !== null
+                            ? level >= selectedPostShareMin && level <= selectedPostShareMax
+                            : false;
+                          return (
+                            <button
+                              key={`community-share-level-${level}`}
+                              type="button"
+                              onClick={() => {
+                                if (postShareRangeA === null || (postShareRangeA !== null && postShareRangeB !== null)) {
+                                  setPostShareRangeA(level);
+                                  setPostShareRangeB(null);
+                                  return;
+                                }
+                                if (postShareRangeA === level) {
+                                  setPostShareRangeA(null);
+                                  return;
+                                }
+                                setPostShareRangeB(level);
+                              }}
+                              className={`min-w-[34px] h-[30px] px-2 rounded-md text-xs font-display font-bold border transition-colors ${
+                                selected
+                                  ? 'bg-cyan-500 text-white border-cyan-400'
+                                  : inSelectedRange
+                                    ? 'bg-cyan-500/15 text-cyan-300 border-cyan-400/50'
+                                    : 'bg-piu-dark text-gray-400 border-piu-border/60 hover:text-white'
+                              }`}
+                            >
+                              {level}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500">No levels found in your latest session.</p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] text-gray-500">
+                      Selected range:{' '}
+                      {selectedPostShareMin !== null && selectedPostShareMax !== null
+                        ? `Lv.${selectedPostShareMin} to Lv.${selectedPostShareMax}`
+                        : 'Select two levels'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onGeneratePostShare({ reloadSession: false })}
+                      disabled={postShareLoading || selectedPostShareMin === null || selectedPostShareMax === null}
+                      className="px-3 py-1.5 rounded text-[11px] font-display font-bold bg-cyan-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {postShareLoading ? 'Generating...' : SLASH_COMMANDS.share.buttonLabel}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {postSharePreview && (
+            <SessionShareCard
+              share={postSharePreview}
+              title="Session Share Preview"
+              className="mt-2"
+              actions={(
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onGeneratePostShare({ reloadSession: false })}
+                    disabled={postShareLoading}
+                    className="px-2 py-1 rounded border border-cyan-400/40 text-cyan-300 hover:bg-cyan-400/10 text-[10px] font-display font-bold disabled:opacity-50"
+                  >
+                    {postShareLoading ? 'Generating...' : 'Regenerate'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClearPostShare}
+                    className="px-2 py-1 rounded border border-red-400/40 text-red-300 hover:bg-red-400/10 text-[10px] font-display font-bold"
+                  >
+                    Remove
+                  </button>
+                </>
+              )}
+            />
+          )}
+
           {postSummaryError && (
             <p className="mt-2 text-xs text-red-400">{postSummaryError}</p>
+          )}
+          {postShareError && (
+            <p className="mt-2 text-xs text-red-400">{postShareError}</p>
           )}
 
           {/* YouTube URL input */}
@@ -1579,6 +1866,10 @@ function PostsTab({
                 <span className="font-mono text-piu-accent">{SLASH_COMMANDS.summary.trigger}</span>
                 {' '}Generate a recap from your latest recently-played session.
               </p>
+              <p className="text-[11px] text-gray-300 mt-1.5">
+                <span className="font-mono text-cyan-300">{SLASH_COMMANDS.share.trigger}</span>
+                {' '}Filter latest-session results and post a share card with judgment drill-down.
+              </p>
             </div>
           </div>
         </div>
@@ -1665,7 +1956,11 @@ function CommunityPostCard({
   const images = (() => { try { return JSON.parse(post.images || '[]'); } catch { return []; } })();
   const isAuthor = user?.id === post.user_id;
   const canDelete = isAuthor || isModOrOwner;
-  const { text: postText, summary: postSummary } = splitSessionSummaryContent(post.content || '');
+  const parsedSummary = splitSessionSummaryContent(post.content || '');
+  const parsedShare = splitSessionShareContent(parsedSummary.text || '');
+  const postText = parsedShare.text || '';
+  const postSummary = parsedSummary.summary;
+  const postShare = parsedShare.share;
 
   const handlePump = async () => {
     if (!isMember) return;
@@ -1755,6 +2050,9 @@ function CommunityPostCard({
 
       {postSummary && (
         <SessionSummaryCard summary={postSummary} title="Session Summary" className="mb-3" />
+      )}
+      {postShare && (
+        <SessionShareCard share={postShare} title="Session Share" className="mb-3" />
       )}
 
       {/* YouTube */}

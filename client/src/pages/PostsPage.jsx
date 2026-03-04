@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserPosts, createPost, deletePost, getPiugameRecentlyPlayed, getJacketMap, getPostDrafts, deletePostDraft } from '../utils/api';
@@ -6,11 +6,14 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import PostCard from '../components/PostCard';
 import ImageEditor from '../components/ImageEditor';
 import SessionSummaryCard from '../components/SessionSummaryCard';
+import SessionShareCard from '../components/SessionShareCard';
 import SessionPlanCard from '../components/SessionPlanCard';
 import { calculateClearRating } from '../utils/clearRating';
 import { serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
+import { serializeSessionShareMarker } from '../utils/sessionShareMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 import { buildSessionCalorieEstimate } from '../utils/calorieEstimate';
+import { buildSessionShareCard, getSessionLevelOptions, SHARE_MIN_GRADE_OPTIONS } from '../utils/sessionShare';
 
 // Common emoji sets for quick insert
 const EMOJI_GROUPS = [
@@ -24,6 +27,10 @@ const SLASH_COMMANDS = {
   summary: {
     trigger: '/summary',
     buttonLabel: 'Generate session summary',
+  },
+  share: {
+    trigger: '/share',
+    buttonLabel: 'Generate session share',
   },
 };
 
@@ -153,6 +160,13 @@ function stripSlashCommand(text, trigger) {
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function stripSlashCommands(text, triggers = []) {
+  return (Array.isArray(triggers) ? triggers : []).reduce(
+    (acc, trigger) => stripSlashCommand(acc, trigger),
+    String(text || '')
+  );
 }
 
 function sortRecentPlays(plays) {
@@ -547,14 +561,39 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
   const [summaryPreview, setSummaryPreview] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState('');
+  const [sharePreview, setSharePreview] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState('');
+  const [shareSessionRows, setShareSessionRows] = useState([]);
+  const [shareJacketLookup, setShareJacketLookup] = useState({});
+  const [shareModeFilter, setShareModeFilter] = useState('Both');
+  const [shareMinGrade, setShareMinGrade] = useState('PASS');
+  const [shareRangeA, setShareRangeA] = useState(null);
+  const [shareRangeB, setShareRangeB] = useState(null);
   const [planPreview, setPlanPreview] = useState(initialPlan);
   const textRef = useRef(null);
   const fileRef = useRef(null);
   const emojiRef = useRef(null);
   const summaryCommand = SLASH_COMMANDS.summary;
+  const shareCommand = SLASH_COMMANDS.share;
   const hasSummaryCommand = hasSlashCommand(content, summaryCommand.trigger);
-  const sanitizedContent = stripSlashCommand(content, summaryCommand.trigger);
-  const canSubmit = !!(sanitizedContent.trim() || images.length > 0 || youtubeUrl.trim() || summaryPreview || planPreview);
+  const hasShareCommand = hasSlashCommand(content, shareCommand.trigger);
+  const sanitizedContent = stripSlashCommands(content, [summaryCommand.trigger, shareCommand.trigger]);
+  const shareLevelOptions = useMemo(() => getSessionLevelOptions(shareSessionRows), [shareSessionRows]);
+  const selectedShareMin = Number.isFinite(shareRangeA) && Number.isFinite(shareRangeB)
+    ? Math.min(shareRangeA, shareRangeB)
+    : null;
+  const selectedShareMax = Number.isFinite(shareRangeA) && Number.isFinite(shareRangeB)
+    ? Math.max(shareRangeA, shareRangeB)
+    : null;
+  const canSubmit = !!(
+    sanitizedContent.trim()
+    || images.length > 0
+    || youtubeUrl.trim()
+    || summaryPreview
+    || sharePreview
+    || planPreview
+  );
 
   // Sync initialPlan prop into local state
   useEffect(() => {
@@ -678,10 +717,89 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
     }
   };
 
+  const hydrateShareSession = async () => {
+    const [data, jacketLookup] = await Promise.all([
+      getPiugameRecentlyPlayed(user.id),
+      getJacketMap().catch(() => ({})),
+    ]);
+    const sortedRows = sortRecentPlays(data?.plays || []);
+    const sessionRows = getMostRecentSession(sortedRows);
+    if (sessionRows.length === 0) {
+      throw new Error('No recently played data found. Sync recently played first.');
+    }
+    const levels = getSessionLevelOptions(sessionRows);
+    setShareSessionRows(sessionRows);
+    setShareJacketLookup(jacketLookup || {});
+    setShareModeFilter('Both');
+    setShareMinGrade('PASS');
+    if (levels.length > 0) {
+      setShareRangeA(levels[0]);
+      setShareRangeB(levels[levels.length - 1]);
+    } else {
+      setShareRangeA(null);
+      setShareRangeB(null);
+    }
+    return { sessionRows, jacketLookup: jacketLookup || {}, levels };
+  };
+
+  const handleLoadShareSession = async () => {
+    if (!user?.id || shareLoading) return;
+    setShareError('');
+    setShareLoading(true);
+    try {
+      await hydrateShareSession();
+    } catch (err) {
+      setShareError(err.message || 'Failed to load share filters.');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const handleGenerateShare = async ({ reloadSession = false } = {}) => {
+    if (!user?.id || shareLoading) return;
+    setShareError('');
+    setShareLoading(true);
+    try {
+      let sessionRows = shareSessionRows;
+      let jacketLookup = shareJacketLookup;
+
+      if (reloadSession || sessionRows.length === 0) {
+        const hydrated = await hydrateShareSession();
+        sessionRows = hydrated.sessionRows;
+        jacketLookup = hydrated.jacketLookup;
+      }
+
+      const levels = getSessionLevelOptions(sessionRows);
+      const minLevel = selectedShareMin ?? levels[0] ?? null;
+      const maxLevel = selectedShareMax ?? levels[levels.length - 1] ?? null;
+      if (minLevel === null || maxLevel === null) {
+        throw new Error('Select a level range before generating the share card.');
+      }
+
+      const share = buildSessionShareCard(sessionRows, {
+        mode: shareModeFilter,
+        minGrade: shareMinGrade,
+        minLevel,
+        maxLevel,
+      }, jacketLookup || {});
+      if (!share) {
+        throw new Error('No results matched your filters. Try widening the selection.');
+      }
+
+      setSharePreview(share);
+      setContent((prev) => stripSlashCommand(prev, shareCommand.trigger));
+    } catch (err) {
+      setShareError(err.message || 'Failed to generate share card.');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     const summaryMarker = summaryPreview ? serializeSessionSummaryMarker(summaryPreview) : '';
+    const shareMarker = sharePreview ? serializeSessionShareMarker(sharePreview) : '';
     const planMarker = planPreview ? serializeSessionPlanMarker(planPreview) : '';
-    const finalText = [sanitizedContent.trim(), summaryMarker, planMarker].filter(Boolean).join('\n\n');
+    const finalText = [sanitizedContent.trim(), summaryMarker, shareMarker, planMarker].filter(Boolean).join('\n\n');
     if (!finalText && images.length === 0 && !youtubeUrl.trim()) return;
 
     setPosting(true);
@@ -696,6 +814,14 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
       setCommentsDisabled(false);
       setSummaryPreview(null);
       setSummaryError('');
+      setSharePreview(null);
+      setShareError('');
+      setShareSessionRows([]);
+      setShareJacketLookup({});
+      setShareModeFilter('Both');
+      setShareMinGrade('PASS');
+      setShareRangeA(null);
+      setShareRangeB(null);
       setPlanPreview(null);
       if (onPlanCleared) onPlanCleared();
       onPost(post);
@@ -720,7 +846,7 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
           ref={textRef}
           value={content}
           onChange={e => setContent(e.target.value)}
-          placeholder="What's on your mind? Try /summary"
+          placeholder="What's on your mind? Try /summary or /share"
           className="input-field flex-1 resize-none min-h-[80px]"
           rows={3}
         />
@@ -767,8 +893,153 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
         />
       )}
 
+      {hasShareCommand && !sharePreview && (
+        <div className="mb-3 rounded-lg border border-cyan-400/30 bg-cyan-500/10 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-display font-bold text-cyan-300">{shareCommand.trigger} command detected</p>
+              <p className="text-[11px] text-gray-400">Choose which results from your latest session to post.</p>
+            </div>
+            <button
+              onClick={handleLoadShareSession}
+              disabled={shareLoading}
+              className="px-3 py-1.5 rounded-lg bg-cyan-500/80 hover:bg-cyan-500 text-[11px] font-display font-bold text-white disabled:opacity-50"
+            >
+              {shareLoading ? 'Loading...' : (shareSessionRows.length > 0 ? 'Refresh Session' : 'Load Session')}
+            </button>
+          </div>
+
+          {shareSessionRows.length > 0 && (
+            <div className="mt-3 space-y-3">
+              <div>
+                <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Mode</p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {['Single', 'Double', 'Both'].map((mode) => (
+                    <button
+                      key={`share-mode-${mode}`}
+                      type="button"
+                      onClick={() => setShareModeFilter(mode)}
+                      className={`px-2.5 py-1 rounded text-[11px] font-display font-bold border transition-colors ${
+                        shareModeFilter === mode
+                          ? 'bg-cyan-500 text-white border-cyan-400'
+                          : 'bg-piu-dark text-gray-400 border-piu-border/60 hover:text-white'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Minimum Grade</p>
+                <select
+                  value={shareMinGrade}
+                  onChange={(e) => setShareMinGrade(String(e.target.value || 'PASS').toUpperCase())}
+                  className="input-field text-xs py-1.5"
+                >
+                  {SHARE_MIN_GRADE_OPTIONS.map((option) => (
+                    <option key={`share-grade-${option.value}`} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Level Range (select two levels)</p>
+                {shareLevelOptions.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {shareLevelOptions.map((level) => {
+                      const selected = level === shareRangeA || level === shareRangeB;
+                      const inSelectedRange = selectedShareMin !== null && selectedShareMax !== null
+                        ? level >= selectedShareMin && level <= selectedShareMax
+                        : false;
+                      return (
+                        <button
+                          key={`share-level-${level}`}
+                          type="button"
+                          onClick={() => {
+                            if (shareRangeA === null || (shareRangeA !== null && shareRangeB !== null)) {
+                              setShareRangeA(level);
+                              setShareRangeB(null);
+                              return;
+                            }
+                            if (shareRangeA === level) {
+                              setShareRangeA(null);
+                              return;
+                            }
+                            setShareRangeB(level);
+                          }}
+                          className={`min-w-[34px] h-[30px] px-2 rounded-md text-xs font-display font-bold border transition-colors ${
+                            selected
+                              ? 'bg-cyan-500 text-white border-cyan-400'
+                              : inSelectedRange
+                                ? 'bg-cyan-500/15 text-cyan-300 border-cyan-400/50'
+                                : 'bg-piu-dark text-gray-400 border-piu-border/60 hover:text-white'
+                          }`}
+                        >
+                          {level}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">No levels found in your latest session.</p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] text-gray-500">
+                  Selected range:{' '}
+                  {selectedShareMin !== null && selectedShareMax !== null
+                    ? `Lv.${selectedShareMin} to Lv.${selectedShareMax}`
+                    : 'Select two levels'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleGenerateShare({ reloadSession: false })}
+                  disabled={shareLoading || selectedShareMin === null || selectedShareMax === null}
+                  className="px-3 py-1.5 rounded text-[11px] font-display font-bold bg-cyan-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {shareLoading ? 'Generating...' : shareCommand.buttonLabel}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {sharePreview && (
+        <SessionShareCard
+          share={sharePreview}
+          title="Session Share Preview"
+          className="mb-3"
+          actions={(
+            <>
+              <button
+                type="button"
+                onClick={() => handleGenerateShare({ reloadSession: false })}
+                disabled={shareLoading}
+                className="px-2 py-1 rounded border border-cyan-400/40 text-cyan-300 hover:bg-cyan-400/10 text-[10px] font-display font-bold disabled:opacity-50"
+              >
+                {shareLoading ? 'Generating...' : 'Regenerate'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSharePreview(null); setShareError(''); }}
+                className="px-2 py-1 rounded border border-red-400/40 text-red-300 hover:bg-red-400/10 text-[10px] font-display font-bold"
+              >
+                Remove
+              </button>
+            </>
+          )}
+        />
+      )}
+
       {summaryError && (
         <p className="text-xs text-red-400 mb-3">{summaryError}</p>
+      )}
+      {shareError && (
+        <p className="text-xs text-red-400 mb-3">{shareError}</p>
       )}
 
       {planPreview && (
