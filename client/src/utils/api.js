@@ -1,3 +1,5 @@
+import { triggerPumpReactionHaptic } from './haptics';
+
 const API_BASE = '/api';
 
 function getAuthHeaders() {
@@ -52,6 +54,12 @@ async function longRequest(url, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function pumpRequestWithHaptic(url, options = {}) {
+  const payload = await request(url, options);
+  triggerPumpReactionHaptic(payload);
+  return payload;
 }
 
 // Dashboard (combined)
@@ -360,7 +368,7 @@ export const onlineDuelSubmitScore = (id, data) => request(`/online-duels/${id}/
 export const onlineDuelFetchScore = (id) => longRequest(`/online-duels/${id}/fetch-score`, { method: 'POST' });
 export const onlineDuelEndRequest = (id) => request(`/online-duels/${id}/end-request`, { method: 'POST' });
 export const onlineDuelCancelEnd = (id) => request(`/online-duels/${id}/cancel-end`, { method: 'POST' });
-export const pumpPlayer = (id, player) => request(`/online-duels/${id}/pump`, { method: 'POST', body: JSON.stringify({ player }) });
+export const pumpPlayer = (id, player) => pumpRequestWithHaptic(`/online-duels/${id}/pump`, { method: 'POST', body: JSON.stringify({ player }) });
 export const getMyPump = (id) => request(`/online-duels/${id}/my-pump`);
 export const onlineDuelRematch = (id) => request(`/online-duels/${id}/rematch`, { method: 'POST' });
 export const onlineDuelForfeit = (id) => request(`/online-duels/${id}/forfeit`, { method: 'POST' });
@@ -562,7 +570,7 @@ export const updatePostDraft = (id, data) => request(`/social/drafts/${id}`, { m
 export const deletePostDraft = (id) => request(`/social/drafts/${id}`, { method: 'DELETE' });
 
 // Social — Post Pumps
-export const pumpPost = (id) => request(`/social/posts/${id}/pump`, { method: 'POST' });
+export const pumpPost = (id) => pumpRequestWithHaptic(`/social/posts/${id}/pump`, { method: 'POST' });
 export const getPostPumpers = (id) => request(`/social/posts/${id}/pumps`);
 
 // Social — Post Comments
@@ -572,21 +580,21 @@ export const deletePostComment = (id) => request(`/social/posts/comments/${id}`,
 export const togglePostComments = (postId) => request(`/social/posts/${postId}/comments-toggle`, { method: 'PATCH' });
 
 // Social — Upscore Interactions
-export const pumpUpscore = (id) => request(`/social/upscores/${id}/pump`, { method: 'POST' });
+export const pumpUpscore = (id) => pumpRequestWithHaptic(`/social/upscores/${id}/pump`, { method: 'POST' });
 export const getUpscorePumpers = (id) => request(`/social/upscores/${id}/pumps`);
 export const getUpscoreComments = (upscoreId) => request(`/social/upscores/${upscoreId}/comments`);
 export const addUpscoreComment = (upscoreId, content, parentId) => request(`/social/upscores/${upscoreId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteUpscoreComment = (id) => request(`/social/upscores/comments/${id}`, { method: 'DELETE' });
 
 // Social — New Clear Interactions
-export const pumpNewClear = (id) => request(`/social/clears/${id}/pump`, { method: 'POST' });
+export const pumpNewClear = (id) => pumpRequestWithHaptic(`/social/clears/${id}/pump`, { method: 'POST' });
 export const getNewClearPumpers = (id) => request(`/social/clears/${id}/pumps`);
 export const getNewClearComments = (clearId) => request(`/social/clears/${clearId}/comments`);
 export const addNewClearComment = (clearId, content, parentId) => request(`/social/clears/${clearId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteNewClearComment = (id) => request(`/social/clears/comments/${id}`, { method: 'DELETE' });
 
 // Social — Comment Pumps
-export const pumpComment = (type, commentId) => request(`/social/comments/${type}/${commentId}/pump`, { method: 'POST' });
+export const pumpComment = (type, commentId) => pumpRequestWithHaptic(`/social/comments/${type}/${commentId}/pump`, { method: 'POST' });
 
 // Social — Individual Item Views
 export const getPost = (id) => request(`/social/posts/${id}`);
@@ -680,12 +688,12 @@ export const getCommunityPosts = (communityId, params = {}) => {
 export const editCommunityPost = (communityId, postId, data) => request(`/communities/${communityId}/posts/${postId}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}`, { method: 'DELETE' });
 export const pinCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pin`, { method: 'PUT' });
-export const pumpCommunityPost = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pump`, { method: 'POST' });
+export const pumpCommunityPost = (communityId, postId) => pumpRequestWithHaptic(`/communities/${communityId}/posts/${postId}/pump`, { method: 'POST' });
 export const getCommunityPostPumpers = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/pumps`);
 export const getCommunityPostComments = (communityId, postId) => request(`/communities/${communityId}/posts/${postId}/comments`);
 export const addCommunityPostComment = (communityId, postId, content, parentId) => request(`/communities/${communityId}/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteCommunityPostComment = (communityId, postId, commentId) => request(`/communities/${communityId}/posts/${postId}/comments/${commentId}`, { method: 'DELETE' });
-export const pumpCommunityComment = (communityId, commentId) => request(`/communities/${communityId}/comments/${commentId}/pump`, { method: 'POST' });
+export const pumpCommunityComment = (communityId, commentId) => pumpRequestWithHaptic(`/communities/${communityId}/comments/${commentId}/pump`, { method: 'POST' });
 
 // Community Emojis
 export const getCommunityEmojis = (communityId) => request(`/communities/${communityId}/emojis`);
