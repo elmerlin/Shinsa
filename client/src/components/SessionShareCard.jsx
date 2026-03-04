@@ -1,7 +1,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { parseGrade } from '../utils/grades';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function getRank(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
+  return { label: 'F', color: 'text-gray-600' };
+}
+
+function getGradeColor(grade, score = 0) {
+  const normalized = parseGrade(grade).normalized;
+  if (normalized) {
+    if (normalized.includes('SSS')) return 'text-sky-300';
+    if (normalized.includes('SS')) return 'text-piu-gold';
+    if (normalized.includes('S')) return 'text-amber-400';
+    if (normalized.includes('AAA')) return 'text-piu-silver';
+    if (normalized.includes('AA')) return 'text-piu-bronze';
+    if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
+  }
+  return getRank(score).color;
 }
 
 function modeShort(mode) {
@@ -60,47 +94,95 @@ function SongJacketButton({ row, onClick }) {
   );
 }
 
+const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
+const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
+
 function JudgmentModal({ row, onClose }) {
   if (!row) return null;
-
-  const totalSteps = (parseInt(row.perfect, 10) || 0)
-    + (parseInt(row.great, 10) || 0)
-    + (parseInt(row.good, 10) || 0)
-    + (parseInt(row.bad, 10) || 0)
-    + (parseInt(row.miss, 10) || 0);
-  const perfectRate = totalSteps > 0 ? Math.round(((parseInt(row.perfect, 10) || 0) / totalSteps) * 100) : 0;
+  const rank = getRank(row.score ?? 0);
+  const displayScore = row.score ?? 0;
+  const parsedGrade = parseGrade(row.grade, rank.label);
+  const grade = parsedGrade.display || rank.label;
+  const plateName = PLATE_NAMES[row.plate] || row.plate || '';
+  const plateColor = PLATE_COLORS[row.plate] || 'text-gray-400';
+  const hasJudgments = (row.perfect > 0 || row.great > 0 || row.good > 0 || row.bad > 0 || row.miss > 0);
+  const judgments = [
+    { label: 'PERFECT', value: row.perfect || 0, textColor: 'text-sky-400' },
+    { label: 'GREAT', value: row.great || 0, textColor: 'text-green-400' },
+    { label: 'GOOD', value: row.good || 0, textColor: 'text-yellow-400' },
+    { label: 'BAD', value: row.bad || 0, textColor: 'text-fuchsia-400' },
+    { label: 'MISS', value: row.miss || 0, textColor: 'text-gray-400' },
+  ];
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-xl border border-piu-border bg-piu-card p-4" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] text-cyan-300 uppercase font-display font-bold tracking-wide">Judgments</p>
-            <p className="text-sm font-display font-bold text-gray-100 break-words">{row.song_title || 'Song'}</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">{modeShort(row.mode)}{row.level || '?'} • {row.grade || '-'}</p>
-          </div>
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {row.jacket_url && (
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-15"
+            style={{ backgroundImage: `url(${row.jacket_url})` }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
+
+        <div className="relative p-5">
           <button
-            type="button"
+            className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
             onClick={onClose}
-            className="text-gray-500 hover:text-white transition-colors"
-            aria-label="Close"
           >
-            &#10005;
+            x
           </button>
-        </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-          <div className="rounded border border-piu-border/50 bg-piu-dark/45 px-2 py-1.5 text-sky-300">P {formatNumber(row.perfect)}</div>
-          <div className="rounded border border-piu-border/50 bg-piu-dark/45 px-2 py-1.5 text-green-300">G {formatNumber(row.great)}</div>
-          <div className="rounded border border-piu-border/50 bg-piu-dark/45 px-2 py-1.5 text-yellow-300">Good {formatNumber(row.good)}</div>
-          <div className="rounded border border-piu-border/50 bg-piu-dark/45 px-2 py-1.5 text-purple-300">Bad {formatNumber(row.bad)}</div>
-          <div className="rounded border border-piu-border/50 bg-piu-dark/45 px-2 py-1.5 text-red-300">Miss {formatNumber(row.miss)}</div>
-          <div className="rounded border border-piu-border/50 bg-piu-dark/45 px-2 py-1.5 text-gray-200">Combo {formatNumber(row.max_combo)}</div>
-        </div>
+          <p className="font-display font-bold text-lg leading-tight pr-6 break-words">{row.song_title || 'Song'}</p>
 
-        <div className="mt-3 rounded border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs">
-          <p className="text-emerald-300 font-display font-bold">{perfectRate}% Perfects</p>
-          <p className="text-gray-400 mt-0.5">{formatNumber(totalSteps)} judged steps</p>
+          <div className="flex items-center gap-3 mt-4">
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
+              row.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : row.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
+            }`}>
+              <span className={`font-display font-bold text-[10px] uppercase ${row.mode === 'Single' ? 'text-red-400' : row.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{row.mode}</span>
+              <span className={`font-display font-bold text-base ${row.mode === 'Single' ? 'text-red-300' : row.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{row.level}</span>
+            </div>
+            <div className="text-center flex-1">
+              {displayScore > 0 ? (
+                <p
+                  className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                  data-grade={grade}
+                >
+                  {grade}
+                </p>
+              ) : (
+                <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+              )}
+            </div>
+          </div>
+
+          {plateName && (
+            <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+          )}
+
+          {displayScore > 0 && (
+            <p className="text-center font-mono text-2xl font-bold mt-2">{displayScore.toLocaleString()}</p>
+          )}
+
+          {hasJudgments && (
+            <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
+              {judgments.map((j) => (
+                <div key={j.label}>
+                  <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
+                  <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!hasJudgments && displayScore > 0 && (
+            <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
+              Judgment breakdown not available
+            </p>
+          )}
         </div>
       </div>
     </div>
