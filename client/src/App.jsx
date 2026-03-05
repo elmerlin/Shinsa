@@ -334,7 +334,7 @@ function UserMenu() {
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canAccessAdmin = !!user?.is_admin;
-  const menuLinkClass = 'flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors';
+  const menuLinkClass = 'flex items-center gap-2 px-3 py-2 text-sm font-display hover:bg-piu-dark/50 transition-colors';
   const closeMenu = () => setOpen(false);
   const drawer = open && typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[110]">
@@ -344,8 +344,8 @@ function UserMenu() {
         onClick={closeMenu}
         className="absolute inset-0 z-0 bg-black/55 backdrop-blur-[1px]"
       />
-      <aside className="absolute right-0 top-0 z-10 h-full w-[90vw] max-w-[360px] border-l border-piu-border bg-piu-card shadow-2xl overflow-y-auto overscroll-contain">
-        <div className="sticky top-0 z-10 px-4 py-3 border-b border-piu-border/60 bg-piu-card/95 backdrop-blur-sm flex items-center justify-between gap-2">
+      <aside className="absolute right-0 top-0 z-10 h-full w-[72vw] max-w-[300px] border-l border-piu-border bg-piu-card shadow-2xl overflow-y-auto overscroll-contain sm:w-[320px] sm:max-w-[320px]">
+        <div className="sticky top-0 z-10 px-3 py-2.5 border-b border-piu-border/60 bg-piu-card/95 backdrop-blur-sm flex items-center justify-between gap-2">
           <div className="min-w-0 flex items-center gap-2.5">
             {user.avatar ? (
               <img src={getAvatarUrl(user.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border" />
