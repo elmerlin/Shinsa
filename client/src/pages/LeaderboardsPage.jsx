@@ -3,7 +3,6 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
-import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { getProfilePath } from '../utils/profile';
 import {
   getGlobalPumbilityLeaderboard,
@@ -11,7 +10,7 @@ import {
   getOver20ChartTop100,
   getOver20ChartsByLevel,
   getOver20Levels,
-  getSongAnalytics,
+  getPiugamePumbility,
 } from '../utils/api';
 
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
@@ -19,6 +18,10 @@ const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, idx) => [grade, i
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function normalizeNameKey(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function getGradeSortValue(grade) {
@@ -218,7 +221,7 @@ function OverChartJacket({ chart, size = 'md' }) {
   );
 }
 
-function Over20Top100Modal({ open, chart, scores, loading, error, permalink, onClose }) {
+function Over20Top100Modal({ open, chart, scores, loading, error, permalink, highlightRank = 0, onClose }) {
   if (!open) return null;
 
   return (
@@ -290,9 +293,14 @@ function Over20Top100Modal({ open, chart, scores, loading, error, permalink, onC
                     : '';
                   const playerName = String(score?.player_name || '').trim();
                   const initial = playerName ? playerName[0].toUpperCase() : '?';
+                  const rank = parseInt(score?.rank, 10) || 0;
+                  const isHighlighted = highlightRank > 0 && rank === highlightRank;
                   return (
-                    <tr key={`${score.rank}-${score.player_name}-${score.score}`} className="border-b border-piu-border/20 last:border-b-0">
-                      <td className="px-2 py-1.5 font-mono text-gray-500">#{score.rank}</td>
+                    <tr
+                      key={`${score.rank}-${score.player_name}-${score.score}`}
+                      className={`border-b border-piu-border/20 last:border-b-0 ${isHighlighted ? 'bg-piu-accent/10' : ''}`}
+                    >
+                      <td className={`px-2 py-1.5 font-mono ${isHighlighted ? 'text-piu-accent' : 'text-gray-500'}`}>#{score.rank}</td>
                       <td className="px-2 py-1.5 text-gray-200">
                         <div className="flex items-center gap-2 min-w-0">
                           {avatarSrc ? (
@@ -307,6 +315,11 @@ function Over20Top100Modal({ open, chart, scores, loading, error, permalink, onC
                             </div>
                           )}
                           <span className="truncate">{playerName || '-'}</span>
+                          {isHighlighted ? (
+                            <span className="px-1.5 py-0.5 rounded bg-piu-accent/30 text-[10px] font-display font-bold text-piu-accent shrink-0">
+                              YOU
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(score.score)}</td>
@@ -324,183 +337,161 @@ function Over20Top100Modal({ open, chart, scores, loading, error, permalink, onC
 }
 
 function PumbilityLeaderboardTab() {
-  const [metric, setMetric] = useState('overall');
-  const [sortBy, setSortBy] = useState('pumbility');
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [mobileMetricView, setMobileMetricView] = useState('avg_grade');
+  const { user } = useAuth();
+  const pageSize = 100;
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [totalRows, setTotalRows] = useState(0);
+  const [initialLoading, setInitialLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
-  const [breakdownModal, setBreakdownModal] = useState(null);
-  const [compModal, setCompModal] = useState(null);
-  const [analyticsCache, setAnalyticsCache] = useState({});
+  const [mySnapshot, setMySnapshot] = useState(null);
+  const loadMoreRef = useRef(null);
 
-  const loadRows = async () => {
-    setLoading(true);
-    setError('');
+  const loadRows = async (nextPage, { append = false } = {}) => {
+    if (append && (loadingMore || initialLoading)) return;
+    if (!append && initialLoading) return;
+
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setInitialLoading(true);
+      setError('');
+    }
+
     try {
       const payload = await getGlobalPumbilityLeaderboard({
-        metric,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-        page,
-        limit: 100,
+        metric: 'overall',
+        sort_by: 'pumbility',
+        sort_order: 'desc',
+        page: nextPage,
+        limit: pageSize,
       });
-      setRows(Array.isArray(payload?.rows) ? payload.rows : []);
-      setTotalPages(Math.max(1, parseInt(payload?.total_pages, 10) || 1));
+      const incomingRows = Array.isArray(payload?.rows) ? payload.rows : [];
+      const nextTotalPages = Math.max(1, parseInt(payload?.total_pages, 10) || 1);
+      const nextTotalRows = Math.max(0, parseInt(payload?.total, 10) || 0);
+      setTotalPages(nextTotalPages);
+      setTotalRows(nextTotalRows);
+      setPage(nextPage);
+      if (append) {
+        setRows((prev) => {
+          const seen = new Set(prev.map((row) => `${parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0}|${normalizeNameKey(row?.username)}`));
+          const merged = [...prev];
+          for (const row of incomingRows) {
+            const key = `${parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0}|${normalizeNameKey(row?.username)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            merged.push(row);
+          }
+          return merged;
+        });
+      } else {
+        setRows(incomingRows);
+      }
     } catch (err) {
-      setRows([]);
-      setTotalPages(1);
+      if (!append) {
+        setRows([]);
+        setTotalPages(1);
+        setTotalRows(0);
+      }
       setError(err?.message || 'Failed to load leaderboard.');
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setInitialLoading(false);
     }
   };
 
   useEffect(() => {
-    loadRows();
-  }, [metric, sortBy, sortOrder, page]);
+    loadRows(1, { append: false });
+  }, []);
 
-  const onSort = (nextKey) => {
-    if (nextKey === sortBy) {
-      setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'));
-      return;
-    }
-    setSortBy(nextKey);
-    setSortOrder('desc');
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const loadSnapshot = async () => {
+      try {
+        const payload = await getPiugamePumbility(user.id);
+        if (cancelled) return;
+        setMySnapshot({
+          ranking: parseInt(payload?.ranking, 10) || 0,
+          pumbility: parseInt(payload?.official_pumbility, 10) || parseInt(payload?.pumbility_value, 10) || 0,
+        });
+      } catch {
+        if (cancelled) return;
+        setMySnapshot(null);
+      }
+    };
+    loadSnapshot();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const hasMore = page < totalPages;
+
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasMore || initialLoading || loadingMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries?.[0]?.isIntersecting) return;
+      loadRows(page + 1, { append: true });
+    }, { rootMargin: '280px 0px' });
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [page, hasMore, initialLoading, loadingMore]);
+
+  const refreshRows = () => {
+    if (initialLoading || loadingMore) return;
+    setRows([]);
+    setPage(1);
+    setTotalPages(1);
+    setTotalRows(0);
+    loadRows(1, { append: false });
   };
 
-  const getOrLoadAnalytics = async (userId) => {
-    const key = String(userId || '');
-    if (!key) return null;
-    if (analyticsCache[key]) return analyticsCache[key];
-    const analytics = await getSongAnalytics(key);
-    setAnalyticsCache((prev) => ({ ...prev, [key]: analytics }));
-    return analytics;
+  const isCurrentUserRow = (row) => {
+    if (!row) return false;
+    const rowUserId = String(row?.user_id || '').trim();
+    if (user?.id && rowUserId && rowUserId === user.id) return true;
+    return normalizeNameKey(row?.username) === normalizeNameKey(user?.username);
   };
 
-  const openBreakdown = async (row) => {
-    if (!row?.isLocalUser || !row?.user_id) return;
-    try {
-      const analytics = await getOrLoadAnalytics(row?.user_id);
-      const breakdownRows = metric === 'singles'
-        ? (analytics?.pumbility_breakdown?.singles_top50 || [])
-        : (analytics?.pumbility_breakdown?.overall_top50 || []);
-      if (!Array.isArray(breakdownRows) || breakdownRows.length === 0) return;
-      setBreakdownModal({
-        title: metric === 'singles'
-          ? `${row.username} • Singles Pumbility Top Songs`
-          : `${row.username} • Pumbility Top Songs`,
-        rows: breakdownRows,
-      });
-    } catch {}
-  };
-
-  const openCompetitiveInfo = async (row) => {
-    if (!row?.isLocalUser || !row?.user_id || row?.competitiveValue <= 0) return;
-    try {
-      const analytics = await getOrLoadAnalytics(row?.user_id);
-      setCompModal({
-        ...row,
-        analytics,
-      });
-    } catch {}
-  };
-
-  const metricRows = useMemo(() => {
-    return rows.map((row) => {
-      const isLocalUser = !!row?.is_local_user && !!row?.user_id;
-      const pumbilityValue = metric === 'singles'
-        ? (parseInt(row?.singles_pumbility, 10) || 0)
-        : (parseInt(row?.overall_pumbility, 10) || 0);
-      const averageGrade = metric === 'singles'
-        ? (row?.singles_average_grade || '--')
-        : (row?.overall_average_grade || '--');
-      const averageLevel = metric === 'singles'
-        ? (Number(row?.singles_average_level) || 0)
-        : (Number(row?.overall_average_level) || 0);
-      const breakdownCount = metric === 'singles'
-        ? (parseInt(row?.singles_breakdown_count, 10) || 0)
-        : (parseInt(row?.overall_breakdown_count, 10) || 0);
-      const singleLevel = parseInt(row?.singles_competitive_level, 10) || 0;
-      const doubleLevel = parseInt(row?.doubles_competitive_level, 10) || 0;
-      const competitiveValue = doubleLevel > singleLevel ? doubleLevel : singleLevel;
-      const competitiveLabel = doubleLevel > singleLevel
-        ? String(doubleLevel)
-        : (singleLevel > 0 ? String(singleLevel) : '--');
-      const competitiveClass = doubleLevel > singleLevel
-        ? 'text-green-300'
-        : (singleLevel > 0 ? 'text-red-300' : 'text-gray-500');
-      return {
-        ...row,
-        isLocalUser,
-        globalRank: parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0,
-        pumbilityValue,
-        averageGrade,
-        averageLevel,
-        breakdownCount,
-        competitiveValue,
-        competitiveLabel,
-        competitiveClass,
-      };
-    });
-  }, [rows, metric]);
+  const myRow = useMemo(() => rows.find((row) => isCurrentUserRow(row)) || null, [rows, user?.id, user?.username]);
+  const myRank = parseInt(mySnapshot?.ranking, 10) || parseInt(myRow?.global_rank, 10) || parseInt(myRow?.rank, 10) || 0;
+  const myPumbility = parseInt(mySnapshot?.pumbility, 10) || parseInt(myRow?.overall_pumbility, 10) || 0;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 font-display">View:</span>
-          <button
-            type="button"
-            onClick={() => { setMetric('overall'); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-              metric === 'overall' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
-            }`}
-          >
-            Overall Pumbility
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMetric('singles'); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-              metric === 'singles' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
-            }`}
-          >
-            Singles Pumbility
-          </button>
-        </div>
+        <p className="text-xs text-gray-400 font-display font-bold">Global PIUGAME Pumbility Top 1000</p>
         <button
           type="button"
-          onClick={loadRows}
-          disabled={loading}
+          onClick={refreshRows}
+          disabled={initialLoading || loadingMore}
           className="btn-secondary text-xs px-3 py-1.5"
         >
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {initialLoading || loadingMore ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
-      <div className="md:hidden flex items-center gap-2">
-        <label htmlFor="leaderboard-mobile-view" className="text-[11px] text-gray-500 font-display">Show:</label>
-        <select
-          id="leaderboard-mobile-view"
-          className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-2.5 py-1.5 text-xs text-gray-200 font-display"
-          value={mobileMetricView}
-          onChange={(event) => setMobileMetricView(event.target.value)}
-        >
-          <option value="avg_grade">Avg Grade</option>
-          <option value="avg_level">Avg Level</option>
-          <option value="competitive_level">C. Level</option>
-        </select>
+      <div className="card">
+        <p className="text-[11px] text-gray-500 font-display">Your Global Snapshot</p>
+        {myRank > 0 ? (
+          <div className="mt-2 flex flex-wrap items-end gap-5">
+            <div>
+              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Global Rank</p>
+              <p className="font-mono font-bold text-xl text-piu-accent">#{myRank}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Pumbility</p>
+              <p className="font-mono font-bold text-xl text-piu-gold">{formatNumber(myPumbility)}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-gray-400">No Top 1000 rank found for your username yet.</p>
+        )}
       </div>
 
-      <p className="text-[11px] text-gray-500">
-        Avg Grade, Avg Level, and Competitive Level are shown when a PIUGAME player has a matched local profile.
-      </p>
-
-      {loading ? (
+      {initialLoading ? (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-piu-accent border-t-transparent rounded-full animate-spin" />
         </div>
@@ -508,228 +499,77 @@ function PumbilityLeaderboardTab() {
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
           {error}
         </div>
-      ) : metricRows.length === 0 ? (
+      ) : rows.length === 0 ? (
         <p className="text-center text-gray-500 py-8 font-display text-sm">No leaderboard data available yet.</p>
       ) : (
         <>
-          <div className="md:hidden space-y-1.5">
-            {metricRows.map((row) => (
-              <div key={`${row.globalRank || row.rank}-${row.username}`} className="rounded-lg border border-piu-border/40 bg-piu-card/35 px-2.5 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="w-7 shrink-0 text-sm font-mono text-gray-500">#{row.rank}</span>
-                    {row.isLocalUser ? (
-                      <Link to={getProfilePath(row.user_id, row.username)} className="shrink-0">
-                        {row.avatar ? (
-                          <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
-                            {row.username?.[0]?.toUpperCase()}
-                          </div>
-                        )}
-                      </Link>
+          <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
+            <div className="grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2 px-3 py-2 border-b border-piu-border/40 text-[11px] font-display font-bold uppercase tracking-wide text-gray-500">
+              <span>#</span>
+              <span>Player</span>
+              <span>Pumbility</span>
+            </div>
+            {rows.map((row) => {
+              const rowRank = parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0;
+              const pumbility = parseInt(row?.overall_pumbility, 10) || 0;
+              const isCurrent = isCurrentUserRow(row);
+              const avatar = String(row?.avatar || '').trim();
+              const avatarSrc = avatar
+                ? (avatar.startsWith('data:') || avatar.startsWith('http') ? avatar : getAvatarUrl(avatar))
+                : '';
+              const playerName = String(row?.username || '').trim() || 'Unknown';
+              const isLocal = !!row?.is_local_user && !!row?.user_id;
+
+              return (
+                <div
+                  key={`${rowRank}-${playerName}`}
+                  className={`grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2 px-3 py-2 border-b border-piu-border/25 last:border-b-0 items-center ${isCurrent ? 'bg-piu-accent/10' : 'hover:bg-piu-dark/25'} transition-colors`}
+                >
+                  <span className={`text-sm font-mono ${isCurrent ? 'text-piu-accent' : 'text-gray-500'}`}>#{rowRank}</span>
+                  <div className="min-w-0 flex items-center gap-2">
+                    {avatarSrc ? (
+                      <img src={avatarSrc} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40 shrink-0" />
                     ) : (
-                      row.avatar ? (
-                        <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40 shrink-0" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40 shrink-0">
-                          {row.username?.[0]?.toUpperCase()}
-                        </div>
-                      )
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40 shrink-0">
+                        {playerName?.[0]?.toUpperCase() || '?'}
+                      </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {row.isLocalUser ? (
-                          <Link to={getProfilePath(row.user_id, row.username)} className="font-display font-bold text-sm truncate hover:text-piu-accent transition-colors">
-                            {row.username}
-                          </Link>
-                        ) : (
-                          <span className="font-display font-bold text-sm truncate text-gray-100">{row.username}</span>
-                        )}
-                        {row.nationality ? <span className="text-sm">{getCountryFlag(row.nationality)}</span> : null}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-500">
-                        <span>
-                          {mobileMetricView === 'avg_level' ? 'Avg Level' : mobileMetricView === 'competitive_level' ? 'C. Level' : 'Avg Grade'}:
-                        </span>
-                        {mobileMetricView === 'avg_level' ? (
-                          <span className="font-mono text-gray-300">{row.averageLevel > 0 ? row.averageLevel.toFixed(1) : '--'}</span>
-                        ) : null}
-                        {mobileMetricView === 'avg_grade' ? (
-                          <span className={`font-display font-bold ${row.averageGrade !== '--' ? getGradeColorClass(row.averageGrade) : 'text-gray-500'}`}>{row.averageGrade || '--'}</span>
-                        ) : null}
-                        {mobileMetricView === 'competitive_level' ? (
-                          row.isLocalUser && row.competitiveValue > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => openCompetitiveInfo(row)}
-                              className={`font-display font-bold underline decoration-dotted underline-offset-2 hover:text-piu-accent transition-colors ${row.competitiveClass}`}
-                            >
-                              {row.competitiveLabel}
-                            </button>
-                          ) : (
-                            <span className="font-display font-bold text-gray-500">--</span>
-                          )
-                        ) : null}
-                      </div>
+                    <div className="min-w-0 flex items-center gap-1.5">
+                      {isLocal ? (
+                        <Link
+                          to={getProfilePath(row.user_id, playerName)}
+                          className={`font-display font-bold text-[13px] truncate transition-colors ${isCurrent ? 'text-piu-accent' : 'text-gray-100 hover:text-piu-accent'}`}
+                        >
+                          {playerName}
+                        </Link>
+                      ) : (
+                        <span className={`font-display font-bold text-[13px] truncate ${isCurrent ? 'text-piu-accent' : 'text-gray-100'}`}>{playerName}</span>
+                      )}
+                      {row?.nationality ? <span className="text-sm shrink-0">{getCountryFlag(row.nationality)}</span> : null}
                     </div>
                   </div>
-                  {row.pumbilityValue > 0 ? (
-                    row.isLocalUser && row.breakdownCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => openBreakdown(row)}
-                        className="shrink-0 text-sm font-mono font-bold text-piu-gold hover:text-yellow-300"
-                      >
-                        {formatNumber(row.pumbilityValue)}
-                      </button>
-                    ) : (
-                      <span className="shrink-0 text-sm font-mono font-bold text-piu-gold">{formatNumber(row.pumbilityValue)}</span>
-                    )
-                  ) : (
-                    <span className="shrink-0 text-sm font-mono font-bold text-gray-500">--</span>
-                  )}
+                  <span className="font-mono font-bold text-piu-gold whitespace-nowrap">
+                    {pumbility > 0 ? formatNumber(pumbility) : '--'}
+                  </span>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+
+            <div className="px-3 py-2 text-center text-[11px] text-gray-500 border-t border-piu-border/30">
+              Loaded {rows.length} / {Math.max(totalRows, rows.length)}
+            </div>
           </div>
 
-          <div className="hidden md:block rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
-            <table className="w-full table-fixed">
-              <thead className="bg-piu-dark/70">
-                <tr className="border-b border-piu-border/50">
-                  <th className="px-2 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-[7%]">#</th>
-                  <th className="px-2 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-[34%]">Player</th>
-                  <th className="px-2 py-2 text-left w-[16%]">
-                    <SortHeader label="Pumbility" sortKey="pumbility" activeSortKey={sortBy} sortDirection={sortOrder} onSort={onSort} />
-                  </th>
-                  <th className="px-2 py-2 text-left w-[14%]">
-                    <SortHeader label="Avg Grade" sortKey="avg_grade" activeSortKey={sortBy} sortDirection={sortOrder} onSort={onSort} />
-                  </th>
-                  <th className="px-2 py-2 text-left w-[14%]">
-                    <SortHeader label="Avg Level" sortKey="avg_level" activeSortKey={sortBy} sortDirection={sortOrder} onSort={onSort} />
-                  </th>
-                  <th className="px-2 py-2 text-left w-[15%]">
-                    <SortHeader label="Competitive Level" sortKey="competitive_level" activeSortKey={sortBy} sortDirection={sortOrder} onSort={onSort} />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {metricRows.map((row) => (
-                  <tr key={`${row.globalRank || row.rank}-${row.username}`} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
-                    <td className="px-2 py-2 text-sm font-mono text-gray-500 whitespace-nowrap">#{row.rank}</td>
-                    <td className="px-2 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {row.isLocalUser ? (
-                          <Link to={getProfilePath(row.user_id, row.username)} className="shrink-0">
-                            {row.avatar ? (
-                              <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40" />
-                            ) : (
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
-                                {row.username?.[0]?.toUpperCase()}
-                              </div>
-                            )}
-                          </Link>
-                        ) : (
-                          row.avatar ? (
-                            <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40 shrink-0" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40 shrink-0">
-                              {row.username?.[0]?.toUpperCase()}
-                            </div>
-                          )
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {row.isLocalUser ? (
-                              <Link to={getProfilePath(row.user_id, row.username)} className="font-display font-bold text-[13px] hover:text-piu-accent transition-colors truncate max-w-[220px]">
-                                {row.username}
-                              </Link>
-                            ) : (
-                              <span className="font-display font-bold text-[13px] truncate max-w-[220px] text-gray-100">{row.username}</span>
-                            )}
-                            {row.nationality ? <span className="text-sm">{getCountryFlag(row.nationality)}</span> : null}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      {row.pumbilityValue > 0 ? (
-                        row.isLocalUser && row.breakdownCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => openBreakdown(row)}
-                            className="font-mono font-bold text-piu-gold hover:text-yellow-300"
-                          >
-                            {formatNumber(row.pumbilityValue)}
-                          </button>
-                        ) : (
-                          <span className="font-mono font-bold text-piu-gold">{formatNumber(row.pumbilityValue)}</span>
-                        )
-                      ) : (
-                        <span className="font-mono font-bold text-gray-500">--</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      <span className={`font-display font-bold text-sm ${row.averageGrade !== '--' ? getGradeColorClass(row.averageGrade) : 'text-gray-500'}`}>
-                        {row.averageGrade || '--'}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 text-sm font-mono text-gray-300 whitespace-nowrap">
-                      {row.averageLevel > 0 ? row.averageLevel.toFixed(1) : '--'}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
-                      {row.isLocalUser && row.competitiveValue > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => openCompetitiveInfo(row)}
-                          className={`font-display font-bold text-sm underline decoration-dotted underline-offset-2 hover:text-piu-accent transition-colors ${row.competitiveClass}`}
-                        >
-                          {row.competitiveLabel}
-                        </button>
-                      ) : (
-                        <span className="font-display font-bold text-sm text-gray-500">--</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <div ref={loadMoreRef} className="h-4" />
+          {loadingMore ? (
+            <div className="flex items-center justify-center py-2 text-xs text-gray-500">Loading more ranks...</div>
+          ) : null}
+          {!hasMore && rows.length > 0 ? (
+            <div className="text-center text-xs text-gray-500 pb-1">Reached rank #1000.</div>
+          ) : null}
         </>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          className="btn-secondary text-xs px-3 py-1.5"
-          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-          disabled={loading || page <= 1}
-        >
-          Prev
-        </button>
-        <span className="text-xs text-gray-500">Page {page} / {totalPages}</span>
-        <button
-          type="button"
-          className="btn-secondary text-xs px-3 py-1.5"
-          onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-          disabled={loading || page >= totalPages}
-        >
-          Next
-        </button>
-      </div>
-
-      <PumbilityBreakdownModal
-        open={!!breakdownModal}
-        title={breakdownModal?.title || ''}
-        rows={breakdownModal?.rows || []}
-        onClose={() => setBreakdownModal(null)}
-      />
-      <CompetitiveLevelInfoModal
-        open={!!compModal}
-        member={compModal}
-        onClose={() => setCompModal(null)}
-      />
     </div>
   );
 }
@@ -1019,6 +859,12 @@ function MyTop100Tab() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [chartModalOpen, setChartModalOpen] = useState(false);
+  const [activeChart, setActiveChart] = useState(null);
+  const [chartScores, setChartScores] = useState([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState('');
+  const [highlightRank, setHighlightRank] = useState(0);
 
   const loadRows = async () => {
     setLoading(true);
@@ -1040,6 +886,56 @@ function MyTop100Tab() {
     loadRows();
   }, [page]);
 
+  useEffect(() => {
+    if (!chartModalOpen || !activeChart?.chart_key) return;
+    let cancelled = false;
+    const loadChart = async () => {
+      setChartLoading(true);
+      setChartError('');
+      try {
+        const payload = await getOver20ChartTop100(activeChart.chart_key);
+        if (cancelled) return;
+        setActiveChart((prev) => ({ ...(prev || {}), ...(payload?.chart || {}) }));
+        setChartScores(Array.isArray(payload?.scores) ? payload.scores : []);
+      } catch (err) {
+        if (cancelled) return;
+        setChartScores([]);
+        setChartError(err?.message || 'Failed to load top 100 scores.');
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    };
+    loadChart();
+    return () => { cancelled = true; };
+  }, [chartModalOpen, activeChart?.chart_key]);
+
+  const openTop100Modal = (row) => {
+    const chartKey = String(row?.chart_key || '').trim();
+    if (!chartKey) return;
+    setActiveChart({
+      chart_key: chartKey,
+      song_title: String(row?.song_title || ''),
+      mode: String(row?.mode || ''),
+      level: parseInt(row?.level, 10) || 0,
+      jacket_url: String(row?.jacket_url || ''),
+    });
+    setHighlightRank(parseInt(row?.over_top100_rank, 10) || 0);
+    setChartScores([]);
+    setChartError('');
+    setChartModalOpen(true);
+  };
+
+  const modalPermalink = useMemo(() => {
+    if (!activeChart?.chart_key) return '';
+    const params = new URLSearchParams();
+    params.set('tab', 'over20');
+    if (activeChart?.level) params.set('level', String(activeChart.level));
+    if (activeChart?.song_title) params.set('song', String(activeChart.song_title));
+    if (activeChart?.mode) params.set('mode', String(activeChart.mode));
+    params.set('chart_key', String(activeChart.chart_key));
+    return `/leaderboards?${params.toString()}`;
+  }, [activeChart?.chart_key, activeChart?.song_title, activeChart?.mode, activeChart?.level]);
+
   return (
     <div className="space-y-4">
       {error && (
@@ -1059,7 +955,14 @@ function MyTop100Tab() {
             {rows.map((row) => (
               <div key={`${row.id}-${row.song_title}-${row.mode}-${row.level}`} className="rounded-lg border border-piu-border/45 bg-piu-card/35 px-2.5 py-2.5">
                 <div className="flex items-start gap-2.5">
-                  <OverChartJacket chart={row} size="sm" />
+                  <button
+                    type="button"
+                    onClick={() => openTop100Modal(row)}
+                    className="shrink-0 hover:opacity-90 transition-opacity"
+                    title="View Top 100 for this chart"
+                  >
+                    <OverChartJacket chart={row} size="sm" />
+                  </button>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-display font-bold text-gray-100 leading-tight break-words">{row.song_title}</p>
                     <p className="text-[11px] text-gray-500 mt-0.5">{row.mode}</p>
@@ -1098,7 +1001,14 @@ function MyTop100Tab() {
                   <tr key={`${row.id}-${row.song_title}-${row.mode}-${row.level}`} className="border-b border-piu-border/20 last:border-b-0">
                     <td className="px-2 py-1.5">
                       <div className="flex items-center gap-2">
-                        <OverChartJacket chart={row} size="sm" />
+                        <button
+                          type="button"
+                          onClick={() => openTop100Modal(row)}
+                          className="shrink-0 hover:opacity-90 transition-opacity"
+                          title="View Top 100 for this chart"
+                        >
+                          <OverChartJacket chart={row} size="sm" />
+                        </button>
                         <div className="min-w-0">
                           <p className="text-sm font-display font-bold text-gray-100 truncate">{row.song_title}</p>
                           <p className="text-[11px] text-gray-500">{row.mode}</p>
@@ -1137,6 +1047,17 @@ function MyTop100Tab() {
           Next
         </button>
       </div>
+
+      <Over20Top100Modal
+        open={chartModalOpen}
+        chart={activeChart}
+        scores={chartScores}
+        loading={chartLoading}
+        error={chartError}
+        permalink={modalPermalink}
+        highlightRank={highlightRank}
+        onClose={() => setChartModalOpen(false)}
+      />
     </div>
   );
 }
