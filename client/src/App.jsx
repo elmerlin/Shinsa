@@ -372,10 +372,10 @@ function UserMenu() {
             type="button"
             aria-label="Close menu"
             onClick={closeMenu}
-            className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+            className="absolute inset-0 z-0 bg-black/55 backdrop-blur-[1px]"
           />
-          <aside className="absolute right-0 top-0 h-full w-[min(90vw,360px)] border-l border-piu-border bg-piu-card shadow-2xl flex flex-col">
-            <div className="px-4 py-3 border-b border-piu-border/60 flex items-center justify-between gap-2">
+          <aside className="absolute right-0 top-0 z-10 h-full w-[90vw] max-w-[360px] border-l border-piu-border bg-piu-card shadow-2xl overflow-y-auto overscroll-contain">
+            <div className="sticky top-0 z-10 px-4 py-3 border-b border-piu-border/60 bg-piu-card/95 backdrop-blur-sm flex items-center justify-between gap-2">
               <div className="min-w-0 flex items-center gap-2.5">
                 {user.avatar ? (
                   <img src={getAvatarUrl(user.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border" />
@@ -401,7 +401,7 @@ function UserMenu() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto overscroll-contain py-1">
+            <div className="py-1">
               <Link
                 to={myProfilePath}
                 onClick={closeMenu}
