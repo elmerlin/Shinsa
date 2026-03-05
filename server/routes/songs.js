@@ -125,6 +125,33 @@ function normalizeSongName(name) {
   return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+function parseSongFlags(flags) {
+  if (Array.isArray(flags)) {
+    return flags
+      .map((flag) => String(flag || '').trim())
+      .filter(Boolean);
+  }
+  return String(flags || '')
+    .split(',')
+    .map((flag) => flag.trim())
+    .filter(Boolean);
+}
+
+function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
+  const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
+  if (!title) return '';
+
+  // PIU metadata has both Yog variants named "Yog-Sothoth"; disambiguate the short cut entry.
+  if (
+    normalizeSongName(title) === 'yog-sothoth'
+    && (String(songKey || '').trim() === '313' || parseSongFlags(flags).some((flag) => flag.toLowerCase() === 'cut:1'))
+  ) {
+    return 'Yog-Sothoth - SHORT CUT -';
+  }
+
+  return title;
+}
+
 function normalizeMode(mode) {
   const m = String(mode || '').trim().toLowerCase();
   if (m === 'single' || m === 'singles' || m === 's') return 'Single';
@@ -368,7 +395,7 @@ function normalizeGrade(grade) {
   };
   if (aliases[raw]) return aliases[raw];
   // PIUGame uses x_* grades for failed runs (stage breaks).
-  if (raw.startsWith('X_')) return 'F';
+  if (/^X(?:[_-]|$)/.test(raw)) return 'F';
   return '';
 }
 
@@ -540,12 +567,13 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
     if (allowedSet.size > 0 && !allowedSet.has(mode)) continue;
     const level = parseInt(row.level, 10) || 0;
     if (level <= 0) continue;
+    const resolvedTitle = resolveKnownSongVariantTitle(row.title, row.song_key, row.flags);
 
-    const chartKey = makeChartKey(row.title, mode, level, aliases);
+    const chartKey = makeChartKey(resolvedTitle, mode, level, aliases);
     if (!chartKey || seenChartKeys.has(chartKey)) continue;
     seenChartKeys.add(chartKey);
 
-    const canonicalTitle = toCanonicalTitle(row.title, aliases);
+    const canonicalTitle = toCanonicalTitle(resolvedTitle, aliases);
     const artistNorm = normalizeSongName(row.artist);
     const groupKey = (row.song_key && String(row.song_key).trim())
       ? `song_key:${String(row.song_key).trim()}`
@@ -554,7 +582,7 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
     if (!songsByGroup.has(groupKey)) {
       songsByGroup.set(groupKey, {
         song_group_key: groupKey,
-        title: row.title,
+        title: resolvedTitle,
         artist: row.artist || '',
         jacket_url: row.jacket_url || '',
         song_key: row.song_key || '',
@@ -568,7 +596,7 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
     const chart = {
       chart_id: row.id,
       key: chartKey,
-      title: row.title,
+      title: resolvedTitle,
       artist: row.artist || '',
       mode,
       level,
@@ -1068,7 +1096,7 @@ function loadJacketMap() {
   for (const song of data.songs) {
     if (!song.jacket) continue;
     const jacketUrl = '/jackets/' + song.jacket;
-    const name = song.name || '';
+    const name = resolveKnownSongVariantTitle(song.name || '', song.saIndex || '', song.flags || '');
     const norm = normalizeSongName(name);
     // Store by normalized name
     if (!map[norm]) map[norm] = jacketUrl;

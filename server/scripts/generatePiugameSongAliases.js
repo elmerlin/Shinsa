@@ -130,6 +130,8 @@ const MANUAL_CANONICAL_OVERRIDES = {
   'Stardream -Eurobeat Remix- - SHORT CUT -': 'Stardream -Eurobeat Remix-',
   'Bemera - SHORT CUT -': 'BEMERA',
   'CHICKEN WING - SHORT CUT -': 'CHICKEN WING',
+  'Yog-Sothoth - SHORT CUT -': 'Yog-Sothoth - SHORT CUT -',
+  '요그 소토스 - SHORT CUT -': 'Yog-Sothoth - SHORT CUT -',
   'Final Audition Ep. 2-X - SHORT CUT -': 'Final Audition EP. 2-X',
   'K.O.A : Alice In Wonderworld - SHORT CUT -': 'K.O.A : Alice In Wonderworld',
   'Beat of The War 2 - FULL SONG -': 'Beat of The War 2',

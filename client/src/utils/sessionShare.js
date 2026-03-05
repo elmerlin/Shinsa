@@ -128,14 +128,14 @@ function normalizeGrade(rawGrade) {
   };
 
   if (aliases[raw]) return aliases[raw];
-  if (raw.startsWith('X_')) return 'F';
+  if (/^X(?:[_-]|$)/.test(raw)) return 'F';
   return '';
 }
 
 function isFailGrade(rawGrade) {
   const raw = String(rawGrade || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!raw) return false;
-  if (raw.startsWith('X_')) return true;
+  if (/^X(?:[_-]|$)/.test(raw)) return true;
   return normalizeGrade(raw) === 'F';
 }
 

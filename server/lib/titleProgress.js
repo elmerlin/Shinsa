@@ -133,7 +133,7 @@ function normalizeGrade(grade) {
   };
   if (aliases[raw]) return aliases[raw];
   // PIUGame uses x_* grades for failed runs (stage breaks).
-  if (raw.startsWith('X_')) return 'F';
+  if (/^X(?:[_-]|$)/.test(raw)) return 'F';
   return '';
 }
 

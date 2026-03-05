@@ -228,6 +228,18 @@ function modeShort(mode) {
   return '';
 }
 
+function formatDisplayGrade(rawGrade) {
+  const source = String(rawGrade || '').trim();
+  if (!source) return '';
+
+  const isBroken = /^x(?:[_-]|$)\s*/i.test(source);
+  const stripped = isBroken ? source.replace(/^x(?:[_-]|$)\s*/i, '').trim() : source;
+  if (!stripped) return '';
+  if (!isBroken) return stripped;
+
+  return stripped.replace(/(?:[_-]p|\+)$/i, '');
+}
+
 function summarizeUpscore(upscore) {
   const username = upscore?.username ? `@${upscore.username}` : 'A player';
   const items = parseJsonArray(upscore?.upscores_json);
@@ -852,7 +864,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
               </div>
               <div style="text-align:right">
                 <div class="mono">${(parseInt(row.score, 10) || 0).toLocaleString()}</div>
-                <div class="pill">${escapeXml(String(row.grade || '').replace(/^x[_-]\s*/i, '').trim() || '--')}</div>
+                <div class="pill">${escapeXml(formatDisplayGrade(row.grade) || '--')}</div>
               </div>
             </div>
           `).join('');
@@ -872,7 +884,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
           const summary = summarizeClear({ ...row, username: user.username });
           const mode = modeShort(row.mode);
           const level = parseInt(row.level, 10) || 0;
-          const grade = String(row.grade || '').replace(/^x[_-]\s*/i, '').trim();
+          const grade = formatDisplayGrade(row.grade);
           return `
             <div class="row">
               <div>

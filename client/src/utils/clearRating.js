@@ -80,7 +80,7 @@ export function normalizeGrade(grade) {
     STAGE_BREAK: 'F',
   };
   if (aliases[raw]) return aliases[raw];
-  if (raw.startsWith('X_')) return normalizeGrade(raw.slice(2));
+  if (/^X(?:[_-]|$)/.test(raw)) return normalizeGrade(raw.replace(/^X[_-]?/, ''));
   return '';
 }
 

@@ -75,7 +75,7 @@ function normalizeRecommendationMetric(metricRaw, modeRaw) {
 function isFailGrade(grade) {
   const raw = String(grade || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!raw) return false;
-  if (raw.startsWith('X_')) return true;
+  if (/^X(?:[_-]|$)/.test(raw)) return true;
   return normalizeGrade(raw) === 'F';
 }
 

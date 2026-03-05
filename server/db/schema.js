@@ -18,6 +18,40 @@ function normalizeShoeText(value, max = 80) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
+function normalizeSongTitle(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function parseSongFlags(flags) {
+  if (Array.isArray(flags)) {
+    return flags
+      .map((flag) => String(flag || '').trim())
+      .filter(Boolean);
+  }
+  return String(flags || '')
+    .split(',')
+    .map((flag) => flag.trim())
+    .filter(Boolean);
+}
+
+function resolveSongTitleForStorage(title, songKey, flags) {
+  const normalizedTitle = normalizeSongTitle(title);
+  if (!normalizedTitle) return '';
+
+  // PIU metadata currently uses the same base title for both Yog variants.
+  if (
+    normalizedTitle.toLowerCase() === 'yog-sothoth'
+    && (
+      String(songKey || '').trim() === '313'
+      || parseSongFlags(flags).some((flag) => flag.toLowerCase() === 'cut:1')
+    )
+  ) {
+    return 'Yog-Sothoth - SHORT CUT -';
+  }
+
+  return normalizedTitle;
+}
+
 function escapeRegExp(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -123,7 +157,7 @@ function ensureCoOpChartsFromJson() {
       for (const song of songList) {
         const jacketUrl = song.jacket ? `/jackets/${song.jacket}` : '';
         const flags = Array.isArray(song.flags) ? song.flags.join(',') : (song.flags || '');
-        const songName = song.name || '';
+        const songName = resolveSongTitleForStorage(song.name || '', song.saIndex || '', song.flags || '');
         const artist = song.artist || '';
         const songKey = song.saIndex || '';
 
@@ -284,12 +318,13 @@ function bootstrapSongsFromJsonIfEmpty() {
       for (const song of songList) {
         const jacketUrl = song.jacket ? `/jackets/${song.jacket}` : '';
         const flags = Array.isArray(song.flags) ? song.flags.join(',') : (song.flags || '');
+        const songTitle = resolveSongTitleForStorage(song.name || '', song.saIndex || '', song.flags || '');
 
         for (const chart of (song.charts || [])) {
           const mapped = chartModeLevelFromJson(chart);
           if (!mapped || mapped.level <= 0 || mapped.mode === 'CoOp') continue;
           insertSong.run(
-            song.name || '',
+            songTitle,
             song.artist || '',
             jacketUrl,
             mapped.mode,
@@ -1846,10 +1881,11 @@ function initializeDb() {
           for (const song of data.songs) {
             const flags = (song.flags || []).join(',');
             if (!flags) continue;
+            const songTitle = resolveSongTitleForStorage(song.name || '', song.saIndex || '', song.flags || '');
             for (const chart of (song.charts || [])) {
               const mapped = chartModeLevelFromJson(chart);
               if (!mapped || mapped.level <= 0) continue;
-              const result = updateStmt.run(flags, song.name, mapped.mode, mapped.level);
+              const result = updateStmt.run(flags, songTitle, mapped.mode, mapped.level);
               updated += result.changes;
             }
           }
@@ -1861,6 +1897,24 @@ function initializeDb() {
         console.error('Failed to backfill song flags:', err.message);
       }
     }
+  }
+
+  // Migration: split Yog-Sothoth short cut rows into their own title bucket.
+  try {
+    const result = db.prepare(`
+      UPDATE songs
+      SET title = 'Yog-Sothoth - SHORT CUT -'
+      WHERE LOWER(TRIM(COALESCE(title, ''))) = 'yog-sothoth'
+        AND (
+          TRIM(COALESCE(song_key, '')) = '313'
+          OR LOWER(COALESCE(flags, '')) LIKE '%cut:1%'
+        )
+    `).run();
+    if ((result?.changes || 0) > 0) {
+      console.log(`Renamed ${result.changes} Yog-Sothoth short cut chart rows`);
+    }
+  } catch (err) {
+    console.error('Failed to normalize Yog-Sothoth short cut rows:', err.message);
   }
 
   // Migrations for grouped new-clear payloads
