@@ -43,6 +43,7 @@ import OptimisePage from './pages/OptimisePage';
 import ChangeLogPage from './pages/ChangeLogPage';
 import CheckinPage from './pages/CheckinPage';
 import DojoPage from './pages/DojoPage';
+import LeaderboardsPage from './pages/LeaderboardsPage';
 
 const DOJO_TARGET_GROUP = 'pump dojo';
 const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
@@ -408,6 +409,17 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
             Lists
+          </Link>
+          <Link
+            to="/leaderboards"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 6v12M12 6v12M17 6v12" />
+            </svg>
+            Leaderboards
           </Link>
           <Link
             to="/shoes"
@@ -959,6 +971,7 @@ export default function App() {
           <Route path="/changelog" element={<ChangeLogPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
           <Route path="/dojo" element={<DojoPage />} />
+          <Route path="/leaderboards" element={<LeaderboardsPage />} />
         </Routes>
       </main>
 

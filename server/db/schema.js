@@ -1120,6 +1120,26 @@ function initializeDb() {
       last_sync TEXT DEFAULT ''
     );
 
+    CREATE TABLE IF NOT EXISTS over_level_sync_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_type TEXT NOT NULL DEFAULT 'sync',
+      status TEXT NOT NULL DEFAULT 'success',
+      trigger_reason TEXT DEFAULT '',
+      force_flag INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL DEFAULT '',
+      completed_at TEXT NOT NULL DEFAULT '',
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      charts INTEGER NOT NULL DEFAULT 0,
+      entries INTEGER NOT NULL DEFAULT 0,
+      source_pages INTEGER NOT NULL DEFAULT 0,
+      backfill_total_checked INTEGER NOT NULL DEFAULT 0,
+      backfill_total_updated INTEGER NOT NULL DEFAULT 0,
+      backfill_best_scores_updated INTEGER NOT NULL DEFAULT 0,
+      backfill_pumbility_scores_updated INTEGER NOT NULL DEFAULT 0,
+      backfill_recent_scores_updated INTEGER NOT NULL DEFAULT 0,
+      error_message TEXT DEFAULT ''
+    );
+
     CREATE TABLE IF NOT EXISTS user_notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1231,6 +1251,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_over_level_rankings_song_mode_level ON over_level_rankings(song_title, mode, level);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
+    CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_started_at ON over_level_sync_runs(datetime(started_at) DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_type ON over_level_sync_runs(run_type, datetime(started_at) DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_user_shoes_user ON user_shoes(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_shoes_make_model ON user_shoes(make, model);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_user_shoes_single_active ON user_shoes(user_id) WHERE is_current = 1;
@@ -2017,6 +2039,10 @@ function initializeDb() {
       ON over_level_rankings(song_title, mode, level);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score
       ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
+    CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_started_at
+      ON over_level_sync_runs(datetime(started_at) DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_type
+      ON over_level_sync_runs(run_type, datetime(started_at) DESC, id DESC);
   `);
 
   // Migrations for users table - add world map location fields

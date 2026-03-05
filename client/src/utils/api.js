@@ -398,6 +398,35 @@ export const getPumbilityRecommendations = (userId, options = {}) => {
 };
 export const getPumbilityRanking = () => request('/piugame/pumbility-ranking');
 export const syncPumbilityRanking = () => longRequest('/piugame/sync/pumbility-ranking', { method: 'POST' });
+export const getAdminOverRankingScheduler = () => request('/piugame/admin/over-ranking/scheduler');
+export const getAdminOverRankingRuns = (params = {}) => {
+  const query = new URLSearchParams();
+  if (params.type) query.set('type', String(params.type));
+  if (params.page) query.set('page', String(params.page));
+  if (params.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return request(`/piugame/admin/over-ranking/runs${qs ? `?${qs}` : ''}`);
+};
+export const getGlobalPumbilityLeaderboard = (params = {}) => {
+  const query = new URLSearchParams();
+  if (params.metric) query.set('metric', String(params.metric));
+  if (params.sort_by) query.set('sort_by', String(params.sort_by));
+  if (params.sort_order) query.set('sort_order', String(params.sort_order));
+  if (params.page) query.set('page', String(params.page));
+  if (params.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return request(`/piugame/leaderboards/pumbility${qs ? `?${qs}` : ''}`);
+};
+export const getOver20Levels = () => request('/piugame/leaderboards/over20/levels');
+export const getOver20ChartsByLevel = (level) => request(`/piugame/leaderboards/over20/charts?level=${encodeURIComponent(level)}`);
+export const getOver20ChartTop100 = (chartKey) => request(`/piugame/leaderboards/over20/chart?chart_key=${encodeURIComponent(chartKey)}`);
+export const getMyTop100Scores = (params = {}) => {
+  const query = new URLSearchParams();
+  if (params.page) query.set('page', String(params.page));
+  if (params.limit) query.set('limit', String(params.limit));
+  const qs = query.toString();
+  return request(`/piugame/leaderboards/my-top100-scores${qs ? `?${qs}` : ''}`);
+};
 export const getSyncProgress = () => request('/piugame/sync/progress');
 export const getProfileShoes = (userId) => request(`/piugame/shoes/${userId}`);
 export const getShoeTopStats = (limit = 24) => request(`/piugame/shoes/stats/top?limit=${encodeURIComponent(limit)}`);
