@@ -933,9 +933,13 @@ async function refreshOverRankingCache(db, options = {}) {
           player_name: String(row.player_name || '').trim(),
           played_at: String(row.played_at || '').trim(),
         }))
-        .filter((row) => row.rank > 0 && row.rank <= 100 && row.score > 0)
-        .sort((a, b) => a.rank - b.rank)
-        .slice(0, 100),
+        .filter((row) => row.score > 0)
+        .sort(compareOverRankingRows)
+        .slice(0, 100)
+        .map((row, idx) => ({
+          ...row,
+          rank: idx + 1,
+        })),
     };
     if (candidate.top100_count <= 0) candidate.top100_count = candidate.top_scores.length;
     if (candidate.min_score <= 0 && candidate.top_scores.length > 0) {
