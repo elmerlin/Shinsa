@@ -344,7 +344,7 @@ function UserMenu() {
         onClick={closeMenu}
         className="absolute inset-0 z-0 bg-black/55 backdrop-blur-[1px]"
       />
-      <aside className="absolute right-0 top-0 z-10 h-full w-[64vw] max-w-[260px] border-l border-piu-border bg-piu-card shadow-2xl overflow-y-auto overscroll-contain sm:w-[320px] sm:max-w-[320px]">
+      <aside className="absolute right-0 top-0 z-10 h-full w-[56vw] max-w-[240px] border-l border-piu-border bg-piu-card shadow-2xl overflow-y-auto overscroll-contain sm:w-[320px] sm:max-w-[320px]">
         <div className="sticky top-0 z-10 px-3 py-2.5 border-b border-piu-border/60 bg-piu-card/95 backdrop-blur-sm flex items-center justify-between gap-2">
           <div className="min-w-0 flex items-center gap-2.5">
             {user.avatar ? (
