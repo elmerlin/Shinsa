@@ -151,8 +151,8 @@ function JudgmentModal({ row, onClose }) {
               <span className={`font-display font-bold text-base ${row.mode === 'Single' ? 'text-red-300' : row.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{row.level}</span>
             </div>
             {getOverTop100Rank(row.over_top100_rank) > 0 && (
-              <span className="px-2 py-0.5 rounded border border-yellow-400/40 bg-yellow-500/10 text-yellow-300 text-[10px] font-display font-black">
-                OVER #{getOverTop100Rank(row.over_top100_rank)}
+              <span className="px-2 py-0.5 rounded border border-yellow-300/60 bg-yellow-500/15 text-yellow-100 text-[11px] leading-none font-display font-black tracking-wide">
+                TOP #{getOverTop100Rank(row.over_top100_rank)}
               </span>
             )}
             <div className="text-center flex-1">
@@ -291,8 +291,8 @@ export default function SessionShareCard({
                             <p className="text-[10px] text-gray-500">
                               {modeShort(row.mode)}{row.level || '?'}
                               {getOverTop100Rank(row.over_top100_rank) > 0 && (
-                                <span className="ml-1 text-yellow-300 font-display font-black">
-                                  OVER #{getOverTop100Rank(row.over_top100_rank)}
+                                <span className="ml-1 inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
+                                  TOP #{getOverTop100Rank(row.over_top100_rank)}
                                 </span>
                               )}
                             </p>

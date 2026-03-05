@@ -1051,6 +1051,10 @@ function getModeCompetitiveLevel(mode, levelStatsByMode = new Map(), chartTotals
   return bestLevel || null;
 }
 
+function normalizeLeaderboardNameKey(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function buildGlobalPumbilityLeaderboardRows(db) {
   const users = db.prepare(`
     SELECT id, username, avatar, nationality, pumbility
@@ -1622,18 +1626,16 @@ async function ensureOverRankingLookupForScoring(db, options = {}) {
 }
 
 function findLeaderboardRankByName(db, name) {
-  const normalized = String(name || '').replace(/\s+/g, ' ').trim();
+  const normalized = normalizeLeaderboardNameKey(name);
   if (!normalized) return null;
-  const entry = db.prepare(`
-    SELECT rank, player_name
-    FROM pumbility_leaderboard
-    WHERE LOWER(TRIM(player_name)) = LOWER(TRIM(?))
-    LIMIT 1
-  `).get(normalized);
-  if (!entry) return null;
-  const rank = parseInt(entry.rank, 10);
-  if (!Number.isInteger(rank) || rank <= 0 || rank > 1000) return null;
-  return { rank, player_name: String(entry.player_name || '').trim() };
+  const rows = db.prepare('SELECT rank, player_name FROM pumbility_leaderboard ORDER BY rank ASC').all();
+  for (const row of rows) {
+    if (normalizeLeaderboardNameKey(row?.player_name) !== normalized) continue;
+    const rank = parseInt(row.rank, 10);
+    if (!Number.isInteger(rank) || rank <= 0 || rank > 1000) return null;
+    return { rank, player_name: String(row.player_name || '').trim() };
+  }
+  return null;
 }
 
 function insertGroupedNewClearPost(db, userId, clears, options = {}) {
@@ -3582,7 +3584,7 @@ router.get('/admin/over-ranking/runs', requireAuth, requireAdmin, (req, res) => 
   });
 });
 
-// GET /api/piugame/leaderboards/pumbility — global pumbility leaderboard (Shinsa users)
+// GET /api/piugame/leaderboards/pumbility — PIUGAME global top 1000 (with local enrichment when available)
 router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
   const db = getDb();
   const metricRaw = String(req.query?.metric || 'overall').trim().toLowerCase();
@@ -3600,7 +3602,48 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
   const offset = (page - 1) * limit;
 
-  const rows = buildGlobalPumbilityLeaderboardRows(db);
+  const globalRows = db.prepare(`
+    SELECT rank, player_name, pumbility
+    FROM pumbility_leaderboard
+    WHERE rank BETWEEN 1 AND 1000
+    ORDER BY rank ASC
+  `).all();
+
+  const localRows = buildGlobalPumbilityLeaderboardRows(db);
+  const localByName = new Map();
+  for (const row of localRows) {
+    const nameKey = normalizeLeaderboardNameKey(row?.username);
+    if (!nameKey || localByName.has(nameKey)) continue;
+    localByName.set(nameKey, row);
+  }
+
+  const rows = globalRows.map((row) => {
+    const globalRank = parseInt(row.rank, 10) || 0;
+    const username = String(row.player_name || '').replace(/\s+/g, ' ').trim() || 'Unknown';
+    const nameKey = normalizeLeaderboardNameKey(username);
+    const local = localByName.get(nameKey) || null;
+    return {
+      user_id: local?.user_id || '',
+      username,
+      avatar: local?.avatar || '',
+      nationality: local?.nationality || '',
+      is_local_user: !!(local?.user_id),
+      global_rank: globalRank,
+      overall_pumbility: parseInt(row.pumbility, 10) || 0,
+      singles_pumbility: parseInt(local?.singles_pumbility, 10) || 0,
+      overall_average_grade: local?.overall_average_grade || '--',
+      overall_average_level: Number(local?.overall_average_level) || 0,
+      singles_average_grade: local?.singles_average_grade || '--',
+      singles_average_level: Number(local?.singles_average_level) || 0,
+      singles_competitive_level: parseInt(local?.singles_competitive_level, 10) || 0,
+      doubles_competitive_level: parseInt(local?.doubles_competitive_level, 10) || 0,
+      competitive_level: parseInt(local?.competitive_level, 10) || 0,
+      competitive_mode: String(local?.competitive_mode || ''),
+      overall_breakdown_count: parseInt(local?.overall_breakdown_count, 10) || 0,
+      singles_breakdown_count: parseInt(local?.singles_breakdown_count, 10) || 0,
+    };
+  });
+
   const sorted = [...rows].sort((a, b) => {
     const metricA = metric === 'singles'
       ? {
@@ -3638,6 +3681,11 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
     }
 
     if (comparison !== 0) return sortOrder === 'asc' ? comparison : -comparison;
+
+    const globalRankA = parseInt(a?.global_rank, 10) || Number.MAX_SAFE_INTEGER;
+    const globalRankB = parseInt(b?.global_rank, 10) || Number.MAX_SAFE_INTEGER;
+    if (globalRankA !== globalRankB) return globalRankA - globalRankB;
+
     return String(a?.username || '').localeCompare(String(b?.username || ''), undefined, { sensitivity: 'base' });
   });
 
@@ -3658,6 +3706,7 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
     total,
     total_pages: totalPages,
     rows: pagedRows,
+    source: 'piugame_global',
   });
 });
 
@@ -3667,6 +3716,7 @@ router.get('/leaderboards/over20/levels', requireAuth, (req, res) => {
   const rows = db.prepare(`
     SELECT level, COUNT(*) AS chart_count
     FROM over_level_rankings
+    WHERE level >= 20
     GROUP BY level
     ORDER BY level ASC
   `).all();
@@ -3687,21 +3737,30 @@ router.get('/leaderboards/over20/levels', requireAuth, (req, res) => {
 router.get('/leaderboards/over20/charts', requireAuth, (req, res) => {
   const db = getDb();
   const level = parseInt(req.query?.level, 10) || 0;
-  if (level <= 0) {
-    return res.status(400).json({ error: 'level is required and must be a positive integer' });
+  if (level < 20) {
+    return res.status(400).json({ error: 'level is required and must be 20 or higher' });
   }
 
-  const charts = db.prepare(`
+  const modeRaw = String(req.query?.mode || '').trim().toLowerCase();
+  const mode = modeRaw === 'single' ? 'Single' : modeRaw === 'double' ? 'Double' : '';
+
+  const chartsSql = `
     SELECT chart_key, song_title, mode, level, jacket_url, source_no, top100_count, min_score, last_sync
     FROM over_level_rankings
-    WHERE level = ?
+    WHERE level = ? AND level >= 20
+    ${mode ? 'AND mode = ?' : ''}
     ORDER BY song_title COLLATE NOCASE ASC,
       CASE mode WHEN 'Single' THEN 0 WHEN 'Double' THEN 1 ELSE 2 END ASC,
       chart_key ASC
-  `).all(level);
+  `;
+
+  const charts = mode
+    ? db.prepare(chartsSql).all(level, mode)
+    : db.prepare(chartsSql).all(level);
 
   res.json({
     level,
+    mode: mode || 'all',
     total_charts: charts.length,
     charts: charts.map((row) => ({
       chart_key: String(row.chart_key || ''),
@@ -3728,7 +3787,7 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
   const chart = db.prepare(`
     SELECT chart_key, song_title, mode, level, jacket_url, source_no, top100_count, min_score, last_sync
     FROM over_level_rankings
-    WHERE chart_key = ?
+    WHERE chart_key = ? AND level >= 20
   `).get(chartKey);
   if (!chart) {
     return res.status(404).json({ error: 'Chart not found in OVER ranking cache' });

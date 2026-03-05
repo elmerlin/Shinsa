@@ -1881,7 +1881,7 @@ export default function ProfilePage() {
                               <span className="ml-1.5 text-gray-600">{String(play.date_played).split(' ').slice(1).join(' ') || ''}</span>
                             )}
                             {overRank > 0 && (
-                              <span className="ml-1.5 text-piu-gold font-display font-bold">OVER #{overRank}</span>
+                              <span className="ml-1.5 inline-flex items-center rounded border border-piu-gold/50 bg-piu-gold/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-200 font-display font-black tracking-wide">TOP #{overRank}</span>
                             )}
                           </p>
                         </div>
@@ -3072,8 +3072,8 @@ export default function ProfilePage() {
                             {s.mode === 'Single' ? 'S' : s.mode === 'Double' ? 'D' : 'C'}{s.level}
                           </span>
                           {overRank > 0 && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
-                              OVER #{overRank}
+                            <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
+                              TOP #{overRank}
                             </span>
                           )}
                         </div>
@@ -3260,8 +3260,8 @@ export default function ProfilePage() {
                             {s.mode === 'Single' ? 'S' : s.mode === 'Double' ? 'D' : 'C'}{s.level}
                           </span>
                           {overRank > 0 && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
-                              OVER #{overRank}
+                            <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
+                              TOP #{overRank}
                             </span>
                           )}
                           {s.plate && (
@@ -3361,7 +3361,7 @@ export default function ProfilePage() {
                       <p className="text-[10px] text-gray-500 mt-0.5">
                         {p.mode === 'Single' ? 'S' : p.mode === 'Double' ? 'D' : 'C'}{p.level}
                         {overRank > 0 && (
-                          <span className="ml-1.5 text-piu-gold font-display font-bold">OVER #{overRank}</span>
+                          <span className="ml-1.5 inline-flex items-center rounded border border-piu-gold/50 bg-piu-gold/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-200 font-display font-black tracking-wide">TOP #{overRank}</span>
                         )}
                       </p>
                     </div>
@@ -3566,8 +3566,8 @@ export default function ProfilePage() {
                     <span className={`font-display font-bold text-base ${p.mode === 'Single' ? 'text-red-300' : p.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{p.level}</span>
                   </div>
                   {overRank > 0 && (
-                    <span className="px-2 py-0.5 rounded-full border border-piu-gold/50 bg-piu-gold/10 text-piu-gold text-[10px] font-display font-black">
-                      OVER #{overRank}
+                    <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
+                      TOP #{overRank}
                     </span>
                   )}
                   <div className="text-center flex-1">

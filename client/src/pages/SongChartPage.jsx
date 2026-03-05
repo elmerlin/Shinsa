@@ -725,7 +725,7 @@ export default function SongChartPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 6v12M12 6v12M17 6v12" />
             </svg>
-            View OVER Top 100 Rankings For This Chart
+            View Top 100 Rankings For This Chart
           </Link>
         </section>
       )}

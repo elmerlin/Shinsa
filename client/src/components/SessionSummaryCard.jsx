@@ -112,8 +112,8 @@ function SongTable({ title, rows, type }) {
                         <p className="text-[10px] text-gray-500">
                           {modeShort(row.mode)}{rowLevel || '?'}
                           {overRank > 0 && (
-                            <span className="ml-1 text-yellow-300 font-display font-black">
-                              OVER #{overRank}
+                            <span className="ml-1 inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
+                              TOP #{overRank}
                             </span>
                           )}
                         </p>

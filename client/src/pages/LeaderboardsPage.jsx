@@ -181,6 +181,125 @@ function SortHeader({ label, sortKey, activeSortKey, sortDirection, onSort }) {
   );
 }
 
+function getChartModeBadgeColor(mode) {
+  if (mode === 'Single') return 'bg-red-600';
+  if (mode === 'Double') return 'bg-green-600';
+  return 'bg-blue-600';
+}
+
+function OverChartJacket({ chart, size = 'md' }) {
+  const isSmall = size === 'sm';
+  const boxClass = isSmall ? 'w-10 h-10' : 'w-12 h-12';
+  const badgeClass = isSmall
+    ? 'min-w-[16px] h-[14px] px-1 text-[9px]'
+    : 'min-w-[18px] h-[16px] px-1 text-[9px]';
+  const level = parseInt(chart?.level, 10);
+  const levelText = Number.isFinite(level) && level > 0 ? String(level) : '?';
+  const badgeColor = getChartModeBadgeColor(chart?.mode);
+  const titleInitial = String(chart?.song_title || '?').trim()[0] || '?';
+
+  return (
+    <div className="relative shrink-0">
+      {chart?.jacket_url ? (
+        <img
+          src={chart.jacket_url}
+          alt=""
+          className={`${boxClass} rounded object-cover border border-piu-border/50`}
+        />
+      ) : (
+        <div className={`${boxClass} rounded bg-piu-dark border border-piu-border/50 flex items-center justify-center font-display font-bold text-sm text-gray-500`}>
+          {titleInitial}
+        </div>
+      )}
+      <span className={`absolute -bottom-1 -right-1 ${badgeClass} rounded flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
+        {levelText}
+      </span>
+    </div>
+  );
+}
+
+function Over20Top100Modal({ open, chart, scores, loading, error, permalink, onClose }) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-piu-border/60">
+          <div className="min-w-0 flex items-center gap-2.5">
+            <OverChartJacket chart={chart || {}} size="sm" />
+            <div className="min-w-0">
+              <p className="font-display font-bold text-sm truncate text-gray-100">
+                {chart?.song_title || 'Top 100 Rankings'}
+              </p>
+              <p className="text-[11px] text-gray-500">
+                {chart ? `${chart.mode} ${chart.level}` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {permalink ? (
+              <Link
+                to={permalink}
+                className="px-2.5 py-1 rounded border border-piu-border/60 text-[11px] font-display font-bold text-cyan-300 hover:text-cyan-200 hover:bg-cyan-500/10 transition-colors"
+              >
+                Permalink
+              </Link>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-2.5 py-1 rounded border border-piu-border/60 text-[11px] font-display font-bold text-gray-300 hover:text-white hover:bg-piu-dark/50 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[70vh] overflow-y-auto">
+          {loading ? (
+            <p className="px-4 py-4 text-xs text-gray-500">Loading top 100...</p>
+          ) : error ? (
+            <div className="px-4 py-4">
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {error}
+              </div>
+            </div>
+          ) : !scores.length ? (
+            <p className="px-4 py-4 text-xs text-gray-500">No top 100 rows available.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-piu-dark/70 sticky top-0">
+                <tr className="border-b border-piu-border/40">
+                  <th className="px-2 py-2 text-left text-gray-400 font-display">#</th>
+                  <th className="px-2 py-2 text-left text-gray-400 font-display">Player</th>
+                  <th className="px-2 py-2 text-right text-gray-400 font-display">Score</th>
+                  <th className="px-2 py-2 text-right text-gray-400 font-display">Grade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scores.map((score) => (
+                  <tr key={`${score.rank}-${score.player_name}-${score.score}`} className="border-b border-piu-border/20 last:border-b-0">
+                    <td className="px-2 py-1.5 font-mono text-gray-500">#{score.rank}</td>
+                    <td className="px-2 py-1.5 text-gray-200">{score.player_name || '-'}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(score.score)}</td>
+                    <td className={`px-2 py-1.5 text-right font-display font-bold ${getGradeColorClass(score.grade)}`}>{score.grade || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PumbilityLeaderboardTab() {
   const [metric, setMetric] = useState('overall');
   const [sortBy, setSortBy] = useState('pumbility');
@@ -240,6 +359,7 @@ function PumbilityLeaderboardTab() {
   };
 
   const openBreakdown = async (row) => {
+    if (!row?.isLocalUser || !row?.user_id) return;
     try {
       const analytics = await getOrLoadAnalytics(row?.user_id);
       const breakdownRows = metric === 'singles'
@@ -256,6 +376,7 @@ function PumbilityLeaderboardTab() {
   };
 
   const openCompetitiveInfo = async (row) => {
+    if (!row?.isLocalUser || !row?.user_id || row?.competitiveValue <= 0) return;
     try {
       const analytics = await getOrLoadAnalytics(row?.user_id);
       setCompModal({
@@ -267,6 +388,7 @@ function PumbilityLeaderboardTab() {
 
   const metricRows = useMemo(() => {
     return rows.map((row) => {
+      const isLocalUser = !!row?.is_local_user && !!row?.user_id;
       const pumbilityValue = metric === 'singles'
         ? (parseInt(row?.singles_pumbility, 10) || 0)
         : (parseInt(row?.overall_pumbility, 10) || 0);
@@ -290,6 +412,8 @@ function PumbilityLeaderboardTab() {
         : (singleLevel > 0 ? 'text-red-300' : 'text-gray-500');
       return {
         ...row,
+        isLocalUser,
+        globalRank: parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0,
         pumbilityValue,
         averageGrade,
         averageLevel,
@@ -349,6 +473,10 @@ function PumbilityLeaderboardTab() {
         </select>
       </div>
 
+      <p className="text-[11px] text-gray-500">
+        Avg Grade, Avg Level, and Competitive Level are shown when a PIUGAME player has a matched local profile.
+      </p>
+
       {loading ? (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-piu-accent border-t-transparent rounded-full animate-spin" />
@@ -363,24 +491,38 @@ function PumbilityLeaderboardTab() {
         <>
           <div className="md:hidden space-y-1.5">
             {metricRows.map((row) => (
-              <div key={`${row.user_id}-${row.rank}`} className="rounded-lg border border-piu-border/40 bg-piu-card/35 px-2.5 py-2.5">
+              <div key={`${row.globalRank || row.rank}-${row.username}`} className="rounded-lg border border-piu-border/40 bg-piu-card/35 px-2.5 py-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="w-7 shrink-0 text-sm font-mono text-gray-500">#{row.rank}</span>
-                    <Link to={getProfilePath(row.user_id, row.username)} className="shrink-0">
-                      {row.avatar ? (
-                        <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
+                    {row.isLocalUser ? (
+                      <Link to={getProfilePath(row.user_id, row.username)} className="shrink-0">
+                        {row.avatar ? (
+                          <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                            {row.username?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                      </Link>
+                    ) : (
+                      row.avatar ? (
+                        <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40 shrink-0" />
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40 shrink-0">
                           {row.username?.[0]?.toUpperCase()}
                         </div>
-                      )}
-                    </Link>
+                      )
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <Link to={getProfilePath(row.user_id, row.username)} className="font-display font-bold text-sm truncate hover:text-piu-accent transition-colors">
-                          {row.username}
-                        </Link>
+                        {row.isLocalUser ? (
+                          <Link to={getProfilePath(row.user_id, row.username)} className="font-display font-bold text-sm truncate hover:text-piu-accent transition-colors">
+                            {row.username}
+                          </Link>
+                        ) : (
+                          <span className="font-display font-bold text-sm truncate text-gray-100">{row.username}</span>
+                        )}
                         {row.nationality ? <span className="text-sm">{getCountryFlag(row.nationality)}</span> : null}
                       </div>
                       <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-500">
@@ -394,29 +536,36 @@ function PumbilityLeaderboardTab() {
                           <span className={`font-display font-bold ${row.averageGrade !== '--' ? getGradeColorClass(row.averageGrade) : 'text-gray-500'}`}>{row.averageGrade || '--'}</span>
                         ) : null}
                         {mobileMetricView === 'competitive_level' ? (
-                          <button
-                            type="button"
-                            onClick={() => openCompetitiveInfo(row)}
-                            className={`font-display font-bold underline decoration-dotted underline-offset-2 hover:text-piu-accent transition-colors ${row.competitiveClass}`}
-                          >
-                            {row.competitiveLabel}
-                          </button>
+                          row.isLocalUser && row.competitiveValue > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => openCompetitiveInfo(row)}
+                              className={`font-display font-bold underline decoration-dotted underline-offset-2 hover:text-piu-accent transition-colors ${row.competitiveClass}`}
+                            >
+                              {row.competitiveLabel}
+                            </button>
+                          ) : (
+                            <span className="font-display font-bold text-gray-500">--</span>
+                          )
                         ) : null}
                       </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openBreakdown(row)}
-                    disabled={row.pumbilityValue <= 0 || row.breakdownCount <= 0}
-                    className={`shrink-0 text-sm font-mono font-bold ${
-                      row.pumbilityValue > 0 && row.breakdownCount > 0
-                        ? 'text-piu-gold hover:text-yellow-300'
-                        : 'text-gray-500'
-                    }`}
-                  >
-                    {row.pumbilityValue > 0 ? formatNumber(row.pumbilityValue) : '--'}
-                  </button>
+                  {row.pumbilityValue > 0 ? (
+                    row.isLocalUser && row.breakdownCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => openBreakdown(row)}
+                        className="shrink-0 text-sm font-mono font-bold text-piu-gold hover:text-yellow-300"
+                      >
+                        {formatNumber(row.pumbilityValue)}
+                      </button>
+                    ) : (
+                      <span className="shrink-0 text-sm font-mono font-bold text-piu-gold">{formatNumber(row.pumbilityValue)}</span>
+                    )
+                  ) : (
+                    <span className="shrink-0 text-sm font-mono font-bold text-gray-500">--</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -444,42 +593,59 @@ function PumbilityLeaderboardTab() {
               </thead>
               <tbody>
                 {metricRows.map((row) => (
-                  <tr key={`${row.user_id}-${row.rank}`} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
+                  <tr key={`${row.globalRank || row.rank}-${row.username}`} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
                     <td className="px-2 py-2 text-sm font-mono text-gray-500 whitespace-nowrap">#{row.rank}</td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <Link to={getProfilePath(row.user_id, row.username)} className="shrink-0">
-                          {row.avatar ? (
-                            <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40" />
+                        {row.isLocalUser ? (
+                          <Link to={getProfilePath(row.user_id, row.username)} className="shrink-0">
+                            {row.avatar ? (
+                              <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                                {row.username?.[0]?.toUpperCase()}
+                              </div>
+                            )}
+                          </Link>
+                        ) : (
+                          row.avatar ? (
+                            <img src={String(row.avatar).startsWith('data:') ? row.avatar : getAvatarUrl(row.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40 shrink-0" />
                           ) : (
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40 shrink-0">
                               {row.username?.[0]?.toUpperCase()}
                             </div>
-                          )}
-                        </Link>
+                          )
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <Link to={getProfilePath(row.user_id, row.username)} className="font-display font-bold text-[13px] hover:text-piu-accent transition-colors truncate max-w-[220px]">
-                              {row.username}
-                            </Link>
+                            {row.isLocalUser ? (
+                              <Link to={getProfilePath(row.user_id, row.username)} className="font-display font-bold text-[13px] hover:text-piu-accent transition-colors truncate max-w-[220px]">
+                                {row.username}
+                              </Link>
+                            ) : (
+                              <span className="font-display font-bold text-[13px] truncate max-w-[220px] text-gray-100">{row.username}</span>
+                            )}
                             {row.nationality ? <span className="text-sm">{getCountryFlag(row.nationality)}</span> : null}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => openBreakdown(row)}
-                        disabled={row.pumbilityValue <= 0 || row.breakdownCount <= 0}
-                        className={`font-mono font-bold ${
-                          row.pumbilityValue > 0 && row.breakdownCount > 0
-                            ? 'text-piu-gold hover:text-yellow-300'
-                            : 'text-gray-500'
-                        }`}
-                      >
-                        {row.pumbilityValue > 0 ? formatNumber(row.pumbilityValue) : '--'}
-                      </button>
+                      {row.pumbilityValue > 0 ? (
+                        row.isLocalUser && row.breakdownCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => openBreakdown(row)}
+                            className="font-mono font-bold text-piu-gold hover:text-yellow-300"
+                          >
+                            {formatNumber(row.pumbilityValue)}
+                          </button>
+                        ) : (
+                          <span className="font-mono font-bold text-piu-gold">{formatNumber(row.pumbilityValue)}</span>
+                        )
+                      ) : (
+                        <span className="font-mono font-bold text-gray-500">--</span>
+                      )}
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap">
                       <span className={`font-display font-bold text-sm ${row.averageGrade !== '--' ? getGradeColorClass(row.averageGrade) : 'text-gray-500'}`}>
@@ -490,13 +656,17 @@ function PumbilityLeaderboardTab() {
                       {row.averageLevel > 0 ? row.averageLevel.toFixed(1) : '--'}
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => openCompetitiveInfo(row)}
-                        className={`font-display font-bold text-sm underline decoration-dotted underline-offset-2 hover:text-piu-accent transition-colors ${row.competitiveClass}`}
-                      >
-                        {row.competitiveLabel}
-                      </button>
+                      {row.isLocalUser && row.competitiveValue > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => openCompetitiveInfo(row)}
+                          className={`font-display font-bold text-sm underline decoration-dotted underline-offset-2 hover:text-piu-accent transition-colors ${row.competitiveClass}`}
+                        >
+                          {row.competitiveLabel}
+                        </button>
+                      ) : (
+                        <span className="font-display font-bold text-sm text-gray-500">--</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -544,18 +714,22 @@ function PumbilityLeaderboardTab() {
 function Over20RankingsTab({ initialSelection = null }) {
   const [levels, setLevels] = useState([]);
   const [selectedLevel, setSelectedLevel] = useState('');
+  const [modeFilter, setModeFilter] = useState('all');
   const [charts, setCharts] = useState([]);
   const [chartsLoading, setChartsLoading] = useState(false);
-  const [selectedChartKey, setSelectedChartKey] = useState('');
-  const [selectedChart, setSelectedChart] = useState(null);
+  const [activeChartKey, setActiveChartKey] = useState('');
+  const [activeChart, setActiveChart] = useState(null);
   const [chartScores, setChartScores] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const initialSelectionAppliedRef = useRef(false);
 
   useEffect(() => {
     initialSelectionAppliedRef.current = false;
+    setIsModalOpen(false);
   }, [initialSelection?.level, initialSelection?.chartKey, initialSelection?.song, initialSelection?.mode]);
 
   useEffect(() => {
@@ -592,45 +766,47 @@ function Over20RankingsTab({ initialSelection = null }) {
         if (cancelled) return;
         const nextCharts = Array.isArray(payload?.charts) ? payload.charts : [];
         setCharts(nextCharts);
-        if (nextCharts.length > 0) {
-          const hasCurrentSelection = String(selectedChartKey || '').trim()
-            && nextCharts.some((chart) => chart?.chart_key === selectedChartKey);
+        if (!nextCharts.length) {
+          setActiveChartKey('');
+          setActiveChart(null);
+          setChartScores([]);
+          setIsModalOpen(false);
+          return;
+        }
 
-          let nextSelectedChartKey = hasCurrentSelection ? String(selectedChartKey) : '';
-          if (!nextSelectedChartKey && !initialSelectionAppliedRef.current) {
-            const preferredChartKey = String(initialSelection?.chartKey || '').trim();
-            const preferredSong = String(initialSelection?.song || '').replace(/\s+/g, ' ').trim().toLowerCase();
-            const preferredMode = String(initialSelection?.mode || '').trim().toLowerCase();
+        if (!initialSelectionAppliedRef.current) {
+          const preferredChartKey = String(initialSelection?.chartKey || '').trim();
+          const preferredSong = String(initialSelection?.song || '').replace(/\s+/g, ' ').trim().toLowerCase();
+          const preferredMode = String(initialSelection?.mode || '').trim().toLowerCase();
+          let matchedChart = null;
 
-            if (preferredChartKey && nextCharts.some((chart) => chart?.chart_key === preferredChartKey)) {
-              nextSelectedChartKey = preferredChartKey;
-            } else if (preferredSong) {
-              const matchedChart = nextCharts.find((chart) => {
-                const song = String(chart?.song_title || '').replace(/\s+/g, ' ').trim().toLowerCase();
-                const mode = String(chart?.mode || '').trim().toLowerCase();
-                if (song !== preferredSong) return false;
-                if (preferredMode && mode !== preferredMode) return false;
-                return true;
-              });
-              nextSelectedChartKey = String(matchedChart?.chart_key || '').trim();
-            }
-
-            initialSelectionAppliedRef.current = true;
+          if (preferredChartKey) {
+            matchedChart = nextCharts.find((chart) => chart?.chart_key === preferredChartKey) || null;
+          }
+          if (!matchedChart && preferredSong) {
+            matchedChart = nextCharts.find((chart) => {
+              const song = String(chart?.song_title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+              const mode = String(chart?.mode || '').trim().toLowerCase();
+              if (song !== preferredSong) return false;
+              if (preferredMode && mode !== preferredMode) return false;
+              return true;
+            }) || null;
           }
 
-          if (!nextSelectedChartKey) nextSelectedChartKey = String(nextCharts[0]?.chart_key || '');
-          setSelectedChartKey(nextSelectedChartKey);
-        } else {
-          setSelectedChartKey('');
-          setSelectedChart(null);
-          setChartScores([]);
+          if (matchedChart?.chart_key) {
+            setActiveChartKey(String(matchedChart.chart_key));
+            setActiveChart(matchedChart);
+            setIsModalOpen(true);
+          }
+          initialSelectionAppliedRef.current = true;
         }
       } catch (err) {
         if (cancelled) return;
         setCharts([]);
-        setSelectedChartKey('');
-        setSelectedChart(null);
+        setActiveChartKey('');
+        setActiveChart(null);
         setChartScores([]);
+        setIsModalOpen(false);
         setError(err?.message || 'Failed to load chart list.');
       } finally {
         if (!cancelled) setChartsLoading(false);
@@ -638,37 +814,61 @@ function Over20RankingsTab({ initialSelection = null }) {
     };
     loadCharts();
     return () => { cancelled = true; };
-  }, [selectedLevel, selectedChartKey, initialSelection?.chartKey, initialSelection?.song, initialSelection?.mode]);
+  }, [selectedLevel, initialSelection?.chartKey, initialSelection?.song, initialSelection?.mode]);
 
   useEffect(() => {
-    if (!selectedChartKey) return;
+    if (!isModalOpen || !activeChartKey) return;
     let cancelled = false;
     const loadChart = async () => {
       setChartLoading(true);
-      setError('');
+      setChartError('');
       try {
-        const payload = await getOver20ChartTop100(selectedChartKey);
+        const payload = await getOver20ChartTop100(activeChartKey);
         if (cancelled) return;
-        setSelectedChart(payload?.chart || null);
+        setActiveChart(payload?.chart || null);
         setChartScores(Array.isArray(payload?.scores) ? payload.scores : []);
       } catch (err) {
         if (cancelled) return;
-        setSelectedChart(null);
+        setActiveChart(null);
         setChartScores([]);
-        setError(err?.message || 'Failed to load top 100 scores.');
+        setChartError(err?.message || 'Failed to load top 100 scores.');
       } finally {
         if (!cancelled) setChartLoading(false);
       }
     };
     loadChart();
     return () => { cancelled = true; };
-  }, [selectedChartKey]);
+  }, [isModalOpen, activeChartKey]);
 
   const filteredCharts = useMemo(() => {
+    const normalizedMode = modeFilter === 'single' ? 'Single' : modeFilter === 'double' ? 'Double' : '';
     const q = String(search || '').trim().toLowerCase();
-    if (!q) return charts;
-    return charts.filter((chart) => String(chart?.song_title || '').toLowerCase().includes(q));
-  }, [charts, search]);
+    return charts.filter((chart) => {
+      if (normalizedMode && String(chart?.mode || '').trim() !== normalizedMode) return false;
+      if (!q) return true;
+      return String(chart?.song_title || '').toLowerCase().includes(q);
+    });
+  }, [charts, search, modeFilter]);
+
+  const modalPermalink = useMemo(() => {
+    if (!activeChartKey) return '';
+    const params = new URLSearchParams();
+    params.set('tab', 'over20');
+    if (selectedLevel) params.set('level', String(selectedLevel));
+    params.set('chart_key', String(activeChartKey));
+    if (activeChart?.song_title) params.set('song', String(activeChart.song_title));
+    if (activeChart?.mode) params.set('mode', String(activeChart.mode));
+    return `/leaderboards?${params.toString()}`;
+  }, [selectedLevel, activeChartKey, activeChart?.song_title, activeChart?.mode]);
+
+  const openChartModal = (chart) => {
+    if (!chart?.chart_key) return;
+    setActiveChartKey(String(chart.chart_key));
+    setActiveChart(chart);
+    setChartScores([]);
+    setChartError('');
+    setIsModalOpen(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -676,7 +876,14 @@ function Over20RankingsTab({ initialSelection = null }) {
         <label className="text-xs text-gray-500 font-display">Level</label>
         <select
           value={selectedLevel}
-          onChange={(event) => setSelectedLevel(event.target.value)}
+          onChange={(event) => {
+            setSelectedLevel(event.target.value);
+            setIsModalOpen(false);
+            setActiveChartKey('');
+            setActiveChart(null);
+            setChartScores([]);
+            setChartError('');
+          }}
           className="input-field max-w-[180px]"
         >
           {levels.map((row) => (
@@ -692,6 +899,35 @@ function Over20RankingsTab({ initialSelection = null }) {
           className="input-field flex-1 min-w-[180px]"
           placeholder="Search songs in this level..."
         />
+        <div className="inline-flex items-center rounded-lg border border-piu-border/60 bg-piu-dark p-0.5">
+          <button
+            type="button"
+            onClick={() => setModeFilter('all')}
+            className={`px-2.5 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+              modeFilter === 'all' ? 'bg-piu-accent text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            onClick={() => setModeFilter('single')}
+            className={`px-2.5 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+              modeFilter === 'single' ? 'bg-red-500/85 text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Singles
+          </button>
+          <button
+            type="button"
+            onClick={() => setModeFilter('double')}
+            className={`px-2.5 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+              modeFilter === 'double' ? 'bg-green-500/85 text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Doubles
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -700,75 +936,56 @@ function Over20RankingsTab({ initialSelection = null }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4">
-        <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
-          <div className="px-3 py-2 border-b border-piu-border/40 text-xs font-display font-bold text-gray-400">
-            Songs ({filteredCharts.length})
-          </div>
-          <div className="max-h-[60vh] overflow-y-auto">
-            {chartsLoading ? (
-              <p className="px-3 py-4 text-xs text-gray-500">Loading songs...</p>
-            ) : filteredCharts.length === 0 ? (
-              <p className="px-3 py-4 text-xs text-gray-500">No songs found for this level.</p>
-            ) : filteredCharts.map((chart) => (
-              <button
-                key={chart.chart_key}
-                type="button"
-                onClick={() => setSelectedChartKey(chart.chart_key)}
-                className={`w-full px-3 py-2 text-left border-b border-piu-border/20 last:border-b-0 hover:bg-piu-dark/30 transition-colors ${
-                  selectedChartKey === chart.chart_key ? 'bg-piu-dark/40' : ''
-                }`}
-              >
-                <p className="text-sm font-display font-bold text-gray-100">{chart.song_title}</p>
-                <p className="text-[11px] text-gray-500">{chart.mode} {chart.level}</p>
-              </button>
-            ))}
-          </div>
+      <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
+        <div className="px-3 py-2 border-b border-piu-border/40 text-xs font-display font-bold text-gray-400">
+          Songs ({filteredCharts.length}) • Tap a jacket to view Top 100
         </div>
-
-        <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
-          <div className="px-3 py-2 border-b border-piu-border/40 flex items-center gap-2">
-            {selectedChart?.jacket_url ? (
-              <img src={selectedChart.jacket_url} alt="" className="w-9 h-9 rounded object-cover border border-piu-border/40" />
-            ) : (
-              <div className="w-9 h-9 rounded bg-piu-dark border border-piu-border/40" />
-            )}
-            <div className="min-w-0">
-              <p className="text-sm font-display font-bold text-gray-100 truncate">{selectedChart?.song_title || 'Select a chart'}</p>
-              <p className="text-[11px] text-gray-500">{selectedChart ? `${selectedChart.mode} ${selectedChart.level}` : ''}</p>
+        <div className="max-h-[70vh] overflow-y-auto p-3">
+          {chartsLoading ? (
+            <p className="px-1 py-4 text-xs text-gray-500">Loading songs...</p>
+          ) : filteredCharts.length === 0 ? (
+            <p className="px-1 py-4 text-xs text-gray-500">No songs found for this level.</p>
+          ) : (
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+              {filteredCharts.map((chart) => {
+                const isActive = isModalOpen && activeChartKey === chart.chart_key;
+                return (
+                  <button
+                    key={chart.chart_key}
+                    type="button"
+                    onClick={() => openChartModal(chart)}
+                    className={`rounded-lg border p-1.5 text-left transition-colors ${
+                      isActive
+                        ? 'border-piu-accent/70 bg-piu-accent/10'
+                        : 'border-piu-border/40 bg-piu-dark/35 hover:border-piu-accent/45 hover:bg-piu-dark/55'
+                    }`}
+                  >
+                    <div className="flex justify-center">
+                      <OverChartJacket chart={chart} size="md" />
+                    </div>
+                    <p className="mt-1 text-[10px] font-display font-bold text-gray-200 leading-tight max-h-8 overflow-hidden">
+                      {chart.song_title}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {chart.mode === 'Single' ? 'Single' : chart.mode === 'Double' ? 'Double' : chart.mode}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
-          </div>
-
-          <div className="max-h-[60vh] overflow-y-auto">
-            {chartLoading ? (
-              <p className="px-3 py-4 text-xs text-gray-500">Loading top 100...</p>
-            ) : chartScores.length === 0 ? (
-              <p className="px-3 py-4 text-xs text-gray-500">No top 100 rows available.</p>
-            ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-piu-dark/70 sticky top-0">
-                  <tr className="border-b border-piu-border/40">
-                    <th className="px-2 py-2 text-left text-gray-400 font-display">#</th>
-                    <th className="px-2 py-2 text-left text-gray-400 font-display">Player</th>
-                    <th className="px-2 py-2 text-right text-gray-400 font-display">Score</th>
-                    <th className="px-2 py-2 text-right text-gray-400 font-display">Grade</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {chartScores.map((score) => (
-                    <tr key={`${score.rank}-${score.player_name}-${score.score}`} className="border-b border-piu-border/20 last:border-b-0">
-                      <td className="px-2 py-1.5 font-mono text-gray-500">#{score.rank}</td>
-                      <td className="px-2 py-1.5 text-gray-200">{score.player_name || '-'}</td>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(score.score)}</td>
-                      <td className={`px-2 py-1.5 text-right font-display font-bold ${getGradeColorClass(score.grade)}`}>{score.grade || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          )}
         </div>
       </div>
+
+      <Over20Top100Modal
+        open={isModalOpen}
+        chart={activeChart}
+        scores={chartScores}
+        loading={chartLoading}
+        error={chartError}
+        permalink={modalPermalink}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 }
@@ -814,42 +1031,68 @@ function MyTop100Tab() {
       ) : rows.length === 0 ? (
         <p className="text-center text-gray-500 py-8 font-display text-sm">You do not have any tracked Top 100 scores yet.</p>
       ) : (
-        <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
-          <table className="w-full text-xs">
-            <thead className="bg-piu-dark/70">
-              <tr className="border-b border-piu-border/40">
-                <th className="px-2 py-2 text-left text-gray-400 font-display">Song</th>
-                <th className="px-2 py-2 text-right text-gray-400 font-display">Score</th>
-                <th className="px-2 py-2 text-right text-gray-400 font-display">Grade</th>
-                <th className="px-2 py-2 text-right text-gray-400 font-display">Rank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={`${row.id}-${row.song_title}-${row.mode}-${row.level}`} className="border-b border-piu-border/20 last:border-b-0">
-                  <td className="px-2 py-1.5">
-                    <div className="flex items-center gap-2">
-                      {row.jacket_url ? (
-                        <img src={row.jacket_url} alt="" className="w-9 h-9 rounded object-cover border border-piu-border/40" />
-                      ) : (
-                        <div className="w-9 h-9 rounded bg-piu-dark border border-piu-border/40" />
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-sm font-display font-bold text-gray-100 truncate">{row.song_title}</p>
-                        <p className="text-[11px] text-gray-500">{row.mode} {row.level}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(row.score)}</td>
-                  <td className={`px-2 py-1.5 text-right font-display font-bold ${getGradeColorClass(row.grade)}`}>{row.grade || '-'}</td>
-                  <td className="px-2 py-1.5 text-right font-mono text-piu-gold">
-                    #{row.over_top100_rank}/{row.top100_count || 100}
-                  </td>
+        <>
+          <div className="md:hidden space-y-2">
+            {rows.map((row) => (
+              <div key={`${row.id}-${row.song_title}-${row.mode}-${row.level}`} className="rounded-lg border border-piu-border/45 bg-piu-card/35 px-2.5 py-2.5">
+                <div className="flex items-start gap-2.5">
+                  <OverChartJacket chart={row} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-display font-bold text-gray-100 leading-tight break-words">{row.song_title}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">{row.mode}</p>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <div className="rounded border border-piu-border/35 bg-piu-dark/45 px-2 py-1.5">
+                    <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Score</p>
+                    <p className="font-mono text-[13px] text-gray-100 whitespace-nowrap">{formatNumber(row.score)}</p>
+                  </div>
+                  <div className="rounded border border-piu-border/35 bg-piu-dark/45 px-2 py-1.5">
+                    <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Grade</p>
+                    <p className={`font-display font-bold text-[13px] whitespace-nowrap ${getGradeColorClass(row.grade)}`}>{row.grade || '-'}</p>
+                  </div>
+                  <div className="rounded border border-piu-border/35 bg-piu-dark/45 px-2 py-1.5">
+                    <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Rank</p>
+                    <p className="font-mono text-[13px] text-piu-gold whitespace-nowrap">#{row.over_top100_rank}/{row.top100_count || 100}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden md:block rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-piu-dark/70">
+                <tr className="border-b border-piu-border/40">
+                  <th className="px-2 py-2 text-left text-gray-400 font-display">Song</th>
+                  <th className="px-2 py-2 text-right text-gray-400 font-display">Score</th>
+                  <th className="px-2 py-2 text-right text-gray-400 font-display">Grade</th>
+                  <th className="px-2 py-2 text-right text-gray-400 font-display">Rank</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={`${row.id}-${row.song_title}-${row.mode}-${row.level}`} className="border-b border-piu-border/20 last:border-b-0">
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <OverChartJacket chart={row} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-display font-bold text-gray-100 truncate">{row.song_title}</p>
+                          <p className="text-[11px] text-gray-500">{row.mode}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-mono text-gray-200 whitespace-nowrap">{formatNumber(row.score)}</td>
+                    <td className={`px-2 py-1.5 text-right font-display font-bold whitespace-nowrap ${getGradeColorClass(row.grade)}`}>{row.grade || '-'}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-piu-gold whitespace-nowrap">
+                      #{row.over_top100_rank}/{row.top100_count || 100}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       <div className="flex items-center justify-end gap-2">

@@ -166,8 +166,8 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
               <span className={`font-display font-bold text-base ${score.mode === 'Single' ? 'text-red-300' : score.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{score.level}</span>
             </div>
             {overRank > 0 && (
-              <span className="px-2 py-0.5 rounded-full border border-piu-gold/50 bg-piu-gold/10 text-piu-gold text-[10px] font-display font-black">
-                OVER #{overRank}
+              <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
+                TOP #{overRank}
               </span>
             )}
             <div className="text-center flex-1">
@@ -599,8 +599,8 @@ export function SingleUpscorePage() {
                   <div className="flex items-center gap-1 mt-0.5">
                     <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>{isSingle ? 'S' : 'D'}{u.level}</span>
                     {overRank > 0 && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
-                        OVER #{overRank}
+                      <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
+                        TOP #{overRank}
                       </span>
                     )}
                     {songPumbilityGain > 0 && (
@@ -756,8 +756,8 @@ export function SingleClearPage() {
                       {isSingle ? 'S' : clear.mode === 'Double' ? 'D' : 'C'}{clear.level}
                     </span>
                     {overRank > 0 && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
-                        OVER #{overRank}
+                      <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
+                        TOP #{overRank}
                       </span>
                     )}
                     {clear.plate && <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>}
