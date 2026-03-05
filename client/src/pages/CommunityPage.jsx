@@ -2677,23 +2677,120 @@ function AboutTab({ community }) {
 
 // ─── Members Tab ─────────────────────────────────────
 
+function CompetitiveLevelInfoModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
+          <h3 className="font-display font-bold tracking-wide text-sm">Competitive Level</h3>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+        <div className="px-4 py-4 text-sm text-gray-300 leading-relaxed space-y-3">
+          <p>
+            The competitive level is defined as the level of a folder for which your average score
+            across cleared songs is 970,000 (Grade S) or better. You must also clear at least 50%
+            of charts in that folder.
+          </p>
+          <p className="text-xs text-gray-500">
+            A folder is just the songs within a mode and level. For instance the S23 folder, or D23 folder etc.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const LEADERBOARD_GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
+const LEADERBOARD_GRADE_INDEX = Object.fromEntries(LEADERBOARD_GRADE_ORDER.map((grade, idx) => [grade, idx]));
+
+function getLeaderboardGradeSortValue(grade) {
+  const normalized = String(grade || '').trim().toUpperCase();
+  return LEADERBOARD_GRADE_INDEX[normalized] ?? -1;
+}
+
+function getHighestCompetitiveLevel(member) {
+  const singleLevel = parseInt(member?.singles_competitive_level, 10) || 0;
+  const doubleLevel = parseInt(member?.doubles_competitive_level, 10) || 0;
+  if (singleLevel <= 0 && doubleLevel <= 0) {
+    return { value: 0, label: '--', colorClass: 'text-gray-500' };
+  }
+  if (doubleLevel > singleLevel) {
+    return { value: doubleLevel, label: `D${doubleLevel}`, colorClass: 'text-green-300' };
+  }
+  return { value: singleLevel, label: `S${singleLevel}`, colorClass: 'text-red-300' };
+}
+
+function LeaderboardSortHeader({ label, sortKey, activeSortKey, sortDirection, onSort }) {
+  const isActive = activeSortKey === sortKey;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      className={`inline-flex items-center gap-1.5 text-left text-[11px] font-display font-bold tracking-wide uppercase transition-colors ${
+        isActive ? 'text-piu-accent' : 'text-gray-400 hover:text-gray-200'
+      }`}
+    >
+      <span>{label}</span>
+      <span className="font-mono text-[10px]">{isActive ? (sortDirection === 'desc' ? '↓' : '↑') : '↕'}</span>
+    </button>
+  );
+}
+
 function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) {
   const [openBreakdown, setOpenBreakdown] = useState(null);
+  const [showCompInfo, setShowCompInfo] = useState(false);
+  const [sortKey, setSortKey] = useState('pumbility');
+  const [sortDirection, setSortDirection] = useState('desc');
   const normalizedMetric = metric === 'singles' ? 'singles' : 'overall';
+
+  const getMetricValues = (member) => {
+    const isSingles = normalizedMetric === 'singles';
+    const pumbilityValue = isSingles
+      ? (parseInt(member?.singles_pumbility, 10) || 0)
+      : (parseInt(member?.overall_pumbility, 10) || parseInt(member?.pumbility, 10) || 0);
+    const averageGrade = isSingles
+      ? (member?.singles_average_grade || '--')
+      : (member?.overall_average_grade || '--');
+    const averageLevel = isSingles
+      ? (Number(member?.singles_average_level) || 0)
+      : (Number(member?.overall_average_level) || 0);
+    const breakdownCount = isSingles
+      ? (Array.isArray(member?.singles_breakdown) ? member.singles_breakdown.length : 0)
+      : (Array.isArray(member?.overall_breakdown) ? member.overall_breakdown.length : 0);
+    const competitiveLevel = getHighestCompetitiveLevel(member);
+    return {
+      pumbilityValue,
+      averageGrade,
+      averageGradeValue: getLeaderboardGradeSortValue(averageGrade),
+      averageLevel,
+      breakdownCount,
+      competitiveLevel,
+    };
+  };
 
   const sortedRows = useMemo(() => {
     const list = Array.isArray(rows) ? [...rows] : [];
     return list.sort((a, b) => {
-      const aValue = normalizedMetric === 'singles'
-        ? (parseInt(a?.singles_pumbility, 10) || 0)
-        : (parseInt(a?.overall_pumbility, 10) || parseInt(a?.pumbility, 10) || 0);
-      const bValue = normalizedMetric === 'singles'
-        ? (parseInt(b?.singles_pumbility, 10) || 0)
-        : (parseInt(b?.overall_pumbility, 10) || parseInt(b?.pumbility, 10) || 0);
-      if (bValue !== aValue) return bValue - aValue;
+      const metricsA = getMetricValues(a);
+      const metricsB = getMetricValues(b);
+      let comparison = 0;
+
+      if (sortKey === 'avg_grade') comparison = metricsA.averageGradeValue - metricsB.averageGradeValue;
+      else if (sortKey === 'avg_level') comparison = metricsA.averageLevel - metricsB.averageLevel;
+      else if (sortKey === 'competitive_level') comparison = metricsA.competitiveLevel.value - metricsB.competitiveLevel.value;
+      else comparison = metricsA.pumbilityValue - metricsB.pumbilityValue;
+
+      if (comparison !== 0) return sortDirection === 'asc' ? comparison : -comparison;
       return String(a?.username || '').localeCompare(String(b?.username || ''), undefined, { sensitivity: 'base' });
     });
-  }, [rows, normalizedMetric]);
+  }, [rows, normalizedMetric, sortKey, sortDirection]);
 
   const handleOpenBreakdown = (member) => {
     const isSingles = normalizedMetric === 'singles';
@@ -2707,6 +2804,15 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
         : `${member.username} • Pumbility Top Songs`,
       rows: breakdownRows,
     });
+  };
+
+  const handleSort = (nextKey) => {
+    if (nextKey === sortKey) {
+      setSortDirection((prev) => (prev === 'desc' ? 'asc' : 'desc'));
+      return;
+    }
+    setSortKey(nextKey);
+    setSortDirection('desc');
   };
 
   return (
@@ -2740,6 +2846,10 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
         </button>
       </div>
 
+      <p className="text-[11px] text-gray-500 mb-3">
+        Click a column header to switch between high-to-low and low-to-high sorting.
+      </p>
+
       {loading ? (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-piu-accent border-t-transparent rounded-full animate-spin" />
@@ -2751,90 +2861,125 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
       ) : sortedRows.length === 0 ? (
         <p className="text-center text-gray-500 py-8 font-display text-sm">No leaderboard data available yet</p>
       ) : (
-        <div className="space-y-1.5">
-          {sortedRows.map((member, index) => {
-            const isSingles = normalizedMetric === 'singles';
-            const pumbilityValue = isSingles
-              ? (parseInt(member?.singles_pumbility, 10) || 0)
-              : (parseInt(member?.overall_pumbility, 10) || parseInt(member?.pumbility, 10) || 0);
-            const averageGrade = isSingles
-              ? (member?.singles_average_grade || '--')
-              : (member?.overall_average_grade || '--');
-            const averageLevel = isSingles
-              ? (Number(member?.singles_average_level) || 0)
-              : (Number(member?.overall_average_level) || 0);
-            const competitiveLevel = isSingles
-              ? (parseInt(member?.singles_competitive_level, 10) || null)
-              : (parseInt(member?.doubles_competitive_level, 10) || null);
-            const breakdownCount = isSingles
-              ? (Array.isArray(member?.singles_breakdown) ? member.singles_breakdown.length : 0)
-              : (Array.isArray(member?.overall_breakdown) ? member.overall_breakdown.length : 0);
-
-            return (
-              <div
-                key={member.id}
-                className="flex items-center gap-2.5 p-3 rounded-lg border border-piu-border/40 bg-piu-card/35"
-              >
-                <div className="w-8 shrink-0 text-right">
-                  <span className="text-sm font-mono text-gray-500">#{index + 1}</span>
-                </div>
-
-                <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
-                  {member.avatar ? (
-                    <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-10 h-10 rounded-full object-cover border border-piu-border/40" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm border border-piu-border/40">
-                      {member.username?.[0]?.toUpperCase()}
-                    </div>
-                  )}
-                </Link>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <Link to={getProfilePath(member.id, member.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
-                      {member.username}
-                    </Link>
-                    <BadgeList badges={member.badges} />
-                    {member.nationality && <span className="text-sm">{getCountryFlag(member.nationality)}</span>}
-                    {member.role === 'owner' && (
-                      <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-gold/20 text-piu-gold">Owner</span>
-                    )}
-                    {member.role === 'moderator' && (
-                      <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-blue/20 text-piu-blue">Mod</span>
-                    )}
-                    <CommunityTagList tags={member.tags} />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenBreakdown(member)}
-                      disabled={pumbilityValue <= 0 || breakdownCount === 0}
-                      className={`font-mono font-bold transition-colors ${
-                        pumbilityValue > 0 && breakdownCount > 0
-                          ? 'text-piu-accent hover:text-piu-gold underline underline-offset-2'
-                          : 'text-gray-500 cursor-default'
-                      }`}
-                    >
-                      {pumbilityValue > 0 ? formatNumber(pumbilityValue) : '--'}
-                    </button>
-                    <span className="text-gray-500">
-                      Avg grade: <span className="font-display font-bold text-gray-300">{averageGrade}</span>
-                    </span>
-                    <span className="text-gray-500">
-                      Avg level: <span className="font-display font-bold text-gray-300">{averageLevel > 0 ? averageLevel.toFixed(1) : '--'}</span>
-                    </span>
-                    <span className="text-gray-500">
-                      {isSingles ? 'Singles comp level:' : 'Doubles comp level:'}
-                      {' '}
-                      <span className={`font-display font-bold ${isSingles ? 'text-red-300' : 'text-green-300'}`}>
-                        {competitiveLevel ? `${isSingles ? 'S' : 'D'}${competitiveLevel}` : '--'}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px]">
+              <thead className="bg-piu-dark/70">
+                <tr className="border-b border-piu-border/50">
+                  <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-14">#</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 min-w-[260px]">Player</th>
+                  <th className="px-3 py-2 text-left">
+                    <LeaderboardSortHeader
+                      label="Pumbility"
+                      sortKey="pumbility"
+                      activeSortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left">
+                    <LeaderboardSortHeader
+                      label="Avg Grade"
+                      sortKey="avg_grade"
+                      activeSortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left">
+                    <LeaderboardSortHeader
+                      label="Avg Level"
+                      sortKey="avg_level"
+                      activeSortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left">
+                    <LeaderboardSortHeader
+                      label="Competitive Level"
+                      sortKey="competitive_level"
+                      activeSortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRows.map((member, index) => {
+                  const metrics = getMetricValues(member);
+                  const pumbilityCanOpen = metrics.pumbilityValue > 0 && metrics.breakdownCount > 0;
+                  return (
+                    <tr key={member.id} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
+                      <td className="px-3 py-2.5 text-sm font-mono text-gray-500">#{index + 1}</td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
+                            {member.avatar ? (
+                              <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                                {member.username?.[0]?.toUpperCase()}
+                              </div>
+                            )}
+                          </Link>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Link to={getProfilePath(member.id, member.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                                {member.username}
+                              </Link>
+                              <BadgeList badges={member.badges} />
+                              {member.nationality && <span className="text-sm">{getCountryFlag(member.nationality)}</span>}
+                              {member.role === 'owner' && (
+                                <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-gold/20 text-piu-gold">Owner</span>
+                              )}
+                              {member.role === 'moderator' && (
+                                <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-blue/20 text-piu-blue">Mod</span>
+                              )}
+                            </div>
+                            <CommunityTagList tags={member.tags} />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenBreakdown(member)}
+                          disabled={!pumbilityCanOpen}
+                          className={`font-mono font-bold transition-colors ${
+                            pumbilityCanOpen
+                              ? 'text-piu-accent hover:text-piu-gold underline underline-offset-2'
+                              : 'text-gray-500 cursor-default'
+                          }`}
+                        >
+                          {metrics.pumbilityValue > 0 ? formatNumber(metrics.pumbilityValue) : '--'}
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={`font-display font-bold text-sm ${metrics.averageGrade !== '--' ? getGradeColorClass(metrics.averageGrade) : 'text-gray-500'}`}>
+                          {metrics.averageGrade || '--'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-sm font-mono text-gray-300">
+                        {metrics.averageLevel > 0 ? metrics.averageLevel.toFixed(1) : '--'}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setShowCompInfo(true)}
+                          className={`font-display font-bold text-sm underline decoration-dotted underline-offset-2 transition-colors hover:text-piu-accent ${metrics.competitiveLevel.colorClass}`}
+                          title="Show competitive level explanation"
+                        >
+                          {metrics.competitiveLevel.label}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -2844,6 +2989,7 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
         rows={openBreakdown?.rows || []}
         onClose={() => setOpenBreakdown(null)}
       />
+      <CompetitiveLevelInfoModal open={showCompInfo} onClose={() => setShowCompInfo(false)} />
     </div>
   );
 }
