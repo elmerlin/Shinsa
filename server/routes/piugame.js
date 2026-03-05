@@ -983,6 +983,7 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
 
 async function refreshOverRankingCache(db, options = {}) {
   const force = !!options.force;
+  const backfillOnly = parseBoolean(options.backfillOnly) === true;
   const maxAgeMinutes = Number.isFinite(parseInt(options.maxAgeMinutes, 10))
     ? Math.max(0, parseInt(options.maxAgeMinutes, 10))
     : 1440;
@@ -993,6 +994,41 @@ async function refreshOverRankingCache(db, options = {}) {
     WHERE id = 1
   `).get();
   const hasUsableCache = !!(currentMeta && parseInt(currentMeta.total_charts, 10) > 0);
+  if (backfillOnly) {
+    if (!hasUsableCache) {
+      return {
+        total_charts: 0,
+        total_entries: 0,
+        source_pages: 0,
+        last_sync: null,
+        backfill: {
+          best_scores_checked: 0,
+          best_scores_updated: 0,
+          pumbility_scores_checked: 0,
+          pumbility_scores_updated: 0,
+          recent_scores_checked: 0,
+          recent_scores_updated: 0,
+          total_checked: 0,
+          total_updated: 0,
+        },
+        cached: true,
+        backfill_only: true,
+      };
+    }
+
+    const overLookup = buildOverRankingLookup(db);
+    const backfill = backfillStoredOverTop100Ranks(db, overLookup);
+    return {
+      total_charts: parseInt(currentMeta.total_charts, 10) || 0,
+      total_entries: parseInt(currentMeta.total_entries, 10) || 0,
+      source_pages: parseInt(currentMeta.source_pages, 10) || 0,
+      last_sync: currentMeta.last_sync || null,
+      backfill,
+      cached: true,
+      backfill_only: true,
+    };
+  }
+
   if (!force && hasUsableCache && !isLeaderboardRefreshNeeded(currentMeta.last_sync, maxAgeMinutes)) {
     return {
       total_charts: parseInt(currentMeta.total_charts, 10) || 0,
@@ -1148,11 +1184,13 @@ function getNextOverRankingNightlyRun(now, hour, minute) {
 
 async function runOverRankingSyncNow(options = {}) {
   const db = getDb();
-  const force = parseBoolean(options.force) !== false;
+  const backfillOnly = parseBoolean(options.backfillOnly) === true;
+  const force = backfillOnly ? false : parseBoolean(options.force) !== false;
   const reason = String(options.reason || 'manual').trim() || 'manual';
   const startedAtMs = Date.now();
   const refreshed = await refreshOverRankingCache(db, {
     force,
+    backfillOnly,
     maxAgeMinutes: 1440,
   });
   const durationMs = Date.now() - startedAtMs;
@@ -1161,6 +1199,7 @@ async function runOverRankingSyncNow(options = {}) {
     duration_ms: durationMs,
     reason,
     force,
+    backfill_only: backfillOnly,
   };
 }
 
@@ -3123,8 +3162,10 @@ router.post('/sync/over-ranking', requireAuth, async (req, res) => {
   try {
     const db = getDb();
     const force = parseBoolean(req.query?.force ?? req.body?.force) === true;
+    const backfillOnly = parseBoolean(req.query?.backfill_only ?? req.body?.backfill_only) === true;
     const refreshed = await refreshOverRankingCache(db, {
-      force,
+      force: backfillOnly ? false : force,
+      backfillOnly,
       maxAgeMinutes: 1440,
     });
     res.json({
@@ -3135,6 +3176,7 @@ router.post('/sync/over-ranking', requireAuth, async (req, res) => {
       last_sync: refreshed.last_sync || null,
       backfill: refreshed.backfill || null,
       cached: !!refreshed.cached,
+      backfill_only: !!refreshed.backfill_only,
     });
   } catch (err) {
     console.error('Over ranking sync error:', err.message);
