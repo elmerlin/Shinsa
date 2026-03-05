@@ -682,6 +682,10 @@ router.get('/:id/members', (req, res) => {
 
   const members = db.prepare(`
     SELECT cm.role, cm.joined_at, u.id, u.username, u.avatar, u.pumbility, u.skill_title, u.nationality,
+           cpr.current_rank AS community_rank,
+           cpr.prev_rank AS community_prev_rank,
+           cpr.rank_delta AS community_rank_delta,
+           cpr.last_sync AS community_rank_last_sync,
            (
              SELECT COUNT(*)
              FROM community_posts cp
@@ -708,6 +712,9 @@ router.get('/:id/members', (req, res) => {
            ) as recent_activity_count
     FROM community_members cm
     JOIN users u ON cm.user_id = u.id
+    LEFT JOIN community_pumbility_rankings cpr
+      ON cpr.community_id = cm.community_id
+     AND cpr.user_id = cm.user_id
     WHERE cm.community_id = ?
     ORDER BY
       CASE cm.role WHEN 'owner' THEN 0 WHEN 'moderator' THEN 1 ELSE 2 END,

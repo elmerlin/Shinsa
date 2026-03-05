@@ -1081,6 +1081,8 @@ function initializeDb() {
       player_name TEXT NOT NULL,
       pumbility INTEGER NOT NULL DEFAULT 0,
       avatar_url TEXT DEFAULT '',
+      prev_rank INTEGER NOT NULL DEFAULT 0,
+      rank_delta INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (rank)
     );
 
@@ -1110,6 +1112,8 @@ function initializeDb() {
       grade TEXT DEFAULT '',
       player_name TEXT DEFAULT '',
       player_avatar_url TEXT DEFAULT '',
+      prev_rank INTEGER NOT NULL DEFAULT 0,
+      rank_delta INTEGER NOT NULL DEFAULT 0,
       played_at TEXT DEFAULT '',
       PRIMARY KEY (chart_key, rank)
     );
@@ -1251,9 +1255,11 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_pumbility_scores_user ON user_pumbility_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
+    CREATE INDEX IF NOT EXISTS idx_pumbility_leaderboard_player_name ON pumbility_leaderboard(player_name);
     CREATE INDEX IF NOT EXISTS idx_over_level_rankings_song_mode_level ON over_level_rankings(song_title, mode, level);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_name ON over_level_ranking_scores(player_name);
+    CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_chart ON over_level_ranking_scores(player_name, chart_key);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_started_at ON over_level_sync_runs(datetime(started_at) DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_type ON over_level_sync_runs(run_type, datetime(started_at) DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_user_shoes_user ON user_shoes(user_id);
@@ -1692,6 +1698,17 @@ function initializeDb() {
       PRIMARY KEY (community_id, user_id)
     );
 
+    CREATE TABLE IF NOT EXISTS community_pumbility_rankings (
+      community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      current_rank INTEGER NOT NULL DEFAULT 0,
+      prev_rank INTEGER NOT NULL DEFAULT 0,
+      rank_delta INTEGER NOT NULL DEFAULT 0,
+      pumbility INTEGER NOT NULL DEFAULT 0,
+      last_sync TEXT DEFAULT '',
+      PRIMARY KEY (community_id, user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS community_role_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
@@ -1774,6 +1791,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_communities_owner ON communities(owner_id);
     CREATE INDEX IF NOT EXISTS idx_community_members_community ON community_members(community_id);
     CREATE INDEX IF NOT EXISTS idx_community_members_user ON community_members(user_id);
+    CREATE INDEX IF NOT EXISTS idx_community_pumbility_rankings_community_rank ON community_pumbility_rankings(community_id, current_rank ASC);
+    CREATE INDEX IF NOT EXISTS idx_community_pumbility_rankings_user ON community_pumbility_rankings(user_id);
     CREATE INDEX IF NOT EXISTS idx_community_role_events_user ON community_role_events(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_community_role_events_community ON community_role_events(community_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_community_tags_community ON community_tags(community_id);
@@ -2027,6 +2046,8 @@ function initializeDb() {
       grade TEXT DEFAULT '',
       player_name TEXT DEFAULT '',
       player_avatar_url TEXT DEFAULT '',
+      prev_rank INTEGER NOT NULL DEFAULT 0,
+      rank_delta INTEGER NOT NULL DEFAULT 0,
       played_at TEXT DEFAULT '',
       PRIMARY KEY (chart_key, rank)
     );
@@ -2055,11 +2076,25 @@ function initializeDb() {
   if (!pumbilityLeaderboardCols.includes('avatar_url')) {
     db.exec("ALTER TABLE pumbility_leaderboard ADD COLUMN avatar_url TEXT DEFAULT ''");
   }
+  if (!pumbilityLeaderboardCols.includes('prev_rank')) {
+    db.exec("ALTER TABLE pumbility_leaderboard ADD COLUMN prev_rank INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!pumbilityLeaderboardCols.includes('rank_delta')) {
+    db.exec("ALTER TABLE pumbility_leaderboard ADD COLUMN rank_delta INTEGER NOT NULL DEFAULT 0");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_pumbility_leaderboard_player_name ON pumbility_leaderboard(player_name)");
 
   const overRankingScoreCols = db.prepare("PRAGMA table_info(over_level_ranking_scores)").all().map((c) => c.name);
   if (!overRankingScoreCols.includes('player_avatar_url')) {
     db.exec("ALTER TABLE over_level_ranking_scores ADD COLUMN player_avatar_url TEXT DEFAULT ''");
   }
+  if (!overRankingScoreCols.includes('prev_rank')) {
+    db.exec("ALTER TABLE over_level_ranking_scores ADD COLUMN prev_rank INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!overRankingScoreCols.includes('rank_delta')) {
+    db.exec("ALTER TABLE over_level_ranking_scores ADD COLUMN rank_delta INTEGER NOT NULL DEFAULT 0");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_chart ON over_level_ranking_scores(player_name, chart_key)");
 
   // Migrations for users table - add world map location fields
   const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);

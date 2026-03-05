@@ -59,6 +59,12 @@ function normalizeShoeColorway(value, max = 120) {
 const SCORE_TO_GRADE_ASC = [...SCORE_TO_GRADE].sort((a, b) => a.min - b.min);
 const LEADERBOARD_GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 const LEADERBOARD_GRADE_INDEX = Object.fromEntries(LEADERBOARD_GRADE_ORDER.map((grade, idx) => [grade, idx]));
+const PLAYER_SHEET_CACHE_TTL_MS = Math.max(30 * 1000, (parseInt(process.env.PLAYER_SHEET_CACHE_TTL_SECONDS, 10) || 300) * 1000);
+const playerSheetCache = new Map();
+
+function clearPlayerSheetCache() {
+  playerSheetCache.clear();
+}
 
 function getNextGradeThreshold(score) {
   const currentScore = parseInt(score, 10) || 0;
@@ -1314,6 +1320,17 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
     };
   }
 
+  const previousRows = db.prepare(`
+    SELECT rank, player_name
+    FROM pumbility_leaderboard
+  `).all();
+  const previousRankByName = new Map();
+  for (const row of previousRows) {
+    const nameKey = normalizeLeaderboardNameKey(row?.player_name);
+    if (!nameKey || previousRankByName.has(nameKey)) continue;
+    previousRankByName.set(nameKey, parseInt(row?.rank, 10) || 0);
+  }
+
   const { rankings, threshold } = await scrapePumbilityRanking();
   const normalizedThreshold = parseInt(threshold, 10) || 0;
   const normalizedRows = [];
@@ -1323,23 +1340,33 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
     if (!Number.isInteger(rank) || rank <= 0) continue;
     if (seenRanks.has(rank)) continue;
     seenRanks.add(rank);
+    const name = String(row?.player_name || '').trim();
+    const prevRank = previousRankByName.get(normalizeLeaderboardNameKey(name)) || 0;
+    const rankDelta = prevRank > 0 ? (prevRank - rank) : 0;
     normalizedRows.push({
       rank,
-      player_name: String(row?.player_name || '').trim(),
+      player_name: name,
       pumbility: parseInt(row?.pumbility, 10) || 0,
       avatar_url: String(row?.avatar_url || '').trim(),
+      prev_rank: prevRank,
+      rank_delta: rankDelta,
     });
   }
 
   const txn = db.transaction(() => {
     db.prepare('DELETE FROM pumbility_leaderboard').run();
-    const insert = db.prepare('INSERT INTO pumbility_leaderboard (rank, player_name, pumbility, avatar_url) VALUES (?, ?, ?, ?)');
+    const insert = db.prepare(`
+      INSERT INTO pumbility_leaderboard (rank, player_name, pumbility, avatar_url, prev_rank, rank_delta)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
     for (const row of normalizedRows) {
       insert.run(
         row.rank,
         row.player_name,
         row.pumbility,
-        row.avatar_url
+        row.avatar_url,
+        row.prev_rank,
+        row.rank_delta
       );
     }
     db.prepare(`
@@ -1352,6 +1379,7 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
     `).run(normalizedThreshold, normalizedRows.length);
   });
   txn();
+  clearPlayerSheetCache();
 
   const refreshedMeta = db.prepare('SELECT threshold, total_entries, last_sync FROM pumbility_leaderboard_meta WHERE id = 1').get();
   return {
@@ -1425,6 +1453,25 @@ async function refreshOverRankingCache(db, options = {}) {
     };
   }
 
+  const previousRankByChartPlayer = new Map();
+  const previousScoreRows = db.prepare(`
+    SELECT chart_key, rank, player_name
+    FROM over_level_ranking_scores
+    WHERE score > 0
+  `).all();
+  for (const row of previousScoreRows) {
+    const chartKey = String(row?.chart_key || '').trim();
+    const playerNameKey = normalizeLeaderboardNameKey(row?.player_name);
+    if (!chartKey || !playerNameKey) continue;
+    const mapKey = `${chartKey}|${playerNameKey}`;
+    const previousRank = parseInt(row?.rank, 10) || 0;
+    if (!previousRank) continue;
+    const existingRank = previousRankByChartPlayer.get(mapKey);
+    if (!existingRank || previousRank < existingRank) {
+      previousRankByChartPlayer.set(mapKey, previousRank);
+    }
+  }
+
   const scraped = await scrapeOverRankingTop100(getOverRankingScrapeConfig());
 
   const normalizedChartMap = new Map();
@@ -1455,6 +1502,16 @@ async function refreshOverRankingCache(db, options = {}) {
         .map((row) => ({ ...row })),
     };
     candidate.top_scores = assignSharedScoreRanks(candidate.top_scores);
+    candidate.top_scores = candidate.top_scores.map((row) => {
+      const playerNameKey = normalizeLeaderboardNameKey(row?.player_name);
+      const mapKey = `${candidate.chart_key}|${playerNameKey}`;
+      const prevRank = previousRankByChartPlayer.get(mapKey) || 0;
+      return {
+        ...row,
+        prev_rank: prevRank,
+        rank_delta: prevRank > 0 ? (prevRank - (parseInt(row?.rank, 10) || 0)) : 0,
+      };
+    });
     if (candidate.top100_count <= 0) candidate.top100_count = candidate.top_scores.length;
     if (candidate.min_score <= 0 && candidate.top_scores.length > 0) {
       candidate.min_score = parseInt(candidate.top_scores[candidate.top_scores.length - 1].score, 10) || 0;
@@ -1485,8 +1542,8 @@ async function refreshOverRankingCache(db, options = {}) {
     `);
     const insertScore = db.prepare(`
       INSERT INTO over_level_ranking_scores (
-        chart_key, rank, score, grade, player_name, player_avatar_url, played_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        chart_key, rank, score, grade, player_name, player_avatar_url, prev_rank, rank_delta, played_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let totalEntries = 0;
@@ -1509,6 +1566,8 @@ async function refreshOverRankingCache(db, options = {}) {
           row.grade,
           row.player_name,
           row.player_avatar_url,
+          row.prev_rank || 0,
+          row.rank_delta || 0,
           row.played_at
         );
         totalEntries += 1;
@@ -1526,6 +1585,7 @@ async function refreshOverRankingCache(db, options = {}) {
     `).run(charts.length, totalEntries, parseInt(scraped?.total_pages, 10) || 0);
   });
   txn(normalizedCharts);
+  clearPlayerSheetCache();
 
   const refreshedMeta = db.prepare(`
     SELECT total_charts, total_entries, source_pages, last_sync
@@ -1545,6 +1605,81 @@ async function refreshOverRankingCache(db, options = {}) {
     backfill,
     backfill_duration_ms: backfillDurationMs,
     cached: false,
+  };
+}
+
+function refreshCommunityPumbilityRankings(db) {
+  const previousRows = db.prepare(`
+    SELECT community_id, user_id, current_rank
+    FROM community_pumbility_rankings
+  `).all();
+  const previousRankMap = new Map();
+  for (const row of previousRows) {
+    const communityId = String(row?.community_id || '').trim();
+    const userId = String(row?.user_id || '').trim();
+    if (!communityId || !userId) continue;
+    previousRankMap.set(`${communityId}|${userId}`, parseInt(row?.current_rank, 10) || 0);
+  }
+
+  const memberRows = db.prepare(`
+    SELECT cm.community_id, cm.user_id, cm.joined_at, COALESCE(u.pumbility, 0) AS pumbility, u.username
+    FROM community_members cm
+    JOIN users u ON u.id = cm.user_id
+    ORDER BY
+      cm.community_id ASC,
+      COALESCE(u.pumbility, 0) DESC,
+      datetime(cm.joined_at) ASC,
+      LOWER(TRIM(u.username)) ASC,
+      cm.user_id ASC
+  `).all();
+
+  const prepared = [];
+  let currentCommunityId = '';
+  let rankCounter = 0;
+  for (const row of memberRows) {
+    const communityId = String(row?.community_id || '').trim();
+    const userId = String(row?.user_id || '').trim();
+    if (!communityId || !userId) continue;
+    if (communityId !== currentCommunityId) {
+      currentCommunityId = communityId;
+      rankCounter = 0;
+    }
+    rankCounter += 1;
+
+    const prevRank = previousRankMap.get(`${communityId}|${userId}`) || 0;
+    prepared.push({
+      community_id: communityId,
+      user_id: userId,
+      current_rank: rankCounter,
+      prev_rank: prevRank,
+      rank_delta: prevRank > 0 ? (prevRank - rankCounter) : 0,
+      pumbility: parseInt(row?.pumbility, 10) || 0,
+    });
+  }
+
+  const txn = db.transaction((rows) => {
+    db.prepare('DELETE FROM community_pumbility_rankings').run();
+    const insert = db.prepare(`
+      INSERT INTO community_pumbility_rankings (
+        community_id, user_id, current_rank, prev_rank, rank_delta, pumbility, last_sync
+      ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `);
+    for (const row of rows) {
+      insert.run(
+        row.community_id,
+        row.user_id,
+        row.current_rank,
+        row.prev_rank,
+        row.rank_delta,
+        row.pumbility
+      );
+    }
+  });
+  txn(prepared);
+
+  return {
+    total_entries: prepared.length,
+    total_communities: new Set(prepared.map((row) => row.community_id)).size,
   };
 }
 
@@ -1691,11 +1826,13 @@ async function runPumbilityRankingSyncNow(options = {}) {
       force,
       maxAgeMinutes: 1440,
     });
+    const communityRefresh = refreshCommunityPumbilityRankings(db);
     const completedAtMs = Date.now();
     const completedAtIso = new Date(completedAtMs).toISOString();
     const durationMs = completedAtMs - startedAtMs;
     const payload = {
       ...refreshed,
+      community_rankings: communityRefresh,
       duration_ms: durationMs,
       reason,
       force,
@@ -1878,6 +2015,11 @@ function startPumbilityRankingNightlyScheduler() {
     };
   }
   pumbilityRankingNightlyStarted = true;
+  try {
+    refreshCommunityPumbilityRankings(getDb());
+  } catch (err) {
+    console.error('[PumbilityRanking] Failed to refresh community leaderboard snapshot:', err?.message || err);
+  }
   return {
     started: true,
     ...scheduleNextPumbilityRankingNightlyRun(),
@@ -2100,11 +2242,12 @@ router.post('/sync/pumbility', requireAuth, async (req, res) => {
 
     res.json({ success: true, pumbility_value: pumbilityValue, scores_count: scores.length });
 
-    // Also sync leaderboard in background (no login required, rate-limited to 1/hour)
+    // Also refresh leaderboard cache in background (daily cadence).
     (async () => {
       try {
-        const refreshed = await refreshPumbilityLeaderboardCache(db, { maxAgeMinutes: 60 });
+        const refreshed = await refreshPumbilityLeaderboardCache(db, { maxAgeMinutes: 1440 });
         if (!refreshed.cached) {
+          refreshCommunityPumbilityRankings(db);
           console.log(`Pumbility leaderboard synced: ${refreshed.total_entries} entries, threshold=${refreshed.threshold}`);
         }
       } catch (err) {
@@ -3609,7 +3752,10 @@ router.get('/pumbility/:userId', async (req, res) => {
     }
 
     try {
-      await refreshPumbilityLeaderboardCache(db, { maxAgeMinutes: 60 });
+      const refreshed = await refreshPumbilityLeaderboardCache(db, { maxAgeMinutes: 1440 });
+      if (!refreshed.cached) {
+        refreshCommunityPumbilityRankings(db);
+      }
     } catch (err) {
       console.error('Pumbility leaderboard refresh error:', err.message);
     }
@@ -3919,7 +4065,7 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
   const offset = (page - 1) * limit;
 
   const globalRows = db.prepare(`
-    SELECT rank, player_name, pumbility, avatar_url
+    SELECT rank, player_name, pumbility, avatar_url, prev_rank, rank_delta
     FROM pumbility_leaderboard
     WHERE rank BETWEEN 1 AND 1000
     ORDER BY rank ASC
@@ -3950,6 +4096,8 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
       nationality: local?.nationality || '',
       is_local_user: !!(local?.user_id),
       global_rank: globalRank,
+      global_prev_rank: parseInt(row.prev_rank, 10) || 0,
+      global_rank_delta: parseInt(row.rank_delta, 10) || 0,
       overall_pumbility: parseInt(row.pumbility, 10) || 0,
       singles_pumbility: parseInt(local?.singles_pumbility, 10) || 0,
       overall_average_grade: local?.overall_average_grade || '--',
@@ -4011,6 +4159,20 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
   });
 
   const capped = sorted.slice(0, 1000);
+  const authUserId = String(req.user?.id || '').trim();
+  const authUsernameKey = normalizeLeaderboardNameKey(req.user?.username);
+  const linkedUsernameKey = authUserId
+    ? normalizeLeaderboardNameKey(getLinkedPiugameUsername(authUserId))
+    : '';
+  const currentUserIndex = capped.findIndex((row) => {
+    const rowUserId = String(row?.user_id || '').trim();
+    if (authUserId && rowUserId && rowUserId === authUserId) return true;
+    const rowNameKey = normalizeLeaderboardNameKey(row?.username);
+    if (authUsernameKey && rowNameKey === authUsernameKey) return true;
+    if (linkedUsernameKey && rowNameKey === linkedUsernameKey) return true;
+    return false;
+  });
+  const currentUserRow = currentUserIndex >= 0 ? capped[currentUserIndex] : null;
   const total = capped.length;
   const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
   const pagedRows = capped.slice(offset, offset + limit).map((row, idx) => ({
@@ -4027,6 +4189,15 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
     total,
     total_pages: totalPages,
     rows: pagedRows,
+    current_user: currentUserRow ? {
+      sort_rank: currentUserIndex + 1,
+      user_id: String(currentUserRow.user_id || ''),
+      username: String(currentUserRow.username || ''),
+      global_rank: Math.max(0, parseInt(currentUserRow.global_rank, 10) || 0),
+      global_prev_rank: Math.max(0, parseInt(currentUserRow.global_prev_rank, 10) || 0),
+      global_rank_delta: parseInt(currentUserRow.global_rank_delta, 10) || 0,
+      overall_pumbility: Math.max(0, parseInt(currentUserRow.overall_pumbility, 10) || 0),
+    } : null,
     source: 'piugame_global',
   });
 });
@@ -4056,14 +4227,33 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   if (!resolvedName) {
     return res.status(404).json({ error: 'Player not found' });
   }
+  const nameCacheKey = `name:${normalizeLeaderboardNameKey(resolvedName)}`;
+  const userCacheKey = resolvedUserId ? `uid:${resolvedUserId}` : '';
+  const cacheKey = userCacheKey || nameCacheKey;
+  const cachedSheet = playerSheetCache.get(cacheKey);
+  if (cachedSheet && cachedSheet.expires_at > Date.now()) {
+    return res.json(cachedSheet.payload);
+  }
+  if (cachedSheet) {
+    playerSheetCache.delete(cacheKey);
+  }
 
-  const globalRow = db.prepare(`
+  let globalRow = db.prepare(`
     SELECT rank, player_name, pumbility, avatar_url
     FROM pumbility_leaderboard
-    WHERE LOWER(TRIM(player_name)) = ?
+    WHERE player_name = ? COLLATE NOCASE
     ORDER BY rank ASC
     LIMIT 1
-  `).get(normalizeLeaderboardNameKey(resolvedName));
+  `).get(resolvedName);
+  if (!globalRow) {
+    globalRow = db.prepare(`
+      SELECT rank, player_name, pumbility, avatar_url
+      FROM pumbility_leaderboard
+      WHERE LOWER(TRIM(player_name)) = ?
+      ORDER BY rank ASC
+      LIMIT 1
+    `).get(normalizeLeaderboardNameKey(resolvedName));
+  }
 
   const normalizedName = normalizeLeaderboardNameKey(globalRow?.player_name || resolvedName);
   let rows = [];
@@ -4243,7 +4433,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
     }
     : null;
 
-  res.json({
+  const payload = {
     player_name: String(globalRow?.player_name || resolvedName).trim(),
     user_id: resolvedUserId,
     is_local_user: !!resolvedUserId,
@@ -4277,7 +4467,18 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       jacket_url: String(row?.jacket_url || ''),
       background_url: String(row?.background_url || ''),
     })),
-  });
+  };
+
+  const cacheEntry = {
+    expires_at: Date.now() + PLAYER_SHEET_CACHE_TTL_MS,
+    payload,
+  };
+  playerSheetCache.set(nameCacheKey, cacheEntry);
+  if (userCacheKey) {
+    playerSheetCache.set(userCacheKey, cacheEntry);
+  }
+
+  res.json(payload);
 });
 
 // GET /api/piugame/leaderboards/over20/levels — available OVER Lv.20+ levels in cache
@@ -4364,7 +4565,7 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
   }
 
   const scores = db.prepare(`
-    SELECT rank, score, grade, player_name, player_avatar_url, played_at
+    SELECT rank, score, grade, player_name, player_avatar_url, prev_rank, rank_delta, played_at
     FROM over_level_ranking_scores
     WHERE chart_key = ?
     ORDER BY rank ASC
@@ -4378,6 +4579,8 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
         grade: String(row.grade || ''),
         player_name: String(row.player_name || ''),
         player_avatar_url: String(row.player_avatar_url || ''),
+        prev_rank: parseInt(row.prev_rank, 10) || 0,
+        rank_delta: parseInt(row.rank_delta, 10) || 0,
         played_at: String(row.played_at || ''),
       }))
       .filter((row) => row.score > 0)
@@ -4415,6 +4618,8 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
         player_name: playerName,
         player_avatar: localAvatar || piugameAvatar || '',
         player_avatar_url: String(row.player_avatar_url || ''),
+        prev_rank: Math.max(0, parseInt(row.prev_rank, 10) || 0),
+        rank_delta: parseInt(row.rank_delta, 10) || 0,
         local_avatar: localAvatar,
         piugame_avatar: piugameAvatar,
         is_local_user: !!localUser?.user_id,
@@ -4466,18 +4671,45 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
     });
   }
 
+  const currentUsername = String(req.user?.username || '').trim();
+  const overRowsForUser = currentUsername
+    ? db.prepare(`
+      SELECT chart_key, score, rank, prev_rank, rank_delta
+      FROM over_level_ranking_scores
+      WHERE player_name = ? COLLATE NOCASE
+    `).all(currentUsername)
+    : [];
+  const overByChartAndScore = new Map();
+  const overByChart = new Map();
+  for (const overRow of overRowsForUser) {
+    const chartKey = String(overRow?.chart_key || '').trim();
+    if (!chartKey) continue;
+    const score = Math.max(0, parseInt(overRow?.score, 10) || 0);
+    if (score > 0) {
+      overByChartAndScore.set(`${chartKey}|${score}`, overRow);
+    }
+    const existing = overByChart.get(chartKey);
+    if (!existing || score > (parseInt(existing?.score, 10) || 0)) {
+      overByChart.set(chartKey, overRow);
+    }
+  }
+
   const rows = scoreRows.map((row) => {
     const chartKey = overRankingChartKey(row.song_title, row.mode, row.level);
     const chart = chartLookup.get(chartKey) || null;
+    const score = Math.max(0, parseInt(row.score, 10) || 0);
+    const overRow = overByChartAndScore.get(`${chartKey}|${score}`) || overByChart.get(chartKey) || null;
     return {
       id: parseInt(row.id, 10) || 0,
       song_title: String(row.song_title || ''),
       mode: String(row.mode || ''),
       level: parseInt(row.level, 10) || 0,
-      score: Math.max(0, parseInt(row.score, 10) || 0),
+      score,
       grade: String(row.grade || ''),
       player_name: String(req.user?.username || ''),
       over_top100_rank: Math.max(0, parseInt(row.over_top100_rank, 10) || 0),
+      over_top100_prev_rank: Math.max(0, parseInt(overRow?.prev_rank, 10) || 0),
+      over_top100_rank_delta: parseInt(overRow?.rank_delta, 10) || 0,
       top100_count: chart?.top100_count || 100,
       jacket_url: chart?.jacket_url || String(row.background_url || ''),
       chart_key: chartKey,

@@ -13,7 +13,6 @@ import {
   getOver20ChartTop100,
   getOver20ChartsByLevel,
   getOver20Levels,
-  getPiugamePumbility,
 } from '../utils/api';
 
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
@@ -187,6 +186,28 @@ function SortHeader({ label, sortKey, activeSortKey, sortDirection, onSort }) {
   );
 }
 
+function RankDeltaIndicator({ delta, compact = false }) {
+  const numericDelta = parseInt(delta, 10) || 0;
+  if (!numericDelta) return null;
+
+  const isUp = numericDelta > 0;
+  const amount = Math.abs(numericDelta);
+  const icon = isUp ? '▲' : '▼';
+  const colorClass = isUp
+    ? 'text-emerald-300 border-emerald-400/40 bg-emerald-500/10'
+    : 'text-red-300 border-red-400/40 bg-red-500/10';
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono font-bold ${compact ? 'text-[10px]' : 'text-[11px]'} ${colorClass}`}
+      title={`Daily change: ${isUp ? '+' : '-'}${amount}`}
+    >
+      <span>{icon}</span>
+      <span>{amount}</span>
+    </span>
+  );
+}
+
 function getChartModeBadgeColor(mode) {
   if (mode === 'Single') return 'bg-red-600';
   if (mode === 'Double') return 'bg-green-600';
@@ -317,6 +338,7 @@ function Over20Top100Modal({
                   const playerName = String(score?.player_name || '').trim();
                   const initial = playerName ? playerName[0].toUpperCase() : '?';
                   const rank = parseInt(score?.rank, 10) || 0;
+                  const rankDelta = parseInt(score?.rank_delta, 10) || 0;
                   const playerScore = parseInt(score?.score, 10) || 0;
                   const exactMatch = normalizedHighlightName
                     && numericHighlightScore > 0
@@ -328,7 +350,12 @@ function Over20Top100Modal({
                       key={`${score.rank}-${score.player_name}-${score.score}`}
                       className={`border-b border-piu-border/20 last:border-b-0 ${isHighlighted ? 'bg-piu-accent/10' : ''}`}
                     >
-                      <td className={`px-2 py-1.5 font-mono ${isHighlighted ? 'text-piu-accent' : 'text-gray-500'}`}>#{score.rank}</td>
+                      <td className={`px-2 py-1.5 font-mono ${isHighlighted ? 'text-piu-accent' : 'text-gray-500'}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span>#{score.rank}</span>
+                          <RankDeltaIndicator delta={rankDelta} compact />
+                        </div>
+                      </td>
                       <td className="px-2 py-1.5 text-gray-200">
                         <div className="flex items-center gap-2 min-w-0">
                           {avatarSrc ? (
@@ -374,7 +401,7 @@ function PumbilityLeaderboardTab() {
   const [initialLoading, setInitialLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
-  const [mySnapshot, setMySnapshot] = useState(null);
+  const [myGlobalRanking, setMyGlobalRanking] = useState(null);
   const [showPumbilityBreakdownModal, setShowPumbilityBreakdownModal] = useState(false);
   const [breakdownTitle, setBreakdownTitle] = useState('Pumbility Top Songs');
   const [breakdownRows, setBreakdownRows] = useState([]);
@@ -409,6 +436,12 @@ function PumbilityLeaderboardTab() {
       const incomingRows = Array.isArray(payload?.rows) ? payload.rows : [];
       const nextTotalPages = Math.max(1, parseInt(payload?.total_pages, 10) || 1);
       const nextTotalRows = Math.max(0, parseInt(payload?.total, 10) || 0);
+      const payloadCurrentUser = payload?.current_user || null;
+      if (payloadCurrentUser) {
+        setMyGlobalRanking(payloadCurrentUser);
+      } else if (!append && nextPage === 1) {
+        setMyGlobalRanking(null);
+      }
       setTotalPages(nextTotalPages);
       setTotalRows(nextTotalRows);
       setPage(nextPage);
@@ -454,29 +487,9 @@ function PumbilityLeaderboardTab() {
       .catch(() => {
         if (cancelled) return;
         setJacketLookup({});
-      });
+    });
     return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    const loadSnapshot = async () => {
-      try {
-        const payload = await getPiugamePumbility(user.id);
-        if (cancelled) return;
-        setMySnapshot({
-          ranking: parseInt(payload?.ranking, 10) || 0,
-          pumbility: parseInt(payload?.official_pumbility, 10) || parseInt(payload?.pumbility_value, 10) || 0,
-        });
-      } catch {
-        if (cancelled) return;
-        setMySnapshot(null);
-      }
-    };
-    loadSnapshot();
-    return () => { cancelled = true; };
-  }, [user?.id]);
 
   const hasMore = page < totalPages;
 
@@ -508,8 +521,10 @@ function PumbilityLeaderboardTab() {
   };
 
   const myRow = useMemo(() => rows.find((row) => isCurrentUserRow(row)) || null, [rows, user?.id, user?.username]);
-  const myRank = parseInt(mySnapshot?.ranking, 10) || parseInt(myRow?.global_rank, 10) || parseInt(myRow?.rank, 10) || 0;
-  const myPumbility = parseInt(mySnapshot?.pumbility, 10) || parseInt(myRow?.overall_pumbility, 10) || 0;
+  const myRankingSource = myRow || myGlobalRanking || null;
+  const myRank = parseInt(myRankingSource?.global_rank, 10) || parseInt(myRankingSource?.rank, 10) || 0;
+  const myRankDelta = parseInt(myRankingSource?.global_rank_delta, 10) || 0;
+  const myPumbility = parseInt(myRankingSource?.overall_pumbility, 10) || 0;
   const getBreakdownKey = (row) => `${String(row?.user_id || '').trim()}|${normalizeNameKey(row?.username)}`;
 
   const openPlayerPumbilityBreakdown = async (row) => {
@@ -602,13 +617,16 @@ function PumbilityLeaderboardTab() {
                 title="Jump to your leaderboard row"
               >
                 <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">Global Rank</p>
-                <p className="font-mono font-bold text-sm text-piu-accent leading-tight">#{myRank}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="font-mono font-bold text-sm text-piu-accent leading-tight">#{myRank}</p>
+                  <RankDeltaIndicator delta={myRankDelta} compact />
+                </div>
               </button>
               <button
                 type="button"
                 onClick={() => openPlayerPumbilityBreakdown({
-                  user_id: myRow?.user_id || user?.id || '',
-                  username: myRow?.username || user?.username || '',
+                  user_id: myRow?.user_id || myGlobalRanking?.user_id || user?.id || '',
+                  username: myRow?.username || myGlobalRanking?.username || user?.username || '',
                 })}
                 disabled={!!breakdownLoadingKey}
                 className="rounded-lg border border-piu-border/60 bg-piu-dark/40 px-2 py-1 text-left hover:border-piu-gold/50 hover:bg-piu-dark/70 transition-colors"
@@ -650,6 +668,7 @@ function PumbilityLeaderboardTab() {
             </div>
             {rows.map((row) => {
               const rowRank = parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0;
+              const rankDelta = parseInt(row?.global_rank_delta, 10) || 0;
               const pumbility = parseInt(row?.overall_pumbility, 10) || 0;
               const isCurrent = isCurrentUserRow(row);
               const avatar = String(row?.avatar || '').trim();
@@ -667,7 +686,10 @@ function PumbilityLeaderboardTab() {
                   data-global-leaderboard-current={isCurrent ? 'true' : undefined}
                   className={`grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2 px-3 py-2 border-b border-piu-border/25 last:border-b-0 items-center ${isCurrent ? 'bg-piu-accent/10' : 'hover:bg-piu-dark/25'} transition-colors`}
                 >
-                  <span className={`text-sm font-mono ${isCurrent ? 'text-piu-accent' : 'text-gray-500'}`}>#{rowRank}</span>
+                  <div className="flex flex-col items-start gap-0.5">
+                    <span className={`text-sm font-mono ${isCurrent ? 'text-piu-accent' : 'text-gray-500'}`}>#{rowRank}</span>
+                    <RankDeltaIndicator delta={rankDelta} compact />
+                  </div>
                   <div className="min-w-0 flex items-center gap-2">
                     {avatarSrc ? (
                       <img src={avatarSrc} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40 shrink-0" />
@@ -1149,7 +1171,10 @@ function MyTop100Tab() {
                   </div>
                   <div className="rounded border border-piu-border/35 bg-piu-dark/45 px-2 py-1.5">
                     <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Rank</p>
-                    <p className="font-mono text-[13px] text-piu-gold whitespace-nowrap">#{row.over_top100_rank}/{row.top100_count || 100}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-mono text-[13px] text-piu-gold whitespace-nowrap">#{row.over_top100_rank}/{row.top100_count || 100}</p>
+                      <RankDeltaIndicator delta={row.over_top100_rank_delta} compact />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1188,7 +1213,10 @@ function MyTop100Tab() {
                     <td className="px-2 py-1.5 text-right font-mono text-gray-200 whitespace-nowrap">{formatNumber(row.score)}</td>
                     <td className={`px-2 py-1.5 text-right font-display font-bold whitespace-nowrap ${getGradeColorClass(row.grade)}`}>{row.grade || '-'}</td>
                     <td className="px-2 py-1.5 text-right font-mono text-piu-gold whitespace-nowrap">
-                      #{row.over_top100_rank}/{row.top100_count || 100}
+                      <span className="inline-flex items-center justify-end gap-1.5">
+                        <span>#{row.over_top100_rank}/{row.top100_count || 100}</span>
+                        <RankDeltaIndicator delta={row.over_top100_rank_delta} compact />
+                      </span>
                     </td>
                   </tr>
                 ))}

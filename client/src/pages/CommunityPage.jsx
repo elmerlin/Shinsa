@@ -115,6 +115,25 @@ function getGradeColorClass(grade) {
   return 'text-gray-300';
 }
 
+function RankDeltaIndicator({ delta, compact = false }) {
+  const numericDelta = parseInt(delta, 10) || 0;
+  if (!numericDelta) return null;
+
+  const isUp = numericDelta > 0;
+  const amount = Math.abs(numericDelta);
+  const icon = isUp ? '▲' : '▼';
+  const colorClass = isUp
+    ? 'text-emerald-300 border-emerald-400/40 bg-emerald-500/10'
+    : 'text-red-300 border-red-400/40 bg-red-500/10';
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono font-bold ${compact ? 'text-[10px]' : 'text-[11px]'} ${colorClass}`}>
+      <span>{icon}</span>
+      <span>{amount}</span>
+    </span>
+  );
+}
+
 function parsePlayedAt(value) {
   if (!value) return null;
   const raw = String(value).trim();
@@ -2982,6 +3001,8 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
           <div className="md:hidden space-y-1.5">
             {sortedRows.map((member, index) => {
               const metrics = getMetricValues(member);
+              const communityRank = parseInt(member?.community_rank, 10) || (index + 1);
+              const communityRankDelta = parseInt(member?.community_rank_delta, 10) || 0;
               const pumbilityCanOpen = metrics.pumbilityValue > 0 && metrics.breakdownCount > 0;
               const mobileMetricLabel = mobileMetricView === 'avg_level'
                 ? 'Avg Level'
@@ -2993,7 +3014,10 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                 <div key={member.id} className="rounded-lg border border-piu-border/40 bg-piu-card/35 px-2.5 py-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="w-7 shrink-0 text-sm font-mono text-gray-500">#{index + 1}</span>
+                      <div className="w-12 shrink-0 flex flex-col items-start gap-0.5">
+                        <span className="text-sm font-mono text-gray-500">#{communityRank}</span>
+                        <RankDeltaIndicator delta={communityRankDelta} compact />
+                      </div>
                       <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
                         {member.avatar ? (
                           <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
@@ -3104,10 +3128,17 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                 <tbody>
                   {sortedRows.map((member, index) => {
                     const metrics = getMetricValues(member);
+                    const communityRank = parseInt(member?.community_rank, 10) || (index + 1);
+                    const communityRankDelta = parseInt(member?.community_rank_delta, 10) || 0;
                     const pumbilityCanOpen = metrics.pumbilityValue > 0 && metrics.breakdownCount > 0;
                     return (
                       <tr key={member.id} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
-                        <td className="px-2 py-2 text-sm font-mono text-gray-500 whitespace-nowrap">#{index + 1}</td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          <div className="flex flex-col items-start gap-0.5">
+                            <span className="text-sm font-mono text-gray-500">#{communityRank}</span>
+                            <RankDeltaIndicator delta={communityRankDelta} compact />
+                          </div>
+                        </td>
                         <td className="px-2 py-2">
                           <div className="flex items-center gap-2 min-w-0">
                             <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
