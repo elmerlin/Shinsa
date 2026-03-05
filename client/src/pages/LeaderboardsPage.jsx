@@ -361,6 +361,60 @@ function Over20Top100Modal({
   );
 }
 
+function PumbilityThresholdModal({ open, snapshot, onClose }) {
+  if (!open) return null;
+  const ranking = parseInt(snapshot?.ranking, 10) || 0;
+  const pumbilityValue = parseInt(snapshot?.pumbility, 10) || 0;
+  const threshold = parseInt(snapshot?.threshold, 10) || 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl p-4"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Top 1000 Threshold</p>
+            <p className="text-xl font-mono font-bold text-white mt-1">
+              {threshold > 0 ? threshold.toLocaleString() : '--'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            Close
+          </button>
+        </div>
+        <div className="mt-3 space-y-1.5">
+          <p className="text-[11px] text-gray-400">
+            Current ranking: {ranking > 0 ? `#${ranking}` : 'Outside top 1000'}
+          </p>
+          <p className="text-[11px] text-gray-400">
+            Current pumbility: {pumbilityValue.toLocaleString()}
+          </p>
+          {threshold > 0 && pumbilityValue > 0 ? (
+            <p className="text-[11px] font-display">
+              {pumbilityValue >= threshold ? (
+                <span className="text-green-400">Qualified for Top 1000</span>
+              ) : (
+                <span className="text-gray-400">
+                  {(threshold - pumbilityValue).toLocaleString()} away from Top 1000
+                </span>
+              )}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PumbilityLeaderboardTab() {
   const { user } = useAuth();
   const pageSize = 100;
@@ -372,6 +426,8 @@ function PumbilityLeaderboardTab() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [mySnapshot, setMySnapshot] = useState(null);
+  const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
+  const [jumpingToRank, setJumpingToRank] = useState(false);
   const loadMoreRef = useRef(null);
 
   const loadRows = async (nextPage, { append = false } = {}) => {
@@ -441,6 +497,7 @@ function PumbilityLeaderboardTab() {
         setMySnapshot({
           ranking: parseInt(payload?.ranking, 10) || 0,
           pumbility: parseInt(payload?.official_pumbility, 10) || parseInt(payload?.pumbility_value, 10) || 0,
+          threshold: parseInt(payload?.threshold, 10) || 0,
         });
       } catch {
         if (cancelled) return;
@@ -454,7 +511,7 @@ function PumbilityLeaderboardTab() {
   const hasMore = page < totalPages;
 
   useEffect(() => {
-    if (!loadMoreRef.current || !hasMore || initialLoading || loadingMore) return;
+    if (!loadMoreRef.current || !hasMore || initialLoading || loadingMore || jumpingToRank) return;
     const observer = new IntersectionObserver((entries) => {
       if (!entries?.[0]?.isIntersecting) return;
       loadRows(page + 1, { append: true });
@@ -462,10 +519,10 @@ function PumbilityLeaderboardTab() {
 
     observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
-  }, [page, hasMore, initialLoading, loadingMore]);
+  }, [page, hasMore, initialLoading, loadingMore, jumpingToRank]);
 
   const refreshRows = () => {
-    if (initialLoading || loadingMore) return;
+    if (initialLoading || loadingMore || jumpingToRank) return;
     setRows([]);
     setPage(1);
     setTotalPages(1);
@@ -484,6 +541,31 @@ function PumbilityLeaderboardTab() {
   const myRank = parseInt(mySnapshot?.ranking, 10) || parseInt(myRow?.global_rank, 10) || parseInt(myRow?.rank, 10) || 0;
   const myPumbility = parseInt(mySnapshot?.pumbility, 10) || parseInt(myRow?.overall_pumbility, 10) || 0;
 
+  const jumpToMyRank = async () => {
+    if (!myRank || initialLoading || loadingMore || jumpingToRank) return;
+    setJumpingToRank(true);
+    try {
+      const targetPage = Math.max(1, Math.ceil(myRank / pageSize));
+      const safeTargetPage = Math.min(Math.max(totalPages, 1), targetPage);
+      if (safeTargetPage > page) {
+        for (let nextPage = page + 1; nextPage <= safeTargetPage; nextPage += 1) {
+          // Load intermediate pages so infinite scroll data stays contiguous.
+          // eslint-disable-next-line no-await-in-loop
+          await loadRows(nextPage, { append: true });
+        }
+      }
+
+      window.setTimeout(() => {
+        const myRowNode = document.querySelector('[data-global-leaderboard-current="true"]');
+        if (myRowNode) {
+          myRowNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    } finally {
+      setJumpingToRank(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -491,26 +573,44 @@ function PumbilityLeaderboardTab() {
         <button
           type="button"
           onClick={refreshRows}
-          disabled={initialLoading || loadingMore}
+          disabled={initialLoading || loadingMore || jumpingToRank}
           className="btn-secondary text-xs px-3 py-1.5"
         >
-          {initialLoading || loadingMore ? 'Refreshing...' : 'Refresh'}
+          {initialLoading || loadingMore ? 'Refreshing...' : jumpingToRank ? 'Jumping...' : 'Refresh'}
         </button>
       </div>
 
       <div className="card">
-        <p className="text-[11px] text-gray-500 font-display">Your Global Snapshot</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[11px] text-gray-500 font-display">Your Global Ranking</p>
+          {myRank > 0 ? (
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={jumpToMyRank}
+                disabled={jumpingToRank || initialLoading || loadingMore}
+                className="rounded-lg border border-piu-border/60 bg-piu-dark/40 px-2 py-1 text-left hover:border-piu-accent/50 hover:bg-piu-dark/70 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                title="Jump to your leaderboard row"
+              >
+                <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">Global Rank</p>
+                <p className="font-mono font-bold text-sm text-piu-accent leading-tight">#{myRank}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPumbilityThresholdModal(true)}
+                className="rounded-lg border border-piu-border/60 bg-piu-dark/40 px-2 py-1 text-left hover:border-piu-gold/50 hover:bg-piu-dark/70 transition-colors"
+                title="Show your pumbility threshold details"
+              >
+                <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">Pumbility</p>
+                <p className="font-mono font-bold text-sm text-piu-gold leading-tight">{formatNumber(myPumbility)}</p>
+              </button>
+            </div>
+          ) : null}
+        </div>
         {myRank > 0 ? (
-          <div className="mt-2 flex flex-wrap items-end gap-5">
-            <div>
-              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Global Rank</p>
-              <p className="font-mono font-bold text-xl text-piu-accent">#{myRank}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Pumbility</p>
-              <p className="font-mono font-bold text-xl text-piu-gold">{formatNumber(myPumbility)}</p>
-            </div>
-          </div>
+          <p className="mt-1 text-[11px] text-gray-500">
+            Tap rank to jump to your row. Tap pumbility to view threshold details.
+          </p>
         ) : (
           <p className="mt-1 text-sm text-gray-400">No Top 1000 rank found for your username yet.</p>
         )}
@@ -548,6 +648,7 @@ function PumbilityLeaderboardTab() {
               return (
                 <div
                   key={`${rowRank}-${playerName}`}
+                  data-global-leaderboard-current={isCurrent ? 'true' : undefined}
                   className={`grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2 px-3 py-2 border-b border-piu-border/25 last:border-b-0 items-center ${isCurrent ? 'bg-piu-accent/10' : 'hover:bg-piu-dark/25'} transition-colors`}
                 >
                   <span className={`text-sm font-mono ${isCurrent ? 'text-piu-accent' : 'text-gray-500'}`}>#{rowRank}</span>
@@ -573,9 +674,20 @@ function PumbilityLeaderboardTab() {
                       {row?.nationality ? <span className="text-sm shrink-0">{getCountryFlag(row.nationality)}</span> : null}
                     </div>
                   </div>
-                  <span className="font-mono font-bold text-piu-gold whitespace-nowrap">
-                    {pumbility > 0 ? formatNumber(pumbility) : '--'}
-                  </span>
+                  {isCurrent ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowPumbilityThresholdModal(true)}
+                      className="font-mono font-bold text-piu-gold whitespace-nowrap hover:text-yellow-200 transition-colors"
+                      title="Show your pumbility threshold details"
+                    >
+                      {pumbility > 0 ? formatNumber(pumbility) : '--'}
+                    </button>
+                  ) : (
+                    <span className="font-mono font-bold text-piu-gold whitespace-nowrap">
+                      {pumbility > 0 ? formatNumber(pumbility) : '--'}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -594,6 +706,16 @@ function PumbilityLeaderboardTab() {
           ) : null}
         </>
       )}
+
+      <PumbilityThresholdModal
+        open={showPumbilityThresholdModal}
+        snapshot={{
+          ranking: myRank,
+          pumbility: myPumbility,
+          threshold: parseInt(mySnapshot?.threshold, 10) || 0,
+        }}
+        onClose={() => setShowPumbilityThresholdModal(false)}
+      />
 
     </div>
   );
