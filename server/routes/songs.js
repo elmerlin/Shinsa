@@ -2525,6 +2525,9 @@ router.get('/analytics/rankings/:userId', (req, res) => {
   const aliases = loadSongAliases();
   const userId = String(req.params.userId || '').trim();
   if (!userId) return res.status(400).json({ error: 'User ID is required' });
+  const scope = String(req.query.scope || 'global').trim().toLowerCase() === 'following'
+    ? 'following'
+    : 'global';
 
   const userExists = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
   if (!userExists) return res.status(404).json({ error: 'User not found' });
@@ -2551,7 +2554,7 @@ router.get('/analytics/rankings/:userId', (req, res) => {
 
   // Per-level percentile among synced Shinsa users
   const placeholders = modeList.map(() => '?').join(', ');
-  const allUserLevelStats = db.prepare(`
+  const allUserLevelStatsRaw = db.prepare(`
     SELECT
       ubs.user_id,
       ubs.mode,
@@ -2564,7 +2567,24 @@ router.get('/analytics/rankings/:userId', (req, res) => {
     GROUP BY ubs.user_id, ubs.mode, ubs.level
   `).all(...modeList);
 
-  const syncedUserCount = new Set(allUserLevelStats.map((r) => r.user_id)).size;
+  let scopedUserIds = null;
+  if (scope === 'following') {
+    const followingRows = db.prepare(`
+      SELECT following_id
+      FROM user_follows
+      WHERE follower_id = ?
+    `).all(userId);
+    scopedUserIds = new Set(
+      [userId, ...followingRows.map((row) => String(row?.following_id || '').trim())]
+        .filter(Boolean)
+    );
+  }
+
+  const allUserLevelStats = scopedUserIds
+    ? allUserLevelStatsRaw.filter((row) => scopedUserIds.has(String(row?.user_id || '').trim()))
+    : allUserLevelStatsRaw;
+
+  const syncedUserCount = new Set(allUserLevelStats.map((r) => String(r.user_id || ''))).size;
 
   const levelUserScores = new Map();
   for (const row of allUserLevelStats) {
@@ -2631,7 +2651,12 @@ router.get('/analytics/rankings/:userId', (req, res) => {
   }
 
   levelPercentiles.sort((a, b) => {
-    if (a.level !== b.level) return a.level - b.level;
+    if (a.level !== b.level) return b.level - a.level;
+    if (a.mode !== b.mode) {
+      if (a.mode === 'Single') return -1;
+      if (b.mode === 'Single') return 1;
+      return String(a.mode).localeCompare(String(b.mode));
+    }
     return a.mode.localeCompare(b.mode);
   });
 
@@ -2649,6 +2674,7 @@ router.get('/analytics/rankings/:userId', (req, res) => {
     pumbility_percentile: pumbilityPercentile,
     pumbility_badge: overallBadge,
     leaderboard_total: totalLeaderboardEntries,
+    scope,
     synced_user_count: syncedUserCount,
     level_percentiles: levelPercentiles,
   });
@@ -2666,18 +2692,59 @@ router.get('/analytics/level-leaderboard', (req, res) => {
   if (!level) {
     return res.status(400).json({ error: 'level is required and must be a positive integer' });
   }
+  const scope = String(req.query.scope || 'global').trim().toLowerCase() === 'following'
+    ? 'following'
+    : 'global';
+  const scopeUserId = String(req.query.user_id || '').trim();
 
-  const rows = db.prepare(`
-    SELECT
-      ubs.user_id,
-      AVG(ubs.score) as avg_score,
-      COUNT(*) as chart_count
-    FROM user_best_scores ubs
-    INNER JOIN user_piugame_sync ups ON ups.user_id = ubs.user_id AND ups.best_scores_imported = 1
-    WHERE ubs.mode = ? AND ubs.level = ?
-    GROUP BY ubs.user_id
-    ORDER BY avg_score DESC
-  `).all(mode, level);
+  let scopedUserIds = null;
+  if (scope === 'following') {
+    if (!scopeUserId) {
+      return res.status(400).json({ error: 'user_id is required when scope=following' });
+    }
+    const scopeUser = db.prepare('SELECT id FROM users WHERE id = ?').get(scopeUserId);
+    if (!scopeUser) {
+      return res.status(404).json({ error: 'Scope user not found' });
+    }
+
+    const followingRows = db.prepare(`
+      SELECT following_id
+      FROM user_follows
+      WHERE follower_id = ?
+    `).all(scopeUserId);
+    scopedUserIds = [
+      scopeUserId,
+      ...followingRows.map((row) => String(row?.following_id || '').trim()).filter(Boolean),
+    ];
+  }
+
+  let rows = [];
+  if (scopedUserIds && scopedUserIds.length > 0) {
+    const placeholders = scopedUserIds.map(() => '?').join(', ');
+    rows = db.prepare(`
+      SELECT
+        ubs.user_id,
+        AVG(ubs.score) as avg_score,
+        COUNT(*) as chart_count
+      FROM user_best_scores ubs
+      INNER JOIN user_piugame_sync ups ON ups.user_id = ubs.user_id AND ups.best_scores_imported = 1
+      WHERE ubs.mode = ? AND ubs.level = ? AND ubs.user_id IN (${placeholders})
+      GROUP BY ubs.user_id
+      ORDER BY avg_score DESC
+    `).all(mode, level, ...scopedUserIds);
+  } else {
+    rows = db.prepare(`
+      SELECT
+        ubs.user_id,
+        AVG(ubs.score) as avg_score,
+        COUNT(*) as chart_count
+      FROM user_best_scores ubs
+      INNER JOIN user_piugame_sync ups ON ups.user_id = ubs.user_id AND ups.best_scores_imported = 1
+      WHERE ubs.mode = ? AND ubs.level = ?
+      GROUP BY ubs.user_id
+      ORDER BY avg_score DESC
+    `).all(mode, level);
+  }
 
   const userIds = rows.map((r) => r.user_id);
   const userMap = new Map();
@@ -2709,6 +2776,8 @@ router.get('/analytics/level-leaderboard', (req, res) => {
   res.json({
     mode,
     level,
+    scope,
+    scope_user_id: scope === 'following' ? scopeUserId : null,
     total_users: leaderboard.length,
     leaderboard,
   });

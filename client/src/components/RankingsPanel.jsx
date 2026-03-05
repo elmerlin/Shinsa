@@ -64,7 +64,7 @@ function sameUserId(a, b) {
   return String(a) === String(b);
 }
 
-function LeaderboardModal({ open, mode, level, profileUserId, viewerUserId, onClose }) {
+function LeaderboardModal({ open, mode, level, profileUserId, viewerUserId, scope = 'global', onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -75,7 +75,12 @@ function LeaderboardModal({ open, mode, level, profileUserId, viewerUserId, onCl
     }
     let cancelled = false;
     setLoading(true);
-    getLevelLeaderboard({ mode, level: String(level) })
+    getLevelLeaderboard({
+      mode,
+      level: String(level),
+      scope,
+      user_id: profileUserId,
+    })
       .then((result) => {
         if (!cancelled) setData(result);
       })
@@ -86,12 +91,13 @@ function LeaderboardModal({ open, mode, level, profileUserId, viewerUserId, onCl
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [open, mode, level]);
+  }, [open, mode, level, profileUserId, scope]);
 
   if (!open) return null;
 
   const isSingle = mode === 'Single';
   const label = `${isSingle ? 'S' : 'D'}${level}`;
+  const scopeLabel = scope === 'following' ? 'Following' : 'Global';
 
   return (
     <div
@@ -108,6 +114,10 @@ function LeaderboardModal({ open, mode, level, profileUserId, viewerUserId, onCl
             {' '}Leaderboard
           </h3>
           <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+
+        <div className="px-4 py-2 border-b border-piu-border/40">
+          <p className="text-[10px] text-gray-500 font-display">Scope: {scopeLabel}</p>
         </div>
 
         <div className="max-h-[60vh] overflow-y-auto p-3 space-y-1.5">
@@ -189,6 +199,7 @@ export default function RankingsPanel({ userId, viewerUserId = null }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedMode, setSelectedMode] = useState('Both');
+  const [scope, setScope] = useState('global');
   const [leaderboardModal, setLeaderboardModal] = useState(null); // { mode, level }
 
   useEffect(() => {
@@ -198,6 +209,7 @@ export default function RankingsPanel({ userId, viewerUserId = null }) {
     setError(null);
     const params = {};
     if (selectedMode !== 'Both') params.mode = selectedMode;
+    params.scope = scope;
     getUserRankings(userId, params)
       .then((result) => {
         if (!cancelled) setData(result);
@@ -209,7 +221,7 @@ export default function RankingsPanel({ userId, viewerUserId = null }) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [userId, selectedMode]);
+  }, [userId, selectedMode, scope]);
 
   const filteredPercentiles = useMemo(() => {
     if (!data?.level_percentiles) return [];
@@ -239,68 +251,58 @@ export default function RankingsPanel({ userId, viewerUserId = null }) {
 
   if (!data) return null;
 
-  const hasPumbility = data.pumbility > 0 && data.pumbility_percentile !== null;
   const hasLevelData = filteredPercentiles.length > 0;
 
-  if (!hasPumbility && !hasLevelData) {
+  if (!hasLevelData) {
     return null;
   }
-
-  const overallBadge = data.pumbility_badge ? badgeStyle(data.pumbility_badge) : null;
+  const scopeLabel = scope === 'following' ? 'Following' : 'All of Shinsa';
 
   return (
     <div className="card">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-xs font-display font-bold tracking-wide text-piu-accent">RANKINGS</h3>
-        <div className="flex rounded-md overflow-hidden border border-piu-border/40">
-          {['Both', 'Single', 'Double'].map((m) => (
-            <button
-              key={m}
-              onClick={() => setSelectedMode(m)}
-              className={`px-2 py-0.5 text-[10px] font-display font-bold transition-colors ${
-                selectedMode === m
-                  ? 'bg-piu-accent/20 text-piu-accent'
-                  : 'bg-piu-dark text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              {m === 'Both' ? 'All' : m === 'Single' ? 'S' : 'D'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Overall pumbility rank */}
-      {hasPumbility && (
-        <div className="rounded-lg border border-piu-border/50 bg-piu-dark/55 px-3 py-2.5 mb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] text-gray-500 font-display">PUMBILITY RANKING</p>
-              <p className="text-lg font-display font-black text-white">{formatNumber(data.pumbility)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-400">
-                Top <span className={`font-display font-bold ${overallBadge?.color || 'text-gray-300'}`}>
-                  {(100 - data.pumbility_percentile).toFixed(1)}%
-                </span>
-              </p>
-              {overallBadge && (
-                <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-display font-bold border ${overallBadge.bg} ${overallBadge.color}`}>
-                  {overallBadge.text}
-                </span>
-              )}
-              <p className="text-[10px] text-gray-600 mt-0.5">of {formatNumber(data.leaderboard_total)} players</p>
-            </div>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-md overflow-hidden border border-piu-border/40">
+            {['global', 'following'].map((opt) => (
+              <button
+                key={opt}
+                onClick={() => setScope(opt)}
+                className={`px-2 py-0.5 text-[10px] font-display font-bold transition-colors ${
+                  scope === opt
+                    ? 'bg-piu-accent/20 text-piu-accent'
+                    : 'bg-piu-dark text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {opt === 'global' ? 'Global' : 'Following'}
+              </button>
+            ))}
+          </div>
+          <div className="flex rounded-md overflow-hidden border border-piu-border/40">
+            {['Both', 'Single', 'Double'].map((m) => (
+              <button
+                key={m}
+                onClick={() => setSelectedMode(m)}
+                className={`px-2 py-0.5 text-[10px] font-display font-bold transition-colors ${
+                  selectedMode === m
+                    ? 'bg-piu-accent/20 text-piu-accent'
+                    : 'bg-piu-dark text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {m === 'Both' ? 'All' : m === 'Single' ? 'S' : 'D'}
+              </button>
+            ))}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Per-level percentiles */}
       {hasLevelData && (
         <div>
           <p className="text-[10px] text-gray-500 font-display mb-1">
             PER-LEVEL RANKING
-            <span className="text-gray-600 ml-1">({data.synced_user_count} synced users)</span>
+            <span className="text-gray-600 ml-1">({data.synced_user_count} synced users, {scopeLabel})</span>
           </p>
           <p className="text-[10px] text-gray-600 mb-2">
             Your avg score rank at each level vs. other players. Tap a row to see the leaderboard.
@@ -375,6 +377,7 @@ export default function RankingsPanel({ userId, viewerUserId = null }) {
         level={leaderboardModal?.level}
         profileUserId={userId}
         viewerUserId={viewerUserId}
+        scope={scope}
         onClose={() => setLeaderboardModal(null)}
       />
     </div>
