@@ -985,7 +985,7 @@ export default function App() {
         <span className="font-display tracking-wider text-piu-gold">PUMP</span>
         {' '}
         <span className="font-display tracking-wider">SHINSA</span>
-        {' '}- Made by Elmer with ❤
+        {' '}- PHOENIX 2026
       </footer>
 
       {/* Mobile Bottom Navigation — Instagram style */}
