@@ -1303,18 +1303,30 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
 
   const { rankings, threshold } = await scrapePumbilityRanking();
   const normalizedThreshold = parseInt(threshold, 10) || 0;
+  const normalizedRows = [];
+  const seenRanks = new Set();
+  for (const row of (Array.isArray(rankings) ? rankings : [])) {
+    const rank = parseInt(row?.rank, 10);
+    if (!Number.isInteger(rank) || rank <= 0) continue;
+    if (seenRanks.has(rank)) continue;
+    seenRanks.add(rank);
+    normalizedRows.push({
+      rank,
+      player_name: String(row?.player_name || '').trim(),
+      pumbility: parseInt(row?.pumbility, 10) || 0,
+      avatar_url: String(row?.avatar_url || '').trim(),
+    });
+  }
 
   const txn = db.transaction(() => {
     db.prepare('DELETE FROM pumbility_leaderboard').run();
     const insert = db.prepare('INSERT INTO pumbility_leaderboard (rank, player_name, pumbility, avatar_url) VALUES (?, ?, ?, ?)');
-    for (const row of rankings) {
-      const rank = parseInt(row.rank, 10);
-      if (!Number.isInteger(rank) || rank <= 0) continue;
+    for (const row of normalizedRows) {
       insert.run(
-        rank,
-        String(row.player_name || '').trim(),
-        parseInt(row.pumbility, 10) || 0,
-        String(row.avatar_url || '').trim()
+        row.rank,
+        row.player_name,
+        row.pumbility,
+        row.avatar_url
       );
     }
     db.prepare(`
@@ -1324,14 +1336,14 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
         threshold = excluded.threshold,
         total_entries = excluded.total_entries,
         last_sync = datetime('now')
-    `).run(normalizedThreshold, rankings.length);
+    `).run(normalizedThreshold, normalizedRows.length);
   });
   txn();
 
   const refreshedMeta = db.prepare('SELECT threshold, total_entries, last_sync FROM pumbility_leaderboard_meta WHERE id = 1').get();
   return {
     threshold: parseInt(refreshedMeta?.threshold, 10) || normalizedThreshold,
-    total_entries: parseInt(refreshedMeta?.total_entries, 10) || rankings.length,
+    total_entries: parseInt(refreshedMeta?.total_entries, 10) || normalizedRows.length,
     last_sync: refreshedMeta?.last_sync || null,
     cached: false,
   };
