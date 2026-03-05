@@ -10,6 +10,11 @@ function modeShort(mode) {
   return 'X';
 }
 
+function getOverTop100Rank(value) {
+  const rank = parseInt(value, 10) || 0;
+  return rank > 0 && rank <= 100 ? rank : 0;
+}
+
 function getGradeColorClass(grade) {
   const normalized = String(grade || '').toUpperCase();
   if (normalized.includes('SSS')) return 'text-sky-300';
@@ -95,6 +100,7 @@ function SongTable({ title, rows, type }) {
               const rowGrade = row?._grade ?? row?.grade;
               const rowRating = row?._rating ?? row?.rating;
               const rowLevel = row?._level ?? row?.level;
+              const overRank = getOverTop100Rank(row?._over_top100_rank ?? row?.over_top100_rank);
               return (
                 <tr key={`${type}-${idx}-${row.song_title}-${row.mode}-${row.level}`} className="border-b border-piu-border/20 last:border-0">
                   <td className="px-2 py-1.5 text-gray-400 font-mono align-top">{idx + 1}</td>
@@ -103,7 +109,14 @@ function SongTable({ title, rows, type }) {
                       <SongJacket row={row} />
                       <div className="min-w-0">
                         <p className="text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">{row.song_title}</p>
-                        <p className="text-[10px] text-gray-500">{modeShort(row.mode)}{rowLevel || '?'}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {modeShort(row.mode)}{rowLevel || '?'}
+                          {overRank > 0 && (
+                            <span className="ml-1 text-yellow-300 font-display font-black">
+                              OVER #{overRank}
+                            </span>
+                          )}
+                        </p>
                       </div>
                     </div>
                   </td>

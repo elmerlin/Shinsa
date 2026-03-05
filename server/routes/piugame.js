@@ -5,7 +5,14 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const sharp = require('sharp');
 const { getDb } = require('../db/schema');
-const { login, scrapePumbility, scrapeBestScores, scrapeRecentlyPlayed, scrapePumbilityRanking } = require('../lib/piugameScraper');
+const {
+  login,
+  scrapePumbility,
+  scrapeBestScores,
+  scrapeRecentlyPlayed,
+  scrapePumbilityRanking,
+  scrapeOverRankingTop100,
+} = require('../lib/piugameScraper');
 const { createUserNotification } = require('../lib/notifications');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
@@ -91,6 +98,110 @@ function chartScoreKey(songTitle, mode, level) {
   const chartLevel = parseInt(level, 10) || 0;
   if (!title || !chartMode || chartLevel <= 0) return '';
   return `${title}|${chartMode}|${chartLevel}`;
+}
+
+function normalizeOverRankingSongTitle(songTitle) {
+  const normalized = String(songTitle || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  const compact = normalized.toLowerCase();
+  if (compact === 'yog-sothoth - short cut -' || compact === 'yog-sothoth- short cut -') {
+    return 'Yog-Sothoth - SHORT CUT -';
+  }
+  return normalized;
+}
+
+function overRankingChartKey(songTitle, mode, level) {
+  const title = normalizeOverRankingSongTitle(songTitle);
+  const chartMode = String(mode || '').trim();
+  const chartLevel = parseInt(level, 10) || 0;
+  if (!title || !chartMode || chartLevel <= 0) return '';
+  return `${title}|${chartMode}|${chartLevel}`;
+}
+
+function buildOverRankingLookup(db) {
+  const charts = db.prepare(`
+    SELECT chart_key, song_title, mode, level, top100_count, min_score
+    FROM over_level_rankings
+  `).all();
+  if (!charts.length) return new Map();
+
+  const scoreRows = db.prepare(`
+    SELECT chart_key, rank, score
+    FROM over_level_ranking_scores
+    WHERE rank > 0 AND rank <= 100
+    ORDER BY chart_key ASC, rank ASC
+  `).all();
+
+  const byChartKey = new Map();
+  for (const chart of charts) {
+    const key = String(chart.chart_key || '').trim();
+    if (!key) continue;
+    byChartKey.set(key, {
+      song_title: String(chart.song_title || '').trim(),
+      mode: String(chart.mode || '').trim(),
+      level: parseInt(chart.level, 10) || 0,
+      top100_count: parseInt(chart.top100_count, 10) || 0,
+      min_score: parseInt(chart.min_score, 10) || 0,
+      scores: [],
+    });
+  }
+
+  for (const row of scoreRows) {
+    const key = String(row.chart_key || '').trim();
+    const entry = byChartKey.get(key);
+    if (!entry) continue;
+    entry.scores.push({
+      rank: parseInt(row.rank, 10) || 0,
+      score: parseInt(row.score, 10) || 0,
+    });
+  }
+
+  // Alias key map supports known song title variants.
+  const aliasLookup = new Map();
+  for (const [key, value] of byChartKey.entries()) {
+    aliasLookup.set(key, value);
+    const parts = key.split('|');
+    if (parts.length !== 3) continue;
+    const [title, mode, level] = parts;
+    if (title === 'Yog-Sothoth - SHORT CUT -') {
+      aliasLookup.set(`Yog-Sothoth - SHORT CUT -|${mode}|${level}`, value);
+      aliasLookup.set(`Yog-Sothoth- SHORT CUT -|${mode}|${level}`, value);
+    }
+  }
+
+  return aliasLookup;
+}
+
+function getOverTop100Rank(overLookup, songTitle, mode, level, score) {
+  if (!(overLookup instanceof Map) || overLookup.size === 0) return 0;
+  const numericScore = parseInt(score, 10) || 0;
+  if (numericScore <= 0) return 0;
+
+  const key = overRankingChartKey(songTitle, mode, level);
+  if (!key) return 0;
+  const chart = overLookup.get(key);
+  if (!chart) return 0;
+
+  const minScore = parseInt(chart.min_score, 10) || 0;
+  const scores = Array.isArray(chart.scores) ? chart.scores : [];
+  const top100Count = parseInt(chart.top100_count, 10) || scores.length;
+  if (top100Count <= 0 || !scores.length || numericScore < minScore) return 0;
+
+  for (const row of scores) {
+    const rank = parseInt(row.rank, 10) || 0;
+    const listedScore = parseInt(row.score, 10) || 0;
+    if (rank <= 0 || rank > 100) continue;
+    if (numericScore >= listedScore) return rank;
+  }
+
+  // If score passes threshold but is below listed entries, use the tail rank.
+  const tail = scores[scores.length - 1];
+  return tail ? (parseInt(tail.rank, 10) || 0) : 0;
+}
+
+function isOverTop100Rank(value) {
+  const rank = parseInt(value, 10) || 0;
+  return Number.isInteger(rank) && rank > 0 && rank <= 100;
 }
 
 function getChartRatingPoints(score, grade, level) {
@@ -713,6 +824,184 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
   };
 }
 
+async function refreshOverRankingCache(db, options = {}) {
+  const force = !!options.force;
+  const maxAgeMinutes = Number.isFinite(parseInt(options.maxAgeMinutes, 10))
+    ? Math.max(0, parseInt(options.maxAgeMinutes, 10))
+    : 1440;
+
+  const currentMeta = db.prepare(`
+    SELECT total_charts, total_entries, source_pages, last_sync
+    FROM over_level_ranking_meta
+    WHERE id = 1
+  `).get();
+  const hasUsableCache = !!(currentMeta && parseInt(currentMeta.total_charts, 10) > 0);
+  if (!force && hasUsableCache && !isLeaderboardRefreshNeeded(currentMeta.last_sync, maxAgeMinutes)) {
+    return {
+      total_charts: parseInt(currentMeta.total_charts, 10) || 0,
+      total_entries: parseInt(currentMeta.total_entries, 10) || 0,
+      source_pages: parseInt(currentMeta.source_pages, 10) || 0,
+      last_sync: currentMeta.last_sync || null,
+      cached: true,
+    };
+  }
+
+  const scraped = await scrapeOverRankingTop100({
+    lang: 'en',
+    listDelayMs: 120,
+    chartDelayMs: 80,
+    maxPages: 250,
+    maxCharts: 4000,
+  });
+
+  const normalizedChartMap = new Map();
+  for (const chart of (Array.isArray(scraped?.charts) ? scraped.charts : [])) {
+    const key = overRankingChartKey(chart.song_title, chart.mode, chart.level);
+    if (!key) continue;
+    const candidate = {
+      chart_key: key,
+      source_no: String(chart.source_no || '').trim(),
+      song_title: normalizeOverRankingSongTitle(chart.song_title),
+      mode: String(chart.mode || '').trim(),
+      level: parseInt(chart.level, 10) || 0,
+      jacket_url: String(chart.jacket_url || '').trim(),
+      top100_count: Math.min(100, Math.max(0, parseInt(chart.top100_count, 10) || 0)),
+      min_score: Math.max(0, parseInt(chart.min_score, 10) || 0),
+      top_scores: (Array.isArray(chart.top_scores) ? chart.top_scores : [])
+        .map((row) => ({
+          rank: parseInt(row.rank, 10) || 0,
+          score: parseInt(row.score, 10) || 0,
+          grade: String(row.grade || '').trim(),
+          player_name: String(row.player_name || '').trim(),
+          played_at: String(row.played_at || '').trim(),
+        }))
+        .filter((row) => row.rank > 0 && row.rank <= 100 && row.score > 0)
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, 100),
+    };
+    if (candidate.top100_count <= 0) candidate.top100_count = candidate.top_scores.length;
+    if (candidate.min_score <= 0 && candidate.top_scores.length > 0) {
+      candidate.min_score = parseInt(candidate.top_scores[candidate.top_scores.length - 1].score, 10) || 0;
+    }
+
+    const existing = normalizedChartMap.get(key);
+    if (!existing) {
+      normalizedChartMap.set(key, candidate);
+      continue;
+    }
+    // Keep the fuller entry when duplicates appear.
+    const existingCount = parseInt(existing.top100_count, 10) || 0;
+    const candidateCount = parseInt(candidate.top100_count, 10) || 0;
+    if (candidateCount > existingCount) {
+      normalizedChartMap.set(key, candidate);
+    }
+  }
+
+  const normalizedCharts = Array.from(normalizedChartMap.values());
+  const txn = db.transaction((charts) => {
+    db.prepare('DELETE FROM over_level_ranking_scores').run();
+    db.prepare('DELETE FROM over_level_rankings').run();
+
+    const insertChart = db.prepare(`
+      INSERT INTO over_level_rankings (
+        chart_key, song_title, mode, level, jacket_url, source_no, top100_count, min_score, last_sync
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    `);
+    const insertScore = db.prepare(`
+      INSERT INTO over_level_ranking_scores (
+        chart_key, rank, score, grade, player_name, played_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    let totalEntries = 0;
+    for (const chart of charts) {
+      insertChart.run(
+        chart.chart_key,
+        chart.song_title,
+        chart.mode,
+        chart.level,
+        chart.jacket_url,
+        chart.source_no,
+        chart.top100_count,
+        chart.min_score
+      );
+      for (const row of chart.top_scores) {
+        insertScore.run(
+          chart.chart_key,
+          row.rank,
+          row.score,
+          row.grade,
+          row.player_name,
+          row.played_at
+        );
+        totalEntries += 1;
+      }
+    }
+
+    db.prepare(`
+      INSERT INTO over_level_ranking_meta (id, total_charts, total_entries, source_pages, last_sync)
+      VALUES (1, ?, ?, ?, datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET
+        total_charts = excluded.total_charts,
+        total_entries = excluded.total_entries,
+        source_pages = excluded.source_pages,
+        last_sync = datetime('now')
+    `).run(charts.length, totalEntries, parseInt(scraped?.total_pages, 10) || 0);
+  });
+  txn(normalizedCharts);
+
+  const refreshedMeta = db.prepare(`
+    SELECT total_charts, total_entries, source_pages, last_sync
+    FROM over_level_ranking_meta
+    WHERE id = 1
+  `).get();
+
+  return {
+    total_charts: parseInt(refreshedMeta?.total_charts, 10) || normalizedCharts.length,
+    total_entries: parseInt(refreshedMeta?.total_entries, 10) || 0,
+    source_pages: parseInt(refreshedMeta?.source_pages, 10) || 0,
+    last_sync: refreshedMeta?.last_sync || null,
+    cached: false,
+  };
+}
+
+async function ensureOverRankingLookupForScoring(db, options = {}) {
+  const maxAgeMinutes = Number.isFinite(parseInt(options.maxAgeMinutes, 10))
+    ? Math.max(0, parseInt(options.maxAgeMinutes, 10))
+    : 1440;
+
+  const meta = db.prepare(`
+    SELECT total_charts, last_sync
+    FROM over_level_ranking_meta
+    WHERE id = 1
+  `).get();
+  const hasCache = !!(meta && parseInt(meta.total_charts, 10) > 0);
+
+  if (!hasCache) {
+    try {
+      await refreshOverRankingCache(db, { force: true, maxAgeMinutes });
+    } catch (err) {
+      console.error('Initial over ranking cache sync error:', err.message);
+    }
+    return buildOverRankingLookup(db);
+  }
+
+  if (isLeaderboardRefreshNeeded(meta.last_sync, maxAgeMinutes)) {
+    (async () => {
+      try {
+        const refreshed = await refreshOverRankingCache(db, { maxAgeMinutes });
+        if (!refreshed.cached) {
+          console.log(`Over ranking cache synced: ${refreshed.total_charts} charts (${refreshed.total_entries} scores)`);
+        }
+      } catch (err) {
+        console.error('Background over ranking cache sync error:', err.message);
+      }
+    })();
+  }
+
+  return buildOverRankingLookup(db);
+}
+
 function findLeaderboardRankByName(db, name) {
   const normalized = String(name || '').replace(/\s+/g, ' ').trim();
   if (!normalized) return null;
@@ -749,6 +1038,7 @@ function insertGroupedNewClearPost(db, userId, clears, options = {}) {
     title_tier: c.title_tier || '',
     pumbility_gain: Math.max(0, parseInt(c.pumbility_gain, 10) || 0),
     singles_pumbility_gain: Math.max(0, parseInt(c.singles_pumbility_gain, 10) || 0),
+    over_top100_rank: Math.max(0, parseInt(c.over_top100_rank, 10) || 0),
   }));
   const first = normalized[0];
   const explicitGain = options?.pumbilityGain;
@@ -846,26 +1136,35 @@ router.post('/sync/pumbility', requireAuth, async (req, res) => {
     const client = await loginWithStoredCredentials(req.user.id);
     const { pumbilityValue, scores } = await scrapePumbility(client);
     const db = getDb();
+    const overRankingLookup = await ensureOverRankingLookupForScoring(db, { maxAgeMinutes: 1440 });
 
     // Update pumbility scores in transaction
     const insertOrUpdate = db.prepare(`
-      INSERT INTO user_pumbility_scores (user_id, song_title, mode, level, score, grade, background_url, date_played, rank_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO user_pumbility_scores (user_id, song_title, mode, level, score, grade, background_url, date_played, rank_order, over_top100_rank)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
         score = excluded.score,
         grade = excluded.grade,
         background_url = excluded.background_url,
         date_played = excluded.date_played,
-        rank_order = excluded.rank_order
+        rank_order = excluded.rank_order,
+        over_top100_rank = excluded.over_top100_rank
     `);
 
     const txn = db.transaction(() => {
       // Clear old pumbility scores and re-insert
       db.prepare('DELETE FROM user_pumbility_scores WHERE user_id = ?').run(req.user.id);
       for (const s of scores) {
+        const overTop100Rank = getOverTop100Rank(
+          overRankingLookup,
+          s.song_title,
+          s.mode,
+          s.level,
+          s.score
+        );
         insertOrUpdate.run(
           req.user.id, s.song_title, s.mode, s.level, s.score,
-          s.grade, s.background_url, s.date_played, s.rank_order
+          s.grade, s.background_url, s.date_played, s.rank_order, overTop100Rank
         );
       }
 
@@ -942,16 +1241,31 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       });
       const passScores = scores.filter((row) => isPassingScore(row.score, row.grade));
       const ignoredFailCount = scores.length - passScores.length;
+      const overRankingLookup = await ensureOverRankingLookupForScoring(db, { maxAgeMinutes: 1440 });
+      const scoredPassScores = passScores.map((row) => ({
+        ...row,
+        over_top100_rank: getOverTop100Rank(
+          overRankingLookup,
+          row.song_title,
+          row.mode,
+          row.level,
+          row.score
+        ),
+      }));
 
       const insertOrUpdate = db.prepare(`
-        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, background_url, shoe_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, background_url, shoe_id, over_top100_rank)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id, song_title, mode, level) DO UPDATE SET
           score = MAX(excluded.score, user_best_scores.score),
           grade = CASE WHEN excluded.score > user_best_scores.score THEN excluded.grade ELSE user_best_scores.grade END,
           plate = CASE WHEN excluded.score > user_best_scores.score THEN excluded.plate ELSE user_best_scores.plate END,
           background_url = CASE WHEN excluded.background_url != '' THEN excluded.background_url ELSE user_best_scores.background_url END,
-          shoe_id = CASE WHEN excluded.score > user_best_scores.score THEN excluded.shoe_id ELSE user_best_scores.shoe_id END
+          shoe_id = CASE WHEN excluded.score > user_best_scores.score THEN excluded.shoe_id ELSE user_best_scores.shoe_id END,
+          over_top100_rank = CASE
+            WHEN excluded.score > user_best_scores.score THEN excluded.over_top100_rank
+            ELSE user_best_scores.over_top100_rank
+          END
       `);
 
       // Capture old scores for upscore tracking before replacing
@@ -970,17 +1284,28 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
 
       const txn = db.transaction(() => {
         db.prepare('DELETE FROM user_best_scores WHERE user_id = ?').run(userId);
-        for (const s of passScores) {
+        for (const s of scoredPassScores) {
           const key = `${s.song_title}|${s.mode}|${s.level}`;
           const old = oldScores[key];
           const preservedShoeId = old && old.score === s.score ? old.shoe_id : null;
-          insertOrUpdate.run(userId, s.song_title, s.mode, s.level, s.score, s.grade, s.plate, s.background_url || '', preservedShoeId);
+          insertOrUpdate.run(
+            userId,
+            s.song_title,
+            s.mode,
+            s.level,
+            s.score,
+            s.grade,
+            s.plate,
+            s.background_url || '',
+            preservedShoeId,
+            s.over_top100_rank
+          );
         }
 
         // Track upscores and new clears
         upscores = [];
         newClears = [];
-        for (const s of passScores) {
+        for (const s of scoredPassScores) {
           const key = `${s.song_title}|${s.mode}|${s.level}`;
           const old = oldScores[key];
           if (old && s.score > old.score) {
@@ -989,6 +1314,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
               old_score: old.score, new_score: s.score,
               old_grade: old.grade, new_grade: s.grade,
               background_url: s.background_url || '',
+              over_top100_rank: s.over_top100_rank,
             });
           } else if (!old) {
             newClears.push(s);
@@ -1024,8 +1350,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       const actorUsername = profile?.username || 'Someone';
       const profileLink = buildProfilePath(profile?.username) || `/profile/${userId}`;
       const syncMessage = ignoredFailCount > 0
-        ? `${passScores.length} passing scores imported (${ignoredFailCount} failed scores ignored).`
-        : `${passScores.length} scores imported successfully!`;
+        ? `${scoredPassScores.length} passing scores imported (${ignoredFailCount} failed scores ignored).`
+        : `${scoredPassScores.length} scores imported successfully!`;
       createUserNotification(
         db,
         userId,
@@ -1073,7 +1399,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         });
       }
 
-      console.log(`Background best scores sync complete for ${userId}: ${passScores.length} passing scores (${ignoredFailCount} failed ignored)`);
+      console.log(`Background best scores sync complete for ${userId}: ${scoredPassScores.length} passing scores (${ignoredFailCount} failed ignored)`);
     } catch (err) {
       console.error('Background best scores sync error:', err.message);
       db.prepare(`
@@ -2022,6 +2348,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
     const progressBeforeSync = getUserTitleProgress(db, req.user.id);
     const client = await loginWithStoredCredentials(req.user.id);
     const plays = await scrapeRecentlyPlayed(client);
+    const overRankingLookup = await ensureOverRankingLookupForScoring(db, { maxAgeMinutes: 1440 });
 
     const activeShoe = db.prepare(`
       SELECT id
@@ -2047,8 +2374,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
 
     const insertRecent = db.prepare(`
       INSERT INTO user_recently_played
-      (user_id, shoe_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (user_id, shoe_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate, over_top100_rank)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO NOTHING
     `);
 
@@ -2065,6 +2392,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
         miss = MAX(COALESCE(miss, 0), ?),
         max_combo = MAX(COALESCE(max_combo, 0), ?),
         kcal = MAX(COALESCE(kcal, 0), ?),
+        over_top100_rank = ?,
         shoe_id = CASE
           WHEN shoe_id IS NULL AND ? IS NOT NULL THEN ?
           ELSE shoe_id
@@ -2074,12 +2402,12 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
 
     // Also update best scores for passing runs only.
     const insertBest = db.prepare(`
-      INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id)
-      VALUES (?, ?, ?, ?, ?, ?, '', ?)
+      INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id, over_top100_rank)
+      VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
     `);
     const replaceBest = db.prepare(`
       UPDATE user_best_scores
-      SET score = ?, grade = ?, plate = '', shoe_id = ?
+      SET score = ?, grade = ?, plate = '', shoe_id = ?, over_top100_rank = ?
       WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?
     `);
 
@@ -2121,6 +2449,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
         const maxCombo = parseInt(p.max_combo, 10) || 0;
         const kcal = Number.isFinite(Number(p.kcal)) ? Number(p.kcal) : 0;
         const plate = p.plate || '';
+        const overTop100Rank = getOverTop100Rank(overRankingLookup, songTitle, mode, level, score);
 
         // When syncing, the current shoe is treated as the shoe worn for fetched plays.
         const existingPlay = findRecentPlay.get(req.user.id, songTitle, mode, level, score, grade, datePlayed);
@@ -2143,7 +2472,8 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
             miss,
             maxCombo,
             kcal,
-            plate
+            plate,
+            overTop100Rank
           );
         } else {
           updateRecent.run(
@@ -2160,6 +2490,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
             miss,
             maxCombo,
             kcal,
+            overTop100Rank,
             activeShoeId,
             activeShoeId,
             existingPlay.id
@@ -2180,6 +2511,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 old_grade: existing.grade || '', new_grade: grade || '',
                 background_url: backgroundUrl || '',
                 perfect, great, good, bad, miss,
+                over_top100_rank: overTop100Rank,
               });
             } else {
               // New clear - first pass on this chart
@@ -2192,12 +2524,13 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
                 plate: plate || '',
                 background_url: backgroundUrl || '',
                 perfect, great, good, bad, miss,
+                over_top100_rank: overTop100Rank,
               });
             }
             if (!existing) {
-              insertBest.run(req.user.id, songTitle, mode, level, score, grade, activeShoeId);
+              insertBest.run(req.user.id, songTitle, mode, level, score, grade, activeShoeId, overTop100Rank);
             } else {
-              replaceBest.run(score, grade, activeShoeId, req.user.id, songTitle, mode, level);
+              replaceBest.run(score, grade, activeShoeId, overTop100Rank, req.user.id, songTitle, mode, level);
             }
             updatedCount++;
           }
@@ -2287,7 +2620,7 @@ router.get('/pumbility/:userId', async (req, res) => {
     const sync = db.prepare('SELECT pumbility_value, last_pumbility_sync, last_best_scores_sync, best_scores_imported FROM user_piugame_sync WHERE user_id = ?').get(userId);
 
     const bestScores = db.prepare(
-      'SELECT song_title, mode, level, score, grade, background_url FROM user_best_scores WHERE user_id = ? AND score > 0'
+      'SELECT song_title, mode, level, score, grade, background_url, over_top100_rank FROM user_best_scores WHERE user_id = ? AND score > 0'
     ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
 
     const allRated = [];
@@ -2508,6 +2841,47 @@ router.get('/pumbility-ranking', (req, res) => {
     total_entries: meta?.total_entries || 0,
     last_sync: meta?.last_sync || null,
     rankings,
+  });
+});
+
+// ─── Over Lv.20 Ranking Cache ───────────────────────────
+
+// POST /api/piugame/sync/over-ranking — scrape public OVER Lv.20 top-100 chart rankings
+router.post('/sync/over-ranking', requireAuth, async (req, res) => {
+  try {
+    const db = getDb();
+    const force = parseBoolean(req.query?.force ?? req.body?.force) === true;
+    const refreshed = await refreshOverRankingCache(db, {
+      force,
+      maxAgeMinutes: 1440,
+    });
+    res.json({
+      success: true,
+      charts: refreshed.total_charts || 0,
+      entries: refreshed.total_entries || 0,
+      source_pages: refreshed.source_pages || 0,
+      last_sync: refreshed.last_sync || null,
+      cached: !!refreshed.cached,
+    });
+  } catch (err) {
+    console.error('Over ranking sync error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/piugame/over-ranking/meta — inspect OVER Lv.20 ranking cache freshness
+router.get('/over-ranking/meta', (req, res) => {
+  const db = getDb();
+  const meta = db.prepare(`
+    SELECT total_charts, total_entries, source_pages, last_sync
+    FROM over_level_ranking_meta
+    WHERE id = 1
+  `).get();
+  res.json({
+    total_charts: parseInt(meta?.total_charts, 10) || 0,
+    total_entries: parseInt(meta?.total_entries, 10) || 0,
+    source_pages: parseInt(meta?.source_pages, 10) || 0,
+    last_sync: meta?.last_sync || null,
   });
 });
 

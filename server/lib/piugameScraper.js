@@ -29,6 +29,7 @@ const PLATE_MAP = {
 // Mode letter mapping from image URLs
 const MODE_MAP = { s: 'Single', d: 'Double', c: 'Co-op', u: 'UCS' };
 const JUDGMENT_ORDER = ['perfect', 'great', 'good', 'bad', 'miss'];
+const OVER_RANKING_PAGE_SIZE = 10;
 
 function collapseWhitespace(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -269,6 +270,130 @@ function parsePlateFromUrl(src) {
  */
 function parseScore(text) {
   return parseInt((text || '').replace(/,/g, '').trim(), 10) || 0;
+}
+
+function extractBackgroundUrl(styleValue) {
+  const style = String(styleValue || '');
+  const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
+  return match ? match[1] : '';
+}
+
+function normalizeKnownSongTitle(title) {
+  const normalized = collapseWhitespace(title);
+  if (!normalized) return '';
+  const compact = normalized.toLowerCase().replace(/\s+/g, ' ');
+
+  if (compact === 'yog-sothoth - short cut -' || compact === 'yog-sothoth- short cut -') {
+    return 'Yog-Sothoth - SHORT CUT -';
+  }
+
+  return normalized;
+}
+
+function parseLastPaginationPage($) {
+  let lastPage = 1;
+  $('.board_paging button, .board_paging a, .paging button, .paging a').each((_, el) => {
+    const $el = $(el);
+    const raw = [
+      $el.attr('onclick') || '',
+      $el.attr('href') || '',
+      $el.text() || '',
+    ].join(' ');
+    const matches = raw.match(/page=(\d+)/gi) || [];
+    for (const token of matches) {
+      const value = parseInt(token.replace(/[^\d]/g, ''), 10);
+      if (Number.isInteger(value) && value > lastPage) lastPage = value;
+    }
+  });
+  return Math.max(1, lastPage);
+}
+
+function parseOverRankingListPage(html) {
+  const $ = cheerio.load(typeof html === 'string' ? html : '');
+  const rows = [];
+  $('ul.rating_ranking_list.overRangking_st > li .li_in > a').each((_, link) => {
+    const $link = $(link);
+    const href = String($link.attr('href') || '').trim();
+    if (!href) return;
+
+    const url = new URL(href, `${PIU_BASE}/leaderboard/over_ranking.php`);
+    const path = `${url.pathname}${url.search}`;
+    const sourceNo = String(url.searchParams.get('no') || '').trim();
+
+    const songTitle = normalizeKnownSongTitle($link.find('.songName_w .tt').first().text());
+    if (!songTitle) return;
+
+    const modeImg = $link.find('.stepBall_in .tw img').first().attr('src') || '';
+    const mode = parseModeFromUrl(modeImg);
+    const level = parseLevelFromImages($, $link.find('.stepBall_in .numw').first());
+    if (!mode || level <= 0) return;
+
+    const jacketUrl = extractBackgroundUrl($link.find('.songImg_w .re.img.bgfix').first().attr('style') || '');
+    rows.push({
+      source_no: sourceNo,
+      view_path: path,
+      song_title: songTitle,
+      mode,
+      level,
+      jacket_url: jacketUrl,
+    });
+  });
+
+  return {
+    rows,
+    total_pages: parseLastPaginationPage($),
+  };
+}
+
+function parseOverRankingChartPage(html, fallback = {}) {
+  const $ = cheerio.load(typeof html === 'string' ? html : '');
+
+  const headerSongTitle = normalizeKnownSongTitle($('.rangking_level_w .songName_w .tt').first().text());
+  const headerModeImg = $('.rangking_level_w .stepBall_in .tw img').first().attr('src') || '';
+  const headerMode = parseModeFromUrl(headerModeImg);
+  const headerLevel = parseLevelFromImages($, $('.rangking_level_w .stepBall_in .numw').first());
+  const headerJacket = extractBackgroundUrl($('.rangking_level_w .songImg_w .re.img.bgfix').first().attr('style') || '');
+
+  const topScores = [];
+  $('.rangking_list_w ul.list > li').each((idx, li) => {
+    const $li = $(li);
+    const rankText = collapseWhitespace($li.find('.num .tt').first().text());
+    const parsedRank = parseInt(rankText, 10);
+    const rank = Number.isInteger(parsedRank) && parsedRank > 0 ? parsedRank : idx + 1;
+    const playerName = collapseWhitespace($li.find('.name_w .profile_name').first().text());
+    const playerTag = collapseWhitespace($li.find('.name_w .profile_name.st1').first().text());
+    const score = parseScore($li.find('.score .tt').first().text());
+    const grade = parseGradeFromUrl($li.find('.grade img').first().attr('src') || '');
+    const playedAt = collapseWhitespace($li.find('.date .tt').first().text());
+    if (!Number.isInteger(rank) || rank <= 0 || score <= 0) return;
+
+    topScores.push({
+      rank,
+      player_name: playerName,
+      player_tag: playerTag,
+      score,
+      grade,
+      played_at: playedAt,
+    });
+  });
+
+  topScores.sort((a, b) => a.rank - b.rank);
+  const top100 = topScores.slice(0, 100);
+  const minScore = top100.length > 0
+    ? (parseInt(top100[top100.length - 1].score, 10) || 0)
+    : 0;
+
+  return {
+    source_no: String(fallback.source_no || ''),
+    view_path: String(fallback.view_path || ''),
+    song_title: headerSongTitle || normalizeKnownSongTitle(fallback.song_title || ''),
+    mode: headerMode || String(fallback.mode || '').trim() || 'Single',
+    level: parseInt(headerLevel, 10) || parseInt(fallback.level, 10) || 0,
+    jacket_url: headerJacket || String(fallback.jacket_url || ''),
+    top100_count: top100.length,
+    min_score: minScore,
+    top_scores: top100,
+  };
 }
 
 /**
@@ -1014,6 +1139,102 @@ async function scrapePumbilityRanking() {
   return { rankings: top1000, threshold };
 }
 
+/**
+ * Scrape all Over Lv.20 chart entries and each chart's TOP 100 ranking list.
+ * Public pages; no account login required.
+ */
+async function scrapeOverRankingTop100(
+  {
+    lang = 'en',
+    listDelayMs = 120,
+    chartDelayMs = 100,
+    maxPages = 250,
+    maxCharts = 3000,
+    onProgress = null,
+  } = {}
+) {
+  const client = createClient();
+  const listBaseUrl = `${PIU_BASE}/leaderboard/over_ranking.php`;
+
+  // Warm up + set preferred language before scraping pages.
+  await client.get(`${listBaseUrl}?page=1`);
+  if (lang) {
+    try {
+      await setLanguage(client, lang);
+    } catch (err) {
+      // Continue even if language switching fails; selectors are class-based.
+    }
+  }
+
+  const discoveredCharts = [];
+  const seenCharts = new Set();
+  let totalPages = 1;
+  const cappedMaxPages = Math.max(1, parseInt(maxPages, 10) || 1);
+
+  for (let page = 1; page <= cappedMaxPages && page <= totalPages; page++) {
+    if (page > 1 && listDelayMs > 0) await delay(listDelayMs);
+
+    const pageRes = await client.get(`${listBaseUrl}?page=${page}`);
+    const parsed = parseOverRankingListPage(pageRes.data);
+    totalPages = Math.max(totalPages, parsed.total_pages || 1);
+
+    for (const row of parsed.rows) {
+      const key = `${row.song_title}|${row.mode}|${row.level}|${row.source_no}`;
+      if (seenCharts.has(key)) continue;
+      seenCharts.add(key);
+      discoveredCharts.push(row);
+      if (discoveredCharts.length >= maxCharts) break;
+    }
+
+    if (discoveredCharts.length >= maxCharts) break;
+    if (parsed.rows.length === 0 && page >= totalPages) break;
+  }
+
+  const charts = [];
+  const failedCharts = [];
+
+  for (let i = 0; i < discoveredCharts.length; i++) {
+    const chart = discoveredCharts[i];
+    if (i > 0 && chartDelayMs > 0) await delay(chartDelayMs);
+
+    try {
+      const fallbackPath = chart.source_no
+        ? `/leaderboard/over_ranking_view.php?no=${encodeURIComponent(chart.source_no)}`
+        : '/leaderboard/over_ranking_view.php';
+      const viewUrl = new URL(chart.view_path || fallbackPath, PIU_BASE).toString();
+      const viewRes = await client.get(viewUrl);
+      const parsedChart = parseOverRankingChartPage(viewRes.data, chart);
+      if (!parsedChart.song_title || parsedChart.level <= 0) {
+        failedCharts.push({
+          source_no: chart.source_no || '',
+          reason: 'Missing chart header',
+        });
+      } else {
+        charts.push(parsedChart);
+      }
+    } catch (err) {
+      failedCharts.push({
+        source_no: chart.source_no || '',
+        reason: err.message || 'Chart scrape failed',
+      });
+    }
+
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress(i + 1, discoveredCharts.length);
+      } catch (_) {}
+    }
+  }
+
+  return {
+    charts,
+    total_pages: totalPages,
+    discovered_charts: discoveredCharts.length,
+    failed_charts: failedCharts,
+    scraped_at: new Date().toISOString(),
+  };
+}
+
 module.exports = {
   login,
   createClient,
@@ -1023,4 +1244,5 @@ module.exports = {
   scrapeTopSongs,
   scrapeRecentlyPlayed,
   scrapePumbilityRanking,
+  scrapeOverRankingTop100,
 };

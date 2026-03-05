@@ -275,6 +275,7 @@ function buildSessionSummary(sessionRows, jacketLookup = {}, userProfile = null)
       _rating: rating,
       _jacketUrl: getJacketForPlay(play, jacketLookup),
       _grade: play?.grade || getRankLabel(score),
+      _over_top100_rank: parseInt(play?.over_top100_rank, 10) || 0,
     };
   });
 

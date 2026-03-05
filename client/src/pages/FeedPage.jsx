@@ -30,6 +30,11 @@ function getRank(score) {
   return { label: 'F', color: 'text-gray-600' };
 }
 
+function getOverTop100Rank(rawRank) {
+  const rank = parseInt(rawRank, 10) || 0;
+  return rank >= 1 && rank <= 100 ? rank : 0;
+}
+
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
   const now = new Date();
@@ -66,6 +71,7 @@ function getClearItems(item) {
     title_tier: '',
     pumbility_gain: parsePumbilityGain(item.pumbility_gain),
     singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
+    over_top100_rank: parseInt(item.over_top100_rank, 10) || 0,
   }];
 
   try {
@@ -90,6 +96,7 @@ function getClearItems(item) {
       title_tier: c.title_tier || '',
       pumbility_gain: parsePumbilityGain(c.pumbility_gain),
       singles_pumbility_gain: parsePumbilityGain(c.singles_pumbility_gain),
+      over_top100_rank: parseInt(c.over_top100_rank, 10) || 0,
     }));
   } catch {
     return fallback;
@@ -154,6 +161,7 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
   const plateColor = PLATE_COLORS[score.plate] || 'text-gray-400';
   const parsedOldGrade = parseGrade(score.old_grade, getRank(score.old_score).label);
   const hasJudgments = (score.perfect > 0 || score.great > 0 || score.good > 0 || score.bad > 0 || score.miss > 0);
+  const overRank = getOverTop100Rank(score.over_top100_rank);
   const judgments = [
     { label: 'PERFECT', value: score.perfect || 0, textColor: 'text-sky-400' },
     { label: 'GREAT', value: score.great || 0, textColor: 'text-green-400' },
@@ -198,6 +206,11 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
               <span className={`font-display font-bold text-[10px] uppercase ${score.mode === 'Single' ? 'text-red-400' : score.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{score.mode}</span>
               <span className={`font-display font-bold text-base ${score.mode === 'Single' ? 'text-red-300' : score.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{score.level}</span>
             </div>
+            {overRank > 0 && (
+              <span className="px-2 py-0.5 rounded-full border border-piu-gold/50 bg-piu-gold/10 text-piu-gold text-[10px] font-display font-black">
+                OVER #{overRank}
+              </span>
+            )}
             <div className="text-center flex-1">
               {displayScore > 0 ? (
                 <p
@@ -549,6 +562,7 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
           const improvement = u.new_score - u.old_score;
           const songPumbilityGain = parsePumbilityGain(u.pumbility_gain);
           const songSinglesPumbilityGain = parsePumbilityGain(u.singles_pumbility_gain);
+          const overRank = getOverTop100Rank(u.over_top100_rank);
 
           const norm = (u.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
           const exactKey = `${norm}|${u.mode}|${u.level}`;
@@ -574,6 +588,11 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
                   <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
                     {isSingle ? 'S' : 'D'}{u.level}
                   </span>
+                  {overRank > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
+                      OVER #{overRank}
+                    </span>
+                  )}
                   {songPumbilityGain > 0 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
                       +{songPumbilityGain.toLocaleString()} PB
@@ -921,6 +940,7 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
 
           const rank = getRank(clear.score);
           const parsedGrade = parseGrade(clear.grade, rank.label);
+          const overRank = getOverTop100Rank(clear.over_top100_rank);
           const isSingle = clear.mode === 'Single';
           const badgeColor = isSingle
             ? 'bg-red-600/20 text-red-400'
@@ -951,6 +971,11 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
                   <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
                     {isSingle ? 'S' : clear.mode === 'Double' ? 'D' : 'C'}{clear.level}
                   </span>
+                  {overRank > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
+                      OVER #{overRank}
+                    </span>
+                  )}
                   {clear.plate && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>
                   )}

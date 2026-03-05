@@ -44,6 +44,11 @@ function modeShort(mode) {
   return 'X';
 }
 
+function getOverTop100Rank(value) {
+  const rank = parseInt(value, 10) || 0;
+  return rank > 0 && rank <= 100 ? rank : 0;
+}
+
 function getGradeColorClass(grade) {
   const normalized = String(grade || '').toUpperCase();
   if (normalized.includes('SSS')) return 'text-sky-300';
@@ -145,6 +150,11 @@ function JudgmentModal({ row, onClose }) {
               <span className={`font-display font-bold text-[10px] uppercase ${row.mode === 'Single' ? 'text-red-400' : row.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{row.mode}</span>
               <span className={`font-display font-bold text-base ${row.mode === 'Single' ? 'text-red-300' : row.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{row.level}</span>
             </div>
+            {getOverTop100Rank(row.over_top100_rank) > 0 && (
+              <span className="px-2 py-0.5 rounded border border-yellow-400/40 bg-yellow-500/10 text-yellow-300 text-[10px] font-display font-black">
+                OVER #{getOverTop100Rank(row.over_top100_rank)}
+              </span>
+            )}
             <div className="text-center flex-1">
               {displayScore > 0 ? (
                 <p
@@ -278,7 +288,14 @@ export default function SessionShareCard({
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0">
                             <p className="text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">{row.song_title}</p>
-                            <p className="text-[10px] text-gray-500">{modeShort(row.mode)}{row.level || '?'}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {modeShort(row.mode)}{row.level || '?'}
+                              {getOverTop100Rank(row.over_top100_rank) > 0 && (
+                                <span className="ml-1 text-yellow-300 font-display font-black">
+                                  OVER #{getOverTop100Rank(row.over_top100_rank)}
+                                </span>
+                              )}
+                            </p>
                           </div>
                         </div>
                       </td>

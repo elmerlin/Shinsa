@@ -49,6 +49,7 @@ function sanitizeSongRows(rows) {
     score: toInt(row?._score ?? row?.score),
     grade: String((row?._grade ?? row?.grade) || ''),
     rating: toNumber(row?._rating ?? row?.rating),
+    over_top100_rank: toInt(row?._over_top100_rank ?? row?.over_top100_rank),
     jacket_url: String((row?._jacketUrl ?? row?.jacket_url) || ''),
   }));
 }

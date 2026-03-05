@@ -55,6 +55,11 @@ function getRank(score) {
   return { label: 'F', color: 'text-gray-600' };
 }
 
+function getOverTop100Rank(rawRank) {
+  const rank = parseInt(rawRank, 10) || 0;
+  return rank >= 1 && rank <= 100 ? rank : 0;
+}
+
 function getGradeColor(grade) {
   const g = parseGrade(grade).normalized.replace('+', '_P');
   if (g.includes('SSS')) return 'text-sky-300';
@@ -1850,6 +1855,7 @@ export default function ProfilePage() {
                   {selectedOverviewDay.plays.map((play, idx) => {
                     const rank = getRank(play.score);
                     const displayGrade = parseGrade(play.grade, rank.label);
+                    const overRank = getOverTop100Rank(play.over_top100_rank);
                     const isBreak = isStageBreakPlay(play);
                     const playNorm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
                     const playChartKey = `${playNorm}|${play.mode}|${play.level}`;
@@ -1873,6 +1879,9 @@ export default function ProfilePage() {
                             {play.mode === 'Single' ? 'S' : play.mode === 'Double' ? 'D' : 'C'}{play.level}
                             {play.date_played && (
                               <span className="ml-1.5 text-gray-600">{String(play.date_played).split(' ').slice(1).join(' ') || ''}</span>
+                            )}
+                            {overRank > 0 && (
+                              <span className="ml-1.5 text-piu-gold font-display font-bold">OVER #{overRank}</span>
                             )}
                           </p>
                         </div>
@@ -3044,6 +3053,7 @@ export default function ProfilePage() {
                 {piuPumbility.scores.map((s, i) => {
                   const rank = getRank(s.score);
                   const displayGrade = parseGrade(s.grade, rank.label);
+                  const overRank = getOverTop100Rank(s.over_top100_rank);
                   return (
                     <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <span className="text-xs text-gray-500 font-mono w-6 shrink-0 text-right">#{s.rank_order}</span>
@@ -3053,6 +3063,20 @@ export default function ProfilePage() {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${
+                            s.mode === 'Single' ? 'bg-red-600/20 text-red-400' :
+                            s.mode === 'Double' ? 'bg-green-600/20 text-green-400' :
+                            'bg-blue-600/20 text-blue-400'
+                          }`}>
+                            {s.mode === 'Single' ? 'S' : s.mode === 'Double' ? 'D' : 'C'}{s.level}
+                          </span>
+                          {overRank > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
+                              OVER #{overRank}
+                            </span>
+                          )}
+                        </div>
                         {s.rating > 0 && (
                           <p className="text-[10px] text-gray-500 font-mono">
                             Rating: {s.rating.toLocaleString()}
@@ -3218,6 +3242,7 @@ export default function ProfilePage() {
                 {bestScorePagination.rows.map((s, i) => {
                   const rank = getRank(s.score);
                   const displayGrade = parseGrade(s.grade, rank.label);
+                  const overRank = getOverTop100Rank(s.over_top100_rank);
                   return (
                     <div key={`${s.song_title}-${s.mode}-${s.level}-${bestScorePagination.startIndex + i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <PiuSongJacket
@@ -3234,6 +3259,11 @@ export default function ProfilePage() {
                           }`}>
                             {s.mode === 'Single' ? 'S' : s.mode === 'Double' ? 'D' : 'C'}{s.level}
                           </span>
+                          {overRank > 0 && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-gold/10 text-piu-gold font-display font-black">
+                              OVER #{overRank}
+                            </span>
+                          )}
                           {s.plate && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{s.plate}</span>
                           )}
@@ -3315,6 +3345,7 @@ export default function ProfilePage() {
               {recentlyPlayedRows.map((p, i) => {
                 const rank = getRank(p.score);
                 const displayGrade = parseGrade(p.grade, rank.label);
+                const overRank = getOverTop100Rank(p.over_top100_rank);
                 return (
                   <div
                     key={i}
@@ -3327,6 +3358,12 @@ export default function ProfilePage() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-display font-bold truncate">{p.song_title}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {p.mode === 'Single' ? 'S' : p.mode === 'Double' ? 'D' : 'C'}{p.level}
+                        {overRank > 0 && (
+                          <span className="ml-1.5 text-piu-gold font-display font-bold">OVER #{overRank}</span>
+                        )}
+                      </p>
                     </div>
                     <div className="text-right shrink-0">
                       {p.score > 0 ? (
@@ -3481,6 +3518,7 @@ export default function ProfilePage() {
         const p = selectedPlay;
         const rank = getRank(p.score);
         const displayGrade = parseGrade(p.grade, rank.label);
+        const overRank = getOverTop100Rank(p.over_top100_rank);
         const hasBreakdown = p.perfect > 0 || p.great > 0 || p.good > 0 || p.bad > 0 || p.miss > 0;
         const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
         const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
@@ -3527,6 +3565,11 @@ export default function ProfilePage() {
                     <span className={`font-display font-bold text-[10px] uppercase ${p.mode === 'Single' ? 'text-red-400' : p.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{p.mode}</span>
                     <span className={`font-display font-bold text-base ${p.mode === 'Single' ? 'text-red-300' : p.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{p.level}</span>
                   </div>
+                  {overRank > 0 && (
+                    <span className="px-2 py-0.5 rounded-full border border-piu-gold/50 bg-piu-gold/10 text-piu-gold text-[10px] font-display font-black">
+                      OVER #{overRank}
+                    </span>
+                  )}
                   <div className="text-center flex-1">
                     {p.score > 0 ? (
                       <p

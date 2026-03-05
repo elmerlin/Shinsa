@@ -994,6 +994,7 @@ function initializeDb() {
       background_url TEXT DEFAULT '',
       date_played TEXT DEFAULT '',
       rank_order INTEGER DEFAULT 0,
+      over_top100_rank INTEGER DEFAULT 0,
       UNIQUE(user_id, song_title, mode, level)
     );
 
@@ -1006,6 +1007,7 @@ function initializeDb() {
       score INTEGER NOT NULL,
       grade TEXT DEFAULT '',
       plate TEXT DEFAULT '',
+      over_top100_rank INTEGER DEFAULT 0,
       shoe_id INTEGER REFERENCES user_shoes(id) ON DELETE SET NULL,
       UNIQUE(user_id, song_title, mode, level)
     );
@@ -1061,7 +1063,8 @@ function initializeDb() {
       miss INTEGER,
       max_combo INTEGER DEFAULT 0,
       kcal REAL DEFAULT 0,
-      plate TEXT DEFAULT ''
+      plate TEXT DEFAULT '',
+      over_top100_rank INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS user_piugame_sync (
@@ -1084,6 +1087,36 @@ function initializeDb() {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       threshold INTEGER NOT NULL DEFAULT 0,
       total_entries INTEGER NOT NULL DEFAULT 0,
+      last_sync TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS over_level_rankings (
+      chart_key TEXT PRIMARY KEY,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      jacket_url TEXT DEFAULT '',
+      source_no TEXT DEFAULT '',
+      top100_count INTEGER NOT NULL DEFAULT 0,
+      min_score INTEGER NOT NULL DEFAULT 0,
+      last_sync TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS over_level_ranking_scores (
+      chart_key TEXT NOT NULL REFERENCES over_level_rankings(chart_key) ON DELETE CASCADE,
+      rank INTEGER NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,
+      grade TEXT DEFAULT '',
+      player_name TEXT DEFAULT '',
+      played_at TEXT DEFAULT '',
+      PRIMARY KEY (chart_key, rank)
+    );
+
+    CREATE TABLE IF NOT EXISTS over_level_ranking_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      total_charts INTEGER NOT NULL DEFAULT 0,
+      total_entries INTEGER NOT NULL DEFAULT 0,
+      source_pages INTEGER NOT NULL DEFAULT 0,
       last_sync TEXT DEFAULT ''
     );
 
@@ -1196,6 +1229,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_pumbility_scores_user ON user_pumbility_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user ON user_best_scores(user_id);
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
+    CREATE INDEX IF NOT EXISTS idx_over_level_rankings_song_mode_level ON over_level_rankings(song_title, mode, level);
+    CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
     CREATE INDEX IF NOT EXISTS idx_user_shoes_user ON user_shoes(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_shoes_make_model ON user_shoes(make, model);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_user_shoes_single_active ON user_shoes(user_id) WHERE is_current = 1;
@@ -1348,6 +1383,7 @@ function initializeDb() {
     ['kcal', 'REAL DEFAULT 0'],
     ['plate', "TEXT DEFAULT ''"],
     ['machine_name', "TEXT DEFAULT ''"],
+    ['over_top100_rank', 'INT DEFAULT 0'],
   ];
   for (const [col, type] of recentMigrations) {
     if (!recentCols.includes(col)) {
@@ -1500,9 +1536,17 @@ function initializeDb() {
   if (!bestScoreCols.includes('shoe_id')) {
     db.exec("ALTER TABLE user_best_scores ADD COLUMN shoe_id INTEGER DEFAULT NULL");
   }
+  if (!bestScoreCols.includes('over_top100_rank')) {
+    db.exec("ALTER TABLE user_best_scores ADD COLUMN over_top100_rank INT DEFAULT 0");
+  }
   const bestScoreIndexes = db.prepare("PRAGMA index_list(user_best_scores)").all().map(i => i.name);
   if (!bestScoreIndexes.includes('idx_best_scores_shoe')) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_best_scores_shoe ON user_best_scores(shoe_id)');
+  }
+
+  const pumbilityScoreCols = db.prepare("PRAGMA table_info(user_pumbility_scores)").all().map(c => c.name);
+  if (!pumbilityScoreCols.includes('over_top100_rank')) {
+    db.exec("ALTER TABLE user_pumbility_scores ADD COLUMN over_top100_rank INT DEFAULT 0");
   }
 
   // Migrations for user_posts - add youtube_url and comments_disabled
@@ -1936,6 +1980,44 @@ function initializeDb() {
     db.exec("ALTER TABLE user_upscores ADD COLUMN singles_pumbility_gain INT DEFAULT 0");
   }
   backfillLegacyGroupedNewClears();
+
+  // Cache of PIUGame OVER Lv.20 chart rankings (top 100 per chart)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS over_level_rankings (
+      chart_key TEXT PRIMARY KEY,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      jacket_url TEXT DEFAULT '',
+      source_no TEXT DEFAULT '',
+      top100_count INTEGER NOT NULL DEFAULT 0,
+      min_score INTEGER NOT NULL DEFAULT 0,
+      last_sync TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS over_level_ranking_scores (
+      chart_key TEXT NOT NULL REFERENCES over_level_rankings(chart_key) ON DELETE CASCADE,
+      rank INTEGER NOT NULL,
+      score INTEGER NOT NULL DEFAULT 0,
+      grade TEXT DEFAULT '',
+      player_name TEXT DEFAULT '',
+      played_at TEXT DEFAULT '',
+      PRIMARY KEY (chart_key, rank)
+    );
+
+    CREATE TABLE IF NOT EXISTS over_level_ranking_meta (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      total_charts INTEGER NOT NULL DEFAULT 0,
+      total_entries INTEGER NOT NULL DEFAULT 0,
+      source_pages INTEGER NOT NULL DEFAULT 0,
+      last_sync TEXT DEFAULT ''
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_over_level_rankings_song_mode_level
+      ON over_level_rankings(song_title, mode, level);
+    CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score
+      ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
+  `);
 
   // Migrations for users table - add world map location fields
   const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);

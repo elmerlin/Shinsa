@@ -645,7 +645,7 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
 function queryUserBestScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, over_top100_rank
     FROM user_best_scores
     WHERE user_id = ?
   `).all(userId);
@@ -655,7 +655,7 @@ function queryUserRecentScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
     SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
-           perfect, great, good, bad, miss, max_combo
+           perfect, great, good, bad, miss, max_combo, over_top100_rank
     FROM user_recently_played
     WHERE user_id = ?
   `).all(userId);
@@ -664,7 +664,7 @@ function queryUserRecentScores(db, userId) {
 function queryUserPumbilityScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, background_url, date_played
+    SELECT id, user_id, song_title, mode, level, score, grade, background_url, date_played, over_top100_rank
     FROM user_pumbility_scores
     WHERE user_id = ?
   `).all(userId);
@@ -693,6 +693,7 @@ function buildUserBestByChartMap({ bestScores, recentScores, pumbilityScores, al
       plate: row.plate || '',
       background_url: row.background_url || '',
       date_played: row.date_played || row.created_at || '',
+      over_top100_rank: parseInt(row.over_top100_rank, 10) || 0,
       is_pass: isPassRecord({ score, grade }),
       is_stage_break: !isPassRecord({ score, grade }),
       rating: calculateRating(row.level, grade, isPassRecord({ score, grade })),
@@ -832,6 +833,7 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
       plate: record.plate || '',
       rating,
       date_played: record.date_played || '',
+      over_top100_rank: parseInt(record.over_top100_rank, 10) || 0,
       jacket_url: chart.jacket_url || '',
     };
 
