@@ -60,6 +60,8 @@ export default function PumbilityBreakdownModal({
   title,
   rows,
   summary = null,
+  headerMeta = null,
+  jacketLookup = {},
   onClose,
   showIncompleteCta = false,
   ctaMessage = '',
@@ -75,8 +77,14 @@ export default function PumbilityBreakdownModal({
   const averageRating = Number(summary?.average_rating) || 0;
   const minEntryRating = parseInt(summary?.min_entry_rating, 10) || 0;
   const averageScore = parseInt(summary?.average_score, 10) || 0;
+  const averageScoreGrade = String(summary?.average_score_grade || '').trim();
   const averageLevel = Number(summary?.average_level) || 0;
+  const equivalentLevel = parseInt(summary?.equivalent_level, 10) || 0;
+  const equivalentGrade = String(summary?.equivalent_grade || '').trim();
+  const minEntryDetails = summary?.min_entry_details || null;
   const scoreCount = parseInt(summary?.score_count, 10) || 0;
+  const metaRank = parseInt(headerMeta?.rank, 10) || 0;
+  const metaPumbility = parseInt(headerMeta?.pumbility, 10) || 0;
 
   return (
     <div
@@ -88,7 +96,19 @@ export default function PumbilityBreakdownModal({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
-          <h3 className="font-display font-bold tracking-wide text-sm sm:text-base">{title}</h3>
+          <div>
+            <h3 className="font-display font-bold tracking-wide text-sm sm:text-base">{title}</h3>
+            {(metaPumbility > 0 || metaRank > 0) ? (
+              <div className="mt-1 flex items-center gap-2">
+                {metaPumbility > 0 ? (
+                  <span className="font-mono font-bold text-piu-gold text-sm">{formatNumber(metaPumbility)}</span>
+                ) : null}
+                {metaRank > 0 ? (
+                  <span className="px-2 py-0.5 rounded border border-piu-gold/35 text-[11px] font-display font-bold text-piu-gold">#{metaRank}</span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
           <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
         </div>
 
@@ -103,18 +123,32 @@ export default function PumbilityBreakdownModal({
                       ? averageRating.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
                       : '--'}
                   </p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    {equivalentLevel > 0 && equivalentGrade
+                      ? `~ Lv.${equivalentLevel} ${equivalentGrade}`
+                      : '--'}
+                  </p>
                 </div>
                 <div className="rounded-md border border-piu-border/40 bg-piu-card/40 px-2 py-1.5 text-center">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Min Entry</p>
                   <p className="font-mono font-bold text-sm text-white">{minEntryRating > 0 ? formatNumber(minEntryRating) : '--'}</p>
+                  <p className={`text-[10px] mt-0.5 ${minEntryDetails?.grade ? getGradeColor(minEntryDetails.grade, minEntryDetails?.score || 0) : 'text-gray-500'}`}>
+                    {minEntryDetails?.level > 0 && minEntryDetails?.grade
+                      ? `Lv.${minEntryDetails.level} ${minEntryDetails.grade}`
+                      : '--'}
+                  </p>
                 </div>
                 <div className="rounded-md border border-piu-border/40 bg-piu-card/40 px-2 py-1.5 text-center">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Avg Score</p>
                   <p className="font-mono font-bold text-sm text-white">{averageScore > 0 ? formatNumber(averageScore) : '--'}</p>
+                  <p className={`text-[10px] mt-0.5 ${averageScoreGrade ? getGradeColor(averageScoreGrade, averageScore) : 'text-gray-500'}`}>
+                    {averageScoreGrade || '--'}
+                  </p>
                 </div>
                 <div className="rounded-md border border-piu-border/40 bg-piu-card/40 px-2 py-1.5 text-center">
                   <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Avg Level</p>
                   <p className="font-mono font-bold text-sm text-white">{averageLevel > 0 ? averageLevel.toFixed(1) : '--'}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Top 50 average</p>
                 </div>
               </div>
               {scoreCount > 0 && scoreCount < 50 ? (
@@ -135,6 +169,14 @@ export default function PumbilityBreakdownModal({
                 <div className="flex items-center gap-2.5">
                   <span className="w-5 shrink-0 text-[11px] text-gray-500 font-mono text-right">#{index + 1}</span>
 
+                  {(() => {
+                    const norm = String(row.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                    const exactKey = `${norm}|${row.mode}|${row.level}`;
+                    const localJacket = jacketLookup?.[exactKey] || jacketLookup?.[norm] || '';
+                    const bgUrl = String(row.background_url || '');
+                    const fallbackBg = bgUrl && !bgUrl.includes('piugame') ? bgUrl : '';
+                    const jacketUrl = localJacket || fallbackBg || String(row.jacket_url || '');
+                    return (
                   <button
                     type="button"
                     onClick={() => setOpenSongInfoKey((prev) => (prev === rowKey ? '' : rowKey))}
@@ -142,13 +184,15 @@ export default function PumbilityBreakdownModal({
                     title={`${row.title || 'Unknown song'}${row.artist ? ` — ${row.artist}` : ''}`}
                     aria-label={`Show song info for ${row.title || 'song'}`}
                   >
-                    {row.jacket_url ? (
-                      <img src={row.jacket_url} alt={row.title || 'Song jacket'} className="w-full h-full object-cover" />
+                    {jacketUrl ? (
+                      <img src={jacketUrl} alt={row.title || 'Song jacket'} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-piu-dark flex items-center justify-center text-[10px] text-gray-500">No art</div>
                     )}
                     <ChartModeBadge mode={row.mode} level={row.level} />
                   </button>
+                    );
+                  })()}
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">

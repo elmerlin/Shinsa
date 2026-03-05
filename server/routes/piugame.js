@@ -4074,11 +4074,8 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
 
   if (resolvedUserId) {
     const localScoreRows = db.prepare(`
-      SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.background_url,
-             COALESCE(s.artist, '') AS artist,
-             COALESCE(s.jacket_url, '') AS song_jacket_url
+      SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.background_url
       FROM user_best_scores bs
-      LEFT JOIN songs s ON s.title = bs.song_title AND s.mode = bs.mode AND s.level = bs.level
       WHERE bs.user_id = ? AND bs.score > 0
     `).all(resolvedUserId);
 
@@ -4095,13 +4092,14 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       rated.push({
         chart_id: chartScoreKey(scoreRow?.song_title, mode, level),
         title: String(scoreRow?.song_title || '').trim(),
-        artist: String(scoreRow?.artist || '').trim(),
+        artist: '',
         mode,
         level,
         score,
         grade,
         rating,
-        jacket_url: String(scoreRow?.song_jacket_url || scoreRow?.background_url || '').trim(),
+        jacket_url: '',
+        background_url: String(scoreRow?.background_url || '').trim(),
       });
     }
 
@@ -4186,6 +4184,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
         grade,
         rating,
         jacket_url: String(row?.jacket_url || '').trim(),
+        background_url: '',
       });
     }
 
@@ -4215,6 +4214,34 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   const minEntryRating = scoreCount >= 50
     ? (parseInt(topRows[scoreCount - 1]?.rating, 10) || 0)
     : 0;
+  const averageScoreGrade = averageScore > 0 ? normalizeGrade(gradeFromScore(averageScore)) : '';
+  let equivalentLevel = null;
+  let equivalentGrade = '';
+  if (averageRating > 0) {
+    let closestDiff = Infinity;
+    const levels = Object.keys(LEVEL_BASE_POINTS).map(Number).sort((a, b) => a - b);
+    const grades = Object.keys(GRADE_MULTIPLIER);
+    for (const level of levels) {
+      const base = LEVEL_BASE_POINTS[level];
+      for (const grade of grades) {
+        const rating = Math.round(base * GRADE_MULTIPLIER[grade]);
+        const diff = Math.abs(rating - averageRating);
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          equivalentLevel = level;
+          equivalentGrade = grade;
+        }
+      }
+    }
+  }
+  const minEntryDetails = scoreCount >= 50
+    ? {
+      level: parseInt(topRows[scoreCount - 1]?.level, 10) || 0,
+      grade: String(topRows[scoreCount - 1]?.grade || ''),
+      score: parseInt(topRows[scoreCount - 1]?.score, 10) || 0,
+      title: String(topRows[scoreCount - 1]?.title || ''),
+    }
+    : null;
 
   res.json({
     player_name: String(globalRow?.player_name || resolvedName).trim(),
@@ -4231,7 +4258,11 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       average_rating: averageRating,
       min_entry_rating: minEntryRating,
       average_score: averageScore,
+      average_score_grade: averageScoreGrade,
       average_level: averageLevel,
+      equivalent_level: equivalentLevel,
+      equivalent_grade: equivalentGrade,
+      min_entry_details: minEntryDetails,
       score_count: scoreCount,
     },
     rows: (Array.isArray(rows) ? rows : []).map((row) => ({
@@ -4244,6 +4275,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       grade: String(row?.grade || ''),
       rating: Math.max(0, parseInt(row?.rating, 10) || 0),
       jacket_url: String(row?.jacket_url || ''),
+      background_url: String(row?.background_url || ''),
     })),
   });
 });

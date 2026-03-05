@@ -6,6 +6,7 @@ import { getCountryFlag } from '../components/PlayerRegistration';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { getProfilePath } from '../utils/profile';
 import {
+  getJacketMap,
   getGlobalPumbilityLeaderboard,
   getGlobalPumbilityPlayerSheet,
   getMyTop100Scores,
@@ -378,10 +379,12 @@ function PumbilityLeaderboardTab() {
   const [breakdownTitle, setBreakdownTitle] = useState('Pumbility Top Songs');
   const [breakdownRows, setBreakdownRows] = useState([]);
   const [breakdownSummary, setBreakdownSummary] = useState(null);
+  const [breakdownHeaderMeta, setBreakdownHeaderMeta] = useState(null);
   const [breakdownIncomplete, setBreakdownIncomplete] = useState(false);
   const [breakdownLoadingKey, setBreakdownLoadingKey] = useState('');
   const [breakdownError, setBreakdownError] = useState('');
   const [jumpingToRank, setJumpingToRank] = useState(false);
+  const [jacketLookup, setJacketLookup] = useState({});
   const loadMoreRef = useRef(null);
 
   const loadRows = async (nextPage, { append = false } = {}) => {
@@ -439,6 +442,20 @@ function PumbilityLeaderboardTab() {
 
   useEffect(() => {
     loadRows(1, { append: false });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getJacketMap()
+      .then((map) => {
+        if (cancelled) return;
+        setJacketLookup(map || {});
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setJacketLookup({});
+      });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -518,11 +535,16 @@ function PumbilityLeaderboardTab() {
       setBreakdownTitle(`${resolvedName} • Pumbility Top Songs`);
       setBreakdownRows(payloadRows);
       setBreakdownSummary(payload?.summary || null);
+      setBreakdownHeaderMeta({
+        pumbility: parseInt(payload?.global_pumbility, 10) || 0,
+        rank: parseInt(payload?.global_rank, 10) || 0,
+      });
       setBreakdownIncomplete(!!payload?.incomplete);
       setShowPumbilityBreakdownModal(true);
     } catch (err) {
       setBreakdownError(err?.message || 'Failed to load pumbility score sheet.');
       setBreakdownSummary(null);
+      setBreakdownHeaderMeta(null);
     } finally {
       setBreakdownLoadingKey('');
     }
@@ -705,11 +727,14 @@ function PumbilityLeaderboardTab() {
         title={breakdownTitle}
         rows={breakdownRows}
         summary={breakdownSummary}
+        headerMeta={breakdownHeaderMeta}
+        jacketLookup={jacketLookup}
         showIncompleteCta={breakdownIncomplete}
         ctaMessage="This pumbility sheet is partial from public OVER Lv.20 Top 100 data. Sign up and sync PIUGAME for complete Top 50 scores."
         onClose={() => {
           setShowPumbilityBreakdownModal(false);
           setBreakdownSummary(null);
+          setBreakdownHeaderMeta(null);
         }}
       />
 
