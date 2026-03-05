@@ -249,6 +249,99 @@ function isOverTop100Rank(value) {
   return Number.isInteger(rank) && rank > 0 && rank <= 100;
 }
 
+function backfillStoredOverTop100Ranks(db, overLookup) {
+  if (!(overLookup instanceof Map) || overLookup.size === 0) {
+    return {
+      best_scores_checked: 0,
+      best_scores_updated: 0,
+      pumbility_scores_checked: 0,
+      pumbility_scores_updated: 0,
+      recent_scores_checked: 0,
+      recent_scores_updated: 0,
+      total_checked: 0,
+      total_updated: 0,
+    };
+  }
+
+  const stats = {
+    best_scores_checked: 0,
+    best_scores_updated: 0,
+    pumbility_scores_checked: 0,
+    pumbility_scores_updated: 0,
+    recent_scores_checked: 0,
+    recent_scores_updated: 0,
+    total_checked: 0,
+    total_updated: 0,
+  };
+
+  const bestRows = db.prepare(`
+    SELECT id, song_title, mode, level, score, grade, over_top100_rank
+    FROM user_best_scores
+    WHERE score > 0 AND level >= 20
+  `).all();
+  const pumbilityRows = db.prepare(`
+    SELECT id, song_title, mode, level, score, grade, date_played, over_top100_rank
+    FROM user_pumbility_scores
+    WHERE score > 0 AND level >= 20
+  `).all();
+  const recentRows = db.prepare(`
+    SELECT id, song_title, mode, level, score, grade, date_played, over_top100_rank
+    FROM user_recently_played
+    WHERE score > 0 AND level >= 20
+  `).all();
+
+  const updateBest = db.prepare('UPDATE user_best_scores SET over_top100_rank = ? WHERE id = ?');
+  const updatePumbility = db.prepare('UPDATE user_pumbility_scores SET over_top100_rank = ? WHERE id = ?');
+  const updateRecent = db.prepare('UPDATE user_recently_played SET over_top100_rank = ? WHERE id = ?');
+
+  const txn = db.transaction(() => {
+    for (const row of bestRows) {
+      stats.best_scores_checked += 1;
+      stats.total_checked += 1;
+      const nextRank = isPassingScore(row?.score, row?.grade)
+        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, '')
+        : 0;
+      const currentRank = parseInt(row?.over_top100_rank, 10) || 0;
+      if (nextRank !== currentRank) {
+        updateBest.run(nextRank, row.id);
+        stats.best_scores_updated += 1;
+        stats.total_updated += 1;
+      }
+    }
+
+    for (const row of pumbilityRows) {
+      stats.pumbility_scores_checked += 1;
+      stats.total_checked += 1;
+      const nextRank = isPassingScore(row?.score, row?.grade)
+        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, row.date_played)
+        : 0;
+      const currentRank = parseInt(row?.over_top100_rank, 10) || 0;
+      if (nextRank !== currentRank) {
+        updatePumbility.run(nextRank, row.id);
+        stats.pumbility_scores_updated += 1;
+        stats.total_updated += 1;
+      }
+    }
+
+    for (const row of recentRows) {
+      stats.recent_scores_checked += 1;
+      stats.total_checked += 1;
+      const nextRank = isPassingScore(row?.score, row?.grade)
+        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, row.date_played)
+        : 0;
+      const currentRank = parseInt(row?.over_top100_rank, 10) || 0;
+      if (nextRank !== currentRank) {
+        updateRecent.run(nextRank, row.id);
+        stats.recent_scores_updated += 1;
+        stats.total_updated += 1;
+      }
+    }
+  });
+  txn();
+
+  return stats;
+}
+
 function getChartRatingPoints(score, grade, level) {
   const numericScore = parseInt(score, 10) || 0;
   const numericLevel = parseInt(level, 10) || 0;
@@ -1017,12 +1110,15 @@ async function refreshOverRankingCache(db, options = {}) {
     FROM over_level_ranking_meta
     WHERE id = 1
   `).get();
+  const overLookup = buildOverRankingLookup(db);
+  const backfill = backfillStoredOverTop100Ranks(db, overLookup);
 
   return {
     total_charts: parseInt(refreshedMeta?.total_charts, 10) || normalizedCharts.length,
     total_entries: parseInt(refreshedMeta?.total_entries, 10) || 0,
     source_pages: parseInt(refreshedMeta?.source_pages, 10) || 0,
     last_sync: refreshedMeta?.last_sync || null,
+    backfill,
     cached: false,
   };
 }
@@ -3037,6 +3133,7 @@ router.post('/sync/over-ranking', requireAuth, async (req, res) => {
       entries: refreshed.total_entries || 0,
       source_pages: refreshed.source_pages || 0,
       last_sync: refreshed.last_sync || null,
+      backfill: refreshed.backfill || null,
       cached: !!refreshed.cached,
     });
   } catch (err) {
