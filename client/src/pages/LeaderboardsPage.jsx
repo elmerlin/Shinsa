@@ -283,14 +283,37 @@ function Over20Top100Modal({ open, chart, scores, loading, error, permalink, onC
                 </tr>
               </thead>
               <tbody>
-                {scores.map((score) => (
-                  <tr key={`${score.rank}-${score.player_name}-${score.score}`} className="border-b border-piu-border/20 last:border-b-0">
-                    <td className="px-2 py-1.5 font-mono text-gray-500">#{score.rank}</td>
-                    <td className="px-2 py-1.5 text-gray-200">{score.player_name || '-'}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(score.score)}</td>
-                    <td className={`px-2 py-1.5 text-right font-display font-bold ${getGradeColorClass(score.grade)}`}>{score.grade || '-'}</td>
-                  </tr>
-                ))}
+                {scores.map((score) => {
+                  const avatar = String(score?.player_avatar || score?.player_avatar_url || '').trim();
+                  const avatarSrc = avatar
+                    ? (avatar.startsWith('data:') || avatar.startsWith('http') ? avatar : getAvatarUrl(avatar))
+                    : '';
+                  const playerName = String(score?.player_name || '').trim();
+                  const initial = playerName ? playerName[0].toUpperCase() : '?';
+                  return (
+                    <tr key={`${score.rank}-${score.player_name}-${score.score}`} className="border-b border-piu-border/20 last:border-b-0">
+                      <td className="px-2 py-1.5 font-mono text-gray-500">#{score.rank}</td>
+                      <td className="px-2 py-1.5 text-gray-200">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {avatarSrc ? (
+                            <img
+                              src={avatarSrc}
+                              alt=""
+                              className="w-6 h-6 rounded-full object-cover border border-piu-border/40 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-[10px] border border-piu-border/40 shrink-0">
+                              {initial}
+                            </div>
+                          )}
+                          <span className="truncate">{playerName || '-'}</span>
+                        </div>
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-200">{formatNumber(score.score)}</td>
+                      <td className={`px-2 py-1.5 text-right font-display font-bold ${getGradeColorClass(score.grade)}`}>{score.grade || '-'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

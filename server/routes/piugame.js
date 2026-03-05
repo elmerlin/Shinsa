@@ -1055,6 +1055,32 @@ function normalizeLeaderboardNameKey(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+function extractPiugameAvatarFilename(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  const match = text.match(/\/(?:data\/avatar_img|avatars)\/([^/?#]+)/i);
+  if (!match) return '';
+
+  const filename = decodeURIComponent(String(match[1] || '').trim());
+  if (!filename || filename.includes('..')) return '';
+  if (!/^[a-zA-Z0-9._-]+$/.test(filename)) return '';
+  return filename;
+}
+
+function mapPiugameAvatarToLocal(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  if (text.startsWith('/avatars/')) return text;
+
+  const filename = extractPiugameAvatarFilename(text);
+  if (filename) return `/avatars/${filename}`;
+
+  if (text.startsWith('http://') || text.startsWith('https://')) return text;
+  return '';
+}
+
 function buildGlobalPumbilityLeaderboardRows(db) {
   const users = db.prepare(`
     SELECT id, username, avatar, nationality, pumbility
@@ -1196,11 +1222,16 @@ async function refreshPumbilityLeaderboardCache(db, options = {}) {
 
   const txn = db.transaction(() => {
     db.prepare('DELETE FROM pumbility_leaderboard').run();
-    const insert = db.prepare('INSERT INTO pumbility_leaderboard (rank, player_name, pumbility) VALUES (?, ?, ?)');
+    const insert = db.prepare('INSERT INTO pumbility_leaderboard (rank, player_name, pumbility, avatar_url) VALUES (?, ?, ?, ?)');
     for (const row of rankings) {
       const rank = parseInt(row.rank, 10);
       if (!Number.isInteger(rank) || rank <= 0) continue;
-      insert.run(rank, String(row.player_name || '').trim(), parseInt(row.pumbility, 10) || 0);
+      insert.run(
+        rank,
+        String(row.player_name || '').trim(),
+        parseInt(row.pumbility, 10) || 0,
+        String(row.avatar_url || '').trim()
+      );
     }
     db.prepare(`
       INSERT INTO pumbility_leaderboard_meta (id, threshold, total_entries, last_sync)
@@ -1306,6 +1337,7 @@ async function refreshOverRankingCache(db, options = {}) {
           score: parseInt(row.score, 10) || 0,
           grade: String(row.grade || '').trim(),
           player_name: String(row.player_name || '').trim(),
+          player_avatar_url: String(row.player_avatar_url || '').trim(),
           played_at: String(row.played_at || '').trim(),
         }))
         .filter((row) => row.score > 0)
@@ -1346,8 +1378,8 @@ async function refreshOverRankingCache(db, options = {}) {
     `);
     const insertScore = db.prepare(`
       INSERT INTO over_level_ranking_scores (
-        chart_key, rank, score, grade, player_name, played_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        chart_key, rank, score, grade, player_name, player_avatar_url, played_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     let totalEntries = 0;
@@ -1369,6 +1401,7 @@ async function refreshOverRankingCache(db, options = {}) {
           row.score,
           row.grade,
           row.player_name,
+          row.player_avatar_url,
           row.played_at
         );
         totalEntries += 1;
@@ -3603,7 +3636,7 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
   const offset = (page - 1) * limit;
 
   const globalRows = db.prepare(`
-    SELECT rank, player_name, pumbility
+    SELECT rank, player_name, pumbility, avatar_url
     FROM pumbility_leaderboard
     WHERE rank BETWEEN 1 AND 1000
     ORDER BY rank ASC
@@ -3622,10 +3655,14 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
     const username = String(row.player_name || '').replace(/\s+/g, ' ').trim() || 'Unknown';
     const nameKey = normalizeLeaderboardNameKey(username);
     const local = localByName.get(nameKey) || null;
+    const piugameAvatar = mapPiugameAvatarToLocal(row.avatar_url);
     return {
       user_id: local?.user_id || '',
       username,
-      avatar: local?.avatar || '',
+      avatar: piugameAvatar || local?.avatar || '',
+      local_avatar: local?.avatar || '',
+      piugame_avatar: piugameAvatar,
+      piugame_avatar_url: String(row.avatar_url || '').trim(),
       nationality: local?.nationality || '',
       is_local_user: !!(local?.user_id),
       global_rank: globalRank,
@@ -3794,7 +3831,7 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
   }
 
   const scores = db.prepare(`
-    SELECT rank, score, grade, player_name, played_at
+    SELECT rank, score, grade, player_name, player_avatar_url, played_at
     FROM over_level_ranking_scores
     WHERE chart_key = ?
     ORDER BY rank ASC
@@ -3818,6 +3855,8 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
       score: Math.max(0, parseInt(row.score, 10) || 0),
       grade: String(row.grade || ''),
       player_name: String(row.player_name || ''),
+      player_avatar: mapPiugameAvatarToLocal(row.player_avatar_url),
+      player_avatar_url: String(row.player_avatar_url || ''),
       played_at: String(row.played_at || ''),
     })),
   });

@@ -362,6 +362,9 @@ function parseOverRankingChartPage(html, fallback = {}) {
     const rank = Number.isInteger(parsedRank) && parsedRank > 0 ? parsedRank : idx + 1;
     const playerName = collapseWhitespace($li.find('.name_w .profile_name').first().text());
     const playerTag = collapseWhitespace($li.find('.name_w .profile_name.st1').first().text());
+    const playerAvatarUrl = extractBackgroundUrl(
+      $li.find('.name .profile_img .re.bgfix, .profile_img .re.bgfix').first().attr('style') || ''
+    );
     const score = parseScore($li.find('.score .tt').first().text());
     const grade = parseGradeFromUrl($li.find('.grade img').first().attr('src') || '');
     const playedAt = collapseWhitespace($li.find('.date .tt').first().text());
@@ -371,6 +374,7 @@ function parseOverRankingChartPage(html, fallback = {}) {
       rank,
       player_name: playerName,
       player_tag: playerTag,
+      player_avatar_url: playerAvatarUrl,
       score,
       grade,
       played_at: playedAt,
@@ -1095,7 +1099,7 @@ async function scrapeRecentlyPlayed(client) {
 /**
  * Scrape pumbility ranking leaderboard (top 1000 players).
  * This is a public page — no login required.
- * Returns { rankings: [{ rank, player_name, pumbility }], threshold }
+ * Returns { rankings: [{ rank, player_name, pumbility, avatar_url }], threshold }
  */
 async function scrapePumbilityRanking() {
   const client = createClient();
@@ -1127,8 +1131,11 @@ async function scrapePumbilityRanking() {
       $li.find('.score i.tt, .profile_name .t2, .pumbility i.tt, .rating i.tt').first().text()
     );
     const pumbility = parseInt((pumbilityText || '').replace(/,/g, ''), 10) || 0;
+    const avatarUrl = extractBackgroundUrl(
+      $li.find('.name .profile_img .re.bgfix, .profile_img .re.bgfix').first().attr('style') || ''
+    );
 
-    rankings.push({ rank, player_name: playerName, pumbility });
+    rankings.push({ rank, player_name: playerName, pumbility, avatar_url: avatarUrl });
   });
 
   const top1000 = rankings.slice(0, 1000);

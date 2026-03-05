@@ -1080,6 +1080,7 @@ function initializeDb() {
       rank INTEGER NOT NULL,
       player_name TEXT NOT NULL,
       pumbility INTEGER NOT NULL DEFAULT 0,
+      avatar_url TEXT DEFAULT '',
       PRIMARY KEY (rank)
     );
 
@@ -1108,6 +1109,7 @@ function initializeDb() {
       score INTEGER NOT NULL DEFAULT 0,
       grade TEXT DEFAULT '',
       player_name TEXT DEFAULT '',
+      player_avatar_url TEXT DEFAULT '',
       played_at TEXT DEFAULT '',
       PRIMARY KEY (chart_key, rank)
     );
@@ -2023,6 +2025,7 @@ function initializeDb() {
       score INTEGER NOT NULL DEFAULT 0,
       grade TEXT DEFAULT '',
       player_name TEXT DEFAULT '',
+      player_avatar_url TEXT DEFAULT '',
       played_at TEXT DEFAULT '',
       PRIMARY KEY (chart_key, rank)
     );
@@ -2044,6 +2047,16 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_type
       ON over_level_sync_runs(run_type, datetime(started_at) DESC, id DESC);
   `);
+
+  const pumbilityLeaderboardCols = db.prepare("PRAGMA table_info(pumbility_leaderboard)").all().map((c) => c.name);
+  if (!pumbilityLeaderboardCols.includes('avatar_url')) {
+    db.exec("ALTER TABLE pumbility_leaderboard ADD COLUMN avatar_url TEXT DEFAULT ''");
+  }
+
+  const overRankingScoreCols = db.prepare("PRAGMA table_info(over_level_ranking_scores)").all().map((c) => c.name);
+  if (!overRankingScoreCols.includes('player_avatar_url')) {
+    db.exec("ALTER TABLE over_level_ranking_scores ADD COLUMN player_avatar_url TEXT DEFAULT ''");
+  }
 
   // Migrations for users table - add world map location fields
   const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
