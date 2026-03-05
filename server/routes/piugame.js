@@ -133,9 +133,9 @@ function buildOverRankingLookup(db) {
   if (!charts.length) return new Map();
 
   const scoreRows = db.prepare(`
-    SELECT chart_key, rank, score, played_at
+    SELECT chart_key, rank, score, player_name, played_at
     FROM over_level_ranking_scores
-    WHERE rank > 0 AND rank <= 100
+    WHERE score > 0
     ORDER BY chart_key ASC, rank ASC
   `).all();
 
@@ -160,8 +160,28 @@ function buildOverRankingLookup(db) {
     entry.scores.push({
       rank: parseInt(row.rank, 10) || 0,
       score: parseInt(row.score, 10) || 0,
+      player_name: String(row.player_name || '').trim(),
       played_at: String(row.played_at || '').trim(),
     });
+  }
+
+  for (const entry of byChartKey.values()) {
+    entry.scores = assignSharedScoreRanks(
+      entry.scores
+        .filter((row) => (parseInt(row?.score, 10) || 0) > 0)
+        .sort(compareOverRankingRows)
+        .slice(0, 100)
+    );
+
+    if ((parseInt(entry.top100_count, 10) || 0) <= 0) {
+      entry.top100_count = entry.scores.length;
+    }
+    const inferredMinScore = entry.scores.length
+      ? (parseInt(entry.scores[entry.scores.length - 1]?.score, 10) || 0)
+      : 0;
+    if ((parseInt(entry.min_score, 10) || 0) <= 0 || inferredMinScore > 0) {
+      entry.min_score = inferredMinScore;
+    }
   }
 
   // Alias key map supports known song title variants.
@@ -216,7 +236,24 @@ function compareOverRankingRows(a, b) {
   return rankA - rankB;
 }
 
-function getOverTop100Rank(overLookup, songTitle, mode, level, score, playedAt = '') {
+function assignSharedScoreRanks(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  let lastScore = null;
+  let currentRank = 0;
+  return list.map((row, idx) => {
+    const score = parseInt(row?.score, 10) || 0;
+    if (lastScore === null || score !== lastScore) {
+      currentRank = idx + 1;
+      lastScore = score;
+    }
+    return {
+      ...row,
+      rank: currentRank,
+    };
+  });
+}
+
+function getOverTop100Rank(overLookup, songTitle, mode, level, score, playedAt = '', playerName = '') {
   if (!(overLookup instanceof Map) || overLookup.size === 0) return 0;
   const numericScore = parseInt(score, 10) || 0;
   if (numericScore <= 0) return 0;
@@ -232,22 +269,22 @@ function getOverTop100Rank(overLookup, songTitle, mode, level, score, playedAt =
   if (top100Count <= 0 || !scores.length) return 0;
   if (scores.length >= 100 && numericScore < minScore) return 0;
 
-  // Snapshot inference policy:
-  // 1) Higher score ranks higher.
-  // 2) On ties, more recent score ranks higher.
-  // 3) Keep a strict 100-place ladder.
-  const withCandidate = scores
-    .filter((row) => (parseInt(row.rank, 10) || 0) > 0 && (parseInt(row.rank, 10) || 0) <= 100)
-    .map((row) => ({ ...row, _candidate: false }));
-  withCandidate.push({
-    rank: 0,
-    score: numericScore,
-    played_at: String(playedAt || '').trim(),
-    _candidate: true,
-  });
-  withCandidate.sort(compareOverRankingRows);
+  const normalizedPlayerName = normalizeLeaderboardNameKey(playerName);
+  if (normalizedPlayerName) {
+    const exact = scores.find((row) => {
+      const rowScore = parseInt(row?.score, 10) || 0;
+      if (rowScore !== numericScore) return false;
+      return normalizeLeaderboardNameKey(row?.player_name) === normalizedPlayerName;
+    });
+    if (exact) {
+      const rank = parseInt(exact?.rank, 10) || 0;
+      if (rank > 0 && rank <= 100) return rank;
+    }
+  }
 
-  const inferredRank = withCandidate.findIndex((row) => row._candidate) + 1;
+  // Tie-aware fallback: ranks are shared by score.
+  const higherScoreCount = scores.filter((row) => (parseInt(row?.score, 10) || 0) > numericScore).length;
+  const inferredRank = higherScoreCount + 1;
   return inferredRank >= 1 && inferredRank <= 100 ? inferredRank : 0;
 }
 
@@ -282,19 +319,22 @@ function backfillStoredOverTop100Ranks(db, overLookup) {
   };
 
   const bestRows = db.prepare(`
-    SELECT id, song_title, mode, level, score, grade, over_top100_rank
-    FROM user_best_scores
-    WHERE score > 0 AND level >= 20
+    SELECT bs.id, bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.over_top100_rank, COALESCE(u.username, '') AS username
+    FROM user_best_scores bs
+    LEFT JOIN users u ON u.id = bs.user_id
+    WHERE bs.score > 0 AND bs.level >= 20
   `).all();
   const pumbilityRows = db.prepare(`
-    SELECT id, song_title, mode, level, score, grade, date_played, over_top100_rank
-    FROM user_pumbility_scores
-    WHERE score > 0 AND level >= 20
+    SELECT ps.id, ps.song_title, ps.mode, ps.level, ps.score, ps.grade, ps.date_played, ps.over_top100_rank, COALESCE(u.username, '') AS username
+    FROM user_pumbility_scores ps
+    LEFT JOIN users u ON u.id = ps.user_id
+    WHERE ps.score > 0 AND ps.level >= 20
   `).all();
   const recentRows = db.prepare(`
-    SELECT id, song_title, mode, level, score, grade, date_played, over_top100_rank
-    FROM user_recently_played
-    WHERE score > 0 AND level >= 20
+    SELECT rp.id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.date_played, rp.over_top100_rank, COALESCE(u.username, '') AS username
+    FROM user_recently_played rp
+    LEFT JOIN users u ON u.id = rp.user_id
+    WHERE rp.score > 0 AND rp.level >= 20
   `).all();
 
   const updateBest = db.prepare('UPDATE user_best_scores SET over_top100_rank = ? WHERE id = ?');
@@ -306,7 +346,7 @@ function backfillStoredOverTop100Ranks(db, overLookup) {
       stats.best_scores_checked += 1;
       stats.total_checked += 1;
       const nextRank = isPassingScore(row?.score, row?.grade)
-        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, '')
+        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, '', row.username)
         : 0;
       const currentRank = parseInt(row?.over_top100_rank, 10) || 0;
       if (nextRank !== currentRank) {
@@ -320,7 +360,7 @@ function backfillStoredOverTop100Ranks(db, overLookup) {
       stats.pumbility_scores_checked += 1;
       stats.total_checked += 1;
       const nextRank = isPassingScore(row?.score, row?.grade)
-        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, row.date_played)
+        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, row.date_played, row.username)
         : 0;
       const currentRank = parseInt(row?.over_top100_rank, 10) || 0;
       if (nextRank !== currentRank) {
@@ -334,7 +374,7 @@ function backfillStoredOverTop100Ranks(db, overLookup) {
       stats.recent_scores_checked += 1;
       stats.total_checked += 1;
       const nextRank = isPassingScore(row?.score, row?.grade)
-        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, row.date_played)
+        ? getOverTop100Rank(overLookup, row.song_title, row.mode, row.level, row.score, row.date_played, row.username)
         : 0;
       const currentRank = parseInt(row?.over_top100_rank, 10) || 0;
       if (nextRank !== currentRank) {
@@ -1081,6 +1121,36 @@ function mapPiugameAvatarToLocal(value) {
   return '';
 }
 
+function buildLocalUsersByNormalizedName(db, names = []) {
+  const normalizedNames = Array.from(
+    new Set(
+      (Array.isArray(names) ? names : [])
+        .map((name) => normalizeLeaderboardNameKey(name))
+        .filter(Boolean)
+    )
+  );
+  if (!normalizedNames.length) return new Map();
+
+  const placeholders = normalizedNames.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT id, username, avatar
+    FROM users
+    WHERE LOWER(TRIM(username)) IN (${placeholders})
+  `).all(...normalizedNames);
+
+  const map = new Map();
+  for (const row of rows) {
+    const key = normalizeLeaderboardNameKey(row?.username);
+    if (!key || map.has(key)) continue;
+    map.set(key, {
+      user_id: String(row.id || ''),
+      username: String(row.username || '').trim(),
+      avatar: String(row.avatar || '').trim(),
+    });
+  }
+  return map;
+}
+
 function buildGlobalPumbilityLeaderboardRows(db) {
   const users = db.prepare(`
     SELECT id, username, avatar, nationality, pumbility
@@ -1343,11 +1413,9 @@ async function refreshOverRankingCache(db, options = {}) {
         .filter((row) => row.score > 0)
         .sort(compareOverRankingRows)
         .slice(0, 100)
-        .map((row, idx) => ({
-          ...row,
-          rank: idx + 1,
-        })),
+        .map((row) => ({ ...row })),
     };
+    candidate.top_scores = assignSharedScoreRanks(candidate.top_scores);
     if (candidate.top100_count <= 0) candidate.top100_count = candidate.top_scores.length;
     if (candidate.min_score <= 0 && candidate.top_scores.length > 0) {
       candidate.min_score = parseInt(candidate.top_scores[candidate.top_scores.length - 1].score, 10) || 0;
@@ -1815,7 +1883,8 @@ router.post('/sync/pumbility', requireAuth, async (req, res) => {
           s.mode,
           s.level,
           s.score,
-          s.date_played
+          s.date_played,
+          req.user?.username || ''
         );
         insertOrUpdate.run(
           req.user.id, s.song_title, s.mode, s.level, s.score,
@@ -1905,7 +1974,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
           row.mode,
           row.level,
           row.score,
-          row.date_played
+          row.date_played,
+          req.user?.username || ''
         ),
       }));
 
@@ -3105,7 +3175,15 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
         const maxCombo = parseInt(p.max_combo, 10) || 0;
         const kcal = Number.isFinite(Number(p.kcal)) ? Number(p.kcal) : 0;
         const plate = p.plate || '';
-        const overTop100Rank = getOverTop100Rank(overRankingLookup, songTitle, mode, level, score, datePlayed);
+        const overTop100Rank = getOverTop100Rank(
+          overRankingLookup,
+          songTitle,
+          mode,
+          level,
+          score,
+          datePlayed,
+          req.user?.username || ''
+        );
 
         // When syncing, the current shoe is treated as the shoe worn for fetched plays.
         const existingPlay = findRecentPlay.get(req.user.id, songTitle, mode, level, score, grade, datePlayed);
@@ -3656,11 +3734,12 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
     const nameKey = normalizeLeaderboardNameKey(username);
     const local = localByName.get(nameKey) || null;
     const piugameAvatar = mapPiugameAvatarToLocal(row.avatar_url);
+    const localAvatar = String(local?.avatar || '').trim();
     return {
       user_id: local?.user_id || '',
       username,
-      avatar: piugameAvatar || local?.avatar || '',
-      local_avatar: local?.avatar || '',
+      avatar: localAvatar || piugameAvatar || '',
+      local_avatar: localAvatar,
       piugame_avatar: piugameAvatar,
       piugame_avatar_url: String(row.avatar_url || '').trim(),
       nationality: local?.nationality || '',
@@ -3837,6 +3916,26 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
     ORDER BY rank ASC
   `).all(chartKey);
 
+  const normalizedScores = assignSharedScoreRanks(
+    scores
+      .map((row) => ({
+        rank: parseInt(row.rank, 10) || 0,
+        score: parseInt(row.score, 10) || 0,
+        grade: String(row.grade || ''),
+        player_name: String(row.player_name || ''),
+        player_avatar_url: String(row.player_avatar_url || ''),
+        played_at: String(row.played_at || ''),
+      }))
+      .filter((row) => row.score > 0)
+      .sort(compareOverRankingRows)
+      .slice(0, 100)
+  );
+
+  const localUsersByName = buildLocalUsersByNormalizedName(
+    db,
+    normalizedScores.map((row) => row.player_name)
+  );
+
   res.json({
     chart: {
       chart_key: String(chart.chart_key || ''),
@@ -3849,16 +3948,25 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
       min_score: Math.max(0, parseInt(chart.min_score, 10) || 0),
       last_sync: chart.last_sync || null,
     },
-    total_scores: scores.length,
-    scores: scores.map((row) => ({
-      rank: Math.max(0, parseInt(row.rank, 10) || 0),
-      score: Math.max(0, parseInt(row.score, 10) || 0),
-      grade: String(row.grade || ''),
-      player_name: String(row.player_name || ''),
-      player_avatar: mapPiugameAvatarToLocal(row.player_avatar_url),
-      player_avatar_url: String(row.player_avatar_url || ''),
-      played_at: String(row.played_at || ''),
-    })),
+    total_scores: normalizedScores.length,
+    scores: normalizedScores.map((row) => {
+      const playerName = String(row.player_name || '').trim();
+      const localUser = localUsersByName.get(normalizeLeaderboardNameKey(playerName)) || null;
+      const localAvatar = String(localUser?.avatar || '').trim();
+      const piugameAvatar = mapPiugameAvatarToLocal(row.player_avatar_url);
+      return {
+        rank: Math.max(0, parseInt(row.rank, 10) || 0),
+        score: Math.max(0, parseInt(row.score, 10) || 0),
+        grade: String(row.grade || ''),
+        player_name: playerName,
+        player_avatar: localAvatar || piugameAvatar || '',
+        player_avatar_url: String(row.player_avatar_url || ''),
+        local_avatar: localAvatar,
+        piugame_avatar: piugameAvatar,
+        is_local_user: !!localUser?.user_id,
+        played_at: String(row.played_at || ''),
+      };
+    }),
   });
 });
 
@@ -3914,6 +4022,7 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
       level: parseInt(row.level, 10) || 0,
       score: Math.max(0, parseInt(row.score, 10) || 0),
       grade: String(row.grade || ''),
+      player_name: String(req.user?.username || ''),
       over_top100_rank: Math.max(0, parseInt(row.over_top100_rank, 10) || 0),
       top100_count: chart?.top100_count || 100,
       jacket_url: chart?.jacket_url || String(row.background_url || ''),

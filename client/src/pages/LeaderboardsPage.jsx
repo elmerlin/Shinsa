@@ -221,8 +221,28 @@ function OverChartJacket({ chart, size = 'md' }) {
   );
 }
 
-function Over20Top100Modal({ open, chart, scores, loading, error, permalink, highlightRank = 0, onClose }) {
+function Over20Top100Modal({
+  open,
+  chart,
+  scores,
+  loading,
+  error,
+  permalink,
+  highlightRank = 0,
+  highlightName = '',
+  highlightScore = 0,
+  onClose,
+}) {
   if (!open) return null;
+  const normalizedHighlightName = normalizeNameKey(highlightName);
+  const numericHighlightScore = parseInt(highlightScore, 10) || 0;
+  const hasExactHighlightMatch = normalizedHighlightName
+    && numericHighlightScore > 0
+    && (Array.isArray(scores) ? scores : []).some((row) => {
+      const rowName = normalizeNameKey(row?.player_name);
+      const rowScore = parseInt(row?.score, 10) || 0;
+      return rowName === normalizedHighlightName && rowScore === numericHighlightScore;
+    });
 
   return (
     <div
@@ -294,7 +314,12 @@ function Over20Top100Modal({ open, chart, scores, loading, error, permalink, hig
                   const playerName = String(score?.player_name || '').trim();
                   const initial = playerName ? playerName[0].toUpperCase() : '?';
                   const rank = parseInt(score?.rank, 10) || 0;
-                  const isHighlighted = highlightRank > 0 && rank === highlightRank;
+                  const playerScore = parseInt(score?.score, 10) || 0;
+                  const exactMatch = normalizedHighlightName
+                    && numericHighlightScore > 0
+                    && normalizeNameKey(playerName) === normalizedHighlightName
+                    && playerScore === numericHighlightScore;
+                  const isHighlighted = hasExactHighlightMatch ? exactMatch : (highlightRank > 0 && rank === highlightRank);
                   return (
                     <tr
                       key={`${score.rank}-${score.player_name}-${score.score}`}
@@ -829,9 +854,6 @@ function Over20RankingsTab({ initialSelection = null }) {
                     <p className="mt-1 text-[10px] font-display font-bold text-gray-200 leading-tight max-h-8 overflow-hidden">
                       {chart.song_title}
                     </p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">
-                      {chart.mode === 'Single' ? 'Single' : chart.mode === 'Double' ? 'Double' : chart.mode}
-                    </p>
                   </button>
                 );
               })}
@@ -854,6 +876,7 @@ function Over20RankingsTab({ initialSelection = null }) {
 }
 
 function MyTop100Tab() {
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -865,6 +888,8 @@ function MyTop100Tab() {
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState('');
   const [highlightRank, setHighlightRank] = useState(0);
+  const [highlightName, setHighlightName] = useState('');
+  const [highlightScore, setHighlightScore] = useState(0);
 
   const loadRows = async () => {
     setLoading(true);
@@ -920,6 +945,8 @@ function MyTop100Tab() {
       jacket_url: String(row?.jacket_url || ''),
     });
     setHighlightRank(parseInt(row?.over_top100_rank, 10) || 0);
+    setHighlightName(String(user?.username || row?.player_name || '').trim());
+    setHighlightScore(parseInt(row?.score, 10) || 0);
     setChartScores([]);
     setChartError('');
     setChartModalOpen(true);
@@ -1056,6 +1083,8 @@ function MyTop100Tab() {
         error={chartError}
         permalink={modalPermalink}
         highlightRank={highlightRank}
+        highlightName={highlightName}
+        highlightScore={highlightScore}
         onClose={() => setChartModalOpen(false)}
       />
     </div>
