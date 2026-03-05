@@ -1148,6 +1148,7 @@ async function scrapeOverRankingTop100(
     lang = 'en',
     listDelayMs = 120,
     chartDelayMs = 100,
+    chartConcurrency = 1,
     maxPages = 250,
     maxCharts = 3000,
     onProgress = null,
@@ -1192,11 +1193,11 @@ async function scrapeOverRankingTop100(
 
   const charts = [];
   const failedCharts = [];
+  const normalizedConcurrency = Math.max(1, parseInt(chartConcurrency, 10) || 1);
+  const totalCharts = discoveredCharts.length;
+  let completedCharts = 0;
 
-  for (let i = 0; i < discoveredCharts.length; i++) {
-    const chart = discoveredCharts[i];
-    if (i > 0 && chartDelayMs > 0) await delay(chartDelayMs);
-
+  async function scrapeChart(chart) {
     try {
       const fallbackPath = chart.source_no
         ? `/leaderboard/over_ranking_view.php?no=${encodeURIComponent(chart.source_no)}`
@@ -1209,21 +1210,43 @@ async function scrapeOverRankingTop100(
           source_no: chart.source_no || '',
           reason: 'Missing chart header',
         });
-      } else {
-        charts.push(parsedChart);
+        return;
       }
+      charts.push(parsedChart);
     } catch (err) {
       failedCharts.push({
         source_no: chart.source_no || '',
         reason: err.message || 'Chart scrape failed',
       });
+    } finally {
+      completedCharts += 1;
+      if (typeof onProgress === 'function') {
+        try {
+          onProgress(completedCharts, totalCharts);
+        } catch (_) {}
+      }
     }
+  }
 
-    if (typeof onProgress === 'function') {
-      try {
-        onProgress(i + 1, discoveredCharts.length);
-      } catch (_) {}
+  if (normalizedConcurrency <= 1) {
+    for (let i = 0; i < discoveredCharts.length; i++) {
+      if (i > 0 && chartDelayMs > 0) await delay(chartDelayMs);
+      await scrapeChart(discoveredCharts[i]);
     }
+  } else {
+    let cursor = 0;
+    const workerCount = Math.min(normalizedConcurrency, discoveredCharts.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      let processed = 0;
+      while (cursor < discoveredCharts.length) {
+        const idx = cursor;
+        cursor += 1;
+        if (processed > 0 && chartDelayMs > 0) await delay(chartDelayMs);
+        processed += 1;
+        await scrapeChart(discoveredCharts[idx]);
+      }
+    });
+    await Promise.all(workers);
   }
 
   return {

@@ -2678,34 +2678,21 @@ function AboutTab({ community }) {
 
 // ─── Members Tab ─────────────────────────────────────
 
-function CompetitiveLevelInfoModal({ open, onClose }) {
-  if (!open) return null;
-  return (
-    <div
-      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
-          <h3 className="font-display font-bold tracking-wide text-sm">Competitive Level</h3>
-          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
-        </div>
-        <div className="px-4 py-4 text-sm text-gray-300 leading-relaxed space-y-3">
-          <p>
-            The competitive level is defined as the level of a folder for which your average score
-            across cleared songs is 970,000 (Grade S) or better. You must also clear at least 50%
-            of charts in that folder.
-          </p>
-          <p className="text-xs text-gray-500">
-            A folder is just the songs within a mode and level. For instance the S23 folder, or D23 folder etc.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+function getCompetitiveLevelInspectRow(rows, computedLevel) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) return null;
+
+  const targetLevel = parseInt(computedLevel, 10) || 0;
+  if (targetLevel > 0) {
+    const exact = list.find((row) => (parseInt(row?.level, 10) || 0) === targetLevel);
+    if (exact) return exact;
+  }
+
+  for (let idx = list.length - 1; idx >= 0; idx -= 1) {
+    const cleared = parseInt(list[idx]?.cleared_charts, 10) || 0;
+    if (cleared > 0) return list[idx];
+  }
+  return list[list.length - 1] || list[0];
 }
 
 const LEADERBOARD_GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
@@ -2714,6 +2701,63 @@ const LEADERBOARD_GRADE_INDEX = Object.fromEntries(LEADERBOARD_GRADE_ORDER.map((
 function getLeaderboardGradeSortValue(grade) {
   const normalized = String(grade || '').trim().toUpperCase();
   return LEADERBOARD_GRADE_INDEX[normalized] ?? -1;
+}
+
+function CompetitiveLevelFolderCard({ modeLabel, modePrefix, modeColorClass, computedLevel, rows }) {
+  const inspectedRow = getCompetitiveLevelInspectRow(rows, computedLevel);
+  const computed = parseInt(computedLevel, 10) || 0;
+
+  if (!inspectedRow) {
+    return (
+      <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 p-3">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <p className="text-[11px] font-display font-bold tracking-wide text-gray-300">{modeLabel}</p>
+          <span className={`font-display font-black text-sm ${modeColorClass}`}>{computed > 0 ? `${modePrefix}${computed}` : '--'}</span>
+        </div>
+        <p className="text-[11px] text-gray-500">No folder data available for this player yet.</p>
+      </div>
+    );
+  }
+
+  const folderLevel = parseInt(inspectedRow?.level, 10) || 0;
+  const avgScore = parseInt(inspectedRow?.average_score, 10) || 0;
+  const avgGrade = String(inspectedRow?.average_grade || '').trim() || (avgScore > 0 ? getRankLabel(avgScore) : '--');
+  const clearedCharts = parseInt(inspectedRow?.cleared_charts, 10) || 0;
+  const totalCharts = parseInt(inspectedRow?.total_charts, 10) || 0;
+  const clearPct = totalCharts > 0 ? (clearedCharts / totalCharts) * 100 : 0;
+  const meetsCoverage = totalCharts > 0 && clearPct >= 50;
+  const meetsGrade = avgGrade !== '--'
+    ? getLeaderboardGradeSortValue(avgGrade) >= getLeaderboardGradeSortValue('S')
+    : avgScore >= 970000;
+  const qualifies = meetsCoverage && meetsGrade;
+
+  return (
+    <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 p-3">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <p className="text-[11px] font-display font-bold tracking-wide text-gray-300">{modeLabel}</p>
+        <span className={`font-display font-black text-sm ${modeColorClass}`}>{computed > 0 ? `${modePrefix}${computed}` : '--'}</span>
+      </div>
+      <div className="space-y-1 text-[11px] text-gray-400">
+        <p>Inspected folder: <span className={`font-display font-bold ${modeColorClass}`}>{folderLevel > 0 ? `${modePrefix}${folderLevel}` : '--'}</span></p>
+        <p>
+          Avg grade:{' '}
+          <span className={`font-display font-bold ${avgGrade !== '--' ? getGradeColorClass(avgGrade) : 'text-gray-500'}`}>
+            {avgGrade}
+          </span>
+        </p>
+        <p>Avg score: <span className="font-mono text-gray-200">{avgScore > 0 ? formatNumber(avgScore) : '--'}</span></p>
+        <p className={meetsCoverage ? 'text-emerald-300' : 'text-gray-500'}>
+          Clear coverage: {totalCharts > 0 ? `${clearPct.toFixed(1)}% (${clearedCharts}/${totalCharts})` : '--'}
+        </p>
+        <p className={meetsGrade ? 'text-emerald-300' : 'text-gray-500'}>
+          S-or-better average: {meetsGrade ? 'met' : 'not met'}
+        </p>
+        <p className={qualifies ? 'text-emerald-300' : 'text-gray-500'}>
+          {qualifies ? 'This folder qualifies for competitive level.' : 'This folder does not qualify yet.'}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function getHighestCompetitiveLevel(member) {
@@ -2726,6 +2770,58 @@ function getHighestCompetitiveLevel(member) {
     return { value: doubleLevel, label: `D${doubleLevel}`, colorClass: 'text-green-300' };
   }
   return { value: singleLevel, label: `S${singleLevel}`, colorClass: 'text-red-300' };
+}
+
+function CompetitiveLevelInfoModal({ open, member, onClose }) {
+  if (!open || !member) return null;
+  const highestLevel = getHighestCompetitiveLevel(member);
+  const singleRows = member?.analytics?.levels?.single || [];
+  const doubleRows = member?.analytics?.levels?.double || [];
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">
+          <div>
+            <h3 className="font-display font-bold tracking-wide text-sm">
+              Competitive Level • {member.username}
+            </h3>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              Highest folder: <span className={`font-display font-bold ${highestLevel.colorClass}`}>{highestLevel.label}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white transition-colors">Close</button>
+        </div>
+
+        <div className="px-4 py-3 text-[11px] text-gray-400">
+          Competitive level requires both: 50%+ clears in a folder and a folder average of Grade S (970,000+) or better.
+        </div>
+
+        <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <CompetitiveLevelFolderCard
+            modeLabel="Singles Folder"
+            modePrefix="S"
+            modeColorClass="text-red-300"
+            computedLevel={member?.singles_competitive_level}
+            rows={singleRows}
+          />
+          <CompetitiveLevelFolderCard
+            modeLabel="Doubles Folder"
+            modePrefix="D"
+            modeColorClass="text-green-300"
+            computedLevel={member?.doubles_competitive_level}
+            rows={doubleRows}
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function LeaderboardSortHeader({ label, sortKey, activeSortKey, sortDirection, onSort }) {
@@ -2746,7 +2842,7 @@ function LeaderboardSortHeader({ label, sortKey, activeSortKey, sortDirection, o
 
 function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) {
   const [openBreakdown, setOpenBreakdown] = useState(null);
-  const [showCompInfo, setShowCompInfo] = useState(false);
+  const [openCompInfo, setOpenCompInfo] = useState(null);
   const [sortKey, setSortKey] = useState('pumbility');
   const [sortDirection, setSortDirection] = useState('desc');
   const [mobileMetricView, setMobileMetricView] = useState('avg_grade');
@@ -2815,6 +2911,11 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
     }
     setSortKey(nextKey);
     setSortDirection('desc');
+  };
+
+  const handleOpenCompInfo = (member) => {
+    if (!member) return;
+    setOpenCompInfo(member);
   };
 
   return (
@@ -2929,7 +3030,7 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                           {mobileMetricView === 'competitive_level' && (
                             <button
                               type="button"
-                              onClick={() => setShowCompInfo(true)}
+                              onClick={() => handleOpenCompInfo(member)}
                               className={`font-display font-bold underline decoration-dotted underline-offset-2 transition-colors hover:text-piu-accent ${metrics.competitiveLevel.colorClass}`}
                             >
                               {metrics.competitiveLevel.label}
@@ -2957,13 +3058,12 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
           </div>
 
           <div className="hidden md:block rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px]">
+              <table className="w-full table-fixed">
                 <thead className="bg-piu-dark/70">
                   <tr className="border-b border-piu-border/50">
-                    <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-14">#</th>
-                    <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 min-w-[260px]">Player</th>
-                    <th className="px-3 py-2 text-left">
+                    <th className="px-2 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-[7%]">#</th>
+                    <th className="px-2 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-[34%]">Player</th>
+                    <th className="px-2 py-2 text-left w-[16%]">
                       <LeaderboardSortHeader
                         label="Pumbility"
                         sortKey="pumbility"
@@ -2972,7 +3072,7 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                         onSort={handleSort}
                       />
                     </th>
-                    <th className="px-3 py-2 text-left">
+                    <th className="px-2 py-2 text-left w-[14%]">
                       <LeaderboardSortHeader
                         label="Avg Grade"
                         sortKey="avg_grade"
@@ -2981,7 +3081,7 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                         onSort={handleSort}
                       />
                     </th>
-                    <th className="px-3 py-2 text-left">
+                    <th className="px-2 py-2 text-left w-[14%]">
                       <LeaderboardSortHeader
                         label="Avg Level"
                         sortKey="avg_level"
@@ -2990,7 +3090,7 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                         onSort={handleSort}
                       />
                     </th>
-                    <th className="px-3 py-2 text-left">
+                    <th className="px-2 py-2 text-left w-[15%]">
                       <LeaderboardSortHeader
                         label="Competitive Level"
                         sortKey="competitive_level"
@@ -3007,21 +3107,24 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                     const pumbilityCanOpen = metrics.pumbilityValue > 0 && metrics.breakdownCount > 0;
                     return (
                       <tr key={member.id} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
-                        <td className="px-3 py-2.5 text-sm font-mono text-gray-500">#{index + 1}</td>
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-2.5 min-w-0">
+                        <td className="px-2 py-2 text-sm font-mono text-gray-500 whitespace-nowrap">#{index + 1}</td>
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
                               {member.avatar ? (
-                                <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
+                                <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border/40" />
                               ) : (
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
                                   {member.username?.[0]?.toUpperCase()}
                                 </div>
                               )}
                             </Link>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <Link to={getProfilePath(member.id, member.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                                <Link
+                                  to={getProfilePath(member.id, member.username)}
+                                  className="font-display font-bold text-[13px] hover:text-piu-accent transition-colors truncate max-w-[120px] lg:max-w-[170px] xl:max-w-[220px]"
+                                >
                                   {member.username}
                                 </Link>
                                 <BadgeList badges={member.badges} />
@@ -3037,7 +3140,7 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-2 py-2 whitespace-nowrap">
                           <button
                             type="button"
                             onClick={() => handleOpenBreakdown(member)}
@@ -3051,20 +3154,20 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                             {metrics.pumbilityValue > 0 ? formatNumber(metrics.pumbilityValue) : '--'}
                           </button>
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-2 py-2 whitespace-nowrap">
                           <span className={`font-display font-bold text-sm ${metrics.averageGrade !== '--' ? getGradeColorClass(metrics.averageGrade) : 'text-gray-500'}`}>
                             {metrics.averageGrade || '--'}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-sm font-mono text-gray-300">
+                        <td className="px-2 py-2 text-sm font-mono text-gray-300 whitespace-nowrap">
                           {metrics.averageLevel > 0 ? metrics.averageLevel.toFixed(1) : '--'}
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-2 py-2 whitespace-nowrap">
                           <button
                             type="button"
-                            onClick={() => setShowCompInfo(true)}
+                            onClick={() => handleOpenCompInfo(member)}
                             className={`font-display font-bold text-sm underline decoration-dotted underline-offset-2 transition-colors hover:text-piu-accent ${metrics.competitiveLevel.colorClass}`}
-                            title="Show competitive level explanation"
+                            title="Show this player's competitive level details"
                           >
                             {metrics.competitiveLevel.label}
                           </button>
@@ -3074,7 +3177,6 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
                   })}
                 </tbody>
               </table>
-            </div>
           </div>
         </>
       )}
@@ -3085,7 +3187,11 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
         rows={openBreakdown?.rows || []}
         onClose={() => setOpenBreakdown(null)}
       />
-      <CompetitiveLevelInfoModal open={showCompInfo} onClose={() => setShowCompInfo(false)} />
+      <CompetitiveLevelInfoModal
+        open={!!openCompInfo}
+        member={openCompInfo}
+        onClose={() => setOpenCompInfo(null)}
+      />
     </div>
   );
 }

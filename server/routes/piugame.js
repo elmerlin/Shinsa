@@ -828,6 +828,18 @@ function parseIntInRange(value, min, max, fallback) {
   return parsed;
 }
 
+function getOverRankingScrapeConfig() {
+  const lang = String(process.env.OVER_RANKING_SCRAPE_LANG || 'en').trim().toLowerCase() === 'kr' ? 'kr' : 'en';
+  return {
+    lang,
+    listDelayMs: parseIntInRange(process.env.OVER_RANKING_SCRAPE_LIST_DELAY_MS, 0, 5000, 120),
+    chartDelayMs: parseIntInRange(process.env.OVER_RANKING_SCRAPE_CHART_DELAY_MS, 0, 5000, 80),
+    chartConcurrency: parseIntInRange(process.env.OVER_RANKING_SCRAPE_CONCURRENCY, 1, 8, 2),
+    maxPages: parseIntInRange(process.env.OVER_RANKING_SCRAPE_MAX_PAGES, 1, 2000, 250),
+    maxCharts: parseIntInRange(process.env.OVER_RANKING_SCRAPE_MAX_CHARTS, 1, 10000, 4000),
+  };
+}
+
 async function refreshPumbilityLeaderboardCache(db, options = {}) {
   const force = !!options.force;
   const maxAgeMinutes = Number.isFinite(parseInt(options.maxAgeMinutes, 10))
@@ -898,13 +910,7 @@ async function refreshOverRankingCache(db, options = {}) {
     };
   }
 
-  const scraped = await scrapeOverRankingTop100({
-    lang: 'en',
-    listDelayMs: 120,
-    chartDelayMs: 80,
-    maxPages: 250,
-    maxCharts: 4000,
-  });
+  const scraped = await scrapeOverRankingTop100(getOverRankingScrapeConfig());
 
   const normalizedChartMap = new Map();
   for (const chart of (Array.isArray(scraped?.charts) ? scraped.charts : [])) {
