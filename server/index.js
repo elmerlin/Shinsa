@@ -64,6 +64,21 @@ app.use('/api/fun', funRoutes);
 app.use('/api/changelog', changelogRoutes);
 app.use('/api/checkins', checkinRoutes);
 
+if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {
+  try {
+    const status = piugameRoutes.startOverRankingNightlyScheduler();
+    if (status?.enabled) {
+      console.log(
+        `[OverRanking] Nightly scheduler active at ${String(status.hour).padStart(2, '0')}:${String(status.minute).padStart(2, '0')} (server time). Next run: ${status.next_run_at || 'n/a'}`
+      );
+    } else {
+      console.log('[OverRanking] Nightly scheduler disabled by OVER_RANKING_NIGHTLY_ENABLED.');
+    }
+  } catch (err) {
+    console.error('[OverRanking] Failed to start nightly scheduler:', err?.message || err);
+  }
+}
+
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });

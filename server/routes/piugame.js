@@ -821,6 +821,13 @@ function isLeaderboardRefreshNeeded(lastSync, maxAgeMinutes = 60) {
   return minutesSince >= maxAgeMinutes;
 }
 
+function parseIntInRange(value, min, max, fallback) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isInteger(parsed)) return fallback;
+  if (parsed < min || parsed > max) return fallback;
+  return parsed;
+}
+
 async function refreshPumbilityLeaderboardCache(db, options = {}) {
   const force = !!options.force;
   const maxAgeMinutes = Number.isFinite(parseInt(options.maxAgeMinutes, 10))
@@ -1007,6 +1014,117 @@ async function refreshOverRankingCache(db, options = {}) {
     source_pages: parseInt(refreshedMeta?.source_pages, 10) || 0,
     last_sync: refreshedMeta?.last_sync || null,
     cached: false,
+  };
+}
+
+let overRankingNightlyTimer = null;
+let overRankingNightlyStarted = false;
+let overRankingNightlyRunning = false;
+let overRankingNightlyNextRunAt = '';
+
+function getOverRankingNightlyConfig() {
+  const enabledRaw = parseBoolean(process.env.OVER_RANKING_NIGHTLY_ENABLED);
+  const enabled = enabledRaw === null ? true : enabledRaw === true;
+  const hour = parseIntInRange(process.env.OVER_RANKING_NIGHTLY_HOUR, 0, 23, 3);
+  const minute = parseIntInRange(process.env.OVER_RANKING_NIGHTLY_MINUTE, 0, 59, 0);
+  return { enabled, hour, minute };
+}
+
+function getNextOverRankingNightlyRun(now, hour, minute) {
+  const next = new Date(now);
+  next.setSeconds(0, 0);
+  next.setHours(hour, minute, 0, 0);
+  if (next.getTime() <= now.getTime()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+async function runOverRankingSyncNow(options = {}) {
+  const db = getDb();
+  const force = parseBoolean(options.force) !== false;
+  const reason = String(options.reason || 'manual').trim() || 'manual';
+  const startedAtMs = Date.now();
+  const refreshed = await refreshOverRankingCache(db, {
+    force,
+    maxAgeMinutes: 1440,
+  });
+  const durationMs = Date.now() - startedAtMs;
+  return {
+    ...refreshed,
+    duration_ms: durationMs,
+    reason,
+    force,
+  };
+}
+
+function scheduleNextOverRankingNightlyRun() {
+  const config = getOverRankingNightlyConfig();
+  if (!config.enabled) {
+    overRankingNightlyNextRunAt = '';
+    return {
+      enabled: false,
+      next_run_at: null,
+      running: overRankingNightlyRunning,
+    };
+  }
+
+  const now = new Date();
+  const nextRun = getNextOverRankingNightlyRun(now, config.hour, config.minute);
+  overRankingNightlyNextRunAt = nextRun.toISOString();
+  const delayMs = Math.max(1000, nextRun.getTime() - now.getTime());
+
+  if (overRankingNightlyTimer) {
+    clearTimeout(overRankingNightlyTimer);
+  }
+
+  overRankingNightlyTimer = setTimeout(async () => {
+    if (overRankingNightlyRunning) {
+      console.warn('[OverRanking] Nightly sync skipped because another sync is still running.');
+      scheduleNextOverRankingNightlyRun();
+      return;
+    }
+
+    overRankingNightlyRunning = true;
+    const startedAt = Date.now();
+    try {
+      const result = await runOverRankingSyncNow({ force: true, reason: 'nightly' });
+      const seconds = Math.round((Date.now() - startedAt) / 1000);
+      console.log(
+        `[OverRanking] Nightly sync finished in ${seconds}s (${result.total_charts} charts, ${result.total_entries} rows).`
+      );
+    } catch (err) {
+      console.error('[OverRanking] Nightly sync failed:', err?.message || err);
+    } finally {
+      overRankingNightlyRunning = false;
+      scheduleNextOverRankingNightlyRun();
+    }
+  }, delayMs);
+
+  if (typeof overRankingNightlyTimer.unref === 'function') {
+    overRankingNightlyTimer.unref();
+  }
+
+  return {
+    enabled: true,
+    hour: config.hour,
+    minute: config.minute,
+    next_run_at: overRankingNightlyNextRunAt,
+    running: overRankingNightlyRunning,
+  };
+}
+
+function startOverRankingNightlyScheduler() {
+  if (overRankingNightlyStarted) {
+    return {
+      started: false,
+      ...scheduleNextOverRankingNightlyRun(),
+    };
+  }
+  overRankingNightlyStarted = true;
+  return {
+    started: true,
+    ...scheduleNextOverRankingNightlyRun(),
   };
 }
 
@@ -2945,5 +3063,8 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
   const payload = buildPumbilityRecommendations(bestScores, { metric, modeFilter });
   res.json(payload);
 });
+
+router.startOverRankingNightlyScheduler = startOverRankingNightlyScheduler;
+router.runOverRankingSyncNow = runOverRankingSyncNow;
 
 module.exports = router;
