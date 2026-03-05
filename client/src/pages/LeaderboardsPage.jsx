@@ -281,9 +281,10 @@ function PumbilityLeaderboardTab() {
         : (parseInt(row?.overall_breakdown_count, 10) || 0);
       const singleLevel = parseInt(row?.singles_competitive_level, 10) || 0;
       const doubleLevel = parseInt(row?.doubles_competitive_level, 10) || 0;
+      const competitiveValue = doubleLevel > singleLevel ? doubleLevel : singleLevel;
       const competitiveLabel = doubleLevel > singleLevel
-        ? `D${doubleLevel}`
-        : (singleLevel > 0 ? `S${singleLevel}` : '--');
+        ? String(doubleLevel)
+        : (singleLevel > 0 ? String(singleLevel) : '--');
       const competitiveClass = doubleLevel > singleLevel
         ? 'text-green-300'
         : (singleLevel > 0 ? 'text-red-300' : 'text-gray-500');
@@ -293,6 +294,7 @@ function PumbilityLeaderboardTab() {
         averageGrade,
         averageLevel,
         breakdownCount,
+        competitiveValue,
         competitiveLabel,
         competitiveClass,
       };
