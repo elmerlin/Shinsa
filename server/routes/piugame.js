@@ -4199,6 +4199,22 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
 
   const localAvatar = String(localUser?.avatar || '').trim();
   const piugameAvatar = mapPiugameAvatarToLocal(globalRow?.avatar_url);
+  const topRows = (Array.isArray(rows) ? rows : []).slice(0, 50);
+  const scoreCount = topRows.length;
+  const ratingTotal = topRows.reduce((sum, row) => sum + (parseInt(row?.rating, 10) || 0), 0);
+  const avgRatingDenominator = scoreCount >= 50 ? 50 : scoreCount;
+  const averageRating = scoreCount > 0
+    ? Math.round((ratingTotal / Math.max(1, avgRatingDenominator)) * 10) / 10
+    : 0;
+  const averageScore = scoreCount > 0
+    ? Math.round(topRows.reduce((sum, row) => sum + (parseInt(row?.score, 10) || 0), 0) / scoreCount)
+    : 0;
+  const averageLevel = scoreCount > 0
+    ? Number((topRows.reduce((sum, row) => sum + (parseInt(row?.level, 10) || 0), 0) / scoreCount).toFixed(1))
+    : 0;
+  const minEntryRating = scoreCount >= 50
+    ? (parseInt(topRows[scoreCount - 1]?.rating, 10) || 0)
+    : 0;
 
   res.json({
     player_name: String(globalRow?.player_name || resolvedName).trim(),
@@ -4211,6 +4227,13 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
     incomplete: !!incomplete,
     total_available_scores: Math.max(0, parseInt(totalAvailableScores, 10) || 0),
     source_scores_count: Math.max(0, parseInt(scoreSourceCount, 10) || 0),
+    summary: {
+      average_rating: averageRating,
+      min_entry_rating: minEntryRating,
+      average_score: averageScore,
+      average_level: averageLevel,
+      score_count: scoreCount,
+    },
     rows: (Array.isArray(rows) ? rows : []).map((row) => ({
       chart_id: String(row?.chart_id || ''),
       title: String(row?.title || ''),

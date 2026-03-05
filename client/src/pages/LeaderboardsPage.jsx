@@ -377,6 +377,7 @@ function PumbilityLeaderboardTab() {
   const [showPumbilityBreakdownModal, setShowPumbilityBreakdownModal] = useState(false);
   const [breakdownTitle, setBreakdownTitle] = useState('Pumbility Top Songs');
   const [breakdownRows, setBreakdownRows] = useState([]);
+  const [breakdownSummary, setBreakdownSummary] = useState(null);
   const [breakdownIncomplete, setBreakdownIncomplete] = useState(false);
   const [breakdownLoadingKey, setBreakdownLoadingKey] = useState('');
   const [breakdownError, setBreakdownError] = useState('');
@@ -516,10 +517,12 @@ function PumbilityLeaderboardTab() {
       const resolvedName = String(payload?.player_name || targetName).replace(/\s+/g, ' ').trim() || targetName;
       setBreakdownTitle(`${resolvedName} • Pumbility Top Songs`);
       setBreakdownRows(payloadRows);
+      setBreakdownSummary(payload?.summary || null);
       setBreakdownIncomplete(!!payload?.incomplete);
       setShowPumbilityBreakdownModal(true);
     } catch (err) {
       setBreakdownError(err?.message || 'Failed to load pumbility score sheet.');
+      setBreakdownSummary(null);
     } finally {
       setBreakdownLoadingKey('');
     }
@@ -701,9 +704,13 @@ function PumbilityLeaderboardTab() {
         open={showPumbilityBreakdownModal}
         title={breakdownTitle}
         rows={breakdownRows}
+        summary={breakdownSummary}
         showIncompleteCta={breakdownIncomplete}
         ctaMessage="This pumbility sheet is partial from public OVER Lv.20 Top 100 data. Sign up and sync PIUGAME for complete Top 50 scores."
-        onClose={() => setShowPumbilityBreakdownModal(false)}
+        onClose={() => {
+          setShowPumbilityBreakdownModal(false);
+          setBreakdownSummary(null);
+        }}
       />
 
     </div>

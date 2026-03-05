@@ -59,6 +59,7 @@ export default function PumbilityBreakdownModal({
   open,
   title,
   rows,
+  summary = null,
   onClose,
   showIncompleteCta = false,
   ctaMessage = '',
@@ -70,6 +71,12 @@ export default function PumbilityBreakdownModal({
   }, [open]);
 
   if (!open) return null;
+
+  const averageRating = Number(summary?.average_rating) || 0;
+  const minEntryRating = parseInt(summary?.min_entry_rating, 10) || 0;
+  const averageScore = parseInt(summary?.average_score, 10) || 0;
+  const averageLevel = Number(summary?.average_level) || 0;
+  const scoreCount = parseInt(summary?.score_count, 10) || 0;
 
   return (
     <div
@@ -86,6 +93,38 @@ export default function PumbilityBreakdownModal({
         </div>
 
         <div className="max-h-[72vh] overflow-y-auto p-3 space-y-2">
+          {summary ? (
+            <div className="rounded-lg border border-piu-border/45 bg-piu-dark/35 p-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-md border border-piu-border/40 bg-piu-card/40 px-2 py-1.5 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Avg Rating</p>
+                  <p className="font-mono font-bold text-sm text-white">
+                    {averageRating > 0
+                      ? averageRating.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                      : '--'}
+                  </p>
+                </div>
+                <div className="rounded-md border border-piu-border/40 bg-piu-card/40 px-2 py-1.5 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Min Entry</p>
+                  <p className="font-mono font-bold text-sm text-white">{minEntryRating > 0 ? formatNumber(minEntryRating) : '--'}</p>
+                </div>
+                <div className="rounded-md border border-piu-border/40 bg-piu-card/40 px-2 py-1.5 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Avg Score</p>
+                  <p className="font-mono font-bold text-sm text-white">{averageScore > 0 ? formatNumber(averageScore) : '--'}</p>
+                </div>
+                <div className="rounded-md border border-piu-border/40 bg-piu-card/40 px-2 py-1.5 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Avg Level</p>
+                  <p className="font-mono font-bold text-sm text-white">{averageLevel > 0 ? averageLevel.toFixed(1) : '--'}</p>
+                </div>
+              </div>
+              {scoreCount > 0 && scoreCount < 50 ? (
+                <p className="mt-2 text-[10px] text-gray-500 text-center">
+                  Based on {scoreCount} available scores.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {(rows || []).map((row, index) => {
             const grade = row.grade || getRank(row.score).label;
             const rowKey = `${row.chart_id || 'chart'}-${index}`;
