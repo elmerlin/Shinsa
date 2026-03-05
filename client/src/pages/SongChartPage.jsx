@@ -482,7 +482,7 @@ export default function SongChartPage() {
   const userSummary = detail.user_summary || null;
   const personalBest = userSummary?.best || null;
   const personalBestGrade = personalBest?.grade || getRank(personalBest?.score).label;
-  const overTop100Link = useMemo(() => {
+  const overTop100Link = (() => {
     const level = parseInt(chart?.level, 10) || 0;
     if (level < 20) return '';
     const params = new URLSearchParams();
@@ -493,7 +493,7 @@ export default function SongChartPage() {
     const chartKey = buildOverRankingChartKeyForLink(chart?.title, chart?.mode, chart?.level);
     if (chartKey) params.set('chart_key', chartKey);
     return `/leaderboards?${params.toString()}`;
-  }, [chart?.title, chart?.mode, chart?.level]);
+  })();
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
