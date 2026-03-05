@@ -79,6 +79,21 @@ if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {
   }
 }
 
+if (typeof piugameRoutes.startPumbilityRankingNightlyScheduler === 'function') {
+  try {
+    const status = piugameRoutes.startPumbilityRankingNightlyScheduler();
+    if (status?.enabled) {
+      console.log(
+        `[PumbilityRanking] Nightly scheduler active at ${String(status.hour).padStart(2, '0')}:${String(status.minute).padStart(2, '0')} (server time). Next run: ${status.next_run_at || 'n/a'}`
+      );
+    } else {
+      console.log('[PumbilityRanking] Nightly scheduler disabled by PUMBILITY_RANKING_NIGHTLY_ENABLED.');
+    }
+  } catch (err) {
+    console.error('[PumbilityRanking] Failed to start nightly scheduler:', err?.message || err);
+  }
+}
+
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });

@@ -399,6 +399,7 @@ export const getPumbilityRecommendations = (userId, options = {}) => {
 export const getPumbilityRanking = () => request('/piugame/pumbility-ranking');
 export const syncPumbilityRanking = () => longRequest('/piugame/sync/pumbility-ranking', { method: 'POST' });
 export const getAdminOverRankingScheduler = () => request('/piugame/admin/over-ranking/scheduler');
+export const getAdminPumbilityRankingScheduler = () => request('/piugame/admin/pumbility-ranking/scheduler');
 export const getAdminOverRankingRuns = (params = {}) => {
   const query = new URLSearchParams();
   if (params.type) query.set('type', String(params.type));

@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getAdminOverRankingRuns, getAdminOverRankingScheduler } from '../utils/api';
+import {
+  getAdminOverRankingRuns,
+  getAdminOverRankingScheduler,
+  getAdminPumbilityRankingScheduler,
+} from '../utils/api';
 
 function formatDateTime(value) {
   if (!value) return '--';
@@ -31,7 +35,14 @@ export default function AdminLeaderboardsTab() {
   const [totalRuns, setTotalRuns] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [scheduler, setScheduler] = useState({
+  const [overScheduler, setOverScheduler] = useState({
+    enabled: true,
+    hour: 3,
+    minute: 0,
+    next_run_at: null,
+    running: false,
+  });
+  const [pumbilityScheduler, setPumbilityScheduler] = useState({
     enabled: true,
     hour: 3,
     minute: 0,
@@ -41,13 +52,23 @@ export default function AdminLeaderboardsTab() {
 
   const loadScheduler = async () => {
     try {
-      const payload = await getAdminOverRankingScheduler();
-      setScheduler({
-        enabled: !!payload?.enabled,
-        hour: parseInt(payload?.hour, 10) || 0,
-        minute: parseInt(payload?.minute, 10) || 0,
-        next_run_at: payload?.next_run_at || null,
-        running: !!payload?.running,
+      const [overPayload, pumbilityPayload] = await Promise.all([
+        getAdminOverRankingScheduler(),
+        getAdminPumbilityRankingScheduler(),
+      ]);
+      setOverScheduler({
+        enabled: !!overPayload?.enabled,
+        hour: parseInt(overPayload?.hour, 10) || 0,
+        minute: parseInt(overPayload?.minute, 10) || 0,
+        next_run_at: overPayload?.next_run_at || null,
+        running: !!overPayload?.running,
+      });
+      setPumbilityScheduler({
+        enabled: !!pumbilityPayload?.enabled,
+        hour: parseInt(pumbilityPayload?.hour, 10) || 0,
+        minute: parseInt(pumbilityPayload?.minute, 10) || 0,
+        next_run_at: pumbilityPayload?.next_run_at || null,
+        running: !!pumbilityPayload?.running,
       });
     } catch {
       // Keep defaults if scheduler endpoint fails.
@@ -81,20 +102,33 @@ export default function AdminLeaderboardsTab() {
   }, [runType, page]);
 
   const pageLabel = useMemo(() => `${page} / ${totalPages}`, [page, totalPages]);
+  const runTypeLabel = runType === 'backfill'
+    ? 'backfill'
+    : runType === 'pumbility'
+      ? 'global pumbility'
+      : 'full sync';
 
   return (
     <div className="space-y-4">
       <div className="card space-y-2">
-        <h3 className="font-display font-bold text-piu-accent">Over Lv.20 Nightly Jobs</h3>
+        <h3 className="font-display font-bold text-piu-accent">Leaderboard Nightly Jobs</h3>
         <p className="text-xs text-gray-400">
-          Nightly schedule: <span className="font-mono text-gray-200">{formatSchedule(scheduler.hour, scheduler.minute)}</span>
+          Over Lv.20: <span className="font-mono text-gray-200">{formatSchedule(overScheduler.hour, overScheduler.minute)}</span>
           {' '}
           (server time)
-        </p>
-        <p className="text-xs text-gray-500">
-          Status: {scheduler.enabled ? (scheduler.running ? 'running' : 'enabled') : 'disabled'}
           {' • '}
-          Next run: {formatDateTime(scheduler.next_run_at)}
+          {overScheduler.enabled ? (overScheduler.running ? 'running' : 'enabled') : 'disabled'}
+          {' • '}
+          Next run: {formatDateTime(overScheduler.next_run_at)}
+        </p>
+        <p className="text-xs text-gray-400">
+          Global Pumbility: <span className="font-mono text-gray-200">{formatSchedule(pumbilityScheduler.hour, pumbilityScheduler.minute)}</span>
+          {' '}
+          (server time)
+          {' • '}
+          {pumbilityScheduler.enabled ? (pumbilityScheduler.running ? 'running' : 'enabled') : 'disabled'}
+          {' • '}
+          Next run: {formatDateTime(pumbilityScheduler.next_run_at)}
         </p>
       </div>
 
@@ -119,6 +153,15 @@ export default function AdminLeaderboardsTab() {
             >
               Backfill
             </button>
+            <button
+              type="button"
+              onClick={() => { setRunType('pumbility'); setPage(1); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                runType === 'pumbility' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+              }`}
+            >
+              Global Pumbility
+            </button>
           </div>
           <button
             type="button"
@@ -131,7 +174,7 @@ export default function AdminLeaderboardsTab() {
         </div>
 
         <p className="text-xs text-gray-500">
-          Total {runType} runs: {totalRuns}
+          Total {runTypeLabel} runs: {totalRuns}
         </p>
 
         {error && (
@@ -172,7 +215,9 @@ export default function AdminLeaderboardsTab() {
                   </td>
                   <td className="px-2 py-2 text-gray-300 font-mono">{parseInt(row.charts, 10) || 0}</td>
                   <td className="px-2 py-2 text-gray-300 font-mono">{parseInt(row.entries, 10) || 0}</td>
-                  <td className="px-2 py-2 text-gray-300 font-mono">{parseInt(row.backfill_total_updated, 10) || 0}</td>
+                  <td className="px-2 py-2 text-gray-300 font-mono">
+                    {row.run_type === 'pumbility' ? '--' : (parseInt(row.backfill_total_updated, 10) || 0)}
+                  </td>
                 </tr>
               ))}
             </tbody>

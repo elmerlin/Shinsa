@@ -981,7 +981,10 @@ function getOverRankingScrapeConfig() {
 }
 
 function normalizeOverRunType(value) {
-  return String(value || '').trim().toLowerCase() === 'backfill' ? 'backfill' : 'sync';
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'backfill') return 'backfill';
+  if (normalized === 'pumbility') return 'pumbility';
+  return 'sync';
 }
 
 function normalizeOverRunStatus(value) {
@@ -1030,6 +1033,17 @@ function getOverRankingNightlyStatus() {
     minute: config.minute,
     next_run_at: overRankingNightlyNextRunAt || null,
     running: overRankingNightlyRunning,
+  };
+}
+
+function getPumbilityRankingNightlyStatus() {
+  const config = getPumbilityRankingNightlyConfig();
+  return {
+    enabled: !!config.enabled,
+    hour: config.hour,
+    minute: config.minute,
+    next_run_at: pumbilityRankingNightlyNextRunAt || null,
+    running: pumbilityRankingNightlyRunning,
   };
 }
 
@@ -1513,6 +1527,10 @@ let overRankingNightlyTimer = null;
 let overRankingNightlyStarted = false;
 let overRankingNightlyRunning = false;
 let overRankingNightlyNextRunAt = '';
+let pumbilityRankingNightlyTimer = null;
+let pumbilityRankingNightlyStarted = false;
+let pumbilityRankingNightlyRunning = false;
+let pumbilityRankingNightlyNextRunAt = '';
 
 function getOverRankingNightlyConfig() {
   const enabledRaw = parseBoolean(process.env.OVER_RANKING_NIGHTLY_ENABLED);
@@ -1522,7 +1540,25 @@ function getOverRankingNightlyConfig() {
   return { enabled, hour, minute };
 }
 
+function getPumbilityRankingNightlyConfig() {
+  const enabledRaw = parseBoolean(process.env.PUMBILITY_RANKING_NIGHTLY_ENABLED);
+  const enabled = enabledRaw === null ? true : enabledRaw === true;
+  const hour = parseIntInRange(process.env.PUMBILITY_RANKING_NIGHTLY_HOUR, 0, 23, 3);
+  const minute = parseIntInRange(process.env.PUMBILITY_RANKING_NIGHTLY_MINUTE, 0, 59, 0);
+  return { enabled, hour, minute };
+}
+
 function getNextOverRankingNightlyRun(now, hour, minute) {
+  const next = new Date(now);
+  next.setSeconds(0, 0);
+  next.setHours(hour, minute, 0, 0);
+  if (next.getTime() <= now.getTime()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+function getNextPumbilityRankingNightlyRun(now, hour, minute) {
   const next = new Date(now);
   next.setSeconds(0, 0);
   next.setHours(hour, minute, 0, 0);
@@ -1618,6 +1654,71 @@ async function runOverRankingSyncNow(options = {}) {
   }
 }
 
+async function runPumbilityRankingSyncNow(options = {}) {
+  const db = getDb();
+  const force = parseBoolean(options.force) === true;
+  const reason = String(options.reason || 'manual').trim() || 'manual';
+  const startedAtMs = Date.now();
+  const startedAtIso = new Date(startedAtMs).toISOString();
+
+  try {
+    const refreshed = await refreshPumbilityLeaderboardCache(db, {
+      force,
+      maxAgeMinutes: 1440,
+    });
+    const completedAtMs = Date.now();
+    const completedAtIso = new Date(completedAtMs).toISOString();
+    const durationMs = completedAtMs - startedAtMs;
+    const payload = {
+      ...refreshed,
+      duration_ms: durationMs,
+      reason,
+      force,
+    };
+
+    try {
+      logOverRankingSyncRun(db, {
+        run_type: 'pumbility',
+        status: 'success',
+        trigger_reason: reason,
+        force_flag: force,
+        started_at: startedAtIso,
+        completed_at: completedAtIso,
+        duration_ms: durationMs,
+        charts: 0,
+        entries: payload.total_entries || 0,
+        source_pages: 0,
+      });
+    } catch (logErr) {
+      console.error('[PumbilityRanking] Failed to persist sync run log:', logErr?.message || logErr);
+    }
+
+    return payload;
+  } catch (err) {
+    const completedAtMs = Date.now();
+    const completedAtIso = new Date(completedAtMs).toISOString();
+    const durationMs = completedAtMs - startedAtMs;
+    try {
+      logOverRankingSyncRun(db, {
+        run_type: 'pumbility',
+        status: 'failed',
+        trigger_reason: reason,
+        force_flag: force,
+        started_at: startedAtIso,
+        completed_at: completedAtIso,
+        duration_ms: durationMs,
+        charts: 0,
+        entries: 0,
+        source_pages: 0,
+        error_message: err?.message || String(err),
+      });
+    } catch (logErr) {
+      console.error('[PumbilityRanking] Failed to persist failed run log:', logErr?.message || logErr);
+    }
+    throw err;
+  }
+}
+
 function scheduleNextOverRankingNightlyRun() {
   const config = getOverRankingNightlyConfig();
   if (!config.enabled) {
@@ -1685,6 +1786,76 @@ function startOverRankingNightlyScheduler() {
   return {
     started: true,
     ...scheduleNextOverRankingNightlyRun(),
+  };
+}
+
+function scheduleNextPumbilityRankingNightlyRun() {
+  const config = getPumbilityRankingNightlyConfig();
+  if (!config.enabled) {
+    pumbilityRankingNightlyNextRunAt = '';
+    return {
+      enabled: false,
+      next_run_at: null,
+      running: pumbilityRankingNightlyRunning,
+    };
+  }
+
+  const now = new Date();
+  const nextRun = getNextPumbilityRankingNightlyRun(now, config.hour, config.minute);
+  pumbilityRankingNightlyNextRunAt = nextRun.toISOString();
+  const delayMs = Math.max(1000, nextRun.getTime() - now.getTime());
+
+  if (pumbilityRankingNightlyTimer) {
+    clearTimeout(pumbilityRankingNightlyTimer);
+  }
+
+  pumbilityRankingNightlyTimer = setTimeout(async () => {
+    if (pumbilityRankingNightlyRunning) {
+      console.warn('[PumbilityRanking] Nightly sync skipped because another sync is still running.');
+      scheduleNextPumbilityRankingNightlyRun();
+      return;
+    }
+
+    pumbilityRankingNightlyRunning = true;
+    const startedAt = Date.now();
+    try {
+      const result = await runPumbilityRankingSyncNow({ force: true, reason: 'nightly' });
+      const seconds = Math.round((Date.now() - startedAt) / 1000);
+      console.log(
+        `[PumbilityRanking] Nightly sync finished in ${seconds}s (${result.total_entries} rows).`
+      );
+    } catch (err) {
+      console.error('[PumbilityRanking] Nightly sync failed:', err?.message || err);
+    } finally {
+      pumbilityRankingNightlyRunning = false;
+      scheduleNextPumbilityRankingNightlyRun();
+    }
+  }, delayMs);
+
+  if (typeof pumbilityRankingNightlyTimer.unref === 'function') {
+    pumbilityRankingNightlyTimer.unref();
+  }
+
+  return {
+    enabled: true,
+    hour: config.hour,
+    minute: config.minute,
+    next_run_at: pumbilityRankingNightlyNextRunAt,
+    running: pumbilityRankingNightlyRunning,
+  };
+}
+
+function startPumbilityRankingNightlyScheduler() {
+  if (pumbilityRankingNightlyStarted) {
+    return {
+      started: false,
+      ...scheduleNextPumbilityRankingNightlyRun(),
+    };
+  }
+  pumbilityRankingNightlyStarted = true;
+  return {
+    started: true,
+    ...scheduleNextPumbilityRankingNightlyRun(),
   };
 }
 
@@ -3550,14 +3721,18 @@ router.get('/sync-status/:userId', (req, res) => {
 // POST /api/piugame/sync/pumbility-ranking — scrape the public leaderboard (no login required)
 router.post('/sync/pumbility-ranking', requireAuth, async (req, res) => {
   try {
-    const db = getDb();
-    const refreshed = await refreshPumbilityLeaderboardCache(db, { maxAgeMinutes: 60 });
+    const force = parseBoolean(req.query?.force ?? req.body?.force) === true;
+    const refreshed = await runPumbilityRankingSyncNow({
+      force,
+      reason: 'manual-endpoint',
+    });
     res.json({
       success: true,
       entries: refreshed.total_entries || 0,
       threshold: refreshed.threshold || 0,
       last_sync: refreshed.last_sync || null,
       cached: !!refreshed.cached,
+      duration_ms: Math.max(0, parseInt(refreshed.duration_ms, 10) || 0),
     });
   } catch (err) {
     console.error('Pumbility ranking sync error:', err.message);
@@ -3629,11 +3804,16 @@ router.get('/admin/over-ranking/scheduler', requireAuth, requireAdmin, (req, res
   res.json(getOverRankingNightlyStatus());
 });
 
+// GET /api/piugame/admin/pumbility-ranking/scheduler — inspect nightly scheduler status
+router.get('/admin/pumbility-ranking/scheduler', requireAuth, requireAdmin, (req, res) => {
+  res.json(getPumbilityRankingNightlyStatus());
+});
+
 // GET /api/piugame/admin/over-ranking/runs — paginated sync/backfill run history
 router.get('/admin/over-ranking/runs', requireAuth, requireAdmin, (req, res) => {
   const db = getDb();
   const runTypeRaw = String(req.query?.type || '').trim().toLowerCase();
-  const runType = runTypeRaw === 'sync' || runTypeRaw === 'backfill' ? runTypeRaw : '';
+  const runType = ['sync', 'backfill', 'pumbility'].includes(runTypeRaw) ? runTypeRaw : '';
 
   const rawLimit = parseInt(req.query?.limit, 10);
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
@@ -4053,6 +4233,8 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
 });
 
 router.startOverRankingNightlyScheduler = startOverRankingNightlyScheduler;
+router.startPumbilityRankingNightlyScheduler = startPumbilityRankingNightlyScheduler;
 router.runOverRankingSyncNow = runOverRankingSyncNow;
+router.runPumbilityRankingSyncNow = runPumbilityRankingSyncNow;
 
 module.exports = router;
