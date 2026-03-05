@@ -2748,6 +2748,7 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
   const [showCompInfo, setShowCompInfo] = useState(false);
   const [sortKey, setSortKey] = useState('pumbility');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [mobileMetricView, setMobileMetricView] = useState('avg_grade');
   const normalizedMetric = metric === 'singles' ? 'singles' : 'overall';
 
   const getMetricValues = (member) => {
@@ -2846,7 +2847,21 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
         </button>
       </div>
 
-      <p className="text-[11px] text-gray-500 mb-3">
+      <div className="md:hidden mb-3 flex items-center gap-2">
+        <label htmlFor="leaderboard-mobile-metric" className="text-[11px] text-gray-500 font-display">Show:</label>
+        <select
+          id="leaderboard-mobile-metric"
+          value={mobileMetricView}
+          onChange={(event) => setMobileMetricView(event.target.value)}
+          className="flex-1 bg-piu-dark border border-piu-border rounded-lg px-2.5 py-1.5 text-xs text-gray-200 font-display focus:outline-none focus:border-piu-accent"
+        >
+          <option value="avg_grade">Avg Grade</option>
+          <option value="avg_level">Avg Level</option>
+          <option value="competitive_level">C. Level</option>
+        </select>
+      </div>
+
+      <p className="hidden md:block text-[11px] text-gray-500 mb-3">
         Click a column header to switch between high-to-low and low-to-high sorting.
       </p>
 
@@ -2861,126 +2876,206 @@ function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) 
       ) : sortedRows.length === 0 ? (
         <p className="text-center text-gray-500 py-8 font-display text-sm">No leaderboard data available yet</p>
       ) : (
-        <div className="rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px]">
-              <thead className="bg-piu-dark/70">
-                <tr className="border-b border-piu-border/50">
-                  <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-14">#</th>
-                  <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 min-w-[260px]">Player</th>
-                  <th className="px-3 py-2 text-left">
-                    <LeaderboardSortHeader
-                      label="Pumbility"
-                      sortKey="pumbility"
-                      activeSortKey={sortKey}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </th>
-                  <th className="px-3 py-2 text-left">
-                    <LeaderboardSortHeader
-                      label="Avg Grade"
-                      sortKey="avg_grade"
-                      activeSortKey={sortKey}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </th>
-                  <th className="px-3 py-2 text-left">
-                    <LeaderboardSortHeader
-                      label="Avg Level"
-                      sortKey="avg_level"
-                      activeSortKey={sortKey}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </th>
-                  <th className="px-3 py-2 text-left">
-                    <LeaderboardSortHeader
-                      label="Competitive Level"
-                      sortKey="competitive_level"
-                      activeSortKey={sortKey}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                    />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((member, index) => {
-                  const metrics = getMetricValues(member);
-                  const pumbilityCanOpen = metrics.pumbilityValue > 0 && metrics.breakdownCount > 0;
-                  return (
-                    <tr key={member.id} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
-                      <td className="px-3 py-2.5 text-sm font-mono text-gray-500">#{index + 1}</td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
-                            {member.avatar ? (
-                              <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
-                            ) : (
-                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
-                                {member.username?.[0]?.toUpperCase()}
-                              </div>
-                            )}
-                          </Link>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Link to={getProfilePath(member.id, member.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
-                                {member.username}
-                              </Link>
-                              <BadgeList badges={member.badges} />
-                              {member.nationality && <span className="text-sm">{getCountryFlag(member.nationality)}</span>}
-                              {member.role === 'owner' && (
-                                <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-gold/20 text-piu-gold">Owner</span>
-                              )}
-                              {member.role === 'moderator' && (
-                                <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-blue/20 text-piu-blue">Mod</span>
-                              )}
-                            </div>
-                            <CommunityTagList tags={member.tags} />
+        <>
+          <div className="md:hidden space-y-1.5">
+            {sortedRows.map((member, index) => {
+              const metrics = getMetricValues(member);
+              const pumbilityCanOpen = metrics.pumbilityValue > 0 && metrics.breakdownCount > 0;
+              const mobileMetricLabel = mobileMetricView === 'avg_level'
+                ? 'Avg Level'
+                : mobileMetricView === 'competitive_level'
+                  ? 'C. Level'
+                  : 'Avg Grade';
+
+              return (
+                <div key={member.id} className="rounded-lg border border-piu-border/40 bg-piu-card/35 px-2.5 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="w-7 shrink-0 text-sm font-mono text-gray-500">#{index + 1}</span>
+                      <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
+                        {member.avatar ? (
+                          <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                            {member.username?.[0]?.toUpperCase()}
                           </div>
+                        )}
+                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+                          <Link to={getProfilePath(member.id, member.username)} className="font-display font-bold text-sm truncate hover:text-piu-accent transition-colors">
+                            {member.username}
+                          </Link>
+                          <BadgeList badges={member.badges} />
+                          {member.nationality && <span className="text-sm">{getCountryFlag(member.nationality)}</span>}
+                          {member.role === 'owner' && (
+                            <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-gold/20 text-piu-gold">Owner</span>
+                          )}
+                          {member.role === 'moderator' && (
+                            <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-blue/20 text-piu-blue">Mod</span>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenBreakdown(member)}
-                          disabled={!pumbilityCanOpen}
-                          className={`font-mono font-bold transition-colors ${
-                            pumbilityCanOpen
-                              ? 'text-piu-accent hover:text-piu-gold underline underline-offset-2'
-                              : 'text-gray-500 cursor-default'
-                          }`}
-                        >
-                          {metrics.pumbilityValue > 0 ? formatNumber(metrics.pumbilityValue) : '--'}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`font-display font-bold text-sm ${metrics.averageGrade !== '--' ? getGradeColorClass(metrics.averageGrade) : 'text-gray-500'}`}>
-                          {metrics.averageGrade || '--'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-sm font-mono text-gray-300">
-                        {metrics.averageLevel > 0 ? metrics.averageLevel.toFixed(1) : '--'}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <button
-                          type="button"
-                          onClick={() => setShowCompInfo(true)}
-                          className={`font-display font-bold text-sm underline decoration-dotted underline-offset-2 transition-colors hover:text-piu-accent ${metrics.competitiveLevel.colorClass}`}
-                          title="Show competitive level explanation"
-                        >
-                          {metrics.competitiveLevel.label}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-500">
+                          <span>{mobileMetricLabel}:</span>
+                          {mobileMetricView === 'avg_level' && (
+                            <span className="font-mono text-gray-300">{metrics.averageLevel > 0 ? metrics.averageLevel.toFixed(1) : '--'}</span>
+                          )}
+                          {mobileMetricView === 'avg_grade' && (
+                            <span className={`font-display font-bold ${metrics.averageGrade !== '--' ? getGradeColorClass(metrics.averageGrade) : 'text-gray-500'}`}>
+                              {metrics.averageGrade || '--'}
+                            </span>
+                          )}
+                          {mobileMetricView === 'competitive_level' && (
+                            <button
+                              type="button"
+                              onClick={() => setShowCompInfo(true)}
+                              className={`font-display font-bold underline decoration-dotted underline-offset-2 transition-colors hover:text-piu-accent ${metrics.competitiveLevel.colorClass}`}
+                            >
+                              {metrics.competitiveLevel.label}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenBreakdown(member)}
+                      disabled={!pumbilityCanOpen}
+                      className={`shrink-0 text-sm font-mono font-bold transition-colors ${
+                        pumbilityCanOpen
+                          ? 'text-piu-gold hover:text-yellow-300'
+                          : 'text-gray-500 cursor-default'
+                      }`}
+                    >
+                      {metrics.pumbilityValue > 0 ? formatNumber(metrics.pumbilityValue) : '--'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
+
+          <div className="hidden md:block rounded-lg border border-piu-border/50 bg-piu-card/35 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[980px]">
+                <thead className="bg-piu-dark/70">
+                  <tr className="border-b border-piu-border/50">
+                    <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 w-14">#</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-display font-bold tracking-wide uppercase text-gray-500 min-w-[260px]">Player</th>
+                    <th className="px-3 py-2 text-left">
+                      <LeaderboardSortHeader
+                        label="Pumbility"
+                        sortKey="pumbility"
+                        activeSortKey={sortKey}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
+                      />
+                    </th>
+                    <th className="px-3 py-2 text-left">
+                      <LeaderboardSortHeader
+                        label="Avg Grade"
+                        sortKey="avg_grade"
+                        activeSortKey={sortKey}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
+                      />
+                    </th>
+                    <th className="px-3 py-2 text-left">
+                      <LeaderboardSortHeader
+                        label="Avg Level"
+                        sortKey="avg_level"
+                        activeSortKey={sortKey}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
+                      />
+                    </th>
+                    <th className="px-3 py-2 text-left">
+                      <LeaderboardSortHeader
+                        label="Competitive Level"
+                        sortKey="competitive_level"
+                        activeSortKey={sortKey}
+                        sortDirection={sortDirection}
+                        onSort={handleSort}
+                      />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedRows.map((member, index) => {
+                    const metrics = getMetricValues(member);
+                    const pumbilityCanOpen = metrics.pumbilityValue > 0 && metrics.breakdownCount > 0;
+                    return (
+                      <tr key={member.id} className="border-b border-piu-border/25 last:border-b-0 hover:bg-piu-dark/25 transition-colors">
+                        <td className="px-3 py-2.5 text-sm font-mono text-gray-500">#{index + 1}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
+                              {member.avatar ? (
+                                <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border/40" />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs border border-piu-border/40">
+                                  {member.username?.[0]?.toUpperCase()}
+                                </div>
+                              )}
+                            </Link>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Link to={getProfilePath(member.id, member.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                                  {member.username}
+                                </Link>
+                                <BadgeList badges={member.badges} />
+                                {member.nationality && <span className="text-sm">{getCountryFlag(member.nationality)}</span>}
+                                {member.role === 'owner' && (
+                                  <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-gold/20 text-piu-gold">Owner</span>
+                                )}
+                                {member.role === 'moderator' && (
+                                  <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-blue/20 text-piu-blue">Mod</span>
+                                )}
+                              </div>
+                              <CommunityTagList tags={member.tags} />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenBreakdown(member)}
+                            disabled={!pumbilityCanOpen}
+                            className={`font-mono font-bold transition-colors ${
+                              pumbilityCanOpen
+                                ? 'text-piu-gold hover:text-yellow-300'
+                                : 'text-gray-500 cursor-default'
+                            }`}
+                          >
+                            {metrics.pumbilityValue > 0 ? formatNumber(metrics.pumbilityValue) : '--'}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className={`font-display font-bold text-sm ${metrics.averageGrade !== '--' ? getGradeColorClass(metrics.averageGrade) : 'text-gray-500'}`}>
+                            {metrics.averageGrade || '--'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-sm font-mono text-gray-300">
+                          {metrics.averageLevel > 0 ? metrics.averageLevel.toFixed(1) : '--'}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setShowCompInfo(true)}
+                            className={`font-display font-bold text-sm underline decoration-dotted underline-offset-2 transition-colors hover:text-piu-accent ${metrics.competitiveLevel.colorClass}`}
+                            title="Show competitive level explanation"
+                          >
+                            {metrics.competitiveLevel.label}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
       <PumbilityBreakdownModal
