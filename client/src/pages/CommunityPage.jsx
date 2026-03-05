@@ -9,6 +9,7 @@ import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
 import SessionSummaryCard from '../components/SessionSummaryCard';
 import SessionShareCard from '../components/SessionShareCard';
+import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { ImageGrid, Lightbox, YouTubeEmbed, ShareButton, timeAgo as postCardTimeAgo } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
 import ImageEditor from '../components/ImageEditor';
@@ -17,6 +18,7 @@ import {
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
   pumpCommunityPost, getCommunityPostComments, addCommunityPostComment, deleteCommunityPostComment,
   getCommunityMembers, pumpCommunityComment, getCommunityEmojis, searchCommunityMentions, getPiugameRecentlyPlayed, getJacketMap, getCommunityPostPumpers,
+  getSongAnalytics,
   getCommunityNotificationPreferences, updateCommunityNotificationPreferences,
 } from '../utils/api';
 import { calculateClearRating } from '../utils/clearRating';
@@ -257,6 +259,54 @@ function getMostRecentSession(sortedRows) {
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function averageForNumericRows(rows, key) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) return 0;
+  const total = list.reduce((sum, row) => sum + (parseInt(row?.[key], 10) || 0), 0);
+  return total / list.length;
+}
+
+function buildPumbilityMetricSummary(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) {
+    return {
+      average_score: 0,
+      average_level: 0,
+      average_grade: '--',
+    };
+  }
+  const averageScore = Math.round(averageForNumericRows(list, 'score'));
+  const averageLevel = averageForNumericRows(list, 'level');
+  return {
+    average_score: averageScore,
+    average_level: Math.round(averageLevel * 10) / 10,
+    average_grade: getRankLabel(averageScore),
+  };
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const source = Array.isArray(items) ? items : [];
+  const maxConcurrent = Math.max(1, parseInt(limit, 10) || 1);
+  const results = new Array(source.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < source.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(source[index], index);
+    }
+  }
+
+  const workers = [];
+  const workerCount = Math.min(maxConcurrent, source.length);
+  for (let i = 0; i < workerCount; i += 1) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+  return results;
 }
 
 function formatDurationLabel(totalMinutes) {
@@ -595,6 +645,11 @@ export default function CommunityPage() {
   const [members, setMembers] = useState([]);
   const [activeMembers, setActiveMembers] = useState([]);
   const [memberSort, setMemberSort] = useState('joined');
+  const [leaderboardRows, setLeaderboardRows] = useState([]);
+  const [leaderboardMetric, setLeaderboardMetric] = useState('overall');
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardError, setLeaderboardError] = useState('');
+  const [leaderboardLoadedCommunityId, setLeaderboardLoadedCommunityId] = useState('');
   const [postsLoading, setPostsLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(false);
   const [joining, setJoining] = useState(false);
@@ -643,6 +698,11 @@ export default function CommunityPage() {
     setPosts([]);
     setMembers([]);
     setActiveMembers([]);
+    setLeaderboardRows([]);
+    setLeaderboardMetric('overall');
+    setLeaderboardLoading(false);
+    setLeaderboardError('');
+    setLeaderboardLoadedCommunityId('');
     setCommunityNotifyMenuOpen(false);
     setCommunityNotifyError('');
     setCommunityNotifyPrefs({
@@ -690,6 +750,82 @@ export default function CommunityPage() {
     finally { setMembersLoading(false); }
   }, [community, memberSort]);
 
+  const loadLeaderboard = useCallback(async () => {
+    if (!community) return;
+    setLeaderboardLoading(true);
+    setLeaderboardError('');
+
+    try {
+      const memberRows = await getCommunityMembers(community.id, 'pumbility');
+      const uniqueMembers = [];
+      const seen = new Set();
+      for (const member of (memberRows || [])) {
+        const id = String(member?.id || '').trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        uniqueMembers.push(member);
+      }
+
+      const analyticsResults = await mapWithConcurrency(uniqueMembers, 6, async (member) => {
+        try {
+          const analytics = await getSongAnalytics(member.id);
+          const overallBreakdown = analytics?.pumbility_breakdown?.overall_top50 || [];
+          const singlesBreakdown = analytics?.pumbility_breakdown?.singles_top50 || [];
+          const overallSummary = buildPumbilityMetricSummary(overallBreakdown);
+          const singlesSummary = buildPumbilityMetricSummary(singlesBreakdown);
+
+          return {
+            user_id: member.id,
+            analytics,
+            overall_pumbility: parseInt(analytics?.pumbility, 10) || parseInt(member?.pumbility, 10) || 0,
+            singles_pumbility: parseInt(analytics?.singles_pumbility, 10) || 0,
+            overall_breakdown: overallBreakdown,
+            singles_breakdown: singlesBreakdown,
+            overall_average_grade: overallSummary.average_grade,
+            overall_average_level: overallSummary.average_level,
+            singles_average_grade: singlesSummary.average_grade,
+            singles_average_level: singlesSummary.average_level,
+            singles_competitive_level: parseInt(analytics?.competitive_levels?.single?.level, 10) || null,
+            doubles_competitive_level: parseInt(analytics?.competitive_levels?.double?.level, 10) || null,
+          };
+        } catch {
+          return {
+            user_id: member.id,
+            analytics: null,
+            overall_pumbility: parseInt(member?.pumbility, 10) || 0,
+            singles_pumbility: 0,
+            overall_breakdown: [],
+            singles_breakdown: [],
+            overall_average_grade: '--',
+            overall_average_level: 0,
+            singles_average_grade: '--',
+            singles_average_level: 0,
+            singles_competitive_level: null,
+            doubles_competitive_level: null,
+          };
+        }
+      });
+
+      const byUserId = new Map((analyticsResults || []).map((row) => [String(row.user_id), row]));
+      const rows = uniqueMembers.map((member) => {
+        const metrics = byUserId.get(String(member.id)) || {};
+        return {
+          ...member,
+          ...metrics,
+        };
+      });
+
+      setLeaderboardRows(rows);
+      setLeaderboardLoadedCommunityId(community.id);
+    } catch (err) {
+      setLeaderboardError(err?.message || 'Failed to load community leaderboard.');
+      setLeaderboardRows([]);
+      setLeaderboardLoadedCommunityId('');
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, [community]);
+
   const loadActiveMembers = useCallback(async () => {
     if (!community) return;
     try {
@@ -711,6 +847,11 @@ export default function CommunityPage() {
   useEffect(() => { loadCommunity(); }, [loadCommunity]);
   useEffect(() => { if (community && activeTab === 'posts') loadPosts(); }, [community, activeTab, postSort, loadPosts]);
   useEffect(() => { if (community && activeTab === 'members') loadMembers(); }, [community, activeTab, memberSort, loadMembers]);
+  useEffect(() => {
+    if (!community || activeTab !== 'leaderboard') return;
+    if (leaderboardLoadedCommunityId === community.id && leaderboardRows.length > 0) return;
+    loadLeaderboard();
+  }, [community, activeTab, leaderboardLoadedCommunityId, leaderboardRows.length, loadLeaderboard]);
   useEffect(() => { if (community) loadActiveMembers(); }, [community, loadActiveMembers]);
 
   useEffect(() => {
@@ -1256,6 +1397,14 @@ export default function CommunityPage() {
             Members
           </button>
           <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`px-4 py-2.5 font-display font-bold text-sm border-b-2 transition-colors ${
+              activeTab === 'leaderboard' ? 'border-piu-accent text-piu-accent' : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Leaderboard
+          </button>
+          <button
             onClick={() => setActiveTab('about')}
             className={`px-4 py-2.5 font-display font-bold text-sm border-b-2 transition-colors ${
               activeTab === 'about' ? 'border-piu-accent text-piu-accent' : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -1332,6 +1481,16 @@ export default function CommunityPage() {
             memberSort={memberSort}
             setMemberSort={setMemberSort}
             community={community}
+          />
+        )}
+        {activeTab === 'leaderboard' && (
+          <LeaderboardTab
+            rows={leaderboardRows}
+            loading={leaderboardLoading}
+            error={leaderboardError}
+            metric={leaderboardMetric}
+            setMetric={setLeaderboardMetric}
+            onRefresh={loadLeaderboard}
           />
         )}
       </div>
@@ -2517,6 +2676,177 @@ function AboutTab({ community }) {
 }
 
 // ─── Members Tab ─────────────────────────────────────
+
+function LeaderboardTab({ rows, loading, error, metric, setMetric, onRefresh }) {
+  const [openBreakdown, setOpenBreakdown] = useState(null);
+  const normalizedMetric = metric === 'singles' ? 'singles' : 'overall';
+
+  const sortedRows = useMemo(() => {
+    const list = Array.isArray(rows) ? [...rows] : [];
+    return list.sort((a, b) => {
+      const aValue = normalizedMetric === 'singles'
+        ? (parseInt(a?.singles_pumbility, 10) || 0)
+        : (parseInt(a?.overall_pumbility, 10) || parseInt(a?.pumbility, 10) || 0);
+      const bValue = normalizedMetric === 'singles'
+        ? (parseInt(b?.singles_pumbility, 10) || 0)
+        : (parseInt(b?.overall_pumbility, 10) || parseInt(b?.pumbility, 10) || 0);
+      if (bValue !== aValue) return bValue - aValue;
+      return String(a?.username || '').localeCompare(String(b?.username || ''), undefined, { sensitivity: 'base' });
+    });
+  }, [rows, normalizedMetric]);
+
+  const handleOpenBreakdown = (member) => {
+    const isSingles = normalizedMetric === 'singles';
+    const breakdownRows = isSingles
+      ? (member?.singles_breakdown || [])
+      : (member?.overall_breakdown || []);
+    if (!Array.isArray(breakdownRows) || breakdownRows.length === 0) return;
+    setOpenBreakdown({
+      title: isSingles
+        ? `${member.username} • Singles Pumbility Top Songs`
+        : `${member.username} • Pumbility Top Songs`,
+      rows: breakdownRows,
+    });
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 font-display">View:</span>
+          <button
+            onClick={() => setMetric('overall')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+              normalizedMetric === 'overall' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+            }`}
+          >
+            Overall Pumbility
+          </button>
+          <button
+            onClick={() => setMetric('singles')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+              normalizedMetric === 'singles' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+            }`}
+          >
+            Singles Pumbility
+          </button>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg text-xs font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white hover:border-piu-accent/50 disabled:opacity-60 transition-colors"
+        >
+          {loading ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-piu-accent border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {error}
+        </div>
+      ) : sortedRows.length === 0 ? (
+        <p className="text-center text-gray-500 py-8 font-display text-sm">No leaderboard data available yet</p>
+      ) : (
+        <div className="space-y-1.5">
+          {sortedRows.map((member, index) => {
+            const isSingles = normalizedMetric === 'singles';
+            const pumbilityValue = isSingles
+              ? (parseInt(member?.singles_pumbility, 10) || 0)
+              : (parseInt(member?.overall_pumbility, 10) || parseInt(member?.pumbility, 10) || 0);
+            const averageGrade = isSingles
+              ? (member?.singles_average_grade || '--')
+              : (member?.overall_average_grade || '--');
+            const averageLevel = isSingles
+              ? (Number(member?.singles_average_level) || 0)
+              : (Number(member?.overall_average_level) || 0);
+            const competitiveLevel = isSingles
+              ? (parseInt(member?.singles_competitive_level, 10) || null)
+              : (parseInt(member?.doubles_competitive_level, 10) || null);
+            const breakdownCount = isSingles
+              ? (Array.isArray(member?.singles_breakdown) ? member.singles_breakdown.length : 0)
+              : (Array.isArray(member?.overall_breakdown) ? member.overall_breakdown.length : 0);
+
+            return (
+              <div
+                key={member.id}
+                className="flex items-center gap-2.5 p-3 rounded-lg border border-piu-border/40 bg-piu-card/35"
+              >
+                <div className="w-8 shrink-0 text-right">
+                  <span className="text-sm font-mono text-gray-500">#{index + 1}</span>
+                </div>
+
+                <Link to={getProfilePath(member.id, member.username)} className="shrink-0">
+                  {member.avatar ? (
+                    <img src={member.avatar.startsWith('data:') ? member.avatar : getAvatarUrl(member.avatar)} alt="" className="w-10 h-10 rounded-full object-cover border border-piu-border/40" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm border border-piu-border/40">
+                      {member.username?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </Link>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Link to={getProfilePath(member.id, member.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                      {member.username}
+                    </Link>
+                    <BadgeList badges={member.badges} />
+                    {member.nationality && <span className="text-sm">{getCountryFlag(member.nationality)}</span>}
+                    {member.role === 'owner' && (
+                      <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-gold/20 text-piu-gold">Owner</span>
+                    )}
+                    {member.role === 'moderator' && (
+                      <span className="text-[9px] font-display font-bold px-1.5 py-0.5 rounded-full bg-piu-blue/20 text-piu-blue">Mod</span>
+                    )}
+                    <CommunityTagList tags={member.tags} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenBreakdown(member)}
+                      disabled={pumbilityValue <= 0 || breakdownCount === 0}
+                      className={`font-mono font-bold transition-colors ${
+                        pumbilityValue > 0 && breakdownCount > 0
+                          ? 'text-piu-accent hover:text-piu-gold underline underline-offset-2'
+                          : 'text-gray-500 cursor-default'
+                      }`}
+                    >
+                      {pumbilityValue > 0 ? formatNumber(pumbilityValue) : '--'}
+                    </button>
+                    <span className="text-gray-500">
+                      Avg grade: <span className="font-display font-bold text-gray-300">{averageGrade}</span>
+                    </span>
+                    <span className="text-gray-500">
+                      Avg level: <span className="font-display font-bold text-gray-300">{averageLevel > 0 ? averageLevel.toFixed(1) : '--'}</span>
+                    </span>
+                    <span className="text-gray-500">
+                      {isSingles ? 'Singles comp level:' : 'Doubles comp level:'}
+                      {' '}
+                      <span className={`font-display font-bold ${isSingles ? 'text-red-300' : 'text-green-300'}`}>
+                        {competitiveLevel ? `${isSingles ? 'S' : 'D'}${competitiveLevel}` : '--'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <PumbilityBreakdownModal
+        open={!!openBreakdown}
+        title={openBreakdown?.title || ''}
+        rows={openBreakdown?.rows || []}
+        onClose={() => setOpenBreakdown(null)}
+      />
+    </div>
+  );
+}
 
 function MembersTab({ members, loading, memberSort, setMemberSort, community }) {
   return (
