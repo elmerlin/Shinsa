@@ -4075,7 +4075,8 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   if (resolvedUserId) {
     const localScoreRows = db.prepare(`
       SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.background_url,
-             COALESCE(s.artist, '') AS artist
+             COALESCE(s.artist, '') AS artist,
+             COALESCE(s.jacket_url, '') AS song_jacket_url
       FROM user_best_scores bs
       LEFT JOIN songs s ON s.title = bs.song_title AND s.mode = bs.mode AND s.level = bs.level
       WHERE bs.user_id = ? AND bs.score > 0
@@ -4100,7 +4101,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
         score,
         grade,
         rating,
-        jacket_url: String(scoreRow?.background_url || '').trim(),
+        jacket_url: String(scoreRow?.song_jacket_url || scoreRow?.background_url || '').trim(),
       });
     }
 
