@@ -7,6 +7,7 @@ import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { getProfilePath } from '../utils/profile';
 import {
   getGlobalPumbilityLeaderboard,
+  getGlobalPumbilityPlayerSheet,
   getMyTop100Scores,
   getOver20ChartTop100,
   getOver20ChartsByLevel,
@@ -374,6 +375,11 @@ function PumbilityLeaderboardTab() {
   const [error, setError] = useState('');
   const [mySnapshot, setMySnapshot] = useState(null);
   const [showPumbilityBreakdownModal, setShowPumbilityBreakdownModal] = useState(false);
+  const [breakdownTitle, setBreakdownTitle] = useState('Pumbility Top Songs');
+  const [breakdownRows, setBreakdownRows] = useState([]);
+  const [breakdownIncomplete, setBreakdownIncomplete] = useState(false);
+  const [breakdownLoadingKey, setBreakdownLoadingKey] = useState('');
+  const [breakdownError, setBreakdownError] = useState('');
   const [jumpingToRank, setJumpingToRank] = useState(false);
   const loadMoreRef = useRef(null);
 
@@ -444,7 +450,6 @@ function PumbilityLeaderboardTab() {
         setMySnapshot({
           ranking: parseInt(payload?.ranking, 10) || 0,
           pumbility: parseInt(payload?.official_pumbility, 10) || parseInt(payload?.pumbility_value, 10) || 0,
-          scores: Array.isArray(payload?.scores) ? payload.scores : [],
         });
       } catch {
         if (cancelled) return;
@@ -487,20 +492,38 @@ function PumbilityLeaderboardTab() {
   const myRow = useMemo(() => rows.find((row) => isCurrentUserRow(row)) || null, [rows, user?.id, user?.username]);
   const myRank = parseInt(mySnapshot?.ranking, 10) || parseInt(myRow?.global_rank, 10) || parseInt(myRow?.rank, 10) || 0;
   const myPumbility = parseInt(mySnapshot?.pumbility, 10) || parseInt(myRow?.overall_pumbility, 10) || 0;
-  const pumbilityBreakdownRows = useMemo(() => {
-    const topScores = Array.isArray(mySnapshot?.scores) ? mySnapshot.scores : [];
-    return topScores.map((score, index) => ({
-      chart_id: `${score?.mode || 'M'}-${score?.level || 0}-${score?.song_title || 'song'}-${index}`,
-      title: String(score?.song_title || ''),
-      artist: String(score?.artist || ''),
-      mode: String(score?.mode || ''),
-      level: parseInt(score?.level, 10) || 0,
-      score: parseInt(score?.score, 10) || 0,
-      grade: String(score?.grade || ''),
-      rating: parseInt(score?.rating, 10) || 0,
-      jacket_url: String(score?.jacket_url || score?.background_url || ''),
-    }));
-  }, [mySnapshot?.scores]);
+  const getBreakdownKey = (row) => `${String(row?.user_id || '').trim()}|${normalizeNameKey(row?.username)}`;
+
+  const openPlayerPumbilityBreakdown = async (row) => {
+    const targetName = String(row?.username || user?.username || '').replace(/\s+/g, ' ').trim();
+    if (!targetName) return;
+    const targetUserId = String(
+      row?.user_id
+        || (normalizeNameKey(targetName) === normalizeNameKey(user?.username) ? user?.id : '')
+        || ''
+    ).trim();
+    const key = `${targetUserId}|${normalizeNameKey(targetName)}`;
+    if (breakdownLoadingKey) return;
+
+    setBreakdownLoadingKey(key);
+    setBreakdownError('');
+    try {
+      const payload = await getGlobalPumbilityPlayerSheet({
+        player_name: targetName,
+        user_id: targetUserId,
+      });
+      const payloadRows = Array.isArray(payload?.rows) ? payload.rows : [];
+      const resolvedName = String(payload?.player_name || targetName).replace(/\s+/g, ' ').trim() || targetName;
+      setBreakdownTitle(`${resolvedName} • Pumbility Top Songs`);
+      setBreakdownRows(payloadRows);
+      setBreakdownIncomplete(!!payload?.incomplete);
+      setShowPumbilityBreakdownModal(true);
+    } catch (err) {
+      setBreakdownError(err?.message || 'Failed to load pumbility score sheet.');
+    } finally {
+      setBreakdownLoadingKey('');
+    }
+  };
 
   const jumpToMyRank = async () => {
     if (!myRank || initialLoading || loadingMore || jumpingToRank) return;
@@ -558,7 +581,11 @@ function PumbilityLeaderboardTab() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowPumbilityBreakdownModal(true)}
+                onClick={() => openPlayerPumbilityBreakdown({
+                  user_id: myRow?.user_id || user?.id || '',
+                  username: myRow?.username || user?.username || '',
+                })}
+                disabled={!!breakdownLoadingKey}
                 className="rounded-lg border border-piu-border/60 bg-piu-dark/40 px-2 py-1 text-left hover:border-piu-gold/50 hover:bg-piu-dark/70 transition-colors"
                 title="Show your pumbility top songs"
               >
@@ -572,6 +599,11 @@ function PumbilityLeaderboardTab() {
           <p className="mt-1 text-sm text-gray-400">No Top 1000 rank found for your username yet.</p>
         ) : null}
       </div>
+      {breakdownError ? (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          {breakdownError}
+        </div>
+      ) : null}
 
       {initialLoading ? (
         <div className="flex justify-center py-8">
@@ -601,6 +633,8 @@ function PumbilityLeaderboardTab() {
                 : '';
               const playerName = String(row?.username || '').trim() || 'Unknown';
               const isLocal = !!row?.is_local_user && !!row?.user_id;
+              const rowBreakdownKey = getBreakdownKey(row);
+              const rowBreakdownLoading = breakdownLoadingKey === rowBreakdownKey;
 
               return (
                 <div
@@ -631,20 +665,19 @@ function PumbilityLeaderboardTab() {
                       {row?.nationality ? <span className="text-sm shrink-0">{getCountryFlag(row.nationality)}</span> : null}
                     </div>
                   </div>
-                  {isCurrent ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowPumbilityBreakdownModal(true)}
-                      className="font-mono font-bold text-piu-gold whitespace-nowrap hover:text-yellow-200 transition-colors"
-                      title="Show your pumbility top songs"
-                    >
-                      {pumbility > 0 ? formatNumber(pumbility) : '--'}
-                    </button>
-                  ) : (
-                    <span className="font-mono font-bold text-piu-gold whitespace-nowrap">
-                      {pumbility > 0 ? formatNumber(pumbility) : '--'}
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => openPlayerPumbilityBreakdown(row)}
+                    disabled={!!breakdownLoadingKey}
+                    className={`font-mono font-bold whitespace-nowrap transition-colors ${
+                      rowBreakdownLoading
+                        ? 'text-yellow-200/80'
+                        : 'text-piu-gold hover:text-yellow-200'
+                    }`}
+                    title="Show this player's pumbility top songs"
+                  >
+                    {pumbility > 0 ? formatNumber(pumbility) : '--'}
+                  </button>
                 </div>
               );
             })}
@@ -666,8 +699,10 @@ function PumbilityLeaderboardTab() {
 
       <PumbilityBreakdownModal
         open={showPumbilityBreakdownModal}
-        title="Pumbility Top Songs"
-        rows={pumbilityBreakdownRows}
+        title={breakdownTitle}
+        rows={breakdownRows}
+        showIncompleteCta={breakdownIncomplete}
+        ctaMessage="This pumbility sheet is partial from public OVER Lv.20 Top 100 data. Sign up and sync PIUGAME for complete Top 50 scores."
         onClose={() => setShowPumbilityBreakdownModal(false)}
       />
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -54,7 +55,14 @@ function ChartModeBadge({ mode, level }) {
   );
 }
 
-export default function PumbilityBreakdownModal({ open, title, rows, onClose }) {
+export default function PumbilityBreakdownModal({
+  open,
+  title,
+  rows,
+  onClose,
+  showIncompleteCta = false,
+  ctaMessage = '',
+}) {
   const [openSongInfoKey, setOpenSongInfoKey] = useState('');
 
   useEffect(() => {
@@ -127,6 +135,28 @@ export default function PumbilityBreakdownModal({ open, title, rows, onClose }) 
 
           {(rows || []).length === 0 && (
             <p className="text-center text-gray-500 py-8 text-sm">No rated songs yet.</p>
+          )}
+
+          {showIncompleteCta && (
+            <div className="mt-3 rounded-lg border border-piu-border/45 bg-piu-dark/35 px-3 py-2.5">
+              <p className="text-[11px] text-gray-400">
+                {ctaMessage || 'This pumbility sheet is partial. Sign up and sync your PIUGAME account for full Top 50 data.'}
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Link
+                  to="/register"
+                  className="px-2.5 py-1 rounded border border-piu-border/60 text-[11px] font-display font-bold text-gray-200 hover:text-white hover:bg-piu-dark/60 transition-colors"
+                >
+                  Sign Up
+                </Link>
+                <Link
+                  to="/account"
+                  className="px-2.5 py-1 rounded border border-piu-accent/50 text-[11px] font-display font-bold text-piu-accent hover:text-white hover:bg-piu-accent/20 transition-colors"
+                >
+                  Sync PIUGAME
+                </Link>
+              </div>
+            </div>
           )}
         </div>
       </div>

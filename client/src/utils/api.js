@@ -418,6 +418,13 @@ export const getGlobalPumbilityLeaderboard = (params = {}) => {
   const qs = query.toString();
   return request(`/piugame/leaderboards/pumbility${qs ? `?${qs}` : ''}`);
 };
+export const getGlobalPumbilityPlayerSheet = (params = {}) => {
+  const query = new URLSearchParams();
+  if (params.player_name) query.set('player_name', String(params.player_name));
+  if (params.user_id) query.set('user_id', String(params.user_id));
+  const qs = query.toString();
+  return request(`/piugame/leaderboards/pumbility/player-sheet${qs ? `?${qs}` : ''}`);
+};
 export const getOver20Levels = () => request('/piugame/leaderboards/over20/levels');
 export const getOver20ChartsByLevel = (level) => request(`/piugame/leaderboards/over20/charts?level=${encodeURIComponent(level)}`);
 export const getOver20ChartTop100 = (chartKey) => request(`/piugame/leaderboards/over20/chart?chart_key=${encodeURIComponent(chartKey)}`);

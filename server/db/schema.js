@@ -1253,6 +1253,7 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_over_level_rankings_song_mode_level ON over_level_rankings(song_title, mode, level);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
+    CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_name ON over_level_ranking_scores(player_name);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_started_at ON over_level_sync_runs(datetime(started_at) DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_type ON over_level_sync_runs(run_type, datetime(started_at) DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_user_shoes_user ON user_shoes(user_id);
@@ -2042,6 +2043,8 @@ function initializeDb() {
       ON over_level_rankings(song_title, mode, level);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score
       ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
+    CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_name
+      ON over_level_ranking_scores(player_name);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_started_at
       ON over_level_sync_runs(datetime(started_at) DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_type

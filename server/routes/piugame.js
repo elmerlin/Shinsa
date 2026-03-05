@@ -398,6 +398,19 @@ function getChartRatingPoints(score, grade, level) {
   return calculateRatingPoints(numericLevel, resolvedGrade, numericScore);
 }
 
+function compareRatedPumbilityEntries(a, b) {
+  const ratingDiff = (parseInt(b?.rating, 10) || 0) - (parseInt(a?.rating, 10) || 0);
+  if (ratingDiff !== 0) return ratingDiff;
+  const scoreDiff = (parseInt(b?.score, 10) || 0) - (parseInt(a?.score, 10) || 0);
+  if (scoreDiff !== 0) return scoreDiff;
+  const levelDiff = (parseInt(b?.level, 10) || 0) - (parseInt(a?.level, 10) || 0);
+  if (levelDiff !== 0) return levelDiff;
+  const modeA = String(a?.mode || '');
+  const modeB = String(b?.mode || '');
+  if (modeA !== modeB) return modeA.localeCompare(modeB);
+  return String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' });
+}
+
 function modeMatchesFilter(mode, modeFilter = '') {
   if (!modeFilter) return true;
   return String(mode || '').trim() === String(modeFilter || '').trim();
@@ -4015,6 +4028,199 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
     total_pages: totalPages,
     rows: pagedRows,
     source: 'piugame_global',
+  });
+});
+
+// GET /api/piugame/leaderboards/pumbility/player-sheet?player_name=...&user_id=...
+// Returns a player's pumbility top-song sheet. Local users use full best-scores data;
+// non-local users get inferred partial data from OVER Lv.20+ cached top 100 rows.
+router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
+  const db = getDb();
+  const requestedName = String(req.query?.player_name || '').replace(/\s+/g, ' ').trim();
+  const requestedUserId = String(req.query?.user_id || '').trim();
+  if (!requestedName && !requestedUserId) {
+    return res.status(400).json({ error: 'player_name or user_id is required' });
+  }
+
+  let localUser = null;
+  if (requestedUserId) {
+    localUser = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(requestedUserId) || null;
+  }
+  if (!localUser && requestedName) {
+    localUser = db.prepare('SELECT id, username, avatar FROM users WHERE LOWER(TRIM(username)) = ? LIMIT 1')
+      .get(normalizeLeaderboardNameKey(requestedName)) || null;
+  }
+
+  const resolvedUserId = String(localUser?.id || '').trim();
+  const resolvedName = String(localUser?.username || requestedName || '').replace(/\s+/g, ' ').trim();
+  if (!resolvedName) {
+    return res.status(404).json({ error: 'Player not found' });
+  }
+
+  const globalRow = db.prepare(`
+    SELECT rank, player_name, pumbility, avatar_url
+    FROM pumbility_leaderboard
+    WHERE LOWER(TRIM(player_name)) = ?
+    ORDER BY rank ASC
+    LIMIT 1
+  `).get(normalizeLeaderboardNameKey(resolvedName));
+
+  const normalizedName = normalizeLeaderboardNameKey(globalRow?.player_name || resolvedName);
+  let rows = [];
+  let source = '';
+  let incomplete = true;
+  let totalAvailableScores = 0;
+  let scoreSourceCount = 0;
+
+  if (resolvedUserId) {
+    const localScoreRows = db.prepare(`
+      SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.background_url,
+             COALESCE(s.artist, '') AS artist
+      FROM user_best_scores bs
+      LEFT JOIN songs s ON s.title = bs.song_title AND s.mode = bs.mode AND s.level = bs.level
+      WHERE bs.user_id = ? AND bs.score > 0
+    `).all(resolvedUserId);
+
+    const rated = [];
+    for (const scoreRow of localScoreRows) {
+      const score = parseInt(scoreRow?.score, 10) || 0;
+      const level = parseInt(scoreRow?.level, 10) || 0;
+      const mode = String(scoreRow?.mode || '').trim();
+      if (mode !== 'Single' && mode !== 'Double') continue;
+      if (!isPassingScore(score, scoreRow?.grade)) continue;
+      const grade = normalizeGrade(scoreRow?.grade || gradeFromScore(score));
+      const rating = getChartRatingPoints(score, grade, level);
+      if (rating <= 0) continue;
+      rated.push({
+        chart_id: chartScoreKey(scoreRow?.song_title, mode, level),
+        title: String(scoreRow?.song_title || '').trim(),
+        artist: String(scoreRow?.artist || '').trim(),
+        mode,
+        level,
+        score,
+        grade,
+        rating,
+        jacket_url: String(scoreRow?.background_url || '').trim(),
+      });
+    }
+
+    rated.sort(compareRatedPumbilityEntries);
+    scoreSourceCount = rated.length;
+    totalAvailableScores = rated.length;
+    rows = rated.slice(0, 50);
+    source = 'user_best_scores';
+
+    const syncRow = db.prepare('SELECT best_scores_imported FROM user_piugame_sync WHERE user_id = ?').get(resolvedUserId);
+    incomplete = parseInt(syncRow?.best_scores_imported, 10) !== 1;
+  }
+
+  if (!rows.length) {
+    let overRows = db.prepare(`
+      SELECT r.chart_key, r.rank, r.score, r.grade, r.played_at, r.player_name, r.player_avatar_url,
+             c.song_title, c.mode, c.level, c.jacket_url,
+             COALESCE(s.artist, '') AS artist
+      FROM over_level_ranking_scores r
+      JOIN over_level_rankings c ON c.chart_key = r.chart_key
+      LEFT JOIN songs s ON s.title = c.song_title AND s.mode = c.mode AND s.level = c.level
+      WHERE c.level >= 20
+        AND r.score > 0
+        AND r.player_name = ? COLLATE NOCASE
+      ORDER BY c.chart_key ASC, r.rank ASC
+    `).all(globalRow?.player_name || resolvedName);
+
+    if (!overRows.length) {
+      overRows = db.prepare(`
+        SELECT r.chart_key, r.rank, r.score, r.grade, r.played_at, r.player_name, r.player_avatar_url,
+               c.song_title, c.mode, c.level, c.jacket_url,
+               COALESCE(s.artist, '') AS artist
+        FROM over_level_ranking_scores r
+        JOIN over_level_rankings c ON c.chart_key = r.chart_key
+        LEFT JOIN songs s ON s.title = c.song_title AND s.mode = c.mode AND s.level = c.level
+        WHERE c.level >= 20
+          AND r.score > 0
+          AND LOWER(TRIM(r.player_name)) = ?
+        ORDER BY c.chart_key ASC, r.rank ASC
+      `).all(normalizedName);
+    }
+
+    const bestByChart = new Map();
+    for (const overRow of overRows) {
+      const chartKey = String(overRow?.chart_key || '').trim();
+      if (!chartKey) continue;
+      const candidate = {
+        rank: parseInt(overRow?.rank, 10) || 0,
+        score: parseInt(overRow?.score, 10) || 0,
+        grade: String(overRow?.grade || '').trim(),
+        player_name: String(overRow?.player_name || '').trim(),
+        played_at: String(overRow?.played_at || '').trim(),
+        title: String(overRow?.song_title || '').trim(),
+        artist: String(overRow?.artist || '').trim(),
+        mode: String(overRow?.mode || '').trim(),
+        level: parseInt(overRow?.level, 10) || 0,
+        jacket_url: String(overRow?.jacket_url || '').trim(),
+      };
+      const existing = bestByChart.get(chartKey);
+      if (!existing || compareOverRankingRows(candidate, existing) < 0) {
+        bestByChart.set(chartKey, candidate);
+      }
+    }
+
+    const rated = [];
+    for (const [chartKey, row] of bestByChart.entries()) {
+      const score = parseInt(row?.score, 10) || 0;
+      const level = parseInt(row?.level, 10) || 0;
+      const mode = String(row?.mode || '').trim();
+      if (mode !== 'Single' && mode !== 'Double') continue;
+      if (!isPassingScore(score, row?.grade)) continue;
+      const grade = normalizeGrade(row?.grade || gradeFromScore(score));
+      const rating = getChartRatingPoints(score, grade, level);
+      if (rating <= 0) continue;
+      rated.push({
+        chart_id: chartKey,
+        title: String(row?.title || '').trim(),
+        artist: String(row?.artist || '').trim(),
+        mode,
+        level,
+        score,
+        grade,
+        rating,
+        jacket_url: String(row?.jacket_url || '').trim(),
+      });
+    }
+
+    rated.sort(compareRatedPumbilityEntries);
+    scoreSourceCount = rated.length;
+    totalAvailableScores = rated.length;
+    rows = rated.slice(0, 50);
+    source = 'over20_top100_cache';
+    incomplete = true;
+  }
+
+  const localAvatar = String(localUser?.avatar || '').trim();
+  const piugameAvatar = mapPiugameAvatarToLocal(globalRow?.avatar_url);
+
+  res.json({
+    player_name: String(globalRow?.player_name || resolvedName).trim(),
+    user_id: resolvedUserId,
+    is_local_user: !!resolvedUserId,
+    avatar: localAvatar || piugameAvatar || '',
+    global_rank: parseInt(globalRow?.rank, 10) || 0,
+    global_pumbility: parseInt(globalRow?.pumbility, 10) || 0,
+    source: source || 'over20_top100_cache',
+    incomplete: !!incomplete,
+    total_available_scores: Math.max(0, parseInt(totalAvailableScores, 10) || 0),
+    source_scores_count: Math.max(0, parseInt(scoreSourceCount, 10) || 0),
+    rows: (Array.isArray(rows) ? rows : []).map((row) => ({
+      chart_id: String(row?.chart_id || ''),
+      title: String(row?.title || ''),
+      artist: String(row?.artist || ''),
+      mode: String(row?.mode || ''),
+      level: parseInt(row?.level, 10) || 0,
+      score: Math.max(0, parseInt(row?.score, 10) || 0),
+      grade: String(row?.grade || ''),
+      rating: Math.max(0, parseInt(row?.rating, 10) || 0),
+      jacket_url: String(row?.jacket_url || ''),
+    })),
   });
 });
 
