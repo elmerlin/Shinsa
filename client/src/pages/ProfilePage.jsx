@@ -1716,7 +1716,7 @@ export default function ProfilePage() {
     ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
   };
 
-  const orderedOverviewCardIds = ['song-analytics', 'skill-breakdown', 'rankings', 'grade-goals', 'play-heatmap']
+  const orderedOverviewCardIds = ['song-analytics', 'play-heatmap', 'skill-breakdown', 'rankings', 'grade-goals']
     .filter((cardId) => overviewCardsById[cardId]);
 
   const renderOverviewCardBody = (cardId) => {
