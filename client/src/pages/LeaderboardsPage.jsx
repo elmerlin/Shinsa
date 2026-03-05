@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
+import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { getProfilePath } from '../utils/profile';
 import {
   getGlobalPumbilityLeaderboard,
@@ -361,60 +362,6 @@ function Over20Top100Modal({
   );
 }
 
-function PumbilityThresholdModal({ open, snapshot, onClose }) {
-  if (!open) return null;
-  const ranking = parseInt(snapshot?.ranking, 10) || 0;
-  const pumbilityValue = parseInt(snapshot?.pumbility, 10) || 0;
-  const threshold = parseInt(snapshot?.threshold, 10) || 0;
-
-  return (
-    <div
-      className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl p-4"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Top 1000 Threshold</p>
-            <p className="text-xl font-mono font-bold text-white mt-1">
-              {threshold > 0 ? threshold.toLocaleString() : '--'}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
-          >
-            Close
-          </button>
-        </div>
-        <div className="mt-3 space-y-1.5">
-          <p className="text-[11px] text-gray-400">
-            Current ranking: {ranking > 0 ? `#${ranking}` : 'Outside top 1000'}
-          </p>
-          <p className="text-[11px] text-gray-400">
-            Current pumbility: {pumbilityValue.toLocaleString()}
-          </p>
-          {threshold > 0 && pumbilityValue > 0 ? (
-            <p className="text-[11px] font-display">
-              {pumbilityValue >= threshold ? (
-                <span className="text-green-400">Qualified for Top 1000</span>
-              ) : (
-                <span className="text-gray-400">
-                  {(threshold - pumbilityValue).toLocaleString()} away from Top 1000
-                </span>
-              )}
-            </p>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PumbilityLeaderboardTab() {
   const { user } = useAuth();
   const pageSize = 100;
@@ -426,7 +373,7 @@ function PumbilityLeaderboardTab() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [mySnapshot, setMySnapshot] = useState(null);
-  const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
+  const [showPumbilityBreakdownModal, setShowPumbilityBreakdownModal] = useState(false);
   const [jumpingToRank, setJumpingToRank] = useState(false);
   const loadMoreRef = useRef(null);
 
@@ -497,7 +444,7 @@ function PumbilityLeaderboardTab() {
         setMySnapshot({
           ranking: parseInt(payload?.ranking, 10) || 0,
           pumbility: parseInt(payload?.official_pumbility, 10) || parseInt(payload?.pumbility_value, 10) || 0,
-          threshold: parseInt(payload?.threshold, 10) || 0,
+          scores: Array.isArray(payload?.scores) ? payload.scores : [],
         });
       } catch {
         if (cancelled) return;
@@ -540,6 +487,20 @@ function PumbilityLeaderboardTab() {
   const myRow = useMemo(() => rows.find((row) => isCurrentUserRow(row)) || null, [rows, user?.id, user?.username]);
   const myRank = parseInt(mySnapshot?.ranking, 10) || parseInt(myRow?.global_rank, 10) || parseInt(myRow?.rank, 10) || 0;
   const myPumbility = parseInt(mySnapshot?.pumbility, 10) || parseInt(myRow?.overall_pumbility, 10) || 0;
+  const pumbilityBreakdownRows = useMemo(() => {
+    const topScores = Array.isArray(mySnapshot?.scores) ? mySnapshot.scores : [];
+    return topScores.map((score, index) => ({
+      chart_id: `${score?.mode || 'M'}-${score?.level || 0}-${score?.song_title || 'song'}-${index}`,
+      title: String(score?.song_title || ''),
+      artist: String(score?.artist || ''),
+      mode: String(score?.mode || ''),
+      level: parseInt(score?.level, 10) || 0,
+      score: parseInt(score?.score, 10) || 0,
+      grade: String(score?.grade || ''),
+      rating: parseInt(score?.rating, 10) || 0,
+      jacket_url: String(score?.jacket_url || score?.background_url || ''),
+    }));
+  }, [mySnapshot?.scores]);
 
   const jumpToMyRank = async () => {
     if (!myRank || initialLoading || loadingMore || jumpingToRank) return;
@@ -597,9 +558,9 @@ function PumbilityLeaderboardTab() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowPumbilityThresholdModal(true)}
+                onClick={() => setShowPumbilityBreakdownModal(true)}
                 className="rounded-lg border border-piu-border/60 bg-piu-dark/40 px-2 py-1 text-left hover:border-piu-gold/50 hover:bg-piu-dark/70 transition-colors"
-                title="Show your pumbility threshold details"
+                title="Show your pumbility top songs"
               >
                 <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">Pumbility</p>
                 <p className="font-mono font-bold text-sm text-piu-gold leading-tight">{formatNumber(myPumbility)}</p>
@@ -607,13 +568,9 @@ function PumbilityLeaderboardTab() {
             </div>
           ) : null}
         </div>
-        {myRank > 0 ? (
-          <p className="mt-1 text-[11px] text-gray-500">
-            Tap rank to jump to your row. Tap pumbility to view threshold details.
-          </p>
-        ) : (
+        {myRank <= 0 ? (
           <p className="mt-1 text-sm text-gray-400">No Top 1000 rank found for your username yet.</p>
-        )}
+        ) : null}
       </div>
 
       {initialLoading ? (
@@ -677,9 +634,9 @@ function PumbilityLeaderboardTab() {
                   {isCurrent ? (
                     <button
                       type="button"
-                      onClick={() => setShowPumbilityThresholdModal(true)}
+                      onClick={() => setShowPumbilityBreakdownModal(true)}
                       className="font-mono font-bold text-piu-gold whitespace-nowrap hover:text-yellow-200 transition-colors"
-                      title="Show your pumbility threshold details"
+                      title="Show your pumbility top songs"
                     >
                       {pumbility > 0 ? formatNumber(pumbility) : '--'}
                     </button>
@@ -707,14 +664,11 @@ function PumbilityLeaderboardTab() {
         </>
       )}
 
-      <PumbilityThresholdModal
-        open={showPumbilityThresholdModal}
-        snapshot={{
-          ranking: myRank,
-          pumbility: myPumbility,
-          threshold: parseInt(mySnapshot?.threshold, 10) || 0,
-        }}
-        onClose={() => setShowPumbilityThresholdModal(false)}
+      <PumbilityBreakdownModal
+        open={showPumbilityBreakdownModal}
+        title="Pumbility Top Songs"
+        rows={pumbilityBreakdownRows}
+        onClose={() => setShowPumbilityBreakdownModal(false)}
       />
 
     </div>
