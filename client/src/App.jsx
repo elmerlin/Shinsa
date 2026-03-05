@@ -312,13 +312,20 @@ function UserMenu() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
 
   useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+    if (!open || typeof document === 'undefined') return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
 
   if (!user) return null;
   const myProfilePath = getProfilePath(user.id, user.username);
@@ -326,9 +333,11 @@ function UserMenu() {
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canAccessAdmin = !!user?.is_admin;
+  const menuLinkClass = 'flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors';
+  const closeMenu = () => setOpen(false);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       {/* Profile pic/name → navigates to public profile */}
       <div className="flex items-center gap-2">
         <Link
@@ -358,197 +367,233 @@ function UserMenu() {
       </div>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-48 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 py-1">
-          <Link
-            to={myProfilePath}
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            My Profile
-          </Link>
-          <Link
-            to="/posts"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Posts
-          </Link>
-          <Link
-            to="/world-max"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
-            </svg>
-            World Max
-          </Link>
-          <Link
-            to="/songs"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
-            </svg>
-            Songs
-          </Link>
-          <Link
-            to="/lists"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-            Lists
-          </Link>
-          <Link
-            to="/leaderboards"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 6v12M12 6v12M17 6v12" />
-            </svg>
-            Leaderboards
-          </Link>
-          <Link
-            to="/shoes"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 16h12M5 20h14M7 8c0-1.657 1.343-3 3-3h5v3a3 3 0 0 1-3 3H7V8Z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 11h3a2 2 0 0 1 2 2v3h-5v-5Z" />
-            </svg>
-            Shoes
-          </Link>
-          {canAccessOptimise && (
-            <Link
-              to="/optimise"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M9 12h6M7.5 18h9" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h1m10 0h1a2 2 0 012 2v1m0 8v1a2 2 0 01-2 2h-1m-10 0H6a2 2 0 01-2-2v-1m0-8V7" />
-              </svg>
-              Optimise
-            </Link>
-          )}
-          <Link
-            to="/tiers"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h14M3 18h10" />
-            </svg>
-            Tiers
-          </Link>
-          <Link
-            to="/head-to-head"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
-            </svg>
-            Rivals
-          </Link>
-          <Link
-            to="/fun"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0Zm6 0a9 9 0 11-18 0 9 9 0 0118 0Z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 15.5h8" />
-            </svg>
-            Fun
-          </Link>
-          {canAccessCheckin && (
-            <Link
-              to="/checkin"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Check In
-            </Link>
-          )}
-          {canAccessDojo && (
-            <Link
-              to="/dojo"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
-              </svg>
-              Dojo
-            </Link>
-          )}
-          <Link
-            to="/changelog"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5a2 2 0 002 2h2a2 2 0 002-2" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M9 8h6" />
-            </svg>
-            Changelog
-          </Link>
-          <Link
-            to="/account"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Profile Settings
-          </Link>
-          {canAccessAdmin && (
-            <Link
-              to="/admin"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-display hover:bg-piu-dark/50 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l2 2 3-3" />
-              </svg>
-              Admin
-            </Link>
-          )}
-          <div className="border-t border-piu-border/30 my-1" />
+        <div className="fixed inset-0 z-[80]">
           <button
-            onClick={() => { logout(); navigate('/'); setOpen(false); }}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-display text-red-400 hover:bg-piu-dark/50 transition-colors w-full text-left"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Logout
-          </button>
+            type="button"
+            aria-label="Close menu"
+            onClick={closeMenu}
+            className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+          />
+          <aside className="absolute right-0 top-0 h-full w-[min(90vw,360px)] border-l border-piu-border bg-piu-card shadow-2xl flex flex-col">
+            <div className="px-4 py-3 border-b border-piu-border/60 flex items-center justify-between gap-2">
+              <div className="min-w-0 flex items-center gap-2.5">
+                {user.avatar ? (
+                  <img src={getAvatarUrl(user.avatar)} alt="" className="w-8 h-8 rounded-full object-cover border border-piu-border" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs">
+                    {user.username[0].toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-display font-bold text-gray-200 truncate">{user.username}</p>
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Menu</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeMenu}
+                className="p-1 text-gray-400 hover:text-white transition-colors"
+                aria-label="Close menu drawer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto overscroll-contain py-1">
+              <Link
+                to={myProfilePath}
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                My Profile
+              </Link>
+              <Link
+                to="/posts"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Posts
+              </Link>
+              <Link
+                to="/world-max"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
+                </svg>
+                World Max
+              </Link>
+              <Link
+                to="/songs"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
+                </svg>
+                Songs
+              </Link>
+              <Link
+                to="/lists"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Lists
+              </Link>
+              <Link
+                to="/leaderboards"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 6v12M12 6v12M17 6v12" />
+                </svg>
+                Leaderboards
+              </Link>
+              <Link
+                to="/shoes"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 16h12M5 20h14M7 8c0-1.657 1.343-3 3-3h5v3a3 3 0 0 1-3 3H7V8Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 11h3a2 2 0 0 1 2 2v3h-5v-5Z" />
+                </svg>
+                Shoes
+              </Link>
+              {canAccessOptimise && (
+                <Link
+                  to="/optimise"
+                  onClick={closeMenu}
+                  className={menuLinkClass}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M9 12h6M7.5 18h9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h1m10 0h1a2 2 0 012 2v1m0 8v1a2 2 0 01-2 2h-1m-10 0H6a2 2 0 01-2-2v-1m0-8V7" />
+                  </svg>
+                  Optimise
+                </Link>
+              )}
+              <Link
+                to="/tiers"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h14M3 18h10" />
+                </svg>
+                Tiers
+              </Link>
+              <Link
+                to="/head-to-head"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
+                </svg>
+                Rivals
+              </Link>
+              <Link
+                to="/fun"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0Zm6 0a9 9 0 11-18 0 9 9 0 0118 0Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 15.5h8" />
+                </svg>
+                Fun
+              </Link>
+              {canAccessCheckin && (
+                <Link
+                  to="/checkin"
+                  onClick={closeMenu}
+                  className={menuLinkClass}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Check In
+                </Link>
+              )}
+              {canAccessDojo && (
+                <Link
+                  to="/dojo"
+                  onClick={closeMenu}
+                  className={menuLinkClass}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
+                  </svg>
+                  Dojo
+                </Link>
+              )}
+              <Link
+                to="/changelog"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5a2 2 0 002 2h2a2 2 0 002-2" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M9 8h6" />
+                </svg>
+                Changelog
+              </Link>
+              <Link
+                to="/account"
+                onClick={closeMenu}
+                className={menuLinkClass}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Profile Settings
+              </Link>
+              {canAccessAdmin && (
+                <Link
+                  to="/admin"
+                  onClick={closeMenu}
+                  className={menuLinkClass}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l2 2 3-3" />
+                  </svg>
+                  Admin
+                </Link>
+              )}
+              <div className="border-t border-piu-border/30 my-1" />
+              <button
+                onClick={() => { logout(); navigate('/'); closeMenu(); }}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-display text-red-400 hover:bg-piu-dark/50 transition-colors w-full text-left"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Logout
+              </button>
+            </div>
+          </aside>
         </div>
       )}
     </div>

@@ -107,6 +107,8 @@ export default function AdminLeaderboardsTab() {
     : runType === 'pumbility'
       ? 'global pumbility'
       : 'full sync';
+  const isPumbilityRunType = runType === 'pumbility';
+  const tableColumnCount = isPumbilityRunType ? 4 : 6;
 
   return (
     <div className="space-y-4">
@@ -190,19 +192,23 @@ export default function AdminLeaderboardsTab() {
                 <th className="px-2 py-2 text-left font-display text-gray-400">Start</th>
                 <th className="px-2 py-2 text-left font-display text-gray-400">Duration</th>
                 <th className="px-2 py-2 text-left font-display text-gray-400">Status</th>
-                <th className="px-2 py-2 text-left font-display text-gray-400">Charts</th>
                 <th className="px-2 py-2 text-left font-display text-gray-400">Entries</th>
-                <th className="px-2 py-2 text-left font-display text-gray-400">Backfill Updated</th>
+                {!isPumbilityRunType ? (
+                  <th className="px-2 py-2 text-left font-display text-gray-400">Charts</th>
+                ) : null}
+                {!isPumbilityRunType ? (
+                  <th className="px-2 py-2 text-left font-display text-gray-400">Backfill Updated</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-2 py-4 text-center text-gray-500">Loading run history...</td>
+                  <td colSpan={tableColumnCount} className="px-2 py-4 text-center text-gray-500">Loading run history...</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-2 py-4 text-center text-gray-500">No runs logged yet.</td>
+                  <td colSpan={tableColumnCount} className="px-2 py-4 text-center text-gray-500">No runs logged yet.</td>
                 </tr>
               ) : rows.map((row) => (
                 <tr key={`${row.id}-${row.run_type}`} className="border-b border-piu-border/20 last:border-b-0">
@@ -213,11 +219,13 @@ export default function AdminLeaderboardsTab() {
                       {row.status === 'failed' ? 'FAILED' : 'SUCCESS'}
                     </span>
                   </td>
-                  <td className="px-2 py-2 text-gray-300 font-mono">{parseInt(row.charts, 10) || 0}</td>
                   <td className="px-2 py-2 text-gray-300 font-mono">{parseInt(row.entries, 10) || 0}</td>
-                  <td className="px-2 py-2 text-gray-300 font-mono">
-                    {row.run_type === 'pumbility' ? '--' : (parseInt(row.backfill_total_updated, 10) || 0)}
-                  </td>
+                  {!isPumbilityRunType ? (
+                    <td className="px-2 py-2 text-gray-300 font-mono">{parseInt(row.charts, 10) || 0}</td>
+                  ) : null}
+                  {!isPumbilityRunType ? (
+                    <td className="px-2 py-2 text-gray-300 font-mono">{parseInt(row.backfill_total_updated, 10) || 0}</td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
