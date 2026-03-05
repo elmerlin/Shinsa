@@ -126,7 +126,7 @@ function buildOverRankingLookup(db) {
   if (!charts.length) return new Map();
 
   const scoreRows = db.prepare(`
-    SELECT chart_key, rank, score
+    SELECT chart_key, rank, score, played_at
     FROM over_level_ranking_scores
     WHERE rank > 0 AND rank <= 100
     ORDER BY chart_key ASC, rank ASC
@@ -153,6 +153,7 @@ function buildOverRankingLookup(db) {
     entry.scores.push({
       rank: parseInt(row.rank, 10) || 0,
       score: parseInt(row.score, 10) || 0,
+      played_at: String(row.played_at || '').trim(),
     });
   }
 
@@ -172,7 +173,43 @@ function buildOverRankingLookup(db) {
   return aliasLookup;
 }
 
-function getOverTop100Rank(overLookup, songTitle, mode, level, score) {
+function parseOverRankingPlayedAt(value) {
+  const text = String(value || '').trim();
+  if (!text) return Number.NEGATIVE_INFINITY;
+
+  // Common PIUGame formats: YYYY-MM-DD, YYYY.MM.DD, with optional HH:MM[:SS]
+  const match = text.match(
+    /(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/
+  );
+  if (match) {
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+    const hour = parseInt(match[4] || '0', 10);
+    const minute = parseInt(match[5] || '0', 10);
+    const second = parseInt(match[6] || '0', 10);
+    const utc = Date.UTC(year, Math.max(0, month - 1), day, hour, minute, second);
+    if (Number.isFinite(utc)) return utc;
+  }
+
+  const fallback = Date.parse(text.replace(/\./g, '-'));
+  return Number.isFinite(fallback) ? fallback : Number.NEGATIVE_INFINITY;
+}
+
+function compareOverRankingRows(a, b) {
+  const scoreDiff = (parseInt(b.score, 10) || 0) - (parseInt(a.score, 10) || 0);
+  if (scoreDiff !== 0) return scoreDiff;
+
+  const playedAtDiff = parseOverRankingPlayedAt(b.played_at) - parseOverRankingPlayedAt(a.played_at);
+  if (playedAtDiff !== 0) return playedAtDiff;
+
+  // Fallback to source order when date resolution is too coarse/equal.
+  const rankA = parseInt(a.rank, 10) || Number.MAX_SAFE_INTEGER;
+  const rankB = parseInt(b.rank, 10) || Number.MAX_SAFE_INTEGER;
+  return rankA - rankB;
+}
+
+function getOverTop100Rank(overLookup, songTitle, mode, level, score, playedAt = '') {
   if (!(overLookup instanceof Map) || overLookup.size === 0) return 0;
   const numericScore = parseInt(score, 10) || 0;
   if (numericScore <= 0) return 0;
@@ -185,18 +222,26 @@ function getOverTop100Rank(overLookup, songTitle, mode, level, score) {
   const minScore = parseInt(chart.min_score, 10) || 0;
   const scores = Array.isArray(chart.scores) ? chart.scores : [];
   const top100Count = parseInt(chart.top100_count, 10) || scores.length;
-  if (top100Count <= 0 || !scores.length || numericScore < minScore) return 0;
+  if (top100Count <= 0 || !scores.length) return 0;
+  if (scores.length >= 100 && numericScore < minScore) return 0;
 
-  for (const row of scores) {
-    const rank = parseInt(row.rank, 10) || 0;
-    const listedScore = parseInt(row.score, 10) || 0;
-    if (rank <= 0 || rank > 100) continue;
-    if (numericScore >= listedScore) return rank;
-  }
+  // Snapshot inference policy:
+  // 1) Higher score ranks higher.
+  // 2) On ties, more recent score ranks higher.
+  // 3) Keep a strict 100-place ladder.
+  const withCandidate = scores
+    .filter((row) => (parseInt(row.rank, 10) || 0) > 0 && (parseInt(row.rank, 10) || 0) <= 100)
+    .map((row) => ({ ...row, _candidate: false }));
+  withCandidate.push({
+    rank: 0,
+    score: numericScore,
+    played_at: String(playedAt || '').trim(),
+    _candidate: true,
+  });
+  withCandidate.sort(compareOverRankingRows);
 
-  // If score passes threshold but is below listed entries, use the tail rank.
-  const tail = scores[scores.length - 1];
-  return tail ? (parseInt(tail.rank, 10) || 0) : 0;
+  const inferredRank = withCandidate.findIndex((row) => row._candidate) + 1;
+  return inferredRank >= 1 && inferredRank <= 100 ? inferredRank : 0;
 }
 
 function isOverTop100Rank(value) {
@@ -966,6 +1011,8 @@ async function refreshOverRankingCache(db, options = {}) {
 }
 
 async function ensureOverRankingLookupForScoring(db, options = {}) {
+  const allowAutoRefresh = parseBoolean(options.autoRefresh) === true;
+  const allowColdStartRefresh = parseBoolean(options.allowColdStartRefresh) === true;
   const maxAgeMinutes = Number.isFinite(parseInt(options.maxAgeMinutes, 10))
     ? Math.max(0, parseInt(options.maxAgeMinutes, 10))
     : 1440;
@@ -977,16 +1024,15 @@ async function ensureOverRankingLookupForScoring(db, options = {}) {
   `).get();
   const hasCache = !!(meta && parseInt(meta.total_charts, 10) > 0);
 
-  if (!hasCache) {
+  if (!hasCache && allowColdStartRefresh) {
     try {
       await refreshOverRankingCache(db, { force: true, maxAgeMinutes });
     } catch (err) {
       console.error('Initial over ranking cache sync error:', err.message);
     }
-    return buildOverRankingLookup(db);
   }
 
-  if (isLeaderboardRefreshNeeded(meta.last_sync, maxAgeMinutes)) {
+  if (allowAutoRefresh && hasCache && isLeaderboardRefreshNeeded(meta.last_sync, maxAgeMinutes)) {
     (async () => {
       try {
         const refreshed = await refreshOverRankingCache(db, { maxAgeMinutes });
@@ -1160,7 +1206,8 @@ router.post('/sync/pumbility', requireAuth, async (req, res) => {
           s.song_title,
           s.mode,
           s.level,
-          s.score
+          s.score,
+          s.date_played
         );
         insertOrUpdate.run(
           req.user.id, s.song_title, s.mode, s.level, s.score,
@@ -1249,7 +1296,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
           row.song_title,
           row.mode,
           row.level,
-          row.score
+          row.score,
+          row.date_played
         ),
       }));
 
@@ -2449,7 +2497,7 @@ router.post('/sync/recently-played', requireAuth, async (req, res) => {
         const maxCombo = parseInt(p.max_combo, 10) || 0;
         const kcal = Number.isFinite(Number(p.kcal)) ? Number(p.kcal) : 0;
         const plate = p.plate || '';
-        const overTop100Rank = getOverTop100Rank(overRankingLookup, songTitle, mode, level, score);
+        const overTop100Rank = getOverTop100Rank(overRankingLookup, songTitle, mode, level, score, datePlayed);
 
         // When syncing, the current shoe is treated as the shoe worn for fetched plays.
         const existingPlay = findRecentPlay.get(req.user.id, songTitle, mode, level, score, grade, datePlayed);
