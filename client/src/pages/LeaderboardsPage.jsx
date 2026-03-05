@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
@@ -541,7 +541,7 @@ function PumbilityLeaderboardTab() {
   );
 }
 
-function Over20RankingsTab() {
+function Over20RankingsTab({ initialSelection = null }) {
   const [levels, setLevels] = useState([]);
   const [selectedLevel, setSelectedLevel] = useState('');
   const [charts, setCharts] = useState([]);
@@ -552,6 +552,11 @@ function Over20RankingsTab() {
   const [chartLoading, setChartLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const initialSelectionAppliedRef = useRef(false);
+
+  useEffect(() => {
+    initialSelectionAppliedRef.current = false;
+  }, [initialSelection?.level, initialSelection?.chartKey, initialSelection?.song, initialSelection?.mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -562,8 +567,10 @@ function Over20RankingsTab() {
         const nextLevels = Array.isArray(payload?.levels) ? payload.levels : [];
         setLevels(nextLevels);
         if (nextLevels.length > 0) {
-          const initial = String(nextLevels[0].level);
-          setSelectedLevel(initial);
+          const preferredLevel = parseInt(initialSelection?.level, 10) || 0;
+          const hasPreferredLevel = preferredLevel > 0
+            && nextLevels.some((row) => (parseInt(row?.level, 10) || 0) === preferredLevel);
+          setSelectedLevel(hasPreferredLevel ? String(preferredLevel) : String(nextLevels[0].level));
         }
       } catch (err) {
         if (cancelled) return;
@@ -572,7 +579,7 @@ function Over20RankingsTab() {
     };
     loadLevels();
     return () => { cancelled = true; };
-  }, []);
+  }, [initialSelection?.level]);
 
   useEffect(() => {
     if (!selectedLevel) return;
@@ -586,7 +593,33 @@ function Over20RankingsTab() {
         const nextCharts = Array.isArray(payload?.charts) ? payload.charts : [];
         setCharts(nextCharts);
         if (nextCharts.length > 0) {
-          setSelectedChartKey(nextCharts[0].chart_key);
+          const hasCurrentSelection = String(selectedChartKey || '').trim()
+            && nextCharts.some((chart) => chart?.chart_key === selectedChartKey);
+
+          let nextSelectedChartKey = hasCurrentSelection ? String(selectedChartKey) : '';
+          if (!nextSelectedChartKey && !initialSelectionAppliedRef.current) {
+            const preferredChartKey = String(initialSelection?.chartKey || '').trim();
+            const preferredSong = String(initialSelection?.song || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            const preferredMode = String(initialSelection?.mode || '').trim().toLowerCase();
+
+            if (preferredChartKey && nextCharts.some((chart) => chart?.chart_key === preferredChartKey)) {
+              nextSelectedChartKey = preferredChartKey;
+            } else if (preferredSong) {
+              const matchedChart = nextCharts.find((chart) => {
+                const song = String(chart?.song_title || '').replace(/\s+/g, ' ').trim().toLowerCase();
+                const mode = String(chart?.mode || '').trim().toLowerCase();
+                if (song !== preferredSong) return false;
+                if (preferredMode && mode !== preferredMode) return false;
+                return true;
+              });
+              nextSelectedChartKey = String(matchedChart?.chart_key || '').trim();
+            }
+
+            initialSelectionAppliedRef.current = true;
+          }
+
+          if (!nextSelectedChartKey) nextSelectedChartKey = String(nextCharts[0]?.chart_key || '');
+          setSelectedChartKey(nextSelectedChartKey);
         } else {
           setSelectedChartKey('');
           setSelectedChart(null);
@@ -605,7 +638,7 @@ function Over20RankingsTab() {
     };
     loadCharts();
     return () => { cancelled = true; };
-  }, [selectedLevel]);
+  }, [selectedLevel, selectedChartKey, initialSelection?.chartKey, initialSelection?.song, initialSelection?.mode]);
 
   useEffect(() => {
     if (!selectedChartKey) return;
@@ -844,7 +877,21 @@ function MyTop100Tab() {
 
 export default function LeaderboardsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('pumbility');
+  const queryTab = String(searchParams.get('tab') || '').trim().toLowerCase();
+  const over20InitialSelection = useMemo(() => ({
+    level: String(searchParams.get('level') || '').trim(),
+    chartKey: String(searchParams.get('chart_key') || '').trim(),
+    song: String(searchParams.get('song') || '').trim(),
+    mode: String(searchParams.get('mode') || '').trim(),
+  }), [searchParams]);
+
+  useEffect(() => {
+    if (queryTab === 'pumbility' || queryTab === 'over20' || queryTab === 'my-top100') {
+      setTab(queryTab);
+    }
+  }, [queryTab]);
 
   if (!user) {
     return (
@@ -895,7 +942,12 @@ export default function LeaderboardsPage() {
       </div>
 
       {tab === 'pumbility' && <PumbilityLeaderboardTab />}
-      {tab === 'over20' && <Over20RankingsTab />}
+      {tab === 'over20' && (
+        <Over20RankingsTab
+          key={`${over20InitialSelection.level}|${over20InitialSelection.chartKey}|${over20InitialSelection.song}|${over20InitialSelection.mode}`}
+          initialSelection={over20InitialSelection}
+        />
+      )}
       {tab === 'my-top100' && <MyTop100Tab />}
     </div>
   );

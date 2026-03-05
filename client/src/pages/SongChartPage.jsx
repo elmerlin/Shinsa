@@ -44,6 +44,24 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
+function normalizeOverRankingSongTitleForLink(songTitle) {
+  const normalized = String(songTitle || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  const compact = normalized.toLowerCase();
+  if (compact === 'yog-sothoth - short cut -' || compact === 'yog-sothoth- short cut -') {
+    return 'Yog-Sothoth - SHORT CUT -';
+  }
+  return normalized;
+}
+
+function buildOverRankingChartKeyForLink(songTitle, mode, level) {
+  const title = normalizeOverRankingSongTitleForLink(songTitle);
+  const chartMode = String(mode || '').trim();
+  const chartLevel = parseInt(level, 10) || 0;
+  if (!title || !chartMode || chartLevel <= 0) return '';
+  return `${title}|${chartMode}|${chartLevel}`;
+}
+
 function parseDateMs(value) {
   const raw = String(value || '').trim();
   if (!raw) return 0;
@@ -464,6 +482,18 @@ export default function SongChartPage() {
   const userSummary = detail.user_summary || null;
   const personalBest = userSummary?.best || null;
   const personalBestGrade = personalBest?.grade || getRank(personalBest?.score).label;
+  const overTop100Link = useMemo(() => {
+    const level = parseInt(chart?.level, 10) || 0;
+    if (level < 20) return '';
+    const params = new URLSearchParams();
+    params.set('tab', 'over20');
+    params.set('level', String(level));
+    params.set('song', String(chart?.title || ''));
+    params.set('mode', String(chart?.mode || ''));
+    const chartKey = buildOverRankingChartKeyForLink(chart?.title, chart?.mode, chart?.level);
+    if (chartKey) params.set('chart_key', chartKey);
+    return `/leaderboards?${params.toString()}`;
+  }, [chart?.title, chart?.mode, chart?.level]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
@@ -684,6 +714,21 @@ export default function SongChartPage() {
           )}
         </div>
       </section>
+
+      {overTop100Link && (
+        <section className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2">
+          <Link
+            to={overTop100Link}
+            className="inline-flex items-center gap-1.5 text-xs font-display font-bold text-cyan-300 hover:text-cyan-200 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 6v12M12 6v12M17 6v12" />
+            </svg>
+            View OVER Top 100 Rankings For This Chart
+          </Link>
+        </section>
+      )}
 
       {showYoutubeInput && (
         <section className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-3">
