@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
+const { ensureBuiltInAchievementSeries } = require('../lib/achievements');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'shinsa.db');
 
@@ -2170,6 +2171,7 @@ function initializeDb() {
     db.exec("UPDATE user_list_items SET sort_order = id WHERE sort_order = 0");
   }
 
+  ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();
 }
 

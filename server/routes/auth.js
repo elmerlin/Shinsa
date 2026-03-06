@@ -9,6 +9,7 @@ const { getDb } = require('../db/schema');
 const { addNotificationClient } = require('../lib/notificationHub');
 const { getPublicVapidKey, isWebPushConfigured } = require('../lib/webPush');
 const { isInlineDataAvatar, normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const { evaluateAchievementSeries } = require('../lib/achievements');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
@@ -1486,53 +1487,10 @@ router.post('/admin/achievements/evaluate/:seriesKey', requireAuth, requireAdmin
   const seriesKey = String(req.params.seriesKey || '').trim().toLowerCase();
   const series = db.prepare('SELECT * FROM achievement_series WHERE key = ?').get(seriesKey);
   if (!series) return res.status(404).json({ error: 'Series not found' });
+  const tierCount = db.prepare('SELECT COUNT(*) AS cnt FROM achievement_tiers WHERE series_id = ?').get(series.id)?.cnt || 0;
+  if (!tierCount) return res.json({ evaluated: seriesKey, awarded: 0 });
 
-  const tiers = db.prepare(`
-    SELECT id, threshold FROM achievement_tiers
-    WHERE series_id = ?
-    ORDER BY threshold ASC
-  `).all(series.id);
-
-  if (!tiers.length) return res.json({ evaluated: 0, awarded: 0 });
-
-  let awarded = 0;
-
-  if (seriesKey === 'pumps_received') {
-    // Get all users and their total pump counts (all pump types)
-    const users = db.prepare('SELECT id FROM users').all();
-    const pumpQuery = db.prepare(`
-      SELECT
-        (SELECT COUNT(*) FROM post_pumps pp JOIN user_posts up ON pp.post_id = up.id WHERE up.user_id = ?) +
-        (SELECT COUNT(*) FROM upscore_pumps usp JOIN user_upscores us ON usp.upscore_id = us.id WHERE us.user_id = ?) +
-        (SELECT COUNT(*) FROM new_clear_pumps ncp JOIN user_new_clears nc ON ncp.clear_id = nc.id WHERE nc.user_id = ?) +
-        (SELECT COUNT(*) FROM comment_pumps cp JOIN post_comments pc ON cp.comment_type = 'post' AND cp.comment_id = pc.id WHERE pc.user_id = ?) +
-        (SELECT COUNT(*) FROM comment_pumps cp JOIN upscore_comments uc ON cp.comment_type = 'upscore' AND cp.comment_id = uc.id WHERE uc.user_id = ?) +
-        (SELECT COUNT(*) FROM comment_pumps cp JOIN new_clear_comments ncc ON cp.comment_type = 'clear' AND cp.comment_id = ncc.id WHERE ncc.user_id = ?) +
-        (SELECT COUNT(*) FROM community_post_pumps cpp JOIN community_posts cpo ON cpp.post_id = cpo.id WHERE cpo.user_id = ?) +
-        (SELECT COUNT(*) FROM community_comment_pumps ccp JOIN community_post_comments cpc ON ccp.comment_id = cpc.id WHERE cpc.user_id = ?)
-        AS total
-    `);
-
-    const insertAward = db.prepare(`
-      INSERT OR IGNORE INTO achievement_awards (tier_id, user_id, awarded_at)
-      VALUES (?, ?, datetime('now'))
-    `);
-
-    const evalTransaction = db.transaction(() => {
-      for (const user of users) {
-        const result = pumpQuery.get(user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id);
-        const totalPumps = result?.total || 0;
-        for (const tier of tiers) {
-          if (totalPumps >= tier.threshold) {
-            const ins = insertAward.run(tier.id, user.id);
-            awarded += ins.changes;
-          }
-        }
-      }
-    });
-    evalTransaction();
-  }
-
+  const awarded = evaluateAchievementSeries(db, seriesKey);
   res.json({ evaluated: seriesKey, awarded });
 });
 
