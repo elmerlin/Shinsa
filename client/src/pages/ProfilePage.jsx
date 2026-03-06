@@ -1943,8 +1943,8 @@ export default function ProfilePage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
       {/* Profile Header */}
-      <div className="card mb-4 sm:mb-6">
-        <div className="flex flex-row items-start gap-3 sm:gap-6">
+      <div className="card mb-4 sm:mb-6 px-3 py-3 sm:p-4">
+        <div className="flex flex-row items-start gap-2.5 sm:gap-6">
           {profile.avatar ? (
             <img src={getAvatarUrl(profile.avatar)} alt="" className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0" />
           ) : (
@@ -1953,14 +1953,16 @@ export default function ProfilePage() {
             </div>
           )}
           <div className="text-left flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-              {flag && <span>{flag}</span>}
-              <h1 className="text-lg sm:text-2xl font-display font-bold truncate">{profile.username}</h1>
-              {genderSymbol && (
-                <span className={`text-base sm:text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
-                  {genderSymbol}
-                </span>
-              )}
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              {flag && <span className="shrink-0">{flag}</span>}
+              <div className="flex items-center gap-1 min-w-0">
+                <h1 className="text-lg sm:text-2xl font-display font-bold truncate">{profile.username}</h1>
+                {genderSymbol && (
+                  <span className={`shrink-0 text-base sm:text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                    {genderSymbol}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
               {displaySkillTitle && (
@@ -2091,23 +2093,23 @@ export default function ProfilePage() {
           {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut) && (
             <div className="shrink-0 self-start w-[160px] sm:w-[220px]">
               {hasCompactPiuSummary && (
-                <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-1.5 sm:px-3 sm:py-2 flex flex-col gap-0.5 sm:gap-1">
+                <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-1.5 py-1 sm:px-3 sm:py-2 flex flex-col gap-0 sm:gap-1">
                   {(overallProfilePumbility > 0 || singlesProfilePumbility > 0) && (
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-col">
+                      <div className="flex items-center justify-between gap-1.5">
                         <button
                           type="button"
                           onClick={() => {
                             if (!hasSinglesProfilePumbility) return;
                             setTopProfileMetricMode((current) => (current === 'overall' ? 'singles' : 'overall'));
                           }}
-                          className={`min-w-0 text-left font-display transition-colors ${
+                          className={`min-w-0 flex-1 text-left font-display transition-colors ${
                             hasSinglesProfilePumbility ? 'hover:text-white cursor-pointer' : 'cursor-default'
                           }`}
                           title={hasSinglesProfilePumbility ? 'Tap to switch between overall and singles pumbility' : undefined}
                         >
-                          <span className="text-[10px] sm:text-xs text-gray-400 font-semibold tracking-wide">
-                            {activeTopProfileMetricMode === 'singles' ? 'Singles Pumbility' : 'Pumbility'}
+                          <span className="block truncate whitespace-nowrap text-[10px] sm:text-xs text-gray-400 font-semibold tracking-wide">
+                            {activeTopProfileMetricMode === 'singles' ? 'S. Pumbility' : 'Pumbility'}
                           </span>
                         </button>
                         <button
@@ -2116,7 +2118,7 @@ export default function ProfilePage() {
                             if (canOpenTopProfilePumbilityModal) setShowTopProfilePumbilityModal(true);
                           }}
                           disabled={!canOpenTopProfilePumbilityModal}
-                          className={`text-sm sm:text-base leading-tight font-mono font-bold transition-colors ${
+                          className={`shrink-0 whitespace-nowrap text-sm sm:text-base leading-tight font-mono font-bold transition-colors ${
                             activeTopProfileMetricMode === 'singles' ? 'text-red-300' : 'text-piu-gold'
                           } ${canOpenTopProfilePumbilityModal ? 'hover:text-white' : 'cursor-default'}`}
                           title={canOpenTopProfilePumbilityModal ? 'Tap to view top songs' : undefined}
@@ -2127,9 +2129,9 @@ export default function ProfilePage() {
                     </div>
                   )}
                   {(piuStatus?.highest_single || piuStatus?.highest_double) && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] sm:text-xs text-gray-400 font-display font-semibold tracking-wide">Best Clears</span>
-                      <span className="text-sm sm:text-base leading-tight font-mono font-bold">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs text-gray-400 font-display font-semibold tracking-wide">Best Clears</span>
+                      <span className="shrink-0 whitespace-nowrap text-sm sm:text-base leading-tight font-mono font-bold">
                         {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
                         {piuStatus.highest_single && piuStatus.highest_double && <span className="text-gray-500 mx-0.5 sm:mx-1">/</span>}
                         {piuStatus.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
