@@ -1945,7 +1945,7 @@ export default function ProfilePage() {
       {/* Profile Header */}
       <div className="card mb-4 sm:mb-6 px-3 py-3 sm:p-4">
         <div className="flex flex-row items-start gap-2.5 sm:gap-6">
-          <div className="grid flex-1 min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 sm:flex sm:items-start sm:gap-6">
+          <div className="flex flex-1 min-w-0 items-start gap-2.5 sm:gap-6">
           {profile.avatar ? (
             <img src={getAvatarUrl(profile.avatar)} alt="" className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0" />
           ) : (
@@ -1953,7 +1953,7 @@ export default function ProfilePage() {
               {profile.username[0].toUpperCase()}
             </div>
           )}
-          <div className="text-left min-w-0 sm:flex-1">
+          <div className="text-left min-w-0 flex-1">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {flag && <span className="shrink-0">{flag}</span>}
               <div className="flex items-center gap-1 min-w-0">
@@ -1972,7 +1972,7 @@ export default function ProfilePage() {
                 </span>
               )}
               {age !== null && (
-                <span className="text-xs sm:text-sm text-gray-500">Age {age}</span>
+                <span className="hidden sm:inline text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
             </div>
             {profile.playing_status && (
@@ -1982,7 +1982,7 @@ export default function ProfilePage() {
               </div>
             )}
             {profile.description && (
-              <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
+              <p className="hidden sm:block text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
             )}
             {locationLabel && (
               <p className="hidden sm:flex text-[11px] sm:text-xs text-gray-500 mt-1 items-center gap-1.5">
@@ -1991,7 +1991,7 @@ export default function ProfilePage() {
                 <span className="truncate">{locationLabel}</span>
               </p>
             )}
-            <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
+            <p className="hidden sm:block text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
               Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
             </p>
             {/* Follow + compact notify controls */}
@@ -2091,22 +2091,6 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-          {(profile.playing_status || locationLabel) && (
-            <div className="col-span-2 sm:hidden mt-0.5 space-y-1">
-              {profile.playing_status && (
-                <div className="flex items-center gap-1.5">
-                  <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-xs font-display font-bold text-green-400">{profile.playing_status}</span>
-                </div>
-              )}
-              {locationLabel && (
-                <p className="flex items-start gap-1.5 text-[11px] text-gray-500">
-                  {locationFlag && <span className="shrink-0">{locationFlag}</span>}
-                  <span className="min-w-0 break-words">{locationLabel}</span>
-                </p>
-              )}
-            </div>
-          )}
           </div>
           {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut) && (
             <div className="shrink-0 self-start w-[160px] sm:w-[220px]">
@@ -2237,6 +2221,32 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+        {(profile.playing_status || age !== null || profile.description || locationLabel || profile.created_at) && (
+          <div className="sm:hidden mt-2.5 space-y-1.5">
+            {profile.playing_status && (
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs font-display font-bold text-green-400">{profile.playing_status}</span>
+              </div>
+            )}
+            {age !== null && (
+              <p className="text-xs text-gray-500 whitespace-nowrap">Age {age}</p>
+            )}
+            <p className="text-[10px] text-gray-600 whitespace-nowrap">
+              Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+            </p>
+            {profile.description && (
+              <p className="text-xs text-gray-400 leading-snug">{profile.description}</p>
+            )}
+            {locationLabel && (
+              <p className="flex items-start gap-1.5 text-[11px] text-gray-500">
+                <span className="shrink-0 text-[12px] leading-none mt-[1px]">{'\u{1F4CD}'}</span>
+                {locationFlag && <span className="shrink-0">{locationFlag}</span>}
+                <span className="min-w-0 break-words">{locationLabel}</span>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Stats integrated into profile card */}
         <div className="flex items-center justify-around sm:justify-start gap-2 sm:gap-6 mt-3 pt-2.5 sm:pt-3 border-t border-piu-border/30">
