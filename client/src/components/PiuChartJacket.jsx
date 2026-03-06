@@ -2,24 +2,24 @@ import React from 'react';
 
 const SIZE_STYLES = {
   xs: {
-    frame: 'w-9 h-9 rounded-lg',
+    frame: 'w-[38px] h-[22px] rounded-md',
     fallback: 'text-xs',
-    badge: 'right-0.5 top-0.5 min-w-[20px] h-[15px] px-1 text-[8px] rounded-md',
+    badge: '-right-1 -bottom-1 min-w-[18px] h-[18px] px-1 text-[7px] rounded-full',
   },
   sm: {
-    frame: 'w-10 h-10 rounded-lg',
+    frame: 'w-[42px] h-[24px] rounded-md',
     fallback: 'text-xs',
-    badge: 'right-0.5 top-0.5 min-w-[22px] h-4 px-1 text-[8px] rounded-md',
+    badge: '-right-1 -bottom-1 min-w-[19px] h-[19px] px-1 text-[7px] rounded-full',
   },
   md: {
-    frame: 'w-11 h-11 rounded-xl',
-    fallback: 'text-sm',
-    badge: 'right-0.5 top-0.5 min-w-[24px] h-[17px] px-1.5 text-[9px] rounded-md',
+    frame: 'w-[50px] h-[28px] rounded-lg',
+    fallback: 'text-xs',
+    badge: '-right-1 -bottom-1 min-w-[20px] h-[20px] px-1 text-[7px] rounded-full',
   },
   wide: {
-    frame: 'w-16 h-10 rounded-xl',
+    frame: 'w-[66px] h-[38px] rounded-lg',
     fallback: 'text-[10px]',
-    badge: 'right-1 top-1 min-w-[26px] h-[17px] px-1.5 text-[9px] rounded-md',
+    badge: '-right-1 -bottom-1 min-w-[21px] h-[21px] px-1 text-[8px] rounded-full',
   },
 };
 
@@ -100,7 +100,7 @@ export default function PiuChartJacket({
       </div>
       {withBadge ? (
         <span
-          className={`absolute inline-flex items-center justify-center border font-display font-black leading-none tracking-wide text-white ${styles.badge} ${getBadgeTone(mode)}`}
+          className={`absolute inline-flex items-center justify-center border font-display font-black leading-none tracking-tight text-white ${styles.badge} ${getBadgeTone(mode)}`}
         >
           {badgeLabel}
         </span>

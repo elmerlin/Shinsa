@@ -408,7 +408,7 @@ function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' })
       mode={mode}
       level={level}
       jacketUrl={jacketUrl}
-      size={size === 'sm' ? 'xs' : 'md'}
+      size={size === 'sm' ? 'sm' : 'md'}
     />
   );
 }
