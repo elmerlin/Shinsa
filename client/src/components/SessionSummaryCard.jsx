@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PiuChartJacket from './PiuChartJacket';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -40,25 +41,16 @@ function Stat({ label, value, subvalue = '' }) {
 }
 
 function SongJacket({ row }) {
-  const isSingle = row?.mode === 'Single';
-  const isDouble = row?.mode === 'Double';
-  const badgeColor = isSingle ? 'bg-red-600' : isDouble ? 'bg-green-600' : 'bg-blue-600';
-  const level = parseInt(row?._level ?? row?.level, 10) || '?';
   const jacketUrl = row?.jacket_url || row?._jacketUrl || '';
 
   return (
-    <div className="relative shrink-0">
-      {jacketUrl ? (
-        <img src={jacketUrl} alt="" className="w-9 h-9 rounded object-cover" />
-      ) : (
-        <div className="w-9 h-9 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-xs text-gray-500">
-          {(row?.song_title || '?')[0]}
-        </div>
-      )}
-      <span className={`absolute -bottom-1 -right-1 min-w-[16px] h-[14px] px-1 rounded text-[8px] flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
-        {level}
-      </span>
-    </div>
+    <PiuChartJacket
+      title={row?.song_title}
+      mode={row?.mode}
+      level={row?._level ?? row?.level}
+      jacketUrl={jacketUrl}
+      size="xs"
+    />
   );
 }
 

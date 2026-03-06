@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import PiuChartJacket from './PiuChartJacket';
 import { parseGrade } from '../utils/grades';
 
 function formatNumber(value) {
@@ -73,28 +74,21 @@ function Stat({ label, value }) {
 }
 
 function SongJacketButton({ row, onClick }) {
-  const isSingle = row?.mode === 'Single';
-  const isDouble = row?.mode === 'Double';
-  const badgeColor = isSingle ? 'bg-red-600' : isDouble ? 'bg-green-600' : 'bg-blue-600';
-  const level = parseInt(row?.level, 10) || '?';
-
   return (
     <button
       type="button"
       onClick={onClick}
-      className="relative shrink-0 rounded focus:outline-none focus:ring-1 focus:ring-cyan-400/80"
+      className="group shrink-0 rounded focus:outline-none focus:ring-1 focus:ring-cyan-400/80"
       title="View judgments"
     >
-      {row?.jacket_url ? (
-        <img src={row.jacket_url} alt="" className="w-10 h-10 rounded object-cover" />
-      ) : (
-        <div className="w-10 h-10 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-xs text-gray-500">
-          {(row?.song_title || '?')[0]}
-        </div>
-      )}
-      <span className={`absolute -bottom-1 -right-1 min-w-[16px] h-[14px] px-1 rounded text-[8px] flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
-        {level}
-      </span>
+      <PiuChartJacket
+        title={row?.song_title}
+        mode={row?.mode}
+        level={row?.level}
+        jacketUrl={row?.jacket_url}
+        size="sm"
+        imageClassName="group-hover:scale-[1.04]"
+      />
     </button>
   );
 }

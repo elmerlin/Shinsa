@@ -23,6 +23,7 @@ import RankingsPanel from '../components/RankingsPanel';
 import GradeGoalTracker from '../components/GradeGoalTracker';
 import TitleProgressTab from '../components/TitleProgressTab';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
+import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 
@@ -393,32 +394,22 @@ function getRankIndex(score) {
 
 // Reusable song jacket with level badge overlay
 function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' }) {
-  const sizeClass = size === 'sm' ? 'w-9 h-9' : 'w-11 h-11';
-  const badgeSize = size === 'sm' ? 'text-[8px] min-w-[16px] h-[14px]' : 'text-[9px] min-w-[18px] h-[16px]';
-  const isSingle = mode === 'Single';
-  const isDouble = mode === 'Double';
-
-  const norm = (title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  const exactKey = `${norm}|${mode}|${level}`;
-  // Prefer local jacket from lookup; only use bgUrl if it's a local path (not piugame)
-  const localJacket = jacketLookup[exactKey] || jacketLookup[norm] || '';
-  const jacketUrl = localJacket || (bgUrl && !bgUrl.includes('piugame') ? bgUrl : '') || '';
-
-  const badgeColor = isSingle ? 'bg-red-600' : isDouble ? 'bg-green-600' : 'bg-blue-600';
+  const jacketUrl = resolveChartJacketUrl({
+    title,
+    mode,
+    level,
+    jacketLookup,
+    backgroundUrl: bgUrl,
+  });
 
   return (
-    <div className="relative shrink-0">
-      {jacketUrl ? (
-        <img src={jacketUrl} alt="" className={`${sizeClass} rounded object-cover`} />
-      ) : (
-        <div className={`${sizeClass} rounded bg-piu-dark flex items-center justify-center font-display font-bold text-sm text-gray-500`}>
-          {(title || '?')[0]}
-        </div>
-      )}
-      <span className={`absolute -bottom-1 -right-1 ${badgeSize} flex items-center justify-center rounded font-display font-bold text-white leading-none ${badgeColor}`}>
-        {level}
-      </span>
-    </div>
+    <PiuChartJacket
+      title={title}
+      mode={mode}
+      level={level}
+      jacketUrl={jacketUrl}
+      size={size === 'sm' ? 'xs' : 'md'}
+    />
   );
 }
 

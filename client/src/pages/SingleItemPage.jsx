@@ -6,6 +6,7 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
+import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
@@ -596,30 +597,35 @@ export function SingleUpscorePage() {
             const newRank = getRank(u.new_score);
             const oldGrade = parseGrade(u.old_grade, oldRank.label);
             const newGrade = parseGrade(u.new_grade, newRank.label);
-            const isSingle = u.mode === 'Single';
-            const badgeColor = isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400';
             const improvement = u.new_score - u.old_score;
             const songPumbilityGain = parsePumbilityGain(u.pumbility_gain);
             const songSinglesPumbilityGain = parsePumbilityGain(u.singles_pumbility_gain);
             const overRank = getOverTop100Rank(u.over_top100_rank);
+            const jacketUrl = resolveChartJacketUrl({
+              title: u.song_title,
+              mode: u.mode,
+              level: u.level,
+              jacketLookup,
+            });
             const norm = (u.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
             const exactKey = `${norm}|${u.mode}|${u.level}`;
-            const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
             const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
             const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(u.song_title || '')}`;
             return (
               <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-                <Link to={chartLink} className="shrink-0">
-                  {jacketUrl ? (
-                    <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover hover:brightness-110 transition-all" />
-                  ) : (
-                    <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 hover:brightness-110 transition-all">{(u.song_title || '?')[0]}</div>
-                  )}
+                <Link to={chartLink} className="group shrink-0">
+                  <PiuChartJacket
+                    title={u.song_title}
+                    mode={u.mode}
+                    level={u.level}
+                    jacketUrl={jacketUrl}
+                    size="md"
+                    imageClassName="group-hover:scale-[1.04]"
+                  />
                 </Link>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-display font-bold truncate">{u.song_title}</p>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>{isSingle ? 'S' : 'D'}{u.level}</span>
                     {overRank > 0 && (
                       <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
                         TOP #{overRank}
@@ -746,37 +752,34 @@ export function SingleClearPage() {
             const rank = getRank(clear.score);
             const parsedGrade = parseGrade(clear.grade, rank.label);
             const overRank = getOverTop100Rank(clear.over_top100_rank);
-            const isSingle = clear.mode === 'Single';
-            const badgeColor = isSingle
-              ? 'bg-red-600/20 text-red-400'
-              : clear.mode === 'Double'
-                ? 'bg-green-600/20 text-green-400'
-                : 'bg-blue-600/20 text-blue-400';
             const songPumbilityGain = parsePumbilityGain(clear.pumbility_gain);
             const songSinglesPumbilityGain = parsePumbilityGain(clear.singles_pumbility_gain);
+            const jacketUrl = resolveChartJacketUrl({
+              title: clear.song_title,
+              mode: clear.mode,
+              level: clear.level,
+              jacketLookup,
+            });
             const norm = (clear.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
             const exactKey = `${norm}|${clear.mode}|${clear.level}`;
-            const jacketUrl = jacketLookup[exactKey] || jacketLookup[norm] || '';
             const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
             const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(clear.song_title || '')}`;
 
             return (
               <div key={`${clear.song_title}-${clear.mode}-${clear.level}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-                <Link to={chartLink} className="shrink-0">
-                  {jacketUrl ? (
-                    <img src={jacketUrl} alt="" className="w-11 h-11 rounded object-cover hover:brightness-110 transition-all" />
-                  ) : (
-                    <div className="w-11 h-11 rounded bg-piu-dark flex items-center justify-center font-display font-bold text-lg text-gray-500 hover:brightness-110 transition-all">
-                      {(clear.song_title || '?')[0]}
-                    </div>
-                  )}
+                <Link to={chartLink} className="group shrink-0">
+                  <PiuChartJacket
+                    title={clear.song_title}
+                    mode={clear.mode}
+                    level={clear.level}
+                    jacketUrl={jacketUrl}
+                    size="md"
+                    imageClassName="group-hover:scale-[1.04]"
+                  />
                 </Link>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-display font-bold truncate">{clear.song_title}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${badgeColor}`}>
-                      {isSingle ? 'S' : clear.mode === 'Double' ? 'D' : 'C'}{clear.level}
-                    </span>
                     {overRank > 0 && (
                       <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
                         TOP #{overRank}

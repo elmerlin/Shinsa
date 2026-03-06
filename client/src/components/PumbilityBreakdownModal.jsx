@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
+import PiuChartJacket, { resolveChartJacketUrl } from './PiuChartJacket';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -38,23 +39,6 @@ function getGradeColor(grade, score = 0) {
   return getRank(score).color;
 }
 
-function ChartModeBadge({ mode, level }) {
-  const isSingle = mode === 'Single';
-  const label = `${isSingle ? 'S' : 'D'}${level}`;
-
-  return (
-    <span
-      className={`absolute -top-1 -right-1 inline-flex items-center justify-center rounded-full min-w-[34px] h-6 px-1.5 border text-white font-display font-black text-[11px] ${
-        isSingle
-          ? 'bg-gradient-to-b from-red-500 to-red-800 border-red-300/50'
-          : 'bg-gradient-to-b from-green-500 to-emerald-800 border-green-300/50'
-      }`}
-    >
-      {label}
-    </span>
-  );
-}
-
 export default function PumbilityBreakdownModal({
   open,
   title,
@@ -66,12 +50,6 @@ export default function PumbilityBreakdownModal({
   showIncompleteCta = false,
   ctaMessage = '',
 }) {
-  const [openSongInfoKey, setOpenSongInfoKey] = useState('');
-
-  useEffect(() => {
-    if (!open) setOpenSongInfoKey('');
-  }, [open]);
-
   if (!open) return null;
 
   const averageRating = Number(summary?.average_rating) || 0;
@@ -161,55 +139,46 @@ export default function PumbilityBreakdownModal({
 
           {(rows || []).map((row, index) => {
             const grade = row.grade || getRank(row.score).label;
-            const rowKey = `${row.chart_id || 'chart'}-${index}`;
-            const isInfoOpen = openSongInfoKey === rowKey;
+            const rowJacketUrl = resolveChartJacketUrl({
+              title: row.title,
+              mode: row.mode,
+              level: row.level,
+              jacketLookup,
+              backgroundUrl: row.background_url,
+              jacketUrl: row.jacket_url,
+            });
 
             return (
-              <div key={rowKey} className="rounded-lg border border-piu-border/40 bg-piu-dark/45 px-2.5 py-2">
-                <div className="flex items-center gap-2.5">
+              <div
+                key={`${row.chart_id || 'chart'}-${index}`}
+                className="rounded-xl border border-piu-border/45 bg-[#0d1628]/75 px-3 py-2.5 shadow-[0_14px_28px_rgba(0,0,0,0.18)]"
+              >
+                <div className="flex items-center gap-3">
                   <span className="w-5 shrink-0 text-[11px] text-gray-500 font-mono text-right">#{index + 1}</span>
 
-                  {(() => {
-                    const norm = String(row.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-                    const exactKey = `${norm}|${row.mode}|${row.level}`;
-                    const localJacket = jacketLookup?.[exactKey] || jacketLookup?.[norm] || '';
-                    const bgUrl = String(row.background_url || '');
-                    const fallbackBg = bgUrl && !bgUrl.includes('piugame') ? bgUrl : '';
-                    const jacketUrl = localJacket || fallbackBg || String(row.jacket_url || '');
-                    return (
-                  <button
-                    type="button"
-                    onClick={() => setOpenSongInfoKey((prev) => (prev === rowKey ? '' : rowKey))}
-                    className="relative w-16 h-10 rounded overflow-hidden border border-piu-border/40 shrink-0 hover:border-piu-accent/50 transition-colors"
-                    title={`${row.title || 'Unknown song'}${row.artist ? ` — ${row.artist}` : ''}`}
-                    aria-label={`Show song info for ${row.title || 'song'}`}
-                  >
-                    {jacketUrl ? (
-                      <img src={jacketUrl} alt={row.title || 'Song jacket'} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-piu-dark flex items-center justify-center text-[10px] text-gray-500">No art</div>
-                    )}
-                    <ChartModeBadge mode={row.mode} level={row.level} />
-                  </button>
-                    );
-                  })()}
+                  <PiuChartJacket
+                    title={row.title}
+                    mode={row.mode}
+                    level={row.level}
+                    jacketUrl={rowJacketUrl}
+                    size="wide"
+                  />
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-mono text-gray-100">{formatNumber(row.score)}</p>
-                      <p className={`text-sm font-display font-bold ${getGradeColor(grade, row.score)}`}>{grade}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-display font-bold text-white truncate">{row.title || 'Unknown song'}</p>
+                        <p className="text-[11px] text-gray-500 truncate">{row.artist || 'Unknown artist'}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className={`text-sm font-display font-black ${getGradeColor(grade, row.score)}`}>{grade}</p>
+                        <p className="text-[11px] font-mono text-gray-100">{formatNumber(row.score)}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="text-[11px] text-gray-500">Tap jacket for song info</p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Rating</p>
                       <p className="text-xs font-mono text-piu-gold">R {formatNumber(row.rating)}</p>
                     </div>
-
-                    {isInfoOpen && (
-                      <div className="mt-1.5 rounded-md border border-piu-border/35 bg-[#0b1324]/70 px-2 py-1.5">
-                        <p className="text-xs font-display font-bold leading-tight break-words">{row.title || 'Unknown song'}</p>
-                        <p className="text-[11px] text-gray-400 break-words">{row.artist || 'Unknown artist'}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
