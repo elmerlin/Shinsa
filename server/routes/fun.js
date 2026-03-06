@@ -79,6 +79,110 @@ function getMySummary(db, userId) {
   };
 }
 
+function buildShinsaInMotionPayload(db) {
+  const activeUsers = db.prepare(`
+    SELECT
+      u.id,
+      u.username,
+      u.avatar,
+      u.avatar_v,
+      u.created_at AS joined_at,
+      COUNT(r.id) AS play_count,
+      MIN(CASE WHEN TRIM(COALESCE(r.date_played, '')) <> '' THEN r.date_played END) AS first_played_at,
+      MAX(CASE WHEN TRIM(COALESCE(r.date_played, '')) <> '' THEN r.date_played END) AS last_played_at
+    FROM users u
+    JOIN user_recently_played r ON r.user_id = u.id
+    GROUP BY u.id
+    HAVING COUNT(r.id) > 0
+    ORDER BY play_count DESC, COALESCE(last_played_at, joined_at) ASC, u.username COLLATE NOCASE ASC
+  `).all();
+
+  const totals = {
+    active_users: activeUsers.length,
+    total_plays: activeUsers.reduce((sum, row) => sum + (Number.parseInt(row.play_count, 10) || 0), 0),
+  };
+
+  if (activeUsers.length === 0) {
+    return {
+      title: 'Shinsa in Motion',
+      duration_ms: 30000,
+      totals,
+      span: {
+        earliest_joined_at: '',
+        earliest_played_at: '',
+        latest_played_at: '',
+      },
+      users: [],
+    };
+  }
+
+  const userIds = activeUsers.map((row) => row.id);
+  const placeholders = userIds.map(() => '?').join(', ');
+  const playRows = db.prepare(`
+    SELECT
+      id,
+      user_id,
+      song_title,
+      mode,
+      level,
+      score,
+      grade,
+      date_played
+    FROM user_recently_played
+    WHERE user_id IN (${placeholders})
+    ORDER BY
+      user_id ASC,
+      CASE WHEN TRIM(COALESCE(date_played, '')) = '' THEN 1 ELSE 0 END ASC,
+      date_played ASC,
+      id ASC
+  `).all(...userIds);
+
+  const playsByUserId = new Map();
+  for (const row of playRows) {
+    if (!playsByUserId.has(row.user_id)) playsByUserId.set(row.user_id, []);
+    playsByUserId.get(row.user_id).push({
+      id: row.id,
+      song_title: String(row.song_title || '').trim(),
+      mode: String(row.mode || '').trim(),
+      level: Number.parseInt(row.level, 10) || 0,
+      score: Number.parseInt(row.score, 10) || 0,
+      grade: String(row.grade || '').trim(),
+      date_played: String(row.date_played || '').trim(),
+    });
+  }
+
+  const joinedDates = activeUsers
+    .map((row) => String(row.joined_at || '').trim())
+    .filter(Boolean)
+    .sort();
+  const playedDates = playRows
+    .map((row) => String(row.date_played || '').trim())
+    .filter(Boolean)
+    .sort();
+
+  return {
+    title: 'Shinsa in Motion',
+    duration_ms: 30000,
+    totals,
+    span: {
+      earliest_joined_at: joinedDates[0] || '',
+      earliest_played_at: playedDates[0] || '',
+      latest_played_at: playedDates[playedDates.length - 1] || '',
+    },
+    users: activeUsers.map((row, index) => ({
+      rank: index + 1,
+      id: row.id,
+      username: row.username,
+      avatar: normalizeUserAvatarForList(row.avatar, row.id, 72, row.avatar_v),
+      joined_at: String(row.joined_at || '').trim(),
+      first_played_at: String(row.first_played_at || '').trim(),
+      last_played_at: String(row.last_played_at || '').trim(),
+      play_count: Number.parseInt(row.play_count, 10) || 0,
+      plays: playsByUserId.get(row.id) || [],
+    })),
+  };
+}
+
 // GET /api/fun/settings
 router.get('/settings', (req, res) => {
   const db = getDb();
@@ -104,6 +208,12 @@ router.put('/settings', requireAuth, (req, res) => {
     WHERE id = 1
   `).run(value);
   res.json(getFunSettingsPayload(db));
+});
+
+// GET /api/fun/shinsa-in-motion
+router.get('/shinsa-in-motion', (req, res) => {
+  const db = getDb();
+  res.json(buildShinsaInMotionPayload(db));
 });
 
 // GET /api/fun/leaderboard

@@ -352,6 +352,7 @@ export const getFunLeaderboard = (limit = 10) => request(`/fun/leaderboard?limit
 export const submitFunScore = (score) => request('/fun/score', { method: 'POST', body: JSON.stringify({ score }) });
 export const getFunSettings = () => request('/fun/settings');
 export const updateFunSettings = (data) => request('/fun/settings', { method: 'PUT', body: JSON.stringify(data) });
+export const getShinsaInMotionData = () => request('/fun/shinsa-in-motion');
 
 // Online Duels
 export const getOnlineDuels = () => request('/online-duels');

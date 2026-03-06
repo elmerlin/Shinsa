@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getFunLeaderboard, getFunSettings, submitFunScore } from '../utils/api';
+import ShinsaInMotionSection from '../components/ShinsaInMotionSection';
 
 const GAME_WIDTH = 420;
 const GAME_HEIGHT = 700;
@@ -2878,7 +2879,7 @@ export default function FunPage() {
             <span className="text-piu-accent">FUN</span> SECTION
           </h1>
           <p className="text-sm text-gray-400 mt-1">
-            Top City Jump: a vertical jumper with one sprite-sheet animated fighter.
+            Shinsa in Motion leads with a cinematic community replay, followed by Top City Jump.
           </p>
         </div>
         <Link
@@ -2888,6 +2889,8 @@ export default function FunPage() {
           Back to Dashboard
         </Link>
       </div>
+
+      <ShinsaInMotionSection />
 
       <section className="card">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
