@@ -1676,6 +1676,12 @@ export default function ProfilePage() {
   const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
   const locationLabel = [profile.location_city, profile.location_country].filter(Boolean).join(', ');
   const locationFlag = getCountryFlag(profile.location_country_code || profile.nationality, "inline-block h-3.5 align-middle");
+  const memberSinceLongLabel = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+    : '';
+  const memberSinceShortLabel = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
+    : '';
   const computedSkillTitle = piuTitles?.imported ? (piuTitles?.summary?.current_title?.name || '') : '';
   const displaySkillTitle = computedSkillTitle || profile.skill_title;
 
@@ -1945,15 +1951,15 @@ export default function ProfilePage() {
       {/* Profile Header */}
       <div className="card mb-4 sm:mb-6 px-3 py-3 sm:p-4">
         <div className="flex flex-row items-start gap-2.5 sm:gap-6">
-          <div className="flex flex-1 min-w-0 items-start gap-2.5 sm:gap-6">
-          {profile.avatar ? (
+          <div className="grid flex-1 min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 sm:flex sm:items-start sm:gap-6">
+            {profile.avatar ? (
             <img src={getAvatarUrl(profile.avatar)} alt="" className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0" />
           ) : (
             <div className="w-14 h-14 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xl sm:text-3xl shadow-lg shrink-0">
               {profile.username[0].toUpperCase()}
             </div>
           )}
-          <div className="text-left min-w-0 flex-1">
+            <div className="text-left min-w-0 flex-1">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {flag && <span className="shrink-0">{flag}</span>}
               <div className="flex items-center gap-1 min-w-0">
@@ -1992,7 +1998,7 @@ export default function ProfilePage() {
               </p>
             )}
             <p className="hidden sm:block text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
-              Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
+              Member since {memberSinceLongLabel}
             </p>
             {/* Follow + compact notify controls */}
             {authUser && !isOwner && (
@@ -2088,6 +2094,24 @@ export default function ProfilePage() {
                     )}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+          <div className="col-span-2 sm:hidden mt-0.5 space-y-1">
+            {age !== null && (
+              <p className="text-xs text-gray-500 whitespace-nowrap">Age {age}</p>
+            )}
+            {profile.playing_status && (
+              <p className="text-xs font-display font-bold text-green-400 truncate">{profile.playing_status}</p>
+            )}
+            <p className="text-[10px] text-gray-600 truncate">Member since {memberSinceShortLabel}</p>
+            {profile.description && (
+              <p className="text-xs text-gray-400 truncate">{profile.description}</p>
+            )}
+            {locationLabel && (
+              <div className="flex items-center gap-1 text-[10px] text-gray-500 min-w-0">
+                {locationFlag && <span className="shrink-0">{locationFlag}</span>}
+                <span className="truncate">{locationLabel}</span>
               </div>
             )}
           </div>
@@ -2221,33 +2245,6 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
-        {(profile.playing_status || age !== null || profile.description || locationLabel || profile.created_at) && (
-          <div className="sm:hidden mt-2.5 space-y-1.5">
-            {profile.playing_status && (
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-xs font-display font-bold text-green-400">{profile.playing_status}</span>
-              </div>
-            )}
-            {age !== null && (
-              <p className="text-xs text-gray-500 whitespace-nowrap">Age {age}</p>
-            )}
-            <p className="text-[10px] text-gray-600 whitespace-nowrap">
-              Member since {new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}
-            </p>
-            {profile.description && (
-              <p className="text-xs text-gray-400 leading-snug">{profile.description}</p>
-            )}
-            {locationLabel && (
-              <p className="flex items-start gap-1.5 text-[11px] text-gray-500">
-                <span className="shrink-0 text-[12px] leading-none mt-[1px]">{'\u{1F4CD}'}</span>
-                {locationFlag && <span className="shrink-0">{locationFlag}</span>}
-                <span className="min-w-0 break-words">{locationLabel}</span>
-              </p>
-            )}
-          </div>
-        )}
-
         {/* Stats integrated into profile card */}
         <div className="flex items-center justify-around sm:justify-start gap-2 sm:gap-6 mt-3 pt-2.5 sm:pt-3 border-t border-piu-border/30">
           <button
