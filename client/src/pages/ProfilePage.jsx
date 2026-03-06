@@ -2106,7 +2106,7 @@ export default function ProfilePage() {
                           }`}
                           title={hasSinglesProfilePumbility ? 'Tap to switch between overall and singles pumbility' : undefined}
                         >
-                          <span className="text-[9px] sm:text-[11px] text-gray-400">
+                          <span className="text-[10px] sm:text-xs text-gray-400 font-semibold tracking-wide">
                             {activeTopProfileMetricMode === 'singles' ? 'Singles Pumbility' : 'Pumbility'}
                           </span>
                         </button>
@@ -2116,7 +2116,7 @@ export default function ProfilePage() {
                             if (canOpenTopProfilePumbilityModal) setShowTopProfilePumbilityModal(true);
                           }}
                           disabled={!canOpenTopProfilePumbilityModal}
-                          className={`text-[11px] sm:text-sm font-mono font-bold transition-colors ${
+                          className={`text-sm sm:text-base leading-tight font-mono font-bold transition-colors ${
                             activeTopProfileMetricMode === 'singles' ? 'text-red-300' : 'text-piu-gold'
                           } ${canOpenTopProfilePumbilityModal ? 'hover:text-white' : 'cursor-default'}`}
                           title={canOpenTopProfilePumbilityModal ? 'Tap to view top songs' : undefined}
@@ -2124,17 +2124,12 @@ export default function ProfilePage() {
                           {activeTopProfilePumbility.toLocaleString()} {activeTopProfileMetricMode === 'singles' ? 'SPB' : 'PB'}
                         </button>
                       </div>
-                      {hasSinglesProfilePumbility && (
-                        <p className="text-[8px] sm:text-[10px] text-gray-500 text-right">
-                          Tap label to switch{canOpenTopProfilePumbilityModal ? ' - tap score for top songs' : ''}
-                        </p>
-                      )}
                     </div>
                   )}
                   {(piuStatus?.highest_single || piuStatus?.highest_double) && (
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] sm:text-[11px] text-gray-400 font-display">Best Clears</span>
-                      <span className="text-[11px] sm:text-sm font-mono font-bold">
+                      <span className="text-[10px] sm:text-xs text-gray-400 font-display font-semibold tracking-wide">Best Clears</span>
+                      <span className="text-sm sm:text-base leading-tight font-mono font-bold">
                         {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
                         {piuStatus.highest_single && piuStatus.highest_double && <span className="text-gray-500 mx-0.5 sm:mx-1">/</span>}
                         {piuStatus.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
