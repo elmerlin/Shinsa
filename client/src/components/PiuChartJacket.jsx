@@ -4,22 +4,22 @@ const SIZE_STYLES = {
   xs: {
     frame: 'w-[38px] h-[22px] rounded-md',
     fallback: 'text-xs',
-    badge: '-right-1 -bottom-1 min-w-[18px] h-[18px] px-1 text-[7px] rounded-full',
+    badge: '-right-0.5 -bottom-0.5 min-w-[16px] h-[16px] px-0.5 text-[7px] rounded-full',
   },
   sm: {
     frame: 'w-[42px] h-[24px] rounded-md',
     fallback: 'text-xs',
-    badge: '-right-1 -bottom-1 min-w-[19px] h-[19px] px-1 text-[7px] rounded-full',
+    badge: '-right-0.5 -bottom-0.5 min-w-[17px] h-[17px] px-0.5 text-[7px] rounded-full',
   },
   md: {
     frame: 'w-[50px] h-[28px] rounded-lg',
     fallback: 'text-xs',
-    badge: '-right-1 -bottom-1 min-w-[20px] h-[20px] px-1 text-[7px] rounded-full',
+    badge: '-right-0.5 -bottom-0.5 min-w-[18px] h-[18px] px-0.5 text-[7px] rounded-full',
   },
   wide: {
     frame: 'w-[66px] h-[38px] rounded-lg',
     fallback: 'text-[10px]',
-    badge: '-right-1 -bottom-1 min-w-[21px] h-[21px] px-1 text-[8px] rounded-full',
+    badge: '-right-0.5 -bottom-0.5 min-w-[19px] h-[19px] px-0.5 text-[8px] rounded-full',
   },
 };
 
