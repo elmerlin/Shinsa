@@ -77,6 +77,7 @@ const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-gre
 
 function getClearItems(item) {
   const fallback = [{
+    entry_type: 'song_clear',
     song_title: item.song_title || '',
     mode: item.mode || 'Single',
     level: parseInt(item.level) || 0,
@@ -84,6 +85,16 @@ function getClearItems(item) {
     grade: item.grade || '',
     plate: item.plate || '',
     background_url: item.background_url || '',
+    perfect: 0,
+    great: 0,
+    good: 0,
+    bad: 0,
+    miss: 0,
+    title_name: '',
+    title_family: '',
+    title_level: 0,
+    title_plate: '',
+    title_tier: '',
     pumbility_gain: parsePumbilityGain(item.pumbility_gain),
     singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
     over_top100_rank: parseInt(item.over_top100_rank, 10) || 0,
@@ -94,6 +105,7 @@ function getClearItems(item) {
     if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
 
     return parsed.map(c => ({
+      entry_type: c.entry_type || 'song_clear',
       song_title: c.song_title || fallback[0].song_title,
       mode: c.mode || fallback[0].mode,
       level: parseInt(c.level) || fallback[0].level,
@@ -101,6 +113,16 @@ function getClearItems(item) {
       grade: c.grade || '',
       plate: c.plate || '',
       background_url: c.background_url || '',
+      perfect: c.perfect || 0,
+      great: c.great || 0,
+      good: c.good || 0,
+      bad: c.bad || 0,
+      miss: c.miss || 0,
+      title_name: c.title_name || '',
+      title_family: c.title_family || '',
+      title_level: parseInt(c.title_level) || 0,
+      title_plate: c.title_plate || '',
+      title_tier: c.title_tier || '',
       pumbility_gain: parsePumbilityGain(c.pumbility_gain),
       singles_pumbility_gain: parsePumbilityGain(c.singles_pumbility_gain),
       over_top100_rank: parseInt(c.over_top100_rank, 10) || 0,
