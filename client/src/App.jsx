@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useAuth } from './contexts/AuthContext';
 import { useNotifications } from './contexts/NotificationContext';
@@ -40,7 +40,6 @@ import SkillsPage from './pages/SkillsPage';
 import SkillChartsPage from './pages/SkillChartsPage';
 import ChatPage from './pages/ChatPage';
 import FunPage from './pages/FunPage';
-import MotionPage from './pages/MotionPage';
 import OptimisePage from './pages/OptimisePage';
 import ChangeLogPage from './pages/ChangeLogPage';
 import CheckinPage from './pages/CheckinPage';
@@ -746,7 +745,6 @@ export default function App() {
   const [showDojoPopup, setShowDojoPopup] = useState(false);
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
-  const isMotion = location.pathname === '/motion';
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canShowDojoPopup = canAccessCheckin && isPumpDojoMember(user);
@@ -896,14 +894,6 @@ export default function App() {
     navigate('/checkin');
   };
 
-  if (isMotion) {
-    return (
-      <Routes>
-        <Route path="/motion" element={<MotionPage />} />
-      </Routes>
-    );
-  }
-
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -1025,7 +1015,7 @@ export default function App() {
           <Route path="/tiers" element={<TiersPage />} />
           <Route path="/head-to-head" element={<HeadToHeadPage />} />
           <Route path="/fun" element={<FunPage />} />
-          <Route path="/motion" element={<MotionPage />} />
+          <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/changelog" element={<ChangeLogPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
