@@ -1945,6 +1945,7 @@ export default function ProfilePage() {
       {/* Profile Header */}
       <div className="card mb-4 sm:mb-6 px-3 py-3 sm:p-4">
         <div className="flex flex-row items-start gap-2.5 sm:gap-6">
+          <div className="grid flex-1 min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 sm:flex sm:items-start sm:gap-6">
           {profile.avatar ? (
             <img src={getAvatarUrl(profile.avatar)} alt="" className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0" />
           ) : (
@@ -1952,7 +1953,7 @@ export default function ProfilePage() {
               {profile.username[0].toUpperCase()}
             </div>
           )}
-          <div className="text-left flex-1 min-w-0">
+          <div className="text-left min-w-0 sm:flex-1">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {flag && <span className="shrink-0">{flag}</span>}
               <div className="flex items-center gap-1 min-w-0">
@@ -1975,7 +1976,7 @@ export default function ProfilePage() {
               )}
             </div>
             {profile.playing_status && (
-              <div className="flex items-center gap-1.5 mt-1 sm:mt-2">
+              <div className="hidden sm:flex items-center gap-1.5 mt-1 sm:mt-2">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                 <span className="text-xs sm:text-sm font-display font-bold text-green-400">{profile.playing_status}</span>
               </div>
@@ -1984,7 +1985,7 @@ export default function ProfilePage() {
               <p className="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
             )}
             {locationLabel && (
-              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+              <p className="hidden sm:flex text-[11px] sm:text-xs text-gray-500 mt-1 items-center gap-1.5">
                 <span className="text-[12px]">📍</span>
                 {locationFlag && <span>{locationFlag}</span>}
                 <span className="truncate">{locationLabel}</span>
@@ -2089,6 +2090,23 @@ export default function ProfilePage() {
                 )}
               </div>
             )}
+          </div>
+          {(profile.playing_status || locationLabel) && (
+            <div className="col-span-2 sm:hidden mt-0.5 space-y-1">
+              {profile.playing_status && (
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-xs font-display font-bold text-green-400">{profile.playing_status}</span>
+                </div>
+              )}
+              {locationLabel && (
+                <p className="flex items-start gap-1.5 text-[11px] text-gray-500">
+                  {locationFlag && <span className="shrink-0">{locationFlag}</span>}
+                  <span className="min-w-0 break-words">{locationLabel}</span>
+                </p>
+              )}
+            </div>
+          )}
           </div>
           {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut) && (
             <div className="shrink-0 self-start w-[160px] sm:w-[220px]">
