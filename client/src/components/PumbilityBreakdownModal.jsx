@@ -88,11 +88,11 @@ export default function PumbilityBreakdownModal({
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 pt-6 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden"
+        className="w-full max-w-2xl rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl overflow-hidden max-h-[calc(100vh-1.5rem)] sm:max-h-[min(72vh,calc(100vh-2rem))]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/60">

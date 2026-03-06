@@ -22,6 +22,7 @@ import SkillBreakdownPanel from '../components/SkillBreakdownPanel';
 import RankingsPanel from '../components/RankingsPanel';
 import GradeGoalTracker from '../components/GradeGoalTracker';
 import TitleProgressTab from '../components/TitleProgressTab';
+import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 
@@ -752,6 +753,8 @@ export default function ProfilePage() {
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
   const [chartKeyMap, setChartKeyMap] = useState({});
+  const [topProfileMetricMode, setTopProfileMetricMode] = useState('overall');
+  const [showTopProfilePumbilityModal, setShowTopProfilePumbilityModal] = useState(false);
   const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
   const [bestScoreSearch, setBestScoreSearch] = useState('');
   const [bestScorePage, setBestScorePage] = useState(1);
@@ -820,6 +823,8 @@ export default function ProfilePage() {
     setFollowersLoaded(false);
     setTab('overview');
     setSelectedOverviewDateKey('');
+    setTopProfileMetricMode('overall');
+    setShowTopProfilePumbilityModal(false);
     setActivitySubTab('all');
     setActivityNotifyPrefs({
       loading: false,
@@ -1692,6 +1697,21 @@ export default function ProfilePage() {
   const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
   const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
+  const overallProfilePumbility = parseInt(songAnalytics?.pumbility, 10) || parseInt(profile?.pumbility, 10) || 0;
+  const singlesProfilePumbility = parseInt(songAnalytics?.singles_pumbility, 10) || 0;
+  const hasSinglesProfilePumbility = singlesProfilePumbility > 0;
+  const activeTopProfileMetricMode = topProfileMetricMode === 'singles' && hasSinglesProfilePumbility
+    ? 'singles'
+    : overallProfilePumbility > 0
+      ? 'overall'
+      : hasSinglesProfilePumbility
+        ? 'singles'
+        : 'overall';
+  const activeTopProfilePumbility = activeTopProfileMetricMode === 'singles' ? singlesProfilePumbility : overallProfilePumbility;
+  const activeTopProfilePumbilityRows = activeTopProfileMetricMode === 'singles'
+    ? songAnalytics?.pumbility_breakdown?.singles_top50 || []
+    : songAnalytics?.pumbility_breakdown?.overall_top50 || [];
+  const canOpenTopProfilePumbilityModal = activeTopProfilePumbility > 0 && activeTopProfilePumbilityRows.length > 0;
   const pumbilityTopScores = Array.isArray(piuPumbility?.scores) ? piuPumbility.scores : [];
   const pumbilityAvgScore = pumbilityTopScores.length > 0
     ? Math.round(pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.score, 10) || 0), 0) / pumbilityTopScores.length)
@@ -1703,7 +1723,7 @@ export default function ProfilePage() {
   const hasGroupBadges = Array.isArray(profile.group_badges) && profile.group_badges.length > 0;
   const hasAchievementBadges = Array.isArray(profile.achievement_badges) && profile.achievement_badges.length > 0;
   const hasAnyBadges = hasGroupBadges || hasAchievementBadges;
-  const hasCompactPiuSummary = profile.pumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
+  const hasCompactPiuSummary = overallProfilePumbility > 0 || singlesProfilePumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
   const showOwnerRecentSyncShortcut = Boolean(isOwner && piuStatus?.linked);
   const activePiuTabLabel = isPiuTab ? tabLabels[tab] : 'Select';
 
@@ -1716,7 +1736,7 @@ export default function ProfilePage() {
     ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
   };
 
-  const orderedOverviewCardIds = ['song-analytics', 'play-heatmap', 'skill-breakdown', 'rankings', 'grade-goals']
+  const orderedOverviewCardIds = ['play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
     .filter((cardId) => overviewCardsById[cardId]);
 
   const renderOverviewCardBody = (cardId) => {
@@ -2069,13 +2089,46 @@ export default function ProfilePage() {
             )}
           </div>
           {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut) && (
-            <div className="shrink-0 self-start w-[140px] sm:w-[220px]">
+            <div className="shrink-0 self-start w-[160px] sm:w-[220px]">
               {hasCompactPiuSummary && (
                 <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-1.5 sm:px-3 sm:py-2 flex flex-col gap-0.5 sm:gap-1">
-                  {profile.pumbility > 0 && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] sm:text-[11px] text-gray-400 font-display">Pumbility</span>
-                      <span className="text-[11px] sm:text-sm text-piu-gold font-mono font-bold">{profile.pumbility.toLocaleString()} PB</span>
+                  {(overallProfilePumbility > 0 || singlesProfilePumbility > 0) && (
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!hasSinglesProfilePumbility) return;
+                            setTopProfileMetricMode((current) => (current === 'overall' ? 'singles' : 'overall'));
+                          }}
+                          className={`min-w-0 text-left font-display transition-colors ${
+                            hasSinglesProfilePumbility ? 'hover:text-white cursor-pointer' : 'cursor-default'
+                          }`}
+                          title={hasSinglesProfilePumbility ? 'Tap to switch between overall and singles pumbility' : undefined}
+                        >
+                          <span className="text-[9px] sm:text-[11px] text-gray-400">
+                            {activeTopProfileMetricMode === 'singles' ? 'Singles Pumbility' : 'Pumbility'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (canOpenTopProfilePumbilityModal) setShowTopProfilePumbilityModal(true);
+                          }}
+                          disabled={!canOpenTopProfilePumbilityModal}
+                          className={`text-[11px] sm:text-sm font-mono font-bold transition-colors ${
+                            activeTopProfileMetricMode === 'singles' ? 'text-red-300' : 'text-piu-gold'
+                          } ${canOpenTopProfilePumbilityModal ? 'hover:text-white' : 'cursor-default'}`}
+                          title={canOpenTopProfilePumbilityModal ? 'Tap to view top songs' : undefined}
+                        >
+                          {activeTopProfilePumbility.toLocaleString()} {activeTopProfileMetricMode === 'singles' ? 'SPB' : 'PB'}
+                        </button>
+                      </div>
+                      {hasSinglesProfilePumbility && (
+                        <p className="text-[8px] sm:text-[10px] text-gray-500 text-right">
+                          Tap label to switch{canOpenTopProfilePumbilityModal ? ' - tap score for top songs' : ''}
+                        </p>
+                      )}
                     </div>
                   )}
                   {(piuStatus?.highest_single || piuStatus?.highest_double) && (
@@ -2201,6 +2254,15 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      <PumbilityBreakdownModal
+        open={showTopProfilePumbilityModal}
+        title={activeTopProfileMetricMode === 'singles' ? 'Singles Pumbility Top Songs' : 'Pumbility Top Songs'}
+        rows={activeTopProfilePumbilityRows}
+        headerMeta={{ pumbility: activeTopProfilePumbility }}
+        jacketLookup={jacketLookup}
+        onClose={() => setShowTopProfilePumbilityModal(false)}
+      />
 
       {/* Tabs */}
       <div className="mb-3" ref={piuTabsMenuRef}>

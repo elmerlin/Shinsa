@@ -9,7 +9,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import PumbilityBreakdownModal from './PumbilityBreakdownModal';
 
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, index) => [grade, index]));
@@ -224,15 +223,15 @@ function CompetitiveLevelInfoModal({ open, onClose }) {
   );
 }
 
-function CompactMetricButton({ label, value, colorClass, onClick }) {
+function CompetitiveModeButton({ label, value, active, activeClass, inactiveClass, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2 hover:border-piu-accent/40 transition-colors text-center"
+      className={`rounded-lg border p-2 text-left transition-colors ${active ? activeClass : inactiveClass}`}
     >
-      <p className="text-[10px] text-gray-500">{label}</p>
-      <p className={`font-display font-bold text-base ${colorClass}`}>{value}</p>
+      <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{label}</p>
+      <p className="mt-1 font-display font-black text-lg">{value}</p>
     </button>
   );
 }
@@ -245,51 +244,92 @@ function PlayerMetricsPanel({
   setSingleCursor,
   doubleCursor,
   setDoubleCursor,
-  setOpenBreakdown,
 }) {
   const [showCompLevelInfo, setShowCompLevelInfo] = useState(false);
+  const singleCompetitiveLevel = analytics?.competitive_levels?.single || null;
+  const doubleCompetitiveLevel = analytics?.competitive_levels?.double || null;
+  const hasSingleMetrics = singleLevels.length > 0 || (parseInt(singleCompetitiveLevel?.level, 10) || 0) > 0;
+  const hasDoubleMetrics = doubleLevels.length > 0 || (parseInt(doubleCompetitiveLevel?.level, 10) || 0) > 0;
+  const [activeCompetitiveMode, setActiveCompetitiveMode] = useState(hasSingleMetrics || !hasDoubleMetrics ? 'single' : 'double');
+
+  useEffect(() => {
+    if (activeCompetitiveMode === 'single' && !hasSingleMetrics && hasDoubleMetrics) {
+      setActiveCompetitiveMode('double');
+      return;
+    }
+    if (activeCompetitiveMode === 'double' && !hasDoubleMetrics && hasSingleMetrics) {
+      setActiveCompetitiveMode('single');
+    }
+  }, [activeCompetitiveMode, hasDoubleMetrics, hasSingleMetrics]);
+
+  const activeCompetitiveCard = activeCompetitiveMode === 'double'
+    ? {
+        title: 'Doubles Competitive Level',
+        modePrefix: 'D',
+        modeColorClass: 'text-green-400',
+        rows: doubleLevels,
+        cursor: doubleCursor,
+        onCursorChange: setDoubleCursor,
+        competitiveLevel: doubleCompetitiveLevel,
+      }
+    : {
+        title: 'Singles Competitive Level',
+        modePrefix: 'S',
+        modeColorClass: 'text-red-400',
+        rows: singleLevels,
+        cursor: singleCursor,
+        onCursorChange: setSingleCursor,
+        competitiveLevel: singleCompetitiveLevel,
+      };
 
   return (
     <div className="rounded-xl border border-piu-border/60 bg-gradient-to-br from-slate-900/80 to-slate-800/50 p-3 space-y-3">
-      <h2 className="text-xs font-display font-bold tracking-wide text-piu-accent">PLAYER METRICS</h2>
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <CompactMetricButton
-          label="Pumbility"
-          value={formatNumber(analytics.pumbility)}
-          colorClass="text-piu-gold"
-          onClick={() => setOpenBreakdown('overall')}
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-xs font-display font-bold tracking-wide text-piu-accent">PLAYER METRICS</h2>
+        <button
+          type="button"
+          onClick={() => setShowCompLevelInfo(true)}
+          className="text-[10px] font-display font-bold text-gray-400 hover:text-piu-accent transition-colors"
+        >
+          Competitive level info
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <CompetitiveModeButton
+          label="Singles"
+          value={singleCompetitiveLevel?.level ? `S${singleCompetitiveLevel.level}` : '--'}
+          active={activeCompetitiveMode === 'single'}
+          activeClass="border-red-400/45 bg-red-500/12 text-red-200"
+          inactiveClass="border-piu-border/50 bg-piu-dark/60 text-gray-300 hover:border-red-400/35"
+          onClick={() => setActiveCompetitiveMode('single')}
         />
-        <CompactMetricButton
-          label="Singles Pumbility"
-          value={formatNumber(analytics.singles_pumbility)}
-          colorClass="text-red-300"
-          onClick={() => setOpenBreakdown('singles')}
+        <CompetitiveModeButton
+          label="Doubles"
+          value={doubleCompetitiveLevel?.level ? `D${doubleCompetitiveLevel.level}` : '--'}
+          active={activeCompetitiveMode === 'double'}
+          activeClass="border-green-400/45 bg-green-500/12 text-green-200"
+          inactiveClass="border-piu-border/50 bg-piu-dark/60 text-gray-300 hover:border-green-400/35"
+          onClick={() => setActiveCompetitiveMode('double')}
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {(hasSingleMetrics || hasDoubleMetrics) ? (
         <CompetitiveLevelCard
-          title="Singles Competitive Level"
-          modePrefix="S"
-          modeColorClass="text-red-400"
-          rows={singleLevels}
-          cursor={singleCursor}
-          onCursorChange={setSingleCursor}
-          competitiveLevel={analytics.competitive_levels?.single}
+          title={activeCompetitiveCard.title}
+          modePrefix={activeCompetitiveCard.modePrefix}
+          modeColorClass={activeCompetitiveCard.modeColorClass}
+          rows={activeCompetitiveCard.rows}
+          cursor={activeCompetitiveCard.cursor}
+          onCursorChange={activeCompetitiveCard.onCursorChange}
+          competitiveLevel={activeCompetitiveCard.competitiveLevel}
           onTitleClick={() => setShowCompLevelInfo(true)}
         />
-
-        <CompetitiveLevelCard
-          title="Doubles Competitive Level"
-          modePrefix="D"
-          modeColorClass="text-green-400"
-          rows={doubleLevels}
-          cursor={doubleCursor}
-          onCursorChange={setDoubleCursor}
-          competitiveLevel={analytics.competitive_levels?.double}
-          onTitleClick={() => setShowCompLevelInfo(true)}
-        />
-      </div>
+      ) : (
+        <div className="rounded-lg border border-piu-border/40 bg-piu-dark/55 px-3 py-4 text-sm text-gray-500">
+          Competitive level data will appear after more scores are synced.
+        </div>
+      )}
 
       <CompetitiveLevelInfoModal open={showCompLevelInfo} onClose={() => setShowCompLevelInfo(false)} />
     </div>
@@ -298,7 +338,6 @@ function PlayerMetricsPanel({
 
 export default function SongAnalyticsPanel({ analytics }) {
   const [progressMode, setProgressMode] = useState('Combined');
-  const [openBreakdown, setOpenBreakdown] = useState('');
   const [singleCursor, setSingleCursor] = useState(0);
   const [doubleCursor, setDoubleCursor] = useState(0);
 
@@ -338,12 +377,6 @@ export default function SongAnalyticsPanel({ analytics }) {
     return max > 0 ? Math.ceil(max / 100) * 100 : 100;
   }, [progressData]);
 
-  const breakdownRows = openBreakdown === 'overall'
-    ? analytics?.pumbility_breakdown?.overall_top50 || []
-    : openBreakdown === 'singles'
-      ? analytics?.pumbility_breakdown?.singles_top50 || []
-      : [];
-
   if (!analytics) return null;
 
   return (
@@ -357,7 +390,6 @@ export default function SongAnalyticsPanel({ analytics }) {
           setSingleCursor={setSingleCursor}
           doubleCursor={doubleCursor}
           setDoubleCursor={setDoubleCursor}
-          setOpenBreakdown={setOpenBreakdown}
         />
 
         <div className="xl:col-span-2 rounded-xl border border-piu-border/60 bg-piu-card/70 p-3">
@@ -418,12 +450,6 @@ export default function SongAnalyticsPanel({ analytics }) {
         </div>
       </section>
 
-      <PumbilityBreakdownModal
-        open={openBreakdown === 'overall' || openBreakdown === 'singles'}
-        title={openBreakdown === 'singles' ? 'Singles Pumbility Top Songs' : 'Pumbility Top Songs'}
-        rows={breakdownRows}
-        onClose={() => setOpenBreakdown('')}
-      />
     </>
   );
 }
