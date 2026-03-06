@@ -61,6 +61,22 @@ function getOverTop100Rank(rawRank) {
   return rank >= 1 && rank <= 100 ? rank : 0;
 }
 
+function formatAchievementThresholdLabel(tier) {
+  const threshold = parseInt(tier?.threshold, 10);
+  if (!Number.isFinite(threshold) || threshold <= 0) return '';
+
+  const seriesKey = String(tier?.series_key || '').trim().toLowerCase();
+  const seriesName = String(tier?.series_name || '').trim().toLowerCase();
+
+  if (seriesKey === 'streak' || seriesName === 'streak') {
+    return `${threshold} day streak`;
+  }
+  if (seriesKey === 'pumps_received' || seriesName.includes('pump')) {
+    return `${threshold} pumps`;
+  }
+  return `Tier ${threshold}`;
+}
+
 function getGradeColor(grade) {
   const g = parseGrade(grade).normalized.replace('+', '_P');
   if (g.includes('SSS')) return 'text-sky-300';
@@ -3586,7 +3602,7 @@ export default function ProfilePage() {
                       </div>
                       <div className="text-left min-w-0">
                         <p className="text-xs font-display font-semibold text-white truncate">{tier.name}</p>
-                        <p className="text-[10px] text-gray-500">{tier.threshold} pumps</p>
+                        <p className="text-[10px] text-gray-500">{formatAchievementThresholdLabel(tier)}</p>
                       </div>
                     </div>
                   ))}
