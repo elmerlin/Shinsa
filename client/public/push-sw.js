@@ -1,4 +1,4 @@
-self.__APP_VERSION__ = '2026-02-21-map-image-fix-v2';
+self.__APP_VERSION__ = '2026-03-06-notification-badge-fix';
 const STATIC_CACHE = `shinsa-static-${self.__APP_VERSION__}`;
 const RUNTIME_CACHE = `shinsa-runtime-${self.__APP_VERSION__}`;
 const OFFLINE_URL = '/offline.html';
@@ -11,6 +11,7 @@ const PRECACHE_URLS = [
   '/favicon.svg',
   '/icons/app-icon-192.png',
   '/icons/app-icon-512.png',
+  '/icons/notification-badge-96.png',
   '/pump-shinsa-wordmark.svg',
 ];
 
@@ -129,7 +130,7 @@ self.addEventListener('push', (event) => {
   const body = payload.body || 'You have a new notification';
   const url = payload.url || '/';
   const icon = payload.icon || '/icons/app-icon-192.png';
-  const badge = payload.badge || '/icons/app-icon-96.png';
+  const badge = payload.badge || '/icons/notification-badge-96.png';
   const tag = payload.tag || 'notification';
 
   event.waitUntil(

@@ -37,8 +37,8 @@ function buildPushPayload(notification) {
     title,
     body,
     url,
-    icon: '/pump-shinsa-logo.svg',
-    badge: '/pump-shinsa-logo.svg',
+    icon: '/icons/app-icon-192.png',
+    badge: '/icons/notification-badge-96.png',
     tag: id ? `notification-${id}` : 'notification',
     notification_id: id,
   };
