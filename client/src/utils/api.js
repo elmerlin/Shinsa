@@ -907,8 +907,12 @@ export const getLiveSessions = (options = {}) => {
 export const getMyLiveSession = () => request('/live/sessions/mine/active');
 export const createLiveSession = (data) => request('/live/sessions', { method: 'POST', body: JSON.stringify(data) });
 export const getLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}`);
-export function openLiveSessionStream(sessionId) {
-  const token = localStorage.getItem('token');
+export const createLiveOverlayToken = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/overlay-token`, {
+  method: 'POST',
+  body: '{}',
+});
+export function openLiveSessionStream(sessionId, providedToken = '') {
+  const token = String(providedToken || '').trim() || localStorage.getItem('token');
   if (!token) throw new Error('Authentication required');
   return new EventSource(
     `${API_BASE}/live/sessions/${encodeURIComponent(sessionId)}/stream?token=${encodeURIComponent(token)}`

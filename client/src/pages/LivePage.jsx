@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   castLiveVote,
+  createLiveOverlayToken,
   createLiveSession,
   createLiveVote,
   deleteLiveMessage,
@@ -30,6 +31,16 @@ import {
   getReactionBurstColors,
   tokenizeLiveMessage,
 } from '../utils/liveEmotes';
+import {
+  buildLiveOverlayUrl,
+  getDefaultLiveOverlayWidgets,
+  LIVE_OVERLAY_PRESETS,
+  LIVE_OVERLAY_THEMES,
+  LIVE_OVERLAY_WIDGETS,
+  normalizeLiveOverlayPreset,
+  normalizeLiveOverlayTheme,
+  normalizeLiveOverlayWidgets,
+} from '../utils/liveOverlay';
 
 const QUICK_REACTIONS = LIVE_EMOJI_GROUPS[0]?.emojis || ['🔥', '💪', '👏', '😂', '❤️', '⚡'];
 const GRADE_SORT = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
@@ -591,6 +602,148 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
   );
 }
 
+function OverlayStudioCard({
+  previewUrl,
+  preset,
+  theme,
+  widgets,
+  motionEnabled,
+  copying,
+  copiedLabel,
+  tokenExpiresAt,
+  onPresetChange,
+  onThemeChange,
+  onToggleWidget,
+  onToggleMotion,
+  onPreview,
+  onCopyBrowserSource,
+}) {
+  return (
+    <div className="rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(236,72,153,0.16),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.12),transparent_36%),linear-gradient(180deg,#0d1322,#09101b)] p-4 sm:p-5 shadow-[0_20px_44px_rgba(17,24,39,0.3)]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-[10px] font-display uppercase tracking-[0.28em] text-fuchsia-200">Overlay Studio</p>
+          <h2 className="mt-1 text-xl font-display font-black text-white">Browser-source layouts for stream scenes</h2>
+          <p className="mt-2 text-sm text-gray-300">
+            Pick a preset, trim the widgets, and copy a scene-ready overlay URL for OBS or any browser source.
+            The overlay reads the same Shinsa Live stream, so scores, chat, votes, and reactions update in real time.
+          </p>
+        </div>
+
+        <div className="min-w-[240px] rounded-[24px] border border-piu-border/70 bg-black/15 p-3">
+          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current output</p>
+          <p className="mt-2 text-sm font-display font-bold text-white">{LIVE_OVERLAY_PRESETS.find((item) => item.id === preset)?.label || preset}</p>
+          <p className="mt-1 text-xs text-gray-400">{LIVE_OVERLAY_THEMES.find((item) => item.id === theme)?.label || theme}</p>
+          <p className="mt-3 truncate rounded-xl border border-piu-border/60 bg-black/20 px-3 py-2 text-[11px] text-cyan-100">
+            {previewUrl}
+          </p>
+          {copiedLabel ? <p className="mt-2 text-xs text-emerald-200">{copiedLabel}</p> : null}
+          {tokenExpiresAt ? <p className="mt-1 text-[11px] text-gray-400">Overlay access valid until {new Date(tokenExpiresAt).toLocaleString()}</p> : null}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="space-y-4">
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Preset</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {LIVE_OVERLAY_PRESETS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onPresetChange(option.id)}
+                  className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
+                    option.id === preset
+                      ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-white shadow-[0_12px_28px_rgba(217,70,239,0.16)]'
+                      : 'border-piu-border bg-black/12 text-gray-300 hover:border-fuchsia-300/25 hover:text-white'
+                  }`}
+                >
+                  <p className="text-sm font-display font-bold">{option.label}</p>
+                  <p className="mt-1 text-xs text-gray-400">{option.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Widgets</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {LIVE_OVERLAY_WIDGETS.map((widget) => {
+                const active = widgets.includes(widget.id);
+                return (
+                  <button
+                    key={widget.id}
+                    type="button"
+                    onClick={() => onToggleWidget(widget.id)}
+                    className={`rounded-full border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${
+                      active
+                        ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
+                        : 'border-piu-border bg-black/18 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {widget.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Theme</p>
+            <div className="mt-2 grid gap-2">
+              {LIVE_OVERLAY_THEMES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onThemeChange(option.id)}
+                  className={`rounded-[22px] border px-4 py-3 text-left transition-colors ${
+                    option.id === theme
+                      ? 'border-cyan-400/35 bg-cyan-500/10 text-white'
+                      : 'border-piu-border bg-black/12 text-gray-300 hover:border-cyan-300/25 hover:text-white'
+                  }`}
+                >
+                  <p className="text-sm font-display font-bold">{option.label}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-piu-border/70 bg-black/12 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Motion</p>
+                <p className="mt-1 text-sm text-gray-300">Toggle emote bursts and animated reaction flourishes.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onToggleMotion}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+                  motionEnabled
+                    ? 'border border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
+                    : 'border border-piu-border bg-black/18 text-gray-400'
+                }`}
+              >
+                {motionEnabled ? 'Motion on' : 'Motion off'}
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={onPreview} className="btn-secondary px-4 py-2 text-xs">
+                Preview overlay
+              </button>
+              <button type="button" onClick={onCopyBrowserSource} disabled={copying} className="btn-primary px-4 py-2 text-xs">
+                {copying ? 'Preparing...' : 'Copy browser source URL'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LivePage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -638,6 +791,13 @@ export default function LivePage() {
   const [deletingMessageId, setDeletingMessageId] = useState('');
   const [streamState, setStreamState] = useState('idle');
   const [copied, setCopied] = useState(false);
+  const [overlayPreset, setOverlayPreset] = useState('compact');
+  const [overlayTheme, setOverlayTheme] = useState('arena');
+  const [overlayWidgets, setOverlayWidgets] = useState(() => getDefaultLiveOverlayWidgets('compact'));
+  const [overlayMotion, setOverlayMotion] = useState(true);
+  const [overlayCopying, setOverlayCopying] = useState(false);
+  const [overlayCopiedLabel, setOverlayCopiedLabel] = useState('');
+  const [overlayTokenExpiresAt, setOverlayTokenExpiresAt] = useState('');
   const chatEndRef = useRef(null);
   const chatInputRef = useRef(null);
   const reactionIdRef = useRef(0);
@@ -646,6 +806,8 @@ export default function LivePage() {
   const liveStreamRef = useRef(null);
   const wakeLockRef = useRef(null);
   const playerModeInitRef = useRef(false);
+  const overlayPrefsKeyRef = useRef('');
+  const overlayCopyTimerRef = useRef(null);
 
   const activeSessionId = sessionId || snapshot?.session?.id || '';
   const live = snapshot?.session || null;
@@ -665,6 +827,16 @@ export default function LivePage() {
   );
   const isPlayerMode = isHost && playerMode;
   const useMobilePlayerHud = isPlayerMode && !isDesktopViewport;
+  const overlayPreviewUrl = useMemo(() => {
+    if (!activeSessionId || typeof window === 'undefined') return '';
+    return buildLiveOverlayUrl(activeSessionId, {
+      preset: overlayPreset,
+      theme: overlayTheme,
+      widgets: overlayWidgets,
+      motion: overlayMotion,
+      baseUrl: window.location.origin,
+    });
+  }, [activeSessionId, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -869,6 +1041,40 @@ export default function LivePage() {
   }, [isHost, playerMode, user?.id]);
 
   useEffect(() => {
+    if (!isHost || typeof window === 'undefined') return;
+    const storageKey = `shinsa_live_overlay:${user?.id || 'host'}`;
+    if (overlayPrefsKeyRef.current === storageKey) return;
+    overlayPrefsKeyRef.current = storageKey;
+
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const normalizedPreset = normalizeLiveOverlayPreset(parsed?.preset);
+      setOverlayPreset(normalizedPreset);
+      setOverlayTheme(normalizeLiveOverlayTheme(parsed?.theme));
+      setOverlayWidgets(normalizeLiveOverlayWidgets(parsed?.widgets, normalizedPreset));
+      setOverlayMotion(parsed?.motion !== false);
+    } catch {
+      // Ignore malformed overlay preferences and fall back to defaults.
+    }
+  }, [isHost, user?.id]);
+
+  useEffect(() => {
+    if (!isHost || typeof window === 'undefined' || !overlayPrefsKeyRef.current) return;
+    try {
+      window.localStorage.setItem(overlayPrefsKeyRef.current, JSON.stringify({
+        preset: overlayPreset,
+        theme: overlayTheme,
+        widgets: overlayWidgets,
+        motion: overlayMotion,
+      }));
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [isHost, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
+
+  useEffect(() => {
     if (!useMobilePlayerHud) {
       setMobilePanel('');
       if (wakeLockRef.current) releaseWakeLock();
@@ -885,6 +1091,10 @@ export default function LivePage() {
     if (wakeLockRef.current) {
       wakeLockRef.current.release().catch(() => {});
       wakeLockRef.current = null;
+    }
+    if (overlayCopyTimerRef.current) {
+      window.clearTimeout(overlayCopyTimerRef.current);
+      overlayCopyTimerRef.current = null;
     }
   }, []);
 
@@ -1299,6 +1509,60 @@ export default function LivePage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {}
+  };
+
+  const flashOverlayCopyLabel = (label) => {
+    setOverlayCopiedLabel(label);
+    if (overlayCopyTimerRef.current) {
+      window.clearTimeout(overlayCopyTimerRef.current);
+    }
+    overlayCopyTimerRef.current = window.setTimeout(() => {
+      setOverlayCopiedLabel('');
+      overlayCopyTimerRef.current = null;
+    }, 2200);
+  };
+
+  const handleToggleOverlayWidget = (widgetId) => {
+    setOverlayWidgets((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      if (current.includes(widgetId)) {
+        return current.length > 1 ? current.filter((item) => item !== widgetId) : current;
+      }
+      return [...current, widgetId];
+    });
+  };
+
+  const handleOpenOverlayPreview = () => {
+    if (!overlayPreviewUrl) return;
+    window.open(overlayPreviewUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCopyOverlayBrowserSource = async () => {
+    if (!activeSessionId || !overlayPreviewUrl) return;
+    setOverlayCopying(true);
+    try {
+      const data = await createLiveOverlayToken(activeSessionId);
+      const url = buildLiveOverlayUrl(activeSessionId, {
+        preset: overlayPreset,
+        theme: overlayTheme,
+        widgets: overlayWidgets,
+        motion: overlayMotion,
+        token: data?.token || '',
+        baseUrl: window.location.origin,
+      });
+      await navigator.clipboard.writeText(url);
+      setOverlayTokenExpiresAt(data?.expires_at || '');
+      flashOverlayCopyLabel('Browser source URL copied');
+      setStatusNote(
+        data?.expires_at
+          ? `Overlay browser source copied. Access token expires ${new Date(data.expires_at).toLocaleString()}.`
+          : 'Overlay browser source copied.'
+      );
+    } catch (err) {
+      setError(err.message || 'Failed to copy overlay browser source');
+    } finally {
+      setOverlayCopying(false);
+    }
   };
 
   const handleToggleWakeLock = async () => {
@@ -2054,6 +2318,29 @@ export default function LivePage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {isHost && activeSessionId ? (
+        <OverlayStudioCard
+          previewUrl={overlayPreviewUrl}
+          preset={overlayPreset}
+          theme={overlayTheme}
+          widgets={overlayWidgets}
+          motionEnabled={overlayMotion}
+          copying={overlayCopying}
+          copiedLabel={overlayCopiedLabel}
+          tokenExpiresAt={overlayTokenExpiresAt}
+          onPresetChange={(nextPreset) => {
+            const normalized = normalizeLiveOverlayPreset(nextPreset);
+            setOverlayPreset(normalized);
+            setOverlayWidgets(getDefaultLiveOverlayWidgets(normalized));
+          }}
+          onThemeChange={(nextTheme) => setOverlayTheme(normalizeLiveOverlayTheme(nextTheme))}
+          onToggleWidget={handleToggleOverlayWidget}
+          onToggleMotion={() => setOverlayMotion((prev) => !prev)}
+          onPreview={handleOpenOverlayPreview}
+          onCopyBrowserSource={handleCopyOverlayBrowserSource}
+        />
       ) : null}
 
       {hasPlayerPanels ? (

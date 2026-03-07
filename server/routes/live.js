@@ -14,6 +14,7 @@ const socialRoutes = require('./social');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
+const LIVE_OVERLAY_TOKEN_EXPIRY = '30d';
 
 const PRESENCE_TTL_SECONDS = 30;
 const CHAT_LIMIT = 200;
@@ -1248,6 +1249,29 @@ function buildSummaryPostContent(summary) {
   return `${summary.postText}\n\n${marker}`;
 }
 
+function createLiveOverlayAccessToken(sessionId) {
+  const normalizedSessionId = String(sessionId || '').trim();
+  const token = jwt.sign(
+    {
+      id: `live_overlay:${normalizedSessionId}`,
+      scope: 'live_overlay',
+      session_id: normalizedSessionId,
+      username: 'Shinsa Live Overlay',
+    },
+    JWT_SECRET,
+    { expiresIn: LIVE_OVERLAY_TOKEN_EXPIRY }
+  );
+  const decoded = jwt.decode(token);
+  return {
+    token,
+    expires_at: decoded?.exp ? new Date(decoded.exp * 1000).toISOString() : '',
+  };
+}
+
+function isLiveOverlayToken(decoded) {
+  return String(decoded?.scope || '').trim().toLowerCase() === 'live_overlay';
+}
+
 function verifyLiveStreamToken(req) {
   const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
   if (!token) {
@@ -1403,6 +1427,24 @@ router.get('/sessions/:id', requireAuth, (req, res) => {
   }
 });
 
+router.post('/sessions/:id/overlay-token', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    if (String(session.host_user_id || '') !== String(req.user.id || '')) {
+      return res.status(403).json({ error: 'Only the host can mint overlay access' });
+    }
+
+    const overlayAccess = createLiveOverlayAccessToken(session.id);
+    return res.json({
+      session_id: session.id,
+      ...overlayAccess,
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 router.get('/sessions/:id/stream', (req, res) => {
   let detach = null;
   let heartbeat = null;
@@ -1411,6 +1453,17 @@ router.get('/sessions/:id/stream', (req, res) => {
     const decoded = verifyLiveStreamToken(req);
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
+    const streamUserId = String(decoded?.id || '').trim();
+    if (!streamUserId) {
+      const err = new Error('Authentication required');
+      err.statusCode = 401;
+      throw err;
+    }
+    if (isLiveOverlayToken(decoded) && String(decoded?.session_id || '') !== String(session.id || '')) {
+      const err = new Error('Overlay token does not match this live session');
+      err.statusCode = 403;
+      throw err;
+    }
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -1418,7 +1471,7 @@ router.get('/sessions/:id/stream', (req, res) => {
     res.setHeader('X-Accel-Buffering', 'no');
     if (res.flushHeaders) res.flushHeaders();
 
-    detach = addLiveSessionClient(session.id, decoded.id, res);
+    detach = addLiveSessionClient(session.id, streamUserId, res);
     heartbeat = setInterval(() => {
       try {
         res.write(': ping\n\n');
@@ -1428,7 +1481,7 @@ router.get('/sessions/:id/stream', (req, res) => {
     }, STREAM_HEARTBEAT_MS);
 
     res.write('event: ready\ndata: {"ok":true}\n\n');
-    const snapshot = buildSessionSnapshot(db, session, decoded.id);
+    const snapshot = buildSessionSnapshot(db, session, streamUserId);
     res.write(`event: snapshot\ndata: ${JSON.stringify({
       reason: 'initial',
       snapshot,

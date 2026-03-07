@@ -1,0 +1,682 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
+import PiuChartJacket from '../components/PiuChartJacket';
+import LiveEmote from '../components/LiveEmote';
+import { openLiveSessionStream } from '../utils/api';
+import { getLiveReactionPayload, tokenizeLiveMessage } from '../utils/liveEmotes';
+import {
+  getLiveOverlayPreset,
+  getLiveOverlayTheme,
+  normalizeLiveOverlayPreset,
+  normalizeLiveOverlayTheme,
+  normalizeLiveOverlayWidgets,
+} from '../utils/liveOverlay';
+
+function formatNumber(value) {
+  return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function modeShort(mode) {
+  if (mode === 'Single') return 'S';
+  if (mode === 'Double') return 'D';
+  return 'X';
+}
+
+function formatPlayLabel(play) {
+  if (!play) return 'Waiting for the next chart';
+  return `${play.song_title || 'Unknown chart'} (${modeShort(play.mode)}${parseInt(play.level, 10) || '?'})`;
+}
+
+function formatCountdownLabel(remainingMs) {
+  const totalSeconds = Math.max(0, Math.ceil((Number(remainingMs) || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  return `${seconds}s`;
+}
+
+function formatRelativeSyncTime(timestamp) {
+  if (!timestamp) return 'Awaiting sync';
+  const parsed = Date.parse(`${timestamp}Z`);
+  if (!Number.isFinite(parsed)) return 'Awaiting sync';
+  const diffMs = Math.max(0, Date.now() - parsed);
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes <= 0) return 'Synced just now';
+  if (diffMinutes < 60) return `Synced ${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  const remMinutes = diffMinutes % 60;
+  return remMinutes > 0 ? `Synced ${diffHours}h ${remMinutes}m ago` : `Synced ${diffHours}h ago`;
+}
+
+function getRequestCounts(requests) {
+  const counts = { open: 0, queued: 0, played: 0, skipped: 0 };
+  for (const request of Array.isArray(requests) ? requests : []) {
+    const status = String(request?.status || '').trim().toLowerCase();
+    if (status === 'queued' || status === 'played' || status === 'skipped') {
+      counts[status] += 1;
+    } else {
+      counts.open += 1;
+    }
+  }
+  return counts;
+}
+
+function getRecentChatMessages(messages) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) => message?.message || message?.is_system)
+    .slice(-5);
+}
+
+function showBurstPayload(message) {
+  if (message?.is_system) return null;
+  return getLiveReactionPayload(message?.message);
+}
+
+function OverlayPanel({ theme, className = '', children, style = {} }) {
+  return (
+    <div
+      className={`rounded-[30px] border backdrop-blur-xl ${theme.chipClass} ${className}`.trim()}
+      style={{
+        background: theme.surface,
+        boxShadow: `0 28px 70px ${theme.shadow}`,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function OverlayBadge({ theme, label, value, emphasis = 'accent' }) {
+  const toneClass = emphasis === 'strong'
+    ? theme.strongClass
+    : emphasis === 'alt'
+      ? theme.altClass
+      : theme.accentClass;
+
+  return (
+    <div className={`rounded-2xl border px-3 py-2 ${toneClass}`}>
+      <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] opacity-75">{label}</p>
+      <p className="mt-1 text-sm font-display font-black">{value}</p>
+    </div>
+  );
+}
+
+function OverlayMessage({ message, theme }) {
+  const reaction = showBurstPayload(message);
+  const segments = tokenizeLiveMessage(message?.message || '');
+
+  return (
+    <div className={`rounded-2xl border px-3 py-2.5 ${message?.is_system ? theme.faintClass : theme.chipClass}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="truncate text-[11px] font-display font-bold text-white/90">
+          {message?.is_system ? (message?.message_type || 'live').replace(/_/g, ' ') : (message?.username || 'Viewer')}
+        </p>
+        <p className="text-[10px] uppercase tracking-wide text-white/35">
+          {message?.is_system ? 'system' : 'chat'}
+        </p>
+      </div>
+      {reaction?.kind === 'emote' ? (
+        <div className="mt-2">
+          <LiveEmote emote={reaction.emote} size="compact" />
+        </div>
+      ) : reaction?.kind === 'emoji' ? (
+        <p className="mt-2 text-2xl leading-none">{reaction.emoji}</p>
+      ) : segments.length > 0 ? (
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-white/80">
+          {segments.map((segment, idx) => (
+            segment.type === 'emote'
+              ? <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
+              : <span key={`seg-${idx}`} className="whitespace-pre-wrap">{segment.text}</span>
+          ))}
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-white/80 whitespace-pre-wrap break-words">{message?.message || ''}</p>
+      )}
+    </div>
+  );
+}
+
+function VoteCard({ vote, theme, compact = false }) {
+  const [nowMs, setNowMs] = useState(Date.now());
+  const endsAtMs = vote?.ends_at ? Date.parse(`${vote.ends_at}Z`) : NaN;
+  const remainingMs = Number.isFinite(endsAtMs) ? Math.max(0, endsAtMs - nowMs) : 0;
+  const winner = Array.isArray(vote?.options) ? vote.options.find((option) => option.is_winner) : null;
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    if (vote?.status !== 'active') return undefined;
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [vote?.id, vote?.status, vote?.ends_at]);
+
+  if (!vote) return null;
+
+  return (
+    <div className={`rounded-[26px] border p-3 ${theme.chipClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/50">Vote</p>
+          <p className="mt-1 text-sm font-display font-black text-white">
+            {vote.mode_filter} Lv.{vote.min_level}{vote.max_level !== vote.min_level ? `-${vote.max_level}` : ''}
+          </p>
+        </div>
+        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${vote.status === 'active' ? theme.accentClass : theme.altClass}`}>
+          {vote.status === 'active' ? formatCountdownLabel(remainingMs) : 'Locked'}
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {(vote.options || []).slice(0, compact ? 2 : 3).map((option) => (
+          <div key={option.id} className={`rounded-2xl border px-3 py-2 ${option.is_winner ? theme.strongClass : theme.faintClass}`}>
+            <div className="flex items-center gap-3">
+              <PiuChartJacket title={option.song_title} mode={option.mode} level={option.level} jacketUrl={option.jacket_url} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-display font-bold text-white">{option.song_title}</p>
+                <p className="text-[11px] text-white/55">{modeShort(option.mode)}{option.level}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-display font-black text-white">{option.vote_count || 0}</p>
+                <p className="text-[10px] uppercase tracking-wide text-white/35">votes</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {vote.status !== 'active' && winner ? (
+        <p className="mt-3 text-xs text-white/70">Winner: {formatPlayLabel(winner)}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function ResultBadges({ play, requests, theme, compact = false }) {
+  if (!play) return null;
+
+  const items = [
+    { label: 'Score', value: formatNumber(play.score), emphasis: 'accent' },
+    { label: 'Grade', value: play.grade || '-', emphasis: 'strong' },
+  ];
+  if (play.pumbility_gain > 0) items.push({ label: 'Pumbility', value: `+${play.pumbility_gain}`, emphasis: 'alt' });
+  if (play.over_top100_rank > 0) items.push({ label: 'OVER', value: `Top 100 #${play.over_top100_rank}`, emphasis: 'alt' });
+  if (requests.queued > 0) items.push({ label: 'Queued', value: `${requests.queued}`, emphasis: 'accent' });
+  if (requests.open > 0) items.push({ label: 'Open req', value: `${requests.open}`, emphasis: 'strong' });
+
+  return (
+    <div className={`grid gap-2 ${compact ? 'grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+      {items.map((item) => (
+        <OverlayBadge key={`${item.label}-${item.value}`} theme={theme} label={item.label} value={item.value} emphasis={item.emphasis} />
+      ))}
+    </div>
+  );
+}
+
+function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showSync }) {
+  if (!showBrand && !showViewers && !showSync) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {showBrand ? (
+        <div className={`rounded-full border px-3 py-1.5 ${theme.accentClass}`}>
+          <p className="text-[10px] font-display font-bold uppercase tracking-[0.28em]">Shinsa Live</p>
+        </div>
+      ) : null}
+      {live?.host?.username ? (
+        <div className={`rounded-full border px-3 py-1.5 ${theme.faintClass}`}>
+          <p className="text-[11px] font-display font-bold text-white">{live.host.username}</p>
+          <p className="text-[10px] text-white/40">{presetLabel}</p>
+        </div>
+      ) : null}
+      {showViewers ? (
+        <div className={`rounded-full border px-3 py-1.5 ${theme.strongClass}`}>
+          <p className="text-[10px] font-display font-bold uppercase tracking-wide">Watching</p>
+          <p className="text-sm font-display font-black">{live?.viewer_count || 0}</p>
+        </div>
+      ) : null}
+      {showSync ? (
+        <div className={`rounded-full border px-3 py-1.5 ${theme.faintClass}`}>
+          <p className="text-[10px] font-display font-bold uppercase tracking-wide">Sync</p>
+          <p className="text-xs text-white/75">{formatRelativeSyncTime(live?.last_sync_at)}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet }) {
+  return (
+    <div className="flex min-h-screen items-end p-5 md:p-7">
+      <OverlayPanel theme={theme} className="w-full px-4 py-4 md:px-5 md:py-5">
+        <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1.2fr)_auto] xl:items-center">
+          <div className="space-y-3">
+            <OverlayHeader
+              live={live}
+              theme={theme}
+              presetLabel="Compact ticker"
+              showBrand={widgetSet.has('brand')}
+              showViewers={widgetSet.has('viewers')}
+              showSync={widgetSet.has('sync')}
+            />
+            {widgetSet.has('summary') && summary ? (
+              <div className="grid grid-cols-3 gap-2">
+                <OverlayBadge theme={theme} label="Songs" value={summary.songCount || 0} />
+                <OverlayBadge theme={theme} label="Clears" value={`${summary.clearCount || 0}/${summary.songCount || 0}`} emphasis="strong" />
+                <OverlayBadge theme={theme} label="Avg Lv" value={summary.averageLevel || 0} emphasis="alt" />
+              </div>
+            ) : null}
+          </div>
+
+          {widgetSet.has('play') ? (
+            <div className={`rounded-[28px] border px-4 py-4 ${theme.chipClass}`}>
+              <div className="flex items-center gap-4">
+                <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="md" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/45">Now Playing</p>
+                  <p className="mt-1 truncate text-xl font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
+                  <p className="mt-1 text-sm text-white/65">
+                    {play ? `${modeShort(play.mode)}${play.level} • ${play.machine_name || 'Live floor'}` : 'Live sync will pin the next result here.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="space-y-3 xl:min-w-[340px]">
+            {widgetSet.has('result') ? <ResultBadges play={play} requests={requestCounts} theme={theme} compact /> : null}
+            {widgetSet.has('vote') && vote ? <VoteCard vote={vote} theme={theme} compact /> : null}
+          </div>
+        </div>
+      </OverlayPanel>
+    </div>
+  );
+}
+
+function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet }) {
+  return (
+    <div className="flex min-h-screen items-end justify-end p-5 md:p-7">
+      <OverlayPanel theme={theme} className="w-full max-w-[660px] p-4 md:p-5">
+        <OverlayHeader
+          live={live}
+          theme={theme}
+          presetLabel="Results card"
+          showBrand={widgetSet.has('brand')}
+          showViewers={widgetSet.has('viewers')}
+          showSync={widgetSet.has('sync')}
+        />
+
+        {widgetSet.has('play') ? (
+          <div className="mt-4 rounded-[28px] border border-white/10 bg-black/18 p-4">
+            <div className="flex items-center gap-4">
+              <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="md" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/45">Last Result</p>
+                <p className="mt-1 truncate text-2xl font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
+                <p className="mt-1 text-sm text-white/65">{formatPlayLabel(play)}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {widgetSet.has('result') ? <div className="mt-4"><ResultBadges play={play} requests={requestCounts} theme={theme} /></div> : null}
+
+        {widgetSet.has('summary') && summary ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-4">
+            <OverlayBadge theme={theme} label="Songs" value={summary.songCount || 0} />
+            <OverlayBadge theme={theme} label="Avg Score" value={formatNumber(summary.averageScore)} emphasis="strong" />
+            <OverlayBadge theme={theme} label="Avg Lv" value={summary.averageLevel || 0} emphasis="alt" />
+            <OverlayBadge theme={theme} label="View Peak" value={summary.viewerPeak || live?.viewer_peak || 0} />
+          </div>
+        ) : null}
+
+        {widgetSet.has('requests') ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-4">
+            <OverlayBadge theme={theme} label="Open req" value={requestCounts.open} />
+            <OverlayBadge theme={theme} label="Queued" value={requestCounts.queued} emphasis="strong" />
+            <OverlayBadge theme={theme} label="Played" value={requestCounts.played} emphasis="alt" />
+            <OverlayBadge theme={theme} label="Skipped" value={requestCounts.skipped} emphasis="strong" />
+          </div>
+        ) : null}
+
+        {widgetSet.has('vote') && vote ? <div className="mt-4"><VoteCard vote={vote} theme={theme} compact /></div> : null}
+      </OverlayPanel>
+    </div>
+  );
+}
+
+function ChatOverlay({ live, play, vote, messages, theme, widgetSet }) {
+  return (
+    <div className="flex min-h-screen items-start justify-end p-5 md:p-7">
+      <OverlayPanel theme={theme} className="w-full max-w-[390px] p-4 md:p-5">
+        <OverlayHeader
+          live={live}
+          theme={theme}
+          presetLabel="Chat rail"
+          showBrand={widgetSet.has('brand')}
+          showViewers={widgetSet.has('viewers')}
+          showSync={widgetSet.has('sync')}
+        />
+
+        {widgetSet.has('play') && play ? (
+          <div className={`mt-4 rounded-[26px] border p-3 ${theme.faintClass}`}>
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Now Playing</p>
+            <div className="mt-2 flex items-center gap-3">
+              <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-display font-black text-white">{play.song_title}</p>
+                <p className="text-[11px] text-white/60">{modeShort(play.mode)}{play.level} • {play.grade || '-'}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {widgetSet.has('chat') ? (
+          <div className="mt-4 space-y-2">
+            {messages.length > 0 ? messages.map((message) => (
+              <OverlayMessage key={message.id} message={message} theme={theme} />
+            )) : (
+              <div className={`rounded-2xl border px-3 py-4 text-sm ${theme.faintClass}`}>
+                Chat is waiting for the next message.
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {widgetSet.has('vote') && vote ? <div className="mt-4"><VoteCard vote={vote} theme={theme} compact /></div> : null}
+      </OverlayPanel>
+    </div>
+  );
+}
+
+function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet }) {
+  return (
+    <div className="flex min-h-screen items-start p-4 md:p-6">
+      <OverlayPanel theme={theme} className="w-full max-w-[340px] p-4">
+        <OverlayHeader
+          live={live}
+          theme={theme}
+          presetLabel="Player mobile"
+          showBrand={widgetSet.has('brand')}
+          showViewers={widgetSet.has('viewers')}
+          showSync={widgetSet.has('sync')}
+        />
+
+        {widgetSet.has('play') ? (
+          <div className="mt-4 rounded-[26px] border border-white/10 bg-black/18 p-4">
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Now Playing</p>
+            <div className="mt-3 flex items-center gap-3">
+              <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
+                <p className="text-[11px] text-white/60">{play ? `${modeShort(play.mode)}${play.level}` : 'Sync armed'}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {widgetSet.has('result') ? <div className="mt-3"><ResultBadges play={play} requests={requestCounts} theme={theme} compact /></div> : null}
+
+        {widgetSet.has('summary') && summary ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <OverlayBadge theme={theme} label="Songs" value={summary.songCount || 0} />
+            <OverlayBadge theme={theme} label="Clears" value={`${summary.clearCount || 0}/${summary.songCount || 0}`} emphasis="strong" />
+            <OverlayBadge theme={theme} label="Avg Score" value={formatNumber(summary.averageScore)} emphasis="alt" />
+            <OverlayBadge theme={theme} label="Avg Lv" value={summary.averageLevel || 0} />
+          </div>
+        ) : null}
+
+        {widgetSet.has('requests') ? (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <OverlayBadge theme={theme} label="Open req" value={requestCounts.open} />
+            <OverlayBadge theme={theme} label="Queued" value={requestCounts.queued} emphasis="strong" />
+            <OverlayBadge theme={theme} label="Played" value={requestCounts.played} emphasis="alt" />
+            <OverlayBadge theme={theme} label="Skipped" value={requestCounts.skipped} />
+          </div>
+        ) : null}
+
+        {widgetSet.has('vote') && vote ? <div className="mt-3"><VoteCard vote={vote} theme={theme} compact /></div> : null}
+      </OverlayPanel>
+    </div>
+  );
+}
+
+export default function LiveOverlayPage() {
+  const { sessionId } = useParams();
+  const location = useLocation();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const overlayToken = String(searchParams.get('token') || '').trim();
+  const presetId = normalizeLiveOverlayPreset(searchParams.get('preset'));
+  const themeId = normalizeLiveOverlayTheme(searchParams.get('theme'));
+  const motionEnabled = searchParams.get('motion') !== '0';
+  const widgetIds = normalizeLiveOverlayWidgets(searchParams.get('widgets'), presetId);
+  const widgetSet = useMemo(() => new Set(widgetIds), [widgetIds]);
+  const theme = getLiveOverlayTheme(themeId);
+  const preset = getLiveOverlayPreset(presetId);
+  const [snapshot, setSnapshot] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [streamState, setStreamState] = useState('idle');
+  const [floatingReactions, setFloatingReactions] = useState([]);
+  const [reactionBursts, setReactionBursts] = useState([]);
+  const seenMessageIdsRef = useRef(new Set());
+  const reactionIdRef = useRef(0);
+
+  const live = snapshot?.session || null;
+  const play = snapshot?.last_play || null;
+  const summary = snapshot?.summary || null;
+  const vote = snapshot?.active_vote || null;
+  const requestCounts = useMemo(() => getRequestCounts(snapshot?.requests), [snapshot?.requests]);
+  const recentMessages = useMemo(() => getRecentChatMessages(snapshot?.messages), [snapshot?.messages]);
+
+  const showFloatingReaction = (payload) => {
+    if (!payload || !motionEnabled) return;
+    const reaction = typeof payload === 'string'
+      ? getLiveReactionPayload(payload) || { kind: 'emoji', emoji: payload }
+      : payload;
+    if (!reaction) return;
+
+    const rid = reactionIdRef.current++;
+    const x = 16 + Math.random() * 68;
+    const burstId = reactionIdRef.current++;
+    const particles = Array.from({ length: 7 }).map((_, idx) => {
+      const angle = (-Math.PI / 2) + ((Math.PI * 1.16) / 6) * idx;
+      const distance = 28 + Math.random() * 30;
+      return {
+        id: `${burstId}-${idx}`,
+        dx: `${Math.cos(angle) * distance}px`,
+        dy: `${Math.sin(angle) * distance}px`,
+        size: `${8 + Math.round(Math.random() * 7)}px`,
+      };
+    });
+
+    setFloatingReactions((prev) => [...prev, { id: rid, reaction, x }]);
+    setReactionBursts((prev) => [...prev, { id: burstId, x, particles }]);
+    setTimeout(() => {
+      setFloatingReactions((prev) => prev.filter((item) => item.id !== rid));
+    }, 1800);
+    setTimeout(() => {
+      setReactionBursts((prev) => prev.filter((item) => item.id !== burstId));
+    }, 950);
+  };
+
+  const applySnapshot = (nextSnapshot, { markMessagesSeen = false } = {}) => {
+    const nextMessages = Array.isArray(nextSnapshot?.messages) ? nextSnapshot.messages : [];
+    if (markMessagesSeen) {
+      seenMessageIdsRef.current = new Set(nextMessages.map((message) => message.id));
+    } else {
+      const seen = seenMessageIdsRef.current;
+      for (const message of nextMessages) {
+        if (seen.has(message.id)) continue;
+        seen.add(message.id);
+        const payload = showBurstPayload(message);
+        if (payload) showFloatingReaction(payload);
+      }
+    }
+    setSnapshot(nextSnapshot);
+  };
+
+  useEffect(() => {
+    if (!sessionId) {
+      setError('Live session missing');
+      setLoading(false);
+      return undefined;
+    }
+
+    let closed = false;
+    let source;
+
+    try {
+      setLoading(true);
+      setStreamState('connecting');
+      source = openLiveSessionStream(sessionId, overlayToken);
+    } catch (err) {
+      setError(err?.message || 'Failed to connect overlay');
+      setStreamState('error');
+      setLoading(false);
+      return undefined;
+    }
+
+    const handleReady = () => {
+      if (!closed) {
+        setStreamState('live');
+        setError('');
+      }
+    };
+
+    const handleSnapshot = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        if (!payload?.snapshot) return;
+        applySnapshot(payload.snapshot, { markMessagesSeen: payload?.reason === 'initial' });
+        setLoading(false);
+        setError('');
+        if (!closed) setStreamState('live');
+      } catch (err) {
+        if (!closed) {
+          setError(err?.message || 'Failed to read overlay snapshot');
+          setLoading(false);
+        }
+      }
+    };
+
+    const handlePresence = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        setSnapshot((prev) => {
+          if (!prev?.session) return prev;
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              viewer_count: parseInt(payload?.viewer_count, 10) || 0,
+              viewer_peak: parseInt(payload?.viewer_peak, 10) || 0,
+            },
+          };
+        });
+      } catch {
+        // Ignore malformed presence events.
+      }
+    };
+
+    const handleError = () => {
+      if (!closed) {
+        setStreamState('reconnecting');
+        setLoading(false);
+      }
+    };
+
+    source.addEventListener('ready', handleReady);
+    source.addEventListener('snapshot', handleSnapshot);
+    source.addEventListener('presence', handlePresence);
+    source.onerror = handleError;
+
+    return () => {
+      closed = true;
+      source?.close();
+    };
+  }, [overlayToken, sessionId]);
+
+  let layout = null;
+  if (preset.id === 'results') {
+    layout = <ResultsOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} />;
+  } else if (preset.id === 'chat') {
+    layout = <ChatOverlay live={live} play={play} vote={vote} messages={recentMessages} theme={theme} widgetSet={widgetSet} />;
+  } else if (preset.id === 'mobile') {
+    layout = <MobileOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} />;
+  } else {
+    layout = <CompactOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} />;
+  }
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-transparent text-white">
+      {widgetSet.has('reactions') && motionEnabled ? (
+        <>
+          {reactionBursts.map((burst) => (
+            <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
+              {burst.particles.map((particle, idx) => (
+                <span
+                  key={particle.id}
+                  className="live-reaction-burst__particle"
+                  style={{
+                    '--dx': particle.dx,
+                    '--dy': particle.dy,
+                    '--size': particle.size,
+                    '--color': idx % 2 === 0 ? 'rgba(56, 189, 248, 0.92)' : 'rgba(244, 63, 94, 0.92)',
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+          {floatingReactions.map((entry) => (
+            <div key={entry.id} className="pointer-events-none absolute bottom-20 z-20 animate-float-up" style={{ left: `${entry.x}%` }}>
+              {entry.reaction.kind === 'emote' ? (
+                <LiveEmote emote={entry.reaction.emote} size="reaction" />
+              ) : (
+                <div className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-3xl shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                  {entry.reaction.emoji}
+                </div>
+              )}
+            </div>
+          ))}
+        </>
+      ) : null}
+
+      <div className="pointer-events-none relative z-10">
+        {layout}
+      </div>
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-40 bg-gradient-to-t from-black/18 to-transparent" />
+
+      {loading && !snapshot ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+          <div className={`rounded-3xl border px-5 py-4 ${theme.chipClass}`} style={{ background: theme.surface }}>
+            <p className="text-sm font-display font-black text-white">Connecting overlay...</p>
+          </div>
+        </div>
+      ) : null}
+
+      {error && !snapshot ? (
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
+          <div className={`max-w-md rounded-3xl border px-5 py-4 ${theme.strongClass}`} style={{ background: theme.surface }}>
+            <p className="text-lg font-display font-black">Overlay unavailable</p>
+            <p className="mt-2 text-sm leading-6 text-white/80">{error}</p>
+            {!overlayToken ? (
+              <p className="mt-2 text-xs text-white/60">
+                This route needs a host session token when used as a browser source.
+              </p>
+            ) : null}
+            <p className="mt-3 text-xs text-white/55">
+              <Link to="/live" className="pointer-events-auto underline underline-offset-4">Return to Shinsa Live</Link>
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {streamState === 'reconnecting' && snapshot ? (
+        <div className="absolute left-5 top-5 z-20">
+          <div className={`rounded-full border px-3 py-1.5 ${theme.altClass}`}>
+            <p className="text-[10px] font-display font-bold uppercase tracking-wide">Reconnecting live stream</p>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}

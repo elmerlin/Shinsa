@@ -46,6 +46,7 @@ import CheckinPage from './pages/CheckinPage';
 import DojoPage from './pages/DojoPage';
 import LeaderboardsPage from './pages/LeaderboardsPage';
 import LivePage from './pages/LivePage';
+import LiveOverlayPage from './pages/LiveOverlayPage';
 
 const DOJO_TARGET_GROUP = 'pump dojo';
 const DOJO_VENUE_SLUG = 'london-pump-dojo';
@@ -869,6 +870,7 @@ export default function App() {
   const [dojoCheckoutError, setDojoCheckoutError] = useState('');
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
+  const isLiveOverlay = /^\/live\/[^/]+\/overlay(?:\/|$)/.test(location.pathname);
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canShowDojoPopup = canAccessCheckin && isPumpDojoMember(user);
@@ -1111,8 +1113,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className={`min-h-screen ${isLiveOverlay ? '' : 'flex flex-col'}`}>
       {/* Header */}
+      {!isLiveOverlay ? (
       <header className="border-b border-piu-border bg-piu-card/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
           <Link to="/" onClick={scrollToTop} className="group">
@@ -1196,9 +1199,10 @@ export default function App() {
           </div>
         </div>
       </header>
+      ) : null}
 
       {/* Main */}
-      <main className={`flex-1 ${user ? 'pb-16 sm:pb-0' : ''}`}>
+      <main className={isLiveOverlay ? 'min-h-screen' : `flex-1 ${user ? 'pb-16 sm:pb-0' : ''}`}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tournament/new" element={<TournamentSetup />} />
@@ -1216,6 +1220,7 @@ export default function App() {
         <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
         <Route path="/live" element={<LivePage />} />
         <Route path="/live/:sessionId" element={<LivePage />} />
+        <Route path="/live/:sessionId/overlay" element={<LiveOverlayPage />} />
         <Route path="/feed" element={<FeedPage />} />
           <Route path="/posts" element={<PostsPage />} />
           <Route path="/post/:id" element={<SinglePostPage />} />
@@ -1247,7 +1252,7 @@ export default function App() {
         </Routes>
       </main>
 
-      {groupPopup && (
+      {!isLiveOverlay && groupPopup && (
         <GroupLoginPopupModal
           popup={groupPopup}
           slideIndex={groupPopupSlide}
@@ -1258,13 +1263,13 @@ export default function App() {
           }}
         />
       )}
-      {showDojoPopup && !groupPopup && (
+      {!isLiveOverlay && showDojoPopup && !groupPopup && (
         <DojoProximityPopupModal
           onClose={() => setShowDojoPopup(false)}
           onOpenCheckin={handleOpenDojoCheckin}
         />
       )}
-      {showDojoCheckoutPopup && !showDojoPopup && !groupPopup && (
+      {!isLiveOverlay && showDojoCheckoutPopup && !showDojoPopup && !groupPopup && (
         <DojoCheckoutPopupModal
           prompt={dojoCheckoutPrompt}
           loading={dojoCheckoutLoading}
@@ -1275,15 +1280,17 @@ export default function App() {
       )}
 
       {/* Footer — hidden on mobile when logged in (bottom nav takes its place) */}
+      {!isLiveOverlay ? (
       <footer className={`border-t border-piu-border py-3 sm:py-4 text-center text-xs text-gray-600 ${user ? 'hidden sm:block' : ''}`}>
         <span className="font-display tracking-wider text-piu-gold">PUMP</span>
         {' '}
         <span className="font-display tracking-wider">SHINSA</span>
         {' '}- PHOENIX 2026
       </footer>
+      ) : null}
 
       {/* Mobile Bottom Navigation — Instagram style */}
-      {user && <MobileBottomNav />}
+      {!isLiveOverlay && user && <MobileBottomNav />}
     </div>
   );
 }
