@@ -918,6 +918,13 @@ export const sendLiveRequest = (sessionId, data) => request(`/live/sessions/${en
   method: 'POST',
   body: JSON.stringify(data),
 });
+export const fulfillLiveRequest = (sessionId, requestId) => request(
+  `/live/sessions/${encodeURIComponent(sessionId)}/requests/${encodeURIComponent(requestId)}/fulfill`,
+  {
+    method: 'POST',
+    body: '{}',
+  }
+);
 export const createLiveVote = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/votes`, {
   method: 'POST',
   body: JSON.stringify(data),

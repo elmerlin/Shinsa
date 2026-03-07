@@ -6,6 +6,7 @@ import {
   createLiveSession,
   createLiveVote,
   endLiveSession,
+  fulfillLiveRequest,
   getLiveMessages,
   getLiveSession,
   getMyLiveSession,
@@ -48,6 +49,118 @@ function modeShort(mode) {
   if (mode === 'Single') return 'S';
   if (mode === 'Double') return 'D';
   return 'X';
+}
+
+function formatPlayLabel(play) {
+  return `${String(play?.song_title || 'Unknown chart').trim() || 'Unknown chart'} (${modeShort(play?.mode)}${parseInt(play?.level, 10) || '?'})`;
+}
+
+function buildRequestKey(songTitle, mode, level) {
+  return [
+    String(songTitle || '').trim().toLowerCase(),
+    String(mode || '').trim().toLowerCase(),
+    parseInt(level, 10) || 0,
+  ].join('|');
+}
+
+function formatCountdownLabel(remainingMs) {
+  const totalSeconds = Math.max(0, Math.ceil((Number(remainingMs) || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes > 0) return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  return `${seconds}s`;
+}
+
+function buildSyncStatusNote(syncResult, fallback = 'Live session is up to date.') {
+  const parts = [];
+  const newPlays = parseInt(syncResult?.new_plays_added, 10) || 0;
+  const fulfilledRequests = parseInt(syncResult?.requests_fulfilled, 10) || 0;
+  const titleUnlocks = parseInt(syncResult?.title_unlocks, 10) || 0;
+
+  if (newPlays > 0) parts.push(`${newPlays} new play${newPlays === 1 ? '' : 's'} added.`);
+  if (fulfilledRequests > 0) parts.push(`${fulfilledRequests} request${fulfilledRequests === 1 ? '' : 's'} fulfilled.`);
+  if (titleUnlocks > 0) parts.push(`${titleUnlocks} title unlock${titleUnlocks === 1 ? '' : 's'} picked up.`);
+
+  return parts.length > 0 ? parts.join(' ') : fallback;
+}
+
+function formatRequestStateLabel(info) {
+  if (!info) return '';
+  if ((info.openCount || 0) > 0) {
+    return info.openCount === 1 ? 'Viewer request' : `${info.openCount} requests`;
+  }
+  return (info.fulfilledCount || 0) <= 1 ? 'Request fulfilled' : `${info.fulfilledCount} fulfilled`;
+}
+
+function getMessageTone(message) {
+  if (!message?.is_system) {
+    return {
+      wrapper: 'bg-black/15 border border-piu-border',
+      label: '',
+      labelClass: '',
+      usernameClass: 'text-cyan-200',
+      bodyClass: 'text-gray-200',
+    };
+  }
+
+  switch (message?.message_type) {
+    case 'play':
+      return {
+        wrapper: 'bg-cyan-500/10 border border-cyan-400/25',
+        label: 'Play',
+        labelClass: 'bg-cyan-400/15 text-cyan-200 border border-cyan-300/30',
+        usernameClass: 'text-cyan-100',
+        bodyClass: 'text-cyan-50',
+      };
+    case 'request':
+      return {
+        wrapper: 'bg-sky-500/10 border border-sky-400/20',
+        label: 'Request',
+        labelClass: 'bg-sky-400/15 text-sky-200 border border-sky-300/30',
+        usernameClass: 'text-sky-100',
+        bodyClass: 'text-sky-50',
+      };
+    case 'request_fulfilled':
+      return {
+        wrapper: 'bg-emerald-500/10 border border-emerald-400/25',
+        label: 'Played',
+        labelClass: 'bg-emerald-400/15 text-emerald-200 border border-emerald-300/30',
+        usernameClass: 'text-emerald-100',
+        bodyClass: 'text-emerald-50',
+      };
+    case 'title_unlock':
+      return {
+        wrapper: 'bg-amber-500/10 border border-amber-400/25',
+        label: 'Title',
+        labelClass: 'bg-amber-400/15 text-amber-200 border border-amber-300/30',
+        usernameClass: 'text-amber-100',
+        bodyClass: 'text-amber-50',
+      };
+    case 'vote':
+      return {
+        wrapper: 'bg-fuchsia-500/10 border border-fuchsia-400/20',
+        label: 'Vote',
+        labelClass: 'bg-fuchsia-400/15 text-fuchsia-200 border border-fuchsia-300/30',
+        usernameClass: 'text-fuchsia-100',
+        bodyClass: 'text-fuchsia-50',
+      };
+    case 'vote_result':
+      return {
+        wrapper: 'bg-orange-500/10 border border-orange-400/20',
+        label: 'Result',
+        labelClass: 'bg-orange-400/15 text-orange-200 border border-orange-300/30',
+        usernameClass: 'text-orange-100',
+        bodyClass: 'text-orange-50',
+      };
+    default:
+      return {
+        wrapper: 'bg-rose-500/10 border border-rose-400/20',
+        label: 'Live',
+        labelClass: 'bg-rose-400/15 text-rose-200 border border-rose-300/30',
+        usernameClass: 'text-rose-100',
+        bodyClass: 'text-rose-50',
+      };
+  }
 }
 
 function isEmojiOnly(message) {
@@ -124,6 +237,18 @@ function PlayDetailModal({ play, onClose }) {
 function VotePanel({ vote, canVote, onVote }) {
   if (!vote) return null;
 
+  const [nowMs, setNowMs] = useState(Date.now());
+  const endsAtMs = vote?.ends_at ? Date.parse(`${vote.ends_at}Z`) : NaN;
+  const remainingMs = Number.isFinite(endsAtMs) ? Math.max(0, endsAtMs - nowMs) : 0;
+  const winningOption = vote.options.find((option) => option.is_winner) || null;
+
+  useEffect(() => {
+    setNowMs(Date.now());
+    if (vote.status !== 'active') return undefined;
+    const interval = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [vote.id, vote.status, vote.ends_at]);
+
   return (
     <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
       <div className="flex items-center justify-between gap-2">
@@ -137,6 +262,13 @@ function VotePanel({ vote, canVote, onVote }) {
           {vote.status === 'active' ? 'Open' : 'Locked'}
         </span>
       </div>
+      <p className="mt-1 text-[11px] text-gray-400">
+        {vote.status === 'active'
+          ? `${formatCountdownLabel(remainingMs)} left to vote`
+          : winningOption
+            ? `${formatPlayLabel(winningOption)} won`
+            : 'No ballots were cast'}
+      </p>
       <div className="space-y-2 mt-3">
         {vote.options.map((option) => (
           <div key={option.id} className={`rounded-xl border px-3 py-2 ${option.is_winner ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-piu-border bg-black/15'}`}>
@@ -226,6 +358,7 @@ export default function LivePage() {
   const [creatingVote, setCreatingVote] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [fulfillingRequestId, setFulfillingRequestId] = useState('');
   const [copied, setCopied] = useState(false);
   const chatEndRef = useRef(null);
   const reactionIdRef = useRef(0);
@@ -237,6 +370,7 @@ export default function LivePage() {
   const currentVote = snapshot?.active_vote || null;
   const lastPlay = snapshot?.last_play || null;
   const youtubeId = getYouTubeId(live?.stream_url || '');
+  const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -362,8 +496,9 @@ export default function LivePage() {
       try {
         const data = await syncLiveSession(activeSessionId);
         if (data?.snapshot) applySnapshot(data.snapshot);
-        if ((data?.sync_result?.new_plays_added || 0) > 0) {
-          setStatusNote(`${data.sync_result.new_plays_added} new play${data.sync_result.new_plays_added === 1 ? '' : 's'} added to the live session.`);
+        if (data?.sync_result) {
+          const note = buildSyncStatusNote(data.sync_result, '');
+          if (note) setStatusNote(note);
         }
       } catch {}
     }, 90000);
@@ -411,6 +546,34 @@ export default function LivePage() {
     });
     return filtered;
   }, [snapshot?.plays, playModeFilter, playSort]);
+
+  const requestLookup = useMemo(() => {
+    const map = new Map();
+    for (const request of requests) {
+      const key = buildRequestKey(request.song_title, request.mode, request.level);
+      if (!map.has(key)) {
+        map.set(key, {
+          openCount: 0,
+          fulfilledCount: 0,
+          usernames: [],
+        });
+      }
+      const row = map.get(key);
+      if (request.fulfilled) row.fulfilledCount += 1;
+      else row.openCount += 1;
+      if (request.username) row.usernames.push(request.username);
+    }
+    return map;
+  }, [requests]);
+
+  const openRequestCount = useMemo(
+    () => requests.filter((request) => !request.fulfilled).length,
+    [requests]
+  );
+  const fulfilledRequestCount = useMemo(
+    () => requests.filter((request) => request.fulfilled).length,
+    [requests]
+  );
 
   const handleCreate = async () => {
     setCreating(true);
@@ -503,15 +666,25 @@ export default function LivePage() {
     try {
       const data = await syncLiveSession(activeSessionId);
       if (data?.snapshot) applySnapshot(data.snapshot);
-      if ((data?.sync_result?.new_plays_added || 0) > 0) {
-        setStatusNote(`${data.sync_result.new_plays_added} new play${data.sync_result.new_plays_added === 1 ? '' : 's'} detected.`);
-      } else {
-        setStatusNote('Live session is up to date.');
-      }
+      setStatusNote(buildSyncStatusNote(data?.sync_result, 'Live session is up to date.'));
     } catch (err) {
       setError(err.message || 'Failed to sync live session');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleFulfillRequest = async (requestId) => {
+    if (!activeSessionId || !requestId) return;
+    setFulfillingRequestId(requestId);
+    try {
+      const data = await fulfillLiveRequest(activeSessionId, requestId);
+      if (data?.snapshot) applySnapshot(data.snapshot);
+      setStatusNote('Request marked as played.');
+    } catch (err) {
+      setError(err.message || 'Failed to mark request as played');
+    } finally {
+      setFulfillingRequestId('');
     }
   };
 
@@ -671,6 +844,16 @@ export default function LivePage() {
                     {lastPlay.session_result_type}
                   </span>
                 ) : null}
+                {(() => {
+                  const requestInfo = requestLookup.get(buildRequestKey(lastPlay.song_title, lastPlay.mode, lastPlay.level));
+                  if (!requestInfo) return null;
+                  const isOpen = requestInfo.openCount > 0;
+                  return (
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${isOpen ? 'border border-sky-400/30 bg-sky-500/10 text-sky-200' : 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'}`}>
+                      {formatRequestStateLabel(requestInfo)}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           ) : null}
@@ -696,26 +879,47 @@ export default function LivePage() {
               </div>
             </div>
             <div className="space-y-2 mt-3">
-              {visiblePlays.map((play) => (
-                <button
-                  type="button"
-                  key={play.id}
-                  onClick={() => setSelectedPlay(play)}
-                  className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-display font-bold text-white truncate">{play.song_title}</p>
-                      <p className="text-[11px] text-gray-400">{modeShort(play.mode)}{play.level}</p>
+              {visiblePlays.map((play) => {
+                const requestInfo = requestLookup.get(buildRequestKey(play.song_title, play.mode, play.level));
+                const isOpenRequest = (requestInfo?.openCount || 0) > 0;
+                return (
+                  <button
+                    type="button"
+                    key={play.id}
+                    onClick={() => setSelectedPlay(play)}
+                    className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold text-white truncate">{play.song_title}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <p className="text-[11px] text-gray-400">{modeShort(play.mode)}{play.level}</p>
+                          {play.pumbility_gain > 0 ? (
+                            <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-emerald-200">
+                              +{play.pumbility_gain} p
+                            </span>
+                          ) : null}
+                          {play.over_top100_rank > 0 ? (
+                            <span className="rounded-full border border-yellow-400/25 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-yellow-200">
+                              Top 100 #{play.over_top100_rank}
+                            </span>
+                          ) : null}
+                          {requestInfo ? (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-display font-bold ${isOpenRequest ? 'border border-sky-400/25 bg-sky-500/10 text-sky-200' : 'border border-emerald-400/25 bg-emerald-500/10 text-emerald-200'}`}>
+                              {formatRequestStateLabel(requestInfo)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
+                        <p className="text-[11px] text-gray-400">{play.grade || '-'}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
-                      <p className="text-[11px] text-gray-400">{play.grade || '-'}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
               {visiblePlays.length === 0 ? <p className="text-sm text-gray-500">No plays match the current filter yet.</p> : null}
             </div>
           </div>
@@ -741,12 +945,23 @@ export default function LivePage() {
           ) : null}
 
           <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
-            <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Song requests</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Song requests</p>
+                <p className="text-sm font-display font-bold text-white">{openRequestCount} open • {fulfilledRequestCount} played</p>
+              </div>
+              {live?.status !== 'live' ? (
+                <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">
+                  Closed
+                </span>
+              ) : null}
+            </div>
             <input
               value={songSearch}
               onChange={(e) => setSongSearch(e.target.value)}
               className="input-field w-full mt-3"
-              placeholder="Search song or chart"
+              placeholder={live?.status === 'live' ? 'Search song or chart' : 'Requests are closed'}
+              disabled={live?.status !== 'live'}
             />
             {searchingSongs ? <p className="text-[11px] text-gray-500 mt-2">Searching...</p> : null}
             <div className="space-y-2 mt-3">
@@ -755,6 +970,7 @@ export default function LivePage() {
                   type="button"
                   key={`${chart.chart_id}-${chart.mode}-${chart.level}`}
                   onClick={() => handleLiveRequest(chart)}
+                  disabled={live?.status !== 'live'}
                   className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
                 >
                   <div className="flex items-center gap-3">
@@ -768,12 +984,35 @@ export default function LivePage() {
               ))}
             </div>
             <div className="space-y-2 mt-4">
-              {(snapshot?.requests || []).slice(0, 8).map((request) => (
-                <div key={request.id} className="rounded-xl border border-piu-border bg-black/10 px-3 py-2">
-                  <p className="text-xs font-display font-bold text-white">{request.song_title}</p>
-                  <p className="text-[11px] text-gray-400">{request.username} requested {modeShort(request.mode)}{request.level}</p>
+              {requests.slice(0, 8).map((request) => (
+                <div
+                  key={request.id}
+                  className={`rounded-xl border px-3 py-2 ${request.fulfilled ? 'border-emerald-400/25 bg-emerald-500/8' : 'border-piu-border bg-black/10'}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-display font-bold text-white">{request.song_title}</p>
+                      <p className="text-[11px] text-gray-400">
+                        {request.username} requested {modeShort(request.mode)}{request.level}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${request.fulfilled ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-sky-400/30 bg-sky-500/10 text-sky-200'}`}>
+                      {request.fulfilled ? 'Played' : 'Open'}
+                    </span>
+                  </div>
+                  {live?.is_host && live?.status === 'live' && !request.fulfilled ? (
+                    <button
+                      type="button"
+                      onClick={() => handleFulfillRequest(request.id)}
+                      disabled={fulfillingRequestId === request.id}
+                      className="mt-2 rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
+                    >
+                      {fulfillingRequestId === request.id ? 'Marking...' : 'Mark played'}
+                    </button>
+                  ) : null}
                 </div>
               ))}
+              {requests.length === 0 ? <p className="text-sm text-gray-500">No requests yet.</p> : null}
             </div>
           </div>
 
@@ -812,21 +1051,31 @@ export default function LivePage() {
             ) : null}
 
             <div className="flex-1 overflow-y-auto space-y-2 mt-3 pr-1">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`rounded-xl px-3 py-2 ${msg.is_system ? 'bg-rose-500/10 border border-rose-400/20' : 'bg-black/15 border border-piu-border'}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`text-[11px] font-display font-bold ${msg.is_system ? 'text-rose-200' : 'text-cyan-200'}`}>
-                      {msg.username || 'System'}
-                    </p>
-                    <p className="text-[10px] text-gray-500">
-                      {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+              {messages.map((msg) => {
+                const tone = getMessageTone(msg);
+                return (
+                  <div key={msg.id} className={`rounded-xl px-3 py-2 ${tone.wrapper}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {tone.label ? (
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.labelClass}`}>
+                            {tone.label}
+                          </span>
+                        ) : null}
+                        <p className={`truncate text-[11px] font-display font-bold ${tone.usernameClass}`}>
+                          {msg.username || 'System'}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-[10px] text-gray-500">
+                        {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </p>
+                    </div>
+                    <p className={`${isEmojiOnly(msg.message) && !msg.is_system ? 'text-2xl leading-none mt-1' : `text-sm mt-1 break-words ${tone.bodyClass}`}`}>
+                      {msg.message}
                     </p>
                   </div>
-                  <p className={`${isEmojiOnly(msg.message) && !msg.is_system ? 'text-2xl leading-none mt-1' : 'text-sm text-gray-200 mt-1 break-words'}`}>
-                    {msg.message}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
               <div ref={chatEndRef} />
             </div>
 

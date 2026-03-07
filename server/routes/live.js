@@ -79,6 +79,14 @@ function buildPlayOutcomeKey(songTitle, mode, level, score) {
   ].join('|');
 }
 
+function buildRequestKey(songTitle, mode, level) {
+  return [
+    normalizeText(songTitle, 160).toLowerCase(),
+    normalizeText(mode, 40).toLowerCase(),
+    toInt(level),
+  ].join('|');
+}
+
 function pickDeterministicMessage(options, seed = '') {
   const list = Array.isArray(options) && options.length > 0 ? options : ['Session updated.'];
   const key = String(seed || '');
@@ -111,6 +119,19 @@ function formatPlayLabel(play) {
   const mode = String(play?.mode || '');
   const modeShort = mode === 'Single' ? 'S' : mode === 'Double' ? 'D' : mode ? mode[0].toUpperCase() : 'X';
   return `${normalizeText(play?.song_title || 'Unknown chart', 160)} (${modeShort}${toInt(play?.level) || '?'})`;
+}
+
+function buildRequestFulfillmentMessage(play, requesters = []) {
+  const names = Array.from(new Set(
+    (Array.isArray(requesters) ? requesters : [])
+      .map((name) => normalizeText(name, 60))
+      .filter(Boolean)
+  ));
+  const label = formatPlayLabel(play);
+  if (names.length === 0) return `Request hit: ${label}.`;
+  if (names.length === 1) return `Request hit: ${label} for ${names[0]}.`;
+  const lead = names.slice(0, 2).join(', ');
+  return `Request hit: ${label} for ${lead}${names.length > 2 ? ` +${names.length - 2} more` : ''}.`;
 }
 
 function addSystemMessage(db, liveSessionId, message, messageType = 'system', metadata = {}) {
@@ -293,7 +314,7 @@ function getSessionRequests(db, liveSessionId) {
     FROM live_session_requests r
     JOIN users u ON u.id = r.user_id
     WHERE r.live_session_id = ?
-    ORDER BY datetime(r.created_at) DESC, r.id DESC
+    ORDER BY r.fulfilled ASC, datetime(r.created_at) DESC, r.id DESC
     LIMIT ?
   `).all(liveSessionId, REQUEST_LIMIT);
 
@@ -493,6 +514,46 @@ function requireSessionHost(session, userId) {
   }
 }
 
+function fulfillMatchingRequests(db, liveSessionId, plays = []) {
+  const playByKey = new Map();
+  for (const play of Array.isArray(plays) ? plays : []) {
+    const key = buildRequestKey(play?.song_title, play?.mode, play?.level);
+    if (!key || playByKey.has(key)) continue;
+    playByKey.set(key, play);
+  }
+  if (playByKey.size === 0) return [];
+
+  const requests = db.prepare(`
+    SELECT id, username, song_title, mode, level
+    FROM live_session_requests
+    WHERE live_session_id = ?
+      AND fulfilled = 0
+    ORDER BY datetime(created_at) ASC, id ASC
+  `).all(liveSessionId);
+  if (!requests.length) return [];
+
+  const markFulfilled = db.prepare(`
+    UPDATE live_session_requests
+    SET fulfilled = 1
+    WHERE id = ?
+  `);
+
+  const matched = [];
+  for (const request of requests) {
+    const key = buildRequestKey(request.song_title, request.mode, request.level);
+    const play = playByKey.get(key);
+    if (!play) continue;
+    markFulfilled.run(request.id);
+    matched.push({
+      request,
+      play,
+      key,
+    });
+  }
+
+  return matched;
+}
+
 function getChartsForVote(db, modeFilter, minLevel, maxLevel) {
   const normalizedMode = String(modeFilter || 'All').trim().toLowerCase();
   let modes = ['Single', 'Double'];
@@ -661,6 +722,39 @@ function applyLiveSyncResult(db, session, syncResult) {
     );
   }
 
+  const fulfilledRequests = fulfillMatchingRequests(db, session.id, insertedRows);
+  if (fulfilledRequests.length > 0) {
+    const groups = new Map();
+    for (const match of fulfilledRequests) {
+      if (!groups.has(match.key)) {
+        groups.set(match.key, {
+          play: match.play,
+          requestIds: [],
+          requesters: [],
+        });
+      }
+      const group = groups.get(match.key);
+      group.requestIds.push(match.request.id);
+      group.requesters.push(match.request.username || 'Viewer');
+    }
+
+    for (const group of groups.values()) {
+      addSystemMessage(
+        db,
+        session.id,
+        buildRequestFulfillmentMessage(group.play, group.requesters),
+        'request_fulfilled',
+        {
+          request_ids: group.requestIds,
+          song_title: group.play?.song_title || '',
+          mode: group.play?.mode || '',
+          level: toInt(group.play?.level),
+          recently_played_id: toInt(group.play?.id),
+        }
+      );
+    }
+  }
+
   const unlockedTitles = Array.isArray(syncResult?.newly_unlocked_titles) ? syncResult.newly_unlocked_titles : [];
   if (unlockedTitles.length > 0) {
     const titleNames = unlockedTitles.map((title) => title?.name || title?.skill_title).filter(Boolean).slice(0, 3);
@@ -689,6 +783,7 @@ function applyLiveSyncResult(db, session, syncResult) {
   return {
     recent_rows_seen: recentRows.length,
     new_plays_added: insertedRows.length,
+    requests_fulfilled: fulfilledRequests.length,
     buffered_upscores: Array.isArray(syncResult?.upscores) ? syncResult.upscores.length : 0,
     buffered_clears: (Array.isArray(syncResult?.new_clears) ? syncResult.new_clears.length : 0)
       + (Array.isArray(syncResult?.title_unlock_rows) ? syncResult.title_unlock_rows.length : 0),
@@ -928,6 +1023,54 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
     res.status(201).json({
       request: getSessionRequests(db, session.id).find((row) => row.id === requestId) || null,
       message: normalizeMessageRow(db.prepare('SELECT * FROM live_session_messages WHERE id = ?').get(messageId)),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/requests/:requestId/fulfill', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+    if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+
+    const requestRow = db.prepare(`
+      SELECT *
+      FROM live_session_requests
+      WHERE id = ?
+        AND live_session_id = ?
+      LIMIT 1
+    `).get(req.params.requestId, session.id);
+    if (!requestRow) return res.status(404).json({ error: 'Request not found' });
+
+    if (!toInt(requestRow.fulfilled)) {
+      db.prepare(`
+        UPDATE live_session_requests
+        SET fulfilled = 1
+        WHERE id = ?
+      `).run(requestRow.id);
+
+      addSystemMessage(
+        db,
+        session.id,
+        buildRequestFulfillmentMessage(requestRow, [requestRow.username || 'Viewer']),
+        'request_fulfilled',
+        {
+          request_ids: [requestRow.id],
+          song_title: requestRow.song_title || '',
+          mode: requestRow.mode || '',
+          level: toInt(requestRow.level),
+          manual: true,
+        }
+      );
+    }
+
+    const request = getSessionRequests(db, session.id).find((row) => row.id === requestRow.id) || null;
+    res.json({
+      request,
+      snapshot: buildSessionSnapshot(db, session, req.user.id),
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
