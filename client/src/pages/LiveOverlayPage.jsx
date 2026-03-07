@@ -5,9 +5,17 @@ import LiveEmote from '../components/LiveEmote';
 import { openLiveSessionStream } from '../utils/api';
 import { getLiveReactionPayload, tokenizeLiveMessage } from '../utils/liveEmotes';
 import {
+  getLiveOverlayAutoHide,
+  getLiveOverlayFit,
   getLiveOverlayPreset,
+  getLiveOverlayScene,
   getLiveOverlayTheme,
+  normalizeLiveOverlayAnchor,
+  normalizeLiveOverlayAutoHide,
+  normalizeLiveOverlayFit,
+  normalizeLiveOverlayGuides,
   normalizeLiveOverlayPreset,
+  normalizeLiveOverlayScene,
   normalizeLiveOverlayTheme,
   normalizeLiveOverlayWidgets,
 } from '../utils/liveOverlay';
@@ -46,6 +54,86 @@ function formatRelativeSyncTime(timestamp) {
   const diffHours = Math.floor(diffMinutes / 60);
   const remMinutes = diffMinutes % 60;
   return remMinutes > 0 ? `Synced ${diffHours}h ${remMinutes}m ago` : `Synced ${diffHours}h ago`;
+}
+
+function parseTimestamp(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return NaN;
+  const withUtc = /(?:Z|[+-]\d{2}:\d{2})$/i.test(raw) ? raw : `${raw}Z`;
+  const parsed = Date.parse(withUtc);
+  if (Number.isFinite(parsed)) return parsed;
+  const fallback = Date.parse(raw);
+  return Number.isFinite(fallback) ? fallback : NaN;
+}
+
+function isRecent(timestampMs, nowMs, windowMs) {
+  if (!Number.isFinite(timestampMs)) return false;
+  return Math.max(0, nowMs - timestampMs) <= windowMs;
+}
+
+function shouldShowOverlay(mode, { play, vote, messages, nowMs }) {
+  if (mode === 'off') return true;
+  const voteActive = vote?.status === 'active';
+  const playMs = parseTimestamp(play?.date_played || play?.created_at || play?.updated_at);
+  const lastMessage = Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1] : null;
+  const messageMs = parseTimestamp(lastMessage?.created_at);
+
+  if (mode === 'results') {
+    return voteActive || isRecent(playMs, nowMs, 45000);
+  }
+  if (mode === 'chat') {
+    return voteActive || isRecent(messageMs, nowMs, 25000);
+  }
+  return voteActive || isRecent(playMs, nowMs, 90000) || isRecent(messageMs, nowMs, 25000);
+}
+
+function getOverlayShellClass(anchorId) {
+  switch (anchorId) {
+    case 'bottom-left':
+      return 'items-end justify-start p-5 md:p-7';
+    case 'bottom-right':
+      return 'items-end justify-end p-5 md:p-7';
+    case 'top-left':
+      return 'items-start justify-start p-5 md:p-7';
+    case 'top-center':
+      return 'items-start justify-center p-5 md:p-7';
+    case 'top-right':
+      return 'items-start justify-end p-5 md:p-7';
+    default:
+      return 'items-end justify-center p-5 md:p-7';
+  }
+}
+
+function getOverlayPanelClass(fitId, presetId) {
+  const preset = String(presetId || '').trim().toLowerCase();
+  if (fitId === 'full') return 'w-full max-w-[1800px]';
+  if (fitId === 'phone') return 'w-full max-w-[360px]';
+  if (fitId === 'rail') return 'w-full max-w-[430px]';
+  if (fitId === 'card') return preset === 'compact' ? 'w-full max-w-[860px]' : 'w-full max-w-[720px]';
+  return preset === 'mobile' ? 'w-full max-w-[400px]' : 'w-full max-w-[1500px]';
+}
+
+function SafeZoneGuides() {
+  const guides = [
+    { label: 'Action safe', inset: '5%' },
+    { label: 'Title safe', inset: '10%' },
+  ];
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10">
+      {guides.map((guide) => (
+        <div
+          key={guide.label}
+          className="absolute rounded-[32px] border border-dashed border-white/22"
+          style={{ inset: guide.inset }}
+        >
+          <span className="absolute left-4 top-3 rounded-full border border-white/20 bg-black/28 px-2 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/60">
+            {guide.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function getRequestCounts(requests) {
@@ -242,11 +330,10 @@ function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showS
   );
 }
 
-function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet }) {
+function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelClassName = '' }) {
   return (
-    <div className="flex min-h-screen items-end p-5 md:p-7">
-      <OverlayPanel theme={theme} className="w-full px-4 py-4 md:px-5 md:py-5">
-        <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1.2fr)_auto] xl:items-center">
+    <OverlayPanel theme={theme} className={`${panelClassName} px-4 py-4 md:px-5 md:py-5`}>
+      <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1.2fr)_auto] xl:items-center">
           <div className="space-y-3">
             <OverlayHeader
               live={live}
@@ -284,16 +371,14 @@ function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widge
             {widgetSet.has('result') ? <ResultBadges play={play} requests={requestCounts} theme={theme} compact /> : null}
             {widgetSet.has('vote') && vote ? <VoteCard vote={vote} theme={theme} compact /> : null}
           </div>
-        </div>
-      </OverlayPanel>
-    </div>
+      </div>
+    </OverlayPanel>
   );
 }
 
-function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet }) {
+function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelClassName = '' }) {
   return (
-    <div className="flex min-h-screen items-end justify-end p-5 md:p-7">
-      <OverlayPanel theme={theme} className="w-full max-w-[660px] p-4 md:p-5">
+    <OverlayPanel theme={theme} className={`${panelClassName} p-4 md:p-5`}>
         <OverlayHeader
           live={live}
           theme={theme}
@@ -337,15 +422,13 @@ function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widge
         ) : null}
 
         {widgetSet.has('vote') && vote ? <div className="mt-4"><VoteCard vote={vote} theme={theme} compact /></div> : null}
-      </OverlayPanel>
-    </div>
+    </OverlayPanel>
   );
 }
 
-function ChatOverlay({ live, play, vote, messages, theme, widgetSet }) {
+function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelClassName = '' }) {
   return (
-    <div className="flex min-h-screen items-start justify-end p-5 md:p-7">
-      <OverlayPanel theme={theme} className="w-full max-w-[390px] p-4 md:p-5">
+    <OverlayPanel theme={theme} className={`${panelClassName} p-4 md:p-5`}>
         <OverlayHeader
           live={live}
           theme={theme}
@@ -381,15 +464,13 @@ function ChatOverlay({ live, play, vote, messages, theme, widgetSet }) {
         ) : null}
 
         {widgetSet.has('vote') && vote ? <div className="mt-4"><VoteCard vote={vote} theme={theme} compact /></div> : null}
-      </OverlayPanel>
-    </div>
+    </OverlayPanel>
   );
 }
 
-function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet }) {
+function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelClassName = '' }) {
   return (
-    <div className="flex min-h-screen items-start p-4 md:p-6">
-      <OverlayPanel theme={theme} className="w-full max-w-[340px] p-4">
+    <OverlayPanel theme={theme} className={`${panelClassName} p-4`}>
         <OverlayHeader
           live={live}
           theme={theme}
@@ -433,8 +514,7 @@ function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widget
         ) : null}
 
         {widgetSet.has('vote') && vote ? <div className="mt-3"><VoteCard vote={vote} theme={theme} compact /></div> : null}
-      </OverlayPanel>
-    </div>
+    </OverlayPanel>
   );
 }
 
@@ -443,19 +523,28 @@ export default function LiveOverlayPage() {
   const location = useLocation();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const overlayToken = String(searchParams.get('token') || '').trim();
+  const sceneId = normalizeLiveOverlayScene(searchParams.get('scene'));
   const presetId = normalizeLiveOverlayPreset(searchParams.get('preset'));
   const themeId = normalizeLiveOverlayTheme(searchParams.get('theme'));
+  const fitId = normalizeLiveOverlayFit(searchParams.get('fit'));
+  const anchorId = normalizeLiveOverlayAnchor(searchParams.get('anchor'));
+  const autoHideId = normalizeLiveOverlayAutoHide(searchParams.get('autohide'));
+  const guidesEnabled = normalizeLiveOverlayGuides(searchParams.get('guides'));
   const motionEnabled = searchParams.get('motion') !== '0';
   const widgetIds = normalizeLiveOverlayWidgets(searchParams.get('widgets'), presetId);
   const widgetSet = useMemo(() => new Set(widgetIds), [widgetIds]);
   const theme = getLiveOverlayTheme(themeId);
+  const fit = getLiveOverlayFit(fitId);
+  const autoHide = getLiveOverlayAutoHide(autoHideId);
   const preset = getLiveOverlayPreset(presetId);
+  const scene = getLiveOverlayScene(sceneId);
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [streamState, setStreamState] = useState('idle');
   const [floatingReactions, setFloatingReactions] = useState([]);
   const [reactionBursts, setReactionBursts] = useState([]);
+  const [activityNowMs, setActivityNowMs] = useState(Date.now());
   const seenMessageIdsRef = useRef(new Set());
   const reactionIdRef = useRef(0);
 
@@ -465,6 +554,14 @@ export default function LiveOverlayPage() {
   const vote = snapshot?.active_vote || null;
   const requestCounts = useMemo(() => getRequestCounts(snapshot?.requests), [snapshot?.requests]);
   const recentMessages = useMemo(() => getRecentChatMessages(snapshot?.messages), [snapshot?.messages]);
+  const shellClassName = useMemo(() => `flex min-h-screen w-full ${getOverlayShellClass(anchorId)}`, [anchorId]);
+  const panelClassName = useMemo(() => getOverlayPanelClass(fit.id, preset.id), [fit.id, preset.id]);
+  const overlayVisible = shouldShowOverlay(autoHide.id, {
+    play,
+    vote,
+    messages: snapshot?.messages,
+    nowMs: activityNowMs,
+  });
 
   const showFloatingReaction = (payload) => {
     if (!payload || !motionEnabled) return;
@@ -496,6 +593,12 @@ export default function LiveOverlayPage() {
       setReactionBursts((prev) => prev.filter((item) => item.id !== burstId));
     }, 950);
   };
+
+  useEffect(() => {
+    if (autoHide.id === 'off' && vote?.status !== 'active') return undefined;
+    const interval = setInterval(() => setActivityNowMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [autoHide.id, vote?.status]);
 
   const applySnapshot = (nextSnapshot, { markMessagesSeen = false } = {}) => {
     const nextMessages = Array.isArray(nextSnapshot?.messages) ? nextSnapshot.messages : [];
@@ -596,17 +699,19 @@ export default function LiveOverlayPage() {
 
   let layout = null;
   if (preset.id === 'results') {
-    layout = <ResultsOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} />;
+    layout = <ResultsOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
   } else if (preset.id === 'chat') {
-    layout = <ChatOverlay live={live} play={play} vote={vote} messages={recentMessages} theme={theme} widgetSet={widgetSet} />;
+    layout = <ChatOverlay live={live} play={play} vote={vote} messages={recentMessages} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
   } else if (preset.id === 'mobile') {
-    layout = <MobileOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} />;
+    layout = <MobileOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
   } else {
-    layout = <CompactOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} />;
+    layout = <CompactOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
   }
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-transparent text-white">
+      {guidesEnabled ? <SafeZoneGuides /> : null}
+
       {widgetSet.has('reactions') && motionEnabled ? (
         <>
           {reactionBursts.map((burst) => (
@@ -640,10 +745,27 @@ export default function LiveOverlayPage() {
       ) : null}
 
       <div className="pointer-events-none relative z-10">
-        {layout}
+        <div
+          className={`${shellClassName} transition-all duration-500 ${overlayVisible ? 'opacity-100' : 'opacity-0'}`}
+          style={{
+            transform: overlayVisible ? 'translate3d(0, 0, 0)' : 'translate3d(0, 12px, 0)',
+          }}
+        >
+          {layout}
+        </div>
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-40 bg-gradient-to-t from-black/18 to-transparent" />
+
+      {guidesEnabled ? (
+        <div className="pointer-events-none absolute right-5 top-5 z-20">
+          <div className={`rounded-full border px-3 py-1.5 ${theme.faintClass}`}>
+            <p className="text-[10px] font-display font-bold uppercase tracking-wide">
+              {scene?.label || 'Custom scene'} • {fit.label} • {autoHide.label}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {loading && !snapshot ? (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">

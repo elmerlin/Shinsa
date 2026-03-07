@@ -74,8 +74,99 @@ export const LIVE_OVERLAY_THEMES = [
   },
 ];
 
+export const LIVE_OVERLAY_FITS = [
+  { id: 'wide', label: 'Wide', description: 'Large lower-third or wide results slab.' },
+  { id: 'card', label: 'Card', description: 'Compact card sized for corner result scenes.' },
+  { id: 'rail', label: 'Rail', description: 'Tall side panel for chat and requests.' },
+  { id: 'phone', label: 'Phone', description: 'Narrow portrait-friendly layout.' },
+  { id: 'full', label: 'Full', description: 'Stretch the overlay across most of the scene.' },
+];
+
+export const LIVE_OVERLAY_ANCHORS = [
+  { id: 'bottom-left', label: 'Bottom Left' },
+  { id: 'bottom-center', label: 'Bottom Center' },
+  { id: 'bottom-right', label: 'Bottom Right' },
+  { id: 'top-left', label: 'Top Left' },
+  { id: 'top-center', label: 'Top Center' },
+  { id: 'top-right', label: 'Top Right' },
+];
+
+export const LIVE_OVERLAY_AUTO_HIDE_MODES = [
+  { id: 'off', label: 'Always On', description: 'Keep the overlay visible at all times.' },
+  { id: 'smart', label: 'Smart Idle', description: 'Fade when the room is quiet, reveal on plays, chat, and votes.' },
+  { id: 'results', label: 'Results Burst', description: 'Stay hidden until a play lands or a vote is active.' },
+  { id: 'chat', label: 'Chat Pulse', description: 'Show for fresh chat/reactions and active votes.' },
+];
+
+export const LIVE_OVERLAY_SCENES = [
+  {
+    id: 'gameplay',
+    label: 'Gameplay Lower Third',
+    description: 'Wide lower-third for gameplay scenes with score and vote info.',
+    options: {
+      preset: 'compact',
+      theme: 'arena',
+      fit: 'wide',
+      anchor: 'bottom-center',
+      widgets: ['brand', 'viewers', 'play', 'result', 'vote'],
+      motion: true,
+      guides: false,
+      autoHide: 'smart',
+    },
+  },
+  {
+    id: 'results',
+    label: 'Results Reveal',
+    description: 'Corner card for post-song score reveals and recap stats.',
+    options: {
+      preset: 'results',
+      theme: 'ember',
+      fit: 'card',
+      anchor: 'bottom-right',
+      widgets: ['brand', 'viewers', 'play', 'result', 'requests', 'summary'],
+      motion: true,
+      guides: false,
+      autoHide: 'results',
+    },
+  },
+  {
+    id: 'chat',
+    label: 'Chat Sidecar',
+    description: 'Right rail that keeps chat, reactions, and live votes visible.',
+    options: {
+      preset: 'chat',
+      theme: 'skyline',
+      fit: 'rail',
+      anchor: 'top-right',
+      widgets: ['brand', 'viewers', 'chat', 'reactions', 'vote'],
+      motion: true,
+      guides: false,
+      autoHide: 'chat',
+    },
+  },
+  {
+    id: 'mobile',
+    label: 'Mobile Companion',
+    description: 'Narrow portrait HUD for a phone or vertical side scene.',
+    options: {
+      preset: 'mobile',
+      theme: 'arena',
+      fit: 'phone',
+      anchor: 'top-left',
+      widgets: ['brand', 'viewers', 'play', 'result', 'requests', 'vote', 'sync'],
+      motion: true,
+      guides: false,
+      autoHide: 'smart',
+    },
+  },
+];
+
 const PRESET_MAP = new Map(LIVE_OVERLAY_PRESETS.map((preset) => [preset.id, preset]));
 const THEME_MAP = new Map(LIVE_OVERLAY_THEMES.map((theme) => [theme.id, theme]));
+const FIT_MAP = new Map(LIVE_OVERLAY_FITS.map((fit) => [fit.id, fit]));
+const ANCHOR_MAP = new Map(LIVE_OVERLAY_ANCHORS.map((anchor) => [anchor.id, anchor]));
+const AUTO_HIDE_MAP = new Map(LIVE_OVERLAY_AUTO_HIDE_MODES.map((mode) => [mode.id, mode]));
+const SCENE_MAP = new Map(LIVE_OVERLAY_SCENES.map((scene) => [scene.id, scene]));
 const WIDGET_IDS = new Set(LIVE_OVERLAY_WIDGETS.map((widget) => widget.id));
 
 export function normalizeLiveOverlayPreset(value) {
@@ -94,6 +185,42 @@ export function normalizeLiveOverlayTheme(value) {
 
 export function getLiveOverlayTheme(value) {
   return THEME_MAP.get(normalizeLiveOverlayTheme(value)) || LIVE_OVERLAY_THEMES[0];
+}
+
+export function normalizeLiveOverlayFit(value) {
+  const id = String(value || '').trim().toLowerCase();
+  return FIT_MAP.has(id) ? id : LIVE_OVERLAY_FITS[0].id;
+}
+
+export function getLiveOverlayFit(value) {
+  return FIT_MAP.get(normalizeLiveOverlayFit(value)) || LIVE_OVERLAY_FITS[0];
+}
+
+export function normalizeLiveOverlayAnchor(value) {
+  const id = String(value || '').trim().toLowerCase();
+  return ANCHOR_MAP.has(id) ? id : LIVE_OVERLAY_ANCHORS[1].id;
+}
+
+export function getLiveOverlayAnchor(value) {
+  return ANCHOR_MAP.get(normalizeLiveOverlayAnchor(value)) || LIVE_OVERLAY_ANCHORS[1];
+}
+
+export function normalizeLiveOverlayAutoHide(value) {
+  const id = String(value || '').trim().toLowerCase();
+  return AUTO_HIDE_MAP.has(id) ? id : LIVE_OVERLAY_AUTO_HIDE_MODES[0].id;
+}
+
+export function getLiveOverlayAutoHide(value) {
+  return AUTO_HIDE_MAP.get(normalizeLiveOverlayAutoHide(value)) || LIVE_OVERLAY_AUTO_HIDE_MODES[0];
+}
+
+export function normalizeLiveOverlayScene(value) {
+  const id = String(value || '').trim().toLowerCase();
+  return SCENE_MAP.has(id) ? id : '';
+}
+
+export function getLiveOverlayScene(value) {
+  return SCENE_MAP.get(normalizeLiveOverlayScene(value)) || null;
 }
 
 export function getDefaultLiveOverlayWidgets(presetId) {
@@ -115,6 +242,27 @@ export function normalizeLiveOverlayWidgets(value, presetId) {
   return deduped.length > 0 ? deduped : getDefaultLiveOverlayWidgets(presetId);
 }
 
+export function normalizeLiveOverlayGuides(value) {
+  if (value === true || value === 1) return true;
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+export function getLiveOverlaySceneOptions(sceneId) {
+  const scene = getLiveOverlayScene(sceneId);
+  if (!scene) return null;
+  return {
+    preset: normalizeLiveOverlayPreset(scene.options?.preset),
+    theme: normalizeLiveOverlayTheme(scene.options?.theme),
+    fit: normalizeLiveOverlayFit(scene.options?.fit),
+    anchor: normalizeLiveOverlayAnchor(scene.options?.anchor),
+    widgets: normalizeLiveOverlayWidgets(scene.options?.widgets, scene.options?.preset),
+    motion: scene.options?.motion !== false,
+    guides: normalizeLiveOverlayGuides(scene.options?.guides),
+    autoHide: normalizeLiveOverlayAutoHide(scene.options?.autoHide),
+  };
+}
+
 export function buildLiveOverlayUrl(sessionId, options = {}) {
   const normalizedSessionId = String(sessionId || '').trim();
   if (!normalizedSessionId) return '';
@@ -122,13 +270,23 @@ export function buildLiveOverlayUrl(sessionId, options = {}) {
   const params = new URLSearchParams();
   const presetId = normalizeLiveOverlayPreset(options.preset);
   const themeId = normalizeLiveOverlayTheme(options.theme);
+  const fitId = normalizeLiveOverlayFit(options.fit);
+  const anchorId = normalizeLiveOverlayAnchor(options.anchor);
+  const autoHideId = normalizeLiveOverlayAutoHide(options.autoHide);
   const widgetIds = normalizeLiveOverlayWidgets(options.widgets, presetId);
   const motion = options.motion === false ? '0' : '1';
+  const guides = normalizeLiveOverlayGuides(options.guides) ? '1' : '0';
+  const sceneId = normalizeLiveOverlayScene(options.scene);
 
   params.set('preset', presetId);
   params.set('theme', themeId);
+  params.set('fit', fitId);
+  params.set('anchor', anchorId);
   params.set('widgets', widgetIds.join(','));
   params.set('motion', motion);
+  params.set('guides', guides);
+  params.set('autohide', autoHideId);
+  if (sceneId) params.set('scene', sceneId);
   if (options.token) params.set('token', String(options.token).trim());
 
   const baseUrl = String(options.baseUrl || '').trim().replace(/\/$/, '');

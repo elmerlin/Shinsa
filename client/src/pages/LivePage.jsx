@@ -32,11 +32,20 @@ import {
   tokenizeLiveMessage,
 } from '../utils/liveEmotes';
 import {
+  getLiveOverlaySceneOptions,
   buildLiveOverlayUrl,
   getDefaultLiveOverlayWidgets,
+  LIVE_OVERLAY_ANCHORS,
+  LIVE_OVERLAY_AUTO_HIDE_MODES,
+  LIVE_OVERLAY_FITS,
   LIVE_OVERLAY_PRESETS,
+  LIVE_OVERLAY_SCENES,
   LIVE_OVERLAY_THEMES,
   LIVE_OVERLAY_WIDGETS,
+  normalizeLiveOverlayAnchor,
+  normalizeLiveOverlayAutoHide,
+  normalizeLiveOverlayFit,
+  normalizeLiveOverlayGuides,
   normalizeLiveOverlayPreset,
   normalizeLiveOverlayTheme,
   normalizeLiveOverlayWidgets,
@@ -606,18 +615,34 @@ function OverlayStudioCard({
   previewUrl,
   preset,
   theme,
+  fit,
+  anchor,
   widgets,
   motionEnabled,
+  guidesEnabled,
+  autoHide,
   copying,
   copiedLabel,
   tokenExpiresAt,
   onPresetChange,
   onThemeChange,
+  onFitChange,
+  onAnchorChange,
+  onAutoHideChange,
+  onToggleGuides,
   onToggleWidget,
   onToggleMotion,
+  onApplyScene,
   onPreview,
   onCopyBrowserSource,
+  onCopyScene,
 }) {
+  const presetLabel = LIVE_OVERLAY_PRESETS.find((item) => item.id === preset)?.label || preset;
+  const themeLabel = LIVE_OVERLAY_THEMES.find((item) => item.id === theme)?.label || theme;
+  const fitLabel = LIVE_OVERLAY_FITS.find((item) => item.id === fit)?.label || fit;
+  const anchorLabel = LIVE_OVERLAY_ANCHORS.find((item) => item.id === anchor)?.label || anchor;
+  const autoHideLabel = LIVE_OVERLAY_AUTO_HIDE_MODES.find((item) => item.id === autoHide)?.label || autoHide;
+
   return (
     <div className="rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(236,72,153,0.16),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.12),transparent_36%),linear-gradient(180deg,#0d1322,#09101b)] p-4 sm:p-5 shadow-[0_20px_44px_rgba(17,24,39,0.3)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -625,15 +650,25 @@ function OverlayStudioCard({
           <p className="text-[10px] font-display uppercase tracking-[0.28em] text-fuchsia-200">Overlay Studio</p>
           <h2 className="mt-1 text-xl font-display font-black text-white">Browser-source layouts for stream scenes</h2>
           <p className="mt-2 text-sm text-gray-300">
-            Pick a preset, trim the widgets, and copy a scene-ready overlay URL for OBS or any browser source.
+            Pick a scene layout, place it exactly where you want it in OBS, and decide when it should disappear.
             The overlay reads the same Shinsa Live stream, so scores, chat, votes, and reactions update in real time.
           </p>
         </div>
 
         <div className="min-w-[240px] rounded-[24px] border border-piu-border/70 bg-black/15 p-3">
           <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current output</p>
-          <p className="mt-2 text-sm font-display font-bold text-white">{LIVE_OVERLAY_PRESETS.find((item) => item.id === preset)?.label || preset}</p>
-          <p className="mt-1 text-xs text-gray-400">{LIVE_OVERLAY_THEMES.find((item) => item.id === theme)?.label || theme}</p>
+          <p className="mt-2 text-sm font-display font-bold text-white">{presetLabel}</p>
+          <p className="mt-1 text-xs text-gray-400">{themeLabel}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full border border-piu-border/70 bg-black/20 px-2.5 py-1 text-[10px] font-display font-bold text-cyan-100">{fitLabel}</span>
+            <span className="rounded-full border border-piu-border/70 bg-black/20 px-2.5 py-1 text-[10px] font-display font-bold text-cyan-100">{anchorLabel}</span>
+            <span className="rounded-full border border-piu-border/70 bg-black/20 px-2.5 py-1 text-[10px] font-display font-bold text-cyan-100">{autoHideLabel}</span>
+            {guidesEnabled ? (
+              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold text-amber-100">
+                Guides on
+              </span>
+            ) : null}
+          </div>
           <p className="mt-3 truncate rounded-xl border border-piu-border/60 bg-black/20 px-3 py-2 text-[11px] text-cyan-100">
             {previewUrl}
           </p>
@@ -644,6 +679,26 @@ function OverlayStudioCard({
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Quick Scenes</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {LIVE_OVERLAY_SCENES.map((scene) => (
+                <div key={scene.id} className="rounded-[24px] border border-piu-border bg-black/12 px-4 py-3">
+                  <p className="text-sm font-display font-bold text-white">{scene.label}</p>
+                  <p className="mt-1 text-xs text-gray-400">{scene.description}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => onApplyScene(scene.id)} className="btn-secondary px-3 py-2 text-[11px]">
+                      Load
+                    </button>
+                    <button type="button" onClick={() => onCopyScene(scene.id)} disabled={copying} className="btn-primary px-3 py-2 text-[11px]">
+                      {copying ? 'Preparing...' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div>
             <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Preset</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -660,6 +715,49 @@ function OverlayStudioCard({
                 >
                   <p className="text-sm font-display font-bold">{option.label}</p>
                   <p className="mt-1 text-xs text-gray-400">{option.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Fit</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {LIVE_OVERLAY_FITS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onFitChange(option.id)}
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${
+                    option.id === fit
+                      ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100'
+                      : 'border-piu-border bg-black/18 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-400">
+              {LIVE_OVERLAY_FITS.find((item) => item.id === fit)?.description || ''}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Position</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {LIVE_OVERLAY_ANCHORS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onAnchorChange(option.id)}
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${
+                    option.id === anchor
+                      ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
+                      : 'border-piu-border bg-black/18 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {option.label}
                 </button>
               ))}
             </div>
@@ -707,6 +805,45 @@ function OverlayStudioCard({
                   <p className="text-sm font-display font-bold">{option.label}</p>
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-piu-border/70 bg-black/12 p-4">
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Visibility</p>
+            <div className="mt-3 grid gap-2">
+              {LIVE_OVERLAY_AUTO_HIDE_MODES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onAutoHideChange(option.id)}
+                  className={`rounded-[18px] border px-4 py-3 text-left transition-colors ${
+                    option.id === autoHide
+                      ? 'border-emerald-400/35 bg-emerald-500/10 text-white'
+                      : 'border-piu-border bg-black/12 text-gray-300 hover:border-emerald-300/25 hover:text-white'
+                  }`}
+                >
+                  <p className="text-sm font-display font-bold">{option.label}</p>
+                  <p className="mt-1 text-xs text-gray-400">{option.description}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-piu-border/70 bg-black/14 px-4 py-3">
+              <div>
+                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Safe-zone guides</p>
+                <p className="mt-1 text-sm text-gray-300">Useful while placing the browser source. Turn them off before going live.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onToggleGuides}
+                className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+                  guidesEnabled
+                    ? 'border border-amber-400/35 bg-amber-500/12 text-amber-100'
+                    : 'border border-piu-border bg-black/18 text-gray-400'
+                }`}
+              >
+                {guidesEnabled ? 'Guides on' : 'Guides off'}
+              </button>
             </div>
           </div>
 
@@ -793,8 +930,12 @@ export default function LivePage() {
   const [copied, setCopied] = useState(false);
   const [overlayPreset, setOverlayPreset] = useState('compact');
   const [overlayTheme, setOverlayTheme] = useState('arena');
+  const [overlayFit, setOverlayFit] = useState('wide');
+  const [overlayAnchor, setOverlayAnchor] = useState('bottom-center');
   const [overlayWidgets, setOverlayWidgets] = useState(() => getDefaultLiveOverlayWidgets('compact'));
   const [overlayMotion, setOverlayMotion] = useState(true);
+  const [overlayGuides, setOverlayGuides] = useState(false);
+  const [overlayAutoHide, setOverlayAutoHide] = useState('off');
   const [overlayCopying, setOverlayCopying] = useState(false);
   const [overlayCopiedLabel, setOverlayCopiedLabel] = useState('');
   const [overlayTokenExpiresAt, setOverlayTokenExpiresAt] = useState('');
@@ -832,11 +973,15 @@ export default function LivePage() {
     return buildLiveOverlayUrl(activeSessionId, {
       preset: overlayPreset,
       theme: overlayTheme,
+      fit: overlayFit,
+      anchor: overlayAnchor,
       widgets: overlayWidgets,
       motion: overlayMotion,
+      guides: overlayGuides,
+      autoHide: overlayAutoHide,
       baseUrl: window.location.origin,
     });
-  }, [activeSessionId, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
+  }, [activeSessionId, overlayAnchor, overlayAutoHide, overlayFit, overlayGuides, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -1053,8 +1198,12 @@ export default function LivePage() {
       const normalizedPreset = normalizeLiveOverlayPreset(parsed?.preset);
       setOverlayPreset(normalizedPreset);
       setOverlayTheme(normalizeLiveOverlayTheme(parsed?.theme));
+      setOverlayFit(normalizeLiveOverlayFit(parsed?.fit));
+      setOverlayAnchor(normalizeLiveOverlayAnchor(parsed?.anchor));
       setOverlayWidgets(normalizeLiveOverlayWidgets(parsed?.widgets, normalizedPreset));
       setOverlayMotion(parsed?.motion !== false);
+      setOverlayGuides(normalizeLiveOverlayGuides(parsed?.guides));
+      setOverlayAutoHide(normalizeLiveOverlayAutoHide(parsed?.autoHide));
     } catch {
       // Ignore malformed overlay preferences and fall back to defaults.
     }
@@ -1066,13 +1215,17 @@ export default function LivePage() {
       window.localStorage.setItem(overlayPrefsKeyRef.current, JSON.stringify({
         preset: overlayPreset,
         theme: overlayTheme,
+        fit: overlayFit,
+        anchor: overlayAnchor,
         widgets: overlayWidgets,
         motion: overlayMotion,
+        guides: overlayGuides,
+        autoHide: overlayAutoHide,
       }));
     } catch {
       // Ignore storage write failures.
     }
-  }, [isHost, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
+  }, [isHost, overlayAnchor, overlayAutoHide, overlayFit, overlayGuides, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
 
   useEffect(() => {
     if (!useMobilePlayerHud) {
@@ -1522,6 +1675,32 @@ export default function LivePage() {
     }, 2200);
   };
 
+  const buildCurrentOverlayOptions = (overrides = {}) => ({
+    preset: overlayPreset,
+    theme: overlayTheme,
+    fit: overlayFit,
+    anchor: overlayAnchor,
+    widgets: overlayWidgets,
+    motion: overlayMotion,
+    guides: overlayGuides,
+    autoHide: overlayAutoHide,
+    ...overrides,
+  });
+
+  const applyOverlayScene = (sceneId) => {
+    const sceneOptions = getLiveOverlaySceneOptions(sceneId);
+    if (!sceneOptions) return;
+    setOverlayPreset(sceneOptions.preset);
+    setOverlayTheme(sceneOptions.theme);
+    setOverlayFit(sceneOptions.fit);
+    setOverlayAnchor(sceneOptions.anchor);
+    setOverlayWidgets(sceneOptions.widgets);
+    setOverlayMotion(sceneOptions.motion);
+    setOverlayGuides(sceneOptions.guides);
+    setOverlayAutoHide(sceneOptions.autoHide);
+    setStatusNote(`${LIVE_OVERLAY_SCENES.find((item) => item.id === sceneId)?.label || 'Overlay scene'} loaded into the studio.`);
+  };
+
   const handleToggleOverlayWidget = (widgetId) => {
     setOverlayWidgets((prev) => {
       const current = Array.isArray(prev) ? prev : [];
@@ -1537,32 +1716,42 @@ export default function LivePage() {
     window.open(overlayPreviewUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const handleCopyOverlayBrowserSource = async () => {
-    if (!activeSessionId || !overlayPreviewUrl) return;
+  const copyOverlayBrowserSource = async (options = {}, message = 'Overlay browser source copied.') => {
+    if (!activeSessionId) return;
     setOverlayCopying(true);
     try {
       const data = await createLiveOverlayToken(activeSessionId);
+      const finalOptions = buildCurrentOverlayOptions(options);
       const url = buildLiveOverlayUrl(activeSessionId, {
-        preset: overlayPreset,
-        theme: overlayTheme,
-        widgets: overlayWidgets,
-        motion: overlayMotion,
+        ...finalOptions,
         token: data?.token || '',
         baseUrl: window.location.origin,
       });
       await navigator.clipboard.writeText(url);
       setOverlayTokenExpiresAt(data?.expires_at || '');
-      flashOverlayCopyLabel('Browser source URL copied');
+      flashOverlayCopyLabel(message);
       setStatusNote(
         data?.expires_at
-          ? `Overlay browser source copied. Access token expires ${new Date(data.expires_at).toLocaleString()}.`
-          : 'Overlay browser source copied.'
+          ? `${message}. Access token expires ${new Date(data.expires_at).toLocaleString()}.`
+          : `${message}.`
       );
     } catch (err) {
       setError(err.message || 'Failed to copy overlay browser source');
     } finally {
       setOverlayCopying(false);
     }
+  };
+
+  const handleCopyOverlayBrowserSource = async () => {
+    if (!overlayPreviewUrl) return;
+    await copyOverlayBrowserSource({}, 'Browser source URL copied');
+  };
+
+  const handleCopyOverlayScene = async (sceneId) => {
+    const sceneOptions = getLiveOverlaySceneOptions(sceneId);
+    if (!sceneOptions) return;
+    const sceneLabel = LIVE_OVERLAY_SCENES.find((item) => item.id === sceneId)?.label || 'Overlay scene';
+    await copyOverlayBrowserSource({ ...sceneOptions, scene: sceneId }, `${sceneLabel} copied`);
   };
 
   const handleToggleWakeLock = async () => {
@@ -2325,8 +2514,12 @@ export default function LivePage() {
           previewUrl={overlayPreviewUrl}
           preset={overlayPreset}
           theme={overlayTheme}
+          fit={overlayFit}
+          anchor={overlayAnchor}
           widgets={overlayWidgets}
           motionEnabled={overlayMotion}
+          guidesEnabled={overlayGuides}
+          autoHide={overlayAutoHide}
           copying={overlayCopying}
           copiedLabel={overlayCopiedLabel}
           tokenExpiresAt={overlayTokenExpiresAt}
@@ -2336,10 +2529,16 @@ export default function LivePage() {
             setOverlayWidgets(getDefaultLiveOverlayWidgets(normalized));
           }}
           onThemeChange={(nextTheme) => setOverlayTheme(normalizeLiveOverlayTheme(nextTheme))}
+          onFitChange={(nextFit) => setOverlayFit(normalizeLiveOverlayFit(nextFit))}
+          onAnchorChange={(nextAnchor) => setOverlayAnchor(normalizeLiveOverlayAnchor(nextAnchor))}
+          onAutoHideChange={(nextMode) => setOverlayAutoHide(normalizeLiveOverlayAutoHide(nextMode))}
+          onToggleGuides={() => setOverlayGuides((prev) => !prev)}
           onToggleWidget={handleToggleOverlayWidget}
           onToggleMotion={() => setOverlayMotion((prev) => !prev)}
+          onApplyScene={applyOverlayScene}
           onPreview={handleOpenOverlayPreview}
           onCopyBrowserSource={handleCopyOverlayBrowserSource}
+          onCopyScene={handleCopyOverlayScene}
         />
       ) : null}
 
