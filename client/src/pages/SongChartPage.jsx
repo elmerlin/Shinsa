@@ -11,7 +11,8 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getSongChartDetail, getUserLists, addListItem, createList, setChartYoutubeLink, removeChartYoutubeLink } from '../utils/api';
+import Over20Top100Modal from '../components/Over20Top100Modal';
+import { getSongChartDetail, getUserLists, addListItem, createList, setChartYoutubeLink, removeChartYoutubeLink, getOver20ChartTop100 } from '../utils/api';
 
 const GRADE_THRESHOLDS = [
   { min: 0,      grade: 'F' },
@@ -281,6 +282,11 @@ export default function SongChartPage() {
   const [error, setError] = useState('');
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedFriendRecord, setSelectedFriendRecord] = useState(null);
+  const [showOverTop100Modal, setShowOverTop100Modal] = useState(false);
+  const [overTop100ModalChart, setOverTop100ModalChart] = useState(null);
+  const [overTop100Scores, setOverTop100Scores] = useState([]);
+  const [overTop100Loading, setOverTop100Loading] = useState(false);
+  const [overTop100Error, setOverTop100Error] = useState('');
 
   // ── YouTube link state ──
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -407,6 +413,54 @@ export default function SongChartPage() {
     return () => { cancelled = true; };
   }, [chartId, user?.id]);
 
+  useEffect(() => {
+    setShowOverTop100Modal(false);
+    setOverTop100ModalChart(null);
+    setOverTop100Scores([]);
+    setOverTop100Loading(false);
+    setOverTop100Error('');
+  }, [chartId]);
+
+  const overTop100Chart = useMemo(() => {
+    const chart = detail?.chart;
+    const level = parseInt(chart?.level, 10) || 0;
+    const chartKey = buildOverRankingChartKeyForLink(chart?.title, chart?.mode, chart?.level);
+    if (!chart || level < 20 || !chartKey) return null;
+    return {
+      chart_key: chartKey,
+      song_title: String(chart?.title || ''),
+      mode: String(chart?.mode || ''),
+      level,
+      jacket_url: String(chart?.jacket_url || ''),
+    };
+  }, [detail?.chart]);
+
+  useEffect(() => {
+    if (!showOverTop100Modal || !overTop100Chart?.chart_key) return undefined;
+    let cancelled = false;
+
+    const loadOverTop100 = async () => {
+      setOverTop100Loading(true);
+      setOverTop100Error('');
+      try {
+        const payload = await getOver20ChartTop100(overTop100Chart.chart_key);
+        if (cancelled) return;
+        setOverTop100ModalChart(payload?.chart || overTop100Chart);
+        setOverTop100Scores(Array.isArray(payload?.scores) ? payload.scores : []);
+      } catch (err) {
+        if (cancelled) return;
+        setOverTop100ModalChart(overTop100Chart);
+        setOverTop100Scores([]);
+        setOverTop100Error(err?.message || 'Failed to load top 100 scores.');
+      } finally {
+        if (!cancelled) setOverTop100Loading(false);
+      }
+    };
+
+    loadOverTop100();
+    return () => { cancelled = true; };
+  }, [showOverTop100Modal, overTop100Chart]);
+
   const rawProgression = useMemo(() => {
     if (!Array.isArray(detail?.progression)) return [];
     return detail.progression.map((row, index) => ({
@@ -483,15 +537,13 @@ export default function SongChartPage() {
   const personalBest = userSummary?.best || null;
   const personalBestGrade = personalBest?.grade || getRank(personalBest?.score).label;
   const overTop100Link = (() => {
-    const level = parseInt(chart?.level, 10) || 0;
-    if (level < 20) return '';
+    if (!overTop100Chart?.chart_key) return '';
     const params = new URLSearchParams();
     params.set('tab', 'over20');
-    params.set('level', String(level));
-    params.set('song', String(chart?.title || ''));
-    params.set('mode', String(chart?.mode || ''));
-    const chartKey = buildOverRankingChartKeyForLink(chart?.title, chart?.mode, chart?.level);
-    if (chartKey) params.set('chart_key', chartKey);
+    params.set('level', String(overTop100Chart.level));
+    params.set('song', String(overTop100Chart.song_title || ''));
+    params.set('mode', String(overTop100Chart.mode || ''));
+    params.set('chart_key', overTop100Chart.chart_key);
     return `/leaderboards?${params.toString()}`;
   })();
 
@@ -717,8 +769,14 @@ export default function SongChartPage() {
 
       {overTop100Link && (
         <section className="rounded-lg bg-piu-dark/60 border border-piu-border/50 p-2">
-          <Link
-            to={overTop100Link}
+          <button
+            type="button"
+            onClick={() => {
+              setOverTop100ModalChart(overTop100Chart);
+              setOverTop100Scores([]);
+              setOverTop100Error('');
+              setShowOverTop100Modal(true);
+            }}
             className="inline-flex items-center gap-1.5 text-xs font-display font-bold text-cyan-300 hover:text-cyan-200 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -726,7 +784,7 @@ export default function SongChartPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 6v12M12 6v12M17 6v12" />
             </svg>
             View Top 100 Rankings For This Chart
-          </Link>
+          </button>
         </section>
       )}
 
@@ -870,6 +928,15 @@ export default function SongChartPage() {
         chart={chart}
         rows={historyByScore}
         onClose={() => setShowHistoryModal(false)}
+      />
+      <Over20Top100Modal
+        open={showOverTop100Modal}
+        chart={overTop100ModalChart}
+        scores={overTop100Scores}
+        loading={overTop100Loading}
+        error={overTop100Error}
+        permalink={overTop100Link}
+        onClose={() => setShowOverTop100Modal(false)}
       />
 
       <FriendJudgmentModal
