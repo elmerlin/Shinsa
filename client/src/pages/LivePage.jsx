@@ -121,6 +121,19 @@ function formatCountdownLabel(remainingMs) {
   return `${seconds}s`;
 }
 
+function formatRelativeSyncTime(timestamp) {
+  if (!timestamp) return 'No sync yet';
+  const parsed = Date.parse(`${timestamp}Z`);
+  if (!Number.isFinite(parsed)) return 'No sync yet';
+  const diffMs = Math.max(0, Date.now() - parsed);
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes <= 0) return 'Synced just now';
+  if (diffMinutes < 60) return `Synced ${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  const remMinutes = diffMinutes % 60;
+  return remMinutes > 0 ? `Synced ${diffHours}h ${remMinutes}m ago` : `Synced ${diffHours}h ago`;
+}
+
 function buildSyncStatusNote(syncResult, fallback = 'Live session is up to date.') {
   const parts = [];
   const newPlays = parseInt(syncResult?.new_plays_added, 10) || 0;
@@ -236,10 +249,6 @@ function getMessageTone(message) {
         bodyClass: 'text-rose-50',
       };
   }
-}
-
-function isReactionOnlyMessage(message) {
-  return !!getLiveReactionPayload(message);
 }
 
 function MessageBody({ message, tone, isSystem }) {
@@ -454,6 +463,35 @@ function DirectorySection({ title, subtitle, sessions }) {
   );
 }
 
+function MobilePanelSheet({ open, title, subtitle = '', onClose, children }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[95] lg:hidden">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+        aria-label="Close panel"
+      />
+      <div className="absolute inset-x-0 bottom-0 max-h-[86vh] overflow-hidden rounded-t-[32px] border border-piu-border bg-[linear-gradient(180deg,#0d1322,#09101b)] shadow-[0_-18px_50px_rgba(0,0,0,0.45)]">
+        <div className="flex items-center justify-between gap-3 border-b border-piu-border/60 px-4 py-3">
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-rose-300">{title}</p>
+            {subtitle ? <p className="mt-1 text-xs text-gray-400">{subtitle}</p> : null}
+          </div>
+          <button type="button" onClick={onClose} className="btn-secondary px-3 py-2 text-xs">
+            Close
+          </button>
+        </div>
+        <div className="max-h-[calc(86vh-74px)] overflow-y-auto px-4 py-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UserIdentity({ avatar, username, skillTitle, isHost, className = '' }) {
   return (
     <div className={`flex min-w-0 items-center gap-2 ${className}`.trim()}>
@@ -568,6 +606,15 @@ export default function LivePage() {
   const [createTitle, setCreateTitle] = useState('');
   const [createStreamUrl, setCreateStreamUrl] = useState('');
   const [creating, setCreating] = useState(false);
+  const [playerMode, setPlayerMode] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState('');
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [wakeLockSupported, setWakeLockSupported] = useState(false);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() => (
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(min-width: 1024px)').matches
+      : false
+  ));
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState([]);
@@ -597,6 +644,8 @@ export default function LivePage() {
   const seenMessageIdsRef = useRef(new Set());
   const presenceIdRef = useRef('');
   const liveStreamRef = useRef(null);
+  const wakeLockRef = useRef(null);
+  const playerModeInitRef = useRef(false);
 
   const activeSessionId = sessionId || snapshot?.session?.id || '';
   const live = snapshot?.session || null;
@@ -605,6 +654,7 @@ export default function LivePage() {
   const youtubeId = getYouTubeId(live?.stream_url || '');
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
+  const isHost = !!live?.is_host;
   const followedDirectorySessions = useMemo(
     () => directorySessions.filter((item) => !!item?.is_following),
     [directorySessions]
@@ -613,12 +663,54 @@ export default function LivePage() {
     () => directorySessions.filter((item) => !item?.is_following),
     [directorySessions]
   );
+  const isPlayerMode = isHost && playerMode;
+  const useMobilePlayerHud = isPlayerMode && !isDesktopViewport;
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
     presenceIdRef.current = window.sessionStorage.getItem(storageKey) || makePresenceId();
     window.sessionStorage.setItem(storageKey, presenceIdRef.current);
   }
+
+  const releaseWakeLock = async () => {
+    const lock = wakeLockRef.current;
+    wakeLockRef.current = null;
+    if (!lock) {
+      setWakeLockActive(false);
+      return;
+    }
+    try {
+      await lock.release();
+    } catch {
+      // Ignore release errors from stale locks.
+    } finally {
+      setWakeLockActive(false);
+    }
+  };
+
+  const requestWakeLock = async () => {
+    if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
+      setWakeLockSupported(false);
+      return;
+    }
+
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      wakeLockRef.current = lock;
+      setWakeLockActive(true);
+      if (typeof lock?.addEventListener === 'function') {
+        lock.addEventListener('release', () => {
+          if (wakeLockRef.current === lock) {
+            wakeLockRef.current = null;
+          }
+          setWakeLockActive(false);
+        });
+      }
+    } catch (err) {
+      setWakeLockActive(false);
+      setError(err?.message || 'Failed to keep the screen awake');
+    }
+  };
 
   const applySnapshot = (data, options = {}) => {
     const nextMessages = Array.isArray(data?.messages) ? data.messages : [];
@@ -734,6 +826,81 @@ export default function LivePage() {
       clearInterval(interval);
     };
   }, [live, sessionId, user]);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    setWakeLockSupported('wakeLock' in navigator);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia('(min-width: 1024px)');
+    const update = () => setIsDesktopViewport(query.matches);
+    update();
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', update);
+      return () => query.removeEventListener('change', update);
+    }
+    query.addListener(update);
+    return () => query.removeListener(update);
+  }, []);
+
+  useEffect(() => {
+    if (!isHost || typeof window === 'undefined') return;
+
+    const storageKey = `shinsa_live_player_mode:${user?.id || 'host'}`;
+    const stored = window.localStorage.getItem(storageKey);
+    if (stored === '1' || stored === '0') {
+      setPlayerMode(stored === '1');
+      playerModeInitRef.current = true;
+      return;
+    }
+
+    if (!playerModeInitRef.current) {
+      const autoEnable = window.matchMedia ? window.matchMedia('(max-width: 1023px)').matches : false;
+      setPlayerMode(autoEnable);
+      playerModeInitRef.current = true;
+    }
+  }, [isHost, user?.id]);
+
+  useEffect(() => {
+    if (!isHost || typeof window === 'undefined' || !playerModeInitRef.current) return;
+    window.localStorage.setItem(`shinsa_live_player_mode:${user?.id || 'host'}`, playerMode ? '1' : '0');
+  }, [isHost, playerMode, user?.id]);
+
+  useEffect(() => {
+    if (!useMobilePlayerHud) {
+      setMobilePanel('');
+      if (wakeLockRef.current) releaseWakeLock();
+    }
+  }, [useMobilePlayerHud]);
+
+  useEffect(() => {
+    if (live?.status !== 'live' && mobilePanel) {
+      setMobilePanel('');
+    }
+  }, [live?.status, mobilePanel]);
+
+  useEffect(() => () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!wakeLockActive || typeof document === 'undefined') return undefined;
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!wakeLockRef.current) {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [wakeLockActive]);
 
   useEffect(() => {
     if (!user || !activeSessionId) {
@@ -1134,6 +1301,564 @@ export default function LivePage() {
     } catch {}
   };
 
+  const handleToggleWakeLock = async () => {
+    if (!wakeLockSupported) {
+      setError('Wake lock is not supported on this device.');
+      return;
+    }
+    if (wakeLockRef.current || wakeLockActive) {
+      await releaseWakeLock();
+    } else {
+      await requestWakeLock();
+    }
+  };
+
+  const hostCanCreateVote = isHost && (!currentVote || currentVote.status !== 'active') && live?.status === 'live';
+  const streamStatusLabel = streamState === 'live'
+    ? 'Channel live'
+    : streamState === 'reconnecting'
+      ? 'Reconnecting'
+      : streamState === 'connecting'
+        ? 'Connecting'
+        : 'Offline';
+  const syncLabel = formatRelativeSyncTime(live?.last_sync_at);
+  const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
+  const viewerNowCount = live?.viewer_count || 0;
+  const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
+  const playerSummaryCards = [
+    {
+      label: 'Last Score',
+      value: lastPlay ? formatNumber(lastPlay.score) : 'Waiting',
+      tone: 'text-cyan-200',
+    },
+    {
+      label: 'Grade',
+      value: lastPlay?.grade || '-',
+      tone: 'text-white',
+    },
+    {
+      label: 'Requests',
+      value: `${requestCounts.open}/${requestCounts.queued}`,
+      tone: 'text-fuchsia-200',
+    },
+    {
+      label: 'Songs',
+      value: songCount,
+      tone: 'text-rose-200',
+    },
+  ];
+
+  const voteSection = (
+    <div className="space-y-4">
+      {hostCanCreateVote ? (
+        <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
+          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Start vote</p>
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            <select value={voteModeFilter} onChange={(e) => setVoteModeFilter(e.target.value)} className="input-field text-xs py-2">
+              <option>All</option>
+              <option>Single</option>
+              <option>Double</option>
+            </select>
+            <input value={voteMinLevel} onChange={(e) => setVoteMinLevel(e.target.value)} className="input-field text-xs py-2" placeholder="Min" />
+            <input value={voteMaxLevel} onChange={(e) => setVoteMaxLevel(e.target.value)} className="input-field text-xs py-2" placeholder="Max" />
+          </div>
+          <button type="button" onClick={handleCreateVote} disabled={creatingVote} className="btn-primary mt-3 w-full py-2.5 text-sm">
+            {creatingVote ? 'Creating vote...' : 'Open 30 second vote'}
+          </button>
+        </div>
+      ) : null}
+
+      {currentVote ? (
+        <div className="rounded-2xl border border-rose-400/25 bg-rose-500/8 p-2">
+          <p className="px-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-rose-200">
+            {currentVote.status === 'active' ? 'Pinned Vote' : 'Last Vote'}
+          </p>
+          <VotePanel vote={currentVote} canVote={!isHost && live?.status === 'live'} onVote={handleCastVote} />
+        </div>
+      ) : null}
+
+      {!hostCanCreateVote && !currentVote ? (
+        <div className="rounded-2xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
+          No live vote is open right now.
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const songsSection = (
+    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Songs This Session</p>
+          <p className="text-sm font-display font-bold text-white">{visiblePlays.length} visible plays</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className="input-field text-xs py-2">
+            <option>All</option>
+            <option>Single</option>
+            <option>Double</option>
+          </select>
+          <select value={playSort} onChange={(e) => setPlaySort(e.target.value)} className="input-field text-xs py-2">
+            <option value="recent">Recent</option>
+            <option value="level_desc">Level high to low</option>
+            <option value="grade_desc">Grade high to low</option>
+            <option value="score_desc">Score high to low</option>
+          </select>
+        </div>
+      </div>
+      <div className="space-y-2 mt-3">
+        {visiblePlays.map((play) => {
+          const requestInfo = requestLookup.get(buildRequestKey(play.song_title, play.mode, play.level));
+          const requestStatus = requestInfo
+            ? requestInfo.queuedCount > 0
+              ? 'queued'
+              : requestInfo.openCount > 0
+                ? 'open'
+                : requestInfo.playedCount > 0
+                  ? 'played'
+                  : 'skipped'
+            : '';
+          return (
+            <button
+              type="button"
+              key={play.id}
+              onClick={() => setSelectedPlay(play)}
+              className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-display font-bold text-white truncate">{play.song_title}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <p className="text-[11px] text-gray-400">{modeShort(play.mode)}{play.level}</p>
+                    {play.pumbility_gain > 0 ? (
+                      <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-emerald-200">
+                        +{play.pumbility_gain} p
+                      </span>
+                    ) : null}
+                    {play.over_top100_rank > 0 ? (
+                      <span className="rounded-full border border-yellow-400/25 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-yellow-200">
+                        Top 100 #{play.over_top100_rank}
+                      </span>
+                    ) : null}
+                    {requestInfo ? (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-display font-bold ${getRequestStatusMeta(requestStatus).pill}`}>
+                        {formatRequestStateLabel(requestInfo)}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
+                  <p className="text-[11px] text-gray-400">{play.grade || '-'}</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+        {visiblePlays.length === 0 ? <p className="text-sm text-gray-500">No plays match the current filter yet.</p> : null}
+      </div>
+    </div>
+  );
+
+  const requestsSection = (
+    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Song requests</p>
+          <p className="text-sm font-display font-bold text-white">
+            {requestCounts.open} open • {requestCounts.queued} queued • {requestCounts.played} played
+            {requestCounts.skipped ? ` • ${requestCounts.skipped} skipped` : ''}
+          </p>
+        </div>
+        {live?.status !== 'live' ? (
+          <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">
+            Closed
+          </span>
+        ) : null}
+      </div>
+      <input
+        value={songSearch}
+        onChange={(e) => setSongSearch(e.target.value)}
+        className="input-field w-full mt-3"
+        placeholder={
+          live?.status !== 'live'
+            ? 'Requests are closed'
+            : viewerState.requests_blocked
+              ? 'Host has blocked your requests'
+              : 'Search song or chart'
+        }
+        disabled={live?.status !== 'live' || viewerState.requests_blocked}
+      />
+      {!isHost && viewerState.requests_blocked ? (
+        <p className="mt-2 text-[11px] text-fuchsia-200">The host has disabled requests from your account for this session.</p>
+      ) : null}
+      {searchingSongs ? <p className="text-[11px] text-gray-500 mt-2">Searching...</p> : null}
+      <div className="space-y-2 mt-3">
+        {songResults.map((chart) => (
+          <button
+            type="button"
+            key={`${chart.chart_id}-${chart.mode}-${chart.level}`}
+            onClick={() => handleLiveRequest(chart)}
+            disabled={live?.status !== 'live' || viewerState.requests_blocked}
+            className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <PiuChartJacket title={chart.song_title} mode={chart.mode} level={chart.level} jacketUrl={chart.jacket_url} size="sm" />
+              <div className="min-w-0">
+                <p className="text-sm font-display font-bold text-white truncate">{chart.song_title}</p>
+                <p className="text-[11px] text-gray-400">{modeShort(chart.mode)}{chart.level}</p>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <div className="space-y-2 mt-4">
+        {requests.slice(0, 10).map((request) => {
+          const requestStatus = getRequestStatus(request.status, request.fulfilled);
+          const requestMeta = getRequestStatusMeta(requestStatus, request.fulfilled);
+          return (
+            <div
+              key={request.id}
+              className={`rounded-xl border px-3 py-2 ${requestMeta.card}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <UserIdentity
+                    avatar={request.avatar}
+                    username={request.username}
+                    skillTitle={request.skill_title}
+                    isHost={request.is_host}
+                    className="mb-2"
+                  />
+                  <p className="text-xs font-display font-bold text-white">{request.song_title}</p>
+                  <p className="text-[11px] text-gray-400">
+                    {modeShort(request.mode)}{request.level}
+                    {request.queue_position ? ` • Queue #${request.queue_position}` : ''}
+                  </p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${requestMeta.pill}`}>
+                  {requestMeta.label}
+                </span>
+              </div>
+              {isHost && live?.status === 'live' ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {requestStatus !== 'queued' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSetRequestStatus(request, 'queued')}
+                      disabled={requestActionKey === `${request.id}:queued`}
+                      className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
+                    >
+                      {requestActionKey === `${request.id}:queued` ? 'Updating...' : 'Queue'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSetRequestStatus(request, 'open')}
+                      disabled={requestActionKey === `${request.id}:open`}
+                      className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
+                    >
+                      {requestActionKey === `${request.id}:open` ? 'Updating...' : 'Move open'}
+                    </button>
+                  )}
+                  {requestStatus !== 'played' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleFulfillRequest(request)}
+                      disabled={requestActionKey === `${request.id}:played`}
+                      className="rounded-lg bg-emerald-500/15 px-3 py-2 text-[11px] font-display font-bold text-emerald-200 transition-colors hover:text-white disabled:opacity-60"
+                    >
+                      {requestActionKey === `${request.id}:played` ? 'Updating...' : 'Mark played'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSetRequestStatus(request, 'open')}
+                      disabled={requestActionKey === `${request.id}:open`}
+                      className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
+                    >
+                      {requestActionKey === `${request.id}:open` ? 'Updating...' : 'Reopen'}
+                    </button>
+                  )}
+                  {requestStatus !== 'skipped' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSetRequestStatus(request, 'skipped')}
+                      disabled={requestActionKey === `${request.id}:skipped`}
+                      className="rounded-lg bg-amber-500/15 px-3 py-2 text-[11px] font-display font-bold text-amber-200 transition-colors hover:text-white disabled:opacity-60"
+                    >
+                      {requestActionKey === `${request.id}:skipped` ? 'Updating...' : 'Skip'}
+                    </button>
+                  ) : null}
+                  {!request.is_host ? (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleModeration(request, 'requests_blocked')}
+                      disabled={moderationActionKey === `requests_blocked:${request.user_id}`}
+                      className="rounded-lg bg-fuchsia-500/15 px-3 py-2 text-[11px] font-display font-bold text-fuchsia-200 transition-colors hover:text-white disabled:opacity-60"
+                    >
+                      {moderationActionKey === `requests_blocked:${request.user_id}`
+                        ? 'Updating...'
+                        : request.requests_blocked
+                          ? 'Allow requests'
+                          : 'Block requests'}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {requests.length === 0 ? <p className="text-sm text-gray-500">No requests yet.</p> : null}
+      </div>
+    </div>
+  );
+
+  const chatSection = (
+    <div className={`relative rounded-2xl border border-piu-border bg-[#0c1220] p-3 flex flex-col ${hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}>
+      {reactionBursts.map((burst) => (
+        <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
+          {burst.particles.map((particle) => (
+            <span
+              key={particle.id}
+              className="live-reaction-burst__particle"
+              style={{
+                '--dx': particle.dx,
+                '--dy': particle.dy,
+                '--size': particle.size,
+                '--color': particle.color,
+              }}
+            />
+          ))}
+        </div>
+      ))}
+
+      {floatingReactions.map((reaction) => (
+        <div
+          key={reaction.id}
+          className="absolute pointer-events-none z-10 animate-float-up"
+          style={{ left: `${reaction.x}%`, bottom: '88px' }}
+        >
+          {reaction.reaction?.kind === 'emote'
+            ? <LiveEmote emote={reaction.reaction.emote} size="reaction" />
+            : <span style={{ fontSize: '24px' }}>{reaction.reaction?.emoji || ''}</span>}
+        </div>
+      ))}
+
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Live chat</p>
+          <p className="text-sm font-display font-bold text-white">{messages.length} recent messages</p>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1">
+          {QUICK_REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => handleQuickReaction(emoji)}
+              disabled={viewerState.chat_muted || live?.status !== 'live'}
+              className="w-8 h-8 rounded-lg bg-piu-dark/60 hover:bg-piu-dark text-sm disabled:opacity-40"
+            >
+              {emoji}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setShowEmoteTray((prev) => !prev)}
+            disabled={viewerState.chat_muted || live?.status !== 'live'}
+            className={`rounded-lg px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide transition-colors ${
+              showEmoteTray
+                ? 'bg-rose-500/20 text-rose-100'
+                : 'bg-piu-dark/60 text-gray-300 hover:bg-piu-dark hover:text-white'
+            } disabled:opacity-40`}
+          >
+            Emotes
+          </button>
+        </div>
+      </div>
+
+      {currentVote && !hasPlayerPanels ? (
+        <div className="mt-3 rounded-2xl border border-rose-400/25 bg-rose-500/8 p-2">
+          <p className="px-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-rose-200">
+            Pinned Vote
+          </p>
+          <VotePanel vote={currentVote} canVote={!isHost && live?.status === 'live'} onVote={handleCastVote} />
+        </div>
+      ) : null}
+
+      {showEmoteTray && live?.status === 'live' ? (
+        <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(244,114,182,0.14),transparent_38%),linear-gradient(180deg,#111827,#0b1220)] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-display uppercase tracking-[0.24em] text-fuchsia-200">Shinsa Emotes</p>
+              <p className="mt-1 text-[11px] text-gray-400">Tap an emote to fire it instantly, or add its token into your next message.</p>
+            </div>
+            <button type="button" onClick={() => setShowEmoteTray(false)} className="text-[11px] text-gray-500 hover:text-white">
+              Close
+            </button>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {LIVE_EMOTES.map((emote) => (
+              <div key={emote.token} className="rounded-2xl border border-white/8 bg-black/20 p-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickReaction(emote.token)}
+                  disabled={viewerState.chat_muted || live?.status !== 'live'}
+                  className="w-full disabled:opacity-40"
+                >
+                  <LiveEmote emote={emote} size="tray" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertChatToken(emote.token)}
+                  disabled={viewerState.chat_muted || live?.status !== 'live'}
+                  className="mt-2 w-full rounded-lg bg-piu-dark/70 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+                >
+                  Add to message
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {LIVE_EMOJI_GROUPS.map((group) => (
+              <div key={group.label} className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
+                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{group.label}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {group.emojis.map((emoji) => (
+                    <button
+                      key={`${group.label}-${emoji}`}
+                      type="button"
+                      onClick={() => handleQuickReaction(emoji)}
+                      disabled={viewerState.chat_muted || live?.status !== 'live'}
+                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-piu-dark/70 text-base transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex-1 overflow-y-auto space-y-2 mt-3 pr-1">
+        {messages.map((msg) => {
+          const tone = getMessageTone(msg);
+          return (
+            <div key={msg.id} className={`rounded-xl px-3 py-2 ${tone.wrapper}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  {tone.label ? (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.labelClass}`}>
+                      {tone.label}
+                    </span>
+                  ) : null}
+                  {msg.is_system ? (
+                    <p className={`truncate text-[11px] font-display font-bold ${tone.usernameClass}`}>
+                      {msg.username || 'System'}
+                    </p>
+                  ) : (
+                    <UserIdentity
+                      avatar={msg.avatar}
+                      username={msg.username}
+                      skillTitle={msg.skill_title}
+                      isHost={msg.is_host}
+                    />
+                  )}
+                  {isHost && !msg.is_system && msg.chat_muted ? (
+                    <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-amber-200">
+                      Muted
+                    </span>
+                  ) : null}
+                  {isHost && !msg.is_system && msg.requests_blocked ? (
+                    <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-fuchsia-200">
+                      Requests off
+                    </span>
+                  ) : null}
+                </div>
+                <p className="shrink-0 text-[10px] text-gray-500">
+                  {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                </p>
+              </div>
+              <MessageBody message={msg.message} tone={tone} isSystem={msg.is_system} />
+              {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMessage(msg.id)}
+                    disabled={deletingMessageId === msg.id}
+                    className="rounded-lg bg-piu-dark px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:text-white disabled:opacity-60"
+                  >
+                    {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleModeration(msg, 'chat_muted')}
+                    disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
+                    className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-amber-200 transition-colors hover:text-white disabled:opacity-60"
+                  >
+                    {moderationActionKey === `chat_muted:${msg.user_id}`
+                      ? 'Updating...'
+                      : msg.chat_muted
+                        ? 'Unmute chat'
+                        : 'Mute chat'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleModeration(msg, 'requests_blocked')}
+                    disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
+                    className="rounded-lg bg-fuchsia-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-fuchsia-200 transition-colors hover:text-white disabled:opacity-60"
+                  >
+                    {moderationActionKey === `requests_blocked:${msg.user_id}`
+                      ? 'Updating...'
+                      : msg.requests_blocked
+                        ? 'Allow requests'
+                        : 'Block requests'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        <div ref={chatEndRef} />
+      </div>
+
+      {live?.status === 'live' ? (
+        <form onSubmit={handleSendChat} className="flex gap-2 mt-3">
+          <button
+            type="button"
+            onClick={() => setShowEmoteTray((prev) => !prev)}
+            disabled={viewerState.chat_muted}
+            className="btn-secondary px-3 text-xs disabled:opacity-40"
+          >
+            {showEmoteTray ? 'Hide' : 'Emotes'}
+          </button>
+          <input
+            ref={chatInputRef}
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            className="input-field flex-1"
+            placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message or use :shinsa_hype:'}
+            maxLength={500}
+            disabled={viewerState.chat_muted}
+          />
+          <button type="submit" disabled={sendingChat || viewerState.chat_muted} className="btn-primary px-4 disabled:opacity-50">
+            {sendingChat ? '...' : 'Send'}
+          </button>
+        </form>
+      ) : (
+        <p className="text-[11px] text-gray-500 mt-3">Chat is read-only because this session has ended.</p>
+      )}
+      {live?.status === 'live' && !isHost && viewerState.chat_muted ? (
+        <p className="mt-2 text-[11px] text-amber-200">The host has muted your chat for this session.</p>
+      ) : null}
+    </div>
+  );
+
   if (!user) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4">
@@ -1221,7 +1946,7 @@ export default function LivePage() {
   }
 
   return (
-    <div className="px-4 py-5 sm:px-6 space-y-4">
+    <div className={`px-4 py-5 sm:px-6 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
       <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.18),transparent_42%),linear-gradient(180deg,#0d1322,#09101d)] p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -1233,6 +1958,19 @@ export default function LivePage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {isHost ? (
+              <button
+                type="button"
+                onClick={() => setPlayerMode((prev) => !prev)}
+                className={`text-xs px-3 py-2 rounded-lg font-display font-bold transition-colors ${
+                  playerMode
+                    ? 'bg-cyan-500/15 text-cyan-100 border border-cyan-400/30'
+                    : 'bg-black/20 text-gray-300 border border-piu-border hover:text-white'
+                }`}
+              >
+                {playerMode ? 'Player mode on' : 'Player mode'}
+              </button>
+            ) : null}
             <button type="button" onClick={handleCopyLink} className="btn-secondary text-xs px-3 py-2">
               {copied ? 'Copied' : 'Copy viewer link'}
             </button>
@@ -1264,19 +2002,26 @@ export default function LivePage() {
                   ? 'border border-orange-400/30 bg-orange-500/10 text-orange-200'
                   : 'border border-piu-border bg-black/20 text-gray-400'
             }`}>
-              {streamState === 'live'
-                ? 'Channel live'
-                : streamState === 'reconnecting'
-                  ? 'Reconnecting'
-                  : streamState === 'connecting'
-                    ? 'Connecting'
-                    : 'Offline'}
+              {streamStatusLabel}
             </span>
           ) : null}
           {live?.last_sync_at ? (
             <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-400">
-              Last sync {new Date(`${live.last_sync_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {syncLabel}
             </span>
+          ) : null}
+          {isHost && wakeLockSupported && playerMode ? (
+            <button
+              type="button"
+              onClick={handleToggleWakeLock}
+              className={`rounded-full px-3 py-1 text-[11px] font-display font-bold uppercase tracking-wide ${
+                wakeLockActive
+                  ? 'border border-amber-400/30 bg-amber-500/10 text-amber-200'
+                  : 'border border-piu-border bg-black/20 text-gray-300'
+              }`}
+            >
+              {wakeLockActive ? 'Screen awake' : 'Keep awake'}
+            </button>
           ) : null}
           {!live?.is_host && viewerState.chat_muted ? (
             <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-display font-bold text-amber-200">
@@ -1293,6 +2038,82 @@ export default function LivePage() {
         {statusNote ? <p className="mt-3 text-sm text-cyan-200">{statusNote}</p> : null}
         {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
       </div>
+
+      {!youtubeId && isHost ? (
+        <div className="rounded-3xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_40%),linear-gradient(180deg,#0d1524,#09101b)] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Companion Dashboard</p>
+              <p className="mt-2 text-sm text-gray-300">
+                No stream link is attached, so this room is running in session-tracker mode. The player HUD can stay pinned while you watch sync state, results, requests, and chat on your phone.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-piu-border bg-black/15 px-4 py-3 text-right">
+              <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current viewers</p>
+              <p className="text-2xl font-display font-black text-cyan-200">{viewerNowCount}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {hasPlayerPanels ? (
+        <div className="lg:hidden sticky top-[68px] z-30 space-y-3">
+          <div className="rounded-[28px] border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_38%),linear-gradient(180deg,rgba(8,14,28,0.96),rgba(7,10,18,0.96))] p-4 shadow-[0_18px_36px_rgba(3,7,18,0.34)] backdrop-blur">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Player HUD</p>
+                <p className="mt-1 text-sm text-gray-300">
+                  {youtubeId ? 'Pinned while the stream sits above.' : 'Built for streamless session tracking on your phone.'}
+                </p>
+              </div>
+              <button type="button" onClick={() => setPlayerMode(false)} className="btn-secondary px-3 py-2 text-xs">
+                Full page
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {playerSummaryCards.map((card) => (
+                <div key={card.label} className="rounded-2xl border border-piu-border/70 bg-black/20 px-3 py-2.5">
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{card.label}</p>
+                  <p className={`mt-1 text-lg font-display font-black ${card.tone}`}>{card.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+                Songs
+              </button>
+              <button type="button" onClick={() => setMobilePanel('requests')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+                Requests
+              </button>
+              <button type="button" onClick={() => setMobilePanel('vote')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+                Vote
+              </button>
+              <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+                Chat
+              </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn-secondary flex-1 min-w-[120px] px-3 py-2 text-xs">
+                {syncing ? 'Syncing...' : 'Sync now'}
+              </button>
+              <button type="button" onClick={handleCopyLink} className="btn-secondary flex-1 min-w-[120px] px-3 py-2 text-xs">
+                {copied ? 'Copied' : 'Copy link'}
+              </button>
+              {wakeLockSupported ? (
+                <button type="button" onClick={handleToggleWakeLock} className="btn-secondary flex-1 min-w-[120px] px-3 py-2 text-xs">
+                  {wakeLockActive ? 'Screen awake' : 'Keep awake'}
+                </button>
+              ) : null}
+              <button type="button" onClick={handleEndSession} disabled={ending} className="btn-primary flex-1 min-w-[120px] px-3 py-2 text-xs">
+                {ending ? 'Ending...' : 'End session'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {youtubeId ? (
         <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
@@ -1319,495 +2140,70 @@ export default function LivePage() {
           />
 
           {snapshot?.summary ? <LiveSessionCard summary={snapshot.summary} /> : null}
-
-          <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Songs This Session</p>
-                <p className="text-sm font-display font-bold text-white">{visiblePlays.length} visible plays</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className="input-field text-xs py-2">
-                  <option>All</option>
-                  <option>Single</option>
-                  <option>Double</option>
-                </select>
-                <select value={playSort} onChange={(e) => setPlaySort(e.target.value)} className="input-field text-xs py-2">
-                  <option value="recent">Recent</option>
-                  <option value="level_desc">Level high to low</option>
-                  <option value="grade_desc">Grade high to low</option>
-                  <option value="score_desc">Score high to low</option>
-                </select>
-              </div>
-            </div>
-            <div className="space-y-2 mt-3">
-              {visiblePlays.map((play) => {
-                const requestInfo = requestLookup.get(buildRequestKey(play.song_title, play.mode, play.level));
-                const requestStatus = requestInfo
-                  ? requestInfo.queuedCount > 0
-                    ? 'queued'
-                    : requestInfo.openCount > 0
-                      ? 'open'
-                      : requestInfo.playedCount > 0
-                        ? 'played'
-                        : 'skipped'
-                  : '';
-                return (
-                  <button
-                    type="button"
-                    key={play.id}
-                    onClick={() => setSelectedPlay(play)}
-                    className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-display font-bold text-white truncate">{play.song_title}</p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <p className="text-[11px] text-gray-400">{modeShort(play.mode)}{play.level}</p>
-                          {play.pumbility_gain > 0 ? (
-                            <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-emerald-200">
-                              +{play.pumbility_gain} p
-                            </span>
-                          ) : null}
-                          {play.over_top100_rank > 0 ? (
-                            <span className="rounded-full border border-yellow-400/25 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-yellow-200">
-                              Top 100 #{play.over_top100_rank}
-                            </span>
-                          ) : null}
-                          {requestInfo ? (
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-display font-bold ${getRequestStatusMeta(requestStatus).pill}`}>
-                              {formatRequestStateLabel(requestInfo)}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
-                        <p className="text-[11px] text-gray-400">{play.grade || '-'}</p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-              {visiblePlays.length === 0 ? <p className="text-sm text-gray-500">No plays match the current filter yet.</p> : null}
-            </div>
-          </div>
+          {hasPlayerPanels ? null : songsSection}
         </div>
 
-        <div className="space-y-4">
-          {live?.is_host && (!currentVote || currentVote.status !== 'active') && live?.status === 'live' ? (
-            <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
-              <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Start vote</p>
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                <select value={voteModeFilter} onChange={(e) => setVoteModeFilter(e.target.value)} className="input-field text-xs py-2">
-                  <option>All</option>
-                  <option>Single</option>
-                  <option>Double</option>
-                </select>
-                <input value={voteMinLevel} onChange={(e) => setVoteMinLevel(e.target.value)} className="input-field text-xs py-2" placeholder="Min" />
-                <input value={voteMaxLevel} onChange={(e) => setVoteMaxLevel(e.target.value)} className="input-field text-xs py-2" placeholder="Max" />
-              </div>
-              <button type="button" onClick={handleCreateVote} disabled={creatingVote} className="btn-primary mt-3 w-full py-2.5 text-sm">
-                {creatingVote ? 'Creating vote...' : 'Open 30 second vote'}
-              </button>
-            </div>
-          ) : null}
-
-          <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Song requests</p>
-                <p className="text-sm font-display font-bold text-white">
-                  {requestCounts.open} open • {requestCounts.queued} queued • {requestCounts.played} played
-                  {requestCounts.skipped ? ` • ${requestCounts.skipped} skipped` : ''}
-                </p>
-              </div>
-              {live?.status !== 'live' ? (
-                <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">
-                  Closed
-                </span>
-              ) : null}
-            </div>
-            <input
-              value={songSearch}
-              onChange={(e) => setSongSearch(e.target.value)}
-              className="input-field w-full mt-3"
-              placeholder={
-                live?.status !== 'live'
-                  ? 'Requests are closed'
-                  : viewerState.requests_blocked
-                    ? 'Host has blocked your requests'
-                    : 'Search song or chart'
-              }
-              disabled={live?.status !== 'live' || viewerState.requests_blocked}
-            />
-            {!live?.is_host && viewerState.requests_blocked ? (
-              <p className="mt-2 text-[11px] text-fuchsia-200">The host has disabled requests from your account for this session.</p>
-            ) : null}
-            {searchingSongs ? <p className="text-[11px] text-gray-500 mt-2">Searching...</p> : null}
-            <div className="space-y-2 mt-3">
-              {songResults.map((chart) => (
-                <button
-                  type="button"
-                  key={`${chart.chart_id}-${chart.mode}-${chart.level}`}
-                  onClick={() => handleLiveRequest(chart)}
-                  disabled={live?.status !== 'live' || viewerState.requests_blocked}
-                  className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <PiuChartJacket title={chart.song_title} mode={chart.mode} level={chart.level} jacketUrl={chart.jacket_url} size="sm" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-display font-bold text-white truncate">{chart.song_title}</p>
-                      <p className="text-[11px] text-gray-400">{modeShort(chart.mode)}{chart.level}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div className="space-y-2 mt-4">
-              {requests.slice(0, 10).map((request) => {
-                const requestStatus = getRequestStatus(request.status, request.fulfilled);
-                const requestMeta = getRequestStatusMeta(requestStatus, request.fulfilled);
-                return (
-                <div
-                  key={request.id}
-                  className={`rounded-xl border px-3 py-2 ${requestMeta.card}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <UserIdentity
-                        avatar={request.avatar}
-                        username={request.username}
-                        skillTitle={request.skill_title}
-                        isHost={request.is_host}
-                        className="mb-2"
-                      />
-                      <p className="text-xs font-display font-bold text-white">{request.song_title}</p>
-                      <p className="text-[11px] text-gray-400">
-                        {modeShort(request.mode)}{request.level}
-                        {request.queue_position ? ` • Queue #${request.queue_position}` : ''}
-                      </p>
-                    </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${requestMeta.pill}`}>
-                      {requestMeta.label}
-                    </span>
-                  </div>
-                  {live?.is_host && live?.status === 'live' ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {requestStatus !== 'queued' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSetRequestStatus(request, 'queued')}
-                          disabled={requestActionKey === `${request.id}:queued`}
-                          className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {requestActionKey === `${request.id}:queued` ? 'Updating...' : 'Queue'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleSetRequestStatus(request, 'open')}
-                          disabled={requestActionKey === `${request.id}:open`}
-                          className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {requestActionKey === `${request.id}:open` ? 'Updating...' : 'Move open'}
-                        </button>
-                      )}
-                      {requestStatus !== 'played' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleFulfillRequest(request)}
-                          disabled={requestActionKey === `${request.id}:played`}
-                          className="rounded-lg bg-emerald-500/15 px-3 py-2 text-[11px] font-display font-bold text-emerald-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {requestActionKey === `${request.id}:played` ? 'Updating...' : 'Mark played'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleSetRequestStatus(request, 'open')}
-                          disabled={requestActionKey === `${request.id}:open`}
-                          className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {requestActionKey === `${request.id}:open` ? 'Updating...' : 'Reopen'}
-                        </button>
-                      )}
-                      {requestStatus !== 'skipped' ? (
-                        <button
-                          type="button"
-                          onClick={() => handleSetRequestStatus(request, 'skipped')}
-                          disabled={requestActionKey === `${request.id}:skipped`}
-                          className="rounded-lg bg-amber-500/15 px-3 py-2 text-[11px] font-display font-bold text-amber-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {requestActionKey === `${request.id}:skipped` ? 'Updating...' : 'Skip'}
-                        </button>
-                      ) : null}
-                      {!request.is_host ? (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleModeration(request, 'requests_blocked')}
-                          disabled={moderationActionKey === `requests_blocked:${request.user_id}`}
-                          className="rounded-lg bg-fuchsia-500/15 px-3 py-2 text-[11px] font-display font-bold text-fuchsia-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {moderationActionKey === `requests_blocked:${request.user_id}`
-                            ? 'Updating...'
-                            : request.requests_blocked
-                              ? 'Allow requests'
-                              : 'Block requests'}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              )})}
-              {requests.length === 0 ? <p className="text-sm text-gray-500">No requests yet.</p> : null}
-            </div>
+        {hasPlayerPanels ? null : (
+          <div className="space-y-4">
+            {voteSection}
+            {requestsSection}
+            {chatSection}
           </div>
+        )}
+      </div>
 
-          <div className="relative rounded-2xl border border-piu-border bg-[#0c1220] p-3 flex flex-col min-h-[520px]">
-            {reactionBursts.map((burst) => (
-              <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
-                {burst.particles.map((particle) => (
-                  <span
-                    key={particle.id}
-                    className="live-reaction-burst__particle"
-                    style={{
-                      '--dx': particle.dx,
-                      '--dy': particle.dy,
-                      '--size': particle.size,
-                      '--color': particle.color,
-                    }}
-                  />
-                ))}
-              </div>
-            ))}
-
-            {floatingReactions.map((reaction) => (
-              <div
-                key={reaction.id}
-                className="absolute pointer-events-none z-10 animate-float-up"
-                style={{ left: `${reaction.x}%`, bottom: '88px' }}
-              >
-                {reaction.reaction?.kind === 'emote'
-                  ? <LiveEmote emote={reaction.reaction.emote} size="reaction" />
-                  : <span style={{ fontSize: '24px' }}>{reaction.reaction?.emoji || ''}</span>}
-              </div>
-            ))}
-
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Live chat</p>
-                <p className="text-sm font-display font-bold text-white">{messages.length} recent messages</p>
-              </div>
-              <div className="flex flex-wrap justify-end gap-1">
-                {QUICK_REACTIONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleQuickReaction(emoji)}
-                    disabled={viewerState.chat_muted || live?.status !== 'live'}
-                    className="w-8 h-8 rounded-lg bg-piu-dark/60 hover:bg-piu-dark text-sm disabled:opacity-40"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setShowEmoteTray((prev) => !prev)}
-                  disabled={viewerState.chat_muted || live?.status !== 'live'}
-                  className={`rounded-lg px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide transition-colors ${
-                    showEmoteTray
-                      ? 'bg-rose-500/20 text-rose-100'
-                      : 'bg-piu-dark/60 text-gray-300 hover:bg-piu-dark hover:text-white'
-                  } disabled:opacity-40`}
-                >
-                  Emotes
-                </button>
-              </div>
-            </div>
-
-            {currentVote ? (
-              <div className="mt-3 rounded-2xl border border-rose-400/25 bg-rose-500/8 p-2">
-                <p className="px-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-rose-200">
-                  Pinned Vote
-                </p>
-                <VotePanel vote={currentVote} canVote={!live?.is_host && live?.status === 'live'} onVote={handleCastVote} />
-              </div>
-            ) : null}
-
-            {showEmoteTray && live?.status === 'live' ? (
-              <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(244,114,182,0.14),transparent_38%),linear-gradient(180deg,#111827,#0b1220)] p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-display uppercase tracking-[0.24em] text-fuchsia-200">Shinsa Emotes</p>
-                    <p className="mt-1 text-[11px] text-gray-400">Tap an emote to fire it instantly, or add its token into your next message.</p>
-                  </div>
-                  <button type="button" onClick={() => setShowEmoteTray(false)} className="text-[11px] text-gray-500 hover:text-white">
-                    Close
-                  </button>
-                </div>
-
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {LIVE_EMOTES.map((emote) => (
-                    <div key={emote.token} className="rounded-2xl border border-white/8 bg-black/20 p-2">
-                      <button
-                        type="button"
-                        onClick={() => handleQuickReaction(emote.token)}
-                        disabled={viewerState.chat_muted || live?.status !== 'live'}
-                        className="w-full disabled:opacity-40"
-                      >
-                        <LiveEmote emote={emote} size="tray" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleInsertChatToken(emote.token)}
-                        disabled={viewerState.chat_muted || live?.status !== 'live'}
-                        className="mt-2 w-full rounded-lg bg-piu-dark/70 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
-                      >
-                        Add to message
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {LIVE_EMOJI_GROUPS.map((group) => (
-                    <div key={group.label} className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
-                      <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{group.label}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {group.emojis.map((emoji) => (
-                          <button
-                            key={`${group.label}-${emoji}`}
-                            type="button"
-                            onClick={() => handleQuickReaction(emoji)}
-                            disabled={viewerState.chat_muted || live?.status !== 'live'}
-                            className="flex h-9 w-9 items-center justify-center rounded-xl bg-piu-dark/70 text-base transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="flex-1 overflow-y-auto space-y-2 mt-3 pr-1">
-              {messages.map((msg) => {
-                const tone = getMessageTone(msg);
-                return (
-                  <div key={msg.id} className={`rounded-xl px-3 py-2 ${tone.wrapper}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        {tone.label ? (
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.labelClass}`}>
-                            {tone.label}
-                          </span>
-                        ) : null}
-                        {msg.is_system ? (
-                          <p className={`truncate text-[11px] font-display font-bold ${tone.usernameClass}`}>
-                            {msg.username || 'System'}
-                          </p>
-                        ) : (
-                          <UserIdentity
-                            avatar={msg.avatar}
-                            username={msg.username}
-                            skillTitle={msg.skill_title}
-                            isHost={msg.is_host}
-                          />
-                        )}
-                        {live?.is_host && !msg.is_system && msg.chat_muted ? (
-                          <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-amber-200">
-                            Muted
-                          </span>
-                        ) : null}
-                        {live?.is_host && !msg.is_system && msg.requests_blocked ? (
-                          <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-fuchsia-200">
-                            Requests off
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="shrink-0 text-[10px] text-gray-500">
-                        {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                      </p>
-                    </div>
-                    <MessageBody message={msg.message} tone={tone} isSystem={msg.is_system} />
-                    {live?.is_host && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteMessage(msg.id)}
-                          disabled={deletingMessageId === msg.id}
-                          className="rounded-lg bg-piu-dark px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleModeration(msg, 'chat_muted')}
-                          disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
-                          className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-amber-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {moderationActionKey === `chat_muted:${msg.user_id}`
-                            ? 'Updating...'
-                            : msg.chat_muted
-                              ? 'Unmute chat'
-                              : 'Mute chat'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleModeration(msg, 'requests_blocked')}
-                          disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
-                          className="rounded-lg bg-fuchsia-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-fuchsia-200 transition-colors hover:text-white disabled:opacity-60"
-                        >
-                          {moderationActionKey === `requests_blocked:${msg.user_id}`
-                            ? 'Updating...'
-                            : msg.requests_blocked
-                              ? 'Allow requests'
-                              : 'Block requests'}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-              <div ref={chatEndRef} />
-            </div>
-
-            {live?.status === 'live' ? (
-              <form onSubmit={handleSendChat} className="flex gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => setShowEmoteTray((prev) => !prev)}
-                  disabled={viewerState.chat_muted}
-                  className="btn-secondary px-3 text-xs disabled:opacity-40"
-                >
-                  {showEmoteTray ? 'Hide' : 'Emotes'}
-                </button>
-                <input
-                  ref={chatInputRef}
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  className="input-field flex-1"
-                  placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message or use :shinsa_hype:'}
-                  maxLength={500}
-                  disabled={viewerState.chat_muted}
-                />
-                <button type="submit" disabled={sendingChat || viewerState.chat_muted} className="btn-primary px-4 disabled:opacity-50">
-                  {sendingChat ? '...' : 'Send'}
-                </button>
-              </form>
-            ) : (
-              <p className="text-[11px] text-gray-500 mt-3">Chat is read-only because this session has ended.</p>
-            )}
-            {live?.status === 'live' && !live?.is_host && viewerState.chat_muted ? (
-              <p className="mt-2 text-[11px] text-amber-200">The host has muted your chat for this session.</p>
-            ) : null}
-          </div>
+      <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-piu-border/70 bg-[linear-gradient(180deg,rgba(9,12,20,0.94),rgba(6,8,14,0.98))] px-4 py-3 shadow-[0_-16px_36px_rgba(0,0,0,0.4)] lg:hidden ${hasPlayerPanels ? '' : 'hidden'}`}>
+        <div className="mx-auto grid max-w-2xl grid-cols-4 gap-2">
+          <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+            Songs
+          </button>
+          <button type="button" onClick={() => setMobilePanel('requests')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+            Requests
+          </button>
+          <button type="button" onClick={() => setMobilePanel('vote')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+            Vote
+          </button>
+          <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+            Chat
+          </button>
         </div>
       </div>
+
+      <MobilePanelSheet
+        open={mobilePanel === 'songs'}
+        title="Songs This Session"
+        subtitle="Full session results with sorting and judgment drill-in."
+        onClose={() => setMobilePanel('')}
+      >
+        {songsSection}
+      </MobilePanelSheet>
+
+      <MobilePanelSheet
+        open={mobilePanel === 'requests'}
+        title="Song Requests"
+        subtitle="Viewer requests, queue management, and quick search."
+        onClose={() => setMobilePanel('')}
+      >
+        {requestsSection}
+      </MobilePanelSheet>
+
+      <MobilePanelSheet
+        open={mobilePanel === 'vote'}
+        title="Vote Control"
+        subtitle="Run the next-chart vote without leaving the player HUD."
+        onClose={() => setMobilePanel('')}
+      >
+        {voteSection}
+      </MobilePanelSheet>
+
+      <MobilePanelSheet
+        open={mobilePanel === 'chat'}
+        title="Live Chat"
+        subtitle="Chat, emotes, moderation, and crowd reactions."
+        onClose={() => setMobilePanel('')}
+      >
+        {chatSection}
+      </MobilePanelSheet>
 
       <PlayDetailModal play={selectedPlay} onClose={() => setSelectedPlay(null)} />
     </div>
