@@ -78,6 +78,185 @@ function normalizeCommentUserRows(rows = [], size = 40) {
   }));
 }
 
+function toInt(value) {
+  const numeric = parseInt(value, 10);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function safeParseJsonArray(raw) {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function hasJudgmentData(entry) {
+  return (
+    toInt(entry?.perfect) > 0 ||
+    toInt(entry?.great) > 0 ||
+    toInt(entry?.good) > 0 ||
+    toInt(entry?.bad) > 0 ||
+    toInt(entry?.miss) > 0
+  );
+}
+
+let recentPlayJudgmentsBeforeStmt = null;
+let recentPlayJudgmentsAnyStmt = null;
+
+function getRecentPlayJudgmentsBeforeStmt(db) {
+  if (!recentPlayJudgmentsBeforeStmt) {
+    recentPlayJudgmentsBeforeStmt = db.prepare(`
+      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank
+      FROM user_recently_played
+      WHERE user_id = ?
+        AND song_title = ?
+        AND mode = ?
+        AND level = ?
+        AND score = ?
+        AND (
+          COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
+        ) > 0
+        AND datetime(COALESCE(date_played, '')) <= datetime(?)
+      ORDER BY
+        datetime(COALESCE(date_played, '1970-01-01')) DESC,
+        (
+          COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
+        ) DESC,
+        id DESC
+      LIMIT 1
+    `);
+  }
+  return recentPlayJudgmentsBeforeStmt;
+}
+
+function getRecentPlayJudgmentsAnyStmt(db) {
+  if (!recentPlayJudgmentsAnyStmt) {
+    recentPlayJudgmentsAnyStmt = db.prepare(`
+      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank
+      FROM user_recently_played
+      WHERE user_id = ?
+        AND song_title = ?
+        AND mode = ?
+        AND level = ?
+        AND score = ?
+        AND (
+          COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
+        ) > 0
+      ORDER BY
+        datetime(COALESCE(date_played, '1970-01-01')) DESC,
+        (
+          COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
+        ) DESC,
+        id DESC
+      LIMIT 1
+    `);
+  }
+  return recentPlayJudgmentsAnyStmt;
+}
+
+function findRecentPlayJudgments(db, { userId, createdAt, songTitle, mode, level, score }) {
+  if (!userId || !songTitle || !mode) return null;
+  const numericLevel = toInt(level);
+  const numericScore = toInt(score);
+  if (numericLevel <= 0 || numericScore <= 0) return null;
+
+  if (createdAt) {
+    const datedMatch = getRecentPlayJudgmentsBeforeStmt(db).get(
+      userId,
+      songTitle,
+      mode,
+      numericLevel,
+      numericScore,
+      createdAt
+    );
+    if (datedMatch) return datedMatch;
+  }
+
+  return getRecentPlayJudgmentsAnyStmt(db).get(userId, songTitle, mode, numericLevel, numericScore) || null;
+}
+
+function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'score') {
+  if (!entry || hasJudgmentData(entry)) return entry;
+
+  const lookup = findRecentPlayJudgments(db, {
+    userId,
+    createdAt,
+    songTitle: entry.song_title,
+    mode: entry.mode,
+    level: entry.level,
+    score: entry[scoreKey],
+  });
+  if (!lookup) return entry;
+
+  return {
+    ...entry,
+    perfect: toInt(lookup.perfect),
+    great: toInt(lookup.great),
+    good: toInt(lookup.good),
+    bad: toInt(lookup.bad),
+    miss: toInt(lookup.miss),
+    max_combo: Math.max(toInt(entry.max_combo), toInt(lookup.max_combo)),
+    plate: entry.plate || lookup.plate || '',
+    background_url: entry.background_url || lookup.background_url || '',
+    over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
+  };
+}
+
+function enrichUpscoreRow(db, upscore) {
+  if (!upscore?.upscores_json) return upscore;
+  const items = safeParseJsonArray(upscore.upscores_json);
+  if (items.length === 0) return upscore;
+
+  const enrichedItems = items.map((item) =>
+    enrichEntryWithJudgments(db, upscore.user_id, upscore.created_at, item, 'new_score')
+  );
+
+  return {
+    ...upscore,
+    upscores_json: JSON.stringify(enrichedItems),
+  };
+}
+
+function buildClearFallbackItem(clear) {
+  if (!clear?.song_title || !clear?.mode || !toInt(clear?.level)) return null;
+  return {
+    entry_type: 'song_clear',
+    song_title: clear.song_title,
+    mode: clear.mode,
+    level: toInt(clear.level),
+    score: toInt(clear.score),
+    grade: clear.grade || '',
+    plate: clear.plate || '',
+    background_url: clear.background_url || '',
+    perfect: 0,
+    great: 0,
+    good: 0,
+    bad: 0,
+    miss: 0,
+    pumbility_gain: toInt(clear.pumbility_gain),
+    singles_pumbility_gain: toInt(clear.singles_pumbility_gain),
+    over_top100_rank: toInt(clear.over_top100_rank),
+  };
+}
+
+function enrichClearRow(db, clear) {
+  const parsedItems = safeParseJsonArray(clear?.clears_json);
+  const items = parsedItems.length > 0 ? parsedItems : [buildClearFallbackItem(clear)].filter(Boolean);
+  if (items.length === 0) return clear;
+
+  const enrichedItems = items.map((item) => {
+    if (String(item?.entry_type || '') === 'title_unlock') return item;
+    return enrichEntryWithJudgments(db, clear.user_id, clear.created_at, item, 'score');
+  });
+
+  return {
+    ...clear,
+    clears_json: JSON.stringify(enrichedItems),
+  };
+}
+
 // Multer config for image uploads (memory-only, images stored as base64 in DB)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -742,7 +921,7 @@ router.get('/upscores/:id', optionalAuth, (req, res) => {
   const upscoreId = parseInt(req.params.id);
   if (isNaN(upscoreId)) return res.status(400).json({ error: 'Invalid upscore ID' });
 
-  const upscore = db.prepare(`
+  let upscore = db.prepare(`
     SELECT us.*, u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM upscore_pumps WHERE upscore_id = us.id) as pump_count,
            (SELECT COUNT(*) FROM upscore_comments WHERE upscore_id = us.id) as comment_count
@@ -750,6 +929,7 @@ router.get('/upscores/:id', optionalAuth, (req, res) => {
     WHERE us.id = ?
   `).get(upscoreId);
   if (!upscore) return res.status(404).json({ error: 'Upscore not found' });
+  upscore = enrichUpscoreRow(db, upscore);
 
   if (req.user) {
     upscore.user_pumped = !!db.prepare(
@@ -766,7 +946,7 @@ router.get('/clears/:id', optionalAuth, (req, res) => {
   const clearId = parseInt(req.params.id);
   if (isNaN(clearId)) return res.status(400).json({ error: 'Invalid clear ID' });
 
-  const clear = db.prepare(`
+  let clear = db.prepare(`
     SELECT nc.*, u.username, u.avatar, u.nationality,
            (SELECT COUNT(*) FROM new_clear_pumps WHERE clear_id = nc.id) as pump_count,
            (SELECT COUNT(*) FROM new_clear_comments WHERE clear_id = nc.id) as comment_count
@@ -774,6 +954,7 @@ router.get('/clears/:id', optionalAuth, (req, res) => {
     WHERE nc.id = ?
   `).get(clearId);
   if (!clear) return res.status(404).json({ error: 'Clear not found' });
+  clear = enrichClearRow(db, clear);
 
   if (req.user) {
     clear.user_pumped = !!db.prepare(
@@ -853,8 +1034,11 @@ router.get('/feed', requireAuth, (req, res) => {
     c.avatar = normalizeUserAvatarForList(c.avatar, c.user_id, 64);
   }
 
+  const enrichedUpscores = upscores.map((us) => enrichUpscoreRow(db, us));
+  const enrichedClears = clears.map((clear) => enrichClearRow(db, clear));
+
   // Merge and sort by created_at (string comparison works for ISO timestamps)
-  const feed = [...posts, ...upscores, ...clears]
+  const feed = [...posts, ...enrichedUpscores, ...enrichedClears]
     .sort((a, b) => (b.created_at > a.created_at ? 1 : b.created_at < a.created_at ? -1 : 0))
     .slice(0, limit);
 
