@@ -1,21 +1,25 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
 const { getDb } = require('../db/schema');
 const { requireAuth } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
+const { addLiveSessionClient, emitLiveSessionEvent } = require('../lib/liveSessionHub');
 const { buildLiveSessionSummary } = require('../lib/liveSessionSummary');
 const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
 const piugameRoutes = require('./piugame');
 const socialRoutes = require('./social');
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 
 const PRESENCE_TTL_SECONDS = 30;
 const CHAT_LIMIT = 200;
 const REQUEST_LIMIT = 100;
 const PLAY_LIMIT = 250;
 const VOTE_DURATION_SECONDS = 30;
+const STREAM_HEARTBEAT_MS = 25000;
 const FAIL_MESSAGES = [
   'Better luck next time!',
   'Shake it off and go again.',
@@ -44,6 +48,7 @@ const ELITE_MESSAGES = [
 const syncRecentlyPlayedForUser = piugameRoutes.syncRecentlyPlayedForUser;
 const insertGroupedNewClearPost = piugameRoutes.insertGroupedNewClearPost;
 const invalidateRecentActivityCache = socialRoutes.invalidateRecentActivityCache;
+const voteCloseTimers = new Map();
 
 function toInt(value) {
   return parseInt(value, 10) || 0;
@@ -387,6 +392,7 @@ function getVoteSnapshot(db, voteId, currentUserId = '') {
 function closeVote(db, voteId, options = {}) {
   const snapshot = getVoteSnapshot(db, voteId, options.currentUserId || '');
   if (!snapshot || snapshot.status !== 'active') return snapshot;
+  clearVoteCloseTimer(voteId);
 
   const rankedOptions = snapshot.options.slice().sort((a, b) => {
     if (b.vote_count !== a.vote_count) return b.vote_count - a.vote_count;
@@ -416,7 +422,11 @@ function closeVote(db, voteId, options = {}) {
     }
   }
 
-  return getVoteSnapshot(db, voteId, options.currentUserId || '');
+  const closedSnapshot = getVoteSnapshot(db, voteId, options.currentUserId || '');
+  if (options.broadcast !== false) {
+    broadcastLiveSessionSnapshot(db, snapshot.live_session_id, options.reason || 'vote_closed');
+  }
+  return closedSnapshot;
 }
 
 function getLatestVoteSnapshot(db, liveSessionId, currentUserId = '') {
@@ -431,7 +441,7 @@ function getLatestVoteSnapshot(db, liveSessionId, currentUserId = '') {
 
   const endsAtMs = vote.ends_at ? Date.parse(`${vote.ends_at}Z`) : NaN;
   if (vote.status === 'active' && Number.isFinite(endsAtMs) && Date.now() >= endsAtMs) {
-    return closeVote(db, vote.id, { currentUserId });
+    return closeVote(db, vote.id, { currentUserId, broadcast: false });
   }
 
   return getVoteSnapshot(db, vote.id, currentUserId);
@@ -811,6 +821,87 @@ function buildSummaryPostContent(summary) {
   return `${summary.postText}\n\n${marker}`;
 }
 
+function verifyLiveStreamToken(req) {
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  if (!token) {
+    const err = new Error('Authentication required');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    const err = new Error('Invalid or expired token');
+    err.statusCode = 401;
+    throw err;
+  }
+}
+
+function broadcastLiveSessionSnapshot(db, liveSessionId, reason = 'session_updated') {
+  return emitLiveSessionEvent(liveSessionId, 'snapshot', ({ userId }) => {
+    const snapshot = buildSessionSnapshot(db, liveSessionId, userId);
+    if (!snapshot) return undefined;
+    return {
+      reason,
+      snapshot,
+      emitted_at: new Date().toISOString(),
+    };
+  });
+}
+
+function broadcastLivePresence(liveSessionId, payload = {}) {
+  return emitLiveSessionEvent(liveSessionId, 'presence', {
+    live_session_id: liveSessionId,
+    viewer_count: Math.max(0, toInt(payload.viewer_count)),
+    viewer_peak: Math.max(0, toInt(payload.viewer_peak)),
+    emitted_at: new Date().toISOString(),
+  });
+}
+
+function clearVoteCloseTimer(voteId) {
+  const key = String(voteId || '').trim();
+  const timer = voteCloseTimers.get(key);
+  if (timer) {
+    clearTimeout(timer);
+    voteCloseTimers.delete(key);
+  }
+}
+
+function scheduleVoteClose(db, voteId) {
+  const key = String(voteId || '').trim();
+  if (!key) return;
+
+  clearVoteCloseTimer(key);
+
+  const vote = db.prepare(`
+    SELECT id, status, ends_at
+    FROM live_session_votes
+    WHERE id = ?
+    LIMIT 1
+  `).get(key);
+  if (!vote || vote.status !== 'active') return;
+
+  const endsAtMs = vote.ends_at ? Date.parse(`${vote.ends_at}Z`) : NaN;
+  if (!Number.isFinite(endsAtMs)) return;
+
+  const delayMs = endsAtMs - Date.now();
+  if (delayMs <= 0) {
+    closeVote(db, key, { emitMessage: true, broadcast: true, reason: 'vote_closed' });
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    voteCloseTimers.delete(key);
+    try {
+      closeVote(db, key, { emitMessage: true, broadcast: true, reason: 'vote_closed' });
+    } catch {
+      // Ignore close errors; the next snapshot request can recover state.
+    }
+  }, delayMs);
+  voteCloseTimers.set(key, timer);
+}
+
 router.get('/sessions/mine/active', requireAuth, (req, res) => {
   const db = getDb();
   const session = getActiveSessionForHost(db, req.user.id);
@@ -869,6 +960,50 @@ router.get('/sessions/:id', requireAuth, (req, res) => {
   }
 });
 
+router.get('/sessions/:id/stream', (req, res) => {
+  let detach = null;
+  let heartbeat = null;
+
+  try {
+    const decoded = verifyLiveStreamToken(req);
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (res.flushHeaders) res.flushHeaders();
+
+    detach = addLiveSessionClient(session.id, decoded.id, res);
+    heartbeat = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        // Ignore broken sockets; request close handler cleans up.
+      }
+    }, STREAM_HEARTBEAT_MS);
+
+    res.write('event: ready\ndata: {"ok":true}\n\n');
+    const snapshot = buildSessionSnapshot(db, session, decoded.id);
+    res.write(`event: snapshot\ndata: ${JSON.stringify({
+      reason: 'initial',
+      snapshot,
+      emitted_at: new Date().toISOString(),
+    })}\n\n`);
+  } catch (err) {
+    if (!res.headersSent) {
+      return res.status(err.statusCode || 500).json({ error: err.message });
+    }
+    return res.end();
+  }
+
+  req.on('close', () => {
+    if (heartbeat) clearInterval(heartbeat);
+    if (detach) detach();
+  });
+});
+
 router.post('/sessions/:id/presence', requireAuth, (req, res) => {
   try {
     const db = getDb();
@@ -886,6 +1021,7 @@ router.post('/sessions/:id/presence', requireAuth, (req, res) => {
 
     const viewerCount = getViewerCount(db, session);
     const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
+    broadcastLivePresence(session.id, { viewer_count: viewerCount, viewer_peak: viewerPeak });
     res.json({ viewer_count: viewerCount, viewer_peak: viewerPeak });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -926,6 +1062,7 @@ router.post('/sessions/:id/messages', requireAuth, (req, res) => {
     `).run(id, session.id, user.id, user.username || req.user.username || 'User', avatar, message);
 
     const row = db.prepare('SELECT * FROM live_session_messages WHERE id = ?').get(id);
+    broadcastLiveSessionSnapshot(db, session.id, 'message');
     res.status(201).json({ message: normalizeMessageRow(row) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -945,6 +1082,7 @@ router.post('/sessions/:id/sync', requireAuth, async (req, res) => {
     const syncResult = await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: false });
     const delta = applyLiveSyncResult(db, session, syncResult);
     session = requireLiveSession(db, req.params.id);
+    broadcastLiveSessionSnapshot(db, session.id, 'sync');
 
     res.json({
       success: true,
@@ -1024,6 +1162,7 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
       request: getSessionRequests(db, session.id).find((row) => row.id === requestId) || null,
       message: normalizeMessageRow(db.prepare('SELECT * FROM live_session_messages WHERE id = ?').get(messageId)),
     });
+    broadcastLiveSessionSnapshot(db, session.id, 'request_created');
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
@@ -1068,6 +1207,7 @@ router.post('/sessions/:id/requests/:requestId/fulfill', requireAuth, (req, res)
     }
 
     const request = getSessionRequests(db, session.id).find((row) => row.id === requestRow.id) || null;
+    broadcastLiveSessionSnapshot(db, session.id, 'request_fulfilled');
     res.json({
       request,
       snapshot: buildSessionSnapshot(db, session, req.user.id),
@@ -1137,6 +1277,8 @@ router.post('/sessions/:id/votes', requireAuth, (req, res) => {
           updated_at = datetime('now')
       WHERE id = ?
     `).run(pinnedMessageId, voteId);
+    scheduleVoteClose(db, voteId);
+    broadcastLiveSessionSnapshot(db, session.id, 'vote_created');
 
     res.status(201).json({ vote: getVoteSnapshot(db, voteId, req.user.id) });
   } catch (err) {
@@ -1174,6 +1316,7 @@ router.post('/votes/:voteId/cast', requireAuth, (req, res) => {
         option_id = excluded.option_id,
         created_at = datetime('now')
     `).run(vote.id, optionId, req.user.id);
+    broadcastLiveSessionSnapshot(db, vote.live_session_id, 'vote_updated');
 
     res.json({ vote: getVoteSnapshot(db, vote.id, req.user.id) });
   } catch (err) {
@@ -1196,7 +1339,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
 
     const latestVote = getLatestVoteSnapshot(db, session.id, req.user.id);
     if (latestVote && latestVote.status === 'active') {
-      closeVote(db, latestVote.id, { currentUserId: req.user.id, emitMessage: false });
+      closeVote(db, latestVote.id, { currentUserId: req.user.id, emitMessage: false, broadcast: false });
     }
 
     const host = getHostProfile(db, session.host_user_id);
@@ -1316,6 +1459,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     }
 
     session = requireLiveSession(db, req.params.id);
+    broadcastLiveSessionSnapshot(db, session.id, 'session_ended');
     res.json({
       success: true,
       upscore_post_id: upscorePostId,
@@ -1329,5 +1473,23 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
+
+function scheduleActiveVoteClosures() {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT id
+    FROM live_session_votes
+    WHERE status = 'active'
+  `).all();
+  for (const row of rows) {
+    scheduleVoteClose(db, row.id);
+  }
+}
+
+try {
+  scheduleActiveVoteClosures();
+} catch (err) {
+  console.error('Live vote timer initialization error:', err.message);
+}
 
 module.exports = router;

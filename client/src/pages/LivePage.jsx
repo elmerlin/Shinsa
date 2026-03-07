@@ -7,10 +7,10 @@ import {
   createLiveVote,
   endLiveSession,
   fulfillLiveRequest,
-  getLiveMessages,
   getLiveSession,
   getMyLiveSession,
   getSongLibrary,
+  openLiveSessionStream,
   sendLiveMessage,
   sendLivePresence,
   sendLiveRequest,
@@ -359,11 +359,13 @@ export default function LivePage() {
   const [syncing, setSyncing] = useState(false);
   const [ending, setEnding] = useState(false);
   const [fulfillingRequestId, setFulfillingRequestId] = useState('');
+  const [streamState, setStreamState] = useState('idle');
   const [copied, setCopied] = useState(false);
   const chatEndRef = useRef(null);
   const reactionIdRef = useRef(0);
   const seenMessageIdsRef = useRef(new Set());
   const presenceIdRef = useRef('');
+  const liveStreamRef = useRef(null);
 
   const activeSessionId = sessionId || snapshot?.session?.id || '';
   const live = snapshot?.session || null;
@@ -379,24 +381,12 @@ export default function LivePage() {
   }
 
   const applySnapshot = (data, options = {}) => {
-    startTransition(() => {
-      setSnapshot(data);
-      if (Array.isArray(data?.messages)) {
-        if (options.markMessagesSeen) {
-          seenMessageIdsRef.current = new Set(data.messages.map((msg) => msg.id));
-        }
-        setMessages(data.messages);
-      }
-    });
-  };
-
-  const applyMessages = (rows, options = {}) => {
-    const list = Array.isArray(rows) ? rows : [];
-    if (options.markSeen) {
-      seenMessageIdsRef.current = new Set(list.map((msg) => msg.id));
+    const nextMessages = Array.isArray(data?.messages) ? data.messages : [];
+    if (options.markMessagesSeen) {
+      seenMessageIdsRef.current = new Set(nextMessages.map((msg) => msg.id));
     } else {
       const seen = seenMessageIdsRef.current;
-      for (const msg of list) {
+      for (const msg of nextMessages) {
         if (seen.has(msg.id)) continue;
         seen.add(msg.id);
         if (!msg?.is_system && isEmojiOnly(msg?.message)) {
@@ -409,7 +399,11 @@ export default function LivePage() {
         }
       }
     }
-    startTransition(() => setMessages(list));
+
+    startTransition(() => {
+      setSnapshot(data);
+      setMessages(nextMessages);
+    });
   };
 
   const showFloatingReaction = (emoji) => {
@@ -456,30 +450,108 @@ export default function LivePage() {
   }, [sessionId, user]);
 
   useEffect(() => {
-    if (!user || !activeSessionId) return undefined;
-    const loadSnapshot = async () => {
+    if (!user || !activeSessionId) {
+      setStreamState('idle');
+      return undefined;
+    }
+
+    let closed = false;
+    let source;
+    try {
+      setStreamState('connecting');
+      source = openLiveSessionStream(activeSessionId);
+      liveStreamRef.current = source;
+    } catch (err) {
+      setStreamState('error');
+      setError(err.message || 'Failed to connect live channel');
+      return undefined;
+    }
+
+    const handleReady = () => {
+      if (closed) return;
+      setError('');
+      setStreamState('live');
+    };
+
+    const handleSnapshot = (event) => {
       try {
-        const data = await getLiveSession(activeSessionId);
-        applySnapshot(data);
-      } catch (err) {
-        setError(err.message || 'Failed to refresh live session');
+        const payload = JSON.parse(event.data || '{}');
+        if (payload?.snapshot) {
+          applySnapshot(payload.snapshot, { markMessagesSeen: payload?.reason === 'initial' });
+          setError('');
+        }
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    const handlePresence = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        const viewerCount = parseInt(payload?.viewer_count, 10) || 0;
+        const viewerPeak = parseInt(payload?.viewer_peak, 10) || 0;
+        setSnapshot((prev) => {
+          if (!prev?.session) return prev;
+          return {
+            ...prev,
+            session: {
+              ...prev.session,
+              viewer_count: viewerCount,
+              viewer_peak: viewerPeak,
+            },
+            summary: prev.summary ? {
+              ...prev.summary,
+              viewerCount,
+              viewerPeak,
+            } : prev.summary,
+          };
+        });
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    source.addEventListener('ready', handleReady);
+    source.addEventListener('snapshot', handleSnapshot);
+    source.addEventListener('presence', handlePresence);
+    source.onopen = handleReady;
+    source.onerror = () => {
+      if (!closed) setStreamState('reconnecting');
+    };
+
+    return () => {
+      closed = true;
+      if (liveStreamRef.current) {
+        liveStreamRef.current.close();
+        liveStreamRef.current = null;
+      } else if (source) {
+        source.close();
       }
     };
-    const interval = setInterval(loadSnapshot, 7000);
-    return () => clearInterval(interval);
   }, [activeSessionId, user]);
 
   useEffect(() => {
-    if (!user || !activeSessionId) return undefined;
-    const loadMessages = async () => {
+    if (!user || !activeSessionId || loading || streamState === 'live') return undefined;
+
+    let cancelled = false;
+    const refreshSnapshot = async () => {
       try {
-        const data = await getLiveMessages(activeSessionId);
-        applyMessages(data?.messages || []);
-      } catch {}
+        const data = await getLiveSession(activeSessionId);
+        if (cancelled || !data?.session) return;
+        applySnapshot(data);
+        setError('');
+      } catch (err) {
+        if (!cancelled && streamState === 'error') {
+          setError(err.message || 'Failed to refresh live session');
+        }
+      }
     };
-    const interval = setInterval(loadMessages, 3000);
-    return () => clearInterval(interval);
-  }, [activeSessionId, user]);
+
+    refreshSnapshot();
+    const interval = setInterval(refreshSnapshot, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeSessionId, loading, streamState, user]);
 
   useEffect(() => {
     if (!user || !activeSessionId || live?.status !== 'live') return undefined;
@@ -784,6 +856,23 @@ export default function LivePage() {
           <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300">
             Peak {live?.viewer_peak || 0}
           </span>
+          {activeSessionId ? (
+            <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold uppercase tracking-wide ${
+              streamState === 'live'
+                ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-200'
+                : streamState === 'reconnecting'
+                  ? 'border border-orange-400/30 bg-orange-500/10 text-orange-200'
+                  : 'border border-piu-border bg-black/20 text-gray-400'
+            }`}>
+              {streamState === 'live'
+                ? 'Channel live'
+                : streamState === 'reconnecting'
+                  ? 'Reconnecting'
+                  : streamState === 'connecting'
+                    ? 'Connecting'
+                    : 'Offline'}
+            </span>
+          ) : null}
           {live?.last_sync_at ? (
             <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-400">
               Last sync {new Date(`${live.last_sync_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
