@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
+const path = require('path');
 const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const {
@@ -62,6 +64,7 @@ const LEADERBOARD_GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AA
 const LEADERBOARD_GRADE_INDEX = Object.fromEntries(LEADERBOARD_GRADE_ORDER.map((grade, idx) => [grade, idx]));
 const PLAYER_SHEET_CACHE_TTL_MS = Math.max(30 * 1000, (parseInt(process.env.PLAYER_SHEET_CACHE_TTL_SECONDS, 10) || 300) * 1000);
 const playerSheetCache = new Map();
+let cachedPiugameSongAliases = null;
 
 function clearPlayerSheetCache() {
   playerSheetCache.clear();
@@ -114,6 +117,18 @@ function chartScoreKey(songTitle, mode, level) {
   return `${title}|${chartMode}|${chartLevel}`;
 }
 
+function normalizePiugameSongName(name) {
+  return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function normalizePiugameMode(mode) {
+  const normalized = String(mode || '').trim().toLowerCase();
+  if (normalized === 'single' || normalized === 'singles' || normalized === 's') return 'Single';
+  if (normalized === 'double' || normalized === 'doubles' || normalized === 'd') return 'Double';
+  if (normalized === 'coop' || normalized === 'co-op' || normalized === 'co op' || normalized === 'cooperative' || normalized === 'c') return 'CoOp';
+  return String(mode || '').trim();
+}
+
 function normalizeOverRankingSongTitle(songTitle) {
   const normalized = String(songTitle || '').replace(/\s+/g, ' ').trim();
   if (!normalized) return '';
@@ -124,9 +139,49 @@ function normalizeOverRankingSongTitle(songTitle) {
   return normalized;
 }
 
-function overRankingChartKey(songTitle, mode, level) {
-  const title = normalizeOverRankingSongTitle(songTitle);
-  const chartMode = String(mode || '').trim();
+function loadPiugameSongAliases() {
+  if (cachedPiugameSongAliases) return cachedPiugameSongAliases;
+
+  const aliasesPath = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
+  const aliases = {};
+  if (!fs.existsSync(aliasesPath)) {
+    cachedPiugameSongAliases = aliases;
+    return aliases;
+  }
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(aliasesPath, 'utf-8'));
+    const rawAliases = payload?.aliases && typeof payload.aliases === 'object' ? payload.aliases : {};
+    for (const [alias, canonical] of Object.entries(rawAliases)) {
+      const aliasKey = normalizePiugameSongName(alias);
+      const canonicalKey = normalizePiugameSongName(canonical);
+      if (!aliasKey || !canonicalKey) continue;
+      aliases[aliasKey] = canonicalKey;
+    }
+  } catch (err) {
+    console.warn('Failed to load PIUGAME song aliases:', err.message);
+  }
+
+  cachedPiugameSongAliases = aliases;
+  return aliases;
+}
+
+function toCanonicalOverRankingSongTitle(songTitle, aliases = null) {
+  const normalized = normalizePiugameSongName(normalizeOverRankingSongTitle(songTitle));
+  if (!normalized) return '';
+  const aliasLookup = aliases || loadPiugameSongAliases();
+  const seen = new Set();
+  let current = normalized;
+  while (aliasLookup[current] && !seen.has(current)) {
+    seen.add(current);
+    current = aliasLookup[current];
+  }
+  return current;
+}
+
+function overRankingChartKey(songTitle, mode, level, aliases = null) {
+  const title = aliases ? toCanonicalOverRankingSongTitle(songTitle, aliases) : normalizeOverRankingSongTitle(songTitle);
+  const chartMode = aliases ? normalizePiugameMode(mode) : String(mode || '').trim();
   const chartLevel = parseInt(level, 10) || 0;
   if (!title || !chartMode || chartLevel <= 0) return '';
   return `${title}|${chartMode}|${chartLevel}`;
@@ -265,7 +320,7 @@ function getOverTop100Rank(overLookup, songTitle, mode, level, score, playedAt =
   const numericScore = parseInt(score, 10) || 0;
   if (numericScore <= 0) return 0;
 
-  const key = overRankingChartKey(songTitle, mode, level);
+  const key = overRankingChartKey(songTitle, mode, level, loadPiugameSongAliases());
   if (!key) return 0;
   const chart = overLookup.get(key);
   if (!chart) return 0;
@@ -4636,6 +4691,7 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
   const db = getDb();
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ error: 'Authentication required' });
+  const songAliases = loadPiugameSongAliases();
 
   const rawLimit = parseInt(req.query?.limit, 10);
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50;
@@ -4697,7 +4753,7 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
   }
 
   const rows = scoreRows.map((row) => {
-    const chartKey = overRankingChartKey(row.song_title, row.mode, row.level);
+    const chartKey = overRankingChartKey(row.song_title, row.mode, row.level, songAliases);
     const chart = chartLookup.get(chartKey) || null;
     const score = Math.max(0, parseInt(row.score, 10) || 0);
     const overRow = overByChartAndScore.get(`${chartKey}|${score}`) || overByChart.get(chartKey) || null;
