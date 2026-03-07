@@ -5,7 +5,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
 import MarkdownContent from './components/MarkdownContent';
-import { searchUsers, consumeGroupPopup } from './utils/api';
+import { searchUsers, consumeGroupPopup, getMyCheckinStatus, checkout } from './utils/api';
 import { getProfilePath } from './utils/profile';
 import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
@@ -47,10 +47,13 @@ import DojoPage from './pages/DojoPage';
 import LeaderboardsPage from './pages/LeaderboardsPage';
 
 const DOJO_TARGET_GROUP = 'pump dojo';
+const DOJO_VENUE_SLUG = 'london-pump-dojo';
 const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
+const DOJO_CHECKOUT_POPUP_STORAGE_PREFIX = 'dojo-checkout-popup-last-shown';
 const DOJO_RECHECK_DEFAULT_MS = 60 * 60 * 1000;
 const DOJO_RECHECK_NEARBY_MS = 10 * 60 * 1000;
 const DOJO_NEARBY_RADIUS_METERS = 3000;
+const DOJO_CHECKOUT_REMINDER_COOLDOWN_MS = 30 * 60 * 1000;
 const DOJO_GEO_TIMEOUT_MS = 10000;
 const DOJO_GEO_MAX_AGE_MS = 120000;
 const DOJO_GEOFENCE = {
@@ -99,6 +102,53 @@ function msUntilNextLocalDay() {
   const next = new Date(now);
   next.setHours(24, 0, 0, 0);
   return Math.max(1000, next.getTime() - now.getTime());
+}
+
+function getDojoCheckoutPopupStorageKey(userId) {
+  return `${DOJO_CHECKOUT_POPUP_STORAGE_PREFIX}:${String(userId || '').trim()}`;
+}
+
+function readDojoCheckoutPopupState(userId) {
+  if (typeof window === 'undefined' || !userId) return null;
+  try {
+    const raw = localStorage.getItem(getDojoCheckoutPopupStorageKey(userId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const checkinId = String(parsed?.checkinId || '').trim();
+    const shownAt = Number(parsed?.shownAt || 0);
+    if (!checkinId || !Number.isFinite(shownAt) || shownAt <= 0) return null;
+    return { checkinId, shownAt };
+  } catch {
+    return null;
+  }
+}
+
+function markDojoCheckoutPopupShown(userId, checkinId) {
+  if (typeof window === 'undefined' || !userId || !checkinId) return;
+  try {
+    localStorage.setItem(
+      getDojoCheckoutPopupStorageKey(userId),
+      JSON.stringify({ checkinId: String(checkinId), shownAt: Date.now() })
+    );
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clearDojoCheckoutPopupState(userId) {
+  if (typeof window === 'undefined' || !userId) return;
+  try {
+    localStorage.removeItem(getDojoCheckoutPopupStorageKey(userId));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function getDojoCheckoutReminderRemainingMs(userId, checkinId) {
+  const state = readDojoCheckoutPopupState(userId);
+  if (!state || state.checkinId !== String(checkinId || '')) return 0;
+  const remainingMs = DOJO_CHECKOUT_REMINDER_COOLDOWN_MS - (Date.now() - state.shownAt);
+  return remainingMs > 0 ? remainingMs : 0;
 }
 
 function NotificationBell() {
@@ -736,6 +786,65 @@ function DojoProximityPopupModal({ onClose, onOpenCheckin }) {
   );
 }
 
+function DojoCheckoutPopupModal({ prompt, loading, error, onClose, onCheckout }) {
+  const machineLabel = String(prompt?.machineName || '').trim();
+  return (
+    <div className="fixed inset-0 z-[96] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl border border-piu-border bg-[#0b1324] shadow-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Check Out Reminder</p>
+            <h3 className="text-base font-display font-bold text-red-300 truncate">
+              You appear to have left {DOJO_GEOFENCE.name}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-60"
+          >
+            Close
+          </button>
+        </div>
+        <div className="px-4 py-4 space-y-4">
+          <p className="text-sm text-gray-300">
+            {machineLabel
+              ? `You are still checked in on ${machineLabel}. Check out now?`
+              : 'You are still checked in. Check out now?'}
+          </p>
+          <p className="text-xs text-gray-500">
+            {DOJO_GEOFENCE.address}
+          </p>
+          {error && (
+            <p className="text-xs text-red-300 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
+              {error}
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn-secondary text-sm"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Later
+            </button>
+            <button
+              type="button"
+              className="btn-primary text-sm"
+              onClick={onCheckout}
+              disabled={loading}
+            >
+              {loading ? 'Checking out...' : 'Check Out'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -743,6 +852,10 @@ export default function App() {
   const [groupPopup, setGroupPopup] = useState(null);
   const [groupPopupSlide, setGroupPopupSlide] = useState(0);
   const [showDojoPopup, setShowDojoPopup] = useState(false);
+  const [showDojoCheckoutPopup, setShowDojoCheckoutPopup] = useState(false);
+  const [dojoCheckoutPrompt, setDojoCheckoutPrompt] = useState(null);
+  const [dojoCheckoutLoading, setDojoCheckoutLoading] = useState(false);
+  const [dojoCheckoutError, setDojoCheckoutError] = useState('');
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
@@ -783,8 +896,11 @@ export default function App() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id || !canShowDojoPopup) {
+    if (!user?.id || !canAccessCheckin) {
       setShowDojoPopup(false);
+      setShowDojoCheckoutPopup(false);
+      setDojoCheckoutPrompt(null);
+      setDojoCheckoutError('');
       return;
     }
     if (typeof window === 'undefined' || !window.isSecureContext || !navigator.geolocation) {
@@ -824,14 +940,46 @@ export default function App() {
       if (cancelled || running) return;
       if (document.visibilityState === 'hidden') return;
 
-      if (getStoredDay() === todayLocalKey()) {
-        // Popup already shown today; resume checking tomorrow.
-        scheduleNext(msUntilNextLocalDay());
-        return;
-      }
-
       running = true;
-      navigator.geolocation.getCurrentPosition(
+      getMyCheckinStatus()
+        .then((status) => {
+          if (cancelled) {
+            running = false;
+            return;
+          }
+
+          const activeCheckin = status?.checked_in ? status.checkin : null;
+          const checkedIntoDojo = activeCheckin?.venue_slug === DOJO_VENUE_SLUG;
+
+          if (!checkedIntoDojo) {
+            clearDojoCheckoutPopupState(user.id);
+            setShowDojoCheckoutPopup(false);
+            setDojoCheckoutPrompt(null);
+            setDojoCheckoutError('');
+          }
+
+          if (activeCheckin && !checkedIntoDojo) {
+            setShowDojoPopup(false);
+            running = false;
+            scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+            return;
+          }
+
+          if (!checkedIntoDojo && !canShowDojoPopup) {
+            setShowDojoPopup(false);
+            running = false;
+            scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+            return;
+          }
+
+          if (!checkedIntoDojo && getStoredDay() === todayLocalKey()) {
+            setShowDojoPopup(false);
+            running = false;
+            scheduleNext(msUntilNextLocalDay());
+            return;
+          }
+
+          navigator.geolocation.getCurrentPosition(
         (position) => {
           running = false;
           if (cancelled) return;
@@ -839,12 +987,43 @@ export default function App() {
           const lng = Number(position?.coords?.longitude);
           const accuracy = Number(position?.coords?.accuracy);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-            scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+            scheduleNext(checkedIntoDojo ? DOJO_RECHECK_NEARBY_MS : DOJO_RECHECK_DEFAULT_MS);
             return;
           }
 
           const distanceMeters = haversineDistanceMeters(lat, lng, DOJO_GEOFENCE.lat, DOJO_GEOFENCE.lng);
           const accuracyOk = !Number.isFinite(accuracy) || accuracy <= DOJO_GEOFENCE.maxAccuracyMeters;
+          if (checkedIntoDojo) {
+            setShowDojoPopup(false);
+            if (!accuracyOk) {
+              scheduleNext(DOJO_RECHECK_NEARBY_MS);
+              return;
+            }
+            if (distanceMeters > DOJO_GEOFENCE.radiusMeters) {
+              const reminderRemainingMs = getDojoCheckoutReminderRemainingMs(user.id, activeCheckin?.id);
+              if (reminderRemainingMs <= 0) {
+                markDojoCheckoutPopupShown(user.id, activeCheckin?.id);
+                setDojoCheckoutError('');
+                setDojoCheckoutPrompt({
+                  checkinId: activeCheckin?.id || '',
+                  machineName: activeCheckin?.machine_name || '',
+                });
+                setShowDojoCheckoutPopup(true);
+                scheduleNext(DOJO_CHECKOUT_REMINDER_COOLDOWN_MS);
+                return;
+              }
+              scheduleNext(Math.min(reminderRemainingMs, DOJO_RECHECK_NEARBY_MS));
+              return;
+            }
+
+            clearDojoCheckoutPopupState(user.id);
+            setShowDojoCheckoutPopup(false);
+            setDojoCheckoutPrompt(null);
+            setDojoCheckoutError('');
+            scheduleNext(DOJO_RECHECK_NEARBY_MS);
+            return;
+          }
+
           if (accuracyOk && distanceMeters <= DOJO_GEOFENCE.radiusMeters) {
             markShownToday();
             setShowDojoPopup(true);
@@ -861,7 +1040,7 @@ export default function App() {
           running = false;
           if (cancelled) return;
           // Denied or unavailable: back off to sparse checks.
-          scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+          scheduleNext(checkedIntoDojo ? DOJO_RECHECK_NEARBY_MS : DOJO_RECHECK_DEFAULT_MS);
         },
         {
           enableHighAccuracy: true,
@@ -869,6 +1048,12 @@ export default function App() {
           maximumAge: DOJO_GEO_MAX_AGE_MS,
         }
       );
+        })
+        .catch(() => {
+          running = false;
+          if (cancelled) return;
+          scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+        });
     };
 
     const handleVisibility = () => {
@@ -887,11 +1072,31 @@ export default function App() {
       if (timeoutId) window.clearTimeout(timeoutId);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [canShowDojoPopup, user?.id]);
+  }, [canAccessCheckin, canShowDojoPopup, user?.id]);
 
   const handleOpenDojoCheckin = () => {
     setShowDojoPopup(false);
     navigate('/checkin');
+  };
+
+  const handleCloseDojoCheckoutPopup = () => {
+    setShowDojoCheckoutPopup(false);
+    setDojoCheckoutError('');
+  };
+
+  const handleDojoCheckout = async () => {
+    setDojoCheckoutLoading(true);
+    setDojoCheckoutError('');
+    try {
+      await checkout();
+      clearDojoCheckoutPopupState(user?.id);
+      setShowDojoCheckoutPopup(false);
+      setDojoCheckoutPrompt(null);
+    } catch (err) {
+      setDojoCheckoutError(err?.message || 'Failed to check out');
+    } finally {
+      setDojoCheckoutLoading(false);
+    }
   };
 
   return (
@@ -1039,6 +1244,15 @@ export default function App() {
         <DojoProximityPopupModal
           onClose={() => setShowDojoPopup(false)}
           onOpenCheckin={handleOpenDojoCheckin}
+        />
+      )}
+      {showDojoCheckoutPopup && !showDojoPopup && !groupPopup && (
+        <DojoCheckoutPopupModal
+          prompt={dojoCheckoutPrompt}
+          loading={dojoCheckoutLoading}
+          error={dojoCheckoutError}
+          onClose={handleCloseDojoCheckoutPopup}
+          onCheckout={handleDojoCheckout}
         />
       )}
 
