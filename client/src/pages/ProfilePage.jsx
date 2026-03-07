@@ -1719,8 +1719,8 @@ export default function ProfilePage() {
   }, [bestScoreSearch, bestScoreSort, chartKeyMap, effectiveBestScoreMode, levelCatalogCharts, piuBestScores, piuScoreLevel, showLevelNonClears]);
 
   const filteredBestScores = useMemo(
-    () => [...filteredClearedBestScores, ...levelNonClearRows].sort((a, b) => compareBestScoreRows(a, b, bestScoreSort)),
-    [bestScoreSort, filteredClearedBestScores, levelNonClearRows]
+    () => (showLevelNonClears ? levelNonClearRows : filteredClearedBestScores),
+    [filteredClearedBestScores, levelNonClearRows, showLevelNonClears]
   );
 
   useEffect(() => {
@@ -3501,7 +3501,7 @@ export default function ProfilePage() {
 
             {filteredBestScores.length > 0 && (
               <p className="text-[11px] text-gray-500 mb-2">
-                Showing {bestScorePagination.startIndex + 1}-{bestScorePagination.endIndex} of {bestScorePagination.total} charts
+                Showing {bestScorePagination.startIndex + 1}-{bestScorePagination.endIndex} of {bestScorePagination.total} {showLevelNonClears ? 'uncleared charts' : 'charts'}
               </p>
             )}
 
@@ -3573,7 +3573,9 @@ export default function ProfilePage() {
               </div>
             ) : (
               <p className="text-center text-gray-500 text-sm py-6">
-                {piuBestScores?.scores?.length > 0
+                {showLevelNonClears
+                  ? `No uncleared charts found${bestScoreSearch ? ` matching "${bestScoreSearch}"` : ''}`
+                  : piuBestScores?.scores?.length > 0
                   ? `No scores found${bestScoreSearch ? ` matching "${bestScoreSearch}"` : ''}`
                   : 'No best scores imported yet'}
               </p>
