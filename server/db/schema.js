@@ -1860,8 +1860,23 @@ function initializeDb() {
       song_title TEXT NOT NULL DEFAULT '',
       mode TEXT NOT NULL DEFAULT '',
       level INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'open',
       fulfilled INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now'))
+      handled_at TEXT DEFAULT '',
+      handled_by_user_id TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_moderation (
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      chat_muted INTEGER NOT NULL DEFAULT 0,
+      requests_blocked INTEGER NOT NULL DEFAULT 0,
+      moderated_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (live_session_id, user_id)
     );
 
     CREATE TABLE IF NOT EXISTS live_session_votes (
@@ -1952,6 +1967,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_live_session_presence_session ON live_session_presence(live_session_id, last_seen);
     CREATE INDEX IF NOT EXISTS idx_live_session_messages_session_time ON live_session_messages(live_session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_time ON live_session_requests(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_status ON live_session_requests(live_session_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_votes_session_status ON live_session_votes(live_session_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_vote_options_vote ON live_session_vote_options(vote_id, position);
     CREATE INDEX IF NOT EXISTS idx_live_session_plays_session_time ON live_session_plays(live_session_id, date_played, id);
@@ -2395,6 +2412,46 @@ function initializeDb() {
     // Backfill sort_order based on existing id order
     db.exec("UPDATE user_list_items SET sort_order = id WHERE sort_order = 0");
   }
+
+  const liveRequestCols = db.prepare("PRAGMA table_info(live_session_requests)").all().map((c) => c.name);
+  const liveRequestMigrations = [
+    ['status', "TEXT NOT NULL DEFAULT 'open'"],
+    ['handled_at', "TEXT DEFAULT ''"],
+    ['handled_by_user_id', "TEXT DEFAULT ''"],
+    ['updated_at', "TEXT DEFAULT (datetime('now'))"],
+  ];
+  for (const [col, type] of liveRequestMigrations) {
+    if (!liveRequestCols.includes(col)) {
+      db.exec(`ALTER TABLE live_session_requests ADD COLUMN ${col} ${type}`);
+    }
+  }
+  db.exec(`
+    UPDATE live_session_requests
+    SET status = CASE
+      WHEN fulfilled = 1 THEN 'played'
+      ELSE 'open'
+    END
+    WHERE COALESCE(status, '') = ''
+       OR status NOT IN ('open', 'queued', 'played', 'skipped');
+
+    UPDATE live_session_requests
+    SET updated_at = COALESCE(NULLIF(updated_at, ''), created_at, datetime('now'))
+    WHERE COALESCE(updated_at, '') = '';
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS live_session_moderation (
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      chat_muted INTEGER NOT NULL DEFAULT 0,
+      requests_blocked INTEGER NOT NULL DEFAULT 0,
+      moderated_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (live_session_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_status ON live_session_requests(live_session_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
+  `);
 
   ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();

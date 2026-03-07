@@ -925,8 +925,26 @@ export const sendLiveRequest = (sessionId, data) => request(`/live/sessions/${en
   method: 'POST',
   body: JSON.stringify(data),
 });
+export const setLiveRequestStatus = (sessionId, requestId, status) => request(
+  `/live/sessions/${encodeURIComponent(sessionId)}/requests/${encodeURIComponent(requestId)}/status`,
+  {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  }
+);
 export const fulfillLiveRequest = (sessionId, requestId) => request(
   `/live/sessions/${encodeURIComponent(sessionId)}/requests/${encodeURIComponent(requestId)}/fulfill`,
+  {
+    method: 'POST',
+    body: '{}',
+  }
+);
+export const setLiveModeration = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/moderation`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const deleteLiveMessage = (sessionId, messageId) => request(
+  `/live/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/delete`,
   {
     method: 'POST',
     body: '{}',

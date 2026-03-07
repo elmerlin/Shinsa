@@ -5,8 +5,8 @@ import {
   castLiveVote,
   createLiveSession,
   createLiveVote,
+  deleteLiveMessage,
   endLiveSession,
-  fulfillLiveRequest,
   getLiveSession,
   getMyLiveSession,
   getSongLibrary,
@@ -14,6 +14,8 @@ import {
   sendLiveMessage,
   sendLivePresence,
   sendLiveRequest,
+  setLiveModeration,
+  setLiveRequestStatus,
   syncLiveSession,
 } from '../utils/api';
 import LiveSessionCard from '../components/LiveSessionCard';
@@ -21,6 +23,28 @@ import PiuChartJacket from '../components/PiuChartJacket';
 
 const QUICK_REACTIONS = ['🔥', '💪', '👏', '😂', '❤️', '⚡'];
 const GRADE_SORT = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
+const REQUEST_STATUS_META = {
+  open: {
+    label: 'Open',
+    pill: 'border border-sky-400/30 bg-sky-500/10 text-sky-200',
+    card: 'border-piu-border bg-black/10',
+  },
+  queued: {
+    label: 'Queued',
+    pill: 'border border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-200',
+    card: 'border-fuchsia-400/25 bg-fuchsia-500/8',
+  },
+  played: {
+    label: 'Played',
+    pill: 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200',
+    card: 'border-emerald-400/25 bg-emerald-500/8',
+  },
+  skipped: {
+    label: 'Skipped',
+    pill: 'border border-amber-400/30 bg-amber-500/10 text-amber-200',
+    card: 'border-amber-400/25 bg-amber-500/8',
+  },
+};
 
 function getGradeIndex(grade) {
   const normalized = String(grade || '').trim().toUpperCase();
@@ -55,6 +79,22 @@ function formatPlayLabel(play) {
   return `${String(play?.song_title || 'Unknown chart').trim() || 'Unknown chart'} (${modeShort(play?.mode)}${parseInt(play?.level, 10) || '?'})`;
 }
 
+function getRequestStatus(status, fulfilled = false) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'open' || normalized === 'queued' || normalized === 'played' || normalized === 'skipped') {
+    return normalized;
+  }
+  return fulfilled ? 'played' : 'open';
+}
+
+function getRequestStatusMeta(status, fulfilled = false) {
+  return REQUEST_STATUS_META[getRequestStatus(status, fulfilled)] || REQUEST_STATUS_META.open;
+}
+
+function getInitial(name) {
+  return String(name || 'U').trim().charAt(0).toUpperCase() || 'U';
+}
+
 function buildRequestKey(songTitle, mode, level) {
   return [
     String(songTitle || '').trim().toLowerCase(),
@@ -86,14 +126,23 @@ function buildSyncStatusNote(syncResult, fallback = 'Live session is up to date.
 
 function formatRequestStateLabel(info) {
   if (!info) return '';
+  if ((info.queuedCount || 0) > 0) {
+    return info.queuedCount === 1 ? 'Queued request' : `${info.queuedCount} queued`;
+  }
   if ((info.openCount || 0) > 0) {
     return info.openCount === 1 ? 'Viewer request' : `${info.openCount} requests`;
   }
-  return (info.fulfilledCount || 0) <= 1 ? 'Request fulfilled' : `${info.fulfilledCount} fulfilled`;
+  if ((info.playedCount || 0) > 0) {
+    return info.playedCount === 1 ? 'Request fulfilled' : `${info.playedCount} fulfilled`;
+  }
+  if ((info.skippedCount || 0) > 0) {
+    return info.skippedCount === 1 ? 'Skipped request' : `${info.skippedCount} skipped`;
+  }
+  return '';
 }
 
 function getMessageTone(message) {
-  if (!message?.is_system) {
+  if (!message?.is_system && message?.message_type !== 'request') {
     return {
       wrapper: 'bg-black/15 border border-piu-border',
       label: '',
@@ -143,6 +192,22 @@ function getMessageTone(message) {
         labelClass: 'bg-fuchsia-400/15 text-fuchsia-200 border border-fuchsia-300/30',
         usernameClass: 'text-fuchsia-100',
         bodyClass: 'text-fuchsia-50',
+      };
+    case 'request_queue':
+      return {
+        wrapper: 'bg-fuchsia-500/10 border border-fuchsia-400/20',
+        label: 'Queue',
+        labelClass: 'bg-fuchsia-400/15 text-fuchsia-200 border border-fuchsia-300/30',
+        usernameClass: 'text-fuchsia-100',
+        bodyClass: 'text-fuchsia-50',
+      };
+    case 'moderation':
+      return {
+        wrapper: 'bg-amber-500/10 border border-amber-400/20',
+        label: 'Host',
+        labelClass: 'bg-amber-400/15 text-amber-200 border border-amber-300/30',
+        usernameClass: 'text-amber-100',
+        bodyClass: 'text-amber-50',
       };
     case 'vote_result':
       return {
@@ -330,6 +395,105 @@ function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStream
   );
 }
 
+function UserIdentity({ avatar, username, skillTitle, isHost, className = '' }) {
+  return (
+    <div className={`flex min-w-0 items-center gap-2 ${className}`.trim()}>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark text-[11px] font-display font-bold text-white">
+        {avatar ? (
+          <img src={avatar} alt={username || 'User'} className="h-full w-full object-cover" />
+        ) : (
+          <span>{getInitial(username)}</span>
+        )}
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p className="truncate text-[11px] font-display font-bold text-white">{username || 'Viewer'}</p>
+          {isHost ? (
+            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-rose-200">
+              Host
+            </span>
+          ) : null}
+          {skillTitle ? (
+            <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-cyan-200">
+              {skillTitle}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
+  return (
+    <div className="rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Now Playing</p>
+          <p className="text-sm text-cyan-50/80 mt-1">
+            {play
+              ? 'Latest chart synced into the live room.'
+              : live?.status === 'live'
+                ? 'Waiting for the first chart to land.'
+                : 'This live room has wrapped.'}
+          </p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${live?.status === 'live' ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-piu-border bg-black/20 text-gray-400'}`}>
+          {live?.status === 'live' ? 'Live sync' : 'Session ended'}
+        </span>
+      </div>
+
+      {play ? (
+        <div className="mt-4 flex items-center gap-3">
+          <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-lg font-display font-black text-white">{play.song_title}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 font-display font-bold text-cyan-100">
+                {modeShort(play.mode)}{play.level}
+              </span>
+              <span className="font-display font-bold text-white">{play.grade || '-'}</span>
+              <span className="text-cyan-100/80">{formatNumber(play.score)}</span>
+              {play.machine_name ? <span className="text-gray-400">at {play.machine_name}</span> : null}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {play.pumbility_gain > 0 ? (
+                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
+                  +{play.pumbility_gain} pumbility
+                </span>
+              ) : null}
+              {play.over_top100_rank > 0 ? (
+                <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-bold text-yellow-200">
+                  OVER Top 100 #{play.over_top100_rank}
+                </span>
+              ) : null}
+              {play.session_result_type ? (
+                <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300 capitalize">
+                  {play.session_result_type}
+                </span>
+              ) : null}
+              {requestInfo ? (
+                <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${getRequestStatusMeta(
+                  requestInfo.queuedCount > 0 ? 'queued' : requestInfo.openCount > 0 ? 'open' : requestInfo.playedCount > 0 ? 'played' : 'skipped'
+                ).pill}`}>
+                  {formatRequestStateLabel(requestInfo)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          <button type="button" onClick={onOpen} className="btn-secondary shrink-0 px-3 py-2 text-xs">
+            Judgments
+          </button>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
+          Once a chart lands through the live sync, it will pin here with score, grade, pumbility, and request context.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LivePage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -358,7 +522,9 @@ export default function LivePage() {
   const [creatingVote, setCreatingVote] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [ending, setEnding] = useState(false);
-  const [fulfillingRequestId, setFulfillingRequestId] = useState('');
+  const [requestActionKey, setRequestActionKey] = useState('');
+  const [moderationActionKey, setModerationActionKey] = useState('');
+  const [deletingMessageId, setDeletingMessageId] = useState('');
   const [streamState, setStreamState] = useState('idle');
   const [copied, setCopied] = useState(false);
   const chatEndRef = useRef(null);
@@ -373,6 +539,7 @@ export default function LivePage() {
   const lastPlay = snapshot?.last_play || null;
   const youtubeId = getYouTubeId(live?.stream_url || '');
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
+  const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -626,26 +793,31 @@ export default function LivePage() {
       if (!map.has(key)) {
         map.set(key, {
           openCount: 0,
-          fulfilledCount: 0,
+          queuedCount: 0,
+          playedCount: 0,
+          skippedCount: 0,
           usernames: [],
         });
       }
       const row = map.get(key);
-      if (request.fulfilled) row.fulfilledCount += 1;
+      const status = getRequestStatus(request.status, request.fulfilled);
+      if (status === 'queued') row.queuedCount += 1;
+      else if (status === 'played') row.playedCount += 1;
+      else if (status === 'skipped') row.skippedCount += 1;
       else row.openCount += 1;
       if (request.username) row.usernames.push(request.username);
     }
     return map;
   }, [requests]);
 
-  const openRequestCount = useMemo(
-    () => requests.filter((request) => !request.fulfilled).length,
-    [requests]
-  );
-  const fulfilledRequestCount = useMemo(
-    () => requests.filter((request) => request.fulfilled).length,
-    [requests]
-  );
+  const requestCounts = useMemo(() => requests.reduce((acc, request) => {
+    const status = getRequestStatus(request.status, request.fulfilled);
+    acc[status] += 1;
+    return acc;
+  }, { open: 0, queued: 0, played: 0, skipped: 0 }), [requests]);
+  const nowPlayingRequestInfo = lastPlay
+    ? requestLookup.get(buildRequestKey(lastPlay.song_title, lastPlay.mode, lastPlay.level))
+    : null;
 
   const handleCreate = async () => {
     setCreating(true);
@@ -664,7 +836,7 @@ export default function LivePage() {
 
   const handleSendChat = async (e) => {
     e.preventDefault();
-    if (!activeSessionId || !chatInput.trim()) return;
+    if (!activeSessionId || !chatInput.trim() || viewerState.chat_muted) return;
     setSendingChat(true);
     try {
       const data = await sendLiveMessage(activeSessionId, { message: chatInput.trim() });
@@ -679,7 +851,7 @@ export default function LivePage() {
   };
 
   const handleQuickReaction = async (emoji) => {
-    if (!activeSessionId || live?.status !== 'live') return;
+    if (!activeSessionId || live?.status !== 'live' || viewerState.chat_muted) return;
     showFloatingReaction(emoji);
     try {
       const data = await sendLiveMessage(activeSessionId, { message: emoji });
@@ -691,7 +863,7 @@ export default function LivePage() {
   };
 
   const handleLiveRequest = async (chart) => {
-    if (!activeSessionId) return;
+    if (!activeSessionId || viewerState.requests_blocked) return;
     try {
       await sendLiveRequest(activeSessionId, { chart_id: chart.chart_id });
       setStatusNote(`Requested ${chart.song_title} (${modeShort(chart.mode)}${chart.level}).`);
@@ -746,17 +918,60 @@ export default function LivePage() {
     }
   };
 
-  const handleFulfillRequest = async (requestId) => {
-    if (!activeSessionId || !requestId) return;
-    setFulfillingRequestId(requestId);
+  const handleSetRequestStatus = async (request, status) => {
+    if (!activeSessionId || !request?.id) return;
+    const nextStatus = getRequestStatus(status, status === 'played');
+    setRequestActionKey(`${request.id}:${nextStatus}`);
     try {
-      const data = await fulfillLiveRequest(activeSessionId, requestId);
+      const data = await setLiveRequestStatus(activeSessionId, request.id, nextStatus);
       if (data?.snapshot) applySnapshot(data.snapshot);
-      setStatusNote('Request marked as played.');
+      setStatusNote(`Request ${request.song_title} is now ${getRequestStatusMeta(nextStatus).label.toLowerCase()}.`);
     } catch (err) {
-      setError(err.message || 'Failed to mark request as played');
+      setError(err.message || 'Failed to update request');
     } finally {
-      setFulfillingRequestId('');
+      setRequestActionKey('');
+    }
+  };
+
+  const handleFulfillRequest = async (request) => {
+    handleSetRequestStatus(request, 'played');
+  };
+
+  const handleToggleModeration = async (target, field) => {
+    if (!activeSessionId || !target?.user_id || target?.is_host) return;
+    const chatMuted = field === 'chat_muted' ? !target.chat_muted : !!target.chat_muted;
+    const requestsBlocked = field === 'requests_blocked' ? !target.requests_blocked : !!target.requests_blocked;
+    setModerationActionKey(`${field}:${target.user_id}`);
+    try {
+      const data = await setLiveModeration(activeSessionId, {
+        target_user_id: target.user_id,
+        chat_muted: chatMuted,
+        requests_blocked: requestsBlocked,
+      });
+      if (data?.snapshot) applySnapshot(data.snapshot);
+      setStatusNote(
+        field === 'chat_muted'
+          ? `${target.username || 'Viewer'} ${chatMuted ? 'was muted in chat.' : 'can chat again.'}`
+          : `${target.username || 'Viewer'} ${requestsBlocked ? 'can no longer send requests.' : 'can send requests again.'}`
+      );
+    } catch (err) {
+      setError(err.message || 'Failed to update moderation');
+    } finally {
+      setModerationActionKey('');
+    }
+  };
+
+  const handleDeleteMessage = async (messageId) => {
+    if (!activeSessionId || !messageId) return;
+    setDeletingMessageId(messageId);
+    try {
+      const data = await deleteLiveMessage(activeSessionId, messageId);
+      if (data?.snapshot) applySnapshot(data.snapshot);
+      setStatusNote('Viewer message removed.');
+    } catch (err) {
+      setError(err.message || 'Failed to remove message');
+    } finally {
+      setDeletingMessageId('');
     }
   };
 
@@ -878,6 +1093,16 @@ export default function LivePage() {
               Last sync {new Date(`${live.last_sync_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           ) : null}
+          {!live?.is_host && viewerState.chat_muted ? (
+            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-display font-bold text-amber-200">
+              Chat muted
+            </span>
+          ) : null}
+          {!live?.is_host && viewerState.requests_blocked ? (
+            <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-display font-bold text-fuchsia-200">
+              Requests blocked
+            </span>
+          ) : null}
         </div>
 
         {statusNote ? <p className="mt-3 text-sm text-cyan-200">{statusNote}</p> : null}
@@ -901,51 +1126,14 @@ export default function LivePage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
         <div className="space-y-4">
-          {snapshot?.summary ? <LiveSessionCard summary={snapshot.summary} /> : null}
+          <NowPlayingPanel
+            play={lastPlay}
+            live={live}
+            requestInfo={nowPlayingRequestInfo}
+            onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+          />
 
-          {lastPlay ? (
-            <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Last Played</p>
-                  <p className="text-lg font-display font-bold text-white">{lastPlay.song_title}</p>
-                  <p className="text-sm text-cyan-300">
-                    {modeShort(lastPlay.mode)}{lastPlay.level} • {lastPlay.grade || '-'} • {formatNumber(lastPlay.score)}
-                  </p>
-                </div>
-                <button type="button" onClick={() => setSelectedPlay(lastPlay)} className="btn-secondary text-xs px-3 py-2">
-                  Judgments
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                {lastPlay.pumbility_gain > 0 ? (
-                  <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
-                    +{lastPlay.pumbility_gain} pumbility
-                  </span>
-                ) : null}
-                {lastPlay.over_top100_rank > 0 ? (
-                  <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-bold text-yellow-200">
-                    OVER Top 100 #{lastPlay.over_top100_rank}
-                  </span>
-                ) : null}
-                {lastPlay.session_result_type ? (
-                  <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300 capitalize">
-                    {lastPlay.session_result_type}
-                  </span>
-                ) : null}
-                {(() => {
-                  const requestInfo = requestLookup.get(buildRequestKey(lastPlay.song_title, lastPlay.mode, lastPlay.level));
-                  if (!requestInfo) return null;
-                  const isOpen = requestInfo.openCount > 0;
-                  return (
-                    <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${isOpen ? 'border border-sky-400/30 bg-sky-500/10 text-sky-200' : 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'}`}>
-                      {formatRequestStateLabel(requestInfo)}
-                    </span>
-                  );
-                })()}
-              </div>
-            </div>
-          ) : null}
+          {snapshot?.summary ? <LiveSessionCard summary={snapshot.summary} /> : null}
 
           <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -970,7 +1158,15 @@ export default function LivePage() {
             <div className="space-y-2 mt-3">
               {visiblePlays.map((play) => {
                 const requestInfo = requestLookup.get(buildRequestKey(play.song_title, play.mode, play.level));
-                const isOpenRequest = (requestInfo?.openCount || 0) > 0;
+                const requestStatus = requestInfo
+                  ? requestInfo.queuedCount > 0
+                    ? 'queued'
+                    : requestInfo.openCount > 0
+                      ? 'open'
+                      : requestInfo.playedCount > 0
+                        ? 'played'
+                        : 'skipped'
+                  : '';
                 return (
                   <button
                     type="button"
@@ -995,7 +1191,7 @@ export default function LivePage() {
                             </span>
                           ) : null}
                           {requestInfo ? (
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-display font-bold ${isOpenRequest ? 'border border-sky-400/25 bg-sky-500/10 text-sky-200' : 'border border-emerald-400/25 bg-emerald-500/10 text-emerald-200'}`}>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-display font-bold ${getRequestStatusMeta(requestStatus).pill}`}>
                               {formatRequestStateLabel(requestInfo)}
                             </span>
                           ) : null}
@@ -1037,7 +1233,10 @@ export default function LivePage() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Song requests</p>
-                <p className="text-sm font-display font-bold text-white">{openRequestCount} open • {fulfilledRequestCount} played</p>
+                <p className="text-sm font-display font-bold text-white">
+                  {requestCounts.open} open • {requestCounts.queued} queued • {requestCounts.played} played
+                  {requestCounts.skipped ? ` • ${requestCounts.skipped} skipped` : ''}
+                </p>
               </div>
               {live?.status !== 'live' ? (
                 <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">
@@ -1049,9 +1248,18 @@ export default function LivePage() {
               value={songSearch}
               onChange={(e) => setSongSearch(e.target.value)}
               className="input-field w-full mt-3"
-              placeholder={live?.status === 'live' ? 'Search song or chart' : 'Requests are closed'}
-              disabled={live?.status !== 'live'}
+              placeholder={
+                live?.status !== 'live'
+                  ? 'Requests are closed'
+                  : viewerState.requests_blocked
+                    ? 'Host has blocked your requests'
+                    : 'Search song or chart'
+              }
+              disabled={live?.status !== 'live' || viewerState.requests_blocked}
             />
+            {!live?.is_host && viewerState.requests_blocked ? (
+              <p className="mt-2 text-[11px] text-fuchsia-200">The host has disabled requests from your account for this session.</p>
+            ) : null}
             {searchingSongs ? <p className="text-[11px] text-gray-500 mt-2">Searching...</p> : null}
             <div className="space-y-2 mt-3">
               {songResults.map((chart) => (
@@ -1059,7 +1267,7 @@ export default function LivePage() {
                   type="button"
                   key={`${chart.chart_id}-${chart.mode}-${chart.level}`}
                   onClick={() => handleLiveRequest(chart)}
-                  disabled={live?.status !== 'live'}
+                  disabled={live?.status !== 'live' || viewerState.requests_blocked}
                   className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
                 >
                   <div className="flex items-center gap-3">
@@ -1073,34 +1281,101 @@ export default function LivePage() {
               ))}
             </div>
             <div className="space-y-2 mt-4">
-              {requests.slice(0, 8).map((request) => (
+              {requests.slice(0, 10).map((request) => {
+                const requestStatus = getRequestStatus(request.status, request.fulfilled);
+                const requestMeta = getRequestStatusMeta(requestStatus, request.fulfilled);
+                return (
                 <div
                   key={request.id}
-                  className={`rounded-xl border px-3 py-2 ${request.fulfilled ? 'border-emerald-400/25 bg-emerald-500/8' : 'border-piu-border bg-black/10'}`}
+                  className={`rounded-xl border px-3 py-2 ${requestMeta.card}`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <UserIdentity
+                        avatar={request.avatar}
+                        username={request.username}
+                        skillTitle={request.skill_title}
+                        isHost={request.is_host}
+                        className="mb-2"
+                      />
                       <p className="text-xs font-display font-bold text-white">{request.song_title}</p>
                       <p className="text-[11px] text-gray-400">
-                        {request.username} requested {modeShort(request.mode)}{request.level}
+                        {modeShort(request.mode)}{request.level}
+                        {request.queue_position ? ` • Queue #${request.queue_position}` : ''}
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${request.fulfilled ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-sky-400/30 bg-sky-500/10 text-sky-200'}`}>
-                      {request.fulfilled ? 'Played' : 'Open'}
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${requestMeta.pill}`}>
+                      {requestMeta.label}
                     </span>
                   </div>
-                  {live?.is_host && live?.status === 'live' && !request.fulfilled ? (
-                    <button
-                      type="button"
-                      onClick={() => handleFulfillRequest(request.id)}
-                      disabled={fulfillingRequestId === request.id}
-                      className="mt-2 rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
-                    >
-                      {fulfillingRequestId === request.id ? 'Marking...' : 'Mark played'}
-                    </button>
+                  {live?.is_host && live?.status === 'live' ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {requestStatus !== 'queued' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSetRequestStatus(request, 'queued')}
+                          disabled={requestActionKey === `${request.id}:queued`}
+                          className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {requestActionKey === `${request.id}:queued` ? 'Updating...' : 'Queue'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetRequestStatus(request, 'open')}
+                          disabled={requestActionKey === `${request.id}:open`}
+                          className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {requestActionKey === `${request.id}:open` ? 'Updating...' : 'Move open'}
+                        </button>
+                      )}
+                      {requestStatus !== 'played' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleFulfillRequest(request)}
+                          disabled={requestActionKey === `${request.id}:played`}
+                          className="rounded-lg bg-emerald-500/15 px-3 py-2 text-[11px] font-display font-bold text-emerald-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {requestActionKey === `${request.id}:played` ? 'Updating...' : 'Mark played'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetRequestStatus(request, 'open')}
+                          disabled={requestActionKey === `${request.id}:open`}
+                          className="rounded-lg bg-piu-dark px-3 py-2 text-[11px] font-display font-bold text-gray-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {requestActionKey === `${request.id}:open` ? 'Updating...' : 'Reopen'}
+                        </button>
+                      )}
+                      {requestStatus !== 'skipped' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSetRequestStatus(request, 'skipped')}
+                          disabled={requestActionKey === `${request.id}:skipped`}
+                          className="rounded-lg bg-amber-500/15 px-3 py-2 text-[11px] font-display font-bold text-amber-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {requestActionKey === `${request.id}:skipped` ? 'Updating...' : 'Skip'}
+                        </button>
+                      ) : null}
+                      {!request.is_host ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleModeration(request, 'requests_blocked')}
+                          disabled={moderationActionKey === `requests_blocked:${request.user_id}`}
+                          className="rounded-lg bg-fuchsia-500/15 px-3 py-2 text-[11px] font-display font-bold text-fuchsia-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {moderationActionKey === `requests_blocked:${request.user_id}`
+                            ? 'Updating...'
+                            : request.requests_blocked
+                              ? 'Allow requests'
+                              : 'Block requests'}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
-              ))}
+              )})}
               {requests.length === 0 ? <p className="text-sm text-gray-500">No requests yet.</p> : null}
             </div>
           </div>
@@ -1123,7 +1398,13 @@ export default function LivePage() {
               </div>
               <div className="flex gap-1">
                 {QUICK_REACTIONS.map((emoji) => (
-                  <button key={emoji} type="button" onClick={() => handleQuickReaction(emoji)} className="w-8 h-8 rounded-lg bg-piu-dark/60 hover:bg-piu-dark text-sm">
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleQuickReaction(emoji)}
+                    disabled={viewerState.chat_muted || live?.status !== 'live'}
+                    className="w-8 h-8 rounded-lg bg-piu-dark/60 hover:bg-piu-dark text-sm disabled:opacity-40"
+                  >
                     {emoji}
                   </button>
                 ))}
@@ -1151,9 +1432,28 @@ export default function LivePage() {
                             {tone.label}
                           </span>
                         ) : null}
-                        <p className={`truncate text-[11px] font-display font-bold ${tone.usernameClass}`}>
-                          {msg.username || 'System'}
-                        </p>
+                        {msg.is_system ? (
+                          <p className={`truncate text-[11px] font-display font-bold ${tone.usernameClass}`}>
+                            {msg.username || 'System'}
+                          </p>
+                        ) : (
+                          <UserIdentity
+                            avatar={msg.avatar}
+                            username={msg.username}
+                            skillTitle={msg.skill_title}
+                            isHost={msg.is_host}
+                          />
+                        )}
+                        {live?.is_host && !msg.is_system && msg.chat_muted ? (
+                          <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-amber-200">
+                            Muted
+                          </span>
+                        ) : null}
+                        {live?.is_host && !msg.is_system && msg.requests_blocked ? (
+                          <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-fuchsia-200">
+                            Requests off
+                          </span>
+                        ) : null}
                       </div>
                       <p className="shrink-0 text-[10px] text-gray-500">
                         {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
@@ -1162,6 +1462,42 @@ export default function LivePage() {
                     <p className={`${isEmojiOnly(msg.message) && !msg.is_system ? 'text-2xl leading-none mt-1' : `text-sm mt-1 break-words ${tone.bodyClass}`}`}>
                       {msg.message}
                     </p>
+                    {live?.is_host && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMessage(msg.id)}
+                          disabled={deletingMessageId === msg.id}
+                          className="rounded-lg bg-piu-dark px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleModeration(msg, 'chat_muted')}
+                          disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
+                          className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-amber-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {moderationActionKey === `chat_muted:${msg.user_id}`
+                            ? 'Updating...'
+                            : msg.chat_muted
+                              ? 'Unmute chat'
+                              : 'Mute chat'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleModeration(msg, 'requests_blocked')}
+                          disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
+                          className="rounded-lg bg-fuchsia-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-fuchsia-200 transition-colors hover:text-white disabled:opacity-60"
+                        >
+                          {moderationActionKey === `requests_blocked:${msg.user_id}`
+                            ? 'Updating...'
+                            : msg.requests_blocked
+                              ? 'Allow requests'
+                              : 'Block requests'}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
@@ -1174,16 +1510,20 @@ export default function LivePage() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   className="input-field flex-1"
-                  placeholder="Send a message"
+                  placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message'}
                   maxLength={500}
+                  disabled={viewerState.chat_muted}
                 />
-                <button type="submit" disabled={sendingChat} className="btn-primary px-4">
+                <button type="submit" disabled={sendingChat || viewerState.chat_muted} className="btn-primary px-4 disabled:opacity-50">
                   {sendingChat ? '...' : 'Send'}
                 </button>
               </form>
             ) : (
               <p className="text-[11px] text-gray-500 mt-3">Chat is read-only because this session has ended.</p>
             )}
+            {live?.status === 'live' && !live?.is_host && viewerState.chat_muted ? (
+              <p className="mt-2 text-[11px] text-amber-200">The host has muted your chat for this session.</p>
+            ) : null}
           </div>
         </div>
       </div>

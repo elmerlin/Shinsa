@@ -211,6 +211,201 @@ function getActiveSessionForHost(db, hostUserId) {
   `).get(hostUserId);
 }
 
+function normalizeRequestStatus(status, fulfilled = false) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'queued' || normalized === 'played' || normalized === 'skipped' || normalized === 'open') {
+    return normalized;
+  }
+  return fulfilled ? 'played' : 'open';
+}
+
+function normalizeModerationRow(row, liveSessionId = '', userId = '') {
+  return {
+    live_session_id: row?.live_session_id || String(liveSessionId || ''),
+    user_id: row?.user_id || String(userId || ''),
+    chat_muted: toInt(row?.chat_muted) === 1,
+    requests_blocked: toInt(row?.requests_blocked) === 1,
+    moderated_by_user_id: row?.moderated_by_user_id || '',
+    created_at: row?.created_at || '',
+    updated_at: row?.updated_at || '',
+  };
+}
+
+function getLiveModerationState(db, liveSessionId, userId = '') {
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) return normalizeModerationRow(null, liveSessionId, normalizedUserId);
+
+  const row = db.prepare(`
+    SELECT live_session_id, user_id, chat_muted, requests_blocked, moderated_by_user_id, created_at, updated_at
+    FROM live_session_moderation
+    WHERE live_session_id = ?
+      AND user_id = ?
+    LIMIT 1
+  `).get(liveSessionId, normalizedUserId);
+  return normalizeModerationRow(row, liveSessionId, normalizedUserId);
+}
+
+function getSessionViewerState(db, session, currentUserId = '') {
+  const normalizedUserId = String(currentUserId || '').trim();
+  if (!normalizedUserId || normalizedUserId === String(session?.host_user_id || '')) {
+    return normalizeModerationRow(null, session?.id || '', normalizedUserId);
+  }
+  return getLiveModerationState(db, session.id, normalizedUserId);
+}
+
+function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus = '') {
+  const requester = normalizeText(requestRow?.username || 'Viewer', 60) || 'Viewer';
+  const label = formatPlayLabel(requestRow);
+
+  if (nextStatus === 'played') {
+    return {
+      message: buildRequestFulfillmentMessage(requestRow, [requester]),
+      message_type: 'request_fulfilled',
+      metadata: {
+        request_ids: [requestRow.id],
+        song_title: requestRow.song_title || '',
+        mode: requestRow.mode || '',
+        level: toInt(requestRow.level),
+        manual: true,
+        request_status: nextStatus,
+      },
+    };
+  }
+
+  if (nextStatus === 'queued') {
+    return {
+      message: `Queued request: ${label} from ${requester}.`,
+      message_type: 'request_queue',
+      metadata: {
+        request_id: requestRow.id,
+        song_title: requestRow.song_title || '',
+        mode: requestRow.mode || '',
+        level: toInt(requestRow.level),
+        request_status: nextStatus,
+      },
+    };
+  }
+
+  if (nextStatus === 'skipped') {
+    return {
+      message: `Skipped request: ${label} from ${requester}.`,
+      message_type: 'request_queue',
+      metadata: {
+        request_id: requestRow.id,
+        song_title: requestRow.song_title || '',
+        mode: requestRow.mode || '',
+        level: toInt(requestRow.level),
+        request_status: nextStatus,
+      },
+    };
+  }
+
+  if (nextStatus === 'open') {
+    return {
+      message: `${previousStatus === 'queued' ? 'Returned to open queue' : 'Reopened request'}: ${label} from ${requester}.`,
+      message_type: 'request_queue',
+      metadata: {
+        request_id: requestRow.id,
+        song_title: requestRow.song_title || '',
+        mode: requestRow.mode || '',
+        level: toInt(requestRow.level),
+        request_status: nextStatus,
+      },
+    };
+  }
+
+  return null;
+}
+
+function updateLiveRequestStatus(db, requestRow, nextStatus, options = {}) {
+  if (!requestRow?.id) return null;
+
+  const normalizedStatus = normalizeRequestStatus(nextStatus, nextStatus === 'played');
+  const previousStatus = normalizeRequestStatus(requestRow.status, toInt(requestRow.fulfilled) === 1);
+  const actorUserId = String(options.actorUserId || '').trim();
+  const handledByUserId = normalizedStatus === 'played' || normalizedStatus === 'skipped' ? actorUserId : '';
+  const handledAt = normalizedStatus === 'played' || normalizedStatus === 'skipped'
+    ? new Date().toISOString().slice(0, 19).replace('T', ' ')
+    : '';
+
+  if (previousStatus !== normalizedStatus || toInt(requestRow.fulfilled) !== (normalizedStatus === 'played' ? 1 : 0)) {
+    db.prepare(`
+      UPDATE live_session_requests
+      SET status = ?,
+          fulfilled = ?,
+          handled_at = ?,
+          handled_by_user_id = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      normalizedStatus,
+      normalizedStatus === 'played' ? 1 : 0,
+      handledAt,
+      handledByUserId,
+      requestRow.id
+    );
+  }
+
+  const updatedRow = db.prepare(`
+    SELECT *
+    FROM live_session_requests
+    WHERE id = ?
+    LIMIT 1
+  `).get(requestRow.id);
+
+  if (options.emitMessage !== false && previousStatus !== normalizedStatus) {
+    const announcement = buildRequestStatusAnnouncement({ ...requestRow, ...updatedRow }, normalizedStatus, previousStatus);
+    if (announcement?.message) {
+      addSystemMessage(
+        db,
+        requestRow.live_session_id,
+        announcement.message,
+        announcement.message_type,
+        announcement.metadata
+      );
+    }
+  }
+
+  return updatedRow;
+}
+
+function buildModerationAnnouncement(targetUser, previousState, nextState) {
+  const changes = [];
+  if (!!previousState?.chat_muted !== !!nextState?.chat_muted) {
+    changes.push(nextState.chat_muted ? 'chat muted' : 'chat unmuted');
+  }
+  if (!!previousState?.requests_blocked !== !!nextState?.requests_blocked) {
+    changes.push(nextState.requests_blocked ? 'requests blocked' : 'requests restored');
+  }
+  if (changes.length === 0) return '';
+
+  const name = normalizeText(targetUser?.username || 'Viewer', 60) || 'Viewer';
+  return `${name}: ${changes.join(' • ')}.`;
+}
+
+function getLiveMessageRow(db, messageId) {
+  return db.prepare(`
+    SELECT
+      m.*,
+      s.host_user_id,
+      COALESCE(u.avatar, '') AS user_avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.pumbility, 0) AS pumbility,
+      COALESCE(u.nationality, '') AS nationality,
+      COALESCE(mod.chat_muted, 0) AS chat_muted,
+      COALESCE(mod.requests_blocked, 0) AS requests_blocked
+    FROM live_session_messages m
+    JOIN live_sessions s ON s.id = m.live_session_id
+    LEFT JOIN users u ON u.id = m.user_id
+    LEFT JOIN live_session_moderation mod
+      ON mod.live_session_id = m.live_session_id
+     AND mod.user_id = m.user_id
+    WHERE m.id = ?
+    LIMIT 1
+  `).get(messageId);
+}
+
 function getPlayOutcomeMap(db, liveSessionId) {
   const map = new Map();
 
@@ -289,21 +484,43 @@ function normalizeMessageRow(row) {
     live_session_id: row.live_session_id,
     user_id: row.user_id || '',
     username: row.username || '',
-    avatar: row.avatar || '',
+    avatar: row.user_id
+      ? normalizeUserAvatarForList(row.user_avatar || row.avatar, row.user_id, 40, row.avatar_v)
+      : row.avatar || '',
     message: row.message || '',
     message_type: row.message_type || 'chat',
     metadata: safeParseJson(row.metadata_json || '{}', {}),
     created_at: row.created_at || '',
     is_system: (row.message_type || '') === 'system' || !row.user_id,
+    skill_title: row.skill_title || '',
+    pumbility: toInt(row.pumbility),
+    nationality: row.nationality || '',
+    is_host: !!row.user_id && String(row.host_user_id || '') === String(row.user_id || ''),
+    chat_muted: toInt(row.chat_muted) === 1,
+    requests_blocked: toInt(row.requests_blocked) === 1,
   };
 }
 
 function getSessionMessages(db, liveSessionId) {
   const rows = db.prepare(`
-    SELECT *
-    FROM live_session_messages
-    WHERE live_session_id = ?
-    ORDER BY datetime(created_at) DESC, id DESC
+    SELECT
+      m.*,
+      s.host_user_id,
+      COALESCE(u.avatar, '') AS user_avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.pumbility, 0) AS pumbility,
+      COALESCE(u.nationality, '') AS nationality,
+      COALESCE(mod.chat_muted, 0) AS chat_muted,
+      COALESCE(mod.requests_blocked, 0) AS requests_blocked
+    FROM live_session_messages m
+    JOIN live_sessions s ON s.id = m.live_session_id
+    LEFT JOIN users u ON u.id = m.user_id
+    LEFT JOIN live_session_moderation mod
+      ON mod.live_session_id = m.live_session_id
+     AND mod.user_id = m.user_id
+    WHERE m.live_session_id = ?
+    ORDER BY datetime(m.created_at) DESC, m.id DESC
     LIMIT ?
   `).all(liveSessionId, CHAT_LIMIT);
 
@@ -314,29 +531,64 @@ function getSessionRequests(db, liveSessionId) {
   const rows = db.prepare(`
     SELECT
       r.*,
+      s.host_user_id,
       u.avatar,
-      u.avatar_v
+      u.avatar_v,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.pumbility, 0) AS pumbility,
+      COALESCE(u.nationality, '') AS nationality,
+      COALESCE(mod.chat_muted, 0) AS chat_muted,
+      COALESCE(mod.requests_blocked, 0) AS requests_blocked
     FROM live_session_requests r
+    JOIN live_sessions s ON s.id = r.live_session_id
     JOIN users u ON u.id = r.user_id
+    LEFT JOIN live_session_moderation mod
+      ON mod.live_session_id = r.live_session_id
+     AND mod.user_id = r.user_id
     WHERE r.live_session_id = ?
-    ORDER BY r.fulfilled ASC, datetime(r.created_at) DESC, r.id DESC
+    ORDER BY CASE COALESCE(NULLIF(r.status, ''), CASE WHEN r.fulfilled = 1 THEN 'played' ELSE 'open' END)
+      WHEN 'queued' THEN 0
+      WHEN 'open' THEN 1
+      WHEN 'played' THEN 2
+      WHEN 'skipped' THEN 3
+      ELSE 4
+    END ASC,
+    datetime(COALESCE(NULLIF(r.updated_at, ''), r.created_at)) DESC,
+    datetime(r.created_at) DESC,
+    r.id DESC
     LIMIT ?
   `).all(liveSessionId, REQUEST_LIMIT);
 
-  return rows.map((row) => ({
-    id: row.id,
-    live_session_id: row.live_session_id,
-    user_id: row.user_id,
-    username: row.username || '',
-    avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 40, row.avatar_v),
-    chart_id: row.chart_id ? toInt(row.chart_id) : null,
-    chart_key: row.chart_key || '',
-    song_title: row.song_title || '',
-    mode: row.mode || '',
-    level: toInt(row.level),
-    fulfilled: toInt(row.fulfilled) === 1,
-    created_at: row.created_at || '',
-  }));
+  let queuePosition = 0;
+  return rows.map((row) => {
+    const status = normalizeRequestStatus(row.status, toInt(row.fulfilled) === 1);
+    if (status === 'queued') queuePosition += 1;
+    return {
+      id: row.id,
+      live_session_id: row.live_session_id,
+      user_id: row.user_id,
+      username: row.username || '',
+      avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 40, row.avatar_v),
+      chart_id: row.chart_id ? toInt(row.chart_id) : null,
+      chart_key: row.chart_key || '',
+      song_title: row.song_title || '',
+      mode: row.mode || '',
+      level: toInt(row.level),
+      status,
+      fulfilled: status === 'played',
+      handled_at: row.handled_at || '',
+      handled_by_user_id: row.handled_by_user_id || '',
+      created_at: row.created_at || '',
+      updated_at: row.updated_at || '',
+      skill_title: row.skill_title || '',
+      pumbility: toInt(row.pumbility),
+      nationality: row.nationality || '',
+      is_host: String(row.host_user_id || '') === String(row.user_id || ''),
+      chat_muted: toInt(row.chat_muted) === 1,
+      requests_blocked: toInt(row.requests_blocked) === 1,
+      queue_position: status === 'queued' ? queuePosition : 0,
+    };
+  });
 }
 
 function getVoteSnapshot(db, voteId, currentUserId = '') {
@@ -497,6 +749,7 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
 
   return {
     session: normalizeSessionPayload({ ...freshSession, viewer_peak: viewerPeak }, host, viewerCount, currentUserId),
+    viewer_state: getSessionViewerState(db, freshSession, currentUserId),
     summary,
     plays,
     messages,
@@ -524,7 +777,7 @@ function requireSessionHost(session, userId) {
   }
 }
 
-function fulfillMatchingRequests(db, liveSessionId, plays = []) {
+function fulfillMatchingRequests(db, liveSessionId, plays = [], actorUserId = '') {
   const playByKey = new Map();
   for (const play of Array.isArray(plays) ? plays : []) {
     const key = buildRequestKey(play?.song_title, play?.mode, play?.level);
@@ -534,26 +787,23 @@ function fulfillMatchingRequests(db, liveSessionId, plays = []) {
   if (playByKey.size === 0) return [];
 
   const requests = db.prepare(`
-    SELECT id, username, song_title, mode, level
+    SELECT id, live_session_id, username, song_title, mode, level, status, fulfilled
     FROM live_session_requests
     WHERE live_session_id = ?
-      AND fulfilled = 0
+      AND COALESCE(NULLIF(status, ''), CASE WHEN fulfilled = 1 THEN 'played' ELSE 'open' END) IN ('open', 'queued')
     ORDER BY datetime(created_at) ASC, id ASC
   `).all(liveSessionId);
   if (!requests.length) return [];
-
-  const markFulfilled = db.prepare(`
-    UPDATE live_session_requests
-    SET fulfilled = 1
-    WHERE id = ?
-  `);
 
   const matched = [];
   for (const request of requests) {
     const key = buildRequestKey(request.song_title, request.mode, request.level);
     const play = playByKey.get(key);
     if (!play) continue;
-    markFulfilled.run(request.id);
+    updateLiveRequestStatus(db, request, 'played', {
+      actorUserId,
+      emitMessage: false,
+    });
     matched.push({
       request,
       play,
@@ -732,7 +982,7 @@ function applyLiveSyncResult(db, session, syncResult) {
     );
   }
 
-  const fulfilledRequests = fulfillMatchingRequests(db, session.id, insertedRows);
+  const fulfilledRequests = fulfillMatchingRequests(db, session.id, insertedRows, session.host_user_id);
   if (fulfilledRequests.length > 0) {
     const groups = new Map();
     for (const match of fulfilledRequests) {
@@ -1043,6 +1293,12 @@ router.post('/sessions/:id/messages', requireAuth, (req, res) => {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+    if (String(req.user.id || '') !== String(session.host_user_id || '')) {
+      const moderation = getLiveModerationState(db, session.id, req.user.id);
+      if (moderation.chat_muted) {
+        return res.status(403).json({ error: 'The host has muted your chat for this session' });
+      }
+    }
 
     const message = String(req.body?.message || '').trim().slice(0, 500);
     if (!message) return res.status(400).json({ error: 'Message is required' });
@@ -1061,7 +1317,7 @@ router.post('/sessions/:id/messages', requireAuth, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 'chat', '{}')
     `).run(id, session.id, user.id, user.username || req.user.username || 'User', avatar, message);
 
-    const row = db.prepare('SELECT * FROM live_session_messages WHERE id = ?').get(id);
+    const row = getLiveMessageRow(db, id);
     broadcastLiveSessionSnapshot(db, session.id, 'message');
     res.status(201).json({ message: normalizeMessageRow(row) });
   } catch (err) {
@@ -1100,6 +1356,12 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+    if (String(req.user.id || '') !== String(session.host_user_id || '')) {
+      const moderation = getLiveModerationState(db, session.id, req.user.id);
+      if (moderation.requests_blocked) {
+        return res.status(403).json({ error: 'The host has blocked your requests for this session' });
+      }
+    }
 
     const chartId = req.body?.chart_id ? toInt(req.body.chart_id) : 0;
     let chart = null;
@@ -1134,8 +1396,11 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
     const avatar = normalizeUserAvatarForList(user?.avatar, req.user.id, 40, user?.avatar_v);
 
     db.prepare(`
-      INSERT INTO live_session_requests (id, live_session_id, user_id, username, chart_id, chart_key, song_title, mode, level, fulfilled, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
+      INSERT INTO live_session_requests (
+        id, live_session_id, user_id, username, chart_id, chart_key, song_title, mode, level,
+        status, fulfilled, handled_at, handled_by_user_id, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, '', '', datetime('now'), datetime('now'))
     `).run(requestId, session.id, req.user.id, user?.username || req.user.username || 'User', toInt(chart.id), chartKey, chart.title, chart.mode, toInt(chart.level));
 
     const messageId = uuidv4();
@@ -1160,7 +1425,7 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
 
     res.status(201).json({
       request: getSessionRequests(db, session.id).find((row) => row.id === requestId) || null,
-      message: normalizeMessageRow(db.prepare('SELECT * FROM live_session_messages WHERE id = ?').get(messageId)),
+      message: normalizeMessageRow(getLiveMessageRow(db, messageId)),
     });
     broadcastLiveSessionSnapshot(db, session.id, 'request_created');
   } catch (err) {
@@ -1184,32 +1449,164 @@ router.post('/sessions/:id/requests/:requestId/fulfill', requireAuth, (req, res)
     `).get(req.params.requestId, session.id);
     if (!requestRow) return res.status(404).json({ error: 'Request not found' });
 
-    if (!toInt(requestRow.fulfilled)) {
-      db.prepare(`
-        UPDATE live_session_requests
-        SET fulfilled = 1
-        WHERE id = ?
-      `).run(requestRow.id);
-
-      addSystemMessage(
-        db,
-        session.id,
-        buildRequestFulfillmentMessage(requestRow, [requestRow.username || 'Viewer']),
-        'request_fulfilled',
-        {
-          request_ids: [requestRow.id],
-          song_title: requestRow.song_title || '',
-          mode: requestRow.mode || '',
-          level: toInt(requestRow.level),
-          manual: true,
-        }
-      );
-    }
+    updateLiveRequestStatus(db, requestRow, 'played', {
+      actorUserId: req.user.id,
+      emitMessage: normalizeRequestStatus(requestRow.status, toInt(requestRow.fulfilled) === 1) !== 'played',
+    });
 
     const request = getSessionRequests(db, session.id).find((row) => row.id === requestRow.id) || null;
     broadcastLiveSessionSnapshot(db, session.id, 'request_fulfilled');
     res.json({
       request,
+      snapshot: buildSessionSnapshot(db, session, req.user.id),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/requests/:requestId/status', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+    if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+
+    const requestRow = db.prepare(`
+      SELECT *
+      FROM live_session_requests
+      WHERE id = ?
+        AND live_session_id = ?
+      LIMIT 1
+    `).get(req.params.requestId, session.id);
+    if (!requestRow) return res.status(404).json({ error: 'Request not found' });
+
+    const requestedStatus = String(req.body?.status || '').trim().toLowerCase();
+    if (!['open', 'queued', 'played', 'skipped'].includes(requestedStatus)) {
+      return res.status(400).json({ error: 'Invalid request status' });
+    }
+    const nextStatus = normalizeRequestStatus(requestedStatus, requestedStatus === 'played');
+
+    updateLiveRequestStatus(db, requestRow, nextStatus, {
+      actorUserId: req.user.id,
+      emitMessage: normalizeRequestStatus(requestRow.status, toInt(requestRow.fulfilled) === 1) !== nextStatus,
+    });
+
+    const request = getSessionRequests(db, session.id).find((row) => row.id === requestRow.id) || null;
+    broadcastLiveSessionSnapshot(db, session.id, `request_${nextStatus}`);
+    res.json({
+      request,
+      snapshot: buildSessionSnapshot(db, session, req.user.id),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/moderation', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+    if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+
+    const targetUserId = normalizeText(req.body?.target_user_id, 80);
+    if (!targetUserId) return res.status(400).json({ error: 'target_user_id is required' });
+    if (String(targetUserId) === String(session.host_user_id || '')) {
+      return res.status(400).json({ error: 'The host cannot moderate themself' });
+    }
+
+    const targetUser = db.prepare(`
+      SELECT id, username
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `).get(targetUserId);
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+    const previousState = getLiveModerationState(db, session.id, targetUserId);
+    const nextState = {
+      chat_muted: req.body?.chat_muted === undefined ? previousState.chat_muted : !!req.body.chat_muted,
+      requests_blocked: req.body?.requests_blocked === undefined ? previousState.requests_blocked : !!req.body.requests_blocked,
+    };
+
+    if (nextState.chat_muted || nextState.requests_blocked) {
+      db.prepare(`
+        INSERT INTO live_session_moderation (
+          live_session_id, user_id, chat_muted, requests_blocked, moderated_by_user_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(live_session_id, user_id) DO UPDATE SET
+          chat_muted = excluded.chat_muted,
+          requests_blocked = excluded.requests_blocked,
+          moderated_by_user_id = excluded.moderated_by_user_id,
+          updated_at = datetime('now')
+      `).run(
+        session.id,
+        targetUserId,
+        nextState.chat_muted ? 1 : 0,
+        nextState.requests_blocked ? 1 : 0,
+        req.user.id
+      );
+    } else {
+      db.prepare(`
+        DELETE FROM live_session_moderation
+        WHERE live_session_id = ?
+          AND user_id = ?
+      `).run(session.id, targetUserId);
+    }
+
+    const moderation = getLiveModerationState(db, session.id, targetUserId);
+    const announcement = buildModerationAnnouncement(targetUser, previousState, moderation);
+    if (announcement) {
+      addSystemMessage(
+        db,
+        session.id,
+        announcement,
+        'moderation',
+        {
+          target_user_id: targetUserId,
+          chat_muted: moderation.chat_muted,
+          requests_blocked: moderation.requests_blocked,
+        }
+      );
+    }
+
+    broadcastLiveSessionSnapshot(db, session.id, 'moderation');
+    res.json({
+      moderation,
+      snapshot: buildSessionSnapshot(db, session, req.user.id),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/messages/:messageId/delete', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+
+    const message = db.prepare(`
+      SELECT *
+      FROM live_session_messages
+      WHERE id = ?
+        AND live_session_id = ?
+      LIMIT 1
+    `).get(req.params.messageId, session.id);
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    if (!message.user_id || (message.message_type || '') !== 'chat') {
+      return res.status(400).json({ error: 'Only viewer chat messages can be removed' });
+    }
+
+    db.prepare(`
+      DELETE FROM live_session_messages
+      WHERE id = ?
+    `).run(message.id);
+
+    broadcastLiveSessionSnapshot(db, session.id, 'message_deleted');
+    res.json({
+      success: true,
       snapshot: buildSessionSnapshot(db, session, req.user.id),
     });
   } catch (err) {
