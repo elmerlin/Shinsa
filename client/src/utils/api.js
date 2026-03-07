@@ -897,6 +897,40 @@ export const updateCheckinNotificationPreferences = (venueSlug, data) => request
 export const setPlayingStatus = (status) => request('/checkins/playing-status', { method: 'PUT', body: JSON.stringify({ status }) });
 export const clearPlayingStatus = () => request('/checkins/playing-status', { method: 'DELETE' });
 
+// Live Sessions
+export const getMyLiveSession = () => request('/live/sessions/mine/active');
+export const createLiveSession = (data) => request('/live/sessions', { method: 'POST', body: JSON.stringify(data) });
+export const getLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}`);
+export const sendLivePresence = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/presence`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const getLiveMessages = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/messages`);
+export const sendLiveMessage = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/messages`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const syncLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/sync`, {
+  method: 'POST',
+  body: '{}',
+});
+export const sendLiveRequest = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/requests`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const createLiveVote = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/votes`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const castLiveVote = (voteId, optionId) => request(`/live/votes/${encodeURIComponent(voteId)}/cast`, {
+  method: 'POST',
+  body: JSON.stringify({ option_id: optionId }),
+});
+export const endLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/end`, {
+  method: 'POST',
+  body: '{}',
+});
+
 // Parser
 export async function parseScorePhoto(file) {
   const formData = new FormData();

@@ -1813,6 +1813,153 @@ function initializeDb() {
       PRIMARY KEY (user_id, snapshot_date)
     );
 
+    CREATE TABLE IF NOT EXISTS live_sessions (
+      id TEXT PRIMARY KEY,
+      host_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT NOT NULL DEFAULT '',
+      stream_url TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'live',
+      recent_anchor_id INTEGER NOT NULL DEFAULT 0,
+      last_recent_row_id INTEGER NOT NULL DEFAULT 0,
+      last_sync_at TEXT DEFAULT '',
+      last_sync_status TEXT DEFAULT '',
+      viewer_peak INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      started_at TEXT DEFAULT (datetime('now')),
+      ended_at TEXT DEFAULT '',
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_presence (
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      last_seen TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (live_session_id, session_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_messages (
+      id TEXT PRIMARY KEY,
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT DEFAULT '',
+      username TEXT NOT NULL DEFAULT '',
+      avatar TEXT DEFAULT '',
+      message TEXT NOT NULL DEFAULT '',
+      message_type TEXT NOT NULL DEFAULT 'chat',
+      metadata_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_requests (
+      id TEXT PRIMARY KEY,
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      username TEXT NOT NULL DEFAULT '',
+      chart_id INTEGER DEFAULT NULL,
+      chart_key TEXT DEFAULT '',
+      song_title TEXT NOT NULL DEFAULT '',
+      mode TEXT NOT NULL DEFAULT '',
+      level INTEGER NOT NULL DEFAULT 0,
+      fulfilled INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_votes (
+      id TEXT PRIMARY KEY,
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      host_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      mode_filter TEXT NOT NULL DEFAULT 'Both',
+      min_level INTEGER NOT NULL DEFAULT 0,
+      max_level INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      pinned_message_id TEXT DEFAULT '',
+      ends_at TEXT DEFAULT '',
+      winning_option_id TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_vote_options (
+      id TEXT PRIMARY KEY,
+      vote_id TEXT NOT NULL REFERENCES live_session_votes(id) ON DELETE CASCADE,
+      chart_id INTEGER DEFAULT NULL,
+      chart_key TEXT DEFAULT '',
+      song_title TEXT NOT NULL DEFAULT '',
+      mode TEXT NOT NULL DEFAULT '',
+      level INTEGER NOT NULL DEFAULT 0,
+      jacket_url TEXT DEFAULT '',
+      position INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_vote_ballots (
+      vote_id TEXT NOT NULL REFERENCES live_session_votes(id) ON DELETE CASCADE,
+      option_id TEXT NOT NULL REFERENCES live_session_vote_options(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (vote_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_plays (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recently_played_id INTEGER DEFAULT NULL REFERENCES user_recently_played(id) ON DELETE SET NULL,
+      song_title TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL DEFAULT 0,
+      score INTEGER NOT NULL DEFAULT 0,
+      grade TEXT DEFAULT '',
+      machine_name TEXT DEFAULT '',
+      background_url TEXT DEFAULT '',
+      date_played TEXT DEFAULT '',
+      perfect INTEGER DEFAULT 0,
+      great INTEGER DEFAULT 0,
+      good INTEGER DEFAULT 0,
+      bad INTEGER DEFAULT 0,
+      miss INTEGER DEFAULT 0,
+      max_combo INTEGER DEFAULT 0,
+      kcal REAL DEFAULT 0,
+      plate TEXT DEFAULT '',
+      over_top100_rank INTEGER DEFAULT 0,
+      shoe_id INTEGER DEFAULT NULL,
+      shoe_make TEXT DEFAULT '',
+      shoe_model TEXT DEFAULT '',
+      shoe_colorway TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(live_session_id, user_id, song_title, mode, level, score, grade, date_played)
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_buffered_upscores (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      pumbility_gain INTEGER NOT NULL DEFAULT 0,
+      singles_pumbility_gain INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_buffered_clears (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      pumbility_gain INTEGER NOT NULL DEFAULT 0,
+      singles_pumbility_gain INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_live_sessions_host_status ON live_sessions(host_user_id, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_live_sessions_single_active_host ON live_sessions(host_user_id) WHERE status = 'live';
+    CREATE INDEX IF NOT EXISTS idx_live_session_presence_session ON live_session_presence(live_session_id, last_seen);
+    CREATE INDEX IF NOT EXISTS idx_live_session_messages_session_time ON live_session_messages(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_time ON live_session_requests(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_votes_session_status ON live_session_votes(live_session_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_vote_options_vote ON live_session_vote_options(vote_id, position);
+    CREATE INDEX IF NOT EXISTS idx_live_session_plays_session_time ON live_session_plays(live_session_id, date_played, id);
+    CREATE INDEX IF NOT EXISTS idx_live_session_plays_recent ON live_session_plays(recently_played_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_live_session_plays_unique_recent ON live_session_plays(live_session_id, recently_played_id) WHERE recently_played_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_live_session_buffered_upscores_session ON live_session_buffered_upscores(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_buffered_clears_session ON live_session_buffered_clears(live_session_id, created_at);
+
     -- Community custom emojis (from sprite sheet uploads)
     CREATE TABLE IF NOT EXISTS community_emojis (
       id TEXT PRIMARY KEY,

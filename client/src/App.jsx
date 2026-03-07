@@ -45,6 +45,7 @@ import ChangeLogPage from './pages/ChangeLogPage';
 import CheckinPage from './pages/CheckinPage';
 import DojoPage from './pages/DojoPage';
 import LeaderboardsPage from './pages/LeaderboardsPage';
+import LivePage from './pages/LivePage';
 
 const DOJO_TARGET_GROUP = 'pump dojo';
 const DOJO_VENUE_SLUG = 'london-pump-dojo';
@@ -441,6 +442,16 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             Posts
+          </Link>
+          <Link
+            to="/live"
+            onClick={closeMenu}
+            className={menuLinkClass}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Shinsa Live
           </Link>
           <Link
             to="/world-max"
@@ -1122,6 +1133,11 @@ export default function App() {
                 Feed
               </Link>
             )}
+            {user && (
+              <Link to="/live" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+                Live
+              </Link>
+            )}
             <Link to="/world-max" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1196,9 +1212,11 @@ export default function App() {
           <Route path="/:username" element={<ProfilePage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/account" element={<MyAccountPage />} />
-          <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
-          <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
-          <Route path="/feed" element={<FeedPage />} />
+        <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
+        <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
+        <Route path="/live" element={<LivePage />} />
+        <Route path="/live/:sessionId" element={<LivePage />} />
+        <Route path="/feed" element={<FeedPage />} />
           <Route path="/posts" element={<PostsPage />} />
           <Route path="/post/:id" element={<SinglePostPage />} />
           <Route path="/upscore/:id" element={<SingleUpscorePage />} />

@@ -2292,9 +2292,9 @@ function getNewlyUnlockedTitles(previousProgress, latestProgress) {
     .filter((title) => title?.unlocked && !previouslyUnlocked.has(title.id) && !isBeginnerTitleRow(title));
 }
 
-function insertTitleUnlockActivityPost(db, userId, unlockedTitles) {
-  if (!Array.isArray(unlockedTitles) || unlockedTitles.length === 0) return null;
-  const payload = unlockedTitles.map((title) => {
+function buildTitleUnlockClearRows(unlockedTitles) {
+  if (!Array.isArray(unlockedTitles) || unlockedTitles.length === 0) return [];
+  return unlockedTitles.map((title) => {
     const plateMeta = getTitlePlateMeta(title);
     return {
       entry_type: 'title_unlock',
@@ -2312,7 +2312,337 @@ function insertTitleUnlockActivityPost(db, userId, unlockedTitles) {
       background_url: '',
     };
   });
+}
+
+function insertTitleUnlockActivityPost(db, userId, unlockedTitles) {
+  const payload = buildTitleUnlockClearRows(unlockedTitles);
+  if (payload.length === 0) return null;
   return insertGroupedNewClearPost(db, userId, payload);
+}
+
+function buildTitleUnlockSummary(unlockedTitles) {
+  const titleList = (Array.isArray(unlockedTitles) ? unlockedTitles : [])
+    .map((title) => title?.name || title?.skill_title)
+    .filter(Boolean);
+  if (titleList.length === 0) return 'a new title';
+  if (titleList.length === 1) return titleList[0];
+  return `${titleList[0]} +${titleList.length - 1}`;
+}
+
+async function syncRecentlyPlayedForUser(user, options = {}) {
+  const db = options.db || getDb();
+  const userId = String(options.userId || user?.id || '').trim();
+  if (!userId) throw new Error('User is required');
+
+  const persistActivityPosts = options.persistActivityPosts !== false;
+  const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
+  const actorUsername = String(options.username || user?.username || profile?.username || '').trim() || 'Someone';
+  const profileLink = buildProfilePath(actorUsername) || `/profile/${userId}`;
+  const progressBeforeSync = getUserTitleProgress(db, userId);
+  const client = options.client || await loginWithStoredCredentials(userId);
+  const plays = Array.isArray(options.plays) ? options.plays : await scrapeRecentlyPlayed(client);
+  const overRankingLookup = options.overRankingLookup || await ensureOverRankingLookupForScoring(db, { maxAgeMinutes: 1440 });
+
+  const activeShoe = db.prepare(`
+    SELECT id
+    FROM user_shoes
+    WHERE user_id = ? AND is_current = 1 AND retired_at IS NULL
+    ORDER BY updated_at DESC, id DESC
+    LIMIT 1
+  `).get(userId);
+  const activeShoeId = activeShoe ? parseInt(activeShoe.id, 10) : null;
+
+  const findRecentPlay = db.prepare(`
+    SELECT id, shoe_id
+    FROM user_recently_played
+    WHERE user_id = ?
+      AND song_title = ?
+      AND mode = ?
+      AND level = ?
+      AND score = ?
+      AND grade = ?
+      AND date_played = ?
+    LIMIT 1
+  `);
+
+  const insertRecent = db.prepare(`
+    INSERT INTO user_recently_played
+    (user_id, shoe_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate, over_top100_rank)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO NOTHING
+  `);
+
+  const updateRecent = db.prepare(`
+    UPDATE user_recently_played
+    SET
+      machine_name = CASE WHEN ? != '' THEN ? ELSE machine_name END,
+      background_url = CASE WHEN ? != '' THEN ? ELSE background_url END,
+      plate = CASE WHEN ? != '' THEN ? ELSE plate END,
+      perfect = MAX(COALESCE(perfect, 0), ?),
+      great = MAX(COALESCE(great, 0), ?),
+      good = MAX(COALESCE(good, 0), ?),
+      bad = MAX(COALESCE(bad, 0), ?),
+      miss = MAX(COALESCE(miss, 0), ?),
+      max_combo = MAX(COALESCE(max_combo, 0), ?),
+      kcal = MAX(COALESCE(kcal, 0), ?),
+      over_top100_rank = ?,
+      shoe_id = CASE
+        WHEN shoe_id IS NULL AND ? IS NOT NULL THEN ?
+        ELSE shoe_id
+      END
+    WHERE id = ?
+  `);
+
+  const insertBest = db.prepare(`
+    INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id, over_top100_rank)
+    VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
+  `);
+  const replaceBest = db.prepare(`
+    UPDATE user_best_scores
+    SET score = ?, grade = ?, plate = '', shoe_id = ?, over_top100_rank = ?
+    WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?
+  `);
+
+  let updatedCount = 0;
+  const upscoresFromRecent = [];
+  const newClearsFromRecent = [];
+  let upscorePostId = null;
+  let newClearPostId = null;
+  let titleUnlockPostId = null;
+  let upscoreRowsWithGains = [];
+  let clearRowsWithGains = [];
+  let pumbilityGains = {
+    upscores: [],
+    clears: [],
+    upscore_gain: 0,
+    clear_gain: 0,
+    singles_upscore_gain: 0,
+    singles_clear_gain: 0,
+  };
+  const baselineBestScores = db.prepare(
+    'SELECT song_title, mode, level, score, grade FROM user_best_scores WHERE user_id = ?'
+  ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
+
+  const txn = db.transaction(() => {
+    db.prepare(`
+      DELETE FROM user_best_scores
+      WHERE user_id = ?
+        AND (
+          score <= 0
+          OR UPPER(REPLACE(TRIM(COALESCE(grade, '')), ' ', '')) IN ('F', 'STAGEBREAK', 'STAGE_BREAK')
+          OR UPPER(REPLACE(TRIM(COALESCE(grade, '')), ' ', '')) LIKE 'X_%'
+        )
+    `).run(userId);
+
+    for (const p of plays) {
+      const songTitle = p.song_title;
+      const mode = p.mode;
+      const level = parseInt(p.level, 10) || 0;
+      const score = parseInt(p.score, 10) || 0;
+      const grade = p.grade || '';
+      const machineName = p.machine_name || '';
+      const backgroundUrl = p.background_url || '';
+      const datePlayed = p.date_played || '';
+      const perfect = parseInt(p.perfect, 10) || 0;
+      const great = parseInt(p.great, 10) || 0;
+      const good = parseInt(p.good, 10) || 0;
+      const bad = parseInt(p.bad, 10) || 0;
+      const miss = parseInt(p.miss, 10) || 0;
+      const maxCombo = parseInt(p.max_combo, 10) || 0;
+      const kcal = Number.isFinite(Number(p.kcal)) ? Number(p.kcal) : 0;
+      const plate = p.plate || '';
+      const overTop100Rank = getOverTop100Rank(
+        overRankingLookup,
+        songTitle,
+        mode,
+        level,
+        score,
+        datePlayed,
+        actorUsername
+      );
+
+      const existingPlay = findRecentPlay.get(userId, songTitle, mode, level, score, grade, datePlayed);
+      if (!existingPlay) {
+        insertRecent.run(
+          userId,
+          activeShoeId,
+          songTitle,
+          mode,
+          level,
+          score,
+          grade,
+          machineName,
+          backgroundUrl,
+          datePlayed,
+          perfect,
+          great,
+          good,
+          bad,
+          miss,
+          maxCombo,
+          kcal,
+          plate,
+          overTop100Rank
+        );
+      } else {
+        updateRecent.run(
+          machineName,
+          machineName,
+          backgroundUrl,
+          backgroundUrl,
+          plate,
+          plate,
+          perfect,
+          great,
+          good,
+          bad,
+          miss,
+          maxCombo,
+          kcal,
+          overTop100Rank,
+          activeShoeId,
+          activeShoeId,
+          existingPlay.id
+        );
+      }
+
+      if (isPassingScore(score, grade)) {
+        const existing = db.prepare(
+          'SELECT score, grade FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
+        ).get(userId, songTitle, mode, level);
+        const existingPass = existing ? isPassingScore(existing.score, existing.grade) : false;
+        if (!existing || !existingPass || score > existing.score) {
+          if (existing && existingPass && score > existing.score) {
+            upscoresFromRecent.push({
+              song_title: songTitle,
+              mode,
+              level,
+              old_score: existing.score,
+              new_score: score,
+              old_grade: existing.grade || '',
+              new_grade: grade || '',
+              background_url: backgroundUrl || '',
+              perfect,
+              great,
+              good,
+              bad,
+              miss,
+              over_top100_rank: overTop100Rank,
+            });
+          } else {
+            newClearsFromRecent.push({
+              song_title: songTitle,
+              mode,
+              level,
+              score,
+              grade: grade || '',
+              plate: plate || '',
+              background_url: backgroundUrl || '',
+              perfect,
+              great,
+              good,
+              bad,
+              miss,
+              over_top100_rank: overTop100Rank,
+            });
+          }
+
+          if (!existing) {
+            insertBest.run(userId, songTitle, mode, level, score, grade, activeShoeId, overTop100Rank);
+          } else {
+            replaceBest.run(score, grade, activeShoeId, overTop100Rank, userId, songTitle, mode, level);
+          }
+          updatedCount += 1;
+        }
+      }
+    }
+
+    db.prepare(`
+      UPDATE user_piugame_sync SET last_recently_played_sync = datetime('now') WHERE user_id = ?
+    `).run(userId);
+
+    pumbilityGains = computePostPumbilityGains(baselineBestScores, upscoresFromRecent, newClearsFromRecent);
+    upscoreRowsWithGains = pumbilityGains.upscores;
+    clearRowsWithGains = pumbilityGains.clears;
+
+    if (persistActivityPosts && upscoreRowsWithGains.length > 0) {
+      const upscoreInsert = db.prepare(`
+        INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+      `).run(userId, JSON.stringify(upscoreRowsWithGains), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
+      upscorePostId = upscoreInsert.lastInsertRowid;
+    }
+
+    if (persistActivityPosts) {
+      newClearPostId = insertGroupedNewClearPost(db, userId, clearRowsWithGains, {
+        pumbilityGain: pumbilityGains.clear_gain,
+        singlesPumbilityGain: pumbilityGains.singles_clear_gain,
+      });
+    }
+  });
+  txn();
+
+  checkStreakAchievements(db, userId);
+  const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
+  const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
+  const titleUnlockRows = buildTitleUnlockClearRows(newlyUnlockedTitles);
+  if (persistActivityPosts) {
+    titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles);
+  }
+
+  if (persistActivityPosts && upscoresFromRecent.length > 0) {
+    notifyActivitySubscribers(db, {
+      actorUserId: userId,
+      actorUsername,
+      activityType: 'upscores',
+      notificationType: 'followed_user_upscore',
+      title: 'New Upscores',
+      message: `${actorUsername} posted ${upscoresFromRecent.length} new upscore${upscoresFromRecent.length === 1 ? '' : 's'}`,
+      link: upscorePostId ? `/upscore/${upscorePostId}` : profileLink,
+    });
+  }
+
+  if (persistActivityPosts && newClearsFromRecent.length > 0) {
+    notifyActivitySubscribers(db, {
+      actorUserId: userId,
+      actorUsername,
+      activityType: 'new_clears',
+      notificationType: 'followed_user_new_clear',
+      title: 'New Clears',
+      message: `${actorUsername} posted ${newClearsFromRecent.length} new clear${newClearsFromRecent.length === 1 ? '' : 's'}`,
+      link: newClearPostId ? `/clear/${newClearPostId}` : profileLink,
+    });
+  }
+
+  if (persistActivityPosts && newlyUnlockedTitles.length > 0) {
+    notifyActivitySubscribers(db, {
+      actorUserId: userId,
+      actorUsername,
+      activityType: 'new_clears',
+      notificationType: 'followed_user_new_title',
+      title: 'Title Earned',
+      message: `${actorUsername} earned ${buildTitleUnlockSummary(newlyUnlockedTitles)}`,
+      link: titleUnlockPostId ? `/clear/${titleUnlockPostId}` : profileLink,
+    });
+  }
+
+  return {
+    success: true,
+    user_id: userId,
+    actor_username: actorUsername,
+    profile_link: profileLink,
+    plays_count: plays.length,
+    scores_updated: updatedCount,
+    plays,
+    upscores: upscoreRowsWithGains,
+    new_clears: clearRowsWithGains,
+    newly_unlocked_titles: newlyUnlockedTitles,
+    title_unlock_rows: titleUnlockRows,
+    pumbility_gains: pumbilityGains,
+    upscore_post_id: upscorePostId,
+    new_clear_post_id: newClearPostId,
+    title_unlock_post_id: titleUnlockPostId,
+  };
 }
 
 // ─── Sync: Pumbility ───────────────────────────────────
@@ -3536,275 +3866,8 @@ router.delete('/shoes/:shoeId', requireAuth, (req, res) => {
 // POST /api/piugame/sync/recently-played — fetch recent plays & update best scores
 router.post('/sync/recently-played', requireAuth, async (req, res) => {
   try {
-    const db = getDb();
-    const progressBeforeSync = getUserTitleProgress(db, req.user.id);
-    const client = await loginWithStoredCredentials(req.user.id);
-    const plays = await scrapeRecentlyPlayed(client);
-    const overRankingLookup = await ensureOverRankingLookupForScoring(db, { maxAgeMinutes: 1440 });
-
-    const activeShoe = db.prepare(`
-      SELECT id
-      FROM user_shoes
-      WHERE user_id = ? AND is_current = 1 AND retired_at IS NULL
-      ORDER BY updated_at DESC, id DESC
-      LIMIT 1
-    `).get(req.user.id);
-    const activeShoeId = activeShoe ? parseInt(activeShoe.id, 10) : null;
-
-    const findRecentPlay = db.prepare(`
-      SELECT id, shoe_id
-      FROM user_recently_played
-      WHERE user_id = ?
-        AND song_title = ?
-        AND mode = ?
-        AND level = ?
-        AND score = ?
-        AND grade = ?
-        AND date_played = ?
-      LIMIT 1
-    `);
-
-    const insertRecent = db.prepare(`
-      INSERT INTO user_recently_played
-      (user_id, shoe_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate, over_top100_rank)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO NOTHING
-    `);
-
-    const updateRecent = db.prepare(`
-      UPDATE user_recently_played
-      SET
-        machine_name = CASE WHEN ? != '' THEN ? ELSE machine_name END,
-        background_url = CASE WHEN ? != '' THEN ? ELSE background_url END,
-        plate = CASE WHEN ? != '' THEN ? ELSE plate END,
-        perfect = MAX(COALESCE(perfect, 0), ?),
-        great = MAX(COALESCE(great, 0), ?),
-        good = MAX(COALESCE(good, 0), ?),
-        bad = MAX(COALESCE(bad, 0), ?),
-        miss = MAX(COALESCE(miss, 0), ?),
-        max_combo = MAX(COALESCE(max_combo, 0), ?),
-        kcal = MAX(COALESCE(kcal, 0), ?),
-        over_top100_rank = ?,
-        shoe_id = CASE
-          WHEN shoe_id IS NULL AND ? IS NOT NULL THEN ?
-          ELSE shoe_id
-        END
-      WHERE id = ?
-    `);
-
-    // Also update best scores for passing runs only.
-    const insertBest = db.prepare(`
-      INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id, over_top100_rank)
-      VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
-    `);
-    const replaceBest = db.prepare(`
-      UPDATE user_best_scores
-      SET score = ?, grade = ?, plate = '', shoe_id = ?, over_top100_rank = ?
-      WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?
-    `);
-
-    let updatedCount = 0;
-    const upscoresFromRecent = [];
-    const newClearsFromRecent = [];
-    let upscorePostId = null;
-    let newClearPostId = null;
-    const baselineBestScores = db.prepare(
-      'SELECT song_title, mode, level, score, grade FROM user_best_scores WHERE user_id = ?'
-    ).all(req.user.id).filter((row) => isPassingScore(row.score, row.grade));
-
-    const txn = db.transaction(() => {
-      // Keep user_best_scores pass-only.
-      db.prepare(`
-        DELETE FROM user_best_scores
-        WHERE user_id = ?
-          AND (
-            score <= 0
-            OR UPPER(REPLACE(TRIM(COALESCE(grade, '')), ' ', '')) IN ('F', 'STAGEBREAK', 'STAGE_BREAK')
-            OR UPPER(REPLACE(TRIM(COALESCE(grade, '')), ' ', '')) LIKE 'X_%'
-          )
-      `).run(req.user.id);
-
-      for (const p of plays) {
-        const songTitle = p.song_title;
-        const mode = p.mode;
-        const level = parseInt(p.level, 10) || 0;
-        const score = parseInt(p.score, 10) || 0;
-        const grade = p.grade || '';
-        const machineName = p.machine_name || '';
-        const backgroundUrl = p.background_url || '';
-        const datePlayed = p.date_played || '';
-        const perfect = parseInt(p.perfect, 10) || 0;
-        const great = parseInt(p.great, 10) || 0;
-        const good = parseInt(p.good, 10) || 0;
-        const bad = parseInt(p.bad, 10) || 0;
-        const miss = parseInt(p.miss, 10) || 0;
-        const maxCombo = parseInt(p.max_combo, 10) || 0;
-        const kcal = Number.isFinite(Number(p.kcal)) ? Number(p.kcal) : 0;
-        const plate = p.plate || '';
-        const overTop100Rank = getOverTop100Rank(
-          overRankingLookup,
-          songTitle,
-          mode,
-          level,
-          score,
-          datePlayed,
-          req.user?.username || ''
-        );
-
-        // When syncing, the current shoe is treated as the shoe worn for fetched plays.
-        const existingPlay = findRecentPlay.get(req.user.id, songTitle, mode, level, score, grade, datePlayed);
-        if (!existingPlay) {
-          insertRecent.run(
-            req.user.id,
-            activeShoeId,
-            songTitle,
-            mode,
-            level,
-            score,
-            grade,
-            machineName,
-            backgroundUrl,
-            datePlayed,
-            perfect,
-            great,
-            good,
-            bad,
-            miss,
-            maxCombo,
-            kcal,
-            plate,
-            overTop100Rank
-          );
-        } else {
-          updateRecent.run(
-            machineName,
-            machineName,
-            backgroundUrl,
-            backgroundUrl,
-            plate,
-            plate,
-            perfect,
-            great,
-            good,
-            bad,
-            miss,
-            maxCombo,
-            kcal,
-            overTop100Rank,
-            activeShoeId,
-            activeShoeId,
-            existingPlay.id
-          );
-        }
-
-        // Best scores / upscores are pass-only.
-        if (isPassingScore(score, grade)) {
-          const existing = db.prepare(
-            'SELECT score, grade FROM user_best_scores WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?'
-          ).get(req.user.id, songTitle, mode, level);
-          const existingPass = existing ? isPassingScore(existing.score, existing.grade) : false;
-          if (!existing || !existingPass || score > existing.score) {
-            if (existing && existingPass && score > existing.score) {
-              upscoresFromRecent.push({
-                song_title: songTitle, mode, level,
-                old_score: existing.score, new_score: score,
-                old_grade: existing.grade || '', new_grade: grade || '',
-                background_url: backgroundUrl || '',
-                perfect, great, good, bad, miss,
-                over_top100_rank: overTop100Rank,
-              });
-            } else {
-              // New clear - first pass on this chart
-              newClearsFromRecent.push({
-                song_title: songTitle,
-                mode,
-                level,
-                score,
-                grade: grade || '',
-                plate: plate || '',
-                background_url: backgroundUrl || '',
-                perfect, great, good, bad, miss,
-                over_top100_rank: overTop100Rank,
-              });
-            }
-            if (!existing) {
-              insertBest.run(req.user.id, songTitle, mode, level, score, grade, activeShoeId, overTop100Rank);
-            } else {
-              replaceBest.run(score, grade, activeShoeId, overTop100Rank, req.user.id, songTitle, mode, level);
-            }
-            updatedCount++;
-          }
-        }
-      }
-      db.prepare(`
-        UPDATE user_piugame_sync SET last_recently_played_sync = datetime('now') WHERE user_id = ?
-      `).run(req.user.id);
-      const pumbilityGains = computePostPumbilityGains(baselineBestScores, upscoresFromRecent, newClearsFromRecent);
-      const upscoreRowsWithGains = pumbilityGains.upscores;
-      const clearRowsWithGains = pumbilityGains.clears;
-
-      // Track upscores from recently played
-      if (upscoreRowsWithGains.length > 0) {
-        const upscoreInsert = db.prepare(`
-          INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
-          VALUES (?, ?, ?, ?, datetime('now'))
-        `).run(req.user.id, JSON.stringify(upscoreRowsWithGains), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
-        upscorePostId = upscoreInsert.lastInsertRowid;
-      }
-      newClearPostId = insertGroupedNewClearPost(db, req.user.id, clearRowsWithGains, {
-        pumbilityGain: pumbilityGains.clear_gain,
-        singlesPumbilityGain: pumbilityGains.singles_clear_gain,
-      });
-    });
-    txn();
-    checkStreakAchievements(db, req.user.id);
-    const progressAfterSync = updateUserSkillTitleFromBestScores(db, req.user.id);
-    const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
-    const titleUnlockPostId = insertTitleUnlockActivityPost(db, req.user.id, newlyUnlockedTitles);
-
-    const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
-    const actorUsername = profile?.username || 'Someone';
-    const profileLink = buildProfilePath(profile?.username) || `/profile/${req.user.id}`;
-
-    if (upscoresFromRecent.length > 0) {
-      notifyActivitySubscribers(db, {
-        actorUserId: req.user.id,
-        actorUsername,
-        activityType: 'upscores',
-        notificationType: 'followed_user_upscore',
-        title: 'New Upscores',
-        message: `${actorUsername} posted ${upscoresFromRecent.length} new upscore${upscoresFromRecent.length === 1 ? '' : 's'}`,
-        link: upscorePostId ? `/upscore/${upscorePostId}` : profileLink,
-      });
-    }
-
-    if (newClearsFromRecent.length > 0) {
-      notifyActivitySubscribers(db, {
-        actorUserId: req.user.id,
-        actorUsername,
-        activityType: 'new_clears',
-        notificationType: 'followed_user_new_clear',
-        title: 'New Clears',
-        message: `${actorUsername} posted ${newClearsFromRecent.length} new clear${newClearsFromRecent.length === 1 ? '' : 's'}`,
-        link: newClearPostId ? `/clear/${newClearPostId}` : profileLink,
-      });
-    }
-
-    if (newlyUnlockedTitles.length > 0) {
-      const titleList = newlyUnlockedTitles.map((title) => title.name || title.skill_title).filter(Boolean);
-      const titleSummary = titleList.length > 1 ? `${titleList[0]} +${titleList.length - 1}` : (titleList[0] || 'a new title');
-      notifyActivitySubscribers(db, {
-        actorUserId: req.user.id,
-        actorUsername,
-        activityType: 'new_clears',
-        notificationType: 'followed_user_new_title',
-        title: 'Title Earned',
-        message: `${actorUsername} earned ${titleSummary}`,
-        link: titleUnlockPostId ? `/clear/${titleUnlockPostId}` : profileLink,
-      });
-    }
-
-    res.json({ success: true, plays_count: plays.length, scores_updated: updatedCount });
+    const result = await syncRecentlyPlayedForUser(req.user, { persistActivityPosts: true });
+    res.json({ success: true, plays_count: result.plays_count, scores_updated: result.scores_updated });
   } catch (err) {
     console.error('Recently played sync error:', err.message);
     res.status(500).json({ error: err.message });
@@ -4884,5 +4947,8 @@ router.startOverRankingNightlyScheduler = startOverRankingNightlyScheduler;
 router.startPumbilityRankingNightlyScheduler = startPumbilityRankingNightlyScheduler;
 router.runOverRankingSyncNow = runOverRankingSyncNow;
 router.runPumbilityRankingSyncNow = runPumbilityRankingSyncNow;
+router.syncRecentlyPlayedForUser = syncRecentlyPlayedForUser;
+router.insertGroupedNewClearPost = insertGroupedNewClearPost;
+router.buildTitleUnlockClearRows = buildTitleUnlockClearRows;
 
 module.exports = router;

@@ -9,9 +9,11 @@ import { pumpPost, getPostComments, addPostComment, deletePostComment, togglePos
 import PumpersModal from './PumpersModal';
 import SessionSummaryCard from './SessionSummaryCard';
 import SessionShareCard from './SessionShareCard';
+import LiveSessionCard from './LiveSessionCard';
 import SessionPlanCard from './SessionPlanCard';
 import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
+import { splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 
 function timeAgo(dateStr) {
@@ -835,9 +837,10 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const { user } = useAuth();
   const initialSummarySplit = useMemo(() => splitSessionSummaryContent(post.content || ''), [post.content]);
   const initialShareSplit = useMemo(() => splitSessionShareContent(initialSummarySplit.text || ''), [initialSummarySplit.text]);
+  const initialLiveSplit = useMemo(() => splitLiveSessionContent(initialShareSplit.text || ''), [initialShareSplit.text]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(initialShareSplit.text || '');
+  const [editContent, setEditContent] = useState(initialLiveSplit.text || '');
   const [editYoutubeUrl, setEditYoutubeUrl] = useState(post.youtube_url || '');
   const [saving, setSaving] = useState(false);
   const [currentContent, setCurrentContent] = useState(post.content || '');
@@ -845,10 +848,12 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
   const parsedSummary = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
   const parsedShare = useMemo(() => splitSessionShareContent(parsedSummary.text || ''), [parsedSummary.text]);
-  const planParsed = useMemo(() => splitSessionPlanContent(parsedShare.text || ''), [parsedShare.text]);
+  const parsedLive = useMemo(() => splitLiveSessionContent(parsedShare.text || ''), [parsedShare.text]);
+  const planParsed = useMemo(() => splitSessionPlanContent(parsedLive.text || ''), [parsedLive.text]);
   const visibleContent = planParsed.text || '';
   const currentSummary = parsedSummary.summary;
   const currentShare = parsedShare.share;
+  const currentLive = parsedLive.live;
   const currentPlan = planParsed.plan;
 
   const images = (() => {
@@ -869,8 +874,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
     try {
       const summaryMarker = currentSummary ? serializeSessionSummaryMarker(currentSummary) : '';
       const shareMarker = currentShare ? serializeSessionShareMarker(currentShare) : '';
+      const liveMarker = currentLive ? serializeLiveSessionMarker(currentLive) : '';
       const planMarker = currentPlan ? serializeSessionPlanMarker(currentPlan) : '';
-      const contentToSave = [editContent.trim(), summaryMarker, shareMarker, planMarker].filter(Boolean).join('\n\n');
+      const contentToSave = [editContent.trim(), summaryMarker, shareMarker, liveMarker, planMarker].filter(Boolean).join('\n\n');
       const updated = await editPost(post.id, { content: contentToSave, youtube_url: editYoutubeUrl });
       setCurrentContent(updated.content || '');
       setCurrentYoutubeUrl(updated.youtube_url || '');
@@ -991,6 +997,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           )}
           {currentShare && (
             <SessionShareCard share={currentShare} title="Session Share" className="mb-3" />
+          )}
+          {currentLive && (
+            <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" />
           )}
           {currentPlan && (
             <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} />
