@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap, getChartKeyMap,
+  getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap, getChartKeyMap, getSongs,
   getSongAnalytics,
   getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
   syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
@@ -269,6 +269,58 @@ function isStageBreakPlay(play) {
   return (parseInt(play?.score, 10) || 0) <= 0;
 }
 
+function isNonClearScoreEntry(entry) {
+  if (entry?.is_uncleared) return true;
+  const score = parseInt(entry?.score, 10) || 0;
+  if (score <= 0) return true;
+  const rawGrade = String(entry?.grade || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!rawGrade) return false;
+  return rawGrade === 'F'
+    || rawGrade === 'STAGEBREAK'
+    || rawGrade === 'STAGE_BREAK'
+    || /^X(?:[_-]|$)/.test(rawGrade);
+}
+
+function normalizeChartMode(mode) {
+  const raw = String(mode || '').trim().toLowerCase();
+  if (raw === 'single' || raw === 'singles' || raw === 's') return 'Single';
+  if (raw === 'double' || raw === 'doubles' || raw === 'd') return 'Double';
+  if (raw === 'coop' || raw === 'co-op' || raw === 'co op' || raw === 'cooperative' || raw === 'c') return 'CoOp';
+  return String(mode || '').trim();
+}
+
+function getDisplayChartMode(mode) {
+  const normalized = normalizeChartMode(mode);
+  return normalized === 'CoOp' ? 'Co-op' : normalized;
+}
+
+function normalizeChartLookupKey(title, mode, level) {
+  const normalizedTitle = String(title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const normalizedMode = normalizeChartMode(mode);
+  const normalizedLevel = parseInt(level, 10) || 0;
+  if (!normalizedTitle || !normalizedMode || normalizedLevel <= 0) return '';
+  return `${normalizedTitle}|${normalizedMode}|${normalizedLevel}`;
+}
+
+function compareBestScoreRows(a, b, sortMode) {
+  const titleCompare = String(a?.song_title || '').localeCompare(String(b?.song_title || ''));
+  if (sortMode === 'name') {
+    if (titleCompare !== 0) return titleCompare;
+    const modeCompare = String(a?.mode || '').localeCompare(String(b?.mode || ''));
+    if (modeCompare !== 0) return modeCompare;
+    return (parseInt(a?.level, 10) || 0) - (parseInt(b?.level, 10) || 0);
+  }
+
+  const aScore = a?.is_uncleared ? -1 : (parseInt(a?.score, 10) || 0);
+  const bScore = b?.is_uncleared ? -1 : (parseInt(b?.score, 10) || 0);
+  if (bScore !== aScore) return bScore - aScore;
+  if (!!a?.is_uncleared !== !!b?.is_uncleared) return a?.is_uncleared ? 1 : -1;
+  if (titleCompare !== 0) return titleCompare;
+  const modeCompare = String(a?.mode || '').localeCompare(String(b?.mode || ''));
+  if (modeCompare !== 0) return modeCompare;
+  return (parseInt(a?.level, 10) || 0) - (parseInt(b?.level, 10) || 0);
+}
+
 function getChartGradeFromScore(score) {
   const label = getRank(parseInt(score, 10) || 0).label;
   // Keep chart compact: fold C/D/F into the B bucket.
@@ -431,7 +483,12 @@ function GradeDistributionChart({
     { label: 'B-', min: 0, bg: 'bg-gray-400' },
   ];
   const distribution = groupedRanges.map(r => ({ ...r, count: 0 }));
+  let nonClearCount = 0;
   for (const s of filtered) {
+    if (isNonClearScoreEntry(s)) {
+      nonClearCount++;
+      continue;
+    }
     let placed = false;
     for (let i = 0; i < rankRanges.length; i++) {
       if (s.score >= rankRanges[i].min) {
@@ -451,7 +508,10 @@ function GradeDistributionChart({
   }
 
   // Invert: lowest grade on left, SSS+ on right
-  const displayDistribution = [...distribution].reverse();
+  const displayDistribution = [
+    ...(nonClearCount > 0 ? [{ label: 'NC', bg: 'bg-red-600', count: nonClearCount }] : []),
+    ...[...distribution].reverse(),
+  ];
 
   const maxCount = Math.max(1, ...displayDistribution.map(d => d.count));
   const totalCount = displayDistribution.reduce((s, d) => s + d.count, 0);
@@ -531,7 +591,7 @@ function VerticalDistributionChart({ levels, maxCount, activeLevel, onLevelClick
 
   return (
     <div className="w-full overflow-x-auto">
-      <div className="flex items-end gap-0.5 min-w-0" style={{ minHeight: '140px' }}>
+      <div className="flex items-end gap-0.5 min-w-0" style={{ minHeight: '172px' }}>
         {levels.map(({ level, distribution, total }) => (
           <button
             key={level}
@@ -539,7 +599,7 @@ function VerticalDistributionChart({ levels, maxCount, activeLevel, onLevelClick
             className={`flex flex-col items-center flex-1 min-w-[22px] group transition-colors rounded-t ${activeLevel === String(level) ? 'bg-piu-dark/80' : 'hover:bg-piu-dark/40'}`}
           >
             {/* Stacked vertical bar */}
-            <div className="w-full flex flex-col-reverse rounded-t overflow-hidden bg-piu-dark/30" style={{ height: `${Math.max((total / maxCount) * 120, 4)}px` }}>
+            <div className="w-full flex flex-col-reverse rounded-t overflow-hidden bg-piu-dark/30" style={{ height: `${Math.max((total / maxCount) * 152, 8)}px` }}>
               {distribution.map((d, i) => d.count > 0 ? (
                 <div
                   key={i}
@@ -764,6 +824,9 @@ export default function ProfilePage() {
   const [showTopProfilePumbilityModal, setShowTopProfilePumbilityModal] = useState(false);
   const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
   const [bestScoreSearch, setBestScoreSearch] = useState('');
+  const [showLevelNonClears, setShowLevelNonClears] = useState(false);
+  const [levelCatalogCharts, setLevelCatalogCharts] = useState([]);
+  const [levelCatalogLoading, setLevelCatalogLoading] = useState(false);
   const [bestScorePage, setBestScorePage] = useState(1);
   const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
   const [profilePosts, setProfilePosts] = useState([]);
@@ -832,6 +895,9 @@ export default function ProfilePage() {
     setSelectedOverviewDateKey('');
     setTopProfileMetricMode('overall');
     setShowTopProfilePumbilityModal(false);
+    setShowLevelNonClears(false);
+    setLevelCatalogCharts([]);
+    setLevelCatalogLoading(false);
     setActivitySubTab('all');
     setActivityNotifyPrefs({
       loading: false,
@@ -1546,7 +1612,7 @@ export default function ProfilePage() {
     [piuScoreMode, piuScoreLevel, piuAllSubMode]
   );
 
-  const filteredBestScores = useMemo(() => {
+  const filteredClearedBestScores = useMemo(() => {
     if (!piuBestScores?.scores) return [];
     let filtered = piuBestScores.scores;
     if (effectiveBestScoreMode) {
@@ -1559,17 +1625,107 @@ export default function ProfilePage() {
       const q = bestScoreSearch.toLowerCase();
       filtered = filtered.filter(s => s.song_title.toLowerCase().includes(q));
     }
-    if (bestScoreSort === 'name') {
-      filtered = [...filtered].sort((a, b) => a.song_title.localeCompare(b.song_title));
-    } else {
-      filtered = [...filtered].sort((a, b) => b.score - a.score);
-    }
-    return filtered;
+    return [...filtered].sort((a, b) => compareBestScoreRows(a, b, bestScoreSort));
   }, [piuBestScores, effectiveBestScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (!showLevelNonClears || !piuScoreLevel) {
+      setLevelCatalogCharts([]);
+      setLevelCatalogLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    const targetLevel = parseInt(piuScoreLevel, 10);
+    if (!Number.isFinite(targetLevel) || targetLevel <= 0) {
+      setLevelCatalogCharts([]);
+      setLevelCatalogLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    const params = {
+      min_level: String(targetLevel),
+      max_level: String(targetLevel),
+    };
+    if (effectiveBestScoreMode) {
+      params.mode = normalizeChartMode(effectiveBestScoreMode);
+    }
+
+    setLevelCatalogLoading(true);
+    getSongs(params)
+      .then((rows) => {
+        if (cancelled) return;
+        setLevelCatalogCharts(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLevelCatalogCharts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLevelCatalogLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [effectiveBestScoreMode, piuScoreLevel, showLevelNonClears]);
+
+  const levelNonClearRows = useMemo(() => {
+    if (!showLevelNonClears || !piuScoreLevel) return [];
+
+    const targetLevel = parseInt(piuScoreLevel, 10);
+    if (!Number.isFinite(targetLevel) || targetLevel <= 0) return [];
+
+    const clearedChartIds = new Set();
+    const clearedChartKeys = new Set();
+    for (const row of (piuBestScores?.scores || [])) {
+      const rowLevel = parseInt(row?.level, 10) || 0;
+      if (rowLevel !== targetLevel) continue;
+      const normalizedMode = normalizeChartMode(row?.mode);
+      if (effectiveBestScoreMode && normalizedMode !== normalizeChartMode(effectiveBestScoreMode)) continue;
+      const lookupKey = normalizeChartLookupKey(row?.song_title, row?.mode, rowLevel);
+      if (lookupKey) {
+        clearedChartKeys.add(lookupKey);
+        const chartId = parseInt(chartKeyMap?.[lookupKey], 10) || 0;
+        if (chartId > 0) clearedChartIds.add(chartId);
+      }
+    }
+
+    let rows = levelCatalogCharts
+      .filter((chart) => {
+        const chartId = parseInt(chart?.id, 10) || 0;
+        if (chartId > 0 && clearedChartIds.has(chartId)) return false;
+        const lookupKey = normalizeChartLookupKey(chart?.title, chart?.mode, chart?.level);
+        if (lookupKey && clearedChartKeys.has(lookupKey)) return false;
+        return true;
+      })
+      .map((chart) => ({
+        chart_id: chart.id,
+        song_title: chart.title,
+        song_artist: chart.artist || '',
+        mode: getDisplayChartMode(chart.mode),
+        level: parseInt(chart.level, 10) || 0,
+        score: null,
+        grade: '',
+        background_url: chart.jacket_url || '',
+        jacket_url: chart.jacket_url || '',
+        is_uncleared: true,
+      }));
+
+    if (bestScoreSearch) {
+      const q = bestScoreSearch.toLowerCase();
+      rows = rows.filter((row) => String(row.song_title || '').toLowerCase().includes(q));
+    }
+    return rows.sort((a, b) => compareBestScoreRows(a, b, bestScoreSort));
+  }, [bestScoreSearch, bestScoreSort, chartKeyMap, effectiveBestScoreMode, levelCatalogCharts, piuBestScores, piuScoreLevel, showLevelNonClears]);
+
+  const filteredBestScores = useMemo(
+    () => [...filteredClearedBestScores, ...levelNonClearRows].sort((a, b) => compareBestScoreRows(a, b, bestScoreSort)),
+    [bestScoreSort, filteredClearedBestScores, levelNonClearRows]
+  );
+
+  useEffect(() => {
     setBestScorePage(1);
-  }, [effectiveBestScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
+  }, [effectiveBestScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch, showLevelNonClears]);
 
   useEffect(() => {
     if (piuScoreMode) {
@@ -1580,6 +1736,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!piuScoreLevel) {
       setPiuAllSubMode('');
+      setShowLevelNonClears(false);
     }
   }, [piuScoreLevel]);
 
@@ -3283,13 +3440,34 @@ export default function ProfilePage() {
 
             {/* Grade distribution chart for selected level */}
             {piuScoreLevel && piuBestScores?.scores && (
-              <GradeDistributionChart
-                scores={piuBestScores.scores.filter(s => s.level === parseInt(piuScoreLevel))}
-                rankRanges={RANK_RANGES}
-                showModeFilter={piuScoreMode === ''}
-                modeFilter={piuAllSubMode}
-                onModeFilterChange={setPiuAllSubMode}
-              />
+              <>
+                <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                  <span className="text-[10px] text-gray-500 font-display">
+                    Level {piuScoreLevel} drill-down
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLevelNonClears((prev) => !prev)}
+                    className={`px-2.5 py-1.5 rounded text-[10px] font-display font-bold transition-colors ${
+                      showLevelNonClears
+                        ? 'bg-red-600/20 text-red-300 border border-red-500/40'
+                        : 'bg-piu-dark text-gray-400 hover:text-white border border-piu-border/40'
+                    }`}
+                  >
+                    {showLevelNonClears ? 'Hide Uncleared Songs' : 'Show Uncleared Songs'}
+                  </button>
+                </div>
+                <GradeDistributionChart
+                  scores={[
+                    ...piuBestScores.scores.filter(s => s.level === parseInt(piuScoreLevel, 10)),
+                    ...levelNonClearRows,
+                  ]}
+                  rankRanges={RANK_RANGES}
+                  showModeFilter={piuScoreMode === ''}
+                  modeFilter={piuAllSubMode}
+                  onModeFilterChange={setPiuAllSubMode}
+                />
+              </>
             )}
 
             {/* Search + Sort */}
@@ -3323,8 +3501,12 @@ export default function ProfilePage() {
 
             {filteredBestScores.length > 0 && (
               <p className="text-[11px] text-gray-500 mb-2">
-                Showing {bestScorePagination.startIndex + 1}-{bestScorePagination.endIndex} of {bestScorePagination.total} scores
+                Showing {bestScorePagination.startIndex + 1}-{bestScorePagination.endIndex} of {bestScorePagination.total} charts
               </p>
+            )}
+
+            {showLevelNonClears && levelCatalogLoading && (
+              <p className="text-[11px] text-gray-500 mb-2">Loading uncleared charts for this level...</p>
             )}
 
             {/* Song list */}
@@ -3334,6 +3516,8 @@ export default function ProfilePage() {
                   const rank = getRank(s.score);
                   const displayGrade = parseGrade(s.grade, rank.label);
                   const overRank = getOverTop100Rank(s.over_top100_rank);
+                  const isUncleared = !!s.is_uncleared;
+                  const isNonClear = isNonClearScoreEntry(s);
                   return (
                     <div key={`${s.song_title}-${s.mode}-${s.level}-${bestScorePagination.startIndex + i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
                       <PiuSongJacket
@@ -3358,16 +3542,30 @@ export default function ProfilePage() {
                           {s.plate && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{s.plate}</span>
                           )}
+                          {isUncleared && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded border border-red-500/40 bg-red-600/15 text-red-300 font-display font-bold">
+                              UNCLEARED
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <span
-                          className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
-                          data-grade={displayGrade.display}
-                        >
-                          {displayGrade.display}
-                        </span>
-                        <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
+                        {isUncleared ? (
+                          <>
+                            <span className="text-xs font-display font-bold text-red-300">UNCLEARED</span>
+                            <p className="font-mono text-xs font-bold text-gray-500">--</p>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                              data-grade={displayGrade.display}
+                            >
+                              {isNonClear && (parseInt(s.score, 10) || 0) <= 0 ? 'STAGE BREAK' : displayGrade.display}
+                            </span>
+                            <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
