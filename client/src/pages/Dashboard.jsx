@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, joinCommunity } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, getLiveSessions, joinCommunity } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
 import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
+import LiveDirectoryCard from '../components/LiveDirectoryCard';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -53,6 +54,7 @@ export default function Dashboard() {
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [featuredCommunities, setFeaturedCommunities] = useState([]);
+  const [liveSessions, setLiveSessions] = useState([]);
   const [joiningCommunity, setJoiningCommunity] = useState(null);
   const [communityPalettes, setCommunityPalettes] = useState({});
 
@@ -80,6 +82,30 @@ export default function Dashboard() {
       }))))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setLiveSessions([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const loadLive = async () => {
+      try {
+        const data = await getLiveSessions({ limit: 3 });
+        if (!cancelled) setLiveSessions(Array.isArray(data?.sessions) ? data.sessions : []);
+      } catch {
+        if (!cancelled) setLiveSessions([]);
+      }
+    };
+
+    loadLive();
+    const interval = setInterval(loadLive, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -378,6 +404,28 @@ export default function Dashboard() {
               <span className="text-xs text-gray-600 shrink-0">{new Date(n.created_at).toLocaleDateString()}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {user && liveSessions.length > 0 && searchResults === null && (
+        <div className="mb-8">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent">LIVE NOW</h2>
+              <p className="text-xs text-gray-500">Jump into active Shinsa Live sessions from the home rail.</p>
+            </div>
+            <Link to="/live" className="flex items-center gap-1 text-xs font-display text-gray-400 transition-colors hover:text-piu-accent">
+              Open directory
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          </div>
+          <div className="grid gap-3 xl:grid-cols-3">
+            {liveSessions.map((item) => (
+              <LiveDirectoryCard key={item?.session?.id || item?.session?.host_user_id || 'live-session'} item={item} compact />
+            ))}
+          </div>
         </div>
       )}
 

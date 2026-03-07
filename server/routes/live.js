@@ -8,6 +8,7 @@ const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activity
 const { addLiveSessionClient, emitLiveSessionEvent } = require('../lib/liveSessionHub');
 const { buildLiveSessionSummary } = require('../lib/liveSessionSummary');
 const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
+const { createUserNotification } = require('../lib/notifications');
 const piugameRoutes = require('./piugame');
 const socialRoutes = require('./social');
 
@@ -477,6 +478,34 @@ function getSessionPlays(db, liveSessionId) {
   });
 }
 
+function getLatestSessionPlay(db, liveSessionId) {
+  const outcomeMap = getPlayOutcomeMap(db, liveSessionId);
+  const row = db.prepare(`
+    SELECT
+      p.*,
+      COALESCE(s.make, '') AS shoe_make,
+      COALESCE(s.model, '') AS shoe_model,
+      COALESCE(s.colorway, '') AS shoe_colorway
+    FROM live_session_plays p
+    LEFT JOIN user_shoes s ON s.id = p.shoe_id
+    WHERE p.live_session_id = ?
+    ORDER BY p.id DESC
+    LIMIT 1
+  `).get(liveSessionId);
+
+  if (!row) return null;
+
+  const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score);
+  const outcome = outcomeMap.get(key) || null;
+  return {
+    ...row,
+    pumbility_gain: outcome ? outcome.pumbility_gain : 0,
+    singles_pumbility_gain: outcome ? outcome.singles_pumbility_gain : 0,
+    session_result_type: outcome ? outcome.type : '',
+    over_top100_rank: Math.max(toInt(row.over_top100_rank), toInt(outcome?.over_top100_rank)),
+  };
+}
+
 function normalizeMessageRow(row) {
   if (!row) return null;
   return {
@@ -757,6 +786,154 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
     active_vote: activeVote,
     last_play: plays[0] || null,
   };
+}
+
+function getSessionRequestCounts(db, liveSessionId) {
+  const rows = db.prepare(`
+    SELECT
+      CASE
+        WHEN COALESCE(NULLIF(status, ''), '') IN ('open', 'queued', 'played', 'skipped') THEN status
+        WHEN fulfilled = 1 THEN 'played'
+        ELSE 'open'
+      END AS status_key,
+      COUNT(*) AS count
+    FROM live_session_requests
+    WHERE live_session_id = ?
+    GROUP BY 1
+  `).all(liveSessionId);
+
+  const counts = {
+    open: 0,
+    queued: 0,
+    played: 0,
+    skipped: 0,
+  };
+
+  for (const row of rows) {
+    const key = normalizeRequestStatus(row?.status_key, false);
+    counts[key] = toInt(row?.count);
+  }
+
+  return counts;
+}
+
+function summarizeVoteForDirectory(vote) {
+  if (!vote) return null;
+  const winningOption = Array.isArray(vote.options) ? vote.options.find((option) => option.is_winner) || null : null;
+  const totalVotes = Array.isArray(vote.options)
+    ? vote.options.reduce((sum, option) => sum + toInt(option?.vote_count), 0)
+    : 0;
+
+  return {
+    id: vote.id,
+    status: vote.status || 'closed',
+    mode_filter: vote.mode_filter || 'All',
+    min_level: toInt(vote.min_level),
+    max_level: toInt(vote.max_level),
+    ends_at: vote.ends_at || '',
+    total_votes: totalVotes,
+    winning_option: winningOption ? {
+      id: winningOption.id,
+      song_title: winningOption.song_title || '',
+      mode: winningOption.mode || '',
+      level: toInt(winningOption.level),
+      jacket_url: winningOption.jacket_url || '',
+    } : null,
+  };
+}
+
+function buildDirectorySessionPayload(db, session, currentUserId = '') {
+  const host = {
+    id: session.host_user_id,
+    username: session.username || '',
+    avatar: normalizeUserAvatarForList(session.avatar, session.host_user_id, 96, session.avatar_v),
+    nationality: session.nationality || '',
+    skill_title: session.skill_title || '',
+    pumbility: toInt(session.pumbility),
+  };
+  const viewerCount = getViewerCount(db, session);
+  const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
+  const lastPlay = getLatestSessionPlay(db, session.id);
+  const activeVote = getLatestVoteSnapshot(db, session.id, currentUserId);
+
+  return {
+    session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId),
+    last_play: lastPlay,
+    request_counts: getSessionRequestCounts(db, session.id),
+    active_vote: summarizeVoteForDirectory(activeVote),
+    is_following: toInt(session.is_following) === 1,
+    has_stream: !!normalizeUrl(session.stream_url, 400),
+  };
+}
+
+function getDirectorySessions(db, currentUserId = '', limit = 18) {
+  const rows = db.prepare(`
+    SELECT
+      s.*,
+      u.username,
+      u.avatar,
+      u.avatar_v,
+      u.nationality,
+      u.skill_title,
+      u.pumbility,
+      EXISTS(
+        SELECT 1
+        FROM user_follows uf
+        WHERE uf.follower_id = ?
+          AND uf.following_id = s.host_user_id
+      ) AS is_following
+    FROM live_sessions s
+    JOIN users u ON u.id = s.host_user_id
+    WHERE s.status = 'live'
+    ORDER BY datetime(s.started_at) DESC, s.id DESC
+    LIMIT ?
+  `).all(currentUserId || '', Math.max(1, Math.min(36, toInt(limit) || 18)));
+
+  const sessions = rows.map((row) => buildDirectorySessionPayload(db, row, currentUserId));
+  sessions.sort((a, b) => {
+    if (Number(b.is_following) !== Number(a.is_following)) {
+      return Number(b.is_following) - Number(a.is_following);
+    }
+    if (toInt(b?.session?.viewer_count) !== toInt(a?.session?.viewer_count)) {
+      return toInt(b.session.viewer_count) - toInt(a.session.viewer_count);
+    }
+    return Date.parse(`${b?.session?.started_at || ''}Z`) - Date.parse(`${a?.session?.started_at || ''}Z`);
+  });
+  return sessions;
+}
+
+function notifyFollowersLive(db, sessionId, host, title = '') {
+  const hostUserId = String(host?.id || '').trim();
+  if (!db || !hostUserId) return 0;
+
+  const rows = db.prepare(`
+    SELECT follower_id
+    FROM user_follows
+    WHERE following_id = ?
+      AND follower_id != ?
+  `).all(hostUserId, hostUserId);
+
+  const actorUsername = normalizeText(host?.username || 'Someone', 80) || 'Someone';
+  const trimmedTitle = normalizeText(title, 120);
+  let created = 0;
+
+  for (const row of rows) {
+    const followerId = String(row?.follower_id || '').trim();
+    if (!followerId) continue;
+    createUserNotification(
+      db,
+      followerId,
+      'followed_user_live',
+      'Shinsa Live',
+      trimmedTitle
+        ? `${actorUsername} just went live: ${trimmedTitle}`
+        : `${actorUsername} just went live on Shinsa Live`,
+      `/live/${sessionId}`
+    );
+    created += 1;
+  }
+
+  return created;
 }
 
 function requireLiveSession(db, sessionId) {
@@ -1159,6 +1336,17 @@ router.get('/sessions/mine/active', requireAuth, (req, res) => {
   return res.json(buildSessionSnapshot(db, session, req.user.id));
 });
 
+router.get('/sessions', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const limit = Math.max(1, Math.min(36, toInt(req.query?.limit) || 18));
+    const sessions = getDirectorySessions(db, req.user.id, limit);
+    res.json({ sessions });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 router.post('/sessions', requireAuth, async (req, res) => {
   try {
     const db = getDb();
@@ -1192,8 +1380,13 @@ router.post('/sessions', requireAuth, async (req, res) => {
     addSystemMessage(db, id, `${req.user.username || 'Player'} started a Shinsa Live session.`, 'session_start', {
       stream_url: streamUrl,
     });
+    const host = getHostProfile(db, req.user.id) || { id: req.user.id, username: req.user.username || 'Player' };
+    const notifiedFollowers = notifyFollowersLive(db, id, host, title);
 
-    res.status(201).json(buildSessionSnapshot(db, id, req.user.id));
+    res.status(201).json({
+      ...buildSessionSnapshot(db, id, req.user.id),
+      notified_followers: notifiedFollowers,
+    });
   } catch (err) {
     console.error('Create live session error:', err.message);
     res.status(500).json({ error: err.message });

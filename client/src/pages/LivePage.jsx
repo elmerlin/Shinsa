@@ -8,6 +8,7 @@ import {
   deleteLiveMessage,
   endLiveSession,
   getLiveSession,
+  getLiveSessions,
   getMyLiveSession,
   getSongLibrary,
   openLiveSessionStream,
@@ -18,10 +19,19 @@ import {
   setLiveRequestStatus,
   syncLiveSession,
 } from '../utils/api';
+import LiveEmote from '../components/LiveEmote';
+import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import LiveSessionCard from '../components/LiveSessionCard';
 import PiuChartJacket from '../components/PiuChartJacket';
+import {
+  LIVE_EMOTES,
+  LIVE_EMOJI_GROUPS,
+  getLiveReactionPayload,
+  getReactionBurstColors,
+  tokenizeLiveMessage,
+} from '../utils/liveEmotes';
 
-const QUICK_REACTIONS = ['🔥', '💪', '👏', '😂', '❤️', '⚡'];
+const QUICK_REACTIONS = LIVE_EMOJI_GROUPS[0]?.emojis || ['🔥', '💪', '👏', '😂', '❤️', '⚡'];
 const GRADE_SORT = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 const REQUEST_STATUS_META = {
   open: {
@@ -228,8 +238,37 @@ function getMessageTone(message) {
   }
 }
 
-function isEmojiOnly(message) {
-  return /^[\p{Emoji}\s]{1,5}$/u.test(String(message || '').trim());
+function isReactionOnlyMessage(message) {
+  return !!getLiveReactionPayload(message);
+}
+
+function MessageBody({ message, tone, isSystem }) {
+  const reaction = !isSystem ? getLiveReactionPayload(message) : null;
+  if (reaction?.kind === 'emoji') {
+    return <p className="mt-1 text-2xl leading-none">{reaction.emoji}</p>;
+  }
+  if (reaction?.kind === 'emote') {
+    return (
+      <div className="mt-2">
+        <LiveEmote emote={reaction.emote} size="reaction" />
+      </div>
+    );
+  }
+
+  const segments = tokenizeLiveMessage(message);
+  if (segments.length === 0) {
+    return <p className={`mt-1 text-sm break-words whitespace-pre-wrap ${tone.bodyClass}`}>{message}</p>;
+  }
+
+  return (
+    <p className={`mt-1 flex flex-wrap items-center gap-1.5 text-sm break-words whitespace-pre-wrap ${tone.bodyClass}`}>
+      {segments.map((segment, idx) => (
+        segment.type === 'emote'
+          ? <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
+          : <span key={`text-${idx}`} className="whitespace-pre-wrap">{segment.text}</span>
+      ))}
+    </p>
+  );
 }
 
 function flattenSongResults(payload) {
@@ -395,6 +434,26 @@ function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStream
   );
 }
 
+function DirectorySection({ title, subtitle, sessions }) {
+  if (!Array.isArray(sessions) || sessions.length === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-display uppercase tracking-[0.28em] text-rose-300">{title}</p>
+          {subtitle ? <p className="mt-1 text-sm text-gray-400">{subtitle}</p> : null}
+        </div>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {sessions.map((item) => (
+          <LiveDirectoryCard key={item?.session?.id || item?.session?.host_user_id || 'live-directory'} item={item} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function UserIdentity({ avatar, username, skillTitle, isHost, className = '' }) {
   return (
     <div className={`flex min-w-0 items-center gap-2 ${className}`.trim()}>
@@ -503,12 +562,17 @@ export default function LivePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statusNote, setStatusNote] = useState('');
+  const [directorySessions, setDirectorySessions] = useState([]);
+  const [directoryLoading, setDirectoryLoading] = useState(false);
+  const [directoryError, setDirectoryError] = useState('');
   const [createTitle, setCreateTitle] = useState('');
   const [createStreamUrl, setCreateStreamUrl] = useState('');
   const [creating, setCreating] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState([]);
+  const [reactionBursts, setReactionBursts] = useState([]);
+  const [showEmoteTray, setShowEmoteTray] = useState(false);
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [playModeFilter, setPlayModeFilter] = useState('All');
   const [playSort, setPlaySort] = useState('recent');
@@ -528,6 +592,7 @@ export default function LivePage() {
   const [streamState, setStreamState] = useState('idle');
   const [copied, setCopied] = useState(false);
   const chatEndRef = useRef(null);
+  const chatInputRef = useRef(null);
   const reactionIdRef = useRef(0);
   const seenMessageIdsRef = useRef(new Set());
   const presenceIdRef = useRef('');
@@ -540,6 +605,14 @@ export default function LivePage() {
   const youtubeId = getYouTubeId(live?.stream_url || '');
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
+  const followedDirectorySessions = useMemo(
+    () => directorySessions.filter((item) => !!item?.is_following),
+    [directorySessions]
+  );
+  const otherDirectorySessions = useMemo(
+    () => directorySessions.filter((item) => !item?.is_following),
+    [directorySessions]
+  );
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -556,13 +629,11 @@ export default function LivePage() {
       for (const msg of nextMessages) {
         if (seen.has(msg.id)) continue;
         seen.add(msg.id);
-        if (!msg?.is_system && isEmojiOnly(msg?.message)) {
-          const rid = reactionIdRef.current++;
-          const x = 15 + Math.random() * 70;
-          setFloatingReactions((prev) => [...prev, { id: rid, emoji: msg.message.trim(), x }]);
-          setTimeout(() => {
-            setFloatingReactions((prev) => prev.filter((row) => row.id !== rid));
-          }, 1800);
+        if (!msg?.is_system) {
+          const reaction = getLiveReactionPayload(msg?.message);
+          if (reaction) {
+            showFloatingReaction(reaction);
+          }
         }
       }
     }
@@ -573,13 +644,35 @@ export default function LivePage() {
     });
   };
 
-  const showFloatingReaction = (emoji) => {
+  const showFloatingReaction = (payload) => {
+    const reaction = typeof payload === 'string'
+      ? getLiveReactionPayload(payload) || { kind: 'emoji', emoji: payload }
+      : payload;
+    if (!reaction) return;
+
     const rid = reactionIdRef.current++;
     const x = 15 + Math.random() * 70;
-    setFloatingReactions((prev) => [...prev, { id: rid, emoji, x }]);
+    setFloatingReactions((prev) => [...prev, { id: rid, reaction, x }]);
+    const colors = getReactionBurstColors(reaction);
+    const burstId = reactionIdRef.current++;
+    const particles = Array.from({ length: 7 }).map((_, idx) => {
+      const angle = (-Math.PI / 2) + ((Math.PI * 1.2) / 6) * idx;
+      const distance = 28 + Math.random() * 34;
+      return {
+        id: `${burstId}-${idx}`,
+        dx: `${Math.cos(angle) * distance}px`,
+        dy: `${Math.sin(angle) * distance}px`,
+        size: `${8 + Math.round(Math.random() * 7)}px`,
+        color: colors[idx % colors.length],
+      };
+    });
+    setReactionBursts((prev) => [...prev, { id: burstId, x, particles }]);
     setTimeout(() => {
       setFloatingReactions((prev) => prev.filter((row) => row.id !== rid));
     }, 1800);
+    setTimeout(() => {
+      setReactionBursts((prev) => prev.filter((row) => row.id !== burstId));
+    }, 950);
   };
 
   useEffect(() => {
@@ -615,6 +708,32 @@ export default function LivePage() {
     loadInitial();
     return () => { cancelled = true; };
   }, [sessionId, user]);
+
+  useEffect(() => {
+    if (!user || sessionId || live) return undefined;
+
+    let cancelled = false;
+    const loadDirectory = async () => {
+      setDirectoryLoading(true);
+      try {
+        const data = await getLiveSessions({ limit: 18 });
+        if (cancelled) return;
+        setDirectorySessions(Array.isArray(data?.sessions) ? data.sessions : []);
+        setDirectoryError('');
+      } catch (err) {
+        if (!cancelled) setDirectoryError(err.message || 'Failed to load live directory');
+      } finally {
+        if (!cancelled) setDirectoryLoading(false);
+      }
+    };
+
+    loadDirectory();
+    const interval = setInterval(loadDirectory, 20000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [live, sessionId, user]);
 
   useEffect(() => {
     if (!user || !activeSessionId) {
@@ -826,6 +945,9 @@ export default function LivePage() {
       const data = await createLiveSession({ title: createTitle, stream_url: createStreamUrl });
       seenMessageIdsRef.current = new Set((data?.messages || []).map((msg) => msg.id));
       applySnapshot(data, { markMessagesSeen: true });
+      if ((parseInt(data?.notified_followers, 10) || 0) > 0) {
+        setStatusNote(`${data.notified_followers} follower${data.notified_followers === 1 ? '' : 's'} notified.`);
+      }
       if (data?.session?.id) navigate(`/live/${data.session.id}`, { replace: true });
     } catch (err) {
       setError(err.message || 'Failed to create live session');
@@ -836,13 +958,16 @@ export default function LivePage() {
 
   const handleSendChat = async (e) => {
     e.preventDefault();
-    if (!activeSessionId || !chatInput.trim() || viewerState.chat_muted) return;
+    const trimmed = chatInput.trim();
+    if (!activeSessionId || !trimmed || viewerState.chat_muted) return;
     setSendingChat(true);
     try {
-      const data = await sendLiveMessage(activeSessionId, { message: chatInput.trim() });
+      const data = await sendLiveMessage(activeSessionId, { message: trimmed });
       setMessages((prev) => [...prev, data.message]);
       seenMessageIdsRef.current.add(data.message.id);
       setChatInput('');
+      const reaction = getLiveReactionPayload(trimmed);
+      if (reaction) showFloatingReaction(reaction);
     } catch (err) {
       setError(err.message || 'Failed to send chat message');
     } finally {
@@ -857,8 +982,17 @@ export default function LivePage() {
       const data = await sendLiveMessage(activeSessionId, { message: emoji });
       setMessages((prev) => [...prev, data.message]);
       seenMessageIdsRef.current.add(data.message.id);
+      setShowEmoteTray(false);
     } catch (err) {
       setError(err.message || 'Failed to send reaction');
+    }
+  };
+
+  const handleInsertChatToken = (token) => {
+    setChatInput((prev) => `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}${token} `);
+    setShowEmoteTray(true);
+    if (chatInputRef.current) {
+      chatInputRef.current.focus();
     }
   };
 
@@ -1017,16 +1151,67 @@ export default function LivePage() {
 
   if (!live && !sessionId) {
     return (
-      <div className="px-4 py-6 sm:px-6">
+      <div className="space-y-5 px-4 py-6 sm:px-6">
         {error ? <p className="mb-4 text-sm text-red-300">{error}</p> : null}
-        <CreateSessionCard
-          title={createTitle}
-          streamUrl={createStreamUrl}
-          creating={creating}
-          onTitleChange={setCreateTitle}
-          onStreamUrlChange={setCreateStreamUrl}
-          onSubmit={handleCreate}
+        <div className="grid gap-4 xl:grid-cols-[minmax(340px,0.85fr)_minmax(0,1.15fr)]">
+          <CreateSessionCard
+            title={createTitle}
+            streamUrl={createStreamUrl}
+            creating={creating}
+            onTitleChange={setCreateTitle}
+            onStreamUrlChange={setCreateStreamUrl}
+            onSubmit={handleCreate}
+          />
+
+          <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_38%),linear-gradient(180deg,#0c1323,#09101c)] p-5 shadow-2xl">
+            <p className="text-[10px] font-display uppercase tracking-[0.28em] text-cyan-200">Live Directory</p>
+            <h2 className="mt-2 text-2xl font-display font-black text-white">
+              {directorySessions.length > 0 ? `${directorySessions.length} room${directorySessions.length === 1 ? '' : 's'} live right now` : 'No live rooms at the moment'}
+            </h2>
+            <p className="mt-2 text-sm text-gray-400">
+              Followed players float to the top, viewer counts stay fresh, and each card shows the latest chart, requests, and vote state before you join.
+            </p>
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
+                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Following live</p>
+                <p className="mt-1 text-2xl font-display font-black text-cyan-200">{followedDirectorySessions.length}</p>
+              </div>
+              <div className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
+                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Open sessions</p>
+                <p className="mt-1 text-2xl font-display font-black text-white">{directorySessions.length}</p>
+              </div>
+              <div className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
+                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Viewer accounts</p>
+                <p className="mt-1 text-2xl font-display font-black text-rose-200">
+                  {directorySessions.reduce((sum, item) => sum + (parseInt(item?.session?.viewer_count, 10) || 0), 0)}
+                </p>
+              </div>
+            </div>
+            {directoryLoading ? <p className="mt-4 text-sm text-gray-500">Refreshing live rooms...</p> : null}
+            {directoryError ? <p className="mt-4 text-sm text-red-300">{directoryError}</p> : null}
+          </div>
+        </div>
+
+        <DirectorySection
+          title="Following Live"
+          subtitle="Players you already follow are surfaced first so you can jump straight into rooms you care about."
+          sessions={followedDirectorySessions}
         />
+
+        <DirectorySection
+          title={followedDirectorySessions.length > 0 ? 'More Live Rooms' : 'Live Now'}
+          subtitle="Browse every active Shinsa Live room, sorted by follow state and audience."
+          sessions={followedDirectorySessions.length > 0 ? otherDirectorySessions : directorySessions}
+        />
+
+        {!directoryLoading && directorySessions.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-piu-border bg-black/20 px-5 py-8 text-center">
+            <p className="text-lg font-display font-black text-white">Be the first room on the board.</p>
+            <p className="mt-2 text-sm text-gray-400">
+              Start a Shinsa Live session and your followers will get a go-live notification with a direct link into the room.
+            </p>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -1381,13 +1566,32 @@ export default function LivePage() {
           </div>
 
           <div className="relative rounded-2xl border border-piu-border bg-[#0c1220] p-3 flex flex-col min-h-[520px]">
+            {reactionBursts.map((burst) => (
+              <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
+                {burst.particles.map((particle) => (
+                  <span
+                    key={particle.id}
+                    className="live-reaction-burst__particle"
+                    style={{
+                      '--dx': particle.dx,
+                      '--dy': particle.dy,
+                      '--size': particle.size,
+                      '--color': particle.color,
+                    }}
+                  />
+                ))}
+              </div>
+            ))}
+
             {floatingReactions.map((reaction) => (
               <div
                 key={reaction.id}
                 className="absolute pointer-events-none z-10 animate-float-up"
-                style={{ left: `${reaction.x}%`, bottom: '88px', fontSize: '24px' }}
+                style={{ left: `${reaction.x}%`, bottom: '88px' }}
               >
-                {reaction.emoji}
+                {reaction.reaction?.kind === 'emote'
+                  ? <LiveEmote emote={reaction.reaction.emote} size="reaction" />
+                  : <span style={{ fontSize: '24px' }}>{reaction.reaction?.emoji || ''}</span>}
               </div>
             ))}
 
@@ -1396,7 +1600,7 @@ export default function LivePage() {
                 <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Live chat</p>
                 <p className="text-sm font-display font-bold text-white">{messages.length} recent messages</p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap justify-end gap-1">
                 {QUICK_REACTIONS.map((emoji) => (
                   <button
                     key={emoji}
@@ -1408,6 +1612,18 @@ export default function LivePage() {
                     {emoji}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setShowEmoteTray((prev) => !prev)}
+                  disabled={viewerState.chat_muted || live?.status !== 'live'}
+                  className={`rounded-lg px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide transition-colors ${
+                    showEmoteTray
+                      ? 'bg-rose-500/20 text-rose-100'
+                      : 'bg-piu-dark/60 text-gray-300 hover:bg-piu-dark hover:text-white'
+                  } disabled:opacity-40`}
+                >
+                  Emotes
+                </button>
               </div>
             </div>
 
@@ -1417,6 +1633,64 @@ export default function LivePage() {
                   Pinned Vote
                 </p>
                 <VotePanel vote={currentVote} canVote={!live?.is_host && live?.status === 'live'} onVote={handleCastVote} />
+              </div>
+            ) : null}
+
+            {showEmoteTray && live?.status === 'live' ? (
+              <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(244,114,182,0.14),transparent_38%),linear-gradient(180deg,#111827,#0b1220)] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-display uppercase tracking-[0.24em] text-fuchsia-200">Shinsa Emotes</p>
+                    <p className="mt-1 text-[11px] text-gray-400">Tap an emote to fire it instantly, or add its token into your next message.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowEmoteTray(false)} className="text-[11px] text-gray-500 hover:text-white">
+                    Close
+                  </button>
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {LIVE_EMOTES.map((emote) => (
+                    <div key={emote.token} className="rounded-2xl border border-white/8 bg-black/20 p-2">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickReaction(emote.token)}
+                        disabled={viewerState.chat_muted || live?.status !== 'live'}
+                        className="w-full disabled:opacity-40"
+                      >
+                        <LiveEmote emote={emote} size="tray" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleInsertChatToken(emote.token)}
+                        disabled={viewerState.chat_muted || live?.status !== 'live'}
+                        className="mt-2 w-full rounded-lg bg-piu-dark/70 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+                      >
+                        Add to message
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {LIVE_EMOJI_GROUPS.map((group) => (
+                    <div key={group.label} className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
+                      <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{group.label}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {group.emojis.map((emoji) => (
+                          <button
+                            key={`${group.label}-${emoji}`}
+                            type="button"
+                            onClick={() => handleQuickReaction(emoji)}
+                            disabled={viewerState.chat_muted || live?.status !== 'live'}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl bg-piu-dark/70 text-base transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
 
@@ -1459,9 +1733,7 @@ export default function LivePage() {
                         {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </p>
                     </div>
-                    <p className={`${isEmojiOnly(msg.message) && !msg.is_system ? 'text-2xl leading-none mt-1' : `text-sm mt-1 break-words ${tone.bodyClass}`}`}>
-                      {msg.message}
-                    </p>
+                    <MessageBody message={msg.message} tone={tone} isSystem={msg.is_system} />
                     {live?.is_host && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button
@@ -1506,11 +1778,20 @@ export default function LivePage() {
 
             {live?.status === 'live' ? (
               <form onSubmit={handleSendChat} className="flex gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEmoteTray((prev) => !prev)}
+                  disabled={viewerState.chat_muted}
+                  className="btn-secondary px-3 text-xs disabled:opacity-40"
+                >
+                  {showEmoteTray ? 'Hide' : 'Emotes'}
+                </button>
                 <input
+                  ref={chatInputRef}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   className="input-field flex-1"
-                  placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message'}
+                  placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message or use :shinsa_hype:'}
                   maxLength={500}
                   disabled={viewerState.chat_muted}
                 />

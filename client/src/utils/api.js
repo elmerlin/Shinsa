@@ -898,6 +898,12 @@ export const setPlayingStatus = (status) => request('/checkins/playing-status', 
 export const clearPlayingStatus = () => request('/checkins/playing-status', { method: 'DELETE' });
 
 // Live Sessions
+export const getLiveSessions = (options = {}) => {
+  const params = new URLSearchParams();
+  if (options.limit) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return request(`/live/sessions${query ? `?${query}` : ''}`);
+};
 export const getMyLiveSession = () => request('/live/sessions/mine/active');
 export const createLiveSession = (data) => request('/live/sessions', { method: 'POST', body: JSON.stringify(data) });
 export const getLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}`);
