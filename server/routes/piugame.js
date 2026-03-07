@@ -202,10 +202,12 @@ function buildOverRankingLookup(db) {
   `).all();
 
   const byChartKey = new Map();
+  const aliases = loadPiugameSongAliases();
   for (const chart of charts) {
     const key = String(chart.chart_key || '').trim();
     if (!key) continue;
     byChartKey.set(key, {
+      chart_key: key,
       song_title: String(chart.song_title || '').trim(),
       mode: String(chart.mode || '').trim(),
       level: parseInt(chart.level, 10) || 0,
@@ -250,6 +252,12 @@ function buildOverRankingLookup(db) {
   const aliasLookup = new Map();
   for (const [key, value] of byChartKey.entries()) {
     aliasLookup.set(key, value);
+
+    const normalizedKey = overRankingChartKey(value.song_title, value.mode, value.level, aliases);
+    if (normalizedKey && !aliasLookup.has(normalizedKey)) {
+      aliasLookup.set(normalizedKey, value);
+    }
+
     const parts = key.split('|');
     if (parts.length !== 3) continue;
     const [title, mode, level] = parts;
@@ -4716,25 +4724,31 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
   `).all(userId, limit, offset);
 
   const chartRows = db.prepare(`
-    SELECT chart_key, jacket_url, top100_count
+    SELECT chart_key, song_title, mode, level, jacket_url, top100_count
     FROM over_level_rankings
   `).all();
   const chartLookup = new Map();
   for (const chart of chartRows) {
     const key = String(chart.chart_key || '').trim();
     if (!key) continue;
-    chartLookup.set(key, {
+    const payload = {
       jacket_url: String(chart.jacket_url || ''),
       top100_count: Math.max(0, parseInt(chart.top100_count, 10) || 0),
-    });
+    };
+    chartLookup.set(key, payload);
+    const normalizedKey = overRankingChartKey(chart.song_title, chart.mode, chart.level, songAliases);
+    if (normalizedKey && !chartLookup.has(normalizedKey)) {
+      chartLookup.set(normalizedKey, payload);
+    }
   }
 
-  const currentUsername = String(req.user?.username || '').trim();
+  const currentUsername = getLinkedPiugameUsername(userId) || String(req.user?.username || '').trim();
   const overRowsForUser = currentUsername
     ? db.prepare(`
-      SELECT chart_key, score, rank, prev_rank, rank_delta
-      FROM over_level_ranking_scores
-      WHERE player_name = ? COLLATE NOCASE
+      SELECT r.chart_key, r.score, r.rank, r.prev_rank, r.rank_delta, c.song_title, c.mode, c.level
+      FROM over_level_ranking_scores r
+      JOIN over_level_rankings c ON c.chart_key = r.chart_key
+      WHERE r.player_name = ? COLLATE NOCASE
     `).all(currentUsername)
     : [];
   const overByChartAndScore = new Map();
@@ -4743,12 +4757,22 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
     const chartKey = String(overRow?.chart_key || '').trim();
     if (!chartKey) continue;
     const score = Math.max(0, parseInt(overRow?.score, 10) || 0);
+    const normalizedKey = overRankingChartKey(overRow?.song_title, overRow?.mode, overRow?.level, songAliases);
     if (score > 0) {
       overByChartAndScore.set(`${chartKey}|${score}`, overRow);
+      if (normalizedKey) {
+        overByChartAndScore.set(`${normalizedKey}|${score}`, overRow);
+      }
     }
     const existing = overByChart.get(chartKey);
     if (!existing || score > (parseInt(existing?.score, 10) || 0)) {
       overByChart.set(chartKey, overRow);
+    }
+    if (normalizedKey) {
+      const existingNormalized = overByChart.get(normalizedKey);
+      if (!existingNormalized || score > (parseInt(existingNormalized?.score, 10) || 0)) {
+        overByChart.set(normalizedKey, overRow);
+      }
     }
   }
 
