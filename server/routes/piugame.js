@@ -198,7 +198,7 @@ function buildOverRankingLookup(db) {
     SELECT chart_key, rank, score, player_name, played_at
     FROM over_level_ranking_scores
     WHERE score > 0
-    ORDER BY chart_key ASC, rank ASC
+    ORDER BY chart_key ASC, row_order ASC
   `).all();
 
   const byChartKey = new Map();
@@ -1606,8 +1606,8 @@ async function refreshOverRankingCache(db, options = {}) {
     `);
     const insertScore = db.prepare(`
       INSERT INTO over_level_ranking_scores (
-        chart_key, rank, score, grade, player_name, player_avatar_url, prev_rank, rank_delta, played_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        chart_key, row_order, rank, score, grade, player_name, player_avatar_url, prev_rank, rank_delta, played_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     let totalEntries = 0;
@@ -1622,9 +1622,11 @@ async function refreshOverRankingCache(db, options = {}) {
         chart.top100_count,
         chart.min_score
       );
-      for (const row of chart.top_scores) {
+      for (let i = 0; i < chart.top_scores.length; i++) {
+        const row = chart.top_scores[i];
         insertScore.run(
           chart.chart_key,
+          i + 1,
           row.rank,
           row.score,
           row.grade,
@@ -4379,7 +4381,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       WHERE c.level >= 20
         AND r.score > 0
         AND r.player_name = ? COLLATE NOCASE
-      ORDER BY c.chart_key ASC, r.rank ASC
+      ORDER BY c.chart_key ASC, r.row_order ASC
     `).all(globalRow?.player_name || resolvedName);
 
     if (!overRows.length) {
@@ -4393,7 +4395,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
         WHERE c.level >= 20
           AND r.score > 0
           AND LOWER(TRIM(r.player_name)) = ?
-        ORDER BY c.chart_key ASC, r.rank ASC
+        ORDER BY c.chart_key ASC, r.row_order ASC
       `).all(normalizedName);
     }
 
@@ -4633,7 +4635,7 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
     SELECT rank, score, grade, player_name, player_avatar_url, prev_rank, rank_delta, played_at
     FROM over_level_ranking_scores
     WHERE chart_key = ?
-    ORDER BY rank ASC
+    ORDER BY row_order ASC
   `).all(chartKey);
 
   const normalizedScores = assignSharedScoreRanks(

@@ -1108,6 +1108,7 @@ function initializeDb() {
 
     CREATE TABLE IF NOT EXISTS over_level_ranking_scores (
       chart_key TEXT NOT NULL REFERENCES over_level_rankings(chart_key) ON DELETE CASCADE,
+      row_order INTEGER NOT NULL,
       rank INTEGER NOT NULL,
       score INTEGER NOT NULL DEFAULT 0,
       grade TEXT DEFAULT '',
@@ -1116,7 +1117,7 @@ function initializeDb() {
       prev_rank INTEGER NOT NULL DEFAULT 0,
       rank_delta INTEGER NOT NULL DEFAULT 0,
       played_at TEXT DEFAULT '',
-      PRIMARY KEY (chart_key, rank)
+      PRIMARY KEY (chart_key, row_order)
     );
 
     CREATE TABLE IF NOT EXISTS over_level_ranking_meta (
@@ -1258,7 +1259,6 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_best_scores_user_mode ON user_best_scores(user_id, mode);
     CREATE INDEX IF NOT EXISTS idx_pumbility_leaderboard_player_name ON pumbility_leaderboard(player_name);
     CREATE INDEX IF NOT EXISTS idx_over_level_rankings_song_mode_level ON over_level_rankings(song_title, mode, level);
-    CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_name ON over_level_ranking_scores(player_name);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_chart ON over_level_ranking_scores(player_name, chart_key);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_started_at ON over_level_sync_runs(datetime(started_at) DESC, id DESC);
@@ -2042,6 +2042,7 @@ function initializeDb() {
 
     CREATE TABLE IF NOT EXISTS over_level_ranking_scores (
       chart_key TEXT NOT NULL REFERENCES over_level_rankings(chart_key) ON DELETE CASCADE,
+      row_order INTEGER NOT NULL,
       rank INTEGER NOT NULL,
       score INTEGER NOT NULL DEFAULT 0,
       grade TEXT DEFAULT '',
@@ -2050,7 +2051,7 @@ function initializeDb() {
       prev_rank INTEGER NOT NULL DEFAULT 0,
       rank_delta INTEGER NOT NULL DEFAULT 0,
       played_at TEXT DEFAULT '',
-      PRIMARY KEY (chart_key, rank)
+      PRIMARY KEY (chart_key, row_order)
     );
 
     CREATE TABLE IF NOT EXISTS over_level_ranking_meta (
@@ -2063,8 +2064,6 @@ function initializeDb() {
 
     CREATE INDEX IF NOT EXISTS idx_over_level_rankings_song_mode_level
       ON over_level_rankings(song_title, mode, level);
-    CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score
-      ON over_level_ranking_scores(chart_key, score DESC, rank ASC);
     CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_name
       ON over_level_ranking_scores(player_name);
     CREATE INDEX IF NOT EXISTS idx_over_level_sync_runs_started_at
@@ -2085,7 +2084,84 @@ function initializeDb() {
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_pumbility_leaderboard_player_name ON pumbility_leaderboard(player_name)");
 
-  const overRankingScoreCols = db.prepare("PRAGMA table_info(over_level_ranking_scores)").all().map((c) => c.name);
+  let overRankingScoreInfo = db.prepare("PRAGMA table_info(over_level_ranking_scores)").all();
+  let overRankingScoreCols = overRankingScoreInfo.map((c) => c.name);
+  if (!overRankingScoreCols.includes('row_order')) {
+    const avatarSelect = overRankingScoreCols.includes('player_avatar_url') ? 'player_avatar_url' : "'' AS player_avatar_url";
+    const prevRankSelect = overRankingScoreCols.includes('prev_rank') ? 'prev_rank' : '0 AS prev_rank';
+    const rankDeltaSelect = overRankingScoreCols.includes('rank_delta') ? 'rank_delta' : '0 AS rank_delta';
+    const existingOverRankingRows = db.prepare(`
+      SELECT chart_key, rank, score, grade, player_name, ${avatarSelect}, ${prevRankSelect}, ${rankDeltaSelect}, played_at
+      FROM over_level_ranking_scores
+      ORDER BY chart_key ASC, score DESC, rank ASC, player_name COLLATE NOCASE ASC
+    `).all();
+
+    const migrateOverRankingScores = db.transaction(() => {
+      db.exec(`
+        DROP INDEX IF EXISTS idx_over_level_ranking_scores_chart_score;
+        DROP INDEX IF EXISTS idx_over_level_ranking_scores_player_name;
+        DROP INDEX IF EXISTS idx_over_level_ranking_scores_player_chart;
+        ALTER TABLE over_level_ranking_scores RENAME TO over_level_ranking_scores_old;
+        CREATE TABLE over_level_ranking_scores (
+          chart_key TEXT NOT NULL REFERENCES over_level_rankings(chart_key) ON DELETE CASCADE,
+          row_order INTEGER NOT NULL,
+          rank INTEGER NOT NULL,
+          score INTEGER NOT NULL DEFAULT 0,
+          grade TEXT DEFAULT '',
+          player_name TEXT DEFAULT '',
+          player_avatar_url TEXT DEFAULT '',
+          prev_rank INTEGER NOT NULL DEFAULT 0,
+          rank_delta INTEGER NOT NULL DEFAULT 0,
+          played_at TEXT DEFAULT '',
+          PRIMARY KEY (chart_key, row_order)
+        );
+      `);
+
+      const insert = db.prepare(`
+        INSERT INTO over_level_ranking_scores (
+          chart_key, row_order, rank, score, grade, player_name, player_avatar_url, prev_rank, rank_delta, played_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      let currentChartKey = '';
+      let currentRowOrder = 0;
+      for (const row of existingOverRankingRows) {
+        const chartKey = String(row?.chart_key || '').trim();
+        if (!chartKey) continue;
+        if (chartKey !== currentChartKey) {
+          currentChartKey = chartKey;
+          currentRowOrder = 0;
+        }
+        currentRowOrder += 1;
+        insert.run(
+          chartKey,
+          currentRowOrder,
+          parseInt(row?.rank, 10) || 0,
+          parseInt(row?.score, 10) || 0,
+          String(row?.grade || ''),
+          String(row?.player_name || ''),
+          String(row?.player_avatar_url || ''),
+          parseInt(row?.prev_rank, 10) || 0,
+          parseInt(row?.rank_delta, 10) || 0,
+          String(row?.played_at || '')
+        );
+      }
+
+      db.exec('DROP TABLE over_level_ranking_scores_old');
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score
+          ON over_level_ranking_scores(chart_key, score DESC, row_order ASC);
+        CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_name
+          ON over_level_ranking_scores(player_name);
+        CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_chart
+          ON over_level_ranking_scores(player_name, chart_key);
+      `);
+    });
+
+    migrateOverRankingScores();
+    overRankingScoreInfo = db.prepare("PRAGMA table_info(over_level_ranking_scores)").all();
+    overRankingScoreCols = overRankingScoreInfo.map((c) => c.name);
+  }
   if (!overRankingScoreCols.includes('player_avatar_url')) {
     db.exec("ALTER TABLE over_level_ranking_scores ADD COLUMN player_avatar_url TEXT DEFAULT ''");
   }
@@ -2095,6 +2171,8 @@ function initializeDb() {
   if (!overRankingScoreCols.includes('rank_delta')) {
     db.exec("ALTER TABLE over_level_ranking_scores ADD COLUMN rank_delta INTEGER NOT NULL DEFAULT 0");
   }
+  db.exec("DROP INDEX IF EXISTS idx_over_level_ranking_scores_chart_score");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score ON over_level_ranking_scores(chart_key, score DESC, row_order ASC)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_chart ON over_level_ranking_scores(player_name, chart_key)");
 
   // Migrations for users table - add world map location fields
