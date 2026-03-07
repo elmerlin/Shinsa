@@ -187,6 +187,67 @@ function overRankingChartKey(songTitle, mode, level, aliases = null) {
   return `${title}|${chartMode}|${chartLevel}`;
 }
 
+const OVER_RANKING_CHART_SELECT_SQL = `
+  SELECT chart_key, song_title, mode, level, jacket_url, source_no, top100_count, min_score, last_sync
+  FROM over_level_rankings
+`;
+
+function parseOverRankingChartKey(chartKey) {
+  const parts = String(chartKey || '').split('|');
+  if (parts.length !== 3) return null;
+
+  const songTitle = String(parts[0] || '').replace(/\s+/g, ' ').trim();
+  const mode = normalizePiugameMode(parts[1]);
+  const level = parseInt(parts[2], 10) || 0;
+  if (!songTitle || !mode || level <= 0) return null;
+
+  return { songTitle, mode, level };
+}
+
+function findOverRankingChart(db, chartKey, sourceNo = '') {
+  const requestedChartKey = String(chartKey || '').trim();
+  const requestedSourceNo = String(sourceNo || '').trim();
+
+  if (requestedSourceNo) {
+    const chartBySourceNo = db.prepare(`
+      ${OVER_RANKING_CHART_SELECT_SQL}
+      WHERE source_no = ? AND level >= 20
+      LIMIT 1
+    `).get(requestedSourceNo);
+    if (chartBySourceNo) return chartBySourceNo;
+  }
+
+  if (!requestedChartKey) return null;
+
+  const exactChart = db.prepare(`
+    ${OVER_RANKING_CHART_SELECT_SQL}
+    WHERE chart_key = ? AND level >= 20
+    LIMIT 1
+  `).get(requestedChartKey);
+  if (exactChart) return exactChart;
+
+  const parsed = parseOverRankingChartKey(requestedChartKey);
+  if (!parsed) return null;
+
+  const aliases = loadPiugameSongAliases();
+  const normalizedRequestedKey = overRankingChartKey(parsed.songTitle, parsed.mode, parsed.level, aliases);
+  if (!normalizedRequestedKey) return null;
+
+  const candidates = db.prepare(`
+    ${OVER_RANKING_CHART_SELECT_SQL}
+    WHERE mode = ? AND level = ? AND level >= 20
+  `).all(parsed.mode, parsed.level);
+
+  for (const candidate of candidates) {
+    const normalizedCandidateKey = overRankingChartKey(candidate.song_title, candidate.mode, candidate.level, aliases);
+    if (normalizedCandidateKey && normalizedCandidateKey === normalizedRequestedKey) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function buildOverRankingLookup(db) {
   const charts = db.prepare(`
     SELECT chart_key, song_title, mode, level, top100_count, min_score
@@ -4618,15 +4679,12 @@ router.get('/leaderboards/over20/charts', requireAuth, (req, res) => {
 router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
   const db = getDb();
   const chartKey = String(req.query?.chart_key || '').trim();
-  if (!chartKey) {
-    return res.status(400).json({ error: 'chart_key is required' });
+  const sourceNo = String(req.query?.source_no || '').trim();
+  if (!chartKey && !sourceNo) {
+    return res.status(400).json({ error: 'chart_key or source_no is required' });
   }
 
-  const chart = db.prepare(`
-    SELECT chart_key, song_title, mode, level, jacket_url, source_no, top100_count, min_score, last_sync
-    FROM over_level_rankings
-    WHERE chart_key = ? AND level >= 20
-  `).get(chartKey);
+  const chart = findOverRankingChart(db, chartKey, sourceNo);
   if (!chart) {
     return res.status(404).json({ error: 'Chart not found in OVER ranking cache' });
   }
@@ -4636,7 +4694,7 @@ router.get('/leaderboards/over20/chart', requireAuth, (req, res) => {
     FROM over_level_ranking_scores
     WHERE chart_key = ?
     ORDER BY row_order ASC
-  `).all(chartKey);
+  `).all(String(chart.chart_key || ''));
 
   const normalizedScores = assignSharedScoreRanks(
     scores
