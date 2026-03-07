@@ -1967,7 +1967,6 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_live_session_presence_session ON live_session_presence(live_session_id, last_seen);
     CREATE INDEX IF NOT EXISTS idx_live_session_messages_session_time ON live_session_messages(live_session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_time ON live_session_requests(live_session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_status ON live_session_requests(live_session_id, status, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_votes_session_status ON live_session_votes(live_session_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_vote_options_vote ON live_session_vote_options(vote_id, position);
