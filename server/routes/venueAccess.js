@@ -615,12 +615,17 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
 
   try {
     switch (event.type) {
-      // Payment completed — handles both day pass and subscription one-off payments
+      // Square emits payment.updated when the payment status changes.
+      // Treat COMPLETED as the successful checkout signal, while still accepting
+      // the older payment.completed name for compatibility.
+      case 'payment.updated':
       case 'payment.completed': {
         const payment = event.data.object?.payment || event.data.object;
+        const paymentStatus = String(payment?.status || '').toUpperCase();
         const orderId = payment?.orderId || payment?.order_id;
         const squarePaymentId = payment?.id;
 
+        if (event.type === 'payment.updated' && paymentStatus !== 'COMPLETED') break;
         if (!orderId) break;
 
         // Find the pending venue payment by square_order_id
@@ -684,7 +689,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
             UPDATE venue_subscriptions SET square_subscription_id = ?, updated_at = datetime('now')
             WHERE square_subscription_id IS NULL AND status = 'active'
             ORDER BY created_at DESC LIMIT 1
-          `);
+          `).run(squareSubId);
         }
         break;
       }
