@@ -1110,7 +1110,7 @@ export default function LivePage() {
   const [desktopMediaHeight, setDesktopMediaHeight] = useState(0);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
-  const desktopVideoCardRef = useRef(null);
+  const desktopVideoFrameRef = useRef(null);
   const reactionIdRef = useRef(0);
   const seenMessageIdsRef = useRef(new Set());
   const presenceIdRef = useRef('');
@@ -1360,7 +1360,7 @@ export default function LivePage() {
       return undefined;
     }
 
-    const node = desktopVideoCardRef.current;
+    const node = desktopVideoFrameRef.current;
     if (!node) return undefined;
 
     const updateHeight = () => {
@@ -2620,7 +2620,7 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      <div ref={chatScrollRef} className={`mt-3 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1 ${isMobileChatSheet ? 'min-h-0' : ''}`}>
+      <div ref={chatScrollRef} className={`mt-3 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1`}>
         {messages.map((msg) => {
           const tone = getMessageTone(msg);
           return (
@@ -3079,8 +3079,8 @@ export default function LivePage() {
 
         {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
           <div className={`grid gap-5 items-stretch ${desktopViewerColumns}`}>
-            <div ref={desktopVideoCardRef} className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
-              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+            <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
+              <div ref={desktopVideoFrameRef} className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                 <iframe
                 className="absolute inset-0 h-full w-full"
                 src={`https://www.youtube-nocookie.com/embed/${youtubeId}`}
