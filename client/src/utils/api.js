@@ -1004,6 +1004,7 @@ export async function parseScorePhoto(file) {
 export const getVenueAccessConfig = () => request('/venue-access/config');
 export const getVenueAccessPlans = (venueSlug) => request(`/venue-access/plans/${encodeURIComponent(venueSlug)}`);
 export const getMyVenueAccess = (venueSlug) => request(`/venue-access/my-access/${encodeURIComponent(venueSlug)}`);
+export const getMyMembership = (venueSlug) => request(`/venue-access/my-membership/${encodeURIComponent(venueSlug)}`);
 export const purchaseDayPass = (planId, passDate) => request('/venue-access/purchase/day-pass', { method: 'POST', body: JSON.stringify({ plan_id: planId, pass_date: passDate }) });
 export const purchaseSubscription = (planId) => request('/venue-access/purchase/subscription', { method: 'POST', body: JSON.stringify({ plan_id: planId }) });
 export const cancelVenueSubscription = (subscriptionId) => request('/venue-access/cancel-subscription', { method: 'POST', body: JSON.stringify({ subscription_id: subscriptionId }) });

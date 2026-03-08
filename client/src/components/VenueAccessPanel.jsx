@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   getMyVenueAccess,
   getVenueAccessPlans,
@@ -267,6 +268,13 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
           )}
         </div>
       )}
+
+      {/* Link to full membership page */}
+      <div className="mt-3 text-center">
+        <Link to="/membership" className="text-xs text-piu-accent hover:underline font-display font-bold">
+          View Full Membership Dashboard
+        </Link>
+      </div>
     </div>
   );
 }

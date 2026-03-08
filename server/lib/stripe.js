@@ -57,8 +57,8 @@ async function createDayPassCheckoutSession({ userId, email, username, venueId, 
       plan_id: planId,
       pass_date: passDate,
     },
-    success_url: `${APP_URL}/checkin?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${APP_URL}/checkin?payment=cancelled`,
+    success_url: `${APP_URL}/membership?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${APP_URL}/membership?payment=cancelled`,
   });
   return session;
 }
@@ -86,8 +86,8 @@ async function createSubscriptionCheckoutSession({ userId, email, username, venu
         plan_id: planId,
       },
     },
-    success_url: `${APP_URL}/checkin?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${APP_URL}/checkin?payment=cancelled`,
+    success_url: `${APP_URL}/membership?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${APP_URL}/membership?payment=cancelled`,
   };
 
   if (stripePriceId) {

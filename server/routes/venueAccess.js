@@ -68,9 +68,63 @@ function isUserApproved(db, userId, venueId) {
   return !!row;
 }
 
+const DOJO_MEMBER_GROUP_NAME = 'Dojo Member';
+
+/** Check if user is in the "Dojo Member" admin user group. */
+function isDojoMember(db, userId) {
+  const row = db.prepare(`
+    SELECT 1 FROM admin_user_group_members gm
+    JOIN admin_user_groups g ON g.id = gm.group_id
+    WHERE gm.user_id = ? AND g.name = ? COLLATE NOCASE
+  `).get(userId, DOJO_MEMBER_GROUP_NAME);
+  return !!row;
+}
+
+/**
+ * Ensure the "Dojo Member" group exists and return its ID.
+ * Creates it if it doesn't exist.
+ */
+function ensureDojoMemberGroup(db, createdByUserId) {
+  let group = db.prepare('SELECT id FROM admin_user_groups WHERE name = ? COLLATE NOCASE').get(DOJO_MEMBER_GROUP_NAME);
+  if (group) return group.id;
+
+  const groupId = uuidv4();
+  db.prepare(`
+    INSERT INTO admin_user_groups (id, name, description, created_by)
+    VALUES (?, ?, ?, ?)
+  `).run(groupId, DOJO_MEMBER_GROUP_NAME, 'Members with venue access via subscription or admin grant', createdByUserId || null);
+
+  return groupId;
+}
+
+/**
+ * Add a user to the "Dojo Member" group if they are not already in it.
+ * Also grants the 'checkin' feature to the group if not already granted.
+ */
+function addUserToDojoMemberGroup(db, userId, addedByUserId) {
+  const groupId = ensureDojoMemberGroup(db, addedByUserId);
+
+  // Add user to group (ignore if already a member)
+  db.prepare(`
+    INSERT OR IGNORE INTO admin_user_group_members (group_id, user_id, added_by)
+    VALUES (?, ?, ?)
+  `).run(groupId, userId, addedByUserId || null);
+
+  // Ensure the group has 'checkin' feature permission
+  db.prepare(`
+    INSERT OR IGNORE INTO admin_user_group_feature_permissions (group_id, feature_key)
+    VALUES (?, 'checkin')
+  `).run(groupId);
+}
+
 /**
  * Check whether a user currently has valid access to a venue.
  * Returns { hasAccess, accessType, detail }.
+ *
+ * Access is granted if any of:
+ *  1. User has an active monthly subscription covering today
+ *  2. User has a day pass for today
+ *  3. User is in the "Dojo Member" admin user group (backward-compat)
  */
 function checkUserVenueAccess(db, userId, venueId) {
   const today = todayDateString();
@@ -99,6 +153,11 @@ function checkUserVenueAccess(db, userId, venueId) {
 
   if (dayPass) {
     return { hasAccess: true, accessType: 'day_pass', detail: dayPass };
+  }
+
+  // 3. Backward-compat: user is in "Dojo Member" group
+  if (isDojoMember(db, userId)) {
+    return { hasAccess: true, accessType: 'group_member', detail: null };
   }
 
   return { hasAccess: false, accessType: null, detail: null };
@@ -419,6 +478,121 @@ router.get('/my-payments', requireAuth, (req, res) => {
   res.json({ payments });
 });
 
+// GET /api/venue-access/my-membership/:venueSlug — full membership dashboard data
+router.get('/my-membership/:venueSlug', requireAuth, (req, res) => {
+  const db = getDb();
+  const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
+  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+
+  const userId = req.user.id;
+  const access = checkUserVenueAccess(db, userId, venue.id);
+  const approved = isUserApproved(db, userId, venue.id);
+  const dojoMember = isDojoMember(db, userId);
+  const today = todayDateString();
+
+  // Active subscription
+  const subscription = db.prepare(`
+    SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
+           vap.name AS plan_name, vap.price_amount, vap.currency
+    FROM venue_subscriptions vs
+    JOIN venue_access_plans vap ON vap.id = vs.plan_id
+    WHERE vs.user_id = ? AND vs.venue_id = ? AND vs.status IN ('active', 'past_due')
+    ORDER BY vs.current_period_end DESC
+    LIMIT 1
+  `).get(userId, venue.id);
+
+  // Past subscriptions
+  const pastSubscriptions = db.prepare(`
+    SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
+           vap.name AS plan_name, vap.price_amount, vap.currency
+    FROM venue_subscriptions vs
+    JOIN venue_access_plans vap ON vap.id = vs.plan_id
+    WHERE vs.user_id = ? AND vs.venue_id = ? AND vs.status IN ('cancelled', 'expired')
+    ORDER BY vs.current_period_end DESC
+    LIMIT 10
+  `).all(userId, venue.id);
+
+  // Day passes (upcoming + recent past)
+  const dayPasses = db.prepare(`
+    SELECT vdp.id, vdp.pass_date, vdp.status, vdp.created_at,
+           vap.name AS plan_name, vap.price_amount, vap.currency
+    FROM venue_day_passes vdp
+    JOIN venue_access_plans vap ON vap.id = vdp.plan_id
+    WHERE vdp.user_id = ? AND vdp.venue_id = ?
+    ORDER BY vdp.pass_date DESC
+    LIMIT 30
+  `).all(userId, venue.id);
+
+  // All payments
+  const payments = db.prepare(`
+    SELECT vp.id, vp.payment_type, vp.amount, vp.currency, vp.status, vp.description, vp.created_at,
+           vap.name AS plan_name
+    FROM venue_payments vp
+    LEFT JOIN venue_access_plans vap ON vap.id = vp.plan_id
+    WHERE vp.user_id = ? AND vp.venue_id = ?
+    ORDER BY vp.created_at DESC
+    LIMIT 50
+  `).all(userId, venue.id);
+
+  // Active discounts
+  const discounts = db.prepare(`
+    SELECT id, discount_percent, applies_to, expires_at, note
+    FROM venue_user_discounts
+    WHERE user_id = ? AND venue_id = ? AND active = 1
+      AND (expires_at IS NULL OR expires_at > datetime('now'))
+    ORDER BY discount_percent DESC
+  `).all(userId, venue.id);
+
+  // Available plans (for purchasing)
+  const plans = db.prepare(`
+    SELECT id, plan_type, name, price_amount, currency
+    FROM venue_access_plans
+    WHERE venue_id = ? AND active = 1
+    ORDER BY plan_type, price_amount
+  `).all(venue.id);
+
+  const plansWithDiscount = plans.map(plan => {
+    const appliesTo = plan.plan_type === 'monthly' ? 'monthly' : 'day_pass';
+    const discount = getUserDiscount(db, userId, venue.id, appliesTo);
+    const discountedAmount = discount ? applyDiscount(plan.price_amount, discount.discount_percent) : plan.price_amount;
+    return {
+      ...plan,
+      discount_percent: discount ? discount.discount_percent : 0,
+      discounted_amount: discountedAmount,
+    };
+  });
+
+  // Stats
+  const totalSpent = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS cnt
+    FROM venue_payments
+    WHERE user_id = ? AND venue_id = ? AND status = 'succeeded'
+  `).get(userId, venue.id);
+
+  const totalDayPasses = db.prepare(`
+    SELECT COUNT(*) AS cnt FROM venue_day_passes WHERE user_id = ? AND venue_id = ?
+  `).get(userId, venue.id);
+
+  res.json({
+    venue,
+    has_access: access.hasAccess,
+    access_type: access.accessType,
+    approved,
+    dojo_member: dojoMember,
+    subscription: subscription || null,
+    past_subscriptions: pastSubscriptions,
+    day_passes: dayPasses,
+    payments,
+    discounts,
+    plans: plansWithDiscount,
+    stats: {
+      total_spent: totalSpent.total,
+      payment_count: totalSpent.cnt,
+      total_day_passes: totalDayPasses.cnt,
+    },
+  });
+});
+
 // ── Stripe Webhook ──────────────────────────────────────────────────────
 
 router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
@@ -482,6 +656,9 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
               VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
             `).run(subId, meta.user_id, meta.venue_id, meta.plan_id, stripeSubId,
               now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
+
+            // Auto-add user to "Dojo Member" group
+            addUserToDojoMemberGroup(db, meta.user_id, null);
           }
         }
         break;
@@ -957,6 +1134,9 @@ router.post('/admin/grant-subscription', requireAuth, requireDojoAdmin, (req, re
     VALUES (?, ?, ?, ?, 'active', ?, ?)
   `).run(subId, user_id, venue_id, plan_id,
     now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
+
+  // Auto-add user to "Dojo Member" group
+  addUserToDojoMemberGroup(db, user_id, req.user.id);
 
   res.json({ id: subId, status: 'active', current_period_end: periodEnd.toISOString().slice(0, 10) });
 });
