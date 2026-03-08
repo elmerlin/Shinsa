@@ -2,7 +2,7 @@ export const LIVE_OVERLAY_PRESETS = [
   {
     id: 'compact',
     label: 'Compact ticker',
-    description: 'Wide lower-third with now playing, result chips, and vote state.',
+    description: 'Tight lower-third with latest play, result chips, and vote state.',
     defaultWidgets: ['brand', 'viewers', 'play', 'result', 'vote'],
   },
   {
@@ -20,7 +20,7 @@ export const LIVE_OVERLAY_PRESETS = [
   {
     id: 'mobile',
     label: 'Player mobile',
-    description: 'Tall phone-safe stack for now playing, sync state, and queue info.',
+    description: 'Tall phone-safe stack for latest play, sync state, and queue info.',
     defaultWidgets: ['brand', 'viewers', 'play', 'result', 'requests', 'vote', 'sync'],
   },
 ];
@@ -28,7 +28,7 @@ export const LIVE_OVERLAY_PRESETS = [
 export const LIVE_OVERLAY_WIDGETS = [
   { id: 'brand', label: 'Brand' },
   { id: 'viewers', label: 'Viewers' },
-  { id: 'play', label: 'Now playing' },
+  { id: 'play', label: 'Latest play' },
   { id: 'result', label: 'Last result' },
   { id: 'requests', label: 'Requests' },
   { id: 'vote', label: 'Vote' },
@@ -102,7 +102,7 @@ export const LIVE_OVERLAY_SCENES = [
   {
     id: 'gameplay',
     label: 'Gameplay Lower Third',
-    description: 'Wide lower-third for gameplay scenes with score and vote info.',
+    description: 'Tight lower-third for gameplay scenes with score and vote info.',
     options: {
       preset: 'compact',
       theme: 'arena',

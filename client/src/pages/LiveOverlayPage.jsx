@@ -106,11 +106,11 @@ function getOverlayShellClass(anchorId) {
 
 function getOverlayPanelClass(fitId, presetId) {
   const preset = String(presetId || '').trim().toLowerCase();
-  if (fitId === 'full') return 'w-full max-w-[1800px]';
-  if (fitId === 'phone') return 'w-full max-w-[360px]';
-  if (fitId === 'rail') return 'w-full max-w-[430px]';
-  if (fitId === 'card') return preset === 'compact' ? 'w-full max-w-[860px]' : 'w-full max-w-[720px]';
-  return preset === 'mobile' ? 'w-full max-w-[400px]' : 'w-full max-w-[1500px]';
+  if (fitId === 'full') return 'w-[min(96vw,72rem)]';
+  if (fitId === 'phone') return 'w-[min(92vw,22rem)]';
+  if (fitId === 'rail') return 'w-[min(92vw,24rem)]';
+  if (fitId === 'card') return preset === 'compact' ? 'w-[min(94vw,52rem)]' : 'w-[min(92vw,34rem)]';
+  return preset === 'mobile' ? 'w-[min(92vw,24rem)]' : 'w-[min(94vw,64rem)]';
 }
 
 function SafeZoneGuides() {
@@ -333,31 +333,22 @@ function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showS
 function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelClassName = '' }) {
   return (
     <OverlayPanel theme={theme} className={`${panelClassName} px-4 py-4 md:px-5 md:py-5`}>
-      <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1.2fr)_auto] xl:items-center">
-          <div className="space-y-3">
-            <OverlayHeader
-              live={live}
-              theme={theme}
-              presetLabel="Compact ticker"
-              showBrand={widgetSet.has('brand')}
-              showViewers={widgetSet.has('viewers')}
-              showSync={widgetSet.has('sync')}
-            />
-            {widgetSet.has('summary') && summary ? (
-              <div className="grid grid-cols-3 gap-2">
-                <OverlayBadge theme={theme} label="Songs" value={summary.songCount || 0} />
-                <OverlayBadge theme={theme} label="Clears" value={`${summary.clearCount || 0}/${summary.songCount || 0}`} emphasis="strong" />
-                <OverlayBadge theme={theme} label="Avg Lv" value={summary.averageLevel || 0} emphasis="alt" />
-              </div>
-            ) : null}
-          </div>
-
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.9fr)] xl:items-start">
+        <div className="space-y-3">
+          <OverlayHeader
+            live={live}
+            theme={theme}
+            presetLabel="Compact ticker"
+            showBrand={widgetSet.has('brand')}
+            showViewers={widgetSet.has('viewers')}
+            showSync={widgetSet.has('sync')}
+          />
           {widgetSet.has('play') ? (
             <div className={`rounded-[28px] border px-4 py-4 ${theme.chipClass}`}>
               <div className="flex items-center gap-4">
                 <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="md" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/45">Now Playing</p>
+                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/45">Latest Play</p>
                   <p className="mt-1 truncate text-xl font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
                   <p className="mt-1 text-sm text-white/65">
                     {play ? `${modeShort(play.mode)}${play.level} • ${play.machine_name || 'Live floor'}` : 'Live sync will pin the next result here.'}
@@ -366,11 +357,19 @@ function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widge
               </div>
             </div>
           ) : null}
+          {widgetSet.has('summary') && summary ? (
+            <div className="grid grid-cols-3 gap-2">
+              <OverlayBadge theme={theme} label="Songs" value={summary.songCount || 0} />
+              <OverlayBadge theme={theme} label="Clears" value={`${summary.clearCount || 0}/${summary.songCount || 0}`} emphasis="strong" />
+              <OverlayBadge theme={theme} label="Avg Lv" value={summary.averageLevel || 0} emphasis="alt" />
+            </div>
+          ) : null}
+        </div>
 
-          <div className="space-y-3 xl:min-w-[340px]">
-            {widgetSet.has('result') ? <ResultBadges play={play} requests={requestCounts} theme={theme} compact /> : null}
-            {widgetSet.has('vote') && vote ? <VoteCard vote={vote} theme={theme} compact /> : null}
-          </div>
+        <div className="space-y-3 xl:min-w-[18rem]">
+          {widgetSet.has('result') ? <ResultBadges play={play} requests={requestCounts} theme={theme} compact /> : null}
+          {widgetSet.has('vote') && vote ? <VoteCard vote={vote} theme={theme} compact /> : null}
+        </div>
       </div>
     </OverlayPanel>
   );
@@ -440,7 +439,7 @@ function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelClassN
 
         {widgetSet.has('play') && play ? (
           <div className={`mt-4 rounded-[26px] border p-3 ${theme.faintClass}`}>
-            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Now Playing</p>
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Play</p>
             <div className="mt-2 flex items-center gap-3">
               <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
               <div className="min-w-0 flex-1">
@@ -482,7 +481,7 @@ function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widget
 
         {widgetSet.has('play') ? (
           <div className="mt-4 rounded-[26px] border border-white/10 bg-black/18 p-4">
-            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Now Playing</p>
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Play</p>
             <div className="mt-3 flex items-center gap-3">
               <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
               <div className="min-w-0 flex-1">
