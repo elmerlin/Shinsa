@@ -2427,16 +2427,16 @@ export default function LivePage() {
 
   const desktopInteractionsSection = hasPlayerPanels ? null : (
     <div className="flex h-full min-h-0 flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Interactions</p>
+          <p className="text-[10px] font-display uppercase tracking-[0.2em] text-cyan-200">Interactions</p>
         </div>
         {isHost ? (
           <button
             type="button"
             onClick={handleToggleRequestsEnabled}
             disabled={savingRequestsEnabled || live?.status !== 'live'}
-            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.14em] ${
               requestsEnabled
                 ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
                 : 'border border-piu-border bg-black/20 text-gray-400'
@@ -2451,19 +2451,23 @@ export default function LivePage() {
           type="button"
           onClick={() => {
             if (requestTabDisabled) return;
-            setDesktopInteractionTab((prev) => (prev === 'requests' && !isDesktopViewport ? '' : 'requests'));
+            if (isDesktopViewport) {
+              setDesktopInteractionTab('requests');
+            } else {
+              setMobilePanel('requests');
+            }
           }}
           disabled={requestTabDisabled}
-          className={`rounded-2xl border px-4 py-2.5 text-left transition-colors ${
-            desktopInteractionTab === 'requests' && !requestTabDisabled
+          className={`rounded-2xl border px-3 py-2.5 text-left transition-colors ${
+            (desktopInteractionTab === 'requests' || mobilePanel === 'requests') && !requestTabDisabled
               ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
               : requestTabDisabled
                 ? 'border-piu-border/60 bg-black/10 text-gray-500'
                 : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
           }`}
         >
-          <p className="text-xs font-display font-bold uppercase tracking-wide">Requests</p>
-          <p className="mt-1 text-[11px]">
+          <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em]">Requests</p>
+          <p className="mt-1 text-[11px] leading-tight">
             {requestTabDisabled ? 'Waiting for host' : `${requestCounts.open} open`}
           </p>
         </button>
@@ -2471,24 +2475,29 @@ export default function LivePage() {
           type="button"
           onClick={() => {
             if (voteTabDisabled) return;
-            setDesktopInteractionTab((prev) => (prev === 'vote' && !isDesktopViewport ? '' : 'vote'));
+            if (isDesktopViewport) {
+              setDesktopInteractionTab('vote');
+            } else {
+              setMobilePanel('vote');
+            }
           }}
           disabled={voteTabDisabled}
-          className={`rounded-2xl border px-4 py-2.5 text-left transition-colors ${
-            desktopInteractionTab === 'vote' && !voteTabDisabled
+          className={`rounded-2xl border px-3 py-2.5 text-left transition-colors ${
+            (desktopInteractionTab === 'vote' || mobilePanel === 'vote') && !voteTabDisabled
               ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
               : voteTabDisabled
                 ? 'border-piu-border/60 bg-black/10 text-gray-500'
                 : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
           }`}
         >
-          <p className="text-xs font-display font-bold uppercase tracking-wide">Vote</p>
-          <p className="mt-1 text-[11px]">
+          <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em]">Vote</p>
+          <p className="mt-1 text-[11px] leading-tight">
             {voteTabDisabled ? 'No active vote' : currentVote?.status === 'active' ? 'Live now' : 'Available'}
           </p>
         </button>
       </div>
-      <div className={`mt-4 ${!isDesktopViewport && !desktopInteractionTab ? 'hidden' : ''}`}>
+      {isDesktopViewport ? (
+        <div className="mt-4">
         {desktopInteractionTab === 'vote'
           ? (voteTabDisabled
             ? (
@@ -2504,7 +2513,8 @@ export default function LivePage() {
               </div>
             )
             : requestsSection)}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 
@@ -3177,8 +3187,8 @@ export default function LivePage() {
               />
               {desktopInteractionsSection}
             </div>
-            {songsSection}
             {chatSection}
+            {songsSection}
           </div>
         ) : (
           <div className={`grid gap-5 ${desktopViewerColumns}`}>
