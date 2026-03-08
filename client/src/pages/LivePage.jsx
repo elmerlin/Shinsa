@@ -721,7 +721,7 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
   );
 }
 
-function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
+function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
   return (
     <div className="rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
       <div className="flex items-start justify-between gap-3">
@@ -741,25 +741,22 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
       </div>
 
       {play ? (
-        <div className="mt-4">
-          <p className="truncate text-lg font-display font-black text-white">{play.song_title}</p>
-          <div className="mt-3 flex items-center gap-3">
-            <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
+        <div className={compact ? 'mt-2' : 'mt-4'}>
+          <p className={`truncate font-display font-black text-white ${compact ? 'text-base leading-tight' : 'text-lg'}`}>{play.song_title}</p>
+          <div className={`${compact ? 'mt-2 flex items-end gap-2.5' : 'mt-3 flex items-center gap-3'}`}>
+            <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size={compact ? 'sm' : 'md'} />
             <div className="min-w-0 flex-1">
               <button
                 type="button"
                 onClick={onOpen}
                 className="flex items-baseline gap-2 text-left transition-colors hover:text-white"
               >
-                <span className={`font-display text-2xl font-black ${getGradeColor(play.grade || '-', play.score || 0)}`}>
+                <span className={`font-display font-black ${compact ? 'text-xl' : 'text-2xl'} ${getGradeColor(play.grade || '-', play.score || 0)}`}>
                   {play.grade || '-'}
                 </span>
-                <span className="text-base font-display font-bold text-cyan-100/90">{formatNumber(play.score)}</span>
+                <span className={`${compact ? 'text-sm' : 'text-base'} font-display font-bold text-cyan-100/90`}>{formatNumber(play.score)}</span>
               </button>
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                {play.machine_name ? <span className="text-gray-400">at {play.machine_name}</span> : null}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className={`${compact ? 'mt-1.5' : 'mt-3'} flex flex-wrap gap-2`}>
                 {play.pumbility_gain > 0 ? (
                   <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
                     +{play.pumbility_gain} pumbility
@@ -785,6 +782,9 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
               </div>
             </div>
           </div>
+          {play.machine_name ? (
+            <p className={`text-right text-gray-400 ${compact ? 'mt-1.5 text-[10px]' : 'mt-2 text-sm'}`}>at {play.machine_name}</p>
+          ) : null}
         </div>
       ) : (
         <div className="mt-4 rounded-xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
@@ -1203,14 +1203,6 @@ export default function LivePage() {
     setEditStreamUrl(live?.stream_url || '');
   }, [live?.id, live?.stream_url]);
 
-  useEffect(() => {
-    if (currentVote) {
-      setDesktopInteractionTab('vote');
-      return;
-    }
-    setDesktopInteractionTab('requests');
-  }, [currentVote?.id]);
-
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
     presenceIdRef.current = window.sessionStorage.getItem(storageKey) || makePresenceId();
@@ -1480,12 +1472,6 @@ export default function LivePage() {
       // Ignore storage write failures.
     }
   }, [isHost, overlayAnchor, overlayAutoHide, overlayFit, overlayGuides, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
-
-  useEffect(() => {
-    if (isDesktopViewport && !desktopInteractionTab) {
-      setDesktopInteractionTab('requests');
-    }
-  }, [desktopInteractionTab, isDesktopViewport]);
 
   useEffect(() => {
     if (!useMobilePlayerHud) {
@@ -3180,10 +3166,11 @@ export default function LivePage() {
           <div className="space-y-4">
             <NowPlayingPanel
               play={lastPlay}
-            live={live}
-            requestInfo={nowPlayingRequestInfo}
-            onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
-          />
+              live={live}
+              requestInfo={nowPlayingRequestInfo}
+              onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+              compact={!isDesktopViewport}
+            />
 
           {hasPlayerPanels ? null : songsSection}
         </div>
