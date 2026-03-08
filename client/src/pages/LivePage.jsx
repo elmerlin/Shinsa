@@ -723,28 +723,30 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
 
 function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
   return (
-    <div className="rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
+    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Latest Play</p>
           {!play ? (
             <p className="text-sm text-cyan-50/80 mt-1">
               {live?.status === 'live'
                 ? 'Waiting for the first chart to land.'
-                : 'This live room has wrapped.'}
+                : 'Live wrapped.'}
             </p>
           ) : null}
         </div>
-        <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${live?.status === 'live' ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-piu-border bg-black/20 text-gray-400'}`}>
+        <span className={`shrink-0 whitespace-nowrap rounded-full ${compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-1 text-[10px]'} font-display font-bold uppercase tracking-wide ${live?.status === 'live' ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-piu-border bg-black/20 text-gray-400'}`}>
           {live?.status === 'live' ? 'Live sync' : 'Session ended'}
         </span>
       </div>
 
       {play ? (
-        <div className={compact ? 'mt-2' : 'mt-4'}>
+        <div className={`${compact ? 'mt-2' : 'mt-4'} flex flex-1 flex-col`}>
           <p className={`truncate font-display font-black text-white ${compact ? 'text-base leading-tight' : 'text-lg'}`}>{play.song_title}</p>
-          <div className={`${compact ? 'mt-2 flex items-end gap-2.5' : 'mt-3 flex items-center gap-3'}`}>
-            <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size={compact ? 'sm' : 'md'} />
+          <div className={`${compact ? 'mt-2 flex items-end gap-2.5' : 'mt-3 flex items-center gap-3'} flex-1`}>
+            <button type="button" onClick={onOpen} className="shrink-0 text-left">
+              <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size={compact ? 'sm' : 'md'} />
+            </button>
             <div className="min-w-0 flex-1">
               <button
                 type="button"
@@ -783,12 +785,14 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
             </div>
           </div>
           {play.machine_name ? (
-            <p className={`text-right text-gray-400 ${compact ? 'mt-1.5 text-[10px]' : 'mt-2 text-sm'}`}>at {play.machine_name}</p>
+            <p className={`mt-auto text-right text-gray-400 ${compact ? 'pt-1 text-[10px]' : 'pt-2 text-sm'}`}>at {play.machine_name}</p>
           ) : null}
         </div>
       ) : (
-        <div className="mt-4 rounded-xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
-          Once a chart lands through the live sync, it will pin here with score, grade, pumbility, and request context.
+        <div className="mt-3 flex flex-1 items-center">
+          <p className={`${compact ? 'text-sm' : 'text-base'} text-cyan-50/75`}>
+            No song played.
+          </p>
         </div>
       )}
     </div>
@@ -2422,18 +2426,17 @@ export default function LivePage() {
   );
 
   const desktopInteractionsSection = hasPlayerPanels ? null : (
-    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
+    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Session Interactions</p>
-          <p className="text-sm font-display font-bold text-white">Requests and votes</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Interactions</p>
         </div>
         {isHost ? (
           <button
             type="button"
             onClick={handleToggleRequestsEnabled}
             disabled={savingRequestsEnabled || live?.status !== 'live'}
-            className={`rounded-full px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide ${
               requestsEnabled
                 ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
                 : 'border border-piu-border bg-black/20 text-gray-400'
@@ -2451,7 +2454,7 @@ export default function LivePage() {
             setDesktopInteractionTab((prev) => (prev === 'requests' && !isDesktopViewport ? '' : 'requests'));
           }}
           disabled={requestTabDisabled}
-          className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
+          className={`rounded-2xl border px-4 py-2.5 text-left transition-colors ${
             desktopInteractionTab === 'requests' && !requestTabDisabled
               ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
               : requestTabDisabled
@@ -2471,7 +2474,7 @@ export default function LivePage() {
             setDesktopInteractionTab((prev) => (prev === 'vote' && !isDesktopViewport ? '' : 'vote'));
           }}
           disabled={voteTabDisabled}
-          className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
+          className={`rounded-2xl border px-4 py-2.5 text-left transition-colors ${
             desktopInteractionTab === 'vote' && !voteTabDisabled
               ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
               : voteTabDisabled
@@ -3164,7 +3167,7 @@ export default function LivePage() {
       {hostWorkspaceTab !== 'overlay' ? (
         !isDesktopViewport && !hasPlayerPanels ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 items-start gap-3">
+            <div className="grid grid-cols-2 items-stretch gap-3">
               <NowPlayingPanel
                 play={lastPlay}
                 live={live}
