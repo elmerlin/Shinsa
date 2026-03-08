@@ -1110,8 +1110,10 @@ export default function LivePage() {
   const [overlayCopying, setOverlayCopying] = useState(false);
   const [overlayCopiedLabel, setOverlayCopiedLabel] = useState('');
   const [overlayTokenExpiresAt, setOverlayTokenExpiresAt] = useState('');
+  const [desktopMediaHeight, setDesktopMediaHeight] = useState(0);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
+  const desktopVideoCardRef = useRef(null);
   const reactionIdRef = useRef(0);
   const seenMessageIdsRef = useRef(new Set());
   const presenceIdRef = useRef('');
@@ -1345,6 +1347,32 @@ export default function LivePage() {
     query.addListener(update);
     return () => query.removeListener(update);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') return undefined;
+    if (!useDesktopViewerLayout) {
+      setDesktopMediaHeight(0);
+      return undefined;
+    }
+
+    const node = desktopVideoCardRef.current;
+    if (!node) return undefined;
+
+    const updateHeight = () => {
+      const nextHeight = Math.round(node.getBoundingClientRect().height);
+      setDesktopMediaHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(() => updateHeight());
+    observer.observe(node);
+    window.addEventListener('resize', updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [useDesktopViewerLayout, youtubeId]);
 
   useEffect(() => {
     if (!isHost || typeof window === 'undefined') return;
@@ -2417,7 +2445,10 @@ export default function LivePage() {
   );
 
   const chatSection = (
-    <div className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${useDesktopViewerLayout ? 'h-full min-h-0' : hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}>
+    <div
+      className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${useDesktopViewerLayout ? 'h-full min-h-0' : hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}
+      style={useDesktopViewerLayout && desktopMediaHeight ? { height: `${desktopMediaHeight}px` } : undefined}
+    >
       {reactionBursts.map((burst) => (
         <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
           {burst.particles.map((particle) => (
@@ -3013,7 +3044,7 @@ export default function LivePage() {
 
         {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
           <div className={`grid gap-5 items-stretch ${desktopViewerColumns}`}>
-            <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
+            <div ref={desktopVideoCardRef} className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
               <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                 <iframe
                 className="absolute inset-0 h-full w-full"
@@ -3025,7 +3056,10 @@ export default function LivePage() {
               />
               </div>
             </div>
-            <div className="h-full min-h-0">
+            <div
+              className="h-full min-h-0"
+              style={desktopMediaHeight ? { height: `${desktopMediaHeight}px` } : undefined}
+            >
               {chatSection}
             </div>
           </div>
