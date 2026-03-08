@@ -975,73 +975,112 @@ router.get('/feed', requireAuth, (req, res) => {
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  // Get posts from followed users with pump/comment counts
-  const posts = db.prepare(`
-    SELECT p.id, p.user_id, p.content, p.images, p.youtube_url, p.comments_disabled, p.created_at,
-           u.username, u.avatar, u.nationality,
-           (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
-           (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count,
-           CASE WHEN pp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
-           'post' as type
-    FROM user_posts p
-    JOIN users u ON p.user_id = u.id
-    LEFT JOIN post_pumps pp_me ON pp_me.post_id = p.id AND pp_me.user_id = ?
-    WHERE p.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
-       OR p.user_id = ?
-    ORDER BY p.created_at DESC
+  const feedRefs = db.prepare(`
+    SELECT type, id, created_at
+    FROM (
+      SELECT 'post' as type, p.id, p.created_at
+      FROM user_posts p
+      WHERE p.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
+         OR p.user_id = ?
+
+      UNION ALL
+
+      SELECT 'upscore' as type, us.id, us.created_at
+      FROM user_upscores us
+      WHERE us.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
+         OR us.user_id = ?
+
+      UNION ALL
+
+      SELECT 'clear' as type, nc.id, nc.created_at
+      FROM user_new_clears nc
+      WHERE nc.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
+         OR nc.user_id = ?
+    ) feed_items
+    ORDER BY
+      datetime(COALESCE(created_at, '1970-01-01 00:00:00')) DESC,
+      created_at DESC,
+      id DESC,
+      type ASC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
-  for (const post of posts) {
-    post.avatar = normalizeUserAvatarForList(post.avatar, post.user_id, 64);
+  `).all(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset);
+
+  if (feedRefs.length === 0) {
+    return res.json([]);
   }
 
-  // Get upscores from followed users with pump/comment counts
-  const upscores = db.prepare(`
-    SELECT us.id, us.user_id, us.upscores_json, us.pumbility_gain, us.singles_pumbility_gain, us.created_at,
-           u.username, u.avatar, u.nationality,
-           (SELECT COUNT(*) FROM upscore_pumps WHERE upscore_id = us.id) as pump_count,
-           (SELECT COUNT(*) FROM upscore_comments WHERE upscore_id = us.id) as comment_count,
-           CASE WHEN usp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
-           'upscore' as type
-    FROM user_upscores us
-    JOIN users u ON us.user_id = u.id
-    LEFT JOIN upscore_pumps usp_me ON usp_me.upscore_id = us.id AND usp_me.user_id = ?
-    WHERE us.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
-       OR us.user_id = ?
-    ORDER BY us.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
-  for (const us of upscores) {
-    us.avatar = normalizeUserAvatarForList(us.avatar, us.user_id, 64);
+  const postIds = feedRefs.filter((item) => item.type === 'post').map((item) => item.id);
+  const upscoreIds = feedRefs.filter((item) => item.type === 'upscore').map((item) => item.id);
+  const clearIds = feedRefs.filter((item) => item.type === 'clear').map((item) => item.id);
+
+  const itemMap = new Map();
+
+  if (postIds.length > 0) {
+    const placeholders = postIds.map(() => '?').join(',');
+    const posts = db.prepare(`
+      SELECT p.id, p.user_id, p.content, p.images, p.youtube_url, p.comments_disabled, p.created_at,
+             u.username, u.avatar, u.nationality,
+             (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
+             (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count,
+             CASE WHEN pp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
+             'post' as type
+      FROM user_posts p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN post_pumps pp_me ON pp_me.post_id = p.id AND pp_me.user_id = ?
+      WHERE p.id IN (${placeholders})
+    `).all(req.user.id, ...postIds);
+
+    for (const post of posts) {
+      post.avatar = normalizeUserAvatarForList(post.avatar, post.user_id, 64);
+      itemMap.set(`post:${post.id}`, post);
+    }
   }
 
-  // Get new clears from followed users with pump/comment counts
-  const clears = db.prepare(`
-    SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.clears_json, nc.pumbility_gain, nc.singles_pumbility_gain, nc.created_at,
-           u.username, u.avatar, u.nationality,
-           (SELECT COUNT(*) FROM new_clear_pumps WHERE clear_id = nc.id) as pump_count,
-           (SELECT COUNT(*) FROM new_clear_comments WHERE clear_id = nc.id) as comment_count,
-           CASE WHEN ncp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
-           'clear' as type
-    FROM user_new_clears nc
-    JOIN users u ON nc.user_id = u.id
-    LEFT JOIN new_clear_pumps ncp_me ON ncp_me.clear_id = nc.id AND ncp_me.user_id = ?
-    WHERE nc.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
-       OR nc.user_id = ?
-    ORDER BY nc.created_at DESC
-    LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, req.user.id, limit, offset);
-  for (const c of clears) {
-    c.avatar = normalizeUserAvatarForList(c.avatar, c.user_id, 64);
+  if (upscoreIds.length > 0) {
+    const placeholders = upscoreIds.map(() => '?').join(',');
+    const upscores = db.prepare(`
+      SELECT us.id, us.user_id, us.upscores_json, us.pumbility_gain, us.singles_pumbility_gain, us.created_at,
+             u.username, u.avatar, u.nationality,
+             (SELECT COUNT(*) FROM upscore_pumps WHERE upscore_id = us.id) as pump_count,
+             (SELECT COUNT(*) FROM upscore_comments WHERE upscore_id = us.id) as comment_count,
+             CASE WHEN usp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
+             'upscore' as type
+      FROM user_upscores us
+      JOIN users u ON us.user_id = u.id
+      LEFT JOIN upscore_pumps usp_me ON usp_me.upscore_id = us.id AND usp_me.user_id = ?
+      WHERE us.id IN (${placeholders})
+    `).all(req.user.id, ...upscoreIds);
+
+    for (const upscore of upscores) {
+      upscore.avatar = normalizeUserAvatarForList(upscore.avatar, upscore.user_id, 64);
+      itemMap.set(`upscore:${upscore.id}`, enrichUpscoreRow(db, upscore));
+    }
   }
 
-  const enrichedUpscores = upscores.map((us) => enrichUpscoreRow(db, us));
-  const enrichedClears = clears.map((clear) => enrichClearRow(db, clear));
+  if (clearIds.length > 0) {
+    const placeholders = clearIds.map(() => '?').join(',');
+    const clears = db.prepare(`
+      SELECT nc.id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate, nc.background_url, nc.clears_json, nc.pumbility_gain, nc.singles_pumbility_gain, nc.created_at,
+             u.username, u.avatar, u.nationality,
+             (SELECT COUNT(*) FROM new_clear_pumps WHERE clear_id = nc.id) as pump_count,
+             (SELECT COUNT(*) FROM new_clear_comments WHERE clear_id = nc.id) as comment_count,
+             CASE WHEN ncp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
+             'clear' as type
+      FROM user_new_clears nc
+      JOIN users u ON nc.user_id = u.id
+      LEFT JOIN new_clear_pumps ncp_me ON ncp_me.clear_id = nc.id AND ncp_me.user_id = ?
+      WHERE nc.id IN (${placeholders})
+    `).all(req.user.id, ...clearIds);
 
-  // Merge and sort by created_at (string comparison works for ISO timestamps)
-  const feed = [...posts, ...enrichedUpscores, ...enrichedClears]
-    .sort((a, b) => (b.created_at > a.created_at ? 1 : b.created_at < a.created_at ? -1 : 0))
-    .slice(0, limit);
+    for (const clear of clears) {
+      clear.avatar = normalizeUserAvatarForList(clear.avatar, clear.user_id, 64);
+      itemMap.set(`clear:${clear.id}`, enrichClearRow(db, clear));
+    }
+  }
+
+  const feed = feedRefs
+    .map((item) => itemMap.get(`${item.type}:${item.id}`))
+    .filter(Boolean);
 
   res.json(feed);
 });
