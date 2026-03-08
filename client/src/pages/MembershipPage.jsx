@@ -145,7 +145,7 @@ export default function MembershipPage() {
     return (
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-8">
         <div className="text-center py-12">
-          <h2 className="font-display font-bold text-xl text-white mb-2">Membership</h2>
+          <h2 className="font-display font-bold text-xl text-white mb-2">Dojo Access &amp; Membership</h2>
           <p className="text-gray-400 mb-4">Log in to view your membership.</p>
           <Link to="/login" className="text-piu-accent hover:underline font-display">Log In</Link>
         </div>
@@ -172,9 +172,12 @@ export default function MembershipPage() {
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="font-display font-bold text-lg sm:text-xl text-white">Membership</h1>
-        <Link to="/checkin" className="text-xs text-piu-accent hover:underline font-display">
-          Back to Check In
+        <h1 className="font-display font-bold text-lg sm:text-xl text-white">Dojo Access &amp; Membership</h1>
+        <Link
+          to="/checkin"
+          className="inline-flex items-center rounded-lg border border-piu-accent/35 bg-piu-accent/10 px-3 py-1.5 text-xs font-display font-bold text-piu-accent transition-colors hover:bg-piu-accent/20"
+        >
+          Check In
         </Link>
       </div>
 

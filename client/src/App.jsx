@@ -605,7 +605,7 @@ function UserMenu() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.5-2.8 7.7-7 9-4.2-1.3-7-4.5-7-9V7l7-4Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M12 9v6" />
               </svg>
-              Dojo Access &amp; Membership
+              Pump Dojo
             </Link>
           )}
           {canAccessDojoAdmin && (
