@@ -1014,7 +1014,12 @@ export const cancelVenueSubscription = (subscriptionId) => request('/venue-acces
 export const getMyVenuePayments = () => request('/venue-access/my-payments');
 
 // Admin venue access
-export const getAdminVenueAccessOverview = (venueSlug) => request(`/venue-access/admin/overview/${encodeURIComponent(venueSlug)}`);
+export const getAdminVenueAccessOverview = (venueSlug, month) => {
+  const query = new URLSearchParams();
+  if (month) query.set('month', String(month));
+  const qs = query.toString();
+  return request(`/venue-access/admin/overview/${encodeURIComponent(venueSlug)}${qs ? `?${qs}` : ''}`);
+};
 export const getAdminVenueAccessPlans = (venueSlug) => request(`/venue-access/admin/plans/${encodeURIComponent(venueSlug)}`);
 export const createAdminVenueAccessPlan = (data) => request('/venue-access/admin/plans', { method: 'POST', body: JSON.stringify(data) });
 export const updateAdminVenueAccessPlan = (planId, data) => request(`/venue-access/admin/plans/${planId}`, { method: 'PUT', body: JSON.stringify(data) });

@@ -144,6 +144,30 @@ function addMonthsToIsoDate(startDate, monthsToAdd) {
   return next.toISOString().slice(0, 10);
 }
 
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function isValidMonthKey(value) {
+  return /^\d{4}-\d{2}$/.test(String(value || '').trim());
+}
+
+function shiftMonthKey(monthKey, offset) {
+  const raw = String(monthKey || '').trim();
+  if (!isValidMonthKey(raw)) return currentMonthKey();
+  const [year, month] = raw.split('-').map((part) => parseInt(part, 10));
+  const next = new Date(Date.UTC(year, month - 1 + offset, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(monthKey) {
+  if (!isValidMonthKey(monthKey)) return monthKey || '';
+  const date = new Date(`${monthKey}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return monthKey;
+  return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
 /**
  * Find the best active discount for a user at a venue.
  * @param {string} appliesTo - 'monthly' or 'day_pass'
@@ -1125,6 +1149,8 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
   const db = getDb();
   const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
+  const selectedMonth = isValidMonthKey(req.query.month) ? String(req.query.month) : currentMonthKey();
+  const monthKeys = Array.from({ length: 6 }, (_, index) => shiftMonthKey(selectedMonth, -index));
 
   const subscribers = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
@@ -1133,9 +1159,9 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
     FROM venue_subscriptions vs
     JOIN users u ON u.id = vs.user_id
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
-    WHERE vs.venue_id = ? AND vs.status IN ('active', 'past_due')
+    WHERE vs.venue_id = ? AND substr(vs.created_at, 1, 7) = ?
     ORDER BY vs.created_at DESC
-  `).all(venue.id);
+  `).all(venue.id, selectedMonth);
 
   const today = todayDateString();
   const dayPasses = db.prepare(`
@@ -1145,10 +1171,10 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
     FROM venue_day_passes vdp
     JOIN users u ON u.id = vdp.user_id
     JOIN venue_access_plans vap ON vap.id = vdp.plan_id
-    WHERE vdp.venue_id = ? AND vdp.pass_date >= ?
+    WHERE vdp.venue_id = ? AND substr(vdp.pass_date, 1, 7) = ?
     ORDER BY vdp.pass_date ASC, vdp.created_at DESC
     LIMIT 100
-  `).all(venue.id, today);
+  `).all(venue.id, selectedMonth);
 
   const payments = db.prepare(`
     SELECT vp.id, vp.payment_type, vp.amount, vp.currency, vp.status, vp.description, vp.created_at,
@@ -1157,10 +1183,10 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
     FROM venue_payments vp
     JOIN users u ON u.id = vp.user_id
     LEFT JOIN venue_access_plans vap ON vap.id = vp.plan_id
-    WHERE vp.venue_id = ?
+    WHERE vp.venue_id = ? AND substr(vp.created_at, 1, 7) = ?
     ORDER BY vp.created_at DESC
     LIMIT 100
-  `).all(venue.id);
+  `).all(venue.id, selectedMonth);
 
   const discounts = db.prepare(`
     SELECT vud.*, u.username, u.avatar, u.avatar_v,
@@ -1200,6 +1226,47 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
     SELECT * FROM venue_access_plans WHERE venue_id = ? ORDER BY plan_type, price_amount
   `).all(venue.id);
 
+  const paymentMonthRows = db.prepare(`
+    SELECT substr(created_at, 1, 7) AS month_key,
+           COALESCE(SUM(CASE WHEN status = 'succeeded' THEN amount ELSE 0 END), 0) AS revenue,
+           SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END) AS payment_count
+    FROM venue_payments
+    WHERE venue_id = ? AND substr(created_at, 1, 7) IN (${monthKeys.map(() => '?').join(', ')})
+    GROUP BY substr(created_at, 1, 7)
+  `).all(venue.id, ...monthKeys);
+  const paymentMonthLookup = Object.fromEntries(paymentMonthRows.map((row) => [row.month_key, row]));
+
+  const dayPassMonthRows = db.prepare(`
+    SELECT substr(pass_date, 1, 7) AS month_key, COUNT(*) AS day_pass_count
+    FROM venue_day_passes
+    WHERE venue_id = ? AND substr(pass_date, 1, 7) IN (${monthKeys.map(() => '?').join(', ')})
+    GROUP BY substr(pass_date, 1, 7)
+  `).all(venue.id, ...monthKeys);
+  const dayPassMonthLookup = Object.fromEntries(dayPassMonthRows.map((row) => [row.month_key, row]));
+
+  const subscriptionMonthRows = db.prepare(`
+    SELECT substr(created_at, 1, 7) AS month_key, COUNT(*) AS subscription_count
+    FROM venue_subscriptions
+    WHERE venue_id = ? AND substr(created_at, 1, 7) IN (${monthKeys.map(() => '?').join(', ')})
+    GROUP BY substr(created_at, 1, 7)
+  `).all(venue.id, ...monthKeys);
+  const subscriptionMonthLookup = Object.fromEntries(subscriptionMonthRows.map((row) => [row.month_key, row]));
+
+  const monthCards = monthKeys.map((monthKey) => ({
+    month_key: monthKey,
+    month_label: formatMonthLabel(monthKey),
+    revenue: Number(paymentMonthLookup[monthKey]?.revenue || 0),
+    payment_count: Number(paymentMonthLookup[monthKey]?.payment_count || 0),
+    day_pass_count: Number(dayPassMonthLookup[monthKey]?.day_pass_count || 0),
+    subscription_count: Number(subscriptionMonthLookup[monthKey]?.subscription_count || 0),
+    selected: monthKey === selectedMonth,
+  }));
+
+  const selectedMonthRevenue = Number(paymentMonthLookup[selectedMonth]?.revenue || 0);
+  const selectedMonthPayments = Number(paymentMonthLookup[selectedMonth]?.payment_count || 0);
+  const selectedMonthDayPasses = Number(dayPassMonthLookup[selectedMonth]?.day_pass_count || 0);
+  const selectedMonthSubscriptions = Number(subscriptionMonthLookup[selectedMonth]?.subscription_count || 0);
+
   res.json({
     venue,
     plans: plans.map((plan) => attachPlanCadenceMeta(plan)),
@@ -1212,7 +1279,14 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
       month_revenue: monthRevenue.total,
       active_subscriptions: activeSubCount.cnt,
       today_day_passes: todayPassCount.cnt,
+      selected_month_revenue: selectedMonthRevenue,
+      selected_month_payments: selectedMonthPayments,
+      selected_month_day_passes: selectedMonthDayPasses,
+      selected_month_subscriptions: selectedMonthSubscriptions,
     },
+    selected_month: selectedMonth,
+    selected_month_label: formatMonthLabel(selectedMonth),
+    month_cards: monthCards,
   });
 });
 

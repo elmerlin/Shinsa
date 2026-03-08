@@ -32,6 +32,11 @@ function formatDate(dateStr) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 const PLAN_TYPE_LABELS = {
   day_pass_weekday: 'Day Pass (Weekday)',
   day_pass_weekend: 'Day Pass (Weekend)',
@@ -55,6 +60,7 @@ export default function AdminVenueAccessTab() {
   const [error, setError] = useState('');
   const [overview, setOverview] = useState(null);
   const [message, setMessage] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
 
   // Plans state
   const [plans, setPlans] = useState([]);
@@ -90,7 +96,7 @@ export default function AdminVenueAccessTab() {
 
   useEffect(() => {
     loadOverview();
-  }, []);
+  }, [selectedMonth]);
 
   useEffect(() => {
     if (subTab === 'approved') loadApprovedUsers();
@@ -102,7 +108,7 @@ export default function AdminVenueAccessTab() {
     setLoading(true);
     setError('');
     try {
-      const data = await getAdminVenueAccessOverview(VENUE_SLUG);
+      const data = await getAdminVenueAccessOverview(VENUE_SLUG, selectedMonth);
       setOverview(data);
       setPlans(data.plans || []);
     } catch (err) {
@@ -365,6 +371,7 @@ export default function AdminVenueAccessTab() {
   if (loading) return <div className="text-center py-10 text-gray-400">Loading venue access data...</div>;
 
   const subTabs = ['overview', 'plans', 'approved', 'discounts', 'grant', 'payments'];
+  const selectedMonthLabel = overview?.selected_month_label || 'Selected month';
 
   return (
     <div className="space-y-4">
@@ -387,13 +394,56 @@ export default function AdminVenueAccessTab() {
       {subTab === 'overview' && overview && (
         <div className="space-y-4">
           <h3 className="text-lg font-display font-bold">{overview.venue?.name} — Access Overview</h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-gray-400">Select a month to drill into venue access activity.</p>
+              <span className="text-xs text-gray-500">{selectedMonthLabel}</span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+              {(overview.month_cards || []).map((monthCard) => (
+                <button
+                  key={monthCard.month_key}
+                  type="button"
+                  onClick={() => setSelectedMonth(monthCard.month_key)}
+                  className={`aspect-square rounded-2xl border p-3 text-left transition-colors ${
+                    monthCard.selected
+                      ? 'border-piu-accent bg-piu-accent/10'
+                      : 'border-piu-border/50 bg-piu-card/50 hover:border-piu-accent/45'
+                  }`}
+                >
+                  <div className="flex h-full flex-col">
+                    <div className="text-[11px] uppercase tracking-wide text-gray-500">{monthCard.month_label}</div>
+                    <div className="mt-2 text-lg font-display font-bold text-white">{formatCurrency(monthCard.revenue)}</div>
+                    <div className="mt-auto space-y-1 text-[11px] text-gray-400">
+                      <div>{monthCard.subscription_count} subs</div>
+                      <div>{monthCard.day_pass_count} day passes</div>
+                      <div>{monthCard.payment_count} payments</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
+              { label: `${selectedMonthLabel} Revenue`, value: formatCurrency(overview.stats?.selected_month_revenue) },
+              { label: `${selectedMonthLabel} Payments`, value: overview.stats?.selected_month_payments || 0 },
+              { label: `${selectedMonthLabel} Day Passes`, value: overview.stats?.selected_month_day_passes || 0 },
+              { label: `${selectedMonthLabel} Subs`, value: overview.stats?.selected_month_subscriptions || 0 },
+            ].map(s => (
+              <div key={s.label} className="bg-piu-card rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold font-display">{s.value}</div>
+                <div className="text-xs text-gray-400">{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[
               { label: 'Active Subscribers', value: overview.stats?.active_subscriptions || 0 },
               { label: 'Today\'s Day Passes', value: overview.stats?.today_day_passes || 0 },
-              { label: 'This Month Revenue', value: formatCurrency(overview.stats?.month_revenue) },
               { label: 'Total Revenue', value: formatCurrency(overview.stats?.total_revenue) },
             ].map(s => (
               <div key={s.label} className="bg-piu-card rounded-lg p-3 text-center">
@@ -405,9 +455,11 @@ export default function AdminVenueAccessTab() {
 
           {/* Active Subscribers */}
           <div>
-            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">Active Subscribers ({overview.subscribers?.length || 0})</h4>
+            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">
+              {selectedMonthLabel} Subscriptions ({overview.subscribers?.length || 0})
+            </h4>
             {overview.subscribers?.length === 0 ? (
-              <p className="text-gray-500 text-sm">No active subscribers</p>
+              <p className="text-gray-500 text-sm">No subscriptions started in this month.</p>
             ) : (
               <div className="space-y-1">
                 {overview.subscribers.map(sub => (
@@ -415,7 +467,10 @@ export default function AdminVenueAccessTab() {
                     <img src={getAvatarUrl(sub.avatar)} alt="" className="w-7 h-7 rounded-full" />
                     <span className="font-bold min-w-0 truncate">{sub.username}</span>
                     <span className="text-gray-400 text-xs">{sub.plan_name}</span>
-                    <span className="text-gray-400 text-xs ml-auto">until {formatDate(sub.current_period_end)}</span>
+                    <span className="text-gray-400 text-xs ml-auto">
+                      {formatDate(sub.created_at)}
+                      {sub.subscription_cadence_label ? ` • ${sub.subscription_cadence_label}` : ''}
+                    </span>
                     {sub.status === 'past_due' && <span className="text-yellow-400 text-xs font-bold">PAST DUE</span>}
                     <button onClick={() => handleRevoke('subscription', sub.id)} className="text-red-400 text-xs hover:text-red-300">Revoke</button>
                   </div>
@@ -426,9 +481,9 @@ export default function AdminVenueAccessTab() {
 
           {/* Today's + Upcoming Day Passes */}
           <div>
-            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">Day Passes ({overview.day_passes?.length || 0})</h4>
+            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">{selectedMonthLabel} Day Passes ({overview.day_passes?.length || 0})</h4>
             {overview.day_passes?.length === 0 ? (
-              <p className="text-gray-500 text-sm">No upcoming day passes</p>
+              <p className="text-gray-500 text-sm">No day passes recorded in this month.</p>
             ) : (
               <div className="space-y-1">
                 {overview.day_passes.map(dp => (
@@ -446,9 +501,9 @@ export default function AdminVenueAccessTab() {
 
           {/* Recent Payments */}
           <div>
-            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">Recent Payments</h4>
+            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">{selectedMonthLabel} Payments</h4>
             {overview.payments?.length === 0 ? (
-              <p className="text-gray-500 text-sm">No payments yet</p>
+              <p className="text-gray-500 text-sm">No payments recorded in this month.</p>
             ) : (
               <div className="space-y-1 max-h-60 overflow-y-auto">
                 {overview.payments?.slice(0, 20).map(p => (
