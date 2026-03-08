@@ -5,6 +5,7 @@ import MarkdownContent from '../components/MarkdownContent';
 import AdminGroupsTab from '../components/AdminGroupsTab';
 import AdminAchievementsTab from '../components/AdminAchievementsTab';
 import AdminLeaderboardsTab from '../components/AdminLeaderboardsTab';
+import AdminVenueAccessTab from '../components/AdminVenueAccessTab';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getTournaments, getArchivedTournaments, archiveTournament, deleteTournament,
@@ -595,7 +596,7 @@ export default function AdminPanel() {
 
       {/* Tabs */}
       <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-6">
-        {['tournaments', 'archived', 'notices', 'changelog', 'shoes', 'permissions', 'groups', 'achievements', 'leaderboards', 'fun'].map(t => (
+        {['tournaments', 'archived', 'notices', 'changelog', 'shoes', 'permissions', 'groups', 'achievements', 'leaderboards', 'venue-access', 'fun'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -613,6 +614,7 @@ export default function AdminPanel() {
                t === 'groups' ? 'Groups' :
                t === 'achievements' ? 'Achievements' :
                t === 'leaderboards' ? 'Leaderboards' :
+               t === 'venue-access' ? 'Venue Access' :
                'Fun Settings'}
             </span>
           </button>
@@ -1371,6 +1373,11 @@ export default function AdminPanel() {
       {/* Leaderboards Tab */}
       {tab === 'leaderboards' && (
         <AdminLeaderboardsTab />
+      )}
+
+      {/* Venue Access Tab */}
+      {tab === 'venue-access' && (
+        <AdminVenueAccessTab />
       )}
 
       {/* Fun Settings Tab */}

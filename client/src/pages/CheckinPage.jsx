@@ -9,6 +9,7 @@ import {
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getProfilePath } from '../utils/profile';
 import DojoActivityPanel from '../components/DojoActivityPanel';
+import VenueAccessPanel from '../components/VenueAccessPanel';
 
 const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
 
@@ -746,7 +747,7 @@ export default function CheckinPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-piu-dark/50 p-1 rounded-xl mb-4">
-        {['live', 'history'].map(t => (
+        {['live', 'access', 'history'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -754,7 +755,7 @@ export default function CheckinPage() {
               tab === t ? 'bg-piu-card text-white shadow' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
-            {t === 'live' ? 'Live Status' : 'My History'}
+            {t === 'live' ? 'Live Status' : t === 'access' ? 'Access' : 'My History'}
           </button>
         ))}
       </div>
@@ -783,6 +784,10 @@ export default function CheckinPage() {
             </p>
           )}
         </>
+      )}
+
+      {tab === 'access' && user && venue && (
+        <VenueAccessPanel venueSlug={venue.slug} />
       )}
 
       {tab === 'history' && user && (
