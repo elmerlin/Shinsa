@@ -15,6 +15,7 @@ const SQUARE_WEBHOOK_SIGNATURE_KEY = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY ||
 const SQUARE_ENVIRONMENT = process.env.SQUARE_ENVIRONMENT || 'sandbox';
 const SQUARE_WEBHOOK_URL = process.env.SQUARE_WEBHOOK_URL || '';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+const SQUARE_API_VERSION = '2026-01-22';
 
 let squareClient = null;
 
@@ -57,14 +58,7 @@ async function createDayPassPaymentLink({ userId, email, username, venueId, plan
     checkoutOptions: {
       redirectUrl: `${APP_URL}/membership?payment=success`,
     },
-    paymentNote: JSON.stringify({
-      type: 'day_pass',
-      user_id: userId,
-      username: username || '',
-      venue_id: venueId,
-      plan_id: planId,
-      pass_date: passDate,
-    }),
+    paymentNote: `Day pass for ${planName || 'Day Pass'} on ${passDate}`,
   });
 
   return {
@@ -92,16 +86,7 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
         redirectUrl: `${APP_URL}/membership?payment=success`,
       },
       prePopulatedData: email ? { buyerEmail: email } : undefined,
-      paymentNote: JSON.stringify({
-        type: 'subscription',
-        user_id: userId,
-        username: username || '',
-        venue_id: venueId,
-        plan_id: planId,
-        cadence_key: cadenceKey || '',
-        cadence_label: cadenceLabel || '',
-        billing_interval_months: parseInt(billingIntervalMonths, 10) || 1,
-      }),
+      paymentNote: `${cadenceLabel || 'Membership'} for ${planName || 'Monthly Subscription'}`,
     });
 
     return {
@@ -125,16 +110,7 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
     checkoutOptions: {
       redirectUrl: `${APP_URL}/membership?payment=success`,
     },
-    paymentNote: JSON.stringify({
-      type: 'subscription',
-      user_id: userId,
-      username: username || '',
-      venue_id: venueId,
-      plan_id: planId,
-      cadence_key: cadenceKey || '',
-      cadence_label: cadenceLabel || '',
-      billing_interval_months: parseInt(billingIntervalMonths, 10) || 1,
-    }),
+    paymentNote: `${cadenceLabel || 'Membership'} for ${planName || 'Monthly Subscription'}`,
   });
 
   return {
@@ -185,6 +161,22 @@ async function retrieveOrder(orderId) {
   return client.orders.retrieveOrder(orderId);
 }
 
+async function retrievePaymentLink(paymentLinkId) {
+  if (!paymentLinkId) {
+    throw new Error('paymentLinkId is required');
+  }
+  const response = await fetch(`https://connect.squareup.com/v2/online-checkout/payment-links/${encodeURIComponent(paymentLinkId)}`, {
+    headers: {
+      Authorization: `Bearer ${SQUARE_ACCESS_TOKEN}`,
+      'Square-Version': SQUARE_API_VERSION,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to retrieve payment link (${response.status})`);
+  }
+  return response.json();
+}
+
 module.exports = {
   getSquareClient,
   isSquareConfigured,
@@ -194,6 +186,7 @@ module.exports = {
   cancelSquareSubscription,
   retrievePayment,
   retrieveOrder,
+  retrievePaymentLink,
   SQUARE_LOCATION_ID,
   APP_URL,
 };

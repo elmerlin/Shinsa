@@ -11,6 +11,7 @@ const {
   verifyWebhookSignature,
   cancelSquareSubscription,
   retrieveOrder,
+  retrievePaymentLink,
 } = require('../lib/square');
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -37,6 +38,11 @@ function isWeekend(dateStr) {
 /** Get the correct day pass plan type for a given date. */
 function dayPassPlanTypeForDate(dateStr) {
   return isWeekend(dateStr) ? 'day_pass_weekend' : 'day_pass_weekday';
+}
+
+function parsePassDateFromDescription(description = '') {
+  const match = String(description || '').match(/(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
 }
 
 function slugifyCadenceKey(value) {
@@ -364,6 +370,182 @@ function addUserToDojoMemberGroup(db, userId, addedByUserId) {
     INSERT OR IGNORE INTO admin_user_group_feature_permissions (group_id, feature_key)
     VALUES (?, 'checkin')
   `).run(groupId);
+}
+
+function finalizeVenuePaymentSuccess(db, paymentRow, options = {}) {
+  if (!paymentRow?.id) return null;
+
+  const squarePaymentId = String(options.squarePaymentId || paymentRow.square_payment_id || '').trim();
+  db.prepare(`
+    UPDATE venue_payments
+    SET status = 'succeeded',
+        square_payment_id = CASE WHEN ? != '' THEN ? ELSE square_payment_id END,
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(squarePaymentId, squarePaymentId, paymentRow.id);
+
+  if (paymentRow.payment_type === 'day_pass') {
+    const passDate = options.passDate || parsePassDateFromDescription(paymentRow.description) || todayDateString();
+    const existingPass = db.prepare(`
+      SELECT id
+      FROM venue_day_passes
+      WHERE payment_id = ?
+         OR (user_id = ? AND venue_id = ? AND pass_date = ? AND status IN ('active', 'used'))
+      LIMIT 1
+    `).get(paymentRow.id, paymentRow.user_id, paymentRow.venue_id, passDate);
+
+    if (!existingPass) {
+      const passId = uuidv4();
+      db.prepare(`
+        INSERT INTO venue_day_passes (id, user_id, venue_id, plan_id, pass_date, status, payment_id)
+        VALUES (?, ?, ?, ?, ?, 'active', ?)
+      `).run(passId, paymentRow.user_id, paymentRow.venue_id, paymentRow.plan_id, passDate, paymentRow.id);
+    }
+
+    const paymentUser = db.prepare('SELECT username FROM users WHERE id = ?').get(paymentRow.user_id);
+    const paymentVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(paymentRow.venue_id);
+    const paymentPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(paymentRow.plan_id);
+
+    notifyUsersAboutVenueAccessEvent(db, {
+      venueId: paymentRow.venue_id,
+      eventType: 'day_pass_purchased',
+      username: paymentUser?.username,
+      venueName: paymentVenue?.name,
+      planName: paymentPlan?.name,
+      passDate,
+    });
+    notifyUsersAboutVenueAccessEvent(db, {
+      venueId: paymentRow.venue_id,
+      eventType: 'payment_received',
+      username: paymentUser?.username,
+      venueName: paymentVenue?.name,
+      planName: paymentPlan?.name,
+      passDate,
+      amount: paymentRow.amount,
+      currency: paymentRow.currency,
+      paymentType: 'day_pass',
+    });
+
+    return { type: 'day_pass', pass_date: passDate };
+  }
+
+  if (paymentRow.payment_type === 'subscription') {
+    const existingSub = db.prepare(`
+      SELECT id
+      FROM venue_subscriptions
+      WHERE user_id = ? AND venue_id = ? AND status IN ('active', 'past_due')
+      LIMIT 1
+    `).get(paymentRow.user_id, paymentRow.venue_id);
+
+    if (!existingSub) {
+      const subId = uuidv4();
+      const periodStart = todayDateString();
+      const billingIntervalMonths = Math.max(1, parseInt(paymentRow.billing_interval_months, 10) || 1);
+      const periodEnd = addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
+
+      db.prepare(`
+        INSERT INTO venue_subscriptions (
+          id, user_id, venue_id, plan_id, status,
+          subscription_cadence_key, subscription_cadence_label, billing_interval_months,
+          current_period_start, current_period_end
+        )
+        VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+      `).run(
+        subId,
+        paymentRow.user_id,
+        paymentRow.venue_id,
+        paymentRow.plan_id,
+        paymentRow.subscription_cadence_key || '',
+        paymentRow.subscription_cadence_label || '',
+        billingIntervalMonths,
+        periodStart,
+        periodEnd,
+      );
+    }
+
+    addUserToDojoMemberGroup(db, paymentRow.user_id, null);
+
+    const paymentUser = db.prepare('SELECT username FROM users WHERE id = ?').get(paymentRow.user_id);
+    const paymentVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(paymentRow.venue_id);
+    const paymentPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(paymentRow.plan_id);
+
+    notifyUsersAboutVenueAccessEvent(db, {
+      venueId: paymentRow.venue_id,
+      eventType: 'subscription_created',
+      username: paymentUser?.username,
+      venueName: paymentVenue?.name,
+      planName: paymentPlan?.name,
+      cadenceLabel: paymentRow.subscription_cadence_label,
+    });
+    notifyUsersAboutVenueAccessEvent(db, {
+      venueId: paymentRow.venue_id,
+      eventType: 'payment_received',
+      username: paymentUser?.username,
+      venueName: paymentVenue?.name,
+      planName: paymentPlan?.name,
+      cadenceLabel: paymentRow.subscription_cadence_label,
+      amount: paymentRow.amount,
+      currency: paymentRow.currency,
+      paymentType: 'subscription',
+    });
+
+    return { type: 'subscription' };
+  }
+
+  return null;
+}
+
+async function reconcilePendingVenuePaymentsForUser(db, userId) {
+  if (!isSquareConfigured() || !userId) return { reconciled: 0 };
+
+  const pendingRows = db.prepare(`
+    SELECT *
+    FROM venue_payments
+    WHERE user_id = ?
+      AND status = 'pending'
+    ORDER BY created_at DESC
+    LIMIT 10
+  `).all(userId);
+
+  let reconciled = 0;
+
+  for (const paymentRow of pendingRows) {
+    let orderId = String(paymentRow.square_order_id || '').trim();
+    try {
+      if (!orderId && paymentRow.square_link_id) {
+        const paymentLinkResponse = await retrievePaymentLink(paymentRow.square_link_id);
+        orderId = String(paymentLinkResponse?.payment_link?.order_id || paymentLinkResponse?.paymentLink?.orderId || '').trim();
+        if (orderId && !paymentRow.square_order_id) {
+          db.prepare(`
+            UPDATE venue_payments
+            SET square_order_id = ?, updated_at = datetime('now')
+            WHERE id = ?
+          `).run(orderId, paymentRow.id);
+          paymentRow.square_order_id = orderId;
+        }
+      }
+
+      if (!orderId) continue;
+
+      const orderResponse = await retrieveOrder(orderId);
+      const order = orderResponse?.order || orderResponse?.result?.order || null;
+      const tender = Array.isArray(order?.tenders) ? order.tenders.find((row) => {
+        const cardStatus = String(row?.card_details?.status || '').toUpperCase();
+        return !!row?.payment_id || cardStatus === 'CAPTURED';
+      }) : null;
+      const isPaid = !!tender || ((parseInt(order?.net_amount_due_money?.amount, 10) || 0) <= 0 && Array.isArray(order?.tenders) && order.tenders.length > 0);
+      if (!isPaid) continue;
+
+      finalizeVenuePaymentSuccess(db, paymentRow, {
+        squarePaymentId: tender?.payment_id || tender?.id || '',
+      });
+      reconciled += 1;
+    } catch (err) {
+      console.error('[VenueAccess] Reconcile pending payment error:', err.message);
+    }
+  }
+
+  return { reconciled };
 }
 
 /**
@@ -868,8 +1050,9 @@ router.post('/cancel-subscription', requireAuth, async (req, res) => {
 });
 
 // GET /api/venue-access/my-payments
-router.get('/my-payments', requireAuth, (req, res) => {
+router.get('/my-payments', requireAuth, async (req, res) => {
   const db = getDb();
+  await reconcilePendingVenuePaymentsForUser(db, req.user.id);
   const payments = db.prepare(`
     SELECT vp.id, vp.payment_type, vp.amount, vp.currency, vp.status, vp.description, vp.created_at,
            v.name AS venue_name, v.slug AS venue_slug,
@@ -886,12 +1069,13 @@ router.get('/my-payments', requireAuth, (req, res) => {
 });
 
 // GET /api/venue-access/my-membership/:venueSlug — full membership dashboard data
-router.get('/my-membership/:venueSlug', requireAuth, (req, res) => {
+router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
   const db = getDb();
   const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
   const userId = req.user.id;
+  await reconcilePendingVenuePaymentsForUser(db, userId);
   const access = checkUserVenueAccess(db, userId, venue.id);
   const approved = isUserApproved(db, userId, venue.id);
   const dojoMember = isDojoMember(db, userId);
@@ -1010,8 +1194,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
   }
 
   const sig = req.headers['x-square-hmacsha256-signature'];
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body.toString('utf8')
+    : typeof req.body === 'string'
+      ? req.body
+      : JSON.stringify(req.body || {});
   try {
-    const rawBody = typeof req.body === 'string' ? req.body : req.body.toString('utf8');
     if (!verifyWebhookSignature(rawBody, sig)) {
       console.error('[Square Webhook] Signature verification failed');
       return res.status(400).json({ error: 'Webhook signature verification failed' });
@@ -1021,7 +1209,17 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
     return res.status(400).json({ error: 'Webhook signature verification failed' });
   }
 
-  const event = typeof req.body === 'string' ? JSON.parse(req.body) : JSON.parse(req.body.toString('utf8'));
+  let event = null;
+  try {
+    event = Buffer.isBuffer(req.body)
+      ? JSON.parse(req.body.toString('utf8'))
+      : typeof req.body === 'string'
+        ? JSON.parse(req.body)
+        : req.body;
+  } catch (err) {
+    console.error('[Square Webhook] Invalid payload:', err.message);
+    return res.status(400).json({ error: 'Invalid webhook payload' });
+  }
   const db = getDb();
 
   try {
@@ -1049,103 +1247,9 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
           break;
         }
 
-        // Try to extract metadata from payment note
-        let meta = {};
-        try {
-          const noteStr = payment?.note || payment?.receiptUrl || '';
-          // Payment note was set as JSON during link creation
-          // Square may not return it in webhook, so we use our DB record instead
-        } catch (e) { /* ignore */ }
-
-        db.prepare(`
-          UPDATE venue_payments SET status = 'succeeded', square_payment_id = ?, updated_at = datetime('now')
-          WHERE id = ?
-        `).run(squarePaymentId || '', paymentRow.id);
-
-        if (paymentRow.payment_type === 'day_pass') {
-          // We need to figure out the pass_date — stored in the description
-          const dateMatch = paymentRow.description?.match(/(\d{4}-\d{2}-\d{2})/);
-          const passDate = dateMatch ? dateMatch[1] : todayDateString();
-          const paymentUser = db.prepare('SELECT username FROM users WHERE id = ?').get(paymentRow.user_id);
-          const paymentVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(paymentRow.venue_id);
-          const paymentPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(paymentRow.plan_id);
-
-          const passId = uuidv4();
-          db.prepare(`
-            INSERT INTO venue_day_passes (id, user_id, venue_id, plan_id, pass_date, status, payment_id)
-            VALUES (?, ?, ?, ?, ?, 'active', ?)
-          `).run(passId, paymentRow.user_id, paymentRow.venue_id, paymentRow.plan_id, passDate, paymentRow.id);
-
-          notifyUsersAboutVenueAccessEvent(db, {
-            venueId: paymentRow.venue_id,
-            eventType: 'day_pass_purchased',
-            username: paymentUser?.username,
-            venueName: paymentVenue?.name,
-            planName: paymentPlan?.name,
-            passDate,
-          });
-          notifyUsersAboutVenueAccessEvent(db, {
-            venueId: paymentRow.venue_id,
-            eventType: 'payment_received',
-            username: paymentUser?.username,
-            venueName: paymentVenue?.name,
-            planName: paymentPlan?.name,
-            passDate,
-            amount: paymentRow.amount,
-            currency: paymentRow.currency,
-            paymentType: 'day_pass',
-          });
-        } else if (paymentRow.payment_type === 'subscription') {
-          const paymentUser = db.prepare('SELECT username FROM users WHERE id = ?').get(paymentRow.user_id);
-          const paymentVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(paymentRow.venue_id);
-          const paymentPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(paymentRow.plan_id);
-          const subId = uuidv4();
-          const periodStart = todayDateString();
-          const billingIntervalMonths = Math.max(1, parseInt(paymentRow.billing_interval_months, 10) || 1);
-          const periodEnd = addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
-
-          db.prepare(`
-            INSERT INTO venue_subscriptions (
-              id, user_id, venue_id, plan_id, status,
-              subscription_cadence_key, subscription_cadence_label, billing_interval_months,
-              current_period_start, current_period_end
-            )
-            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
-          `).run(
-            subId,
-            paymentRow.user_id,
-            paymentRow.venue_id,
-            paymentRow.plan_id,
-            paymentRow.subscription_cadence_key || '',
-            paymentRow.subscription_cadence_label || '',
-            billingIntervalMonths,
-            periodStart,
-            periodEnd,
-          );
-
-          // Auto-add user to "Pump Dojo" group
-          addUserToDojoMemberGroup(db, paymentRow.user_id, null);
-
-          notifyUsersAboutVenueAccessEvent(db, {
-            venueId: paymentRow.venue_id,
-            eventType: 'subscription_created',
-            username: paymentUser?.username,
-            venueName: paymentVenue?.name,
-            planName: paymentPlan?.name,
-            cadenceLabel: paymentRow.subscription_cadence_label,
-          });
-          notifyUsersAboutVenueAccessEvent(db, {
-            venueId: paymentRow.venue_id,
-            eventType: 'payment_received',
-            username: paymentUser?.username,
-            venueName: paymentVenue?.name,
-            planName: paymentPlan?.name,
-            cadenceLabel: paymentRow.subscription_cadence_label,
-            amount: paymentRow.amount,
-            currency: paymentRow.currency,
-            paymentType: 'subscription',
-          });
-        }
+        finalizeVenuePaymentSuccess(db, paymentRow, {
+          squarePaymentId: squarePaymentId || '',
+        });
         break;
       }
 
