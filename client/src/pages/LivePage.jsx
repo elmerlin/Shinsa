@@ -1103,6 +1103,7 @@ export default function LivePage() {
   const [savingStreamUrl, setSavingStreamUrl] = useState(false);
   const [savingRequestsEnabled, setSavingRequestsEnabled] = useState(false);
   const [playerMode, setPlayerMode] = useState(false);
+  const [lockVideo, setLockVideo] = useState(false);
   const [mobilePanel, setMobilePanel] = useState('');
   const [desktopInteractionTab, setDesktopInteractionTab] = useState('');
   const [hostWorkspaceTab, setHostWorkspaceTab] = useState('room');
@@ -1185,6 +1186,8 @@ export default function LivePage() {
   const isCompactSongCardLayout = !isDesktopViewport;
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
+  const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && !hasPlayerPanels && hostWorkspaceTab !== 'overlay';
+  const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
   const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px` }
     : undefined;
@@ -1434,6 +1437,20 @@ export default function LivePage() {
     if (!isHost || typeof window === 'undefined' || !playerModeInitRef.current) return;
     window.localStorage.setItem(`shinsa_live_player_mode:${user?.id || 'host'}`, playerMode ? '1' : '0');
   }, [isHost, playerMode, user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storageKey = `shinsa_live_video_lock:${user?.id || 'viewer'}`;
+    const stored = window.localStorage.getItem(storageKey);
+    if (stored === '1' || stored === '0') {
+      setLockVideo(stored === '1');
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(`shinsa_live_video_lock:${user?.id || 'viewer'}`, lockVideo ? '1' : '0');
+  }, [lockVideo, user?.id]);
 
   useEffect(() => {
     if (!isHost || typeof window === 'undefined') return;
@@ -2896,6 +2913,19 @@ export default function LivePage() {
                   {playerMode ? 'Player mode on' : 'Player mode'}
                 </button>
               ) : null}
+              {mobileVideoLockAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => setLockVideo((prev) => !prev)}
+                  className={`text-xs px-3 py-2 rounded-lg font-display font-bold transition-colors ${
+                    lockVideo
+                      ? 'bg-cyan-500/15 text-cyan-100 border border-cyan-400/30'
+                      : 'bg-black/20 text-gray-300 border border-piu-border hover:text-white'
+                  }`}
+                >
+                  {lockVideo ? 'Video locked' : 'Lock video'}
+                </button>
+              ) : null}
               <button type="button" onClick={handleCopyLink} className="btn-secondary text-xs px-3 py-2">
                 {copied ? 'Copied' : 'Copy viewer link'}
               </button>
@@ -3162,16 +3192,18 @@ export default function LivePage() {
             </div>
           </div>
       ) : hostWorkspaceTab !== 'overlay' && youtubeId ? (
-        <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
-          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-            <iframe
-              className="absolute inset-0 w-full h-full"
-              src={`https://www.youtube-nocookie.com/embed/${youtubeId}`}
-              title="Shinsa Live stream"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              frameBorder="0"
-            />
+        <div className={shouldLockMobileVideo ? 'lg:hidden sticky top-[68px] z-20' : ''}>
+          <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                className="absolute inset-0 w-full h-full"
+                src={`https://www.youtube-nocookie.com/embed/${youtubeId}`}
+                title="Shinsa Live stream"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                frameBorder="0"
+              />
+            </div>
           </div>
         </div>
       ) : null}
