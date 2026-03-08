@@ -1358,7 +1358,17 @@ function parseBufferedRows(db, liveSessionId, tableName) {
 function buildSummaryPostContent(summary) {
   if (!summary) return '';
   const marker = serializeLiveSessionMarker(summary);
-  return `${summary.postText}\n\n${marker}`;
+  return marker;
+}
+
+function getSessionMessageCount(db, liveSessionId) {
+  if (!liveSessionId) return 0;
+  const row = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM live_session_messages
+    WHERE live_session_id = ?
+  `).get(liveSessionId);
+  return toInt(row?.count);
 }
 
 function createLiveOverlayAccessToken(sessionId) {
@@ -2129,9 +2139,11 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     const plays = getSessionPlays(db, session.id);
     const viewerCount = getViewerCount(db, session);
     const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
+    const messageCount = getSessionMessageCount(db, session.id);
     const summary = buildLiveSessionSummary(plays, host || {}, {
       viewerCount,
       viewerPeak,
+      messageCount,
       streamUrl: session.stream_url,
       hostUsername: host?.username || '',
     });

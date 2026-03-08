@@ -78,6 +78,7 @@ function sanitizeLiveSummary(summary) {
     averageRating: toInt(src.averageRating),
     viewerCount: toInt(src.viewerCount),
     viewerPeak: toInt(src.viewerPeak),
+    messageCount: toInt(src.messageCount),
     streamUrl: String(src.streamUrl || ''),
     hostUsername: String(src.hostUsername || ''),
     topSongsByScore: sanitizeSongRows(src.topSongsByScore),

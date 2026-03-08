@@ -873,11 +873,14 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const parsedShare = useMemo(() => splitSessionShareContent(parsedSummary.text || ''), [parsedSummary.text]);
   const parsedLive = useMemo(() => splitLiveSessionContent(parsedShare.text || ''), [parsedShare.text]);
   const planParsed = useMemo(() => splitSessionPlanContent(parsedLive.text || ''), [parsedLive.text]);
-  const visibleContent = planParsed.text || '';
+  const rawVisibleContent = planParsed.text || '';
   const currentSummary = parsedSummary.summary;
   const currentShare = parsedShare.share;
   const currentLive = parsedLive.live;
   const currentPlan = planParsed.plan;
+  const visibleContent = currentLive && rawVisibleContent.trim().startsWith('🔴 **Shinsa Live Recap**')
+    ? ''
+    : rawVisibleContent;
 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }

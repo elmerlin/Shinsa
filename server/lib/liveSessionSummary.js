@@ -99,7 +99,7 @@ function buildLiveSessionPostText(summary) {
     `🗓️ ${summary.sessionDateLabel}${summary.sessionTimeRange ? ` • ${summary.sessionTimeRange}` : ''}${summary.sessionDurationLabel ? ` • ${summary.sessionDurationLabel}` : ''}`,
     summary.streamUrl ? `📺 Stream: ${summary.streamUrl}` : '',
     summary.sessionMachineName ? `🕹️ Machine: **${summary.sessionMachineName}**` : '',
-    `👀 Viewers: **${summary.viewerPeak || summary.viewerCount || 0} peak**${summary.viewerCount ? ` • ${summary.viewerCount} at end` : ''}`,
+    `👀 Viewers: **${summary.viewerPeak || summary.viewerCount || 0} peak**${summary.viewerCount ? ` • ${summary.viewerCount} at end` : ''}${summary.messageCount ? ` • 💬 ${summary.messageCount} messages` : ''}`,
     `🎵 **${summary.songCount} songs** | 🏁 Clears: **${summary.clearCount}/${summary.songCount}** (${summary.clearRate}%)`,
     `📈 Avg level: **Lv.${summary.averageLevel.toFixed(1)}**`,
     summary.averageRating > 0 ? `⭐ Avg rating: **${summary.averageRating.toLocaleString()}**` : '',
@@ -256,6 +256,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     topSongsByRating,
     viewerCount: Math.max(0, toInt(extras?.viewerCount)),
     viewerPeak: Math.max(0, toInt(extras?.viewerPeak)),
+    messageCount: Math.max(0, toInt(extras?.messageCount)),
     streamUrl: String(extras?.streamUrl || '').trim(),
     hostUsername: String(extras?.hostUsername || '').trim(),
   };

@@ -464,6 +464,33 @@ function PlayDetailModal({ play, onClose }) {
   );
 }
 
+function EndSessionConfirmModal({ open, ending, onClose, onConfirm }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-3xl border border-rose-400/35 bg-gradient-to-br from-[#10173a] via-[#09142c] to-[#08101f] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-rose-300">Shinsa Live</p>
+        <h3 className="mt-2 text-2xl font-display font-black text-white">End session and post recap?</h3>
+        <p className="mt-3 text-sm leading-relaxed text-slate-300">
+          This will end the live session now, post the Shinsa Live recap automatically, and flush any buffered upscore and clear posts.
+        </p>
+        <div className="mt-5 flex items-center justify-end gap-3">
+          <button type="button" className="btn-secondary px-4 py-2 text-sm" onClick={onClose} disabled={ending}>
+            Keep session open
+          </button>
+          <button type="button" className="btn-primary px-4 py-2 text-sm" onClick={onConfirm} disabled={ending}>
+            {ending ? 'Ending...' : 'End and post recap'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VotePanel({ vote, canVote, onVote }) {
   if (!vote) return null;
 
@@ -1091,6 +1118,7 @@ export default function LivePage() {
   const [creatingVote, setCreatingVote] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [requestActionKey, setRequestActionKey] = useState('');
   const [moderationActionKey, setModerationActionKey] = useState('');
   const [deletingMessageId, setDeletingMessageId] = useState('');
@@ -1923,11 +1951,17 @@ export default function LivePage() {
   };
 
   const handleEndSession = async () => {
-    if (!activeSessionId || !window.confirm('End this live session and auto-post the recap now?')) return;
+    if (!activeSessionId) return;
+    setShowEndConfirm(true);
+  };
+
+  const handleConfirmEndSession = async () => {
+    if (!activeSessionId) return;
     setEnding(true);
     try {
       const data = await endLiveSession(activeSessionId);
       setStatusNote(data?.summary_post_id ? `Live session ended. Recap post #${data.summary_post_id} created.` : 'Live session ended.');
+      setShowEndConfirm(false);
       const fresh = await getLiveSession(activeSessionId);
       applySnapshot(fresh);
     } catch (err) {
@@ -3200,6 +3234,12 @@ export default function LivePage() {
         {chatSection}
       </MobilePanelSheet>
 
+      <EndSessionConfirmModal
+        open={showEndConfirm}
+        ending={ending}
+        onClose={() => !ending && setShowEndConfirm(false)}
+        onConfirm={handleConfirmEndSession}
+      />
       <PlayDetailModal play={selectedPlay} onClose={() => setSelectedPlay(null)} />
     </div>
   );
