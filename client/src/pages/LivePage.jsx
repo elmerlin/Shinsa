@@ -2021,6 +2021,7 @@ export default function LivePage() {
   const syncLabel = formatRelativeSyncTime(live?.last_sync_at);
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
+  const desktopViewerColumns = 'xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]';
   const viewerNowCount = live?.viewer_count || 0;
   const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
   const requestTabDisabled = !isHost && (!requestsEnabled || live?.status !== 'live');
@@ -2409,7 +2410,7 @@ export default function LivePage() {
   );
 
   const chatSection = (
-    <div className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}>
+    <div className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${useDesktopViewerLayout ? 'h-full min-h-0' : hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}>
       {reactionBursts.map((burst) => (
         <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
           {burst.particles.map((particle) => (
@@ -2620,15 +2621,7 @@ export default function LivePage() {
       </div>
 
       {live?.status === 'live' ? (
-        <form onSubmit={handleSendChat} className="flex gap-2 mt-3">
-          <button
-            type="button"
-            onClick={() => setShowEmoteTray((prev) => !prev)}
-            disabled={viewerState.chat_muted}
-            className="btn-secondary px-3 text-xs disabled:opacity-40"
-          >
-            {showEmoteTray ? 'Hide' : 'Emotes'}
-          </button>
+        <form onSubmit={handleSendChat} className="mt-3 flex gap-2">
           <input
             ref={chatInputRef}
             value={chatInput}
@@ -2737,8 +2730,8 @@ export default function LivePage() {
     return <div className="py-12 text-center text-red-300">{error}</div>;
   }
 
-  return (
-    <div className={`overflow-x-hidden px-4 py-5 sm:px-6 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
+    return (
+      <div className={`mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
       <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.18),transparent_42%),linear-gradient(180deg,#0d1322,#09101d)] p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -2999,11 +2992,11 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-          <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
-            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-              <iframe
+        {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
+          <div className={`grid gap-5 items-stretch ${desktopViewerColumns}`}>
+            <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
+              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                <iframe
                 className="absolute inset-0 h-full w-full"
                 src={`https://www.youtube-nocookie.com/embed/${youtubeId}`}
                 title="Shinsa Live stream"
@@ -3011,12 +3004,12 @@ export default function LivePage() {
                 allowFullScreen
                 frameBorder="0"
               />
+              </div>
+            </div>
+            <div className="h-full min-h-0">
+              {chatSection}
             </div>
           </div>
-          <div className="min-h-[560px]">
-            {chatSection}
-          </div>
-        </div>
       ) : hostWorkspaceTab !== 'overlay' && youtubeId ? (
         <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
           <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
@@ -3033,10 +3026,10 @@ export default function LivePage() {
       ) : null}
 
       {hostWorkspaceTab !== 'overlay' ? (
-      <div className={`grid gap-4 ${useDesktopViewerLayout ? 'xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]' : 'xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]'}`}>
-        <div className="space-y-4">
-          <NowPlayingPanel
-            play={lastPlay}
+        <div className={`grid gap-5 ${desktopViewerColumns}`}>
+          <div className="space-y-4">
+            <NowPlayingPanel
+              play={lastPlay}
             live={live}
             requestInfo={nowPlayingRequestInfo}
             onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
