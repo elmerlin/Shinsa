@@ -3162,30 +3162,47 @@ export default function LivePage() {
       ) : null}
 
       {hostWorkspaceTab !== 'overlay' ? (
-        <div className={`grid gap-5 ${desktopViewerColumns}`}>
+        !isDesktopViewport && !hasPlayerPanels ? (
           <div className="space-y-4">
-            <NowPlayingPanel
-              play={lastPlay}
-              live={live}
-              requestInfo={nowPlayingRequestInfo}
-              onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
-              compact={!isDesktopViewport}
-            />
-
-          {hasPlayerPanels ? null : songsSection}
-        </div>
-
-        {hasPlayerPanels ? null : (
-          <div className="space-y-4">
-            {useDesktopViewerLayout ? desktopInteractionsSection : (
-              <>
-                {desktopInteractionsSection}
-                {chatSection}
-              </>
-            )}
+            <div className="grid grid-cols-2 items-start gap-3">
+              <NowPlayingPanel
+                play={lastPlay}
+                live={live}
+                requestInfo={nowPlayingRequestInfo}
+                onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+                compact
+              />
+              {desktopInteractionsSection}
+            </div>
+            {songsSection}
+            {chatSection}
           </div>
-        )}
-      </div>
+        ) : (
+          <div className={`grid gap-5 ${desktopViewerColumns}`}>
+            <div className="space-y-4">
+              <NowPlayingPanel
+                play={lastPlay}
+                live={live}
+                requestInfo={nowPlayingRequestInfo}
+                onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+                compact={!isDesktopViewport}
+              />
+
+            {hasPlayerPanels ? null : songsSection}
+          </div>
+
+          {hasPlayerPanels ? null : (
+            <div className="space-y-4">
+              {useDesktopViewerLayout ? desktopInteractionsSection : (
+                <>
+                  {desktopInteractionsSection}
+                  {chatSection}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        )
       ) : null}
 
       <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-piu-border/70 bg-[linear-gradient(180deg,rgba(9,12,20,0.94),rgba(6,8,14,0.98))] px-4 py-3 shadow-[0_-16px_36px_rgba(0,0,0,0.4)] lg:hidden ${hasPlayerPanels && hostWorkspaceTab !== 'overlay' ? '' : 'hidden'}`}>
