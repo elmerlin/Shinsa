@@ -1142,6 +1142,8 @@ export default function LivePage() {
   );
   const isPlayerMode = isHost && playerMode;
   const useMobilePlayerHud = isPlayerMode && !isDesktopViewport;
+  const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
+  const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const overlayPreviewUrl = useMemo(() => {
     if (!activeSessionId || typeof window === 'undefined') return '';
     return buildLiveOverlayUrl(activeSessionId, {
@@ -2053,8 +2055,6 @@ export default function LivePage() {
         ? 'Connecting'
         : 'Offline';
   const syncLabel = formatRelativeSyncTime(live?.last_sync_at);
-  const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
-  const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const desktopViewerColumns = 'xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]';
   const showCompactStreamEditor = isHost && activeSessionId && hostWorkspaceTab === 'stream';
   const viewerNowCount = live?.viewer_count || 0;
