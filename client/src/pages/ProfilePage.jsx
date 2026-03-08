@@ -1861,8 +1861,8 @@ export default function ProfilePage() {
   const hasActiveProfileLiveSession = !!activeProfileLiveUrl;
 
   const tabs = hasPiuData
-    ? ['overview', 'live', 'piu', 'posts', 'shoes', 'competitions', 'activity']
-    : ['overview', 'live', 'posts', 'shoes', 'competitions', 'activity'];
+    ? ['overview', 'piu', 'posts', 'live', 'shoes', 'competitions', 'activity']
+    : ['overview', 'posts', 'live', 'shoes', 'competitions', 'activity'];
 
   const tabLabels = {
     overview: 'Overview', live: 'Live', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
