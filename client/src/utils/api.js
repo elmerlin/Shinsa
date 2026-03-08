@@ -8,12 +8,13 @@ function getAuthHeaders() {
 }
 
 async function request(url, options = {}) {
+  const { timeoutMs = 8000, headers, ...fetchOptions } = options;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${API_BASE}${url}`, {
-      headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), ...options.headers },
-      ...options,
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders(), ...headers },
+      ...fetchOptions,
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -905,7 +906,11 @@ export const getLiveSessions = (options = {}) => {
   return request(`/live/sessions${query ? `?${query}` : ''}`);
 };
 export const getMyLiveSession = () => request('/live/sessions/mine/active');
-export const createLiveSession = (data) => request('/live/sessions', { method: 'POST', body: JSON.stringify(data) });
+export const createLiveSession = (data) => request('/live/sessions', {
+  method: 'POST',
+  body: JSON.stringify(data),
+  timeoutMs: 60000,
+});
 export const getLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}`);
 export const createLiveOverlayToken = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/overlay-token`, {
   method: 'POST',
@@ -930,6 +935,7 @@ export const sendLiveMessage = (sessionId, data) => request(`/live/sessions/${en
 export const syncLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/sync`, {
   method: 'POST',
   body: '{}',
+  timeoutMs: 60000,
 });
 export const sendLiveRequest = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/requests`, {
   method: 'POST',
