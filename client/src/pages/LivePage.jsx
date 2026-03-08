@@ -1104,6 +1104,9 @@ export default function LivePage() {
   const [savingRequestsEnabled, setSavingRequestsEnabled] = useState(false);
   const [playerMode, setPlayerMode] = useState(false);
   const [lockVideo, setLockVideo] = useState(false);
+  const [mobileVideoDocked, setMobileVideoDocked] = useState(false);
+  const [mobileVideoDockHeight, setMobileVideoDockHeight] = useState(0);
+  const [mobileVideoDockStyle, setMobileVideoDockStyle] = useState(null);
   const [mobilePanel, setMobilePanel] = useState('');
   const [desktopInteractionTab, setDesktopInteractionTab] = useState('');
   const [hostWorkspaceTab, setHostWorkspaceTab] = useState('room');
@@ -1153,6 +1156,7 @@ export default function LivePage() {
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
   const desktopVideoFrameRef = useRef(null);
+  const mobileVideoShellRef = useRef(null);
   const reactionIdRef = useRef(0);
   const seenMessageIdsRef = useRef(new Set());
   const presenceIdRef = useRef('');
@@ -1188,9 +1192,6 @@ export default function LivePage() {
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && !hasPlayerPanels && hostWorkspaceTab !== 'overlay';
   const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
-  const mobileLockedVideoWrapperClass = shouldLockMobileVideo
-    ? 'fixed inset-x-4 top-[76px] z-40 lg:hidden'
-    : '';
   const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px` }
     : undefined;
@@ -1454,6 +1455,46 @@ export default function LivePage() {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(`shinsa_live_video_lock:${user?.id || 'viewer'}`, lockVideo ? '1' : '0');
   }, [lockVideo, user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !shouldLockMobileVideo) {
+      setMobileVideoDocked(false);
+      setMobileVideoDockHeight(0);
+      setMobileVideoDockStyle(null);
+      return undefined;
+    }
+
+    const lockTop = 76;
+    const updateDockState = () => {
+      const shell = mobileVideoShellRef.current;
+      if (!shell) return;
+
+      const rect = shell.getBoundingClientRect();
+      const height = shell.offsetHeight || rect.height || 0;
+      const shouldDock = rect.top <= lockTop && rect.bottom - lockTop > 8;
+
+      setMobileVideoDockHeight(height);
+      setMobileVideoDocked(shouldDock);
+      setMobileVideoDockStyle(
+        shouldDock
+          ? {
+              top: `${lockTop}px`,
+              left: `${Math.max(0, rect.left)}px`,
+              width: `${rect.width}px`,
+            }
+          : null
+      );
+    };
+
+    updateDockState();
+    window.addEventListener('scroll', updateDockState, { passive: true });
+    window.addEventListener('resize', updateDockState);
+
+    return () => {
+      window.removeEventListener('scroll', updateDockState);
+      window.removeEventListener('resize', updateDockState);
+    };
+  }, [shouldLockMobileVideo, youtubeId]);
 
   useEffect(() => {
     if (!isHost || typeof window === 'undefined') return;
@@ -3194,14 +3235,17 @@ export default function LivePage() {
             </div>
           </div>
       ) : hostWorkspaceTab !== 'overlay' && youtubeId ? (
-        <>
-          {shouldLockMobileVideo ? (
-            <div className="lg:hidden" aria-hidden="true">
-              <div className="w-full" style={{ paddingBottom: '56.25%' }} />
-            </div>
-          ) : null}
-        <div className={mobileLockedVideoWrapperClass}>
-          <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
+        <div
+          ref={mobileVideoShellRef}
+          className="lg:hidden"
+          style={mobileVideoDocked && mobileVideoDockHeight ? { height: `${mobileVideoDockHeight}px` } : undefined}
+        >
+          <div
+            className={`rounded-3xl overflow-hidden border border-piu-border bg-black/30 ${
+              mobileVideoDocked ? 'fixed z-40' : ''
+            }`}
+            style={mobileVideoDocked && mobileVideoDockStyle ? mobileVideoDockStyle : undefined}
+          >
             <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
               <iframe
                 className="absolute inset-0 w-full h-full"
@@ -3214,7 +3258,6 @@ export default function LivePage() {
             </div>
           </div>
         </div>
-        </>
       ) : null}
 
       {hostWorkspaceTab !== 'overlay' ? (
