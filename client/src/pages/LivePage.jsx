@@ -2889,17 +2889,25 @@ export default function LivePage() {
     return (
       <div className={`mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
       <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.18),transparent_42%),linear-gradient(180deg,#0d1322,#09101d)] p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between">
+          <div className="min-w-0 w-full md:flex-1">
             <p className="text-[10px] font-display uppercase tracking-[0.28em] text-rose-300">Shinsa Live</p>
-            <h1 className="text-2xl sm:text-3xl font-display font-black text-white mt-1">{live?.title || 'Live session'}</h1>
+            <h1 className="mt-1 text-2xl font-display font-black text-white sm:text-3xl">
+              {live?.title || 'Live session'}
+            </h1>
             <p className={`text-sm text-gray-400 mt-1 ${isDesktopViewport ? '' : 'hidden'}`}>
               {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
               {live?.status === 'ended' ? ' • ended' : ' • live'}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col gap-2 items-start md:items-end">
-            <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
+          <div className="flex w-full flex-col items-start gap-2 md:w-auto md:shrink-0 md:items-end">
+            {!isDesktopViewport ? (
+              <p className="text-xs text-left text-gray-400">
+                {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
+                {syncLabel ? ` • ${syncLabel}` : ''}
+              </p>
+            ) : null}
+            <div className="flex w-full flex-wrap items-center gap-2 justify-start md:w-auto md:justify-end">
               {isHost ? (
                 <button
                   type="button"
@@ -2940,12 +2948,6 @@ export default function LivePage() {
                 </>
               )}
             </div>
-            {!isDesktopViewport ? (
-              <p className="text-xs text-left text-gray-400">
-                {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
-                {syncLabel ? ` • ${syncLabel}` : ''}
-              </p>
-            ) : null}
           </div>
         </div>
 
@@ -2984,9 +2986,6 @@ export default function LivePage() {
             >
               Overlay Studio
             </button>
-            <p className="self-center text-[11px] text-gray-400">
-              Use `Stream Link` to attach or replace the YouTube URL, and `Overlay Studio` only when setting up OBS.
-            </p>
           </div>
         ) : null}
 
