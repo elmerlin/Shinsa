@@ -5,7 +5,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
 import MarkdownContent from './components/MarkdownContent';
-import { searchUsers, consumeGroupPopup, getMyCheckinStatus, checkout } from './utils/api';
+import { searchUsers, consumeGroupPopup, getMyCheckinStatus, checkout, getMyVenueAccess } from './utils/api';
 import { getProfilePath } from './utils/profile';
 import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
@@ -366,6 +366,7 @@ function UserMenu() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [dojoMembershipEligible, setDojoMembershipEligible] = useState(false);
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') return undefined;
@@ -385,10 +386,38 @@ function UserMenu() {
   const myProfilePath = getProfilePath(user.id, user.username);
   const canAccessOptimise = !!(user?.is_admin || user?.feature_access?.optimise);
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
-  const canAccessDojo = !!user?.feature_access?.dojo_admin;
+  const canAccessDojoAdmin = !!user?.feature_access?.dojo_admin;
   const canAccessAdmin = !!user?.is_admin;
+  const isDojoMember = isPumpDojoMember(user);
   const menuLinkClass = 'flex items-center gap-2 px-3 py-2 text-sm font-display hover:bg-piu-dark/50 transition-colors';
   const closeMenu = () => setOpen(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) {
+      setDojoMembershipEligible(false);
+      return undefined;
+    }
+    if (isDojoMember) {
+      setDojoMembershipEligible(true);
+      return undefined;
+    }
+    getMyVenueAccess(DOJO_VENUE_SLUG)
+      .then((data) => {
+        if (!cancelled) {
+          setDojoMembershipEligible(!!data?.approved);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDojoMembershipEligible(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, isDojoMember]);
+
   const drawer = open && typeof document !== 'undefined' ? createPortal(
     <div className="fixed inset-0 z-[110]">
       <button
@@ -566,9 +595,22 @@ function UserMenu() {
               Check In
             </Link>
           )}
-          {canAccessDojo && (
+          {dojoMembershipEligible && (
             <Link
               to="/dojo"
+              onClick={closeMenu}
+              className={menuLinkClass}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.5-2.8 7.7-7 9-4.2-1.3-7-4.5-7-9V7l7-4Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M12 9v6" />
+              </svg>
+              Dojo Access &amp; Membership
+            </Link>
+          )}
+          {canAccessDojoAdmin && (
+            <Link
+              to="/dojoadmin"
               onClick={closeMenu}
               className={menuLinkClass}
             >
@@ -576,7 +618,7 @@ function UserMenu() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
               </svg>
-              Dojo
+              Dojo Admin
             </Link>
           )}
           <Link
@@ -1168,12 +1210,12 @@ export default function App() {
               <span>Tiers</span>
             </Link>
             {canAccessDojo && (
-              <Link to="/dojo" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
+              <Link to="/dojoadmin" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
                 </svg>
-                <span>Dojo</span>
+                <span>Dojo Admin</span>
               </Link>
             )}
             <Link to="/head-to-head" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
@@ -1249,7 +1291,8 @@ export default function App() {
           <Route path="/changelog" element={<ChangeLogPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
           <Route path="/membership" element={<MembershipPage />} />
-          <Route path="/dojo" element={<DojoPage />} />
+          <Route path="/dojo" element={<Navigate to="/membership" replace />} />
+          <Route path="/dojoadmin" element={<DojoPage />} />
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
         </Routes>
       </main>

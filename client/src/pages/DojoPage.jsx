@@ -61,7 +61,7 @@ export default function DojoPage() {
     return (
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-8">
         <div className="card text-center">
-          <h1 className="text-xl font-display font-bold">Dojo</h1>
+          <h1 className="text-xl font-display font-bold">Dojo Admin</h1>
           <p className="text-sm text-gray-400 mt-2">Login required.</p>
           <Link to="/login" className="inline-flex mt-4 btn-primary">Login</Link>
         </div>
@@ -73,7 +73,7 @@ export default function DojoPage() {
     return (
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-8">
         <div className="card text-center">
-          <h1 className="text-xl font-display font-bold">Dojo</h1>
+          <h1 className="text-xl font-display font-bold">Dojo Admin</h1>
           <p className="text-sm text-red-300 mt-2">Dojo Admin access has not been granted for your account.</p>
         </div>
       </div>
@@ -82,7 +82,6 @@ export default function DojoPage() {
 
   const machines = Array.isArray(overview?.machines) ? overview.machines : [];
   const activeCount = Array.isArray(overview?.active_checkins) ? overview.active_checkins.length : 0;
-  const title = tab === 'venue-access' ? 'Venue Access' : 'Pump Dojo Venue';
   const subtitle = tab === 'venue-access'
     ? 'Venue subscriptions, day passes, discounts, and approved user controls'
     : 'Live machine check-ins and weekly activity';
@@ -91,7 +90,7 @@ export default function DojoPage() {
     <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="font-display font-bold text-lg sm:text-xl text-white">Dojo</h1>
+          <h1 className="font-display font-bold text-lg sm:text-xl text-white">Dojo Admin</h1>
           <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>
         </div>
         {tab === 'venue' ? (
