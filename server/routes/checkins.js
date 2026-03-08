@@ -7,6 +7,8 @@ const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { createUserNotification } = require('../lib/notifications');
 const { checkUserVenueAccess } = require('./venueAccess');
 
+const AUTO_CHECKOUT_AWAY_MS = 60 * 60 * 1000;
+
 function normalizeCheckinUser(row, size = 48) {
   if (!row) return null;
   const ownerUserId = row.user_id || row.id || '';
@@ -24,6 +26,103 @@ function parseUtcDate(value) {
   const parsed = new Date(withZone);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function formatSqlDateTime(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
+  const earthRadius = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadius * c;
+}
+
+function normalizeVenueRadiusMeters(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 180;
+  return numeric;
+}
+
+function autoCheckoutThresholdDate(lastNearVenueAt) {
+  const parsed = parseUtcDate(lastNearVenueAt);
+  if (!parsed) return null;
+  return new Date(parsed.getTime() + AUTO_CHECKOUT_AWAY_MS);
+}
+
+function runAutoCheckoutSweep(db) {
+  if (!db) return [];
+
+  const now = new Date();
+  const nowSql = formatSqlDateTime(now);
+  const activeAwayRows = db.prepare(`
+    SELECT c.id,
+           c.user_id,
+           c.last_near_venue_at,
+           v.id AS venue_id,
+           v.name AS venue_name,
+           m.name AS machine_name,
+           u.username
+    FROM checkins c
+    JOIN venues v ON v.id = c.venue_id
+    JOIN venue_machines m ON m.id = c.machine_id
+    JOIN users u ON u.id = c.user_id
+    WHERE c.checked_out_at IS NULL
+      AND c.last_proximity_status = 'away'
+      AND c.last_near_venue_at IS NOT NULL
+  `).all();
+
+  const updateCheckin = db.prepare(`
+    UPDATE checkins
+    SET checked_out_at = ?,
+        auto_checked_out_at = ?,
+        checkout_reason = 'proximity_away_timeout'
+    WHERE id = ? AND checked_out_at IS NULL
+  `);
+  const clearPlayingStatus = db.prepare("UPDATE users SET playing_status = '' WHERE id = ?");
+
+  const autoCheckedOut = [];
+  for (const row of activeAwayRows) {
+    const thresholdAt = autoCheckoutThresholdDate(row.last_near_venue_at);
+    if (!thresholdAt || thresholdAt > now) continue;
+
+    const thresholdSql = formatSqlDateTime(thresholdAt);
+    const result = updateCheckin.run(thresholdSql, nowSql, row.id);
+    if (!result.changes) continue;
+
+    clearPlayingStatus.run(row.user_id);
+    notifyUsersAboutCheckinEvent(db, {
+      actorUserId: row.user_id,
+      actorUsername: row.username,
+      eventType: 'checkout',
+      venueId: row.venue_id,
+      venueName: row.venue_name,
+      machineName: row.machine_name,
+    });
+
+    autoCheckedOut.push({
+      checkin_id: row.id,
+      user_id: row.user_id,
+      username: row.username,
+      venue_id: row.venue_id,
+      venue_name: row.venue_name,
+      machine_name: row.machine_name,
+      checked_out_at: thresholdSql,
+      auto_checked_out_at: nowSql,
+    });
+  }
+
+  return autoCheckedOut;
 }
 
 function startOfWeekMonday(date) {
@@ -172,6 +271,7 @@ function notifyUsersAboutCheckinEvent(db, {
 // GET /api/checkins/venues — list all venues with their machines
 router.get('/venues', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const venues = db.prepare('SELECT * FROM venues ORDER BY name').all();
   const machines = db.prepare('SELECT * FROM venue_machines ORDER BY sort_order, name').all();
   const machinesByVenue = {};
@@ -283,6 +383,7 @@ router.put('/notifications/:venueSlug', requireAuth, requireCheckinFeature, (req
 // GET /api/checkins/venue/:slug — single venue with machines and active checkins
 router.get('/venue/:slug', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const venue = db.prepare('SELECT * FROM venues WHERE slug = ?').get(req.params.slug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
@@ -308,6 +409,7 @@ router.get('/venue/:slug', requireAuth, requireCheckinFeature, (req, res) => {
 // POST /api/checkins/checkin — check in to a machine
 router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const { venue_id, machine_id } = req.body;
   const userId = req.user.id;
 
@@ -340,7 +442,12 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   }
 
   const id = uuidv4();
-  db.prepare('INSERT INTO checkins (id, user_id, venue_id, machine_id) VALUES (?, ?, ?, ?)').run(id, userId, venue_id, machine_id);
+  db.prepare(`
+    INSERT INTO checkins (
+      id, user_id, venue_id, machine_id,
+      last_near_venue_at, last_proximity_status
+    ) VALUES (?, ?, ?, ?, datetime('now'), 'near')
+  `).run(id, userId, venue_id, machine_id);
 
   // Set playing status
   const status = `Playing at ${machine.name}`;
@@ -362,6 +469,7 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
 // POST /api/checkins/checkout — check out (clear status)
 router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const userId = req.user.id;
 
   const active = db.prepare(`
@@ -392,12 +500,152 @@ router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
   res.json({ success: true });
 });
 
+// POST /api/checkins/proximity — record a proximity heartbeat for the current active check-in
+router.post('/proximity', requireAuth, requireCheckinFeature, (req, res) => {
+  const db = getDb();
+  runAutoCheckoutSweep(db);
+
+  const active = db.prepare(`
+    SELECT c.id,
+           c.checked_in_at,
+           c.last_near_venue_at,
+           c.last_proximity_check_at,
+           c.last_proximity_status,
+           v.slug AS venue_slug,
+           v.name AS venue_name,
+           v.latitude AS venue_latitude,
+           v.longitude AS venue_longitude,
+           v.proximity_radius_m,
+           m.name AS machine_name
+    FROM checkins c
+    JOIN venues v ON v.id = c.venue_id
+    JOIN venue_machines m ON m.id = c.machine_id
+    WHERE c.user_id = ? AND c.checked_out_at IS NULL
+  `).get(req.user.id);
+
+  if (!active) {
+    return res.json({ checked_in: false, tracked: false });
+  }
+
+  const venueLat = Number(active.venue_latitude);
+  const venueLng = Number(active.venue_longitude);
+  if (!Number.isFinite(venueLat) || !Number.isFinite(venueLng)) {
+    return res.json({
+      checked_in: true,
+      tracked: false,
+      reason: 'venue_missing_coordinates',
+      venue_slug: active.venue_slug,
+      venue_name: active.venue_name,
+    });
+  }
+
+  const latitude = Number(req.body?.lat ?? req.body?.latitude);
+  const longitude = Number(req.body?.lng ?? req.body?.longitude);
+  const accuracy = Number(req.body?.accuracy);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return res.status(400).json({ error: 'latitude and longitude are required' });
+  }
+
+  const distanceMeters = haversineDistanceMeters(latitude, longitude, venueLat, venueLng);
+  const radiusMeters = normalizeVenueRadiusMeters(active.proximity_radius_m);
+  const isNear = distanceMeters <= radiusMeters;
+  const now = new Date();
+  const nowSql = formatSqlDateTime(now);
+  const roundedDistance = Math.round(distanceMeters);
+
+  if (isNear) {
+    db.prepare(`
+      UPDATE checkins
+      SET last_proximity_check_at = ?,
+          last_near_venue_at = ?,
+          last_proximity_lat = ?,
+          last_proximity_lng = ?,
+          last_proximity_accuracy_m = ?,
+          last_proximity_distance_m = ?,
+          last_proximity_status = 'near'
+      WHERE id = ? AND checked_out_at IS NULL
+    `).run(
+      nowSql,
+      nowSql,
+      latitude,
+      longitude,
+      Number.isFinite(accuracy) ? accuracy : null,
+      roundedDistance,
+      active.id
+    );
+  } else {
+    db.prepare(`
+      UPDATE checkins
+      SET last_proximity_check_at = ?,
+          last_near_venue_at = COALESCE(last_near_venue_at, ?),
+          last_proximity_lat = ?,
+          last_proximity_lng = ?,
+          last_proximity_accuracy_m = ?,
+          last_proximity_distance_m = ?,
+          last_proximity_status = 'away'
+      WHERE id = ? AND checked_out_at IS NULL
+    `).run(
+      nowSql,
+      nowSql,
+      latitude,
+      longitude,
+      Number.isFinite(accuracy) ? accuracy : null,
+      roundedDistance,
+      active.id
+    );
+  }
+
+  runAutoCheckoutSweep(db);
+
+  const updated = db.prepare(`
+    SELECT id,
+           checked_in_at,
+           checked_out_at,
+           last_near_venue_at,
+           last_proximity_check_at,
+           last_proximity_status,
+           checkout_reason
+    FROM checkins
+    WHERE id = ?
+  `).get(active.id);
+
+  const autoCheckoutAt = autoCheckoutThresholdDate(updated?.last_near_venue_at);
+  if (updated?.checked_out_at) {
+    return res.json({
+      checked_in: false,
+      tracked: true,
+      auto_checked_out: true,
+      checked_out_at: updated.checked_out_at,
+      checkout_reason: updated.checkout_reason || '',
+      venue_slug: active.venue_slug,
+      venue_name: active.venue_name,
+      machine_name: active.machine_name,
+    });
+  }
+
+  return res.json({
+    checked_in: true,
+    tracked: true,
+    venue_slug: active.venue_slug,
+    venue_name: active.venue_name,
+    machine_name: active.machine_name,
+    is_near: isNear,
+    distance_m: roundedDistance,
+    radius_m: radiusMeters,
+    last_near_venue_at: updated?.last_near_venue_at || null,
+    auto_checkout_at: autoCheckoutAt ? formatSqlDateTime(autoCheckoutAt) : null,
+  });
+});
+
 // GET /api/checkins/my-status — get current user's checkin status
 router.get('/my-status', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const active = db.prepare(`
     SELECT c.id, c.venue_id, c.machine_id, c.checked_in_at,
+           c.last_near_venue_at, c.last_proximity_check_at, c.last_proximity_status,
            v.name AS venue_name, v.slug AS venue_slug,
+           v.latitude AS venue_latitude, v.longitude AS venue_longitude, v.proximity_radius_m,
            m.name AS machine_name, m.position AS machine_position
     FROM checkins c
     JOIN venues v ON v.id = c.venue_id
@@ -417,6 +665,7 @@ router.get('/my-status', requireAuth, requireCheckinFeature, (req, res) => {
 // GET /api/checkins/active/:venueSlug — get active checkins for a venue (live status)
 router.get('/active/:venueSlug', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const venue = db.prepare('SELECT * FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
@@ -442,6 +691,7 @@ router.get('/active/:venueSlug', requireAuth, requireCheckinFeature, (req, res) 
 // GET /api/checkins/dojo/:slug/overview — dojo machine status + weekly activity summary
 router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const venue = db.prepare('SELECT * FROM venues WHERE slug = ?').get(req.params.slug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
@@ -751,6 +1001,7 @@ router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, r
 // GET /api/checkins/history — current user's checkin history with stats
 router.get('/history', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const userId = req.user.id;
 
   const checkins = db.prepare(`
@@ -821,6 +1072,7 @@ router.get('/history', requireAuth, requireCheckinFeature, (req, res) => {
 // GET /api/checkins/user/:userId/history — view another user's checkin history
 router.get('/user/:userId/history', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
+  runAutoCheckoutSweep(db);
   const userId = req.params.userId;
 
   const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);

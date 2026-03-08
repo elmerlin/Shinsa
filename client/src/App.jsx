@@ -5,7 +5,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
 import MarkdownContent from './components/MarkdownContent';
-import { searchUsers, consumeGroupPopup, getMyCheckinStatus, checkout, getMyVenueAccess } from './utils/api';
+import { searchUsers, consumeGroupPopup, getMyCheckinStatus, sendCheckinProximity, checkout, getMyVenueAccess } from './utils/api';
 import { getProfilePath } from './utils/profile';
 import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
@@ -61,9 +61,9 @@ const DOJO_GEO_TIMEOUT_MS = 10000;
 const DOJO_GEO_MAX_AGE_MS = 120000;
 const DOJO_GEOFENCE = {
   name: 'London Pump Dojo',
-  address: 'Unit 5, 2 Wadsworth Rd, Perivale, Greenford UB6 7JD',
-  lat: 51.53639,
-  lng: -0.31489,
+  address: '59 Summerlands Avenue, London W3 6EW',
+  lat: 51.510815,
+  lng: -0.269995,
   radiusMeters: 180,
   maxAccuracyMeters: 120,
 };
@@ -1036,7 +1036,7 @@ export default function App() {
           }
 
           navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           running = false;
           if (cancelled) return;
           const lat = Number(position?.coords?.latitude);
@@ -1047,7 +1047,6 @@ export default function App() {
             return;
           }
 
-          const distanceMeters = haversineDistanceMeters(lat, lng, DOJO_GEOFENCE.lat, DOJO_GEOFENCE.lng);
           const accuracyOk = !Number.isFinite(accuracy) || accuracy <= DOJO_GEOFENCE.maxAccuracyMeters;
           if (checkedIntoDojo) {
             setShowDojoPopup(false);
@@ -1055,20 +1054,40 @@ export default function App() {
               scheduleNext(DOJO_RECHECK_NEARBY_MS);
               return;
             }
-            if (distanceMeters > DOJO_GEOFENCE.radiusMeters) {
-              const reminderRemainingMs = getDojoCheckoutReminderRemainingMs(user.id, activeCheckin?.id);
-              if (reminderRemainingMs <= 0) {
-                markDojoCheckoutPopupShown(user.id, activeCheckin?.id);
+
+            try {
+              const proximity = await sendCheckinProximity({
+                latitude: lat,
+                longitude: lng,
+                accuracy,
+              });
+              if (!proximity?.checked_in) {
+                clearDojoCheckoutPopupState(user.id);
+                setShowDojoCheckoutPopup(false);
+                setDojoCheckoutPrompt(null);
                 setDojoCheckoutError('');
-                setDojoCheckoutPrompt({
-                  checkinId: activeCheckin?.id || '',
-                  machineName: activeCheckin?.machine_name || '',
-                });
-                setShowDojoCheckoutPopup(true);
-                scheduleNext(DOJO_CHECKOUT_REMINDER_COOLDOWN_MS);
+                scheduleNext(DOJO_RECHECK_DEFAULT_MS);
                 return;
               }
-              scheduleNext(Math.min(reminderRemainingMs, DOJO_RECHECK_NEARBY_MS));
+
+              if (!proximity?.is_near) {
+                const reminderRemainingMs = getDojoCheckoutReminderRemainingMs(user.id, activeCheckin?.id);
+                if (reminderRemainingMs <= 0) {
+                  markDojoCheckoutPopupShown(user.id, activeCheckin?.id);
+                  setDojoCheckoutError('');
+                  setDojoCheckoutPrompt({
+                    checkinId: activeCheckin?.id || '',
+                    machineName: activeCheckin?.machine_name || '',
+                  });
+                  setShowDojoCheckoutPopup(true);
+                  scheduleNext(DOJO_CHECKOUT_REMINDER_COOLDOWN_MS);
+                  return;
+                }
+                scheduleNext(Math.min(reminderRemainingMs, DOJO_RECHECK_NEARBY_MS));
+                return;
+              }
+            } catch {
+              scheduleNext(DOJO_RECHECK_NEARBY_MS);
               return;
             }
 
@@ -1080,6 +1099,7 @@ export default function App() {
             return;
           }
 
+          const distanceMeters = haversineDistanceMeters(lat, lng, DOJO_GEOFENCE.lat, DOJO_GEOFENCE.lng);
           if (accuracyOk && distanceMeters <= DOJO_GEOFENCE.radiusMeters) {
             markShownToday();
             setShowDojoPopup(true);

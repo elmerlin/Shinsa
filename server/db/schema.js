@@ -2070,6 +2070,9 @@ function initializeDb() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       slug TEXT NOT NULL UNIQUE,
+      latitude REAL DEFAULT NULL,
+      longitude REAL DEFAULT NULL,
+      proximity_radius_m REAL DEFAULT 180,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -2089,7 +2092,16 @@ function initializeDb() {
       venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
       machine_id TEXT NOT NULL REFERENCES venue_machines(id) ON DELETE CASCADE,
       checked_in_at TEXT DEFAULT (datetime('now')),
-      checked_out_at TEXT DEFAULT NULL
+      checked_out_at TEXT DEFAULT NULL,
+      last_proximity_check_at TEXT DEFAULT NULL,
+      last_near_venue_at TEXT DEFAULT NULL,
+      last_proximity_lat REAL DEFAULT NULL,
+      last_proximity_lng REAL DEFAULT NULL,
+      last_proximity_accuracy_m REAL DEFAULT NULL,
+      last_proximity_distance_m REAL DEFAULT NULL,
+      last_proximity_status TEXT DEFAULT '',
+      auto_checked_out_at TEXT DEFAULT NULL,
+      checkout_reason TEXT DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_checkins_user ON checkins(user_id, checked_in_at DESC);
     CREATE INDEX IF NOT EXISTS idx_checkins_venue ON checkins(venue_id, checked_out_at);
@@ -2109,14 +2121,67 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_venue_checkin_notif_venue ON venue_checkin_notification_subscriptions(venue_id);
   `);
 
+  const venueCols = db.prepare("PRAGMA table_info(venues)").all().map(c => c.name);
+  const venueMigrations = [
+    ['latitude', 'REAL DEFAULT NULL'],
+    ['longitude', 'REAL DEFAULT NULL'],
+    ['proximity_radius_m', 'REAL DEFAULT 180'],
+  ];
+  for (const [col, type] of venueMigrations) {
+    if (!venueCols.includes(col)) {
+      db.exec(`ALTER TABLE venues ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  db.prepare(`
+    UPDATE venues
+    SET latitude = COALESCE(latitude, ?),
+        longitude = COALESCE(longitude, ?),
+        proximity_radius_m = COALESCE(proximity_radius_m, ?)
+    WHERE slug = ?
+  `).run(51.510815, -0.269995, 180, 'london-pump-dojo');
+
   // Seed default venue and machines if empty
   const venueCount = db.prepare('SELECT COUNT(*) AS cnt FROM venues').get().cnt;
   if (venueCount === 0) {
     const venueId = randomUUID();
-    db.prepare("INSERT INTO venues (id, name, slug) VALUES (?, ?, ?)").run(venueId, 'London Pump Dojo', 'london-pump-dojo');
+    db.prepare(`
+      INSERT INTO venues (id, name, slug, latitude, longitude, proximity_radius_m)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(venueId, 'London Pump Dojo', 'london-pump-dojo', 51.510815, -0.269995, 180);
     db.prepare("INSERT INTO venue_machines (id, venue_id, name, position, sort_order) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), venueId, 'London Pump Dojo 1', 'left', 0);
     db.prepare("INSERT INTO venue_machines (id, venue_id, name, position, sort_order) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), venueId, 'London Pump Dojo 2', 'right', 1);
   }
+
+  const checkinCols = db.prepare("PRAGMA table_info(checkins)").all().map(c => c.name);
+  const checkinMigrations = [
+    ['last_proximity_check_at', 'TEXT DEFAULT NULL'],
+    ['last_near_venue_at', 'TEXT DEFAULT NULL'],
+    ['last_proximity_lat', 'REAL DEFAULT NULL'],
+    ['last_proximity_lng', 'REAL DEFAULT NULL'],
+    ['last_proximity_accuracy_m', 'REAL DEFAULT NULL'],
+    ['last_proximity_distance_m', 'REAL DEFAULT NULL'],
+    ['last_proximity_status', "TEXT DEFAULT ''"],
+    ['auto_checked_out_at', 'TEXT DEFAULT NULL'],
+    ['checkout_reason', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of checkinMigrations) {
+    if (!checkinCols.includes(col)) {
+      db.exec(`ALTER TABLE checkins ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_checkins_proximity_active ON checkins(checked_out_at, last_proximity_status, last_near_venue_at)');
+
+  db.exec(`
+    UPDATE checkins
+    SET last_near_venue_at = COALESCE(last_near_venue_at, datetime('now')),
+        last_proximity_status = CASE
+          WHEN COALESCE(last_proximity_status, '') = '' THEN 'near'
+          ELSE last_proximity_status
+        END
+    WHERE checked_out_at IS NULL
+  `);
 
   bootstrapSongsFromJsonIfEmpty();
   ensureCoOpChartsFromJson();

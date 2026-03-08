@@ -890,6 +890,7 @@ export const getActiveCheckins = (venueSlug) => request(`/checkins/active/${enco
 export const checkin = (venue_id, machine_id) => request('/checkins/checkin', { method: 'POST', body: JSON.stringify({ venue_id, machine_id }) });
 export const checkout = () => request('/checkins/checkout', { method: 'POST' });
 export const getMyCheckinStatus = () => request('/checkins/my-status');
+export const sendCheckinProximity = (data) => request('/checkins/proximity', { method: 'POST', body: JSON.stringify(data) });
 export const getCheckinHistory = () => request('/checkins/history');
 export const getUserCheckinHistory = (userId) => request(`/checkins/user/${userId}/history`);
 export const getDojoOverview = (venueSlug = 'london-pump-dojo', params = {}) => {
