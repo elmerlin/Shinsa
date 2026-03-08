@@ -1819,6 +1819,7 @@ function initializeDb() {
       title TEXT NOT NULL DEFAULT '',
       stream_url TEXT DEFAULT '',
       requests_enabled INTEGER NOT NULL DEFAULT 1,
+      is_hidden_from_profile INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'live',
       recent_anchor_id INTEGER NOT NULL DEFAULT 0,
       last_recent_row_id INTEGER NOT NULL DEFAULT 0,
@@ -2416,6 +2417,9 @@ function initializeDb() {
   const liveSessionCols = db.prepare("PRAGMA table_info(live_sessions)").all().map((c) => c.name);
   if (!liveSessionCols.includes('requests_enabled')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN requests_enabled INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!liveSessionCols.includes('is_hidden_from_profile')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN is_hidden_from_profile INTEGER NOT NULL DEFAULT 0");
   }
 
   const liveRequestCols = db.prepare("PRAGMA table_info(live_session_requests)").all().map((c) => c.name);

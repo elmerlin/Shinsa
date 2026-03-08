@@ -13,7 +13,7 @@ import {
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
-  getProfileLiveSessions,
+  getProfileLiveSessions, updateLiveSessionProfileVisibility,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -25,7 +25,6 @@ import GradeGoalTracker from '../components/GradeGoalTracker';
 import TitleProgressTab from '../components/TitleProgressTab';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
-import LiveSessionCard from '../components/LiveSessionCard';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
@@ -270,6 +269,28 @@ function getDoubleLevelColor(level) {
 
 function isStageBreakPlay(play) {
   return (parseInt(play?.score, 10) || 0) <= 0;
+}
+
+function formatLiveSessionDurationLabel(summary, session) {
+  if (summary?.sessionDurationLabel) return summary.sessionDurationLabel;
+  const start = Date.parse(`${session?.started_at || ''}Z`);
+  const end = Date.parse(`${session?.ended_at || ''}Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '';
+  const minutes = Math.max(0, Math.round((end - start) / 60000));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours > 0 && remainder > 0) return `${hours}h ${remainder}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainder}m`;
+}
+
+function getLiveSessionStreamHost(url) {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
 }
 
 function isNonClearScoreEntry(entry) {
@@ -863,6 +884,7 @@ export default function ProfilePage() {
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
   const [songAnalytics, setSongAnalytics] = useState(null);
   const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
+  const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
@@ -1057,6 +1079,30 @@ export default function ProfilePage() {
 
     return () => { cancelled = true; };
   }, [authUser, profileId, isOwner]);
+
+  async function handleToggleLiveProfileVisibility(sessionId, hidden) {
+    if (!isOwner || !sessionId) return;
+    setLiveVisibilityBusyId(sessionId);
+    try {
+      await updateLiveSessionProfileVisibility(sessionId, hidden);
+      setProfileLive((prev) => ({
+        ...prev,
+        ended_sessions: (Array.isArray(prev?.ended_sessions) ? prev.ended_sessions : []).map((item) => (
+          String(item?.session?.id || '') === String(sessionId)
+            ? {
+                ...item,
+                session: {
+                  ...(item.session || {}),
+                  is_hidden_from_profile: !!hidden,
+                },
+              }
+            : item
+        )),
+      }));
+    } finally {
+      setLiveVisibilityBusyId('');
+    }
+  }
 
   const refreshShoeCabinet = async (options = {}) => {
     const { silent = false } = options;
@@ -2637,39 +2683,77 @@ export default function ProfilePage() {
                   const session = item?.session || {};
                   const summary = item?.summary || null;
                   const endedLabel = session.ended_at ? timeAgo(session.ended_at) : '';
-
-                  if (!summary) {
-                    return (
-                      <Link key={session.id} to={session.live_url || `/live/${session.id}`} className="card-hover block p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-display font-bold text-white truncate">
-                              {session.title || `${profile.username} live session`}
-                            </p>
-                            <p className="mt-1 text-xs text-gray-400">
-                              {item.play_count || 0} plays • {item.message_count || 0} messages
-                            </p>
-                          </div>
-                          {endedLabel ? (
-                            <span className="shrink-0 text-[11px] text-gray-500">{endedLabel}</span>
-                          ) : null}
-                        </div>
-                      </Link>
-                    );
-                  }
-
+                  const sessionDuration = formatLiveSessionDurationLabel(summary, session);
+                  const streamHost = getLiveSessionStreamHost(session.stream_url);
+                  const songCount = summary?.songCount || item?.play_count || 0;
+                  const messageCount = summary?.messageCount || item?.message_count || 0;
+                  const peakViewers = summary?.viewerPeak || session?.viewer_peak || 0;
+                  const isHidden = !!session.is_hidden_from_profile;
                   return (
                     <div key={session.id} className="space-y-2">
                       <div className="flex items-center justify-between gap-3 px-1">
                         <p className="min-w-0 truncate text-sm font-display font-bold text-white">
-                          {session.title || 'Shinsa Live Recap'}
+                          {session.title || `${profile.username} live session`}
                         </p>
-                        {endedLabel ? (
-                          <span className="shrink-0 text-[11px] text-gray-500">{endedLabel}</span>
-                        ) : null}
+                        <div className="flex items-center gap-2">
+                          {isOwner ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleLiveProfileVisibility(session.id, !isHidden)}
+                              disabled={liveVisibilityBusyId === session.id}
+                              className={`rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide transition-colors ${
+                                isHidden
+                                  ? 'border border-amber-400/30 bg-amber-500/10 text-amber-200'
+                                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
+                              } disabled:opacity-60`}
+                            >
+                              {liveVisibilityBusyId === session.id ? 'Saving...' : isHidden ? 'Hidden' : 'Visible'}
+                            </button>
+                          ) : null}
+                          {endedLabel ? (
+                            <span className="shrink-0 text-[11px] text-gray-500">{endedLabel}</span>
+                          ) : null}
+                        </div>
                       </div>
-                      <Link to={session.live_url || `/live/${session.id}`} className="block">
-                        <LiveSessionCard summary={summary} className="mb-0 transition-colors hover:border-cyan-300/30" />
+                      <Link
+                        to={session.live_url || `/live/${session.id}`}
+                        className="card-hover block overflow-hidden rounded-[24px] border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(251,113,133,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.1),transparent_34%),linear-gradient(180deg,#0d1322,#09101b)] p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full border border-piu-border/70 bg-black/15 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300">
+                                Ended session
+                              </span>
+                              {streamHost ? (
+                                <span className="rounded-full border border-rose-400/20 bg-rose-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100">
+                                  {streamHost}
+                                </span>
+                              ) : null}
+                              {isHidden ? (
+                                <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-amber-200">
+                                  Hidden from others
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-3 truncate text-lg font-display font-black text-white">
+                              {session.title || `${profile.username} live session`}
+                            </p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                              {sessionDuration ? <span>{sessionDuration}</span> : null}
+                              <span>{songCount} plays</span>
+                              <span>{messageCount} messages</span>
+                              <span>Peak {peakViewers}</span>
+                            </div>
+                            {summary?.sessionMachineName ? (
+                              <p className="mt-2 text-xs text-cyan-200">{summary.sessionMachineName}</p>
+                            ) : null}
+                          </div>
+                          <div className="shrink-0 rounded-2xl border border-piu-border/70 bg-black/15 px-3 py-2 text-right">
+                            <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Open</p>
+                            <p className="text-sm font-display font-black text-cyan-200">Session</p>
+                          </div>
+                        </div>
                       </Link>
                     </div>
                   );

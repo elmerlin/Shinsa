@@ -55,6 +55,17 @@ const voteCloseTimers = new Map();
 const liveSyncTimers = new Map();
 const liveSyncInFlight = new Set();
 
+function getOptionalAuthUserId(req) {
+  const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token) return '';
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return String(decoded?.id || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 function toInt(value) {
   return parseInt(value, 10) || 0;
 }
@@ -846,6 +857,7 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId) {
     title: session.title || '',
     stream_url: session.stream_url || '',
     requests_enabled: toInt(session.requests_enabled) !== 0,
+    is_hidden_from_profile: toInt(session.is_hidden_from_profile) !== 0,
     status: session.status || 'live',
     host_user_id: session.host_user_id,
     recent_anchor_id: toInt(session.recent_anchor_id),
@@ -1036,9 +1048,10 @@ function getProfileEndedSessions(db, hostUserId, currentUserId = '', limit = 12)
     FROM live_sessions
     WHERE host_user_id = ?
       AND status = 'ended'
+      AND (? = host_user_id OR COALESCE(is_hidden_from_profile, 0) = 0)
     ORDER BY datetime(COALESCE(NULLIF(ended_at, ''), updated_at, created_at)) DESC, id DESC
     LIMIT ?
-  `).all(hostUserId, Math.max(1, Math.min(24, toInt(limit) || 12)));
+  `).all(hostUserId, String(currentUserId || ''), Math.max(1, Math.min(24, toInt(limit) || 12)));
 
   return rows.map((row) => buildProfileEndedSessionPayload(db, row, currentUserId)).filter(Boolean);
 }
@@ -1562,6 +1575,7 @@ router.get('/profile/:userId', (req, res) => {
   try {
     const db = getDb();
     const userId = String(req.params.userId || '').trim();
+    const currentUserId = getOptionalAuthUserId(req);
     if (!userId) return res.status(400).json({ error: 'User ID is required' });
 
     const hostExists = db.prepare('SELECT id FROM users WHERE id = ? LIMIT 1').get(userId);
@@ -1569,8 +1583,8 @@ router.get('/profile/:userId', (req, res) => {
 
     const activeSession = getActiveSessionForHost(db, userId);
     res.json({
-      active_session: buildProfileActiveSessionPayload(db, activeSession, ''),
-      ended_sessions: getProfileEndedSessions(db, userId, '', 12),
+      active_session: buildProfileActiveSessionPayload(db, activeSession, currentUserId),
+      ended_sessions: getProfileEndedSessions(db, userId, currentUserId, 12),
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -1655,6 +1669,31 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
 
     broadcastLiveSessionSnapshot(db, session.id, 'stream_updated');
     return res.json(buildSessionSnapshot(db, session.id, req.user.id));
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.patch('/sessions/:id/profile-visibility', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    if (String(session.host_user_id || '') !== String(req.user.id || '')) {
+      return res.status(403).json({ error: 'Only the host can update this live session' });
+    }
+
+    const hidden = !!req.body?.hidden;
+    db.prepare(`
+      UPDATE live_sessions
+      SET is_hidden_from_profile = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(hidden ? 1 : 0, session.id);
+
+    const updated = requireLiveSession(db, session.id);
+    return res.json({
+      success: true,
+      session: normalizeSessionPayload(updated, getHostProfile(db, updated.host_user_id), 0, req.user.id),
+    });
   } catch (err) {
     return res.status(err.statusCode || 500).json({ error: err.message });
   }

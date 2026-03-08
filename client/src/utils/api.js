@@ -914,6 +914,10 @@ export const getLiveSessions = (options = {}) => {
   return request(`/live/sessions${query ? `?${query}` : ''}`);
 };
 export const getProfileLiveSessions = (userId) => request(`/live/profile/${encodeURIComponent(userId)}`);
+export const updateLiveSessionProfileVisibility = (sessionId, hidden) => request(`/live/sessions/${encodeURIComponent(sessionId)}/profile-visibility`, {
+  method: 'PATCH',
+  body: JSON.stringify({ hidden: !!hidden }),
+});
 export const getMyLiveSession = () => request('/live/sessions/mine/active');
 export const createLiveSession = (data) => request('/live/sessions', {
   method: 'POST',
