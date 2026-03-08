@@ -1485,7 +1485,7 @@ export default function LivePage() {
   }, [useMobilePlayerHud]);
 
   useEffect(() => {
-    if (live?.status !== 'live' && mobilePanel) {
+    if (live?.status !== 'live' && mobilePanel && mobilePanel !== 'requests' && mobilePanel !== 'vote') {
       setMobilePanel('');
     }
   }, [live?.status, mobilePanel]);
@@ -2102,6 +2102,8 @@ export default function LivePage() {
   const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
   const requestTabDisabled = !isHost && (!requestsEnabled || live?.status !== 'live');
   const voteTabDisabled = !isHost && !currentVote;
+  const mobileRequestModalDisabled = false;
+  const mobileVoteModalDisabled = false;
   const showOverlayStudioTab = isHost && activeSessionId;
   const playerSummaryCards = [
     {
@@ -2427,8 +2429,8 @@ export default function LivePage() {
 
   const desktopInteractionsSection = hasPlayerPanels ? null : (
     <div className="flex h-full min-h-0 flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
+      <div className={`gap-2 ${isDesktopViewport ? 'flex flex-wrap items-start justify-between' : 'flex flex-col items-start'}`}>
+        <div className="min-w-0">
           <p className="text-[10px] font-display uppercase tracking-[0.2em] text-cyan-200">Interactions</p>
         </div>
         {isHost ? (
@@ -2436,7 +2438,7 @@ export default function LivePage() {
             type="button"
             onClick={handleToggleRequestsEnabled}
             disabled={savingRequestsEnabled || live?.status !== 'live'}
-            className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.14em] ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[8px] font-display font-bold uppercase tracking-[0.1em] ${
               requestsEnabled
                 ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
                 : 'border border-piu-border bg-black/20 text-gray-400'
@@ -2450,49 +2452,49 @@ export default function LivePage() {
         <button
           type="button"
           onClick={() => {
-            if (requestTabDisabled) return;
             if (isDesktopViewport) {
+              if (requestTabDisabled) return;
               setDesktopInteractionTab('requests');
             } else {
               setMobilePanel('requests');
             }
           }}
-          disabled={requestTabDisabled}
-          className={`rounded-2xl border px-3 py-2.5 text-left transition-colors ${
-            (desktopInteractionTab === 'requests' || mobilePanel === 'requests') && !requestTabDisabled
+          disabled={isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled}
+          className={`min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition-colors ${
+            (desktopInteractionTab === 'requests' || mobilePanel === 'requests') && !(isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
               ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
-              : requestTabDisabled
+              : (isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
                 ? 'border-piu-border/60 bg-black/10 text-gray-500'
                 : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
           }`}
         >
-          <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em]">Requests</p>
-          <p className="mt-1 text-[11px] leading-tight">
-            {requestTabDisabled ? 'Waiting for host' : `${requestCounts.open} open`}
+          <p className="text-[10px] font-display font-bold uppercase tracking-[0.12em]">Requests</p>
+          <p className="mt-1 text-[10px] leading-tight">
+            {isDesktopViewport && requestTabDisabled ? 'Waiting for host' : `${requestCounts.open} open`}
           </p>
         </button>
         <button
           type="button"
           onClick={() => {
-            if (voteTabDisabled) return;
             if (isDesktopViewport) {
+              if (voteTabDisabled) return;
               setDesktopInteractionTab('vote');
             } else {
               setMobilePanel('vote');
             }
           }}
-          disabled={voteTabDisabled}
-          className={`rounded-2xl border px-3 py-2.5 text-left transition-colors ${
-            (desktopInteractionTab === 'vote' || mobilePanel === 'vote') && !voteTabDisabled
+          disabled={isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled}
+          className={`min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition-colors ${
+            (desktopInteractionTab === 'vote' || mobilePanel === 'vote') && !(isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
               ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
-              : voteTabDisabled
+              : (isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
                 ? 'border-piu-border/60 bg-black/10 text-gray-500'
                 : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
           }`}
         >
-          <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em]">Vote</p>
-          <p className="mt-1 text-[11px] leading-tight">
-            {voteTabDisabled ? 'No active vote' : currentVote?.status === 'active' ? 'Live now' : 'Available'}
+          <p className="text-[10px] font-display font-bold uppercase tracking-[0.12em]">Vote</p>
+          <p className="mt-1 text-[10px] leading-tight">
+            {isDesktopViewport && voteTabDisabled ? 'No active vote' : currentVote?.status === 'active' ? 'Live now' : 'Available'}
           </p>
         </button>
       </div>
