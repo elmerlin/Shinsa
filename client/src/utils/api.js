@@ -913,6 +913,7 @@ export const getLiveSessions = (options = {}) => {
   const query = params.toString();
   return request(`/live/sessions${query ? `?${query}` : ''}`);
 };
+export const getProfileLiveSessions = (userId) => request(`/live/profile/${encodeURIComponent(userId)}`);
 export const getMyLiveSession = () => request('/live/sessions/mine/active');
 export const createLiveSession = (data) => request('/live/sessions', {
   method: 'POST',

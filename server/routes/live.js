@@ -979,6 +979,70 @@ function buildDirectorySessionPayload(db, session, currentUserId = '') {
   };
 }
 
+function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
+  if (!session) return null;
+  const host = getHostProfile(db, session.host_user_id);
+  const viewerCount = getViewerCount(db, session);
+  const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
+  const plays = getSessionPlays(db, session.id);
+  const messageCount = getSessionMessageCount(db, session.id);
+  const summary = plays.length > 0
+    ? buildLiveSessionSummary(plays, host || {}, {
+        viewerCount,
+        viewerPeak,
+        messageCount,
+        streamUrl: session.stream_url,
+        hostUsername: host?.username || '',
+      })
+    : null;
+
+  return {
+    session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId),
+    summary,
+    last_play: plays[0] || null,
+    message_count: messageCount,
+    request_counts: getSessionRequestCounts(db, session.id),
+    active_vote: summarizeVoteForDirectory(getLatestVoteSnapshot(db, session.id, currentUserId)),
+  };
+}
+
+function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
+  if (!session) return null;
+  const host = getHostProfile(db, session.host_user_id);
+  const plays = getSessionPlays(db, session.id);
+  const messageCount = getSessionMessageCount(db, session.id);
+  const summary = plays.length > 0
+    ? buildLiveSessionSummary(plays, host || {}, {
+        viewerCount: 0,
+        viewerPeak: Math.max(0, toInt(session.viewer_peak)),
+        messageCount,
+        streamUrl: session.stream_url,
+        hostUsername: host?.username || '',
+      })
+    : null;
+
+  return {
+    session: normalizeSessionPayload(session, host, 0, currentUserId),
+    summary,
+    last_play: plays[0] || null,
+    message_count: messageCount,
+    play_count: plays.length,
+  };
+}
+
+function getProfileEndedSessions(db, hostUserId, currentUserId = '', limit = 12) {
+  const rows = db.prepare(`
+    SELECT *
+    FROM live_sessions
+    WHERE host_user_id = ?
+      AND status = 'ended'
+    ORDER BY datetime(COALESCE(NULLIF(ended_at, ''), updated_at, created_at)) DESC, id DESC
+    LIMIT ?
+  `).all(hostUserId, Math.max(1, Math.min(24, toInt(limit) || 12)));
+
+  return rows.map((row) => buildProfileEndedSessionPayload(db, row, currentUserId)).filter(Boolean);
+}
+
 function getDirectorySessions(db, currentUserId = '', limit = 18) {
   const rows = db.prepare(`
     SELECT
@@ -1489,6 +1553,25 @@ router.get('/sessions', requireAuth, (req, res) => {
     const limit = Math.max(1, Math.min(36, toInt(req.query?.limit) || 18));
     const sessions = getDirectorySessions(db, req.user.id, limit);
     res.json({ sessions });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.get('/profile/:userId', (req, res) => {
+  try {
+    const db = getDb();
+    const userId = String(req.params.userId || '').trim();
+    if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+    const hostExists = db.prepare('SELECT id FROM users WHERE id = ? LIMIT 1').get(userId);
+    if (!hostExists) return res.status(404).json({ error: 'User not found' });
+
+    const activeSession = getActiveSessionForHost(db, userId);
+    res.json({
+      active_session: buildProfileActiveSessionPayload(db, activeSession, ''),
+      ended_sessions: getProfileEndedSessions(db, userId, '', 12),
+    });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }

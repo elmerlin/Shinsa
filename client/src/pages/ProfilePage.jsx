@@ -13,6 +13,7 @@ import {
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
+  getProfileLiveSessions,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -24,6 +25,8 @@ import GradeGoalTracker from '../components/GradeGoalTracker';
 import TitleProgressTab from '../components/TitleProgressTab';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
+import LiveSessionCard from '../components/LiveSessionCard';
+import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 
@@ -859,6 +862,7 @@ export default function ProfilePage() {
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
   const [songAnalytics, setSongAnalytics] = useState(null);
+  const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
@@ -886,6 +890,7 @@ export default function ProfilePage() {
     setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
     setActivityItems([]);
     setSongAnalytics(null);
+    setProfileLive({ active_session: null, ended_sessions: [] });
     setShoeCabinet(null);
     setShoeLoading(false);
     setShoeBusy(false);
@@ -933,12 +938,13 @@ export default function ProfilePage() {
         }
 
         const uid = userProfile.id;
-        const [statsData, piuStatusData, socialData, activityData, titleData] = await Promise.all([
+        const [statsData, piuStatusData, socialData, activityData, titleData, liveData] = await Promise.all([
           getUserStats(uid).catch(() => null),
           getPiugameSyncStatus(uid).catch(() => null),
           getSocialCounts(uid).catch(() => null),
           getUserActivity(uid).catch(() => []),
           getPiugameTitles(uid).catch(() => null),
+          getProfileLiveSessions(uid).catch(() => ({ active_session: null, ended_sessions: [] })),
         ]);
 
         if (cancelled) return;
@@ -947,6 +953,7 @@ export default function ProfilePage() {
         if (socialData) setSocialCounts(socialData);
         if (Array.isArray(activityData)) setActivityItems(activityData);
         if (titleData) setPiuTitles(titleData);
+        setProfileLive(liveData || { active_session: null, ended_sessions: [] });
 
         if (authUser) {
           const status = await getFollowStatus(uid).catch(() => null);
@@ -1848,13 +1855,17 @@ export default function ProfilePage() {
     : '';
   const computedSkillTitle = piuTitles?.imported ? (piuTitles?.summary?.current_title?.name || '') : '';
   const displaySkillTitle = computedSkillTitle || profile.skill_title;
+  const activeProfileLiveSession = profileLive?.active_session || null;
+  const endedProfileLiveSessions = Array.isArray(profileLive?.ended_sessions) ? profileLive.ended_sessions : [];
+  const activeProfileLiveUrl = activeProfileLiveSession?.session?.live_url || '';
+  const hasActiveProfileLiveSession = !!activeProfileLiveUrl;
 
   const tabs = hasPiuData
-    ? ['overview', 'piu', 'posts', 'shoes', 'competitions', 'activity']
-    : ['overview', 'posts', 'shoes', 'competitions', 'activity'];
+    ? ['overview', 'live', 'piu', 'posts', 'shoes', 'competitions', 'activity']
+    : ['overview', 'live', 'posts', 'shoes', 'competitions', 'activity'];
 
   const tabLabels = {
-    overview: 'Overview', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
+    overview: 'Overview', live: 'Live', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
     piu: 'PIU',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', titles: 'Titles', 'recently-played': 'Recently Played',
   };
@@ -1898,6 +1909,27 @@ export default function ProfilePage() {
   const activePiuTabLabel = isPiuTab ? tabLabels[tab] : 'Select';
 
   const showOverviewHeatmapCard = overviewPlayHeatmap.weeks.length > 0 || hasPiuData;
+  const avatarCore = profile.avatar ? (
+    <img
+      src={getAvatarUrl(profile.avatar)}
+      alt=""
+      className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0"
+    />
+  ) : (
+    <div className="w-14 h-14 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xl sm:text-3xl shadow-lg shrink-0">
+      {profile.username[0].toUpperCase()}
+    </div>
+  );
+  const avatarBlock = hasActiveProfileLiveSession ? (
+    <Link to={activeProfileLiveUrl} className="relative inline-flex shrink-0" title="Open Shinsa Live session">
+      <span className="absolute -inset-1 rounded-full bg-gradient-to-br from-rose-500 via-red-500 to-orange-400 opacity-90 blur-[1px]" />
+      <span className="absolute -inset-[3px] rounded-full border-2 border-rose-300/90 animate-pulse" />
+      <span className="relative">{avatarCore}</span>
+      <span className="absolute -bottom-1 left-1/2 z-10 -translate-x-1/2 rounded-full border border-rose-200/80 bg-rose-500 px-1.5 py-0.5 text-[8px] font-display font-black uppercase tracking-[0.2em] text-white shadow-[0_10px_20px_rgba(244,63,94,0.35)]">
+        Live
+      </span>
+    </Link>
+  ) : avatarCore;
   const overviewCardsById = {
     ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
     'skill-breakdown': { title: 'Skill Breakdown' },
@@ -2213,13 +2245,7 @@ export default function ProfilePage() {
       <div className="card mb-4 sm:mb-6 px-3 py-3 sm:p-4">
         <div className="flex flex-row items-start gap-2.5 sm:gap-6">
           <div className="grid flex-1 min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 sm:flex sm:items-start sm:gap-6">
-            {profile.avatar ? (
-            <img src={getAvatarUrl(profile.avatar)} alt="" className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0" />
-          ) : (
-            <div className="w-14 h-14 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xl sm:text-3xl shadow-lg shrink-0">
-              {profile.username[0].toUpperCase()}
-            </div>
-          )}
+            {avatarBlock}
             <div className="text-left min-w-0 flex-1">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {flag && <span className="shrink-0">{flag}</span>}
@@ -2248,6 +2274,16 @@ export default function ProfilePage() {
                 <span className="text-xs sm:text-sm font-display font-bold text-green-400">{profile.playing_status}</span>
               </div>
             )}
+            {hasActiveProfileLiveSession && (
+              <div className="hidden sm:flex items-center gap-2 mt-1.5">
+                <span className="inline-flex items-center rounded-full border border-rose-300/40 bg-rose-500/12 px-2 py-0.5 text-[10px] font-display font-black uppercase tracking-[0.2em] text-rose-200">
+                  Live now
+                </span>
+                <Link to={activeProfileLiveUrl} className="text-xs font-display font-bold text-cyan-300 hover:text-white transition-colors">
+                  Open Shinsa Live
+                </Link>
+              </div>
+            )}
             {profile.description && (
               <p className="hidden sm:block text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
             )}
@@ -2268,6 +2304,12 @@ export default function ProfilePage() {
             )}
             {profile.playing_status && (
               <p className="text-xs font-display font-bold text-green-400 truncate">{profile.playing_status}</p>
+            )}
+            {hasActiveProfileLiveSession && (
+              <Link to={activeProfileLiveUrl} className="inline-flex items-center gap-1 text-[10px] font-display font-black uppercase tracking-[0.18em] text-rose-300 hover:text-white transition-colors">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                Live
+              </Link>
             )}
             <p className="text-[10px] text-gray-600 truncate">Member since {memberSinceShortLabel}</p>
             {profile.description && (
@@ -2555,6 +2597,86 @@ export default function ProfilePage() {
             const body = renderOverviewCardBody(cardId);
             return body ? <React.Fragment key={cardId}>{body}</React.Fragment> : null;
           })}
+        </div>
+      )}
+
+      {tab === 'live' && (
+        <div className="space-y-4">
+          {activeProfileLiveSession ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div>
+                  <p className="text-[10px] font-display font-black uppercase tracking-[0.22em] text-rose-300">Live Now</p>
+                  <p className="text-xs text-gray-400">Current Shinsa Live session</p>
+                </div>
+                <Link
+                  to={activeProfileLiveUrl}
+                  className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-display font-bold uppercase tracking-wide text-cyan-200 hover:text-white transition-colors"
+                >
+                  Open live room
+                </Link>
+              </div>
+              <LiveDirectoryCard item={activeProfileLiveSession} compact />
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 px-1">
+              <div>
+                <p className="text-[10px] font-display font-black uppercase tracking-[0.22em] text-gray-500">Ended Sessions</p>
+                <p className="text-xs text-gray-400">Past Shinsa Live sessions</p>
+              </div>
+              <span className="text-[11px] text-gray-500">{endedProfileLiveSessions.length}</span>
+            </div>
+
+            {endedProfileLiveSessions.length === 0 ? (
+              <div className="card text-center text-gray-500 py-8">No ended Shinsa Live sessions yet.</div>
+            ) : (
+              <div className="space-y-4">
+                {endedProfileLiveSessions.map((item) => {
+                  const session = item?.session || {};
+                  const summary = item?.summary || null;
+                  const endedLabel = session.ended_at ? timeAgo(session.ended_at) : '';
+
+                  if (!summary) {
+                    return (
+                      <Link key={session.id} to={session.live_url || `/live/${session.id}`} className="card-hover block p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-display font-bold text-white truncate">
+                              {session.title || `${profile.username} live session`}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-400">
+                              {item.play_count || 0} plays • {item.message_count || 0} messages
+                            </p>
+                          </div>
+                          {endedLabel ? (
+                            <span className="shrink-0 text-[11px] text-gray-500">{endedLabel}</span>
+                          ) : null}
+                        </div>
+                      </Link>
+                    );
+                  }
+
+                  return (
+                    <div key={session.id} className="space-y-2">
+                      <div className="flex items-center justify-between gap-3 px-1">
+                        <p className="min-w-0 truncate text-sm font-display font-bold text-white">
+                          {session.title || 'Shinsa Live Recap'}
+                        </p>
+                        {endedLabel ? (
+                          <span className="shrink-0 text-[11px] text-gray-500">{endedLabel}</span>
+                        ) : null}
+                      </div>
+                      <Link to={session.live_url || `/live/${session.id}`} className="block">
+                        <LiveSessionCard summary={summary} className="mb-0 transition-colors hover:border-cyan-300/30" />
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
