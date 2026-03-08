@@ -44,7 +44,7 @@ async function createDayPassPaymentLink({ userId, email, username, venueId, plan
   const client = getSquareClient();
   const { v4: uuidv4 } = require('uuid');
 
-  const result = await client.checkout.createPaymentLink({
+  const result = await client.checkout.paymentLinks.create({
     idempotencyKey: uuidv4(),
     quickPay: {
       name: planName || 'Day Pass',
@@ -85,7 +85,7 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
 
   if (squarePlanVariationId) {
     // Use subscription checkout
-    const result = await client.checkout.createPaymentLink({
+    const result = await client.checkout.paymentLinks.create({
       idempotencyKey: uuidv4(),
       checkoutOptions: {
         subscriptionPlanId: squarePlanVariationId,
@@ -112,7 +112,7 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
   }
 
   // Fallback: one-off payment link (admin will need to manage renewal manually)
-  const result = await client.checkout.createPaymentLink({
+  const result = await client.checkout.paymentLinks.create({
     idempotencyKey: uuidv4(),
     quickPay: {
       name: planName || 'Monthly Subscription',

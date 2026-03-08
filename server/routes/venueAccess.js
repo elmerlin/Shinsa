@@ -646,7 +646,7 @@ router.post('/purchase/day-pass', requireAuth, async (req, res) => {
     }
 
     // Check whitelist
-    const venue = db.prepare(`SELECT id FROM venues v JOIN venue_access_plans vap ON v.id = vap.venue_id WHERE vap.id = ?`).get(plan_id);
+    const venue = db.prepare(`SELECT v.id FROM venues v JOIN venue_access_plans vap ON v.id = vap.venue_id WHERE vap.id = ?`).get(plan_id);
     if (venue && !isUserApproved(db, req.user.id, venue.id)) {
       return res.status(403).json({ error: 'You are not approved for this venue. Please contact the venue admin.' });
     }
