@@ -912,6 +912,10 @@ export const createLiveSession = (data) => request('/live/sessions', {
   timeoutMs: 60000,
 });
 export const getLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}`);
+export const updateLiveSession = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}`, {
+  method: 'PATCH',
+  body: JSON.stringify(data),
+});
 export const createLiveOverlayToken = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/overlay-token`, {
   method: 'POST',
   body: '{}',

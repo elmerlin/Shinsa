@@ -19,6 +19,7 @@ import {
   setLiveModeration,
   setLiveRequestStatus,
   syncLiveSession,
+  updateLiveSession,
 } from '../utils/api';
 import LiveEmote from '../components/LiveEmote';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
@@ -562,6 +563,57 @@ function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStream
   );
 }
 
+function StreamUrlEditorCard({
+  streamUrl,
+  saving,
+  attached,
+  recognized,
+  onChange,
+  onSubmit,
+}) {
+  return (
+    <div className="rounded-3xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_40%),linear-gradient(180deg,#0d1524,#09101b)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Stream Link</p>
+          <p className="mt-2 text-sm text-gray-300">
+            Attach or replace your YouTube live URL without ending the session.
+          </p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${
+          attached
+            ? recognized
+              ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+              : 'border border-amber-400/30 bg-amber-500/10 text-amber-200'
+            : 'border border-piu-border bg-black/20 text-gray-400'
+        }`}>
+          {attached ? (recognized ? 'Video ready' : 'Link saved') : 'No link attached'}
+        </span>
+      </div>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <input
+          value={streamUrl}
+          onChange={(e) => onChange(e.target.value)}
+          className="input-field w-full"
+          placeholder="YouTube stream URL"
+          maxLength={400}
+        />
+        <button type="button" onClick={onSubmit} disabled={saving} className="btn-primary px-4 py-2.5 sm:w-auto">
+          {saving ? 'Saving...' : attached ? 'Update link' : 'Attach link'}
+        </button>
+      </div>
+      <p className="mt-2 text-[11px] text-gray-400">
+        Leave it blank and save if you want to remove the current link.
+      </p>
+      {attached && !recognized ? (
+        <p className="mt-2 text-[11px] text-amber-200">
+          The link is attached to the room, but Shinsa could not turn it into an embedded YouTube player yet.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function DirectorySection({ title, subtitle, sessions }) {
   if (!Array.isArray(sessions) || sessions.length === 0) return null;
 
@@ -994,7 +1046,9 @@ export default function LivePage() {
   const [directoryError, setDirectoryError] = useState('');
   const [createTitle, setCreateTitle] = useState('');
   const [createStreamUrl, setCreateStreamUrl] = useState('');
+  const [editStreamUrl, setEditStreamUrl] = useState('');
   const [creating, setCreating] = useState(false);
+  const [savingStreamUrl, setSavingStreamUrl] = useState(false);
   const [playerMode, setPlayerMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState('');
   const [wakeLockActive, setWakeLockActive] = useState(false);
@@ -1081,6 +1135,10 @@ export default function LivePage() {
       baseUrl: window.location.origin,
     });
   }, [activeSessionId, overlayAnchor, overlayAutoHide, overlayFit, overlayGuides, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
+
+  useEffect(() => {
+    setEditStreamUrl(live?.stream_url || '');
+  }, [live?.id, live?.stream_url]);
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -1582,6 +1640,23 @@ export default function LivePage() {
       setError(err.message || 'Failed to create live session');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleUpdateStreamUrl = async () => {
+    if (!activeSessionId || !isHost) return;
+    setSavingStreamUrl(true);
+    setError('');
+    try {
+      const data = await updateLiveSession(activeSessionId, { stream_url: editStreamUrl });
+      applySnapshot(data, { markMessagesSeen: false });
+      const savedUrl = String(data?.session?.stream_url || '').trim();
+      setEditStreamUrl(savedUrl);
+      setStatusNote(savedUrl ? 'Live stream link updated.' : 'Live stream link removed.');
+    } catch (err) {
+      setError(err.message || 'Failed to update live stream link');
+    } finally {
+      setSavingStreamUrl(false);
     }
   };
 
@@ -2592,20 +2667,39 @@ export default function LivePage() {
       </div>
 
       {!youtubeId && isHost ? (
-        <div className="rounded-3xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_40%),linear-gradient(180deg,#0d1524,#09101b)] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Companion Dashboard</p>
-              <p className="mt-2 text-sm text-gray-300">
-                No stream link is attached, so this room is running in session-tracker mode. The player HUD can stay pinned while you watch sync state, results, requests, and chat on your phone.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-piu-border bg-black/15 px-4 py-3 text-right">
-              <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current viewers</p>
-              <p className="text-2xl font-display font-black text-cyan-200">{viewerNowCount}</p>
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_40%),linear-gradient(180deg,#0d1524,#09101b)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Companion Dashboard</p>
+                <p className="mt-2 text-sm text-gray-300">
+                  No stream link is attached, so this room is running in session-tracker mode. The player HUD can stay pinned while you watch sync state, results, requests, and chat on your phone.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-piu-border bg-black/15 px-4 py-3 text-right">
+                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current viewers</p>
+                <p className="text-2xl font-display font-black text-cyan-200">{viewerNowCount}</p>
+              </div>
             </div>
           </div>
+          <StreamUrlEditorCard
+            streamUrl={editStreamUrl}
+            saving={savingStreamUrl}
+            attached={!!String(live?.stream_url || '').trim()}
+            recognized={!!youtubeId}
+            onChange={setEditStreamUrl}
+            onSubmit={handleUpdateStreamUrl}
+          />
         </div>
+      ) : isHost ? (
+        <StreamUrlEditorCard
+          streamUrl={editStreamUrl}
+          saving={savingStreamUrl}
+          attached={!!String(live?.stream_url || '').trim()}
+          recognized={!!youtubeId}
+          onChange={setEditStreamUrl}
+          onSubmit={handleUpdateStreamUrl}
+        />
       ) : null}
 
       {isHost && activeSessionId ? (

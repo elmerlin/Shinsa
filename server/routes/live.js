@@ -1427,6 +1427,28 @@ router.get('/sessions/:id', requireAuth, (req, res) => {
   }
 });
 
+router.patch('/sessions/:id', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    if (String(session.host_user_id || '') !== String(req.user.id || '')) {
+      return res.status(403).json({ error: 'Only the host can update this live session' });
+    }
+
+    const nextStreamUrl = normalizeUrl(req.body?.stream_url, 400);
+    db.prepare(`
+      UPDATE live_sessions
+      SET stream_url = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(nextStreamUrl, session.id);
+
+    broadcastLiveSessionSnapshot(db, session.id, 'stream_updated');
+    return res.json(buildSessionSnapshot(db, session.id, req.user.id));
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 router.post('/sessions/:id/overlay-token', requireAuth, (req, res) => {
   try {
     const db = getDb();
