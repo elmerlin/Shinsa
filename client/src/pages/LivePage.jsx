@@ -727,13 +727,13 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Latest Play</p>
-          <p className="text-sm text-cyan-50/80 mt-1">
-            {play
-              ? 'Last song played'
-              : live?.status === 'live'
+          {!play ? (
+            <p className="text-sm text-cyan-50/80 mt-1">
+              {live?.status === 'live'
                 ? 'Waiting for the first chart to land.'
                 : 'This live room has wrapped.'}
-          </p>
+            </p>
+          ) : null}
         </div>
         <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${live?.status === 'live' ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-piu-border bg-black/20 text-gray-400'}`}>
           {live?.status === 'live' ? 'Live sync' : 'Session ended'}
@@ -757,7 +757,6 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
                 <span className="text-base font-display font-bold text-cyan-100/90">{formatNumber(play.score)}</span>
               </button>
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-gray-400">{modeShort(play.mode)}{play.level}</span>
                 {play.machine_name ? <span className="text-gray-400">at {play.machine_name}</span> : null}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -1101,7 +1100,7 @@ export default function LivePage() {
   const [savingRequestsEnabled, setSavingRequestsEnabled] = useState(false);
   const [playerMode, setPlayerMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState('');
-  const [desktopInteractionTab, setDesktopInteractionTab] = useState('requests');
+  const [desktopInteractionTab, setDesktopInteractionTab] = useState('');
   const [hostWorkspaceTab, setHostWorkspaceTab] = useState('room');
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
@@ -1117,7 +1116,7 @@ export default function LivePage() {
   const [showEmoteTray, setShowEmoteTray] = useState(false);
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [playModeFilter, setPlayModeFilter] = useState('All');
-  const [playSort, setPlaySort] = useState('recent');
+  const [playPassOnly, setPlayPassOnly] = useState(true);
   const [songSearch, setSongSearch] = useState('');
   const deferredSongSearch = useDeferredValue(songSearch);
   const [songResults, setSongResults] = useState([]);
@@ -1483,6 +1482,12 @@ export default function LivePage() {
   }, [isHost, overlayAnchor, overlayAutoHide, overlayFit, overlayGuides, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
 
   useEffect(() => {
+    if (isDesktopViewport && !desktopInteractionTab) {
+      setDesktopInteractionTab('requests');
+    }
+  }, [desktopInteractionTab, isDesktopViewport]);
+
+  useEffect(() => {
     if (!useMobilePlayerHud) {
       setMobilePanel('');
       if (wakeLockRef.current) releaseWakeLock();
@@ -1701,18 +1706,17 @@ export default function LivePage() {
 
   const visiblePlays = useMemo(() => {
     const rows = Array.isArray(snapshot?.plays) ? [...snapshot.plays] : [];
-    const filtered = playModeFilter === 'All'
+    let filtered = playModeFilter === 'All'
       ? rows
       : rows.filter((play) => play.mode === playModeFilter);
 
-    filtered.sort((a, b) => {
-      if (playSort === 'level_desc') return (parseInt(b.level, 10) || 0) - (parseInt(a.level, 10) || 0);
-      if (playSort === 'score_desc') return (parseInt(b.score, 10) || 0) - (parseInt(a.score, 10) || 0);
-      if (playSort === 'grade_desc') return getGradeIndex(b.grade) - getGradeIndex(a.grade);
-      return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);
-    });
+    if (playPassOnly) {
+      filtered = filtered.filter((play) => (parseInt(play.score, 10) || 0) > 0);
+    }
+
+    filtered.sort((a, b) => (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0));
     return filtered;
-  }, [snapshot?.plays, playModeFilter, playSort]);
+  }, [snapshot?.plays, playModeFilter, playPassOnly]);
 
   const requestLookup = useMemo(() => {
     const map = new Map();
@@ -2176,18 +2180,24 @@ export default function LivePage() {
           <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Songs This Session</p>
           <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field ${isCompactSongCardLayout ? 'text-[11px] py-1.5 px-2.5' : 'text-xs py-2'}`}>
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[320px]">
+          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field rounded-2xl border border-piu-border bg-black/15 ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
             <option>All</option>
             <option>Single</option>
             <option>Double</option>
           </select>
-          <select value={playSort} onChange={(e) => setPlaySort(e.target.value)} className={`input-field ${isCompactSongCardLayout ? 'text-[11px] py-1.5 px-2.5' : 'text-xs py-2'}`}>
-            <option value="recent">Recent</option>
-            <option value="level_desc">Level high to low</option>
-            <option value="grade_desc">Grade high to low</option>
-            <option value="score_desc">Score high to low</option>
-          </select>
+          <button
+            type="button"
+            onClick={() => setPlayPassOnly((prev) => !prev)}
+            className={`rounded-2xl border px-3 text-left transition-colors ${
+              playPassOnly
+                ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'
+                : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
+            } ${isCompactSongCardLayout ? 'py-2' : 'py-2.5'}`}
+          >
+            <p className="text-[10px] font-display font-bold uppercase tracking-wide">Pass</p>
+            <p className="mt-1 text-[11px]">{playPassOnly ? 'Showing passes only' : 'Showing all results'}</p>
+          </button>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-2.5 xl:grid-cols-3 2xl:grid-cols-4">
@@ -2452,7 +2462,7 @@ export default function LivePage() {
           type="button"
           onClick={() => {
             if (requestTabDisabled) return;
-            setDesktopInteractionTab('requests');
+            setDesktopInteractionTab((prev) => (prev === 'requests' && !isDesktopViewport ? '' : 'requests'));
           }}
           disabled={requestTabDisabled}
           className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
@@ -2472,7 +2482,7 @@ export default function LivePage() {
           type="button"
           onClick={() => {
             if (voteTabDisabled) return;
-            setDesktopInteractionTab('vote');
+            setDesktopInteractionTab((prev) => (prev === 'vote' && !isDesktopViewport ? '' : 'vote'));
           }}
           disabled={voteTabDisabled}
           className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
@@ -2489,7 +2499,7 @@ export default function LivePage() {
           </p>
         </button>
       </div>
-      <div className="mt-4">
+      <div className={`mt-4 ${!isDesktopViewport && !desktopInteractionTab ? 'hidden' : ''}`}>
         {desktopInteractionTab === 'vote'
           ? (voteTabDisabled
             ? (
@@ -2870,8 +2880,8 @@ export default function LivePage() {
               {live?.status === 'ended' ? ' • ended' : ' • live'}
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex shrink-0 flex-col gap-2 items-start md:items-end">
+            <div className="flex flex-wrap items-center gap-2 justify-start md:justify-end">
               {isHost ? (
                 <button
                   type="button"
@@ -2900,7 +2910,7 @@ export default function LivePage() {
               )}
             </div>
             {!isDesktopViewport ? (
-              <p className="text-xs text-right text-gray-400">
+              <p className="text-xs text-left text-gray-400">
                 {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
                 {syncLabel ? ` • ${syncLabel}` : ''}
               </p>
