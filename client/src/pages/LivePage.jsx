@@ -1188,6 +1188,9 @@ export default function LivePage() {
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && !hasPlayerPanels && hostWorkspaceTab !== 'overlay';
   const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
+  const mobileLockedVideoWrapperClass = shouldLockMobileVideo
+    ? 'fixed inset-x-4 top-[76px] z-40 lg:hidden'
+    : '';
   const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px` }
     : undefined;
@@ -3191,7 +3194,13 @@ export default function LivePage() {
             </div>
           </div>
       ) : hostWorkspaceTab !== 'overlay' && youtubeId ? (
-        <div className={shouldLockMobileVideo ? 'lg:hidden sticky top-[68px] z-20' : ''}>
+        <>
+          {shouldLockMobileVideo ? (
+            <div className="lg:hidden" aria-hidden="true">
+              <div className="w-full" style={{ paddingBottom: '56.25%' }} />
+            </div>
+          ) : null}
+        <div className={mobileLockedVideoWrapperClass}>
           <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
             <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
               <iframe
@@ -3205,6 +3214,7 @@ export default function LivePage() {
             </div>
           </div>
         </div>
+        </>
       ) : null}
 
       {hostWorkspaceTab !== 'overlay' ? (
