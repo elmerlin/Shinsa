@@ -901,6 +901,8 @@ export const getDojoOverview = (venueSlug = 'london-pump-dojo', params = {}) => 
 };
 export const getCheckinNotificationPreferences = (venueSlug) => request(`/checkins/notifications/${encodeURIComponent(venueSlug)}`);
 export const updateCheckinNotificationPreferences = (venueSlug, data) => request(`/checkins/notifications/${encodeURIComponent(venueSlug)}`, { method: 'PUT', body: JSON.stringify(data) });
+export const getVenueAccessNotificationPreferences = (venueSlug) => request(`/venue-access/notifications/${encodeURIComponent(venueSlug)}`);
+export const updateVenueAccessNotificationPreferences = (venueSlug, data) => request(`/venue-access/notifications/${encodeURIComponent(venueSlug)}`, { method: 'PUT', body: JSON.stringify(data) });
 export const setPlayingStatus = (status) => request('/checkins/playing-status', { method: 'PUT', body: JSON.stringify({ status }) });
 export const clearPlayingStatus = () => request('/checkins/playing-status', { method: 'DELETE' });
 

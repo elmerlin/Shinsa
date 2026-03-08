@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth, isAdminUser, hasFeatureAccess } = require('./auth');
+const { createUserNotification } = require('../lib/notifications');
 const {
   isSquareConfigured,
   createDayPassPaymentLink,
@@ -173,6 +174,118 @@ function formatMonthLabel(monthKey) {
   const date = new Date(`${monthKey}-01T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return monthKey;
   return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function formatCurrencyAmount(amount, currency = 'gbp') {
+  const normalizedCurrency = String(currency || 'gbp').trim().toUpperCase() || 'GBP';
+  const numericAmount = Number(amount || 0) / 100;
+  try {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numericAmount);
+  } catch {
+    return `${normalizedCurrency} ${numericAmount.toFixed(2)}`;
+  }
+}
+
+function getVenueAccessNotificationState(db, subscriberUserId, venueId) {
+  const row = db.prepare(`
+    SELECT notify_subscription_events, notify_day_pass_purchases, notify_payments
+    FROM venue_access_notification_subscriptions
+    WHERE subscriber_user_id = ? AND venue_id = ?
+  `).get(subscriberUserId, venueId);
+
+  const notifySubscriptionEvents = !!row?.notify_subscription_events;
+  const notifyDayPassPurchases = !!row?.notify_day_pass_purchases;
+  const notifyPayments = !!row?.notify_payments;
+
+  return {
+    notify_subscription_events: notifySubscriptionEvents,
+    notify_day_pass_purchases: notifyDayPassPurchases,
+    notify_payments: notifyPayments,
+    subscribed: notifySubscriptionEvents || notifyDayPassPurchases || notifyPayments,
+  };
+}
+
+function notifyUsersAboutVenueAccessEvent(db, {
+  venueId,
+  eventType,
+  username,
+  venueName,
+  planName,
+  cadenceLabel,
+  passDate,
+  amount,
+  currency,
+  paymentType,
+}) {
+  if (!db || !venueId || !eventType) return 0;
+
+  const normalizedType = String(eventType || '').trim().toLowerCase();
+  const recipientRows = db.prepare(`
+    SELECT subscriber_user_id AS user_id,
+           notify_subscription_events,
+           notify_day_pass_purchases,
+           notify_payments
+    FROM venue_access_notification_subscriptions
+    WHERE venue_id = ?
+  `).all(venueId);
+
+  if (!recipientRows.length) return 0;
+
+  const safeUsername = String(username || '').trim() || 'Someone';
+  const safeVenueName = String(venueName || '').trim() || 'Pump Dojo';
+  const safePlanName = String(planName || '').trim();
+  const safeCadenceLabel = String(cadenceLabel || '').trim();
+  const safePassDate = String(passDate || '').trim();
+  const safeAmount = amount != null ? formatCurrencyAmount(amount, currency) : '';
+  const cadenceSummary = safeCadenceLabel || safePlanName || 'membership';
+  const paymentLabel = paymentType === 'day_pass'
+    ? 'day pass'
+    : paymentType === 'subscription_renewal'
+      ? 'subscription renewal'
+      : 'subscription';
+
+  let title = 'Dojo Update';
+  let message = `${safeUsername} triggered a dojo event.`;
+  let shouldNotify = () => false;
+  let notificationType = 'dojo_venue_access';
+
+  if (normalizedType === 'subscription_created') {
+    title = 'Dojo Subscription Started';
+    message = `${safeUsername} started a ${cadenceSummary} at ${safeVenueName}.`;
+    shouldNotify = (row) => !!row?.notify_subscription_events;
+    notificationType = 'dojo_subscription_created';
+  } else if (normalizedType === 'subscription_cancelled') {
+    title = 'Dojo Subscription Cancelled';
+    message = `${safeUsername} cancelled their ${cadenceSummary} at ${safeVenueName}.`;
+    shouldNotify = (row) => !!row?.notify_subscription_events;
+    notificationType = 'dojo_subscription_cancelled';
+  } else if (normalizedType === 'day_pass_purchased') {
+    title = 'Dojo Day Pass Purchased';
+    message = `${safeUsername} bought a day pass${safePassDate ? ` for ${safePassDate}` : ''} at ${safeVenueName}.`;
+    shouldNotify = (row) => !!row?.notify_day_pass_purchases;
+    notificationType = 'dojo_day_pass_purchase';
+  } else if (normalizedType === 'payment_received') {
+    title = 'Dojo Payment Received';
+    message = `${safeUsername} paid ${safeAmount || 'for access'} for ${paymentLabel}${safePassDate ? ` on ${safePassDate}` : ''} at ${safeVenueName}.`;
+    shouldNotify = (row) => !!row?.notify_payments;
+    notificationType = 'dojo_payment_received';
+  } else {
+    return 0;
+  }
+
+  let notified = 0;
+  for (const row of recipientRows) {
+    const recipientId = String(row?.user_id || '').trim();
+    if (!recipientId || !shouldNotify(row)) continue;
+    createUserNotification(db, recipientId, notificationType, title, message, '/dojoadmin');
+    notified += 1;
+  }
+  return notified;
 }
 
 /**
@@ -390,6 +503,126 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
   });
 });
 
+// GET /api/venue-access/notifications/:venueSlug — get current dojo admin venue-access notification prefs
+router.get('/notifications/:venueSlug', requireAuth, requireDojoAdmin, (req, res) => {
+  const db = getDb();
+  const venue = db.prepare('SELECT id, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
+  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+
+  const prefs = getVenueAccessNotificationState(db, req.user.id, venue.id);
+  res.json({
+    venue_id: venue.id,
+    venue_slug: venue.slug,
+    ...prefs,
+  });
+});
+
+// PUT /api/venue-access/notifications/:venueSlug — set current dojo admin venue-access notification prefs
+router.put('/notifications/:venueSlug', requireAuth, requireDojoAdmin, (req, res) => {
+  const db = getDb();
+  const venue = db.prepare('SELECT id, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
+  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+
+  const payload = req.body || {};
+  const hasSubscribed = Object.prototype.hasOwnProperty.call(payload, 'subscribed');
+  const hasNotifySubscriptionEvents = Object.prototype.hasOwnProperty.call(payload, 'notify_subscription_events');
+  const hasNotifyDayPassPurchases = Object.prototype.hasOwnProperty.call(payload, 'notify_day_pass_purchases');
+  const hasNotifyPayments = Object.prototype.hasOwnProperty.call(payload, 'notify_payments');
+
+  if (!hasSubscribed && !hasNotifySubscriptionEvents && !hasNotifyDayPassPurchases && !hasNotifyPayments) {
+    return res.status(400).json({ error: 'At least one notification field must be provided' });
+  }
+
+  const existing = getVenueAccessNotificationState(db, req.user.id, venue.id);
+  if (hasSubscribed && !payload.subscribed) {
+    db.prepare(`
+      DELETE FROM venue_access_notification_subscriptions
+      WHERE subscriber_user_id = ? AND venue_id = ?
+    `).run(req.user.id, venue.id);
+
+    return res.json({
+      venue_id: venue.id,
+      venue_slug: venue.slug,
+      subscribed: false,
+      notify_subscription_events: false,
+      notify_day_pass_purchases: false,
+      notify_payments: false,
+    });
+  }
+
+  let notifySubscriptionEvents = hasNotifySubscriptionEvents
+    ? !!payload.notify_subscription_events
+    : !!existing.notify_subscription_events;
+  let notifyDayPassPurchases = hasNotifyDayPassPurchases
+    ? !!payload.notify_day_pass_purchases
+    : !!existing.notify_day_pass_purchases;
+  let notifyPayments = hasNotifyPayments
+    ? !!payload.notify_payments
+    : !!existing.notify_payments;
+
+  if (
+    hasSubscribed
+    && !!payload.subscribed
+    && !hasNotifySubscriptionEvents
+    && !hasNotifyDayPassPurchases
+    && !hasNotifyPayments
+    && !existing.subscribed
+  ) {
+    notifySubscriptionEvents = true;
+    notifyDayPassPurchases = true;
+    notifyPayments = true;
+  }
+
+  if (!notifySubscriptionEvents && !notifyDayPassPurchases && !notifyPayments) {
+    db.prepare(`
+      DELETE FROM venue_access_notification_subscriptions
+      WHERE subscriber_user_id = ? AND venue_id = ?
+    `).run(req.user.id, venue.id);
+
+    return res.json({
+      venue_id: venue.id,
+      venue_slug: venue.slug,
+      subscribed: false,
+      notify_subscription_events: false,
+      notify_day_pass_purchases: false,
+      notify_payments: false,
+    });
+  }
+
+  db.prepare(`
+    INSERT INTO venue_access_notification_subscriptions (
+      subscriber_user_id,
+      venue_id,
+      notify_subscription_events,
+      notify_day_pass_purchases,
+      notify_payments,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(subscriber_user_id, venue_id) DO UPDATE SET
+      notify_subscription_events = excluded.notify_subscription_events,
+      notify_day_pass_purchases = excluded.notify_day_pass_purchases,
+      notify_payments = excluded.notify_payments,
+      updated_at = datetime('now')
+  `).run(
+    req.user.id,
+    venue.id,
+    notifySubscriptionEvents ? 1 : 0,
+    notifyDayPassPurchases ? 1 : 0,
+    notifyPayments ? 1 : 0,
+  );
+
+  return res.json({
+    venue_id: venue.id,
+    venue_slug: venue.slug,
+    subscribed: true,
+    notify_subscription_events: notifySubscriptionEvents,
+    notify_day_pass_purchases: notifyDayPassPurchases,
+    notify_payments: notifyPayments,
+  });
+});
+
 // POST /api/venue-access/purchase/day-pass — create Square payment link for a day pass
 router.post('/purchase/day-pass', requireAuth, async (req, res) => {
   try {
@@ -600,7 +833,12 @@ router.post('/cancel-subscription', requireAuth, async (req, res) => {
     }
 
     const sub = db.prepare(`
-      SELECT * FROM venue_subscriptions WHERE id = ? AND user_id = ? AND status = 'active'
+      SELECT vs.*, u.username, v.name AS venue_name, vap.name AS plan_name
+      FROM venue_subscriptions vs
+      JOIN users u ON u.id = vs.user_id
+      JOIN venues v ON v.id = vs.venue_id
+      JOIN venue_access_plans vap ON vap.id = vs.plan_id
+      WHERE vs.id = ? AND vs.user_id = ? AND vs.status = 'active'
     `).get(subscription_id, req.user.id);
     if (!sub) return res.status(404).json({ error: 'Active subscription not found' });
 
@@ -612,6 +850,15 @@ router.post('/cancel-subscription', requireAuth, async (req, res) => {
       UPDATE venue_subscriptions SET status = 'cancelled', cancelled_at = datetime('now'), updated_at = datetime('now')
       WHERE id = ?
     `).run(subscription_id);
+
+    notifyUsersAboutVenueAccessEvent(db, {
+      venueId: sub.venue_id,
+      eventType: 'subscription_cancelled',
+      username: sub.username,
+      venueName: sub.venue_name,
+      planName: sub.plan_name,
+      cadenceLabel: sub.subscription_cadence_label,
+    });
 
     res.json({ success: true });
   } catch (err) {
@@ -819,13 +1066,39 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
           // We need to figure out the pass_date — stored in the description
           const dateMatch = paymentRow.description?.match(/(\d{4}-\d{2}-\d{2})/);
           const passDate = dateMatch ? dateMatch[1] : todayDateString();
+          const paymentUser = db.prepare('SELECT username FROM users WHERE id = ?').get(paymentRow.user_id);
+          const paymentVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(paymentRow.venue_id);
+          const paymentPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(paymentRow.plan_id);
 
           const passId = uuidv4();
           db.prepare(`
             INSERT INTO venue_day_passes (id, user_id, venue_id, plan_id, pass_date, status, payment_id)
             VALUES (?, ?, ?, ?, ?, 'active', ?)
           `).run(passId, paymentRow.user_id, paymentRow.venue_id, paymentRow.plan_id, passDate, paymentRow.id);
+
+          notifyUsersAboutVenueAccessEvent(db, {
+            venueId: paymentRow.venue_id,
+            eventType: 'day_pass_purchased',
+            username: paymentUser?.username,
+            venueName: paymentVenue?.name,
+            planName: paymentPlan?.name,
+            passDate,
+          });
+          notifyUsersAboutVenueAccessEvent(db, {
+            venueId: paymentRow.venue_id,
+            eventType: 'payment_received',
+            username: paymentUser?.username,
+            venueName: paymentVenue?.name,
+            planName: paymentPlan?.name,
+            passDate,
+            amount: paymentRow.amount,
+            currency: paymentRow.currency,
+            paymentType: 'day_pass',
+          });
         } else if (paymentRow.payment_type === 'subscription') {
+          const paymentUser = db.prepare('SELECT username FROM users WHERE id = ?').get(paymentRow.user_id);
+          const paymentVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(paymentRow.venue_id);
+          const paymentPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(paymentRow.plan_id);
           const subId = uuidv4();
           const periodStart = todayDateString();
           const billingIntervalMonths = Math.max(1, parseInt(paymentRow.billing_interval_months, 10) || 1);
@@ -852,6 +1125,26 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
 
           // Auto-add user to "Pump Dojo" group
           addUserToDojoMemberGroup(db, paymentRow.user_id, null);
+
+          notifyUsersAboutVenueAccessEvent(db, {
+            venueId: paymentRow.venue_id,
+            eventType: 'subscription_created',
+            username: paymentUser?.username,
+            venueName: paymentVenue?.name,
+            planName: paymentPlan?.name,
+            cadenceLabel: paymentRow.subscription_cadence_label,
+          });
+          notifyUsersAboutVenueAccessEvent(db, {
+            venueId: paymentRow.venue_id,
+            eventType: 'payment_received',
+            username: paymentUser?.username,
+            venueName: paymentVenue?.name,
+            planName: paymentPlan?.name,
+            cadenceLabel: paymentRow.subscription_cadence_label,
+            amount: paymentRow.amount,
+            currency: paymentRow.currency,
+            paymentType: 'subscription',
+          });
         }
         break;
       }
@@ -882,6 +1175,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
         `).get(squareSubId);
 
         if (sub) {
+          const previousStatus = String(sub.status || '').toLowerCase();
           if (status === 'ACTIVE') {
             db.prepare(`
               UPDATE venue_subscriptions SET status = 'active', updated_at = datetime('now')
@@ -897,6 +1191,20 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
               UPDATE venue_subscriptions SET status = 'expired', cancelled_at = datetime('now'), updated_at = datetime('now')
               WHERE id = ?
             `).run(sub.id);
+
+            if (previousStatus !== 'cancelled' && previousStatus !== 'expired') {
+              const subscriptionUser = db.prepare('SELECT username FROM users WHERE id = ?').get(sub.user_id);
+              const subscriptionVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(sub.venue_id);
+              const subscriptionPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(sub.plan_id);
+              notifyUsersAboutVenueAccessEvent(db, {
+                venueId: sub.venue_id,
+                eventType: 'subscription_cancelled',
+                username: subscriptionUser?.username,
+                venueName: subscriptionVenue?.name,
+                planName: subscriptionPlan?.name,
+                cadenceLabel: sub.subscription_cadence_label,
+              });
+            }
           }
         }
         break;
@@ -913,6 +1221,9 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
         `).get(subscriptionId);
 
         if (sub) {
+          const subscriptionUser = db.prepare('SELECT username FROM users WHERE id = ?').get(sub.user_id);
+          const subscriptionVenue = db.prepare('SELECT name FROM venues WHERE id = ?').get(sub.venue_id);
+          const subscriptionPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(sub.plan_id);
           const periodStart = todayDateString();
           const billingIntervalMonths = Math.max(1, parseInt(sub.billing_interval_months, 10) || 1);
           const periodEnd = addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
@@ -949,6 +1260,18 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
               ? `Subscription renewal (${sub.subscription_cadence_label})`
               : 'Subscription renewal',
           );
+
+          notifyUsersAboutVenueAccessEvent(db, {
+            venueId: sub.venue_id,
+            eventType: 'payment_received',
+            username: subscriptionUser?.username,
+            venueName: subscriptionVenue?.name,
+            planName: subscriptionPlan?.name,
+            cadenceLabel: sub.subscription_cadence_label,
+            amount,
+            currency,
+            paymentType: 'subscription_renewal',
+          });
         }
         break;
       }
@@ -1604,7 +1927,14 @@ router.post('/admin/revoke/:type/:id', requireAuth, requireDojoAdmin, (req, res)
     db.prepare("UPDATE venue_day_passes SET status = 'cancelled' WHERE id = ?").run(id);
     res.json({ success: true });
   } else if (type === 'subscription') {
-    const sub = db.prepare('SELECT * FROM venue_subscriptions WHERE id = ?').get(id);
+    const sub = db.prepare(`
+      SELECT vs.*, u.username, v.name AS venue_name, vap.name AS plan_name
+      FROM venue_subscriptions vs
+      JOIN users u ON u.id = vs.user_id
+      JOIN venues v ON v.id = vs.venue_id
+      JOIN venue_access_plans vap ON vap.id = vs.plan_id
+      WHERE vs.id = ?
+    `).get(id);
     if (!sub) return res.status(404).json({ error: 'Subscription not found' });
     db.prepare("UPDATE venue_subscriptions SET status = 'cancelled', cancelled_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").run(id);
     if (isSquareConfigured() && sub.square_subscription_id) {
@@ -1612,6 +1942,14 @@ router.post('/admin/revoke/:type/:id', requireAuth, requireDojoAdmin, (req, res)
         console.error('[VenueAccess] Failed to cancel Square subscription:', err.message);
       });
     }
+    notifyUsersAboutVenueAccessEvent(db, {
+      venueId: sub.venue_id,
+      eventType: 'subscription_cancelled',
+      username: sub.username,
+      venueName: sub.venue_name,
+      planName: sub.plan_name,
+      cadenceLabel: sub.subscription_cadence_label,
+    });
     res.json({ success: true });
   } else {
     res.status(400).json({ error: 'Invalid type (day_pass or subscription)' });

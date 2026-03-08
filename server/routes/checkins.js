@@ -140,24 +140,6 @@ function notifyUsersAboutCheckinEvent(db, {
     : `${safeUsername} checked in at ${safeMachineName} (${safeVenueName})`;
   const link = '/checkin';
 
-  const dojoAdmins = db.prepare(`
-    SELECT DISTINCT user_id
-    FROM (
-      SELECT id AS user_id
-      FROM users
-      WHERE is_admin = 1
-      UNION
-      SELECT user_id
-      FROM user_feature_permissions
-      WHERE feature_key = 'dojo_admin'
-      UNION
-      SELECT gm.user_id
-      FROM admin_user_group_feature_permissions gfp
-      JOIN admin_user_group_members gm ON gm.group_id = gfp.group_id
-      WHERE gfp.feature_key = 'dojo_admin'
-    )
-  `).all();
-
   const subscriberRows = venueId
     ? db.prepare(`
       SELECT subscriber_user_id AS user_id, notify_checkins, notify_checkouts
@@ -167,10 +149,6 @@ function notifyUsersAboutCheckinEvent(db, {
     : [];
 
   const recipientIds = new Set();
-  for (const admin of dojoAdmins) {
-    const adminId = String(admin?.user_id || '').trim();
-    if (adminId) recipientIds.add(adminId);
-  }
   for (const row of subscriberRows) {
     const subscriberId = String(row?.user_id || '').trim();
     if (!subscriberId) continue;

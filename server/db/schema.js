@@ -2557,6 +2557,19 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_venue_payments_square_payment ON venue_payments(square_payment_id);
     CREATE INDEX IF NOT EXISTS idx_venue_payments_square_order ON venue_payments(square_order_id);
     CREATE INDEX IF NOT EXISTS idx_venue_payments_square_link ON venue_payments(square_link_id);
+
+    CREATE TABLE IF NOT EXISTS venue_access_notification_subscriptions (
+      subscriber_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      notify_subscription_events INTEGER NOT NULL DEFAULT 1,
+      notify_day_pass_purchases INTEGER NOT NULL DEFAULT 1,
+      notify_payments INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (subscriber_user_id, venue_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_access_notif_subscriber ON venue_access_notification_subscriptions(subscriber_user_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_access_notif_venue ON venue_access_notification_subscriptions(venue_id);
   `);
 
   const venuePlanCols = db.prepare("PRAGMA table_info(venue_access_plans)").all().map(c => c.name);
