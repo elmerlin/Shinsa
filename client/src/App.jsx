@@ -43,6 +43,7 @@ import FunPage from './pages/FunPage';
 import OptimisePage from './pages/OptimisePage';
 import ChangeLogPage from './pages/ChangeLogPage';
 import CheckinPage from './pages/CheckinPage';
+import MembershipPage from './pages/MembershipPage';
 import DojoPage from './pages/DojoPage';
 import LeaderboardsPage from './pages/LeaderboardsPage';
 import LivePage from './pages/LivePage';
@@ -1247,6 +1248,7 @@ export default function App() {
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/changelog" element={<ChangeLogPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
+          <Route path="/membership" element={<MembershipPage />} />
           <Route path="/dojo" element={<DojoPage />} />
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
         </Routes>

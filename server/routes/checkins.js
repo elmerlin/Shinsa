@@ -5,6 +5,7 @@ const { getDb } = require('../db/schema');
 const { requireAuth, hasFeatureAccess } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { createUserNotification } = require('../lib/notifications');
+const { checkUserVenueAccess } = require('./venueAccess');
 
 function normalizeCheckinUser(row, size = 48) {
   if (!row) return null;
@@ -294,6 +295,17 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
 
   const machine = db.prepare('SELECT * FROM venue_machines WHERE id = ? AND venue_id = ?').get(machine_id, venue_id);
   if (!machine) return res.status(404).json({ error: 'Machine not found at this venue' });
+
+  // Verify venue access (day pass or monthly subscription)
+  const access = checkUserVenueAccess(db, userId, venue_id);
+  if (!access.hasAccess) {
+    return res.status(403).json({ error: 'No valid day pass or subscription for this venue. Please purchase access first.' });
+  }
+
+  // Mark day pass as used if that's the access type
+  if (access.accessType === 'day_pass' && access.detail?.id) {
+    db.prepare("UPDATE venue_day_passes SET status = 'used' WHERE id = ? AND status = 'active'").run(access.detail.id);
+  }
 
   // Check if already checked in somewhere
   const existing = db.prepare('SELECT id FROM checkins WHERE user_id = ? AND checked_out_at IS NULL').get(userId);

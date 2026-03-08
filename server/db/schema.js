@@ -2458,6 +2458,100 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
   `);
 
+  // ── Venue Day Pass & Subscription System ──────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS venue_access_plans (
+      id TEXT PRIMARY KEY,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      plan_type TEXT NOT NULL CHECK(plan_type IN ('day_pass_weekday', 'day_pass_weekend', 'monthly')),
+      name TEXT NOT NULL,
+      price_amount INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'gbp',
+      square_plan_variation_id TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_access_plans_venue ON venue_access_plans(venue_id, plan_type);
+
+    CREATE TABLE IF NOT EXISTS venue_approved_users (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      approved_by TEXT REFERENCES users(id),
+      note TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, venue_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_approved_users_venue ON venue_approved_users(venue_id);
+
+    CREATE TABLE IF NOT EXISTS venue_user_discounts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      discount_percent INTEGER NOT NULL CHECK(discount_percent IN (10, 20, 50)),
+      applies_to TEXT NOT NULL DEFAULT 'all' CHECK(applies_to IN ('all', 'monthly', 'day_pass')),
+      active INTEGER NOT NULL DEFAULT 1,
+      granted_by TEXT REFERENCES users(id),
+      note TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      expires_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_user_discounts_user ON venue_user_discounts(user_id, venue_id, active);
+
+    CREATE TABLE IF NOT EXISTS venue_day_passes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      plan_id TEXT NOT NULL REFERENCES venue_access_plans(id) ON DELETE CASCADE,
+      pass_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'used', 'expired', 'cancelled', 'refunded')),
+      payment_id TEXT REFERENCES venue_payments(id),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_day_passes_user ON venue_day_passes(user_id, pass_date);
+    CREATE INDEX IF NOT EXISTS idx_venue_day_passes_venue_date ON venue_day_passes(venue_id, pass_date);
+    CREATE INDEX IF NOT EXISTS idx_venue_day_passes_payment ON venue_day_passes(payment_id);
+
+    CREATE TABLE IF NOT EXISTS venue_subscriptions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      plan_id TEXT NOT NULL REFERENCES venue_access_plans(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'past_due', 'cancelled', 'expired')),
+      square_subscription_id TEXT,
+      current_period_start TEXT,
+      current_period_end TEXT,
+      cancelled_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_subscriptions_user ON venue_subscriptions(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_venue_subscriptions_venue ON venue_subscriptions(venue_id, status);
+    CREATE INDEX IF NOT EXISTS idx_venue_subscriptions_square ON venue_subscriptions(square_subscription_id);
+
+    CREATE TABLE IF NOT EXISTS venue_payments (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+      plan_id TEXT REFERENCES venue_access_plans(id) ON DELETE SET NULL,
+      payment_type TEXT NOT NULL CHECK(payment_type IN ('day_pass', 'subscription', 'subscription_renewal')),
+      amount INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'gbp',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'succeeded', 'failed', 'refunded')),
+      square_payment_id TEXT,
+      square_order_id TEXT,
+      square_link_id TEXT,
+      description TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_user ON venue_payments(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_venue ON venue_payments(venue_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_square_payment ON venue_payments(square_payment_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_square_order ON venue_payments(square_order_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_square_link ON venue_payments(square_link_id);
+  `);
+
   ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();
 }

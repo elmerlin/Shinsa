@@ -999,3 +999,33 @@ export async function parseScorePhoto(file) {
   }
   return res.json();
 }
+
+// ── Venue Access / Day Pass / Subscriptions ─────────────────────────────
+export const getVenueAccessConfig = () => request('/venue-access/config');
+export const getVenueAccessPlans = (venueSlug) => request(`/venue-access/plans/${encodeURIComponent(venueSlug)}`);
+export const getMyVenueAccess = (venueSlug) => request(`/venue-access/my-access/${encodeURIComponent(venueSlug)}`);
+export const getMyMembership = (venueSlug) => request(`/venue-access/my-membership/${encodeURIComponent(venueSlug)}`);
+export const purchaseDayPass = (planId, passDate) => request('/venue-access/purchase/day-pass', { method: 'POST', body: JSON.stringify({ plan_id: planId, pass_date: passDate }) });
+export const purchaseSubscription = (planId) => request('/venue-access/purchase/subscription', { method: 'POST', body: JSON.stringify({ plan_id: planId }) });
+export const cancelVenueSubscription = (subscriptionId) => request('/venue-access/cancel-subscription', { method: 'POST', body: JSON.stringify({ subscription_id: subscriptionId }) });
+export const getMyVenuePayments = () => request('/venue-access/my-payments');
+
+// Admin venue access
+export const getAdminVenueAccessOverview = (venueSlug) => request(`/venue-access/admin/overview/${encodeURIComponent(venueSlug)}`);
+export const getAdminVenueAccessPlans = (venueSlug) => request(`/venue-access/admin/plans/${encodeURIComponent(venueSlug)}`);
+export const createAdminVenueAccessPlan = (data) => request('/venue-access/admin/plans', { method: 'POST', body: JSON.stringify(data) });
+export const updateAdminVenueAccessPlan = (planId, data) => request(`/venue-access/admin/plans/${planId}`, { method: 'PUT', body: JSON.stringify(data) });
+export const getAdminVenueMembers = (venueSlug) => request(`/venue-access/admin/members/${encodeURIComponent(venueSlug)}`);
+export const getAdminVenuePayments = (venueSlug, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/venue-access/admin/payments/${encodeURIComponent(venueSlug)}${qs ? `?${qs}` : ''}`);
+};
+export const adminGrantDayPass = (data) => request('/venue-access/admin/grant-day-pass', { method: 'POST', body: JSON.stringify(data) });
+export const adminGrantSubscription = (data) => request('/venue-access/admin/grant-subscription', { method: 'POST', body: JSON.stringify(data) });
+export const adminRevokeAccess = (type, id) => request(`/venue-access/admin/revoke/${type}/${id}`, { method: 'POST' });
+export const getAdminVenueDiscounts = (venueSlug) => request(`/venue-access/admin/discounts/${encodeURIComponent(venueSlug)}`);
+export const adminGrantDiscount = (data) => request('/venue-access/admin/discounts', { method: 'POST', body: JSON.stringify(data) });
+export const adminRevokeDiscount = (discountId) => request(`/venue-access/admin/discounts/${discountId}`, { method: 'DELETE' });
+export const getAdminApprovedUsers = (venueSlug) => request(`/venue-access/admin/approved-users/${encodeURIComponent(venueSlug)}`);
+export const adminApproveUser = (data) => request('/venue-access/admin/approved-users', { method: 'POST', body: JSON.stringify(data) });
+export const adminRemoveApprovedUser = (venueId, userId) => request(`/venue-access/admin/approved-users/${venueId}/${userId}`, { method: 'DELETE' });
