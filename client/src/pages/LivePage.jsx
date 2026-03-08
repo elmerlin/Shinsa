@@ -1601,7 +1601,7 @@ export default function LivePage() {
           if (note) setStatusNote(note);
         }
       } catch {}
-    }, 90000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [activeSessionId, live?.is_host, live?.status, syncing, user]);
 

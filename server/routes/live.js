@@ -22,7 +22,7 @@ const REQUEST_LIMIT = 100;
 const PLAY_LIMIT = 250;
 const VOTE_DURATION_SECONDS = 30;
 const STREAM_HEARTBEAT_MS = 25000;
-const LIVE_SYNC_INTERVAL_MS = 90000;
+const LIVE_SYNC_INTERVAL_MS = 60000;
 const FAIL_MESSAGES = [
   'Better luck next time!',
   'Shake it off and go again.',
