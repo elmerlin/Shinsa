@@ -239,6 +239,12 @@ export default function MembershipPage() {
           </div>
         )}
 
+        {!hasAccess && data?.approved && (
+          <div className="text-xs text-gray-400 mt-2">
+            You've been whitelisted to use the Dojo! Please purchase a day pass, or consider a monthly membership for access!
+          </div>
+        )}
+
         {!hasAccess && !data?.approved && (
           <div className="text-xs text-gray-400 mt-2">
             You need to be approved by an admin before you can purchase access. Please contact the venue admin.
