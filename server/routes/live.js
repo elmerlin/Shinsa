@@ -22,6 +22,7 @@ const REQUEST_LIMIT = 100;
 const PLAY_LIMIT = 250;
 const VOTE_DURATION_SECONDS = 30;
 const STREAM_HEARTBEAT_MS = 25000;
+const LIVE_SYNC_INTERVAL_MS = 90000;
 const FAIL_MESSAGES = [
   'Better luck next time!',
   'Shake it off and go again.',
@@ -51,6 +52,8 @@ const syncRecentlyPlayedForUser = piugameRoutes.syncRecentlyPlayedForUser;
 const insertGroupedNewClearPost = piugameRoutes.insertGroupedNewClearPost;
 const invalidateRecentActivityCache = socialRoutes.invalidateRecentActivityCache;
 const voteCloseTimers = new Map();
+const liveSyncTimers = new Map();
+const liveSyncInFlight = new Set();
 
 function toInt(value) {
   return parseInt(value, 10) || 0;
@@ -211,6 +214,114 @@ function getActiveSessionForHost(db, hostUserId) {
     ORDER BY created_at DESC
     LIMIT 1
   `).get(hostUserId);
+}
+
+function getLiveSyncActor(db, session) {
+  if (!session?.host_user_id) return null;
+  const user = db.prepare(`
+    SELECT id, username
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).get(session.host_user_id);
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username || '',
+  };
+}
+
+function markLiveSessionSyncError(db, liveSessionId) {
+  db.prepare(`
+    UPDATE live_sessions
+    SET last_sync_status = 'error',
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(liveSessionId);
+}
+
+async function performLiveSessionSync(db, sessionOrId, options = {}) {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  if (!session || session.status !== 'live') return null;
+  if (typeof syncRecentlyPlayedForUser !== 'function') {
+    throw new Error('Live sync dependency unavailable');
+  }
+
+  const actor = getLiveSyncActor(db, session);
+  if (!actor?.id) {
+    throw new Error('Live session host not found');
+  }
+
+  const syncResult = await syncRecentlyPlayedForUser(actor, {
+    db,
+    userId: actor.id,
+    username: actor.username,
+    persistActivityPosts: false,
+  });
+  const delta = applyLiveSyncResult(db, session, syncResult);
+  const nextSession = getLiveSession(db, session.id);
+  if (options.broadcast !== false && nextSession) {
+    broadcastLiveSessionSnapshot(db, nextSession.id, options.reason || 'sync');
+  }
+  return {
+    delta,
+    session: nextSession || session,
+  };
+}
+
+function clearLiveSyncTimer(liveSessionId) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return;
+  const timer = liveSyncTimers.get(key);
+  if (timer) {
+    clearInterval(timer);
+    liveSyncTimers.delete(key);
+  }
+  liveSyncInFlight.delete(key);
+}
+
+function ensureLiveSyncTimer(db, sessionOrId) {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  if (!session) return;
+
+  const key = String(session.id || '').trim();
+  if (!key) return;
+  if (session.status !== 'live') {
+    clearLiveSyncTimer(key);
+    return;
+  }
+  if (liveSyncTimers.has(key)) return;
+
+  const timer = setInterval(async () => {
+    if (liveSyncInFlight.has(key)) return;
+    liveSyncInFlight.add(key);
+    try {
+      const currentDb = getDb();
+      const currentSession = getLiveSession(currentDb, key);
+      if (!currentSession || currentSession.status !== 'live') {
+        clearLiveSyncTimer(key);
+        return;
+      }
+      await performLiveSessionSync(currentDb, currentSession, { reason: 'sync' });
+    } catch (err) {
+      try {
+        const currentDb = getDb();
+        markLiveSessionSyncError(currentDb, key);
+        broadcastLiveSessionSnapshot(currentDb, key, 'sync_error');
+      } catch {
+        // Ignore secondary errors while surfacing the original sync failure in logs.
+      }
+      console.error('Live session background sync error:', err.message);
+    } finally {
+      liveSyncInFlight.delete(key);
+    }
+  }, LIVE_SYNC_INTERVAL_MS);
+
+  liveSyncTimers.set(key, timer);
 }
 
 function normalizeRequestStatus(status, fulfilled = false) {
@@ -1358,6 +1469,7 @@ router.get('/sessions/mine/active', requireAuth, (req, res) => {
   const db = getDb();
   const session = getActiveSessionForHost(db, req.user.id);
   if (!session) return res.json({ session: null });
+  ensureLiveSyncTimer(db, session);
   return res.json(buildSessionSnapshot(db, session, req.user.id));
 });
 
@@ -1407,6 +1519,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
     });
     const host = getHostProfile(db, req.user.id) || { id: req.user.id, username: req.user.username || 'Player' };
     const notifiedFollowers = notifyFollowersLive(db, id, host, title);
+    ensureLiveSyncTimer(db, id);
 
     res.status(201).json({
       ...buildSessionSnapshot(db, id, req.user.id),
@@ -1422,6 +1535,7 @@ router.get('/sessions/:id', requireAuth, (req, res) => {
   try {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
+    ensureLiveSyncTimer(db, session);
     res.json(buildSessionSnapshot(db, session, req.user.id));
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -1479,6 +1593,7 @@ router.get('/sessions/:id/stream', (req, res) => {
     const decoded = verifyLiveStreamToken(req);
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
+    ensureLiveSyncTimer(db, session);
     const streamUserId = String(decoded?.id || '').trim();
     if (!streamUserId) {
       const err = new Error('Authentication required');
@@ -1600,22 +1715,17 @@ router.post('/sessions/:id/messages', requireAuth, (req, res) => {
 router.post('/sessions/:id/sync', requireAuth, async (req, res) => {
   try {
     const db = getDb();
-    let session = requireLiveSession(db, req.params.id);
+    const session = requireLiveSession(db, req.params.id);
     requireSessionHost(session, req.user.id);
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
-    if (typeof syncRecentlyPlayedForUser !== 'function') {
-      throw new Error('Live sync dependency unavailable');
-    }
-
-    const syncResult = await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: false });
-    const delta = applyLiveSyncResult(db, session, syncResult);
-    session = requireLiveSession(db, req.params.id);
-    broadcastLiveSessionSnapshot(db, session.id, 'sync');
+    ensureLiveSyncTimer(db, session);
+    const result = await performLiveSessionSync(db, session, { reason: 'sync' });
+    const nextSession = result?.session || getLiveSession(db, session.id) || session;
 
     res.json({
       success: true,
-      sync_result: delta,
-      snapshot: buildSessionSnapshot(db, session, req.user.id),
+      sync_result: result?.delta || null,
+      snapshot: buildSessionSnapshot(db, nextSession, req.user.id),
     });
   } catch (err) {
     console.error('Live session sync error:', err.message);
@@ -2075,6 +2185,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       db.prepare('DELETE FROM live_session_presence WHERE live_session_id = ?').run(session.id);
     });
     txn();
+    clearLiveSyncTimer(session.id);
 
     if (typeof invalidateRecentActivityCache === 'function' && (upscorePostId || clearPostId || summaryPostId)) {
       invalidateRecentActivityCache();
@@ -2159,10 +2270,28 @@ function scheduleActiveVoteClosures() {
   }
 }
 
+function scheduleActiveLiveSessionSyncs() {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT id
+    FROM live_sessions
+    WHERE status = 'live'
+  `).all();
+  for (const row of rows) {
+    ensureLiveSyncTimer(db, row.id);
+  }
+}
+
 try {
   scheduleActiveVoteClosures();
 } catch (err) {
   console.error('Live vote timer initialization error:', err.message);
+}
+
+try {
+  scheduleActiveLiveSessionSyncs();
+} catch (err) {
+  console.error('Live sync timer initialization error:', err.message);
 }
 
 module.exports = router;
