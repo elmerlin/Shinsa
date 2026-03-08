@@ -2109,6 +2109,103 @@ export default function ProfilePage() {
       </div>
     );
   };
+  const profileActionControls = authUser && !isOwner ? (
+    <div className="mt-2.5 flex justify-start sm:justify-end" ref={notifyMenuRef}>
+      <div className="relative w-fit">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleFollow}
+            disabled={followLoading}
+            className={`px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+              followStatus.following
+                ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
+                : 'bg-piu-accent text-white hover:bg-piu-accent/80'
+            }`}
+          >
+            {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
+          </button>
+          <button
+            onClick={() => setNotifyMenuOpen(v => !v)}
+            className={`px-3.5 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
+              activityNotifyPrefs.subscribed
+                ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
+                : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <span>Notify</span>
+              {activityNotifyPrefs.subscribed && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
+            </span>
+          </button>
+        </div>
+
+        {notifyMenuOpen && (
+          <div className="absolute right-0 top-full mt-2 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                Notify About {profile.username}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleSetAllActivityPrefs(true)}
+                  disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                  className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => handleSetAllActivityPrefs(false)}
+                  disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                  className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                >
+                  None
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {[
+                { key: 'notify_posts', label: 'New Posts' },
+                { key: 'notify_upscores', label: 'Upscores' },
+                { key: 'notify_new_clears', label: 'New Clears' },
+              ].map(opt => {
+                const enabled = !!activityNotifyPrefs[opt.key];
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => handleToggleActivityPref(opt.key)}
+                    disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                    className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                      enabled
+                        ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
+                        : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {enabled && <span className="text-emerald-400">✓</span>}
+                      <span>{opt.label}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-[10px] text-gray-500 mt-1.5">
+              {activityNotifyPrefs.loading && 'Loading activity notification settings...'}
+              {!activityNotifyPrefs.loading && activityNotifyPrefs.saving && 'Saving activity notification settings...'}
+              {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && activityNotifyPrefs.subscribed && 'You will get notified for selected activities.'}
+              {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && !activityNotifyPrefs.subscribed && 'Activity notifications are off.'}
+            </p>
+            {activityNotifyError && (
+              <p className="text-[10px] text-red-400 mt-1">{activityNotifyError}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
@@ -2164,102 +2261,6 @@ export default function ProfilePage() {
             <p className="hidden sm:block text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
               Member since {memberSinceLongLabel}
             </p>
-            {/* Follow + compact notify controls */}
-            {authUser && !isOwner && (
-              <div className="mt-1.5 sm:mt-2 relative w-fit" ref={notifyMenuRef}>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleFollow}
-                    disabled={followLoading}
-                    className={`px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
-                      followStatus.following
-                        ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
-                        : 'bg-piu-accent text-white hover:bg-piu-accent/80'
-                    }`}
-                  >
-                    {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
-                  </button>
-                  <button
-                    onClick={() => setNotifyMenuOpen(v => !v)}
-                    className={`px-3.5 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
-                      activityNotifyPrefs.subscribed
-                        ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
-                        : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <span>Notify</span>
-                      {activityNotifyPrefs.subscribed && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      )}
-                    </span>
-                  </button>
-                </div>
-
-                {notifyMenuOpen && (
-                  <div className="absolute left-0 top-full mt-2 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
-                        Notify About {profile.username}
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleSetAllActivityPrefs(true)}
-                          disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
-                          className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
-                        >
-                          All
-                        </button>
-                        <button
-                          onClick={() => handleSetAllActivityPrefs(false)}
-                          disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
-                          className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
-                        >
-                          None
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {[
-                        { key: 'notify_posts', label: 'New Posts' },
-                        { key: 'notify_upscores', label: 'Upscores' },
-                        { key: 'notify_new_clears', label: 'New Clears' },
-                      ].map(opt => {
-                        const enabled = !!activityNotifyPrefs[opt.key];
-                        return (
-                          <button
-                            key={opt.key}
-                            onClick={() => handleToggleActivityPref(opt.key)}
-                            disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
-                            className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
-                              enabled
-                                ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
-                                : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
-                            }`}
-                          >
-                            <span className="inline-flex items-center gap-1">
-                              {enabled && <span className="text-emerald-400">✓</span>}
-                              <span>{opt.label}</span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <p className="text-[10px] text-gray-500 mt-1.5">
-                      {activityNotifyPrefs.loading && 'Loading activity notification settings...'}
-                      {!activityNotifyPrefs.loading && activityNotifyPrefs.saving && 'Saving activity notification settings...'}
-                      {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && activityNotifyPrefs.subscribed && 'You will get notified for selected activities.'}
-                      {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && !activityNotifyPrefs.subscribed && 'Activity notifications are off.'}
-                    </p>
-                    {activityNotifyError && (
-                      <p className="text-[10px] text-red-400 mt-1">{activityNotifyError}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
           <div className="col-span-2 sm:hidden mt-0.5 space-y-1">
             {age !== null && (
@@ -2409,6 +2410,7 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+        {profileActionControls}
         {/* Stats integrated into profile card */}
         <div className="flex items-center justify-around sm:justify-start gap-2 sm:gap-6 mt-3 pt-2.5 sm:pt-3 border-t border-piu-border/30">
           <button
