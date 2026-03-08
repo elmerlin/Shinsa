@@ -13,6 +13,7 @@ import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { ImageGrid, Lightbox, YouTubeEmbed, ShareButton, timeAgo as postCardTimeAgo } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
 import ImageEditor from '../components/ImageEditor';
+import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import {
   getCommunityByName, joinCommunity, leaveCommunity,
   getCommunityPosts, createCommunityPost, deleteCommunityPost, pinCommunityPost,
@@ -26,7 +27,6 @@ import { serializeSessionSummaryMarker, splitSessionSummaryContent } from '../ut
 import { serializeSessionShareMarker, splitSessionShareContent } from '../utils/sessionShareMarker';
 import { buildSessionCalorieEstimate } from '../utils/calorieEstimate';
 import { buildSessionShareCard, getSessionLevelOptions, SHARE_MIN_GRADE_OPTIONS } from '../utils/sessionShare';
-import { DOJO_CAT_EMOJI_GROUP } from '../utils/dojoCatEmojis';
 
 // Common emoji sets for quick insert (same as PostsPage)
 const EMOJI_GROUPS = [
@@ -1953,27 +1953,13 @@ function PostsTab({
 
               <div className="w-px h-5 bg-piu-border/30 mx-1" />
 
+              <DojoCatStickerPicker onSelect={insertEmoji} compact />
+
               {/* Emoji picker */}
               <div className="relative" ref={emojiRef}>
                 <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors text-sm" title="Emoji">&#9786;</button>
                 {showEmojis && (
-                  <div className="absolute left-0 top-full mt-1 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 p-3 w-80 max-h-80 overflow-y-auto">
-                    <div className="mb-3">
-                      <p className="text-[10px] text-cyan-300 font-display mb-1">{DOJO_CAT_EMOJI_GROUP.label}</p>
-                      <div className="grid grid-cols-6 gap-1">
-                        {DOJO_CAT_EMOJI_GROUP.emojis.map((emoji) => (
-                          <button
-                            key={emoji.id}
-                            type="button"
-                            onClick={() => insertEmoji(emoji.token)}
-                            className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/8 bg-black/20 hover:bg-piu-dark/50 transition-colors"
-                            title={`${emoji.label} ${emoji.token}`}
-                          >
-                            <img src={emoji.image} alt={emoji.label} className="h-7 w-7 object-contain" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="absolute left-0 top-full mt-1 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 p-3 w-[min(18rem,calc(100vw-1.5rem))] max-h-80 overflow-y-auto">
                     {/* Custom community emojis */}
                     {customEmojis.length > 0 && (
                       <div className="mb-2">
@@ -2570,6 +2556,27 @@ function MentionCommentInput({
     updateMentionState(nextValue);
   };
 
+  const insertSticker = (token) => {
+    const current = String(value || '');
+    const input = inputRef.current;
+    if (!input) {
+      const next = `${current}${token}`;
+      onChange(next);
+      updateMentionState(next, next.length);
+      return;
+    }
+    const start = input.selectionStart ?? current.length;
+    const end = input.selectionEnd ?? current.length;
+    const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+    const nextCursor = start + token.length;
+    onChange(next);
+    updateMentionState(next, nextCursor);
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   const applyMention = (username) => {
     const current = String(value || '');
     const cursor = inputRef.current?.selectionStart ?? current.length;
@@ -2611,18 +2618,21 @@ function MentionCommentInput({
 
   return (
     <div className="relative flex-1">
-      <input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        onClick={() => updateMentionState(value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        disabled={disabled}
-        className={classes}
-      />
+      <div className="flex items-center gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => handleChange(e.target.value)}
+          onClick={() => updateMentionState(value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          autoFocus={autoFocus}
+          disabled={disabled}
+          className={classes}
+        />
+        <DojoCatStickerPicker onSelect={insertSticker} compact align="right" />
+      </div>
       {(showMentions || mentionLoading) && (
         <div className="absolute left-0 right-0 top-full mt-1 z-40 rounded-lg border border-piu-border bg-piu-card shadow-xl max-h-48 overflow-y-auto">
           {mentionLoading && mentionUsers.length === 0 ? (

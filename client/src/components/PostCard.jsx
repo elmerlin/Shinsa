@@ -11,6 +11,7 @@ import SessionSummaryCard from './SessionSummaryCard';
 import SessionShareCard from './SessionShareCard';
 import LiveSessionCard from './LiveSessionCard';
 import SessionPlanCard from './SessionPlanCard';
+import DojoCatStickerPicker from './DojoCatStickerPicker';
 import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
 import { splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
@@ -536,6 +537,27 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
     updateMentionState(value);
   };
 
+  const insertSticker = (token) => {
+    const current = String(newComment || '');
+    const input = inputRef.current;
+    if (!input) {
+      const next = `${current}${token}`;
+      setNewComment(next);
+      updateMentionState(next, next.length);
+      return;
+    }
+    const start = input.selectionStart ?? current.length;
+    const end = input.selectionEnd ?? current.length;
+    const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+    const nextCursor = start + token.length;
+    setNewComment(next);
+    updateMentionState(next, nextCursor);
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
   const applyMention = (selectedUsername) => {
     const current = String(newComment || '');
     const cursor = inputRef.current?.selectionStart ?? current.length;
@@ -817,6 +839,7 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
                   </div>
                 )}
               </div>
+              <DojoCatStickerPicker onSelect={insertSticker} compact align="right" />
               <button
                 onClick={handleSubmit}
                 disabled={!newComment.trim()}

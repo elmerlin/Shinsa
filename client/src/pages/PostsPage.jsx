@@ -5,6 +5,7 @@ import { getUserPosts, createPost, deletePost, getPiugameRecentlyPlayed, getJack
 import { getAvatarUrl } from '../components/AvatarPicker';
 import PostCard from '../components/PostCard';
 import ImageEditor from '../components/ImageEditor';
+import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import SessionSummaryCard from '../components/SessionSummaryCard';
 import SessionShareCard from '../components/SessionShareCard';
 import SessionPlanCard from '../components/SessionPlanCard';
@@ -14,7 +15,6 @@ import { serializeSessionShareMarker } from '../utils/sessionShareMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 import { buildSessionCalorieEstimate } from '../utils/calorieEstimate';
 import { buildSessionShareCard, getSessionLevelOptions, SHARE_MIN_GRADE_OPTIONS } from '../utils/sessionShare';
-import { DOJO_CAT_EMOJI_GROUP } from '../utils/dojoCatEmojis';
 
 // Common emoji sets for quick insert
 const EMOJI_GROUPS = [
@@ -1151,6 +1151,8 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
 
           <div className="w-px h-5 bg-piu-border/30 mx-1" />
 
+          <DojoCatStickerPicker onSelect={insertEmoji} />
+
           {/* Emoji picker */}
           <div className="relative" ref={emojiRef}>
             <button
@@ -1161,22 +1163,7 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
               &#9786;
             </button>
             {showEmojis && (
-              <div className="absolute left-0 top-full mt-1 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 p-3 w-80 max-h-80 overflow-y-auto">
-                <div className="mb-3">
-                  <p className="text-[10px] text-cyan-300 font-display mb-1">{DOJO_CAT_EMOJI_GROUP.label}</p>
-                  <div className="grid grid-cols-6 gap-1">
-                    {DOJO_CAT_EMOJI_GROUP.emojis.map((emoji) => (
-                      <button
-                        key={emoji.id}
-                        onClick={() => insertEmoji(emoji.token)}
-                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/8 bg-black/20 hover:bg-piu-dark/50 transition-colors"
-                        title={`${emoji.label} ${emoji.token}`}
-                      >
-                        <img src={emoji.image} alt={emoji.label} className="h-7 w-7 object-contain" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <div className="absolute left-0 top-full mt-1 bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50 p-3 w-[min(18rem,calc(100vw-1.5rem))] max-h-80 overflow-y-auto">
                 {EMOJI_GROUPS.map(group => (
                   <div key={group.label} className="mb-2">
                     <p className="text-[10px] text-gray-500 font-display mb-1">{group.label}</p>
