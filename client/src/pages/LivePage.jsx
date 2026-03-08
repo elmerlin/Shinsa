@@ -23,7 +23,6 @@ import {
 } from '../utils/api';
 import LiveEmote from '../components/LiveEmote';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
-import LiveSessionCard from '../components/LiveSessionCard';
 import PiuChartJacket from '../components/PiuChartJacket';
 import { parseGrade } from '../utils/grades';
 import {
@@ -687,10 +686,12 @@ function MobilePanelSheet({ open, title, subtitle = '', onClose, children }) {
   );
 }
 
-function UserIdentity({ avatar, username, skillTitle, isHost, className = '' }) {
+function UserIdentity({ avatar, username, skillTitle, isHost, className = '', compact = false }) {
   return (
     <div className={`flex min-w-0 items-center gap-2 ${className}`.trim()}>
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark text-[11px] font-display font-bold text-white">
+      <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark font-display font-bold text-white ${
+        compact ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
+      }`}>
         {avatar ? (
           <img src={avatar} alt={username || 'User'} className="h-full w-full object-cover" />
         ) : (
@@ -699,14 +700,18 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '' }) 
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
-          <p className="truncate text-[11px] font-display font-bold text-white">{username || 'Viewer'}</p>
+          <p className={`truncate font-display font-bold text-white ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
           {isHost ? (
-            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-rose-200">
+            <span className={`rounded-full border border-rose-400/30 bg-rose-500/10 font-display font-bold uppercase tracking-wide text-rose-200 ${
+              compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
+            }`}>
               Host
             </span>
           ) : null}
           {skillTitle ? (
-            <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-cyan-200">
+            <span className={`rounded-full border border-cyan-400/20 bg-cyan-500/10 font-display font-bold uppercase tracking-wide text-cyan-200 ${
+              compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
+            }`}>
               {skillTitle}
             </span>
           ) : null}
@@ -724,58 +729,63 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
           <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Latest Play</p>
           <p className="text-sm text-cyan-50/80 mt-1">
             {play
-              ? 'Most recently fetched song result from the live sync.'
+              ? 'Last song played'
               : live?.status === 'live'
                 ? 'Waiting for the first chart to land.'
                 : 'This live room has wrapped.'}
           </p>
         </div>
-        <span className={`rounded-full px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${live?.status === 'live' ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-piu-border bg-black/20 text-gray-400'}`}>
+        <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${live?.status === 'live' ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-piu-border bg-black/20 text-gray-400'}`}>
           {live?.status === 'live' ? 'Live sync' : 'Session ended'}
         </span>
       </div>
 
       {play ? (
-        <div className="mt-4 flex items-center gap-3">
-          <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-display font-black text-white">{play.song_title}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
-              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 font-display font-bold text-cyan-100">
-                {modeShort(play.mode)}{play.level}
-              </span>
-              <span className="font-display font-bold text-white">{play.grade || '-'}</span>
-              <span className="text-cyan-100/80">{formatNumber(play.score)}</span>
-              {play.machine_name ? <span className="text-gray-400">at {play.machine_name}</span> : null}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {play.pumbility_gain > 0 ? (
-                <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
-                  +{play.pumbility_gain} pumbility
+        <div className="mt-4">
+          <p className="truncate text-lg font-display font-black text-white">{play.song_title}</p>
+          <div className="mt-3 flex items-center gap-3">
+            <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
+            <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={onOpen}
+                className="flex items-baseline gap-2 text-left transition-colors hover:text-white"
+              >
+                <span className={`font-display text-2xl font-black ${getGradeColor(play.grade || '-', play.score || 0)}`}>
+                  {play.grade || '-'}
                 </span>
-              ) : null}
-              {play.over_top100_rank > 0 ? (
-                <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-bold text-yellow-200">
-                  OVER Top 100 #{play.over_top100_rank}
-                </span>
-              ) : null}
-              {play.session_result_type ? (
-                <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300 capitalize">
-                  {play.session_result_type}
-                </span>
-              ) : null}
-              {requestInfo ? (
-                <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${getRequestStatusMeta(
-                  requestInfo.queuedCount > 0 ? 'queued' : requestInfo.openCount > 0 ? 'open' : requestInfo.playedCount > 0 ? 'played' : 'skipped'
-                ).pill}`}>
-                  {formatRequestStateLabel(requestInfo)}
-                </span>
-              ) : null}
+                <span className="text-base font-display font-bold text-cyan-100/90">{formatNumber(play.score)}</span>
+              </button>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-gray-400">{modeShort(play.mode)}{play.level}</span>
+                {play.machine_name ? <span className="text-gray-400">at {play.machine_name}</span> : null}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {play.pumbility_gain > 0 ? (
+                  <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
+                    +{play.pumbility_gain} pumbility
+                  </span>
+                ) : null}
+                {play.over_top100_rank > 0 ? (
+                  <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-bold text-yellow-200">
+                    OVER Top 100 #{play.over_top100_rank}
+                  </span>
+                ) : null}
+                {play.session_result_type ? (
+                  <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300 capitalize">
+                    {play.session_result_type}
+                  </span>
+                ) : null}
+                {requestInfo ? (
+                  <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${getRequestStatusMeta(
+                    requestInfo.queuedCount > 0 ? 'queued' : requestInfo.openCount > 0 ? 'open' : requestInfo.playedCount > 0 ? 'played' : 'skipped'
+                  ).pill}`}>
+                    {formatRequestStateLabel(requestInfo)}
+                  </span>
+                ) : null}
+              </div>
             </div>
           </div>
-          <button type="button" onClick={onOpen} className="btn-secondary shrink-0 px-3 py-2 text-xs">
-            Judgments
-          </button>
         </div>
       ) : (
         <div className="mt-4 rounded-xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
@@ -2513,8 +2523,10 @@ export default function LivePage() {
       style={
         desktopMediaHeightStyle
           ? desktopMediaHeightStyle
-          : isMobileChatSheet
-            ? { maxHeight: 'calc(100dvh - 8.5rem)' }
+          : isMobileChatLayout
+            ? { maxHeight: isMobileChatSheet ? 'calc(100dvh - 8.5rem)' : 'min(68dvh, calc(100dvh - 10rem))' }
+            : isMobileChatSheet
+              ? { maxHeight: 'calc(100dvh - 8.5rem)' }
             : undefined
       }
     >
@@ -2658,11 +2670,11 @@ export default function LivePage() {
         {messages.map((msg) => {
           const tone = getMessageTone(msg);
           return (
-            <div key={msg.id} className={`overflow-hidden rounded-xl px-3 py-2 ${tone.wrapper}`}>
+            <div key={msg.id} className={`overflow-hidden ${isMobileChatLayout ? 'rounded-lg px-2.5 py-2' : 'rounded-xl px-3 py-2'} ${tone.wrapper}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                   {tone.label ? (
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.labelClass}`}>
+                    <span className={`shrink-0 rounded-full font-display font-bold uppercase tracking-wide ${tone.labelClass} ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                       {tone.label}
                     </span>
                   ) : null}
@@ -2676,15 +2688,16 @@ export default function LivePage() {
                       username={msg.username}
                       skillTitle={msg.skill_title}
                       isHost={msg.is_host}
+                      compact={isMobileChatLayout}
                     />
                   )}
                   {isHost && !msg.is_system && msg.chat_muted ? (
-                    <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-amber-200">
+                    <span className={`rounded-full border border-amber-400/30 bg-amber-500/10 font-display font-bold uppercase tracking-wide text-amber-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
                       Muted
                     </span>
                   ) : null}
                   {isHost && !msg.is_system && msg.requests_blocked ? (
-                    <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide text-fuchsia-200">
+                    <span className={`rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 font-display font-bold uppercase tracking-wide text-fuchsia-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
                       Requests off
                     </span>
                   ) : null}
@@ -2849,41 +2862,49 @@ export default function LivePage() {
       <div className={`mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
       <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.18),transparent_42%),linear-gradient(180deg,#0d1322,#09101d)] p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] font-display uppercase tracking-[0.28em] text-rose-300">Shinsa Live</p>
             <h1 className="text-2xl sm:text-3xl font-display font-black text-white mt-1">{live?.title || 'Live session'}</h1>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className={`text-sm text-gray-400 mt-1 ${isDesktopViewport ? '' : 'hidden'}`}>
               {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
               {live?.status === 'ended' ? ' • ended' : ' • live'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {isHost ? (
-              <button
-                type="button"
-                onClick={() => setPlayerMode((prev) => !prev)}
-                className={`text-xs px-3 py-2 rounded-lg font-display font-bold transition-colors ${
-                  playerMode
-                    ? 'bg-cyan-500/15 text-cyan-100 border border-cyan-400/30'
-                    : 'bg-black/20 text-gray-300 border border-piu-border hover:text-white'
-                }`}
-              >
-                {playerMode ? 'Player mode on' : 'Player mode'}
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {isHost ? (
+                <button
+                  type="button"
+                  onClick={() => setPlayerMode((prev) => !prev)}
+                  className={`text-xs px-3 py-2 rounded-lg font-display font-bold transition-colors ${
+                    playerMode
+                      ? 'bg-cyan-500/15 text-cyan-100 border border-cyan-400/30'
+                      : 'bg-black/20 text-gray-300 border border-piu-border hover:text-white'
+                  }`}
+                >
+                  {playerMode ? 'Player mode on' : 'Player mode'}
+                </button>
+              ) : null}
+              <button type="button" onClick={handleCopyLink} className="btn-secondary text-xs px-3 py-2">
+                {copied ? 'Copied' : 'Copy viewer link'}
               </button>
+              {live?.is_host && live?.status === 'live' && (
+                <>
+                  <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn-secondary text-xs px-3 py-2">
+                    {syncing ? 'Syncing...' : 'Sync now'}
+                  </button>
+                  <button type="button" onClick={handleEndSession} disabled={ending} className="btn-primary text-xs px-3 py-2">
+                    {ending ? 'Ending...' : 'End session'}
+                  </button>
+                </>
+              )}
+            </div>
+            {!isDesktopViewport ? (
+              <p className="text-xs text-right text-gray-400">
+                {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
+                {syncLabel ? ` • ${syncLabel}` : ''}
+              </p>
             ) : null}
-            <button type="button" onClick={handleCopyLink} className="btn-secondary text-xs px-3 py-2">
-              {copied ? 'Copied' : 'Copy viewer link'}
-            </button>
-            {live?.is_host && live?.status === 'live' && (
-              <>
-                <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn-secondary text-xs px-3 py-2">
-                  {syncing ? 'Syncing...' : 'Sync now'}
-                </button>
-                <button type="button" onClick={handleEndSession} disabled={ending} className="btn-primary text-xs px-3 py-2">
-                  {ending ? 'Ending...' : 'End session'}
-                </button>
-              </>
-            )}
           </div>
         </div>
 
@@ -2946,7 +2967,7 @@ export default function LivePage() {
               {streamStatusLabel}
             </span>
           ) : null}
-          {live?.last_sync_at ? (
+          {live?.last_sync_at && isDesktopViewport ? (
             <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-400">
               {syncLabel}
             </span>
@@ -3154,7 +3175,6 @@ export default function LivePage() {
             onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
           />
 
-          {snapshot?.summary ? <LiveSessionCard summary={snapshot.summary} /> : null}
           {hasPlayerPanels ? null : songsSection}
         </div>
 
