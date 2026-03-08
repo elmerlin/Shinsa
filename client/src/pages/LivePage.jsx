@@ -24,6 +24,7 @@ import LiveEmote from '../components/LiveEmote';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import LiveSessionCard from '../components/LiveSessionCard';
 import PiuChartJacket from '../components/PiuChartJacket';
+import { parseGrade } from '../utils/grades';
 import {
   LIVE_EMOTES,
   LIVE_EMOJI_GROUPS,
@@ -53,6 +54,8 @@ import {
 
 const QUICK_REACTIONS = LIVE_EMOJI_GROUPS[0]?.emojis || ['🔥', '💪', '👏', '😂', '❤️', '⚡'];
 const GRADE_SORT = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
+const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
+const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
 const REQUEST_STATUS_META = {
   open: {
     label: 'Open',
@@ -80,6 +83,44 @@ function getGradeIndex(grade) {
   const normalized = String(grade || '').trim().toUpperCase();
   const idx = GRADE_SORT.indexOf(normalized);
   return idx >= 0 ? idx : -1;
+}
+
+function getRank(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
+  return { label: 'F', color: 'text-gray-600' };
+}
+
+function getGradeColor(grade, score = 0) {
+  const normalized = parseGrade(grade).normalized;
+  if (normalized) {
+    if (normalized.includes('SSS')) return 'text-sky-300';
+    if (normalized.includes('SS')) return 'text-piu-gold';
+    if (normalized.includes('S')) return 'text-amber-400';
+    if (normalized.includes('AAA')) return 'text-piu-silver';
+    if (normalized.includes('AA')) return 'text-piu-bronze';
+    if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
+  }
+  return getRank(score).color;
+}
+
+function getOverTop100Rank(value) {
+  const rank = parseInt(value, 10) || 0;
+  return rank > 0 && rank <= 100 ? rank : 0;
 }
 
 function formatNumber(value) {
@@ -324,42 +365,100 @@ function makePresenceId() {
 
 function PlayDetailModal({ play, onClose }) {
   if (!play) return null;
+  const rank = getRank(play.score ?? 0);
+  const displayScore = play.score ?? 0;
+  const parsedGrade = parseGrade(play.grade, rank.label);
+  const grade = parsedGrade.display || rank.label;
+  const overRank = getOverTop100Rank(play.over_top100_rank);
+  const plateName = PLATE_NAMES[play.plate] || play.plate || '';
+  const plateColor = PLATE_COLORS[play.plate] || 'text-gray-400';
+  const hasJudgments = (play.perfect > 0 || play.great > 0 || play.good > 0 || play.bad > 0 || play.miss > 0);
+  const judgments = [
+    { label: 'PERFECT', value: play.perfect || 0, textColor: 'text-sky-400' },
+    { label: 'GREAT', value: play.great || 0, textColor: 'text-green-400' },
+    { label: 'GOOD', value: play.good || 0, textColor: 'text-yellow-400' },
+    { label: 'BAD', value: play.bad || 0, textColor: 'text-fuchsia-400' },
+    { label: 'MISS', value: play.miss || 0, textColor: 'text-gray-400' },
+  ];
+  const modalBg = play.jacket_url || play.background_url || '';
 
   return (
-    <div className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-piu-border bg-[#0d1426] p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Judgments</p>
-            <h3 className="text-lg font-display font-bold text-white">{play.song_title}</h3>
-            <p className="text-sm text-cyan-300">{modeShort(play.mode)}{play.level} • {play.grade || '-'} • {formatNumber(play.score)}</p>
+    <div className="fixed inset-0 bg-black/80 z-[90] flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {modalBg ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-15"
+            style={{ backgroundImage: `url(${modalBg})` }}
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
+
+        <div className="relative p-5">
+          <button
+            type="button"
+            className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
+            onClick={onClose}
+          >
+            x
+          </button>
+
+          <p className="font-display font-bold text-lg leading-tight pr-6 break-words">{play.song_title || 'Song'}</p>
+
+          <div className="flex items-center gap-3 mt-4">
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
+              play.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : play.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
+            }`}>
+              <span className={`font-display font-bold text-[10px] uppercase ${play.mode === 'Single' ? 'text-red-400' : play.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{play.mode}</span>
+              <span className={`font-display font-bold text-base ${play.mode === 'Single' ? 'text-red-300' : play.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{play.level}</span>
+            </div>
+            {overRank > 0 ? (
+              <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
+                TOP #{overRank}
+              </span>
+            ) : null}
+            <div className="text-center flex-1">
+              {displayScore > 0 ? (
+                <p
+                  className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                  data-grade={grade}
+                >
+                  {grade}
+                </p>
+              ) : (
+                <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+              )}
+            </div>
           </div>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
-          <div className="rounded-lg border border-sky-400/25 bg-sky-500/10 px-3 py-2">
-            <p className="text-[10px] text-sky-200/70 uppercase tracking-wide">Perfect</p>
-            <p className="text-lg font-display font-bold text-sky-200">{formatNumber(play.perfect)}</p>
-          </div>
-          <div className="rounded-lg border border-green-400/25 bg-green-500/10 px-3 py-2">
-            <p className="text-[10px] text-green-200/70 uppercase tracking-wide">Great</p>
-            <p className="text-lg font-display font-bold text-green-200">{formatNumber(play.great)}</p>
-          </div>
-          <div className="rounded-lg border border-yellow-400/25 bg-yellow-500/10 px-3 py-2">
-            <p className="text-[10px] text-yellow-200/70 uppercase tracking-wide">Good</p>
-            <p className="text-lg font-display font-bold text-yellow-200">{formatNumber(play.good)}</p>
-          </div>
-          <div className="rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2">
-            <p className="text-[10px] text-red-200/70 uppercase tracking-wide">Bad</p>
-            <p className="text-lg font-display font-bold text-red-200">{formatNumber(play.bad)}</p>
-          </div>
-          <div className="rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2">
-            <p className="text-[10px] text-red-200/70 uppercase tracking-wide">Miss</p>
-            <p className="text-lg font-display font-bold text-red-200">{formatNumber(play.miss)}</p>
-          </div>
-          <div className="rounded-lg border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-2">
-            <p className="text-[10px] text-fuchsia-200/70 uppercase tracking-wide">Max Combo</p>
-            <p className="text-lg font-display font-bold text-fuchsia-200">{formatNumber(play.max_combo)}</p>
+
+          {plateName ? (
+            <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+          ) : null}
+
+          {displayScore > 0 ? (
+            <p className="text-center font-mono text-2xl font-bold mt-2">{displayScore.toLocaleString()}</p>
+          ) : null}
+
+          {hasJudgments ? (
+            <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
+              {judgments.map((j) => (
+                <div key={j.label}>
+                  <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
+                  <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : displayScore > 0 ? (
+            <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
+              Judgment breakdown not available
+            </p>
+          ) : null}
+
+          <div className="mt-4 pt-3 border-t border-piu-border/20 flex items-center justify-between text-xs">
+            <span className="text-gray-500 uppercase tracking-wide font-display">Max Combo</span>
+            <span className="font-mono font-bold text-white">{formatNumber(play.max_combo)}</span>
           </div>
         </div>
       </div>
