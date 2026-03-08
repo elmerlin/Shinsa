@@ -1471,7 +1471,7 @@ export default function LivePage() {
 
       const rect = shell.getBoundingClientRect();
       const height = shell.offsetHeight || rect.height || 0;
-      const shouldDock = rect.top <= lockTop && rect.bottom - lockTop > 8;
+      const shouldDock = rect.top <= lockTop;
 
       setMobileVideoDockHeight(height);
       setMobileVideoDocked(shouldDock);
