@@ -2467,7 +2467,7 @@ function initializeDb() {
       name TEXT NOT NULL,
       price_amount INTEGER NOT NULL,
       currency TEXT NOT NULL DEFAULT 'gbp',
-      stripe_price_id TEXT,
+      square_plan_variation_id TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -2518,7 +2518,7 @@ function initializeDb() {
       venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
       plan_id TEXT NOT NULL REFERENCES venue_access_plans(id) ON DELETE CASCADE,
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'past_due', 'cancelled', 'expired')),
-      stripe_subscription_id TEXT,
+      square_subscription_id TEXT,
       current_period_start TEXT,
       current_period_end TEXT,
       cancelled_at TEXT,
@@ -2527,7 +2527,7 @@ function initializeDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_venue_subscriptions_user ON venue_subscriptions(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_venue_subscriptions_venue ON venue_subscriptions(venue_id, status);
-    CREATE INDEX IF NOT EXISTS idx_venue_subscriptions_stripe ON venue_subscriptions(stripe_subscription_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_subscriptions_square ON venue_subscriptions(square_subscription_id);
 
     CREATE TABLE IF NOT EXISTS venue_payments (
       id TEXT PRIMARY KEY,
@@ -2538,18 +2538,18 @@ function initializeDb() {
       amount INTEGER NOT NULL,
       currency TEXT NOT NULL DEFAULT 'gbp',
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'succeeded', 'failed', 'refunded')),
-      stripe_payment_intent_id TEXT,
-      stripe_checkout_session_id TEXT,
-      stripe_invoice_id TEXT,
+      square_payment_id TEXT,
+      square_order_id TEXT,
+      square_link_id TEXT,
       description TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_venue_payments_user ON venue_payments(user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_venue_payments_venue ON venue_payments(venue_id, created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_venue_payments_stripe_pi ON venue_payments(stripe_payment_intent_id);
-    CREATE INDEX IF NOT EXISTS idx_venue_payments_stripe_session ON venue_payments(stripe_checkout_session_id);
-    CREATE INDEX IF NOT EXISTS idx_venue_payments_stripe_invoice ON venue_payments(stripe_invoice_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_square_payment ON venue_payments(square_payment_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_square_order ON venue_payments(square_order_id);
+    CREATE INDEX IF NOT EXISTS idx_venue_payments_square_link ON venue_payments(square_link_id);
   `);
 
   ensureBuiltInAchievementSeries(db);

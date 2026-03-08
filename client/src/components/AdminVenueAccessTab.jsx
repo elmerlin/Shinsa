@@ -46,7 +46,7 @@ export default function AdminVenueAccessTab() {
 
   // Plans state
   const [plans, setPlans] = useState([]);
-  const [planForm, setPlanForm] = useState({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', stripe_price_id: '' });
+  const [planForm, setPlanForm] = useState({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', square_plan_variation_id: '' });
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [planSaving, setPlanSaving] = useState(false);
 
@@ -167,7 +167,7 @@ export default function AdminVenueAccessTab() {
           name: planForm.name,
           price_amount: priceInPence,
           currency: planForm.currency,
-          stripe_price_id: planForm.stripe_price_id || undefined,
+          square_plan_variation_id: planForm.square_plan_variation_id || undefined,
         });
         setMessage('Plan updated');
       } else {
@@ -177,11 +177,11 @@ export default function AdminVenueAccessTab() {
           name: planForm.name,
           price_amount: priceInPence,
           currency: planForm.currency,
-          stripe_price_id: planForm.stripe_price_id || undefined,
+          square_plan_variation_id: planForm.square_plan_variation_id || undefined,
         });
         setMessage('Plan created');
       }
-      setPlanForm({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', stripe_price_id: '' });
+      setPlanForm({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', square_plan_variation_id: '' });
       setEditingPlanId(null);
       await loadPlans();
     } catch (err) {
@@ -207,7 +207,7 @@ export default function AdminVenueAccessTab() {
       name: plan.name,
       price_amount: (plan.price_amount / 100).toFixed(2),
       currency: plan.currency,
-      stripe_price_id: plan.stripe_price_id || '',
+      square_plan_variation_id: plan.square_plan_variation_id || '',
     });
   }
 
@@ -452,8 +452,8 @@ export default function AdminVenueAccessTab() {
                   className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Stripe Price ID (optional)</label>
-                <input value={planForm.stripe_price_id} onChange={e => setPlanForm(f => ({ ...f, stripe_price_id: e.target.value }))}
+                <label className="text-xs text-gray-400 block mb-1">Square Plan Variation ID (optional, for subscriptions)</label>
+                <input value={planForm.square_plan_variation_id} onChange={e => setPlanForm(f => ({ ...f, square_plan_variation_id: e.target.value }))}
                   placeholder="price_..."
                   className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
               </div>
@@ -464,7 +464,7 @@ export default function AdminVenueAccessTab() {
                 {planSaving ? 'Saving...' : editingPlanId ? 'Update Plan' : 'Create Plan'}
               </button>
               {editingPlanId && (
-                <button type="button" onClick={() => { setEditingPlanId(null); setPlanForm({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', stripe_price_id: '' }); }}
+                <button type="button" onClick={() => { setEditingPlanId(null); setPlanForm({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', square_plan_variation_id: '' }); }}
                   className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm">Cancel</button>
               )}
             </div>

@@ -4,14 +4,13 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth, isAdminUser, hasFeatureAccess } = require('./auth');
 const {
-  isStripeConfigured,
-  createDayPassCheckoutSession,
-  createSubscriptionCheckoutSession,
-  constructWebhookEvent,
-  cancelStripeSubscription,
-  retrieveCheckoutSession,
-  STRIPE_PUBLIC_KEY,
-} = require('../lib/stripe');
+  isSquareConfigured,
+  createDayPassPaymentLink,
+  createSubscriptionPaymentLink,
+  verifyWebhookSignature,
+  cancelSquareSubscription,
+  retrieveOrder,
+} = require('../lib/square');
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -168,8 +167,7 @@ function checkUserVenueAccess(db, userId, venueId) {
 // GET /api/venue-access/config
 router.get('/config', (req, res) => {
   res.json({
-    stripe_configured: isStripeConfigured(),
-    stripe_public_key: STRIPE_PUBLIC_KEY || null,
+    payments_configured: isSquareConfigured(),
   });
 });
 
@@ -254,10 +252,10 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
   });
 });
 
-// POST /api/venue-access/purchase/day-pass — create Stripe checkout for a day pass
+// POST /api/venue-access/purchase/day-pass — create Square payment link for a day pass
 router.post('/purchase/day-pass', requireAuth, async (req, res) => {
   try {
-    if (!isStripeConfigured()) {
+    if (!isSquareConfigured()) {
       return res.status(503).json({ error: 'Payment processing is not configured' });
     }
 
@@ -338,7 +336,7 @@ router.post('/purchase/day-pass', requireAuth, async (req, res) => {
 
     const user = db.prepare('SELECT email, username FROM users WHERE id = ?').get(req.user.id);
 
-    const session = await createDayPassCheckoutSession({
+    const link = await createDayPassPaymentLink({
       userId: req.user.id,
       email: user?.email || '',
       username: user?.username || '',
@@ -350,20 +348,20 @@ router.post('/purchase/day-pass', requireAuth, async (req, res) => {
       passDate: pass_date,
     });
 
-    db.prepare(`UPDATE venue_payments SET stripe_checkout_session_id = ? WHERE id = ?`)
-      .run(session.id, paymentId);
+    db.prepare(`UPDATE venue_payments SET square_link_id = ?, square_order_id = ? WHERE id = ?`)
+      .run(link.id, link.orderId || null, paymentId);
 
-    res.json({ checkout_url: session.url, session_id: session.id });
+    res.json({ checkout_url: link.url, link_id: link.id });
   } catch (err) {
     console.error('[VenueAccess] Day pass checkout error:', err.message);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
 
-// POST /api/venue-access/purchase/subscription — create Stripe checkout for monthly subscription
+// POST /api/venue-access/purchase/subscription — create Square payment link for monthly subscription
 router.post('/purchase/subscription', requireAuth, async (req, res) => {
   try {
-    if (!isStripeConfigured()) {
+    if (!isSquareConfigured()) {
       return res.status(503).json({ error: 'Payment processing is not configured' });
     }
 
@@ -408,22 +406,22 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
 
     const user = db.prepare('SELECT email, username FROM users WHERE id = ?').get(req.user.id);
 
-    const session = await createSubscriptionCheckoutSession({
+    const link = await createSubscriptionPaymentLink({
       userId: req.user.id,
       email: user?.email || '',
       username: user?.username || '',
       venueId: plan.venue_id,
       planId: plan.id,
-      stripePriceId: plan.stripe_price_id || null,
+      squarePlanVariationId: plan.square_plan_variation_id || null,
       planName: `${plan.venue_name} — ${plan.name}${discountNote}`,
       priceAmount: chargeAmount,
       currency: plan.currency,
     });
 
-    db.prepare(`UPDATE venue_payments SET stripe_checkout_session_id = ? WHERE id = ?`)
-      .run(session.id, paymentId);
+    db.prepare(`UPDATE venue_payments SET square_link_id = ?, square_order_id = ? WHERE id = ?`)
+      .run(link.id, link.orderId || null, paymentId);
 
-    res.json({ checkout_url: session.url, session_id: session.id });
+    res.json({ checkout_url: link.url, link_id: link.id });
   } catch (err) {
     console.error('[VenueAccess] Subscription checkout error:', err.message);
     res.status(500).json({ error: 'Failed to create checkout session' });
@@ -444,8 +442,8 @@ router.post('/cancel-subscription', requireAuth, async (req, res) => {
     `).get(subscription_id, req.user.id);
     if (!sub) return res.status(404).json({ error: 'Active subscription not found' });
 
-    if (isStripeConfigured() && sub.stripe_subscription_id) {
-      await cancelStripeSubscription(sub.stripe_subscription_id);
+    if (isSquareConfigured() && sub.square_subscription_id) {
+      await cancelSquareSubscription(sub.square_subscription_id);
     }
 
     db.prepare(`
@@ -593,129 +591,165 @@ router.get('/my-membership/:venueSlug', requireAuth, (req, res) => {
   });
 });
 
-// ── Stripe Webhook ──────────────────────────────────────────────────────
+// ── Square Webhook ──────────────────────────────────────────────────────
 
 router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  if (!isStripeConfigured()) {
-    return res.status(503).json({ error: 'Stripe not configured' });
+  if (!isSquareConfigured()) {
+    return res.status(503).json({ error: 'Square not configured' });
   }
 
-  const sig = req.headers['stripe-signature'];
-  let event;
+  const sig = req.headers['x-square-hmacsha256-signature'];
   try {
-    event = constructWebhookEvent(req.body, sig);
+    const rawBody = typeof req.body === 'string' ? req.body : req.body.toString('utf8');
+    if (!verifyWebhookSignature(rawBody, sig)) {
+      console.error('[Square Webhook] Signature verification failed');
+      return res.status(400).json({ error: 'Webhook signature verification failed' });
+    }
   } catch (err) {
-    console.error('[Stripe Webhook] Signature verification failed:', err.message);
+    console.error('[Square Webhook] Signature verification error:', err.message);
     return res.status(400).json({ error: 'Webhook signature verification failed' });
   }
 
+  const event = typeof req.body === 'string' ? JSON.parse(req.body) : JSON.parse(req.body.toString('utf8'));
   const db = getDb();
 
   try {
     switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object;
-        const meta = session.metadata || {};
+      // Payment completed — handles both day pass and subscription one-off payments
+      case 'payment.completed': {
+        const payment = event.data.object?.payment || event.data.object;
+        const orderId = payment?.orderId || payment?.order_id;
+        const squarePaymentId = payment?.id;
 
-        if (meta.type === 'day_pass') {
-          const paymentRow = db.prepare(`
-            SELECT id FROM venue_payments WHERE stripe_checkout_session_id = ?
-          `).get(session.id);
+        if (!orderId) break;
 
-          if (paymentRow) {
+        // Find the pending venue payment by square_order_id
+        const paymentRow = db.prepare(`
+          SELECT * FROM venue_payments WHERE square_order_id = ? AND status = 'pending'
+        `).get(orderId);
+
+        if (!paymentRow) {
+          // Also try by square_link_id — try matching via order
+          break;
+        }
+
+        // Try to extract metadata from payment note
+        let meta = {};
+        try {
+          const noteStr = payment?.note || payment?.receiptUrl || '';
+          // Payment note was set as JSON during link creation
+          // Square may not return it in webhook, so we use our DB record instead
+        } catch (e) { /* ignore */ }
+
+        db.prepare(`
+          UPDATE venue_payments SET status = 'succeeded', square_payment_id = ?, updated_at = datetime('now')
+          WHERE id = ?
+        `).run(squarePaymentId || '', paymentRow.id);
+
+        if (paymentRow.payment_type === 'day_pass') {
+          // We need to figure out the pass_date — stored in the description
+          const dateMatch = paymentRow.description?.match(/(\d{4}-\d{2}-\d{2})/);
+          const passDate = dateMatch ? dateMatch[1] : todayDateString();
+
+          const passId = uuidv4();
+          db.prepare(`
+            INSERT INTO venue_day_passes (id, user_id, venue_id, plan_id, pass_date, status, payment_id)
+            VALUES (?, ?, ?, ?, ?, 'active', ?)
+          `).run(passId, paymentRow.user_id, paymentRow.venue_id, paymentRow.plan_id, passDate, paymentRow.id);
+        } else if (paymentRow.payment_type === 'subscription') {
+          const subId = uuidv4();
+          const now = new Date();
+          const periodEnd = new Date(now);
+          periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+          db.prepare(`
+            INSERT INTO venue_subscriptions (id, user_id, venue_id, plan_id, status, current_period_start, current_period_end)
+            VALUES (?, ?, ?, ?, 'active', ?, ?)
+          `).run(subId, paymentRow.user_id, paymentRow.venue_id, paymentRow.plan_id,
+            now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
+
+          // Auto-add user to "Pump Dojo" group
+          addUserToDojoMemberGroup(db, paymentRow.user_id, null);
+        }
+        break;
+      }
+
+      // Square subscription events
+      case 'subscription.created': {
+        const subscription = event.data.object?.subscription || event.data.object;
+        const squareSubId = subscription?.id;
+        // Update any matching subscription record
+        if (squareSubId) {
+          db.prepare(`
+            UPDATE venue_subscriptions SET square_subscription_id = ?, updated_at = datetime('now')
+            WHERE square_subscription_id IS NULL AND status = 'active'
+            ORDER BY created_at DESC LIMIT 1
+          `);
+        }
+        break;
+      }
+
+      case 'subscription.updated': {
+        const subscription = event.data.object?.subscription || event.data.object;
+        const squareSubId = subscription?.id;
+        const status = subscription?.status;
+        if (!squareSubId) break;
+
+        const sub = db.prepare(`
+          SELECT * FROM venue_subscriptions WHERE square_subscription_id = ?
+        `).get(squareSubId);
+
+        if (sub) {
+          if (status === 'ACTIVE') {
             db.prepare(`
-              UPDATE venue_payments SET status = 'succeeded', stripe_payment_intent_id = ?, updated_at = datetime('now')
+              UPDATE venue_subscriptions SET status = 'active', updated_at = datetime('now')
               WHERE id = ?
-            `).run(session.payment_intent || '', paymentRow.id);
-
-            const passId = uuidv4();
+            `).run(sub.id);
+          } else if (status === 'DELINQUENT') {
             db.prepare(`
-              INSERT INTO venue_day_passes (id, user_id, venue_id, plan_id, pass_date, status, payment_id)
-              VALUES (?, ?, ?, ?, ?, 'active', ?)
-            `).run(passId, meta.user_id, meta.venue_id, meta.plan_id, meta.pass_date, paymentRow.id);
-          }
-        } else if (meta.type === 'subscription') {
-          const paymentRow = db.prepare(`
-            SELECT id FROM venue_payments WHERE stripe_checkout_session_id = ?
-          `).get(session.id);
-
-          if (paymentRow) {
-            db.prepare(`
-              UPDATE venue_payments SET status = 'succeeded', stripe_payment_intent_id = ?, updated_at = datetime('now')
+              UPDATE venue_subscriptions SET status = 'past_due', updated_at = datetime('now')
               WHERE id = ?
-            `).run(session.payment_intent || '', paymentRow.id);
-
-            const subId = uuidv4();
-            const stripeSubId = session.subscription || '';
-            const now = new Date();
-            const periodEnd = new Date(now);
-            periodEnd.setMonth(periodEnd.getMonth() + 1);
-
+            `).run(sub.id);
+          } else if (status === 'CANCELED' || status === 'TERMINATED') {
             db.prepare(`
-              INSERT INTO venue_subscriptions (id, user_id, venue_id, plan_id, status, stripe_subscription_id, current_period_start, current_period_end)
-              VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
-            `).run(subId, meta.user_id, meta.venue_id, meta.plan_id, stripeSubId,
-              now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
-
-            // Auto-add user to "Pump Dojo" group
-            addUserToDojoMemberGroup(db, meta.user_id, null);
+              UPDATE venue_subscriptions SET status = 'expired', cancelled_at = datetime('now'), updated_at = datetime('now')
+              WHERE id = ?
+            `).run(sub.id);
           }
         }
         break;
       }
 
-      case 'invoice.paid': {
-        const invoice = event.data.object;
-        const subId = invoice.subscription;
-        if (!subId) break;
+      // Subscription invoice paid (renewal)
+      case 'invoice.payment_made': {
+        const invoice = event.data.object?.invoice || event.data.object;
+        const subscriptionId = invoice?.subscriptionId || invoice?.subscription_id;
+        if (!subscriptionId) break;
 
         const sub = db.prepare(`
-          SELECT * FROM venue_subscriptions WHERE stripe_subscription_id = ?
-        `).get(subId);
+          SELECT * FROM venue_subscriptions WHERE square_subscription_id = ?
+        `).get(subscriptionId);
 
         if (sub) {
-          const periodStart = invoice.period_start
-            ? new Date(invoice.period_start * 1000).toISOString().slice(0, 10)
-            : sub.current_period_start;
-          const periodEnd = invoice.period_end
-            ? new Date(invoice.period_end * 1000).toISOString().slice(0, 10)
-            : sub.current_period_end;
+          const now = new Date();
+          const periodEnd = new Date(now);
+          periodEnd.setMonth(periodEnd.getMonth() + 1);
 
           db.prepare(`
             UPDATE venue_subscriptions
             SET status = 'active', current_period_start = ?, current_period_end = ?, updated_at = datetime('now')
             WHERE id = ?
-          `).run(periodStart, periodEnd, sub.id);
+          `).run(now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10), sub.id);
 
           const paymentId = uuidv4();
+          const amount = invoice?.paymentRequests?.[0]?.computedAmountMoney?.amount || 0;
           db.prepare(`
-            INSERT INTO venue_payments (id, user_id, venue_id, plan_id, payment_type, amount, currency, status, stripe_invoice_id, description)
+            INSERT INTO venue_payments (id, user_id, venue_id, plan_id, payment_type, amount, currency, status, square_payment_id, description)
             VALUES (?, ?, ?, ?, 'subscription_renewal', ?, ?, 'succeeded', ?, ?)
           `).run(paymentId, sub.user_id, sub.venue_id, sub.plan_id,
-            invoice.amount_paid || 0, invoice.currency || 'gbp',
-            invoice.id, 'Subscription renewal');
+            Number(amount), 'gbp',
+            invoice?.id || '', 'Subscription renewal');
         }
-        break;
-      }
-
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object;
-        const subId = invoice.subscription;
-        if (!subId) break;
-
-        db.prepare(`
-          UPDATE venue_subscriptions SET status = 'past_due', updated_at = datetime('now')
-          WHERE stripe_subscription_id = ?
-        `).run(subId);
-        break;
-      }
-
-      case 'customer.subscription.deleted': {
-        const subscription = event.data.object;
-        db.prepare(`
-          UPDATE venue_subscriptions SET status = 'expired', cancelled_at = datetime('now'), updated_at = datetime('now')
-          WHERE stripe_subscription_id = ?
-        `).run(subscription.id);
         break;
       }
 
@@ -723,7 +757,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
         break;
     }
   } catch (err) {
-    console.error('[Stripe Webhook] Error processing event:', err.message);
+    console.error('[Square Webhook] Error processing event:', err.message);
   }
 
   res.json({ received: true });
@@ -747,7 +781,7 @@ router.get('/admin/plans/:venueSlug', requireAuth, requireDojoAdmin, (req, res) 
 // POST /api/venue-access/admin/plans — create a new plan
 router.post('/admin/plans', requireAuth, requireDojoAdmin, (req, res) => {
   const db = getDb();
-  const { venue_id, plan_type, name, price_amount, currency, stripe_price_id } = req.body;
+  const { venue_id, plan_type, name, price_amount, currency, square_plan_variation_id } = req.body;
 
   if (!venue_id || !plan_type || !name || price_amount == null) {
     return res.status(400).json({ error: 'venue_id, plan_type, name, and price_amount are required' });
@@ -764,9 +798,9 @@ router.post('/admin/plans', requireAuth, requireDojoAdmin, (req, res) => {
 
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO venue_access_plans (id, venue_id, plan_type, name, price_amount, currency, stripe_price_id, active)
+    INSERT INTO venue_access_plans (id, venue_id, plan_type, name, price_amount, currency, square_plan_variation_id, active)
     VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-  `).run(id, venue_id, plan_type, name.trim(), price_amount, (currency || 'gbp').toLowerCase(), stripe_price_id || null);
+  `).run(id, venue_id, plan_type, name.trim(), price_amount, (currency || 'gbp').toLowerCase(), square_plan_variation_id || null);
 
   const plan = db.prepare('SELECT * FROM venue_access_plans WHERE id = ?').get(id);
   res.json(plan);
@@ -778,14 +812,14 @@ router.put('/admin/plans/:planId', requireAuth, requireDojoAdmin, (req, res) => 
   const plan = db.prepare('SELECT * FROM venue_access_plans WHERE id = ?').get(req.params.planId);
   if (!plan) return res.status(404).json({ error: 'Plan not found' });
 
-  const { name, price_amount, currency, stripe_price_id, active } = req.body;
+  const { name, price_amount, currency, square_plan_variation_id, active } = req.body;
 
   const updates = [];
   const params = [];
   if (name !== undefined) { updates.push('name = ?'); params.push(String(name).trim()); }
   if (price_amount !== undefined) { updates.push('price_amount = ?'); params.push(price_amount); }
   if (currency !== undefined) { updates.push('currency = ?'); params.push(String(currency).toLowerCase()); }
-  if (stripe_price_id !== undefined) { updates.push('stripe_price_id = ?'); params.push(stripe_price_id || null); }
+  if (square_plan_variation_id !== undefined) { updates.push('square_plan_variation_id = ?'); params.push(square_plan_variation_id || null); }
   if (active !== undefined) { updates.push('active = ?'); params.push(active ? 1 : 0); }
 
   if (updates.length === 0) {
@@ -1039,7 +1073,7 @@ router.get('/admin/payments/:venueSlug', requireAuth, requireDojoAdmin, (req, re
 
   const payments = db.prepare(`
     SELECT vp.id, vp.payment_type, vp.amount, vp.currency, vp.status, vp.description,
-           vp.stripe_payment_intent_id, vp.stripe_checkout_session_id, vp.stripe_invoice_id,
+           vp.square_payment_id, vp.square_order_id, vp.square_link_id,
            vp.created_at, vp.updated_at,
            u.id AS user_id, u.username, u.avatar, u.avatar_v,
            vap.name AS plan_name, vap.plan_type
@@ -1155,9 +1189,9 @@ router.post('/admin/revoke/:type/:id', requireAuth, requireDojoAdmin, (req, res)
     const sub = db.prepare('SELECT * FROM venue_subscriptions WHERE id = ?').get(id);
     if (!sub) return res.status(404).json({ error: 'Subscription not found' });
     db.prepare("UPDATE venue_subscriptions SET status = 'cancelled', cancelled_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").run(id);
-    if (isStripeConfigured() && sub.stripe_subscription_id) {
-      cancelStripeSubscription(sub.stripe_subscription_id, { immediately: true }).catch(err => {
-        console.error('[VenueAccess] Failed to cancel Stripe subscription:', err.message);
+    if (isSquareConfigured() && sub.square_subscription_id) {
+      cancelSquareSubscription(sub.square_subscription_id).catch(err => {
+        console.error('[VenueAccess] Failed to cancel Square subscription:', err.message);
       });
     }
     res.json({ success: true });

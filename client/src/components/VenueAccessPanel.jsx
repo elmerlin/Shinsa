@@ -39,7 +39,7 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
   const [access, setAccess] = useState(null);
   const [plans, setPlans] = useState([]);
   const [approved, setApproved] = useState(false);
-  const [stripeConfigured, setStripeConfigured] = useState(false);
+  const [paymentsConfigured, setPaymentsConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [purchasing, setPurchasing] = useState(false);
@@ -63,7 +63,7 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
       setAccess(accessData);
       setPlans(plansData.plans || []);
       setApproved(!!plansData.approved);
-      setStripeConfigured(!!config.stripe_configured);
+      setPaymentsConfigured(!!config.payments_configured);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -208,7 +208,7 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
               <div className="space-y-1.5">
                 {dayPassPlans.map(plan => (
                   <button key={plan.id} onClick={() => handlePurchaseDayPass(plan.id)}
-                    disabled={purchasing || !stripeConfigured}
+                    disabled={purchasing || !paymentsConfigured}
                     className="w-full flex items-center justify-between bg-piu-dark/60 border border-piu-border/50 rounded-xl px-3 py-2.5 hover:border-piu-accent/50 transition-colors disabled:opacity-50">
                     <div className="text-left">
                       <div className="text-sm font-bold">{plan.name}</div>
@@ -237,7 +237,7 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
               <div className="space-y-1.5">
                 {monthlyPlans.map(plan => (
                   <button key={plan.id} onClick={() => handlePurchaseSubscription(plan.id)}
-                    disabled={purchasing || !stripeConfigured}
+                    disabled={purchasing || !paymentsConfigured}
                     className="w-full flex items-center justify-between bg-piu-dark/60 border border-piu-border/50 rounded-xl px-3 py-2.5 hover:border-piu-accent/50 transition-colors disabled:opacity-50">
                     <div className="text-left">
                       <div className="text-sm font-bold">{plan.name}</div>
@@ -263,7 +263,7 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
             </div>
           )}
 
-          {!stripeConfigured && (dayPassPlans.length > 0 || monthlyPlans.length > 0) && (
+          {!paymentsConfigured && (dayPassPlans.length > 0 || monthlyPlans.length > 0) && (
             <p className="text-xs text-yellow-400">Payment processing is not yet configured. Contact the venue admin.</p>
           )}
         </div>

@@ -52,7 +52,7 @@ export default function MembershipPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [data, setData] = useState(null);
-  const [stripeConfigured, setStripeConfigured] = useState(false);
+  const [paymentsConfigured, setPaymentsConfigured] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -82,7 +82,7 @@ export default function MembershipPage() {
         getVenueAccessConfig(),
       ]);
       setData(membership);
-      setStripeConfigured(!!config.stripe_configured);
+      setPaymentsConfigured(!!config.payments_configured);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -332,7 +332,7 @@ export default function MembershipPage() {
               <div className="space-y-1.5">
                 {dayPassPlans.map(plan => (
                   <button key={plan.id} onClick={() => handlePurchaseDayPass(plan.id)}
-                    disabled={purchasing || !stripeConfigured}
+                    disabled={purchasing || !paymentsConfigured}
                     className="w-full flex items-center justify-between bg-piu-card/60 border border-piu-border/50 rounded-xl px-3 py-2.5 hover:border-piu-accent/50 transition-colors disabled:opacity-50">
                     <div className="text-left">
                       <div className="text-sm font-bold">{plan.name}</div>
@@ -351,7 +351,7 @@ export default function MembershipPage() {
                   </button>
                 ))}
               </div>
-              {!stripeConfigured && <p className="text-xs text-yellow-400 mt-2">Payment processing is not yet configured.</p>}
+              {!paymentsConfigured && <p className="text-xs text-yellow-400 mt-2">Payment processing is not yet configured.</p>}
             </div>
           )}
         </div>
@@ -387,7 +387,7 @@ export default function MembershipPage() {
                     </div>
                   </div>
                   <button onClick={() => handlePurchaseSubscription(plan.id)}
-                    disabled={purchasing || !stripeConfigured}
+                    disabled={purchasing || !paymentsConfigured}
                     className="w-full px-4 py-2.5 text-sm font-display font-bold text-white bg-gradient-to-r from-piu-accent to-pink-600 rounded-xl hover:from-pink-600 hover:to-piu-accent transition-all disabled:opacity-50">
                     {purchasing ? 'Processing...' : 'Subscribe Now'}
                   </button>
@@ -395,7 +395,7 @@ export default function MembershipPage() {
               ))}
             </div>
           )}
-          {!stripeConfigured && monthlyPlans.length > 0 && (
+          {!paymentsConfigured && monthlyPlans.length > 0 && (
             <p className="text-xs text-yellow-400">Payment processing is not yet configured. Contact the venue admin.</p>
           )}
         </div>
