@@ -1141,6 +1141,7 @@ export default function LivePage() {
   const useMobilePlayerHud = isPlayerMode && !isDesktopViewport;
   const isMobileChatLayout = !isDesktopViewport;
   const isMobileChatSheet = mobilePanel === 'chat' && !isDesktopViewport;
+  const isCompactSongCardLayout = !isDesktopViewport;
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const overlayPreviewUrl = useMemo(() => {
@@ -2122,19 +2123,19 @@ export default function LivePage() {
   );
 
   const songsSection = (
-    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-2.5 sm:p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
         <div>
           <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Songs This Session</p>
-          <p className="text-sm font-display font-bold text-white">{visiblePlays.length} visible plays</p>
+          <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className="input-field text-xs py-2">
+          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field ${isCompactSongCardLayout ? 'text-[11px] py-1.5 px-2.5' : 'text-xs py-2'}`}>
             <option>All</option>
             <option>Single</option>
             <option>Double</option>
           </select>
-          <select value={playSort} onChange={(e) => setPlaySort(e.target.value)} className="input-field text-xs py-2">
+          <select value={playSort} onChange={(e) => setPlaySort(e.target.value)} className={`input-field ${isCompactSongCardLayout ? 'text-[11px] py-1.5 px-2.5' : 'text-xs py-2'}`}>
             <option value="recent">Recent</option>
             <option value="level_desc">Level high to low</option>
             <option value="grade_desc">Grade high to low</option>
@@ -2142,7 +2143,7 @@ export default function LivePage() {
           </select>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-2.5 xl:grid-cols-3 2xl:grid-cols-4">
         {visiblePlays.map((play) => {
           const requestInfo = requestLookup.get(buildRequestKey(play.song_title, play.mode, play.level));
           const requestStatus = requestInfo
@@ -2162,34 +2163,42 @@ export default function LivePage() {
               type="button"
               key={play.id}
               onClick={() => setSelectedPlay(play)}
-              className="w-full rounded-2xl border border-piu-border bg-black/15 p-3 text-left transition-colors hover:border-cyan-400/40"
+              className={`w-full rounded-2xl border border-piu-border bg-black/15 text-left transition-colors hover:border-cyan-400/40 ${
+                isCompactSongCardLayout ? 'p-2.5' : 'p-3'
+              }`}
             >
-              <div className="flex items-start gap-3">
-                <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
+              <div className={`flex items-start ${isCompactSongCardLayout ? 'gap-2.5' : 'gap-3'}`}>
+                <PiuChartJacket
+                  title={play.song_title}
+                  mode={play.mode}
+                  level={play.level}
+                  jacketUrl={play.background_url}
+                  size={isCompactSongCardLayout ? 'sm' : 'md'}
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-display font-bold text-white">{play.song_title}</p>
-                  <div className="mt-3 flex flex-col items-start gap-1">
+                  <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} truncate font-display font-bold leading-tight text-white`}>{play.song_title}</p>
+                  <div className={`flex flex-col items-start ${isCompactSongCardLayout ? 'mt-2 gap-0.5' : 'mt-3 gap-1'}`}>
                     <p
-                      className={`text-lg font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                      className={`${isCompactSongCardLayout ? 'text-base' : 'text-lg'} font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
                       data-grade={displayGrade}
                     >
                       {displayGrade}
                     </p>
-                    <p className="text-[11px] font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
+                    <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} font-display font-bold text-cyan-300`}>{formatNumber(play.score)}</p>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className={`flex flex-wrap ${isCompactSongCardLayout ? 'mt-1.5 gap-1' : 'mt-2 gap-1.5'}`}>
                     {play.pumbility_gain > 0 ? (
-                      <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-emerald-200">
+                      <span className={`rounded-full border border-emerald-400/25 bg-emerald-500/10 font-display font-bold text-emerald-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                         +{play.pumbility_gain} p
                       </span>
                     ) : null}
                     {play.over_top100_rank > 0 ? (
-                      <span className="rounded-full border border-yellow-400/25 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-yellow-200">
+                      <span className={`rounded-full border border-yellow-400/25 bg-yellow-500/10 font-display font-bold text-yellow-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                         Top 100 #{play.over_top100_rank}
                       </span>
                     ) : null}
                     {requestInfo ? (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-display font-bold ${getRequestStatusMeta(requestStatus).pill}`}>
+                      <span className={`rounded-full font-display font-bold ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'} ${getRequestStatusMeta(requestStatus).pill}`}>
                         {formatRequestStateLabel(requestInfo)}
                       </span>
                     ) : null}
