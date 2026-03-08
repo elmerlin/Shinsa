@@ -58,6 +58,23 @@ function shiftMonthKey(monthKey, offset) {
   return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+function compareMonthKeys(a, b) {
+  return String(a || '').localeCompare(String(b || ''));
+}
+
+function formatMonthShort(monthKey) {
+  const raw = `${String(monthKey || '')}-01T00:00:00Z`;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return monthKey || '—';
+  return parsed.toLocaleDateString(undefined, { month: 'short' });
+}
+
+function paymentTypeLabel(type) {
+  if (type === 'subscription') return 'Subscriptions';
+  if (type === 'day_pass') return 'Day Passes';
+  return type ? String(type).replace(/_/g, ' ') : 'Other';
+}
+
 function formatAverageVisits(value) {
   const num = Number(value || 0);
   if (num === 0) return '0';
@@ -92,7 +109,6 @@ export default function AdminVenueAccessTab() {
   const [selectedSubscriberId, setSelectedSubscriberId] = useState('');
   const [subscriberDetail, setSubscriberDetail] = useState(null);
   const [subscriberDetailLoading, setSubscriberDetailLoading] = useState(false);
-  const monthStripRef = useRef(null);
 
   // Plans state
   const [plans, setPlans] = useState([]);
@@ -135,14 +151,6 @@ export default function AdminVenueAccessTab() {
     if (subTab === 'discounts') loadDiscounts();
     if (subTab === 'plans') loadPlans();
   }, [subTab]);
-
-  useEffect(() => {
-    if (!monthStripRef.current) return;
-    const target = monthStripRef.current.querySelector(`[data-month-key="${selectedMonth}"]`);
-    if (target && typeof target.scrollIntoView === 'function') {
-      target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    }
-  }, [overview, selectedMonth]);
 
   async function loadOverview() {
     setLoading(true);
@@ -426,12 +434,31 @@ export default function AdminVenueAccessTab() {
 
   const subTabs = ['overview', 'plans', 'approved', 'discounts', 'grant', 'payments'];
   const selectedMonthLabel = overview?.selected_month_label || 'Selected month';
-  const isCurrentMonth = selectedMonth === currentMonthKey();
+  const selectedYear = parseInt(String(selectedMonth || currentMonthKey()).slice(0, 4), 10) || new Date().getFullYear();
+  const canMoveToNextYear = compareMonthKeys(shiftMonthKey(selectedMonth, 12), currentMonthKey()) <= 0;
   const groupedDayPasses = Object.entries(
     (overview?.day_passes || []).reduce((acc, pass) => {
       const key = pass.pass_date || 'Unknown date';
       if (!acc[key]) acc[key] = [];
       acc[key].push(pass);
+      return acc;
+    }, {}),
+  );
+  const monthCards = Array.isArray(overview?.month_cards) ? overview.month_cards : [];
+  const featuredMonthCard = monthCards.find((monthCard) => monthCard.month_key === selectedMonth) || monthCards[0] || null;
+  const quarterGroups = [
+    { label: 'Jan - Mar', cards: monthCards.slice(0, 3) },
+    { label: 'Apr - Jun', cards: monthCards.slice(3, 6) },
+    { label: 'Jul - Sep', cards: monthCards.slice(6, 9) },
+    { label: 'Oct - Dec', cards: monthCards.slice(9, 12) },
+  ];
+  const revenueTransactions = (overview?.payments || []).filter((payment) => payment.status === 'succeeded');
+  const revenueBreakdown = Object.entries(
+    revenueTransactions.reduce((acc, payment) => {
+      const key = payment.payment_type || 'other';
+      if (!acc[key]) acc[key] = { amount: 0, count: 0 };
+      acc[key].amount += Number(payment.amount || 0);
+      acc[key].count += 1;
       return acc;
     }, {}),
   );
@@ -465,59 +492,103 @@ export default function AdminVenueAccessTab() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setSelectedMonth((prev) => shiftMonthKey(prev, -1))}
+                onClick={() => setSelectedMonth((prev) => shiftMonthKey(prev, -12))}
                 className="rounded-lg border border-piu-border/60 bg-piu-card/50 px-3 py-2 text-xs font-display font-bold text-gray-200 hover:border-piu-accent/50 hover:text-white"
               >
-                Older
+                Previous Year
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedMonth((prev) => (prev === currentMonthKey() ? prev : shiftMonthKey(prev, 1)))}
-                disabled={isCurrentMonth}
+                onClick={() => setSelectedMonth((prev) => {
+                  const next = shiftMonthKey(prev, 12);
+                  return compareMonthKeys(next, currentMonthKey()) > 0 ? currentMonthKey() : next;
+                })}
+                disabled={!canMoveToNextYear}
                 className="rounded-lg border border-piu-border/60 bg-piu-card/50 px-3 py-2 text-xs font-display font-bold text-gray-200 hover:border-piu-accent/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Newer
+                Next Year
               </button>
-              <span className="text-[11px] text-gray-500">Scroll the month strip or move one month at a time.</span>
+              <span className="text-[11px] text-gray-500">{selectedYear}</span>
             </div>
-            <div ref={monthStripRef} className="flex gap-3 overflow-x-auto pb-2">
-              {(overview.month_cards || []).map((monthCard) => (
-                <button
-                  key={monthCard.month_key}
-                  type="button"
-                  onClick={() => setSelectedMonth(monthCard.month_key)}
-                  data-month-key={monthCard.month_key}
-                  className={`min-w-[180px] shrink-0 rounded-2xl border p-3 text-left transition-colors ${
-                    monthCard.selected
-                      ? 'border-piu-accent bg-piu-accent/10'
-                      : 'border-piu-border/50 bg-piu-card/50 hover:border-piu-accent/45'
-                  }`}
-                >
-                  <div className="flex h-full min-h-[156px] flex-col">
-                    <div className="text-[11px] uppercase tracking-wide text-gray-500">{monthCard.month_label}</div>
-                    <div className="mt-2 text-lg font-display font-bold text-white">{formatCurrency(monthCard.revenue)}</div>
-                    <div className="mt-auto space-y-1 text-[11px] text-gray-400">
-                      <div>{monthCard.subscription_count} subs</div>
-                      <div>{monthCard.day_pass_count} day passes</div>
-                      <div>{monthCard.payment_count} payments</div>
-                    </div>
+            {featuredMonthCard && (
+              <div className="rounded-2xl border border-piu-accent/35 bg-gradient-to-br from-piu-accent/10 via-piu-card/80 to-piu-dark/60 p-4">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+                  <div className="space-y-3">
+                    <div className="text-[11px] uppercase tracking-[0.35em] text-gray-500">Featured Month</div>
+                    <div className="text-2xl font-display font-bold text-white">{featuredMonthCard.month_label}</div>
+                    <div className="text-3xl font-display font-bold text-piu-accent">{formatCurrency(featuredMonthCard.revenue)}</div>
+                    <div className="text-sm text-gray-400">Click any month tile in the quarter grid to load its full monthly card and drilldown stats.</div>
                   </div>
-                </button>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {[
+                      { label: 'Subscriptions', value: featuredMonthCard.subscription_count },
+                      { label: 'Day Passes', value: featuredMonthCard.day_pass_count },
+                      { label: 'Payments', value: featuredMonthCard.payment_count },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-xl border border-piu-border/40 bg-piu-dark/50 p-3 text-center">
+                        <div className="text-2xl font-display font-bold text-white">{item.value}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500">{item.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="grid gap-3 xl:grid-cols-2">
+              {quarterGroups.map((quarter) => (
+                <div key={quarter.label} className="rounded-2xl border border-piu-border/45 bg-piu-card/40 p-3">
+                  <div className="mb-3 text-[11px] font-display font-bold uppercase tracking-[0.3em] text-gray-500">{quarter.label}</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {quarter.cards.map((monthCard) => (
+                      <button
+                        key={monthCard.month_key}
+                        type="button"
+                        onClick={() => setSelectedMonth(monthCard.month_key)}
+                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                          monthCard.selected
+                            ? 'border-piu-accent bg-piu-accent/10'
+                            : 'border-piu-border/40 bg-piu-dark/35 hover:border-piu-accent/35'
+                        }`}
+                      >
+                        <div className="text-[11px] uppercase tracking-wide text-gray-500">{formatMonthShort(monthCard.month_key)}</div>
+                        <div className="mt-1 text-sm font-display font-bold text-white">{formatCurrency(monthCard.revenue)}</div>
+                        <div className="mt-1 text-[10px] text-gray-400">
+                          {monthCard.payment_count} pay • {monthCard.day_pass_count} pass
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
 
           {/* Stats */}
           <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { label: `${selectedMonthLabel} Revenue`, value: formatCurrency(overview.stats?.selected_month_revenue) },
-              { label: `${selectedMonthLabel} Payments`, value: overview.stats?.selected_month_payments || 0 },
-            ].map((s) => (
-              <div key={s.label} className="bg-piu-card rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold font-display">{s.value}</div>
-                <div className="text-xs text-gray-400">{s.label}</div>
-              </div>
-            ))}
+            <button
+              type="button"
+              onClick={() => setOverviewPanel((prev) => (prev === 'revenue' ? '' : 'revenue'))}
+              className={`rounded-lg p-3 text-center transition-colors ${
+                overviewPanel === 'revenue'
+                  ? 'bg-piu-accent/10 ring-1 ring-piu-accent'
+                  : 'bg-piu-card hover:bg-piu-card/80'
+              }`}
+            >
+              <div className="text-2xl font-bold font-display">{formatCurrency(overview.stats?.selected_month_revenue)}</div>
+              <div className="text-xs text-gray-400">{selectedMonthLabel} Revenue</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setOverviewPanel((prev) => (prev === 'payments' ? '' : 'payments'))}
+              className={`rounded-lg p-3 text-center transition-colors ${
+                overviewPanel === 'payments'
+                  ? 'bg-piu-accent/10 ring-1 ring-piu-accent'
+                  : 'bg-piu-card hover:bg-piu-card/80'
+              }`}
+            >
+              <div className="text-2xl font-bold font-display">{overview.stats?.selected_month_payments || 0}</div>
+              <div className="text-xs text-gray-400">{selectedMonthLabel} Payments</div>
+            </button>
             <button
               type="button"
               onClick={() => setOverviewPanel((prev) => (prev === 'day_passes' ? '' : 'day_passes'))}
@@ -550,6 +621,74 @@ export default function AdminVenueAccessTab() {
               <div className="text-xs text-gray-400">Total Revenue</div>
             </div>
           </div>
+
+          {overviewPanel === 'revenue' && (
+            <div className="rounded-2xl border border-piu-border/50 bg-piu-card/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h4 className="text-sm font-display font-bold text-gray-200">
+                  {selectedMonthLabel} Revenue ({formatCurrency(overview.stats?.selected_month_revenue)})
+                </h4>
+                <span className="text-xs text-gray-500">Income from successful subscriptions and day passes in this month.</span>
+              </div>
+              {revenueTransactions.length === 0 ? (
+                <p className="text-sm text-gray-500">No revenue recorded in this month.</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {revenueBreakdown.map(([type, summary]) => (
+                      <div key={type} className="rounded-xl border border-piu-border/40 bg-piu-dark/50 p-3">
+                        <div className="text-xs uppercase tracking-wide text-gray-500">{paymentTypeLabel(type)}</div>
+                        <div className="mt-1 text-xl font-display font-bold text-white">{formatCurrency(summary.amount)}</div>
+                        <div className="text-xs text-gray-400">{summary.count} transaction{summary.count === 1 ? '' : 's'}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    {revenueTransactions.map((payment) => (
+                      <div key={payment.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-piu-card/60 px-3 py-2 text-sm">
+                        <img src={getAvatarUrl(payment.avatar)} alt="" className="h-7 w-7 rounded-full" />
+                        <span className="font-bold text-white">{payment.username}</span>
+                        <span className="text-xs text-gray-400">{paymentTypeLabel(payment.payment_type)}</span>
+                        <span className="text-xs text-gray-500">{payment.description || payment.plan_name || 'Venue payment'}</span>
+                        <span className="ml-auto font-bold text-white">{formatCurrency(payment.amount, payment.currency)}</span>
+                        <span className="text-xs text-gray-500">{formatDateTime(payment.created_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {overviewPanel === 'payments' && (
+            <div className="rounded-2xl border border-piu-border/50 bg-piu-card/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h4 className="text-sm font-display font-bold text-gray-200">
+                  {selectedMonthLabel} Payments ({overview.payments?.length || 0})
+                </h4>
+                <span className="text-xs text-gray-500">Every payment transaction recorded in this month.</span>
+              </div>
+              {overview.payments?.length === 0 ? (
+                <p className="text-sm text-gray-500">No payments recorded in this month.</p>
+              ) : (
+                <div className="space-y-1">
+                  {overview.payments.map((payment) => (
+                    <div key={payment.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-piu-card/60 px-3 py-2 text-sm">
+                      <img src={getAvatarUrl(payment.avatar)} alt="" className="h-7 w-7 rounded-full" />
+                      <span className="font-bold text-white">{payment.username}</span>
+                      <span className="text-xs text-gray-400">{paymentTypeLabel(payment.payment_type)}</span>
+                      <span className="text-xs text-gray-500">{payment.description || payment.plan_name || 'Venue payment'}</span>
+                      <span className="ml-auto font-bold text-white">{formatCurrency(payment.amount, payment.currency)}</span>
+                      <span className={`text-xs font-bold ${payment.status === 'succeeded' ? 'text-green-400' : payment.status === 'pending' ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {String(payment.status || 'unknown').toUpperCase()}
+                      </span>
+                      <span className="text-xs text-gray-500">{formatDateTime(payment.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {overviewPanel === 'day_passes' && (
             <div className="rounded-2xl border border-piu-border/50 bg-piu-card/40 p-4">
@@ -751,25 +890,6 @@ export default function AdminVenueAccessTab() {
             </div>
           )}
 
-          {/* Recent Payments */}
-          <div>
-            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">{selectedMonthLabel} Payments</h4>
-            {overview.payments?.length === 0 ? (
-              <p className="text-gray-500 text-sm">No payments recorded in this month.</p>
-            ) : (
-              <div className="space-y-1 max-h-60 overflow-y-auto">
-                {overview.payments?.slice(0, 20).map(p => (
-                  <div key={p.id} className="flex items-center gap-3 bg-piu-card/50 rounded-lg px-3 py-2 text-sm">
-                    <img src={getAvatarUrl(p.avatar)} alt="" className="w-6 h-6 rounded-full" />
-                    <span className="font-bold min-w-0 truncate text-xs">{p.username}</span>
-                    <span className="text-gray-400 text-xs">{p.description || p.payment_type}</span>
-                    <span className="ml-auto font-bold text-xs">{formatCurrency(p.amount, p.currency)}</span>
-                    <span className={`text-xs ${p.status === 'succeeded' ? 'text-green-400' : p.status === 'pending' ? 'text-yellow-400' : 'text-red-400'}`}>{p.status}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       )}
 

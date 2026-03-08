@@ -1158,8 +1158,8 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
   const selectedMonth = isValidMonthKey(req.query.month) ? String(req.query.month) : currentMonthKey();
   const currentMonth = currentMonthKey();
-  const monthsBack = Math.max(11, monthDistance(currentMonth, selectedMonth));
-  const monthKeys = Array.from({ length: monthsBack + 1 }, (_, index) => shiftMonthKey(currentMonth, -index));
+  const selectedYear = parseInt(selectedMonth.slice(0, 4), 10) || parseInt(currentMonth.slice(0, 4), 10);
+  const monthKeys = Array.from({ length: 12 }, (_, index) => `${selectedYear}-${String(index + 1).padStart(2, '0')}`);
 
   const subscribers = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
