@@ -68,9 +68,9 @@ function isUserApproved(db, userId, venueId) {
   return !!row;
 }
 
-const DOJO_MEMBER_GROUP_NAME = 'Dojo Member';
+const DOJO_MEMBER_GROUP_NAME = 'Pump Dojo';
 
-/** Check if user is in the "Dojo Member" admin user group. */
+/** Check if user is in the "Pump Dojo" admin user group. */
 function isDojoMember(db, userId) {
   const row = db.prepare(`
     SELECT 1 FROM admin_user_group_members gm
@@ -81,7 +81,7 @@ function isDojoMember(db, userId) {
 }
 
 /**
- * Ensure the "Dojo Member" group exists and return its ID.
+ * Ensure the "Pump Dojo" group exists and return its ID.
  * Creates it if it doesn't exist.
  */
 function ensureDojoMemberGroup(db, createdByUserId) {
@@ -92,13 +92,13 @@ function ensureDojoMemberGroup(db, createdByUserId) {
   db.prepare(`
     INSERT INTO admin_user_groups (id, name, description, created_by)
     VALUES (?, ?, ?, ?)
-  `).run(groupId, DOJO_MEMBER_GROUP_NAME, 'Members with venue access via subscription or admin grant', createdByUserId || null);
+  `).run(groupId, DOJO_MEMBER_GROUP_NAME, 'Pump Dojo members with venue access via subscription or admin grant', createdByUserId || null);
 
   return groupId;
 }
 
 /**
- * Add a user to the "Dojo Member" group if they are not already in it.
+ * Add a user to the "Pump Dojo" group if they are not already in it.
  * Also grants the 'checkin' feature to the group if not already granted.
  */
 function addUserToDojoMemberGroup(db, userId, addedByUserId) {
@@ -124,7 +124,7 @@ function addUserToDojoMemberGroup(db, userId, addedByUserId) {
  * Access is granted if any of:
  *  1. User has an active monthly subscription covering today
  *  2. User has a day pass for today
- *  3. User is in the "Dojo Member" admin user group (backward-compat)
+ *  3. User is in the "Pump Dojo" admin user group (backward-compat)
  */
 function checkUserVenueAccess(db, userId, venueId) {
   const today = todayDateString();
@@ -155,7 +155,7 @@ function checkUserVenueAccess(db, userId, venueId) {
     return { hasAccess: true, accessType: 'day_pass', detail: dayPass };
   }
 
-  // 3. Backward-compat: user is in "Dojo Member" group
+  // 3. Backward-compat: user is in "Pump Dojo" group
   if (isDojoMember(db, userId)) {
     return { hasAccess: true, accessType: 'group_member', detail: null };
   }
@@ -657,7 +657,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
             `).run(subId, meta.user_id, meta.venue_id, meta.plan_id, stripeSubId,
               now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
 
-            // Auto-add user to "Dojo Member" group
+            // Auto-add user to "Pump Dojo" group
             addUserToDojoMemberGroup(db, meta.user_id, null);
           }
         }
@@ -1135,7 +1135,7 @@ router.post('/admin/grant-subscription', requireAuth, requireDojoAdmin, (req, re
   `).run(subId, user_id, venue_id, plan_id,
     now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
 
-  // Auto-add user to "Dojo Member" group
+  // Auto-add user to "Pump Dojo" group
   addUserToDojoMemberGroup(db, user_id, req.user.id);
 
   res.json({ id: subId, status: 'active', current_period_end: periodEnd.toISOString().slice(0, 10) });

@@ -190,7 +190,7 @@ export default function MembershipPage() {
                 ? 'Active Monthly Member'
                 : accessType === 'day_pass'
                   ? 'Day Pass Active'
-                  : 'Dojo Member'
+                  : 'Pump Dojo Member'
               : 'No Active Access'}
           </h2>
         </div>
@@ -229,7 +229,7 @@ export default function MembershipPage() {
         {/* Group-only member message */}
         {accessType === 'group_member' && !data?.subscription && (
           <div className="text-xs text-gray-400 mt-2">
-            You have access through your Dojo Member group membership. Consider subscribing for uninterrupted access.
+            You have access through your Pump Dojo Member group membership. Consider subscribing for uninterrupted access.
           </div>
         )}
 
