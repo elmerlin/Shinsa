@@ -2177,14 +2177,16 @@ export default function LivePage() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} truncate font-display font-bold leading-tight text-white`}>{play.song_title}</p>
-                  <div className={`flex flex-col items-start ${isCompactSongCardLayout ? 'mt-2 gap-0.5' : 'mt-3 gap-1'}`}>
-                    <p
-                      className={`${isCompactSongCardLayout ? 'text-base' : 'text-lg'} font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
-                      data-grade={displayGrade}
-                    >
-                      {displayGrade}
-                    </p>
-                    <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} font-display font-bold text-cyan-300`}>{formatNumber(play.score)}</p>
+                  <div className={`${isCompactSongCardLayout ? 'mt-2' : 'mt-3'}`}>
+                    <div className={`flex items-baseline ${isCompactSongCardLayout ? 'gap-2' : 'gap-2.5'}`}>
+                      <p
+                        className={`${isCompactSongCardLayout ? 'text-base' : 'text-lg'} font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                        data-grade={displayGrade}
+                      >
+                        {displayGrade}
+                      </p>
+                      <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} font-display font-bold text-cyan-300`}>{formatNumber(play.score)}</p>
+                    </div>
                   </div>
                   <div className={`flex flex-wrap ${isCompactSongCardLayout ? 'mt-1.5 gap-1' : 'mt-2 gap-1.5'}`}>
                     {play.pumbility_gain > 0 ? (
