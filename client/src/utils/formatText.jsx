@@ -1,19 +1,41 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { getProfilePathByUsername } from './profile';
+import { getDojoCatEmoji } from './dojoCatEmojis';
 
-const MENTION_REGEX = /(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{2,30})/g;
+const INLINE_TOKEN_REGEX = /(:dojocat_[0-9]+_[0-9]+:|(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{2,30}))/g;
 
-function renderMentions(text, keyRef) {
+function renderInlineTokens(text, keyRef) {
   if (!text) return [];
   const parts = [];
   let lastIndex = 0;
   let match;
 
-  while ((match = MENTION_REGEX.exec(text)) !== null) {
+  INLINE_TOKEN_REGEX.lastIndex = 0;
+  while ((match = INLINE_TOKEN_REGEX.exec(text)) !== null) {
+    const token = match[1] || '';
+    const dojoCat = getDojoCatEmoji(token);
+
+    if (dojoCat) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push(
+        <img
+          key={keyRef.value++}
+          src={dojoCat.image}
+          alt={dojoCat.label}
+          title={dojoCat.label}
+          className="mx-0.5 inline-block h-8 w-8 rounded-md object-contain align-middle"
+        />
+      );
+      lastIndex = match.index + token.length;
+      continue;
+    }
+
     const full = match[0] || '';
-    const prefix = match[1] || '';
-    const username = match[2] || '';
+    const prefix = match[2] || '';
+    const username = match[3] || '';
     const atIndex = match.index + prefix.length;
 
     if (atIndex > lastIndex) {
@@ -52,25 +74,25 @@ export function renderFormattedText(text) {
 
   while ((match = combined.exec(text)) !== null) {
     if (match.index > lastIndex) {
-      parts.push(...renderMentions(text.slice(lastIndex, match.index), keyRef));
+      parts.push(...renderInlineTokens(text.slice(lastIndex, match.index), keyRef));
     }
 
     if (match[2]) {
       parts.push(
         <strong key={keyRef.value++} className="font-bold">
-          {renderMentions(match[2], keyRef)}
+          {renderInlineTokens(match[2], keyRef)}
         </strong>
       );
     } else if (match[3]) {
       parts.push(
         <em key={keyRef.value++}>
-          {renderMentions(match[3], keyRef)}
+          {renderInlineTokens(match[3], keyRef)}
         </em>
       );
     } else if (match[4]) {
       parts.push(
         <span key={keyRef.value++} className="line-through text-gray-500">
-          {renderMentions(match[4], keyRef)}
+          {renderInlineTokens(match[4], keyRef)}
         </span>
       );
     }
@@ -79,7 +101,7 @@ export function renderFormattedText(text) {
   }
 
   if (lastIndex < text.length) {
-    parts.push(...renderMentions(text.slice(lastIndex), keyRef));
+    parts.push(...renderInlineTokens(text.slice(lastIndex), keyRef));
   }
 
   return parts.length > 0 ? parts : text;
