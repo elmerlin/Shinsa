@@ -801,9 +801,18 @@ function OverlayStudioCard({
           <p className="text-[10px] font-display uppercase tracking-[0.28em] text-fuchsia-200">Overlay Studio</p>
           <h2 className="mt-1 text-xl font-display font-black text-white">Browser-source layouts for stream scenes</h2>
           <p className="mt-2 text-sm text-gray-300">
-            Pick a scene layout, place it exactly where you want it in OBS, and decide when it should disappear.
+            Use this once to set up OBS or Streamlabs, then return to the live room tab.
             The overlay reads the same Shinsa Live stream, so scores, chat, votes, and reactions update in real time.
           </p>
+          <div className="mt-4 rounded-[24px] border border-white/10 bg-black/18 p-4">
+            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">How To Use It</p>
+            <ol className="mt-3 space-y-2 text-sm text-gray-300">
+              <li>1. Pick a quick scene or preset that matches the stream layout you want.</li>
+              <li>2. Click `Preview overlay` to see the transparent browser-source page.</li>
+              <li>3. Click `Copy browser source URL`, then paste it into an OBS `Browser Source`.</li>
+              <li>4. Position and size it in OBS, then come back here only if you want to change the scene.</li>
+            </ol>
+          </div>
         </div>
 
         <div className="min-w-[240px] rounded-[24px] border border-piu-border/70 bg-black/15 p-3">
@@ -1053,6 +1062,7 @@ export default function LivePage() {
   const [playerMode, setPlayerMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState('');
   const [desktopInteractionTab, setDesktopInteractionTab] = useState('requests');
+  const [hostWorkspaceTab, setHostWorkspaceTab] = useState('room');
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(() => (
@@ -2015,6 +2025,7 @@ export default function LivePage() {
   const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
   const requestTabDisabled = !isHost && (!requestsEnabled || live?.status !== 'live');
   const voteTabDisabled = !isHost && !currentVote;
+  const showOverlayStudioTab = isHost && activeSessionId;
   const playerSummaryCards = [
     {
       label: 'Last Score',
@@ -2768,6 +2779,36 @@ export default function LivePage() {
           </div>
         </div>
 
+        {showOverlayStudioTab ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setHostWorkspaceTab('room')}
+              className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+                hostWorkspaceTab === 'room'
+                  ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
+                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
+              }`}
+            >
+              Live Room
+            </button>
+            <button
+              type="button"
+              onClick={() => setHostWorkspaceTab('overlay')}
+              className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+                hostWorkspaceTab === 'overlay'
+                  ? 'border border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-100'
+                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
+              }`}
+            >
+              Overlay Studio
+            </button>
+            <p className="self-center text-[11px] text-gray-400">
+              Use `Overlay Studio` for setup, then switch back to `Live Room`.
+            </p>
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap items-center gap-2 mt-3">
           <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
             {live?.viewer_count || 0} watching now
@@ -2856,7 +2897,7 @@ export default function LivePage() {
         />
       ) : null}
 
-      {isHost && activeSessionId ? (
+      {isHost && activeSessionId && hostWorkspaceTab === 'overlay' ? (
         <OverlayStudioCard
           previewUrl={overlayPreviewUrl}
           preset={overlayPreset}
@@ -2889,7 +2930,7 @@ export default function LivePage() {
         />
       ) : null}
 
-      {hasPlayerPanels ? (
+      {hostWorkspaceTab !== 'overlay' && hasPlayerPanels ? (
         <div className="lg:hidden sticky top-[68px] z-30 space-y-3">
           <div className="rounded-[28px] border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_38%),linear-gradient(180deg,rgba(8,14,28,0.96),rgba(7,10,18,0.96))] p-4 shadow-[0_18px_36px_rgba(3,7,18,0.34)] backdrop-blur">
             <div className="flex items-center justify-between gap-3">
@@ -2958,7 +2999,7 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      {useDesktopViewerLayout ? (
+      {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
           <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
             <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
@@ -2976,7 +3017,7 @@ export default function LivePage() {
             {chatSection}
           </div>
         </div>
-      ) : youtubeId ? (
+      ) : hostWorkspaceTab !== 'overlay' && youtubeId ? (
         <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
           <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
             <iframe
@@ -2991,6 +3032,7 @@ export default function LivePage() {
         </div>
       ) : null}
 
+      {hostWorkspaceTab !== 'overlay' ? (
       <div className={`grid gap-4 ${useDesktopViewerLayout ? 'xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]' : 'xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]'}`}>
         <div className="space-y-4">
           <NowPlayingPanel
@@ -3015,8 +3057,9 @@ export default function LivePage() {
           </div>
         )}
       </div>
+      ) : null}
 
-      <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-piu-border/70 bg-[linear-gradient(180deg,rgba(9,12,20,0.94),rgba(6,8,14,0.98))] px-4 py-3 shadow-[0_-16px_36px_rgba(0,0,0,0.4)] lg:hidden ${hasPlayerPanels ? '' : 'hidden'}`}>
+      <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-piu-border/70 bg-[linear-gradient(180deg,rgba(9,12,20,0.94),rgba(6,8,14,0.98))] px-4 py-3 shadow-[0_-16px_36px_rgba(0,0,0,0.4)] lg:hidden ${hasPlayerPanels && hostWorkspaceTab !== 'overlay' ? '' : 'hidden'}`}>
         <div className="mx-auto grid max-w-2xl grid-cols-4 gap-2">
           <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
             Songs
