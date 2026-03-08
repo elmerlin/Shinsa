@@ -1144,6 +1144,9 @@ export default function LivePage() {
   const isCompactSongCardLayout = !isDesktopViewport;
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
+  const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
+    ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px` }
+    : undefined;
   const overlayPreviewUrl = useMemo(() => {
     if (!activeSessionId || typeof window === 'undefined') return '';
     return buildLiveOverlayUrl(activeSessionId, {
@@ -2474,8 +2477,8 @@ export default function LivePage() {
               : 'min-h-[520px]'
       }`}
       style={
-        useDesktopViewerLayout && desktopMediaHeight
-          ? { height: `${desktopMediaHeight}px` }
+        desktopMediaHeightStyle
+          ? desktopMediaHeightStyle
           : isMobileChatSheet
             ? { maxHeight: 'calc(100dvh - 8.5rem)' }
             : undefined
@@ -3088,10 +3091,7 @@ export default function LivePage() {
               />
               </div>
             </div>
-            <div
-              className="h-full min-h-0"
-              style={desktopMediaHeight ? { height: `${desktopMediaHeight}px` } : undefined}
-            >
+            <div className="h-full min-h-0 overflow-hidden" style={desktopMediaHeightStyle}>
               {chatSection}
             </div>
           </div>
