@@ -9,6 +9,11 @@ import AdminVenueAccessTab from '../components/AdminVenueAccessTab';
 
 const DEFAULT_DOJO_SLUG = 'london-pump-dojo';
 
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function formatCheckinTime(value) {
   if (!value) return '--';
   const withZone = String(value).endsWith('Z') ? String(value) : `${value}Z`;
@@ -24,6 +29,8 @@ export default function DojoPage() {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
+  const [selectedWeekStart, setSelectedWeekStart] = useState('');
 
   const loadOverview = useCallback(async () => {
     if (!user || !hasDojoAccess) {
@@ -32,8 +39,17 @@ export default function DojoPage() {
       return;
     }
     try {
-      const data = await getDojoOverview(DEFAULT_DOJO_SLUG);
+      const data = await getDojoOverview(DEFAULT_DOJO_SLUG, {
+        month: selectedMonth,
+        week_start: selectedWeekStart || undefined,
+      });
       setOverview(data || null);
+      if (data?.selected_month && data.selected_month !== selectedMonth) {
+        setSelectedMonth(data.selected_month);
+      }
+      if (data?.week?.start_day && data.week.start_day !== selectedWeekStart) {
+        setSelectedWeekStart(data.week.start_day);
+      }
       setError('');
     } catch (err) {
       // Only show errors on initial load; suppress timeout errors during polling if we already have data
@@ -43,7 +59,7 @@ export default function DojoPage() {
     } finally {
       setLoading(false);
     }
-  }, [hasDojoAccess, user]);
+  }, [hasDojoAccess, user, selectedMonth, selectedWeekStart]);
 
   useEffect(() => {
     loadOverview();
@@ -194,6 +210,8 @@ export default function DojoPage() {
             loading={loading}
             error={error}
             onRefresh={loadOverview}
+            onSelectMonth={setSelectedMonth}
+            onSelectWeekStart={setSelectedWeekStart}
           />
         </>
       ) : (

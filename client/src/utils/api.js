@@ -892,7 +892,13 @@ export const checkout = () => request('/checkins/checkout', { method: 'POST' });
 export const getMyCheckinStatus = () => request('/checkins/my-status');
 export const getCheckinHistory = () => request('/checkins/history');
 export const getUserCheckinHistory = (userId) => request(`/checkins/user/${userId}/history`);
-export const getDojoOverview = (venueSlug = 'london-pump-dojo') => request(`/checkins/dojo/${encodeURIComponent(venueSlug)}/overview`);
+export const getDojoOverview = (venueSlug = 'london-pump-dojo', params = {}) => {
+  const query = new URLSearchParams();
+  if (params.month) query.set('month', String(params.month));
+  if (params.week_start) query.set('week_start', String(params.week_start));
+  const qs = query.toString();
+  return request(`/checkins/dojo/${encodeURIComponent(venueSlug)}/overview${qs ? `?${qs}` : ''}`);
+};
 export const getCheckinNotificationPreferences = (venueSlug) => request(`/checkins/notifications/${encodeURIComponent(venueSlug)}`);
 export const updateCheckinNotificationPreferences = (venueSlug, data) => request(`/checkins/notifications/${encodeURIComponent(venueSlug)}`, { method: 'PUT', body: JSON.stringify(data) });
 export const setPlayingStatus = (status) => request('/checkins/playing-status', { method: 'PUT', body: JSON.stringify({ status }) });

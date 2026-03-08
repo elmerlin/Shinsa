@@ -40,6 +40,13 @@ function formatDayLabel(dayKey) {
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function formatWeekStartLabel(dayKey) {
+  if (!dayKey) return 'Unknown week';
+  const d = new Date(`${dayKey}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dayKey;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function sessionMinutes(startValue, endValue) {
   const start = parseUtc(startValue);
   if (!start) return 0;
@@ -254,11 +261,26 @@ function ActivityLogSection({ activityLog, groupByUserDay = false }) {
   );
 }
 
-export default function DojoActivityPanel({ overview, loading, error, onRefresh, logOnly = false }) {
+export default function DojoActivityPanel({
+  overview,
+  loading,
+  error,
+  onRefresh,
+  logOnly = false,
+  onSelectMonth,
+  onSelectWeekStart,
+}) {
   const week = overview?.week || null;
   const days = Array.isArray(week?.days) ? week.days : [];
   const users = Array.isArray(week?.users) ? week.users : [];
   const activityLog = Array.isArray(overview?.activity_log) ? overview.activity_log : [];
+  const availableMonths = Array.isArray(overview?.available_months) ? overview.available_months : [];
+  const weekOptions = Array.isArray(overview?.week_options) ? overview.week_options : [];
+  const selectedMonth = overview?.selected_month || '';
+  const selectedMonthLabel = overview?.selected_month_label || selectedMonth || 'Selected month';
+  const selectedWeekIndex = Number.isInteger(week?.selected_index) ? week.selected_index : weekOptions.findIndex((option) => option.week_start === week?.start_day);
+  const previousWeek = selectedWeekIndex > 0 ? weekOptions[selectedWeekIndex - 1] : null;
+  const nextWeek = selectedWeekIndex >= 0 && selectedWeekIndex < weekOptions.length - 1 ? weekOptions[selectedWeekIndex + 1] : null;
 
   const maxVisitors = useMemo(
     () => Math.max(0, ...days.map((day) => Number(day.visitors) || 0)),
@@ -286,10 +308,10 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
   const selectedDay = days.find((d) => d.day_key === selectedDayKey) || null;
   const groupedSelectedEntries = useMemo(() => {
     const rows = Array.isArray(selectedDay?.entries) ? selectedDay.entries : [];
-    const groups = new Map();
+      const groups = new Map();
 
     for (const entry of rows) {
-      const userKey = String(entry?.user_id || `${entry?.username || 'unknown'}:${entry?.checkin_id || ''}`);
+      const userKey = String(entry?.user_id || `${entry?.username || 'unknown'}:${entry?.checkin_id || entry?.booking_created_at || ''}`);
       if (!groups.has(userKey)) {
         groups.set(userKey, {
           key: userKey,
@@ -298,12 +320,14 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
           avatar: entry?.avatar || '',
           total_minutes: 0,
           active: false,
+          has_booking_only: false,
           sessions: [],
         });
       }
       const group = groups.get(userKey);
       group.total_minutes += Number(entry?.session_minutes) || 0;
       if (entry?.active) group.active = true;
+      if (entry?.is_day_pass_booking) group.has_booking_only = true;
       group.sessions.push(entry);
     }
 
@@ -315,6 +339,7 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
       }))
       .sort((a, b) => {
         if (a.active !== b.active) return a.active ? -1 : 1;
+        if (a.has_booking_only !== b.has_booking_only) return a.has_booking_only ? 1 : -1;
         if (b.total_minutes !== a.total_minutes) return b.total_minutes - a.total_minutes;
         return String(a.username || '').localeCompare(String(b.username || ''));
       });
@@ -366,9 +391,40 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-display font-bold text-gray-300 uppercase tracking-wide">Week Grid (Mon-Sun)</h4>
-                  <p className="text-[10px] text-gray-500">Tap a day for visitors + session times</p>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-xs font-display font-bold text-gray-300 uppercase tracking-wide">Week Grid (Mon-Sun)</h4>
+                    <p className="text-[10px] text-gray-500">
+                      {selectedMonthLabel} • Monday {formatWeekStartLabel(week.start_day)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={selectedMonth}
+                      onChange={(event) => onSelectMonth?.(event.target.value)}
+                      className="rounded-lg border border-piu-border/50 bg-piu-dark/60 px-2.5 py-1.5 text-xs text-gray-200"
+                    >
+                      {availableMonths.map((month) => (
+                        <option key={month.month_key} value={month.month_key}>{month.month_label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => previousWeek && onSelectWeekStart?.(previousWeek.week_start)}
+                      disabled={!previousWeek}
+                      className="rounded-lg border border-piu-border/50 bg-piu-dark/60 px-2.5 py-1.5 text-xs font-display font-bold text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {previousWeek ? `Prev • ${previousWeek.label}` : 'Prev Week'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nextWeek && onSelectWeekStart?.(nextWeek.week_start)}
+                      disabled={!nextWeek}
+                      className="rounded-lg border border-piu-border/50 bg-piu-dark/60 px-2.5 py-1.5 text-xs font-display font-bold text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {nextWeek ? `Next • ${nextWeek.label}` : 'Next Week'}
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                   {days.map((day) => {
@@ -386,10 +442,16 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[11px] font-display font-bold text-white">{day.day_label}</span>
-                          <DayBusyBadge visitors={day.visitors} maxVisitors={maxVisitors} />
+                          <div className="flex items-center gap-1.5">
+                            {day.has_day_pass_booking ? <span className="text-[11px] text-piu-gold">★</span> : null}
+                            <DayBusyBadge visitors={day.visitors} maxVisitors={maxVisitors} />
+                          </div>
                         </div>
                         <p className="text-[10px] text-gray-400 mt-1">{day.visitors || 0} visitors</p>
                         <p className="text-[10px] text-gray-500">{day.sessions || 0} sessions</p>
+                        {day.day_pass_booking_count > 0 ? (
+                          <p className="text-[10px] text-piu-gold">{day.day_pass_booking_count} booked pass{day.day_pass_booking_count === 1 ? '' : 'es'}</p>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -404,6 +466,7 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
                     </h5>
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       {selectedDay.visitors || 0} visitors, {selectedDay.sessions || 0} sessions, {formatDuration(selectedDay.total_minutes)} total
+                      {selectedDay.day_pass_booking_count > 0 ? ` • ${selectedDay.day_pass_booking_count} day pass booking${selectedDay.day_pass_booking_count === 1 ? '' : 's'}` : ''}
                     </p>
                     <div className="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1">
                       {groupedSelectedEntries.length === 0 ? (
@@ -433,8 +496,9 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
                                     {entry.username}
                                   </Link>
                                   <p className="text-[10px] text-gray-500">
-                                    {entry.session_count} session{entry.session_count === 1 ? '' : 's'}
-                                    {entry.active ? ' • Active now' : ''}
+                                    {entry.has_booking_only
+                                      ? 'Day Pass Booking - Not Checked In'
+                                      : `${entry.session_count} session${entry.session_count === 1 ? '' : 's'}${entry.active ? ' • Active now' : ''}`}
                                   </p>
                                 </div>
                                 <span className="text-[10px] font-mono text-gray-300 shrink-0">{formatDuration(entry.total_minutes)}</span>
@@ -449,14 +513,22 @@ export default function DojoActivityPanel({ overview, loading, error, onRefresh,
                               {expanded && (
                                 <div className="border-t border-piu-border/20 px-2 pb-2 pt-1.5 space-y-1.5">
                                   {entry.sessions.map((session) => (
-                                    <div key={session.checkin_id} className="flex items-center gap-2 rounded border border-piu-border/20 bg-piu-dark/35 px-2 py-1">
+                                    <div key={session.checkin_id || `${entry.key}-${session.booking_created_at || session.machine_name}`} className="flex items-center gap-2 rounded border border-piu-border/20 bg-piu-dark/35 px-2 py-1">
                                       <div className="min-w-0 flex-1">
                                         <p className="text-[10px] text-gray-300 truncate">{session.machine_name}</p>
-                                        <p className="text-[10px] text-gray-500">
-                                          {formatShortTime(session.checked_in_at)} - {session.active ? 'Now' : formatShortTime(session.checked_out_at)}
-                                        </p>
+                                        {session.is_day_pass_booking ? (
+                                          <p className="text-[10px] text-piu-gold">
+                                            Booked {formatDateTime(session.booking_created_at)} • {session.plan_name || 'Day pass'}
+                                          </p>
+                                        ) : (
+                                          <p className="text-[10px] text-gray-500">
+                                            {formatShortTime(session.checked_in_at)} - {session.active ? 'Now' : formatShortTime(session.checked_out_at)}
+                                          </p>
+                                        )}
                                       </div>
-                                      <span className="text-[10px] font-mono text-gray-300 shrink-0">{formatDuration(session.session_minutes)}</span>
+                                      <span className="text-[10px] font-mono text-gray-300 shrink-0">
+                                        {session.is_day_pass_booking ? 'Booked' : formatDuration(session.session_minutes)}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>

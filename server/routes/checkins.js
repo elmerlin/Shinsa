@@ -40,11 +40,58 @@ function addDays(date, days) {
   return d;
 }
 
+function startOfMonth(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfMonth(date) {
+  const d = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function parseMonthKey(value) {
+  const raw = String(value || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(raw)) return null;
+  const parsed = new Date(`${raw}-01T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : startOfMonth(parsed);
+}
+
 function toDayKey(date) {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function monthKeyFromDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatMonthLabel(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+function formatWeekStartLabel(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function listMonthWeekStarts(monthDate) {
+  if (!(monthDate instanceof Date) || Number.isNaN(monthDate.getTime())) return [];
+  const firstDay = startOfMonth(monthDate);
+  const lastDay = endOfMonth(monthDate);
+  const starts = [];
+  let cursor = startOfWeekMonday(firstDay);
+  while (cursor <= lastDay) {
+    starts.push(new Date(cursor));
+    cursor = addDays(cursor, 7);
+  }
+  return starts;
 }
 
 function sessionMinutes(startDate, endDate, now = new Date()) {
@@ -451,12 +498,47 @@ router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, r
     };
   });
 
+  const monthRows = db.prepare(`
+    SELECT month_key
+    FROM (
+      SELECT substr(c.checked_in_at, 1, 7) AS month_key
+      FROM checkins c
+      WHERE c.venue_id = ?
+      UNION
+      SELECT substr(vdp.pass_date, 1, 7) AS month_key
+      FROM venue_day_passes vdp
+      WHERE vdp.venue_id = ?
+    )
+    WHERE month_key IS NOT NULL AND month_key <> ''
+    ORDER BY month_key DESC
+  `).all(venue.id, venue.id);
+
+  const availableMonthKeys = Array.from(new Set(monthRows.map((row) => String(row.month_key || '').trim()).filter(Boolean)));
   const now = new Date();
-  const weekStart = startOfWeekMonday(now);
+  const currentMonthDate = startOfMonth(now);
+  const currentMonthKey = monthKeyFromDate(currentMonthDate);
+  if (!availableMonthKeys.includes(currentMonthKey)) {
+    availableMonthKeys.unshift(currentMonthKey);
+  }
+
+  const requestedMonthDate = parseMonthKey(req.query.month);
+  const selectedMonthDate = requestedMonthDate || currentMonthDate;
+  const selectedMonthKey = monthKeyFromDate(selectedMonthDate);
+  const weekOptions = listMonthWeekStarts(selectedMonthDate);
+  const requestedWeekStart = parseUtcDate(req.query.week_start);
+  const normalizedRequestedWeekStart = requestedWeekStart ? startOfWeekMonday(requestedWeekStart) : null;
+  const weekOptionLookup = new Set(weekOptions.map((date) => toDayKey(date)));
+  const currentWeekStart = startOfWeekMonday(now);
+  const defaultWeekStart = monthKeyFromDate(currentWeekStart) === selectedMonthKey || toDayKey(currentWeekStart) === toDayKey(weekOptions[0])
+    ? currentWeekStart
+    : (weekOptions[0] || currentWeekStart);
+  const weekStart = normalizedRequestedWeekStart && weekOptionLookup.has(toDayKey(normalizedRequestedWeekStart))
+    ? normalizedRequestedWeekStart
+    : defaultWeekStart;
   const weekEnd = addDays(weekStart, 7);
   const weekStartStr = weekStart.toISOString().replace('T', ' ').slice(0, 19);
+  const weekEndStr = weekEnd.toISOString().replace('T', ' ').slice(0, 19);
 
-  // Query 1: Only this week's checkins for weekly stats (much smaller than LIMIT 1200)
   const weekRows = db.prepare(`
     SELECT c.id, c.user_id, c.machine_id, c.checked_in_at, c.checked_out_at,
            m.name AS machine_name,
@@ -464,11 +546,21 @@ router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, r
     FROM checkins c
     JOIN venue_machines m ON m.id = c.machine_id
     JOIN users u ON u.id = c.user_id
-    WHERE c.venue_id = ? AND c.checked_in_at >= ?
+    WHERE c.venue_id = ? AND c.checked_in_at >= ? AND c.checked_in_at < ?
     ORDER BY c.checked_in_at DESC
-  `).all(venue.id, weekStartStr);
+  `).all(venue.id, weekStartStr, weekEndStr);
 
-  // Query 2: Recent checkins for activity log only (need 100 rows to produce ~200 events)
+  const weekDayPassRows = db.prepare(`
+    SELECT vdp.id, vdp.user_id, vdp.pass_date, vdp.status, vdp.created_at,
+           u.username, u.avatar, u.avatar_v,
+           vap.name AS plan_name
+    FROM venue_day_passes vdp
+    JOIN users u ON u.id = vdp.user_id
+    JOIN venue_access_plans vap ON vap.id = vdp.plan_id
+    WHERE vdp.venue_id = ? AND vdp.pass_date >= ? AND vdp.pass_date < ? AND vdp.status IN ('active', 'used')
+    ORDER BY vdp.pass_date ASC, vdp.created_at ASC
+  `).all(venue.id, toDayKey(weekStart), toDayKey(weekEnd));
+
   const logRows = db.prepare(`
     SELECT c.id, c.user_id, c.machine_id, c.checked_in_at, c.checked_out_at,
            m.name AS machine_name,
@@ -494,6 +586,8 @@ router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, r
       total_minutes: 0,
       entries: [],
       _visitor_ids: new Set(),
+      has_day_pass_booking: false,
+      day_pass_booking_count: 0,
     };
     dayBuckets.push(bucket);
     dayLookup[dayKey] = bucket;
@@ -544,6 +638,35 @@ router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, r
     userWeek.week_sessions += 1;
     userWeek.week_minutes += duration;
     if (isActive) userWeek.active = true;
+  }
+
+  for (const booking of weekDayPassRows) {
+    const bookingDayKey = String(booking.pass_date || '').trim();
+    const dayBucket = dayLookup[bookingDayKey];
+    if (!dayBucket) continue;
+
+    const alreadyCheckedIn = dayBucket.entries.some((entry) => String(entry.user_id) === String(booking.user_id));
+    dayBucket.has_day_pass_booking = true;
+    dayBucket.day_pass_booking_count += 1;
+    if (alreadyCheckedIn) continue;
+
+    const normalizedUser = normalizeCheckinUser(booking, 48);
+    dayBucket._visitor_ids.add(booking.user_id);
+    dayBucket.entries.push({
+      checkin_id: '',
+      user_id: booking.user_id,
+      username: normalizedUser.username,
+      avatar: normalizedUser.avatar,
+      machine_name: 'Day Pass Booking - Not Checked In',
+      checked_in_at: '',
+      checked_out_at: null,
+      session_minutes: 0,
+      active: false,
+      is_day_pass_booking: true,
+      booking_created_at: booking.created_at,
+      plan_name: booking.plan_name,
+      pass_status: booking.status,
+    });
   }
 
   // Build activity log from the smaller recent-only query
@@ -610,15 +733,34 @@ router.get('/dojo/:slug/overview', requireAuth, requireDojoAdminFeature, (req, r
   for (const day of dayBuckets) {
     for (const entry of day.entries) weekVisitorIds.add(entry.user_id);
   }
+  const weekOptionPayload = weekOptions.map((date) => ({
+    week_start: toDayKey(date),
+    week_end: toDayKey(addDays(date, 6)),
+    label: formatWeekStartLabel(date),
+  }));
+  const selectedWeekIndex = weekOptionPayload.findIndex((option) => option.week_start === toDayKey(weekStart));
+  const availableMonths = availableMonthKeys.map((monthKey) => {
+    const parsed = parseMonthKey(monthKey);
+    return {
+      month_key: monthKey,
+      month_label: parsed ? formatMonthLabel(parsed) : monthKey,
+    };
+  });
 
   res.json({
     venue,
     machines: machineStatus,
     active_checkins: normalizedActiveCheckins,
     activity_log: activityLog.slice(0, 200),
+    available_months: availableMonths,
+    selected_month: selectedMonthKey,
+    selected_month_label: formatMonthLabel(selectedMonthDate),
+    week_options: weekOptionPayload,
     week: {
       start_day: toDayKey(weekStart),
       end_day: toDayKey(addDays(weekStart, 6)),
+      label: formatWeekStartLabel(weekStart),
+      selected_index: selectedWeekIndex,
       total_sessions: dayBuckets.reduce((sum, day) => sum + day.sessions, 0),
       total_minutes: dayBuckets.reduce((sum, day) => sum + day.total_minutes, 0),
       total_visitors: weekVisitorIds.size,
