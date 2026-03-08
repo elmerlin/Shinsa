@@ -1,3 +1,69 @@
+import { DOJO_CAT_EMOJIS } from './dojoCatEmojis';
+
+const FEATURED_DOJO_CAT_CONFIG = [
+  {
+    token: ':dojocat_1_0:',
+    label: 'Dojo Wink',
+    colors: ['rgba(251, 191, 36, 0.92)', 'rgba(249, 115, 22, 0.82)', 'rgba(253, 224, 71, 0.85)', '#fff7ed'],
+    motion: 'pulse',
+  },
+  {
+    token: ':dojocat_2_4:',
+    label: 'Dojo Bite',
+    colors: ['rgba(244, 63, 94, 0.92)', 'rgba(168, 85, 247, 0.82)', 'rgba(251, 113, 133, 0.85)', '#fff1f2'],
+    motion: 'spark',
+  },
+  {
+    token: ':dojocat_4_2:',
+    label: 'Dojo Shock',
+    colors: ['rgba(56, 189, 248, 0.92)', 'rgba(14, 165, 233, 0.82)', 'rgba(34, 211, 238, 0.85)', '#ecfeff'],
+    motion: 'drift',
+  },
+  {
+    token: ':dojocat_4_7:',
+    label: 'Dojo Laugh',
+    colors: ['rgba(34, 197, 94, 0.9)', 'rgba(16, 185, 129, 0.82)', 'rgba(74, 222, 128, 0.85)', '#ecfdf5'],
+    motion: 'pulse',
+  },
+  {
+    token: ':dojocat_5_6:',
+    label: 'Dojo Hero',
+    colors: ['rgba(96, 165, 250, 0.92)', 'rgba(59, 130, 246, 0.82)', 'rgba(147, 197, 253, 0.85)', '#eff6ff'],
+    motion: 'drift',
+  },
+  {
+    token: ':dojocat_6_1:',
+    label: 'Dojo Sweet',
+    colors: ['rgba(244, 114, 182, 0.92)', 'rgba(236, 72, 153, 0.82)', 'rgba(251, 182, 206, 0.85)', '#fdf2f8'],
+    motion: 'pulse',
+  },
+  {
+    token: ':dojocat_7_1:',
+    label: 'Dojo Cackle',
+    colors: ['rgba(250, 204, 21, 0.92)', 'rgba(245, 158, 11, 0.82)', 'rgba(253, 230, 138, 0.85)', '#fefce8'],
+    motion: 'spark',
+  },
+  {
+    token: ':dojocat_7_4:',
+    label: 'Dojo Lock In',
+    colors: ['rgba(148, 163, 184, 0.92)', 'rgba(100, 116, 139, 0.82)', 'rgba(203, 213, 225, 0.85)', '#f8fafc'],
+    motion: 'drift',
+  },
+];
+
+const FEATURED_DOJO_CAT_EMOTES = FEATURED_DOJO_CAT_CONFIG
+  .map((entry) => {
+    const match = DOJO_CAT_EMOJIS.find((emoji) => emoji.token === entry.token);
+    if (!match) return null;
+    return {
+      ...entry,
+      image: match.image,
+      variant: 'sticker',
+      trayGroup: 'Featured DojoCat',
+    };
+  })
+  .filter(Boolean);
+
 export const LIVE_EMOTES = [
   {
     token: ':shinsa_hype:',
@@ -41,6 +107,7 @@ export const LIVE_EMOTES = [
     colors: ['rgba(245, 158, 11, 0.92)', 'rgba(249, 115, 22, 0.82)', 'rgba(251, 191, 36, 0.85)', '#fffbeb'],
     motion: 'spark',
   },
+  ...FEATURED_DOJO_CAT_EMOTES,
 ];
 
 export const LIVE_EMOJI_GROUPS = [
@@ -48,12 +115,25 @@ export const LIVE_EMOJI_GROUPS = [
   { label: 'Crowd', emojis: ['🙌', '🫡', '👀', '💯', '🚀', '🎉'] },
 ];
 
+export const LIVE_EMOTE_TRAY_GROUPS = [
+  {
+    label: 'Shinsa Emotes',
+    description: 'Fire branded hype chips instantly, or add their token into your next message.',
+    emotes: LIVE_EMOTES.filter((emote) => emote.variant !== 'sticker'),
+  },
+  {
+    label: 'Featured DojoCat',
+    description: 'Bigger sticker reactions that also work in the live overlay and chat replays.',
+    emotes: LIVE_EMOTES.filter((emote) => emote.variant === 'sticker'),
+  },
+];
+
 const LIVE_EMOTE_MAP = LIVE_EMOTES.reduce((acc, emote) => {
   acc[emote.token] = emote;
   return acc;
 }, {});
 
-const LIVE_EMOTE_TOKEN_REGEX = /(:shinsa_[a-z0-9_]+:)/g;
+const LIVE_EMOTE_TOKEN_REGEX = /(:[a-z0-9_]+:)/gi;
 
 export function getLiveEmote(token) {
   return LIVE_EMOTE_MAP[String(token || '').trim().toLowerCase()] || null;

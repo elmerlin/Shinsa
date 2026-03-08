@@ -286,6 +286,102 @@
   display: none;
 }
 
+.live-emote-sticker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.72rem;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 44%),
+    linear-gradient(135deg, rgba(8, 11, 26, 0.94), rgba(5, 9, 22, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 16px 34px var(--live-emote-glow);
+  color: var(--live-emote-text);
+  isolation: isolate;
+}
+
+.live-emote-sticker__halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78%;
+  height: 78%;
+  border-radius: 999px;
+  background: radial-gradient(circle, var(--live-emote-glow), transparent 68%);
+  filter: blur(12px);
+  opacity: 0.9;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
+
+.live-emote-sticker__frame,
+.live-emote-sticker__label {
+  position: relative;
+  z-index: 1;
+}
+
+.live-emote-sticker__frame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1.2rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(8, 11, 26, 0.12));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 24px rgba(8, 11, 26, 0.26);
+}
+
+.live-emote-sticker__image {
+  display: block;
+  width: var(--live-sticker-size, 2.5rem);
+  height: var(--live-sticker-size, 2.5rem);
+  object-fit: contain;
+  filter: drop-shadow(0 8px 18px rgba(8, 11, 26, 0.28));
+}
+
+.live-emote-sticker__label {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.live-emote-sticker--inline {
+  --live-sticker-size: 1.75rem;
+  min-height: 2rem;
+  padding: 0.14rem 0.22rem;
+}
+
+.live-emote-sticker--compact {
+  --live-sticker-size: 2.35rem;
+  min-height: 2.7rem;
+  padding: 0.18rem 0.28rem;
+}
+
+.live-emote-sticker--tray {
+  --live-sticker-size: 3.5rem;
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 4.6rem;
+  padding: 0.45rem 0.85rem;
+}
+
+.live-emote-sticker--reaction {
+  --live-sticker-size: 4.6rem;
+  min-height: 5rem;
+  padding: 0.28rem 0.34rem;
+}
+
+.live-emote-sticker--no-label .live-emote-sticker__label {
+  display: none;
+}
+
 .live-emote-motion-pulse {
   animation: live-emote-pulse 1.8s ease-in-out infinite;
 }
@@ -295,6 +391,11 @@
 }
 
 .live-emote-motion-spark .live-emote-chip__icon {
+  animation: live-emote-spark 1.2s ease-in-out infinite;
+}
+
+.live-emote-motion-spark .live-emote-sticker__frame,
+.live-emote-motion-spark .live-emote-sticker__image {
   animation: live-emote-spark 1.2s ease-in-out infinite;
 }
 
