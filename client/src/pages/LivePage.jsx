@@ -313,7 +313,7 @@ function getMessageTone(message) {
   }
 }
 
-function MessageBody({ message, tone, isSystem }) {
+function MessageBody({ message, tone, isSystem, compact = false }) {
   const reaction = !isSystem ? getLiveReactionPayload(message) : null;
   if (reaction?.kind === 'emoji') {
     return <p className="mt-1 max-w-full overflow-hidden text-2xl leading-none">{reaction.emoji}</p>;
@@ -327,12 +327,13 @@ function MessageBody({ message, tone, isSystem }) {
   }
 
   const segments = tokenizeLiveMessage(message);
+  const textSizeClass = compact ? 'text-[12px]' : 'text-sm';
   if (segments.length === 0) {
-    return <p className={`mt-1 w-full max-w-full overflow-hidden text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${tone.bodyClass}`}>{message}</p>;
+    return <p className={`mt-1 w-full max-w-full overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>{message}</p>;
   }
 
   return (
-    <p className={`mt-1 flex w-full max-w-full min-w-0 flex-wrap items-center gap-1.5 overflow-hidden text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${tone.bodyClass}`}>
+    <p className={`mt-1 flex w-full max-w-full min-w-0 flex-wrap items-center gap-1.5 overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>
       {segments.map((segment, idx) => (
         segment.type === 'emote'
           ? <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
@@ -457,10 +458,6 @@ function PlayDetailModal({ play, onClose }) {
             </p>
           ) : null}
 
-          <div className="mt-4 pt-3 border-t border-piu-border/20 flex items-center justify-between text-xs">
-            <span className="text-gray-500 uppercase tracking-wide font-display">Max Combo</span>
-            <span className="font-mono font-bold text-white">{formatNumber(play.max_combo)}</span>
-          </div>
         </div>
       </div>
     </div>
@@ -1142,6 +1139,8 @@ export default function LivePage() {
   );
   const isPlayerMode = isHost && playerMode;
   const useMobilePlayerHud = isPlayerMode && !isDesktopViewport;
+  const isMobileChatLayout = !isDesktopViewport;
+  const isMobileChatSheet = mobilePanel === 'chat' && !isDesktopViewport;
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const overlayPreviewUrl = useMemo(() => {
@@ -2155,6 +2154,9 @@ export default function LivePage() {
                   ? 'played'
                   : 'skipped'
             : '';
+          const parsedGrade = parseGrade(play.grade, getRank(play.score ?? 0).label);
+          const displayGrade = parsedGrade.display || '-';
+          const displayScore = parseInt(play.score, 10) || 0;
           return (
             <button
               type="button"
@@ -2166,8 +2168,13 @@ export default function LivePage() {
                 <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[11px] font-display font-bold text-white">{play.song_title}</p>
-                  <div className="mt-2 flex items-baseline justify-between gap-2">
-                    <p className="text-lg font-display font-black text-white">{play.grade || '-'}</p>
+                  <div className="mt-3 flex flex-col items-start gap-1">
+                    <p
+                      className={`text-lg font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                      data-grade={displayGrade}
+                    >
+                      {displayGrade}
+                    </p>
                     <p className="text-[11px] font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -2446,8 +2453,22 @@ export default function LivePage() {
 
   const chatSection = (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${useDesktopViewerLayout ? 'h-full min-h-0' : hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}
-      style={useDesktopViewerLayout && desktopMediaHeight ? { height: `${desktopMediaHeight}px` } : undefined}
+      className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${
+        useDesktopViewerLayout
+          ? 'h-full min-h-0'
+          : isMobileChatLayout
+            ? 'min-h-0'
+            : hasPlayerPanels
+              ? 'min-h-[420px]'
+              : 'min-h-[520px]'
+      }`}
+      style={
+        useDesktopViewerLayout && desktopMediaHeight
+          ? { height: `${desktopMediaHeight}px` }
+          : isMobileChatSheet
+            ? { maxHeight: 'calc(100dvh - 8.5rem)' }
+            : undefined
+      }
     >
       {reactionBursts.map((burst) => (
         <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
@@ -2481,7 +2502,7 @@ export default function LivePage() {
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Live chat</p>
-          <p className="text-sm font-display font-bold text-white">{messages.length} recent messages</p>
+          <p className={`${isMobileChatLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{messages.length} recent messages</p>
         </div>
         <div className="flex flex-wrap justify-end gap-1">
           {QUICK_REACTIONS.map((emoji) => (
@@ -2585,7 +2606,7 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      <div ref={chatScrollRef} className="mt-3 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1">
+      <div ref={chatScrollRef} className={`mt-3 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1 ${isMobileChatSheet ? 'min-h-0' : ''}`}>
         {messages.map((msg) => {
           const tone = getMessageTone(msg);
           return (
@@ -2598,7 +2619,7 @@ export default function LivePage() {
                     </span>
                   ) : null}
                   {msg.is_system ? (
-                    <p className={`truncate text-[11px] font-display font-bold ${tone.usernameClass}`}>
+                    <p className={`truncate ${isMobileChatLayout ? 'text-[10px]' : 'text-[11px]'} font-display font-bold ${tone.usernameClass}`}>
                       {msg.username || 'System'}
                     </p>
                   ) : (
@@ -2620,11 +2641,11 @@ export default function LivePage() {
                     </span>
                   ) : null}
                 </div>
-                <p className="shrink-0 text-[10px] text-gray-500">
+                <p className={`shrink-0 ${isMobileChatLayout ? 'text-[9px]' : 'text-[10px]'} text-gray-500`}>
                   {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </p>
               </div>
-              <MessageBody message={msg.message} tone={tone} isSystem={msg.is_system} />
+              <MessageBody message={msg.message} tone={tone} isSystem={msg.is_system} compact={isMobileChatLayout} />
               {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
@@ -2672,7 +2693,7 @@ export default function LivePage() {
             ref={chatInputRef}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            className="input-field flex-1"
+            className={`input-field flex-1 ${isMobileChatLayout ? 'text-[13px]' : ''}`}
             placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message or use :shinsa_hype:'}
             maxLength={500}
             disabled={viewerState.chat_muted}
