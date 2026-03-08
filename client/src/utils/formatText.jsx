@@ -4,6 +4,36 @@ import { getProfilePathByUsername } from './profile';
 import { getDojoCatEmoji } from './dojoCatEmojis';
 
 const INLINE_TOKEN_REGEX = /(:dojocat_[0-9]+_[0-9]+:|(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{2,30}))/g;
+const DOJO_CAT_TOKEN_REGEX = /:dojocat_[0-9]+_[0-9]+:/gi;
+const DOJO_CAT_ONLY_REGEX = /^(?:\s*:dojocat_[0-9]+_[0-9]+:\s*)+$/i;
+
+function renderStickerOnlyMessage(text, keyRef) {
+  const raw = String(text || '');
+  if (!DOJO_CAT_ONLY_REGEX.test(raw)) return null;
+
+  const tokens = raw.match(DOJO_CAT_TOKEN_REGEX) || [];
+  const stickers = tokens
+    .map((token) => getDojoCatEmoji(token))
+    .filter(Boolean);
+
+  if (stickers.length === 0) return null;
+
+  const largeClass = stickers.length === 1 ? 'h-24 w-24' : 'h-16 w-16 sm:h-[4.5rem] sm:w-[4.5rem]';
+
+  return (
+    <div key={keyRef.value++} className="flex flex-wrap items-end gap-2">
+      {stickers.map((sticker, index) => (
+        <img
+          key={`${sticker.id}-${index}`}
+          src={sticker.image}
+          alt={sticker.label}
+          title={sticker.label}
+          className={`${largeClass} rounded-xl object-contain`}
+        />
+      ))}
+    </div>
+  );
+}
 
 function renderInlineTokens(text, keyRef) {
   if (!text) return [];
@@ -67,6 +97,8 @@ export function renderFormattedText(text) {
   if (!text) return null;
   const parts = [];
   const keyRef = { value: 0 };
+  const stickerOnly = renderStickerOnlyMessage(text, keyRef);
+  if (stickerOnly) return stickerOnly;
 
   const combined = /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~)/g;
   let lastIndex = 0;
