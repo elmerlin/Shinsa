@@ -316,11 +316,11 @@ function getMessageTone(message) {
 function MessageBody({ message, tone, isSystem }) {
   const reaction = !isSystem ? getLiveReactionPayload(message) : null;
   if (reaction?.kind === 'emoji') {
-    return <p className="mt-1 text-2xl leading-none">{reaction.emoji}</p>;
+    return <p className="mt-1 max-w-full overflow-hidden text-2xl leading-none">{reaction.emoji}</p>;
   }
   if (reaction?.kind === 'emote') {
     return (
-      <div className="mt-2">
+      <div className="mt-2 max-w-full overflow-hidden">
         <LiveEmote emote={reaction.emote} size="reaction" />
       </div>
     );
@@ -328,15 +328,15 @@ function MessageBody({ message, tone, isSystem }) {
 
   const segments = tokenizeLiveMessage(message);
   if (segments.length === 0) {
-    return <p className={`mt-1 text-sm break-words whitespace-pre-wrap ${tone.bodyClass}`}>{message}</p>;
+    return <p className={`mt-1 w-full max-w-full overflow-hidden text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${tone.bodyClass}`}>{message}</p>;
   }
 
   return (
-    <p className={`mt-1 flex flex-wrap items-center gap-1.5 text-sm break-words whitespace-pre-wrap ${tone.bodyClass}`}>
+    <p className={`mt-1 flex w-full max-w-full min-w-0 flex-wrap items-center gap-1.5 overflow-hidden text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${tone.bodyClass}`}>
       {segments.map((segment, idx) => (
         segment.type === 'emote'
           ? <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
-          : <span key={`text-${idx}`} className="whitespace-pre-wrap">{segment.text}</span>
+          : <span key={`text-${idx}`} className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{segment.text}</span>
       ))}
     </p>
   );
@@ -1092,7 +1092,7 @@ export default function LivePage() {
   const [overlayCopying, setOverlayCopying] = useState(false);
   const [overlayCopiedLabel, setOverlayCopiedLabel] = useState('');
   const [overlayTokenExpiresAt, setOverlayTokenExpiresAt] = useState('');
-  const chatEndRef = useRef(null);
+  const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
   const reactionIdRef = useRef(0);
   const seenMessageIdsRef = useRef(new Set());
@@ -1572,10 +1572,34 @@ export default function LivePage() {
   }, [deferredSongSearch]);
 
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (mobilePanel !== 'chat' || isDesktopViewport || typeof window === 'undefined') return undefined;
+
+    const focusInput = () => {
+      const input = chatInputRef.current;
+      if (!input) return;
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        input.focus();
+      }
+      if (typeof input.scrollIntoView === 'function') {
+        input.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
+    };
+
+    const frameId = window.requestAnimationFrame(focusInput);
+    const timeoutId = window.setTimeout(focusInput, 160);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [isDesktopViewport, mobilePanel]);
 
   const visiblePlays = useMemo(() => {
     const rows = Array.isArray(snapshot?.plays) ? [...snapshot.plays] : [];
@@ -1696,7 +1720,14 @@ export default function LivePage() {
     setChatInput((prev) => `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}${token} `);
     setShowEmoteTray(true);
     if (chatInputRef.current) {
-      chatInputRef.current.focus();
+      try {
+        chatInputRef.current.focus({ preventScroll: true });
+      } catch {
+        chatInputRef.current.focus();
+      }
+      if (typeof chatInputRef.current.scrollIntoView === 'function') {
+        chatInputRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
     }
   };
 
@@ -2243,7 +2274,7 @@ export default function LivePage() {
   );
 
   const chatSection = (
-    <div className={`relative rounded-2xl border border-piu-border bg-[#0c1220] p-3 flex flex-col ${hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}>
+    <div className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${hasPlayerPanels ? 'min-h-[420px]' : 'min-h-[520px]'}`}>
       {reactionBursts.map((burst) => (
         <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
           {burst.particles.map((particle) => (
@@ -2372,13 +2403,13 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      <div className="flex-1 overflow-y-auto space-y-2 mt-3 pr-1">
+      <div ref={chatScrollRef} className="mt-3 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1">
         {messages.map((msg) => {
           const tone = getMessageTone(msg);
           return (
-            <div key={msg.id} className={`rounded-xl px-3 py-2 ${tone.wrapper}`}>
+            <div key={msg.id} className={`overflow-hidden rounded-xl px-3 py-2 ${tone.wrapper}`}>
               <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                   {tone.label ? (
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.labelClass}`}>
                       {tone.label}
@@ -2451,7 +2482,6 @@ export default function LivePage() {
             </div>
           );
         })}
-        <div ref={chatEndRef} />
       </div>
 
       {live?.status === 'live' ? (
@@ -2573,7 +2603,7 @@ export default function LivePage() {
   }
 
   return (
-    <div className={`px-4 py-5 sm:px-6 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
+    <div className={`overflow-x-hidden px-4 py-5 sm:px-6 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
       <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.18),transparent_42%),linear-gradient(180deg,#0d1322,#09101d)] p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
