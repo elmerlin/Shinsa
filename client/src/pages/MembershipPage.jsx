@@ -9,6 +9,7 @@ import {
   purchaseSubscription,
   cancelVenueSubscription,
 } from '../utils/api';
+import { getCadenceCycleSuffix, getCadenceIntervalLabel, getMonthlyCadenceOptions } from '../utils/venueAccess';
 
 const VENUE_SLUG = 'london-pump-dojo';
 
@@ -108,11 +109,11 @@ export default function MembershipPage() {
     }
   }
 
-  async function handlePurchaseSubscription(planId) {
+  async function handlePurchaseSubscription(planId, cadenceKey) {
     setPurchasing(true);
     setError('');
     try {
-      const result = await purchaseSubscription(planId);
+      const result = await purchaseSubscription(planId, cadenceKey);
       if (result.checkout_url) {
         window.location.href = result.checkout_url;
       } else {
@@ -206,7 +207,9 @@ export default function MembershipPage() {
               <div>
                 <div className="text-sm font-bold">{data.subscription.plan_name}</div>
                 <div className="text-xs text-gray-400 mt-0.5">
-                  {formatCurrency(data.subscription.price_amount, data.subscription.currency)}/month
+                  {data.subscription.subscription_cadence_label
+                    ? `${data.subscription.subscription_cadence_label} billing`
+                    : `${formatCurrency(data.subscription.price_amount, data.subscription.currency)}/month`}
                 </div>
               </div>
               <div className="text-right">
@@ -298,6 +301,9 @@ export default function MembershipPage() {
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold">{data.subscription.plan_name}</div>
                       <div className="text-xs text-gray-400">
+                        {data.subscription.subscription_cadence_label
+                          ? `${data.subscription.subscription_cadence_label} • `
+                          : ''}
                         {formatDate(data.subscription.current_period_start)} — {formatDate(data.subscription.current_period_end)}
                       </div>
                     </div>
@@ -309,6 +315,7 @@ export default function MembershipPage() {
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-gray-300">{sub.plan_name}</div>
                       <div className="text-xs text-gray-500">
+                        {sub.subscription_cadence_label ? `${sub.subscription_cadence_label} • ` : ''}
                         {formatDate(sub.current_period_start)} — {formatDate(sub.current_period_end)}
                       </div>
                     </div>
@@ -367,32 +374,52 @@ export default function MembershipPage() {
             <p className="text-gray-500 text-sm">No monthly plans are currently available.</p>
           ) : (
             <div className="space-y-2">
-              {monthlyPlans.map(plan => (
-                <div key={plan.id} className="bg-piu-card border border-piu-border rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
+              {monthlyPlans.map(plan => {
+                const cadenceOptions = getMonthlyCadenceOptions(plan);
+                return (
+                  <div key={plan.id} className="bg-piu-card border border-piu-border rounded-xl p-4">
+                    <div className="mb-3">
                       <h4 className="font-bold text-base">{plan.name}</h4>
-                      <div className="text-xs text-gray-400">Unlimited venue access, billed monthly</div>
+                      <div className="text-xs text-gray-400">Unlimited venue access with recurring billing options.</div>
                     </div>
-                    <div className="text-right">
-                      {plan.discount_percent > 0 ? (
-                        <>
-                          <div className="text-xs text-gray-500 line-through">{formatCurrency(plan.price_amount, plan.currency)}/mo</div>
-                          <div className="text-lg font-bold text-green-400">{formatCurrency(plan.discounted_amount, plan.currency)}<span className="text-xs text-gray-400">/mo</span></div>
-                          <div className="text-[10px] text-green-400">{plan.discount_percent}% discount applied</div>
-                        </>
-                      ) : (
-                        <div className="text-lg font-bold">{formatCurrency(plan.price_amount, plan.currency)}<span className="text-xs text-gray-400">/mo</span></div>
-                      )}
+                    <div className="space-y-2">
+                      {cadenceOptions.map(cadence => {
+                        const displayAmount = cadence.discount_percent > 0 ? cadence.discounted_amount : cadence.price_amount;
+                        return (
+                          <button
+                            key={`${plan.id}-${cadence.key}`}
+                            onClick={() => handlePurchaseSubscription(plan.id, cadence.key)}
+                            disabled={purchasing || !paymentsConfigured}
+                            className="w-full flex items-center justify-between bg-piu-dark/60 border border-piu-border/50 rounded-xl px-3 py-3 hover:border-piu-accent/50 transition-colors disabled:opacity-50"
+                          >
+                            <div className="text-left">
+                              <div className="font-bold text-sm">{cadence.label}</div>
+                              <div className="text-xs text-gray-400">{getCadenceIntervalLabel(cadence)}</div>
+                            </div>
+                            <div className="text-right">
+                              {cadence.discount_percent > 0 ? (
+                                <>
+                                  <div className="text-xs text-gray-500 line-through">{formatCurrency(cadence.price_amount, cadence.currency)}</div>
+                                  <div className="text-lg font-bold text-green-400">
+                                    {formatCurrency(displayAmount, cadence.currency)}
+                                    <span className="text-xs text-gray-400">{getCadenceCycleSuffix(cadence)}</span>
+                                  </div>
+                                  <div className="text-[10px] text-green-400">{cadence.discount_percent}% discount applied</div>
+                                </>
+                              ) : (
+                                <div className="text-lg font-bold">
+                                  {formatCurrency(displayAmount, cadence.currency)}
+                                  <span className="text-xs text-gray-400">{getCadenceCycleSuffix(cadence)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <button onClick={() => handlePurchaseSubscription(plan.id)}
-                    disabled={purchasing || !paymentsConfigured}
-                    className="w-full px-4 py-2.5 text-sm font-display font-bold text-white bg-gradient-to-r from-piu-accent to-pink-600 rounded-xl hover:from-pink-600 hover:to-piu-accent transition-all disabled:opacity-50">
-                    {purchasing ? 'Processing...' : 'Subscribe Now'}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
           {!paymentsConfigured && monthlyPlans.length > 0 && (

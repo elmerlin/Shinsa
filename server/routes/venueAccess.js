@@ -38,6 +38,112 @@ function dayPassPlanTypeForDate(dateStr) {
   return isWeekend(dateStr) ? 'day_pass_weekend' : 'day_pass_weekday';
 }
 
+function slugifyCadenceKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48);
+}
+
+function parseMonthlyCadences(plan) {
+  if (!plan || plan.plan_type !== 'monthly') return [];
+
+  let rows = [];
+  try {
+    rows = JSON.parse(plan.monthly_cadences_json || '[]');
+  } catch {
+    rows = [];
+  }
+
+  const normalized = rows
+    .map((row, idx) => {
+      const months = Math.max(1, parseInt(row?.months, 10) || 0);
+      const priceAmount = Math.max(0, parseInt(row?.price_amount, 10) || 0);
+      const label = String(row?.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`);
+      const key = slugifyCadenceKey(row?.key || label || `cadence_${idx + 1}`) || `cadence_${idx + 1}`;
+      return {
+        key,
+        label,
+        months,
+        price_amount: priceAmount,
+        currency: String(row?.currency || plan.currency || 'gbp').toLowerCase(),
+        square_plan_variation_id: String(row?.square_plan_variation_id || '').trim(),
+      };
+    })
+    .filter((row) => row.months > 0 && row.price_amount >= 0);
+
+  if (normalized.length > 0) {
+    const seen = new Set();
+    return normalized.filter((row) => {
+      if (seen.has(row.key)) return false;
+      seen.add(row.key);
+      return true;
+    });
+  }
+
+  return plan.square_plan_variation_id || plan.price_amount
+    ? [{
+      key: 'monthly',
+      label: 'Monthly',
+      months: 1,
+      price_amount: Math.max(0, parseInt(plan.price_amount, 10) || 0),
+      currency: String(plan.currency || 'gbp').toLowerCase(),
+      square_plan_variation_id: String(plan.square_plan_variation_id || '').trim(),
+    }]
+    : [];
+}
+
+function serializeMonthlyCadences(cadences, fallbackCurrency = 'gbp') {
+  const normalized = (Array.isArray(cadences) ? cadences : [])
+    .map((row, idx) => {
+      const months = Math.max(1, parseInt(row?.months, 10) || 0);
+      const priceAmount = Math.max(0, parseInt(row?.price_amount, 10) || 0);
+      const label = String(row?.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`);
+      const key = slugifyCadenceKey(row?.key || label || `cadence_${idx + 1}`) || `cadence_${idx + 1}`;
+      return {
+        key,
+        label,
+        months,
+        price_amount: priceAmount,
+        currency: String(row?.currency || fallbackCurrency || 'gbp').toLowerCase(),
+        square_plan_variation_id: String(row?.square_plan_variation_id || '').trim(),
+      };
+    })
+    .filter((row) => row.months > 0 && row.price_amount >= 0);
+
+  const seen = new Set();
+  return normalized.filter((row) => {
+    if (seen.has(row.key)) return false;
+    seen.add(row.key);
+    return true;
+  });
+}
+
+function attachPlanCadenceMeta(plan, discount = null) {
+  const base = { ...plan };
+  if (plan.plan_type !== 'monthly') return base;
+
+  const cadences = parseMonthlyCadences(plan).map((cadence) => ({
+    ...cadence,
+    discount_percent: discount ? discount.discount_percent : 0,
+    discounted_amount: discount ? applyDiscount(cadence.price_amount, discount.discount_percent) : cadence.price_amount,
+  }));
+
+  return {
+    ...base,
+    monthly_cadences: cadences,
+  };
+}
+
+function addMonthsToIsoDate(startDate, monthsToAdd) {
+  const base = new Date(startDate);
+  const next = new Date(base);
+  next.setMonth(next.getMonth() + Math.max(1, parseInt(monthsToAdd, 10) || 1));
+  return next.toISOString().slice(0, 10);
+}
+
 /**
  * Find the best active discount for a user at a venue.
  * @param {string} appliesTo - 'monthly' or 'day_pass'
@@ -178,7 +284,7 @@ router.get('/plans/:venueSlug', requireAuth, (req, res) => {
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
   const plans = db.prepare(`
-    SELECT id, plan_type, name, price_amount, currency
+    SELECT id, plan_type, name, price_amount, currency, square_plan_variation_id, monthly_cadences_json
     FROM venue_access_plans
     WHERE venue_id = ? AND active = 1
     ORDER BY plan_type, price_amount
@@ -189,11 +295,11 @@ router.get('/plans/:venueSlug', requireAuth, (req, res) => {
     const appliesTo = plan.plan_type === 'monthly' ? 'monthly' : 'day_pass';
     const discount = getUserDiscount(db, req.user.id, venue.id, appliesTo);
     const discountedAmount = discount ? applyDiscount(plan.price_amount, discount.discount_percent) : plan.price_amount;
-    return {
+    return attachPlanCadenceMeta({
       ...plan,
       discount_percent: discount ? discount.discount_percent : 0,
       discounted_amount: discountedAmount,
-    };
+    }, discount);
   });
 
   const approved = isUserApproved(db, req.user.id, venue.id);
@@ -211,6 +317,7 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
 
   const subscription = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
@@ -366,7 +473,7 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
     }
 
     const db = getDb();
-    const { plan_id } = req.body;
+    const { plan_id, cadence_key } = req.body;
     if (!plan_id) {
       return res.status(400).json({ error: 'plan_id is required' });
     }
@@ -378,6 +485,14 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
       WHERE vap.id = ? AND vap.plan_type = 'monthly' AND vap.active = 1
     `).get(plan_id);
     if (!plan) return res.status(404).json({ error: 'Monthly plan not found' });
+
+    const cadenceOptions = parseMonthlyCadences(plan);
+    const selectedCadence = cadenceOptions.find((row) => row.key === String(cadence_key || '').trim())
+      || cadenceOptions[0]
+      || null;
+    if (!selectedCadence) {
+      return res.status(400).json({ error: 'No monthly cadence configured for this plan' });
+    }
 
     // Check whitelist
     if (!isUserApproved(db, req.user.id, plan.venue_id)) {
@@ -394,15 +509,28 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
 
     // Apply discount if available
     const discount = getUserDiscount(db, req.user.id, plan.venue_id, 'monthly');
-    const chargeAmount = discount ? applyDiscount(plan.price_amount, discount.discount_percent) : plan.price_amount;
+    const chargeAmount = discount ? applyDiscount(selectedCadence.price_amount, discount.discount_percent) : selectedCadence.price_amount;
     const discountNote = discount ? ` (${discount.discount_percent}% discount applied)` : '';
 
     const paymentId = uuidv4();
     db.prepare(`
-      INSERT INTO venue_payments (id, user_id, venue_id, plan_id, payment_type, amount, currency, status, description)
-      VALUES (?, ?, ?, ?, 'subscription', ?, ?, 'pending', ?)
-    `).run(paymentId, req.user.id, plan.venue_id, plan.id, chargeAmount, plan.currency,
-      `Monthly subscription for ${plan.venue_name}${discountNote}`);
+      INSERT INTO venue_payments (
+        id, user_id, venue_id, plan_id, payment_type, amount, currency, status,
+        subscription_cadence_key, subscription_cadence_label, billing_interval_months, description
+      )
+      VALUES (?, ?, ?, ?, 'subscription', ?, ?, 'pending', ?, ?, ?, ?)
+    `).run(
+      paymentId,
+      req.user.id,
+      plan.venue_id,
+      plan.id,
+      chargeAmount,
+      selectedCadence.currency || plan.currency,
+      selectedCadence.key,
+      selectedCadence.label,
+      selectedCadence.months,
+      `${selectedCadence.label} membership for ${plan.venue_name}${discountNote}`,
+    );
 
     const user = db.prepare('SELECT email, username FROM users WHERE id = ?').get(req.user.id);
 
@@ -412,10 +540,13 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
       username: user?.username || '',
       venueId: plan.venue_id,
       planId: plan.id,
-      squarePlanVariationId: plan.square_plan_variation_id || null,
-      planName: `${plan.venue_name} — ${plan.name}${discountNote}`,
+      squarePlanVariationId: selectedCadence.square_plan_variation_id || null,
+      cadenceKey: selectedCadence.key,
+      cadenceLabel: selectedCadence.label,
+      billingIntervalMonths: selectedCadence.months,
+      planName: `${plan.venue_name} — ${plan.name} (${selectedCadence.label})${discountNote}`,
       priceAmount: chargeAmount,
-      currency: plan.currency,
+      currency: selectedCadence.currency || plan.currency,
     });
 
     db.prepare(`UPDATE venue_payments SET square_link_id = ?, square_order_id = ? WHERE id = ?`)
@@ -491,6 +622,7 @@ router.get('/my-membership/:venueSlug', requireAuth, (req, res) => {
   // Active subscription
   const subscription = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
@@ -502,6 +634,7 @@ router.get('/my-membership/:venueSlug', requireAuth, (req, res) => {
   // Past subscriptions
   const pastSubscriptions = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
@@ -543,7 +676,7 @@ router.get('/my-membership/:venueSlug', requireAuth, (req, res) => {
 
   // Available plans (for purchasing)
   const plans = db.prepare(`
-    SELECT id, plan_type, name, price_amount, currency
+    SELECT id, plan_type, name, price_amount, currency, square_plan_variation_id, monthly_cadences_json
     FROM venue_access_plans
     WHERE venue_id = ? AND active = 1
     ORDER BY plan_type, price_amount
@@ -553,11 +686,11 @@ router.get('/my-membership/:venueSlug', requireAuth, (req, res) => {
     const appliesTo = plan.plan_type === 'monthly' ? 'monthly' : 'day_pass';
     const discount = getUserDiscount(db, userId, venue.id, appliesTo);
     const discountedAmount = discount ? applyDiscount(plan.price_amount, discount.discount_percent) : plan.price_amount;
-    return {
+    return attachPlanCadenceMeta({
       ...plan,
       discount_percent: discount ? discount.discount_percent : 0,
       discounted_amount: discountedAmount,
-    };
+    }, discount);
   });
 
   // Stats
@@ -663,15 +796,28 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
           `).run(passId, paymentRow.user_id, paymentRow.venue_id, paymentRow.plan_id, passDate, paymentRow.id);
         } else if (paymentRow.payment_type === 'subscription') {
           const subId = uuidv4();
-          const now = new Date();
-          const periodEnd = new Date(now);
-          periodEnd.setMonth(periodEnd.getMonth() + 1);
+          const periodStart = todayDateString();
+          const billingIntervalMonths = Math.max(1, parseInt(paymentRow.billing_interval_months, 10) || 1);
+          const periodEnd = addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
 
           db.prepare(`
-            INSERT INTO venue_subscriptions (id, user_id, venue_id, plan_id, status, current_period_start, current_period_end)
-            VALUES (?, ?, ?, ?, 'active', ?, ?)
-          `).run(subId, paymentRow.user_id, paymentRow.venue_id, paymentRow.plan_id,
-            now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
+            INSERT INTO venue_subscriptions (
+              id, user_id, venue_id, plan_id, status,
+              subscription_cadence_key, subscription_cadence_label, billing_interval_months,
+              current_period_start, current_period_end
+            )
+            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+          `).run(
+            subId,
+            paymentRow.user_id,
+            paymentRow.venue_id,
+            paymentRow.plan_id,
+            paymentRow.subscription_cadence_key || '',
+            paymentRow.subscription_cadence_label || '',
+            billingIntervalMonths,
+            periodStart,
+            periodEnd,
+          );
 
           // Auto-add user to "Pump Dojo" group
           addUserToDojoMemberGroup(db, paymentRow.user_id, null);
@@ -736,24 +882,42 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
         `).get(subscriptionId);
 
         if (sub) {
-          const now = new Date();
-          const periodEnd = new Date(now);
-          periodEnd.setMonth(periodEnd.getMonth() + 1);
+          const periodStart = todayDateString();
+          const billingIntervalMonths = Math.max(1, parseInt(sub.billing_interval_months, 10) || 1);
+          const periodEnd = addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
 
           db.prepare(`
             UPDATE venue_subscriptions
             SET status = 'active', current_period_start = ?, current_period_end = ?, updated_at = datetime('now')
             WHERE id = ?
-          `).run(now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10), sub.id);
+          `).run(periodStart, periodEnd, sub.id);
 
           const paymentId = uuidv4();
-          const amount = invoice?.paymentRequests?.[0]?.computedAmountMoney?.amount || 0;
+          const amountMoney = invoice?.paymentRequests?.[0]?.computedAmountMoney || {};
+          const amount = amountMoney?.amount || 0;
+          const currency = String(amountMoney?.currency || 'GBP').toLowerCase();
           db.prepare(`
-            INSERT INTO venue_payments (id, user_id, venue_id, plan_id, payment_type, amount, currency, status, square_payment_id, description)
-            VALUES (?, ?, ?, ?, 'subscription_renewal', ?, ?, 'succeeded', ?, ?)
-          `).run(paymentId, sub.user_id, sub.venue_id, sub.plan_id,
-            Number(amount), 'gbp',
-            invoice?.id || '', 'Subscription renewal');
+            INSERT INTO venue_payments (
+              id, user_id, venue_id, plan_id, payment_type, amount, currency, status,
+              subscription_cadence_key, subscription_cadence_label, billing_interval_months,
+              square_payment_id, description
+            )
+            VALUES (?, ?, ?, ?, 'subscription_renewal', ?, ?, 'succeeded', ?, ?, ?, ?, ?)
+          `).run(
+            paymentId,
+            sub.user_id,
+            sub.venue_id,
+            sub.plan_id,
+            Number(amount),
+            currency,
+            sub.subscription_cadence_key || '',
+            sub.subscription_cadence_label || '',
+            billingIntervalMonths,
+            invoice?.id || '',
+            sub.subscription_cadence_label
+              ? `Subscription renewal (${sub.subscription_cadence_label})`
+              : 'Subscription renewal',
+          );
         }
         break;
       }
@@ -780,13 +944,13 @@ router.get('/admin/plans/:venueSlug', requireAuth, requireDojoAdmin, (req, res) 
     SELECT * FROM venue_access_plans WHERE venue_id = ? ORDER BY plan_type, price_amount
   `).all(venue.id);
 
-  res.json({ venue, plans });
+  res.json({ venue, plans: plans.map((plan) => attachPlanCadenceMeta(plan)) });
 });
 
 // POST /api/venue-access/admin/plans — create a new plan
 router.post('/admin/plans', requireAuth, requireDojoAdmin, (req, res) => {
   const db = getDb();
-  const { venue_id, plan_type, name, price_amount, currency, square_plan_variation_id } = req.body;
+  const { venue_id, plan_type, name, price_amount, currency, square_plan_variation_id, monthly_cadences } = req.body;
 
   if (!venue_id || !plan_type || !name || price_amount == null) {
     return res.status(400).json({ error: 'venue_id, plan_type, name, and price_amount are required' });
@@ -801,14 +965,39 @@ router.post('/admin/plans', requireAuth, requireDojoAdmin, (req, res) => {
   const venue = db.prepare('SELECT id FROM venues WHERE id = ?').get(venue_id);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
+  const normalizedCadences = plan_type === 'monthly'
+    ? serializeMonthlyCadences(monthly_cadences, currency || 'gbp')
+    : [];
+  const primaryCadence = normalizedCadences[0] || null;
+  const effectivePriceAmount = plan_type === 'monthly'
+    ? (primaryCadence ? primaryCadence.price_amount : price_amount)
+    : price_amount;
+  const effectiveCurrency = plan_type === 'monthly'
+    ? (primaryCadence?.currency || currency || 'gbp')
+    : (currency || 'gbp').toLowerCase();
+  const effectiveVariationId = plan_type === 'monthly'
+    ? (primaryCadence?.square_plan_variation_id || square_plan_variation_id || null)
+    : (square_plan_variation_id || null);
+
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO venue_access_plans (id, venue_id, plan_type, name, price_amount, currency, square_plan_variation_id, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-  `).run(id, venue_id, plan_type, name.trim(), price_amount, (currency || 'gbp').toLowerCase(), square_plan_variation_id || null);
+    INSERT INTO venue_access_plans (
+      id, venue_id, plan_type, name, price_amount, currency, square_plan_variation_id, monthly_cadences_json, active
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `).run(
+    id,
+    venue_id,
+    plan_type,
+    name.trim(),
+    effectivePriceAmount,
+    effectiveCurrency,
+    effectiveVariationId,
+    JSON.stringify(normalizedCadences),
+  );
 
   const plan = db.prepare('SELECT * FROM venue_access_plans WHERE id = ?').get(id);
-  res.json(plan);
+  res.json(attachPlanCadenceMeta(plan));
 });
 
 // PUT /api/venue-access/admin/plans/:planId — update a plan
@@ -817,14 +1006,30 @@ router.put('/admin/plans/:planId', requireAuth, requireDojoAdmin, (req, res) => 
   const plan = db.prepare('SELECT * FROM venue_access_plans WHERE id = ?').get(req.params.planId);
   if (!plan) return res.status(404).json({ error: 'Plan not found' });
 
-  const { name, price_amount, currency, square_plan_variation_id, active } = req.body;
+  const { name, price_amount, currency, square_plan_variation_id, monthly_cadences, active } = req.body;
 
   const updates = [];
   const params = [];
+  let nextCurrency = currency !== undefined ? String(currency).toLowerCase() : String(plan.currency || 'gbp').toLowerCase();
+  let nextPriceAmount = price_amount !== undefined ? price_amount : plan.price_amount;
+  let nextVariationId = square_plan_variation_id !== undefined ? (square_plan_variation_id || null) : (plan.square_plan_variation_id || null);
+  let nextCadenceJson = plan.monthly_cadences_json || '[]';
+
+  if (plan.plan_type === 'monthly' && monthly_cadences !== undefined) {
+    const normalizedCadences = serializeMonthlyCadences(monthly_cadences, nextCurrency);
+    const primaryCadence = normalizedCadences[0] || null;
+    nextCadenceJson = JSON.stringify(normalizedCadences);
+    nextCurrency = primaryCadence?.currency || nextCurrency;
+    nextPriceAmount = primaryCadence ? primaryCadence.price_amount : nextPriceAmount;
+    nextVariationId = primaryCadence?.square_plan_variation_id || nextVariationId;
+    updates.push('monthly_cadences_json = ?');
+    params.push(nextCadenceJson);
+  }
+
   if (name !== undefined) { updates.push('name = ?'); params.push(String(name).trim()); }
-  if (price_amount !== undefined) { updates.push('price_amount = ?'); params.push(price_amount); }
-  if (currency !== undefined) { updates.push('currency = ?'); params.push(String(currency).toLowerCase()); }
-  if (square_plan_variation_id !== undefined) { updates.push('square_plan_variation_id = ?'); params.push(square_plan_variation_id || null); }
+  if (price_amount !== undefined || (plan.plan_type === 'monthly' && monthly_cadences !== undefined)) { updates.push('price_amount = ?'); params.push(nextPriceAmount); }
+  if (currency !== undefined || (plan.plan_type === 'monthly' && monthly_cadences !== undefined)) { updates.push('currency = ?'); params.push(nextCurrency); }
+  if (square_plan_variation_id !== undefined || (plan.plan_type === 'monthly' && monthly_cadences !== undefined)) { updates.push('square_plan_variation_id = ?'); params.push(nextVariationId); }
   if (active !== undefined) { updates.push('active = ?'); params.push(active ? 1 : 0); }
 
   if (updates.length === 0) {
@@ -836,7 +1041,7 @@ router.put('/admin/plans/:planId', requireAuth, requireDojoAdmin, (req, res) => 
 
   db.prepare(`UPDATE venue_access_plans SET ${updates.join(', ')} WHERE id = ?`).run(...params);
   const updated = db.prepare('SELECT * FROM venue_access_plans WHERE id = ?').get(req.params.planId);
-  res.json(updated);
+  res.json(attachPlanCadenceMeta(updated));
 });
 
 // ── Admin Discount Management ───────────────────────────────────────────
@@ -997,7 +1202,7 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
 
   res.json({
     venue,
-    plans,
+    plans: plans.map((plan) => attachPlanCadenceMeta(plan)),
     subscribers,
     day_passes: dayPasses,
     payments,
@@ -1162,17 +1367,44 @@ router.post('/admin/grant-subscription', requireAuth, requireDojoAdmin, (req, re
   periodEnd.setMonth(periodEnd.getMonth() + months);
 
   const paymentId = uuidv4();
+  const cadenceLabel = months === 1 ? 'Monthly' : `${months} months`;
   db.prepare(`
-    INSERT INTO venue_payments (id, user_id, venue_id, plan_id, payment_type, amount, currency, status, description)
-    VALUES (?, ?, ?, ?, 'subscription', 0, ?, 'succeeded', ?)
-  `).run(paymentId, user_id, venue_id, plan_id, plan.currency, `Admin-granted subscription (${months} month${months > 1 ? 's' : ''})`);
+    INSERT INTO venue_payments (
+      id, user_id, venue_id, plan_id, payment_type, amount, currency, status,
+      subscription_cadence_key, subscription_cadence_label, billing_interval_months, description
+    )
+    VALUES (?, ?, ?, ?, 'subscription', 0, ?, 'succeeded', ?, ?, ?, ?)
+  `).run(
+    paymentId,
+    user_id,
+    venue_id,
+    plan_id,
+    plan.currency,
+    months === 1 ? 'monthly' : `${months}_months`,
+    cadenceLabel,
+    months,
+    `Admin-granted subscription (${months} month${months > 1 ? 's' : ''})`,
+  );
 
   const subId = uuidv4();
   db.prepare(`
-    INSERT INTO venue_subscriptions (id, user_id, venue_id, plan_id, status, current_period_start, current_period_end)
-    VALUES (?, ?, ?, ?, 'active', ?, ?)
-  `).run(subId, user_id, venue_id, plan_id,
-    now.toISOString().slice(0, 10), periodEnd.toISOString().slice(0, 10));
+    INSERT INTO venue_subscriptions (
+      id, user_id, venue_id, plan_id, status,
+      subscription_cadence_key, subscription_cadence_label, billing_interval_months,
+      current_period_start, current_period_end
+    )
+    VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+  `).run(
+    subId,
+    user_id,
+    venue_id,
+    plan_id,
+    months === 1 ? 'monthly' : `${months}_months`,
+    cadenceLabel,
+    months,
+    now.toISOString().slice(0, 10),
+    periodEnd.toISOString().slice(0, 10),
+  );
 
   // Auto-add user to "Pump Dojo" group
   addUserToDojoMemberGroup(db, user_id, req.user.id);

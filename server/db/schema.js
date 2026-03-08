@@ -2468,6 +2468,7 @@ function initializeDb() {
       price_amount INTEGER NOT NULL,
       currency TEXT NOT NULL DEFAULT 'gbp',
       square_plan_variation_id TEXT,
+      monthly_cadences_json TEXT DEFAULT '[]',
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -2519,6 +2520,9 @@ function initializeDb() {
       plan_id TEXT NOT NULL REFERENCES venue_access_plans(id) ON DELETE CASCADE,
       status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'past_due', 'cancelled', 'expired')),
       square_subscription_id TEXT,
+      subscription_cadence_key TEXT DEFAULT '',
+      subscription_cadence_label TEXT DEFAULT '',
+      billing_interval_months INTEGER NOT NULL DEFAULT 1,
       current_period_start TEXT,
       current_period_end TEXT,
       cancelled_at TEXT,
@@ -2538,6 +2542,9 @@ function initializeDb() {
       amount INTEGER NOT NULL,
       currency TEXT NOT NULL DEFAULT 'gbp',
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'succeeded', 'failed', 'refunded')),
+      subscription_cadence_key TEXT DEFAULT '',
+      subscription_cadence_label TEXT DEFAULT '',
+      billing_interval_months INTEGER NOT NULL DEFAULT 1,
       square_payment_id TEXT,
       square_order_id TEXT,
       square_link_id TEXT,
@@ -2551,6 +2558,33 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_venue_payments_square_order ON venue_payments(square_order_id);
     CREATE INDEX IF NOT EXISTS idx_venue_payments_square_link ON venue_payments(square_link_id);
   `);
+
+  const venuePlanCols = db.prepare("PRAGMA table_info(venue_access_plans)").all().map(c => c.name);
+  if (!venuePlanCols.includes('monthly_cadences_json')) {
+    db.exec("ALTER TABLE venue_access_plans ADD COLUMN monthly_cadences_json TEXT DEFAULT '[]'");
+  }
+
+  const venueSubscriptionCols = db.prepare("PRAGMA table_info(venue_subscriptions)").all().map(c => c.name);
+  if (!venueSubscriptionCols.includes('subscription_cadence_key')) {
+    db.exec("ALTER TABLE venue_subscriptions ADD COLUMN subscription_cadence_key TEXT DEFAULT ''");
+  }
+  if (!venueSubscriptionCols.includes('subscription_cadence_label')) {
+    db.exec("ALTER TABLE venue_subscriptions ADD COLUMN subscription_cadence_label TEXT DEFAULT ''");
+  }
+  if (!venueSubscriptionCols.includes('billing_interval_months')) {
+    db.exec("ALTER TABLE venue_subscriptions ADD COLUMN billing_interval_months INTEGER NOT NULL DEFAULT 1");
+  }
+
+  const venuePaymentCols = db.prepare("PRAGMA table_info(venue_payments)").all().map(c => c.name);
+  if (!venuePaymentCols.includes('subscription_cadence_key')) {
+    db.exec("ALTER TABLE venue_payments ADD COLUMN subscription_cadence_key TEXT DEFAULT ''");
+  }
+  if (!venuePaymentCols.includes('subscription_cadence_label')) {
+    db.exec("ALTER TABLE venue_payments ADD COLUMN subscription_cadence_label TEXT DEFAULT ''");
+  }
+  if (!venuePaymentCols.includes('billing_interval_months')) {
+    db.exec("ALTER TABLE venue_payments ADD COLUMN billing_interval_months INTEGER NOT NULL DEFAULT 1");
+  }
 
   ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();

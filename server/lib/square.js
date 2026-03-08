@@ -79,7 +79,7 @@ async function createDayPassPaymentLink({ userId, email, username, venueId, plan
  * Requires a subscription plan variation to be set up in Square.
  * If no Square plan variation ID is provided, falls back to a one-off payment.
  */
-async function createSubscriptionPaymentLink({ userId, email, username, venueId, planId, squarePlanVariationId, planName, priceAmount, currency }) {
+async function createSubscriptionPaymentLink({ userId, email, username, venueId, planId, squarePlanVariationId, cadenceKey, cadenceLabel, billingIntervalMonths, planName, priceAmount, currency }) {
   const client = getSquareClient();
   const { v4: uuidv4 } = require('uuid');
 
@@ -98,6 +98,9 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
         username: username || '',
         venue_id: venueId,
         plan_id: planId,
+        cadence_key: cadenceKey || '',
+        cadence_label: cadenceLabel || '',
+        billing_interval_months: parseInt(billingIntervalMonths, 10) || 1,
       }),
     });
 
@@ -128,6 +131,9 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
       username: username || '',
       venue_id: venueId,
       plan_id: planId,
+      cadence_key: cadenceKey || '',
+      cadence_label: cadenceLabel || '',
+      billing_interval_months: parseInt(billingIntervalMonths, 10) || 1,
     }),
   });
 

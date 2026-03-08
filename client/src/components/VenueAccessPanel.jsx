@@ -8,6 +8,7 @@ import {
   cancelVenueSubscription,
   getVenueAccessConfig,
 } from '../utils/api';
+import { getCadenceCycleSuffix, getCadenceIntervalLabel, getMonthlyCadenceOptions } from '../utils/venueAccess';
 
 function formatCurrency(amount, currency = 'gbp') {
   const val = (amount || 0) / 100;
@@ -89,11 +90,11 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
     }
   }
 
-  async function handlePurchaseSubscription(planId) {
+  async function handlePurchaseSubscription(planId, cadenceKey) {
     setPurchasing(true);
     setError('');
     try {
-      const result = await purchaseSubscription(planId);
+      const result = await purchaseSubscription(planId, cadenceKey);
       if (result.checkout_url) {
         window.location.href = result.checkout_url;
       } else {
@@ -151,7 +152,9 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
         </div>
         {hasAccess && access.subscription && (
           <div className="text-xs text-gray-400 mt-1">
-            {access.subscription.plan_name} — valid until {formatDate(access.subscription.current_period_end)}
+            {access.subscription.plan_name}
+            {access.subscription.subscription_cadence_label ? ` (${access.subscription.subscription_cadence_label})` : ''}
+            {' — '}valid until {formatDate(access.subscription.current_period_end)}
             <button onClick={handleCancelSubscription} disabled={cancelling}
               className="ml-2 text-red-400 hover:text-red-300 underline">
               {cancelling ? 'Cancelling...' : 'Cancel'}
@@ -235,30 +238,49 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
             <div>
               <div className="text-xs text-gray-400 font-bold mb-2">Monthly Membership</div>
               <div className="space-y-1.5">
-                {monthlyPlans.map(plan => (
-                  <button key={plan.id} onClick={() => handlePurchaseSubscription(plan.id)}
-                    disabled={purchasing || !paymentsConfigured}
-                    className="w-full flex items-center justify-between bg-piu-dark/60 border border-piu-border/50 rounded-xl px-3 py-2.5 hover:border-piu-accent/50 transition-colors disabled:opacity-50">
-                    <div className="text-left">
-                      <div className="text-sm font-bold">{plan.name}</div>
-                      <div className="text-xs text-gray-400">Unlimited access / month</div>
+                {monthlyPlans.map(plan => {
+                  const cadenceOptions = getMonthlyCadenceOptions(plan);
+                  return (
+                    <div key={plan.id} className="bg-piu-dark/40 border border-piu-border/40 rounded-xl p-3 space-y-2">
+                      <div>
+                        <div className="text-sm font-bold">{plan.name}</div>
+                        <div className="text-xs text-gray-400">Unlimited venue access with flexible billing options.</div>
+                      </div>
+                      <div className="space-y-2">
+                        {cadenceOptions.map(cadence => {
+                          const displayAmount = cadence.discount_percent > 0 ? cadence.discounted_amount : cadence.price_amount;
+                          return (
+                            <button
+                              key={`${plan.id}-${cadence.key}`}
+                              onClick={() => handlePurchaseSubscription(plan.id, cadence.key)}
+                              disabled={purchasing || !paymentsConfigured}
+                              className="w-full flex items-center justify-between bg-piu-dark/70 border border-piu-border/50 rounded-xl px-3 py-2.5 hover:border-piu-accent/50 transition-colors disabled:opacity-50"
+                            >
+                              <div className="text-left">
+                                <div className="text-sm font-bold">{cadence.label}</div>
+                                <div className="text-xs text-gray-400">{getCadenceIntervalLabel(cadence)}</div>
+                              </div>
+                              <div className="text-right">
+                                {cadence.discount_percent > 0 ? (
+                                  <>
+                                    <span className="text-xs text-gray-500 line-through mr-1">{formatCurrency(cadence.price_amount, cadence.currency)}</span>
+                                    <span className="text-sm font-bold text-green-400">{formatCurrency(displayAmount, cadence.currency)}</span>
+                                    <div className="text-[10px] text-green-400">{cadence.discount_percent}% off</div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-sm font-bold">{formatCurrency(displayAmount, cadence.currency)}</span>
+                                    <div className="text-[10px] text-gray-500">{getCadenceCycleSuffix(cadence)}</div>
+                                  </>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="text-right">
-                      {plan.discount_percent > 0 ? (
-                        <>
-                          <span className="text-xs text-gray-500 line-through mr-1">{formatCurrency(plan.price_amount, plan.currency)}</span>
-                          <span className="text-sm font-bold text-green-400">{formatCurrency(plan.discounted_amount, plan.currency)}</span>
-                          <div className="text-[10px] text-green-400">{plan.discount_percent}% off</div>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-sm font-bold">{formatCurrency(plan.price_amount, plan.currency)}</span>
-                          <div className="text-[10px] text-gray-500">/month</div>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

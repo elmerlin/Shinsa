@@ -16,6 +16,7 @@ import {
   adminRemoveApprovedUser,
   searchUsers,
 } from '../utils/api';
+import { buildMonthlyCadenceDraft, getMonthlyCadenceOptions } from '../utils/venueAccess';
 
 const VENUE_SLUG = 'london-pump-dojo';
 
@@ -37,6 +38,17 @@ const PLAN_TYPE_LABELS = {
   monthly: 'Monthly Subscription',
 };
 
+function buildEmptyPlanForm() {
+  return {
+    plan_type: 'day_pass_weekday',
+    name: '',
+    price_amount: '',
+    currency: 'gbp',
+    square_plan_variation_id: '',
+    monthly_cadences: [buildMonthlyCadenceDraft({ label: 'Monthly', months: 1 }, 'gbp')],
+  };
+}
+
 export default function AdminVenueAccessTab() {
   const [subTab, setSubTab] = useState('overview');
   const [loading, setLoading] = useState(true);
@@ -46,7 +58,7 @@ export default function AdminVenueAccessTab() {
 
   // Plans state
   const [plans, setPlans] = useState([]);
-  const [planForm, setPlanForm] = useState({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', square_plan_variation_id: '' });
+  const [planForm, setPlanForm] = useState(buildEmptyPlanForm);
   const [editingPlanId, setEditingPlanId] = useState(null);
   const [planSaving, setPlanSaving] = useState(false);
 
@@ -159,29 +171,57 @@ export default function AdminVenueAccessTab() {
     setPlanSaving(true);
     setMessage('');
     try {
-      const priceInPence = Math.round(parseFloat(planForm.price_amount) * 100);
-      if (isNaN(priceInPence) || priceInPence < 0) throw new Error('Invalid price');
-
-      if (editingPlanId) {
-        await updateAdminVenueAccessPlan(editingPlanId, {
+      let payload;
+      if (planForm.plan_type === 'monthly') {
+        const monthlyCadences = (planForm.monthly_cadences || [])
+          .map((cadence, index) => {
+            const priceInPence = Math.round(parseFloat(cadence.price_amount) * 100);
+            if (isNaN(priceInPence) || priceInPence < 0) {
+              throw new Error(`Invalid price for cadence #${index + 1}`);
+            }
+            const months = Math.max(1, parseInt(cadence.months, 10) || 0);
+            const label = String(cadence.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`);
+            return {
+              key: String(cadence.key || '').trim(),
+              label,
+              months,
+              price_amount: priceInPence,
+              currency: planForm.currency,
+              square_plan_variation_id: String(cadence.square_plan_variation_id || '').trim(),
+            };
+          })
+          .filter((cadence) => cadence.label && cadence.price_amount >= 0);
+        if (monthlyCadences.length === 0) throw new Error('Add at least one monthly billing option');
+        payload = {
+          name: planForm.name,
+          price_amount: monthlyCadences[0].price_amount,
+          currency: planForm.currency,
+          square_plan_variation_id: monthlyCadences[0].square_plan_variation_id || undefined,
+          monthly_cadences: monthlyCadences,
+        };
+      } else {
+        const priceInPence = Math.round(parseFloat(planForm.price_amount) * 100);
+        if (isNaN(priceInPence) || priceInPence < 0) throw new Error('Invalid price');
+        payload = {
           name: planForm.name,
           price_amount: priceInPence,
           currency: planForm.currency,
           square_plan_variation_id: planForm.square_plan_variation_id || undefined,
-        });
+        };
+      }
+
+      if (editingPlanId) {
+        await updateAdminVenueAccessPlan(editingPlanId, payload);
         setMessage('Plan updated');
       } else {
         await createAdminVenueAccessPlan({
           venue_id: overview?.venue?.id,
           plan_type: planForm.plan_type,
-          name: planForm.name,
-          price_amount: priceInPence,
-          currency: planForm.currency,
-          square_plan_variation_id: planForm.square_plan_variation_id || undefined,
+          ...payload,
         });
         setMessage('Plan created');
       }
-      setPlanForm({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', square_plan_variation_id: '' });
+      setPlanForm(buildEmptyPlanForm());
       setEditingPlanId(null);
       await loadPlans();
     } catch (err) {
@@ -201,6 +241,9 @@ export default function AdminVenueAccessTab() {
   }
 
   function startEditPlan(plan) {
+    const monthlyCadences = getMonthlyCadenceOptions(plan).map((cadence) =>
+      buildMonthlyCadenceDraft(cadence, cadence.currency || plan.currency || 'gbp'),
+    );
     setEditingPlanId(plan.id);
     setPlanForm({
       plan_type: plan.plan_type,
@@ -208,6 +251,9 @@ export default function AdminVenueAccessTab() {
       price_amount: (plan.price_amount / 100).toFixed(2),
       currency: plan.currency,
       square_plan_variation_id: plan.square_plan_variation_id || '',
+      monthly_cadences: monthlyCadences.length > 0
+        ? monthlyCadences
+        : [buildMonthlyCadenceDraft({ label: 'Monthly', months: 1 }, plan.currency || 'gbp')],
     });
   }
 
@@ -444,38 +490,145 @@ export default function AdminVenueAccessTab() {
                   placeholder="e.g. Standard Day Pass" required
                   className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
               </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Price ({planForm.currency.toUpperCase()})</label>
-                <input type="number" step="0.01" min="0" value={planForm.price_amount}
-                  onChange={e => setPlanForm(f => ({ ...f, price_amount: e.target.value }))}
-                  placeholder="5.00" required
-                  className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Square Plan Variation ID (optional, for subscriptions)</label>
-                <input value={planForm.square_plan_variation_id} onChange={e => setPlanForm(f => ({ ...f, square_plan_variation_id: e.target.value }))}
-                  placeholder="price_..."
-                  className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
-              </div>
+              {planForm.plan_type !== 'monthly' && (
+                <>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Price ({planForm.currency.toUpperCase()})</label>
+                    <input type="number" step="0.01" min="0" value={planForm.price_amount}
+                      onChange={e => setPlanForm(f => ({ ...f, price_amount: e.target.value }))}
+                      placeholder="5.00" required
+                      className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Square Plan Variation ID (optional)</label>
+                    <input value={planForm.square_plan_variation_id} onChange={e => setPlanForm(f => ({ ...f, square_plan_variation_id: e.target.value }))}
+                      placeholder="price_..."
+                      className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" />
+                  </div>
+                </>
+              )}
             </div>
+            {planForm.plan_type === 'monthly' && (
+              <div className="space-y-3 rounded-xl border border-piu-border/50 bg-piu-dark/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-gray-200">Billing options</div>
+                    <div className="text-xs text-gray-500">Add one Square subscription variation per billing cadence.</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPlanForm(f => ({
+                      ...f,
+                      monthly_cadences: [...(f.monthly_cadences || []), buildMonthlyCadenceDraft({}, f.currency)],
+                    }))}
+                    className="px-3 py-1.5 rounded-lg bg-piu-accent/20 text-piu-accent text-xs font-bold"
+                  >
+                    Add cadence
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {(planForm.monthly_cadences || []).map((cadence, index) => (
+                    <div key={`cadence-${index}`} className="rounded-xl border border-piu-border/40 bg-piu-card/40 p-3 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs font-bold text-gray-300">Cadence #{index + 1}</div>
+                        {(planForm.monthly_cadences || []).length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPlanForm(f => ({
+                              ...f,
+                              monthly_cadences: f.monthly_cadences.filter((_, rowIndex) => rowIndex !== index),
+                            }))}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">Label</label>
+                          <input
+                            value={cadence.label}
+                            onChange={e => setPlanForm(f => ({
+                              ...f,
+                              monthly_cadences: f.monthly_cadences.map((row, rowIndex) => rowIndex === index ? { ...row, label: e.target.value } : row),
+                            }))}
+                            placeholder="Monthly"
+                            className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">Months per billing cycle</label>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={cadence.months}
+                            onChange={e => setPlanForm(f => ({
+                              ...f,
+                              monthly_cadences: f.monthly_cadences.map((row, rowIndex) => rowIndex === index ? { ...row, months: e.target.value } : row),
+                            }))}
+                            className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">Price ({planForm.currency.toUpperCase()})</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={cadence.price_amount}
+                            onChange={e => setPlanForm(f => ({
+                              ...f,
+                              monthly_cadences: f.monthly_cadences.map((row, rowIndex) => rowIndex === index ? { ...row, price_amount: e.target.value } : row),
+                            }))}
+                            placeholder="110.00"
+                            className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">Square Plan Variation ID</label>
+                          <input
+                            value={cadence.square_plan_variation_id}
+                            onChange={e => setPlanForm(f => ({
+                              ...f,
+                              monthly_cadences: f.monthly_cadences.map((row, rowIndex) => rowIndex === index ? { ...row, square_plan_variation_id: e.target.value } : row),
+                            }))}
+                            placeholder="..."
+                            className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <button type="submit" disabled={planSaving}
                 className="px-4 py-2 bg-piu-accent text-white rounded-lg text-sm font-bold hover:bg-piu-accent/80 disabled:opacity-50">
                 {planSaving ? 'Saving...' : editingPlanId ? 'Update Plan' : 'Create Plan'}
               </button>
               {editingPlanId && (
-                <button type="button" onClick={() => { setEditingPlanId(null); setPlanForm({ plan_type: 'day_pass_weekday', name: '', price_amount: '', currency: 'gbp', square_plan_variation_id: '' }); }}
+                <button type="button" onClick={() => { setEditingPlanId(null); setPlanForm(buildEmptyPlanForm()); }}
                   className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm">Cancel</button>
               )}
             </div>
           </form>
 
           <div className="space-y-2">
-            {plans.map(plan => (
+            {plans.map(plan => {
+              const cadenceOptions = plan.plan_type === 'monthly' ? getMonthlyCadenceOptions(plan) : [];
+              return (
               <div key={plan.id} className={`flex items-center gap-3 bg-piu-card/50 rounded-lg px-4 py-3 ${!plan.active ? 'opacity-50' : ''}`}>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-sm">{plan.name}</div>
                   <div className="text-xs text-gray-400">{PLAN_TYPE_LABELS[plan.plan_type] || plan.plan_type}</div>
+                  {cadenceOptions.length > 0 && (
+                    <div className="text-[11px] text-gray-500 mt-1 truncate">
+                      {cadenceOptions.map((cadence) => `${cadence.label} ${formatCurrency(cadence.price_amount, cadence.currency)}`).join(' • ')}
+                    </div>
+                  )}
                 </div>
                 <span className="font-bold text-lg">{formatCurrency(plan.price_amount, plan.currency)}</span>
                 <button onClick={() => startEditPlan(plan)} className="text-blue-400 text-xs hover:text-blue-300">Edit</button>
@@ -483,7 +636,7 @@ export default function AdminVenueAccessTab() {
                   {plan.active ? 'Disable' : 'Enable'}
                 </button>
               </div>
-            ))}
+            )})}
             {plans.length === 0 && <p className="text-gray-500 text-sm text-center py-4">No plans configured yet. Create one above.</p>}
           </div>
         </div>
