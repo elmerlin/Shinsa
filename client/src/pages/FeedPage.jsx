@@ -7,6 +7,7 @@ import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
+import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
@@ -48,6 +49,12 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function appendStickerToken(value, token) {
+  const current = String(value || '');
+  const needsSpace = current.length > 0 && !/\s$/.test(current);
+  return `${current}${needsSpace ? ' ' : ''}${token} `;
 }
 
 function parsePumbilityGain(value) {
@@ -414,6 +421,14 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
     }
   };
 
+  const insertCommentSticker = (token) => {
+    setNewComment((prev) => appendStickerToken(prev, token));
+  };
+
+  const insertReplySticker = (token) => {
+    setReplyText((prev) => appendStickerToken(prev, token));
+  };
+
   return (
     <>
       <button
@@ -485,6 +500,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                     onKeyDown={e => e.key === 'Enter' && submitReply(c.id)}
                     autoFocus
                   />
+                  <DojoCatStickerPicker onSelect={insertReplySticker} compact align="right" />
                   <button onClick={() => submitReply(c.id)} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
                   <button onClick={() => { setReplyTo(null); setReplyText(''); }} className="text-[10px] text-gray-600 hover:text-gray-400 font-display px-1">&#10005;</button>
                 </div>
@@ -500,6 +516,7 @@ function UpscoreCommentSection({ upscoreId, commentCount: initialCount }) {
                 onChange={e => setNewComment(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()}
               />
+              <DojoCatStickerPicker onSelect={insertCommentSticker} compact align="right" />
               <button onClick={submit} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
             </div>
           )}
@@ -768,6 +785,14 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
     }
   };
 
+  const insertCommentSticker = (token) => {
+    setNewComment((prev) => appendStickerToken(prev, token));
+  };
+
+  const insertReplySticker = (token) => {
+    setReplyText((prev) => appendStickerToken(prev, token));
+  };
+
   return (
     <>
       <button
@@ -837,6 +862,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                     onKeyDown={e => e.key === 'Enter' && submitReply(c.id)}
                     autoFocus
                   />
+                  <DojoCatStickerPicker onSelect={insertReplySticker} compact align="right" />
                   <button onClick={() => submitReply(c.id)} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
                   <button onClick={() => { setReplyTo(null); setReplyText(''); }} className="text-[10px] text-gray-600 hover:text-gray-400 font-display px-1">&#10005;</button>
                 </div>
@@ -852,6 +878,7 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
                 onChange={e => setNewComment(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()}
               />
+              <DojoCatStickerPicker onSelect={insertCommentSticker} compact align="right" />
               <button onClick={submit} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
             </div>
           )}

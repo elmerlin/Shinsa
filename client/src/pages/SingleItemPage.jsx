@@ -7,6 +7,7 @@ import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
+import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
@@ -75,6 +76,12 @@ function getGradeColor(grade, score = 0) {
 
 const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
 const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
+
+function appendStickerToken(value, token) {
+  const current = String(value || '');
+  const needsSpace = current.length > 0 && !/\s$/.test(current);
+  return `${current}${needsSpace ? ' ' : ''}${token} `;
+}
 
 function getClearItems(item) {
   const fallback = [{
@@ -419,6 +426,14 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
     }
   };
 
+  const insertCommentSticker = (token) => {
+    setNewComment((prev) => appendStickerToken(prev, token));
+  };
+
+  const insertReplySticker = (token) => {
+    setReplyText((prev) => appendStickerToken(prev, token));
+  };
+
   return (
     <>
       <button onClick={() => setOpen(!open)}
@@ -495,6 +510,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
                 <div className="flex gap-1 ml-6 mt-1">
                   <input className="input-field text-[11px] py-1 flex-1" placeholder="Reply..." value={replyText}
                     onChange={e => setReplyText(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitReply(c.id)} autoFocus />
+                  <DojoCatStickerPicker onSelect={insertReplySticker} compact align="right" />
                   <button onClick={() => submitReply(c.id)} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
                   <button onClick={() => { setReplyTo(null); setReplyText(''); }} className="text-[10px] text-gray-600 hover:text-gray-400 font-display px-1">&#10005;</button>
                 </div>
@@ -505,6 +521,7 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
             <div className="flex gap-1">
               <input className="input-field text-[11px] py-1 flex-1" placeholder="Write a comment..." value={newComment}
                 onChange={e => setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} />
+              <DojoCatStickerPicker onSelect={insertCommentSticker} compact align="right" />
               <button onClick={submit} className="text-[10px] text-piu-accent font-display font-bold px-2">Send</button>
             </div>
           )}
