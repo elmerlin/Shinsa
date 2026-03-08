@@ -723,7 +723,7 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
 
 function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
+    <div className={`flex flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)] ${compact ? 'h-full min-h-0' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Latest Play</p>
@@ -2515,7 +2515,7 @@ export default function LivePage() {
           onClick={() => {
             if (isDesktopViewport) {
               if (requestTabDisabled) return;
-              setDesktopInteractionTab('requests');
+              setDesktopInteractionTab((prev) => (prev === 'requests' ? '' : 'requests'));
             } else {
               setMobilePanel('requests');
             }
@@ -2539,7 +2539,7 @@ export default function LivePage() {
           onClick={() => {
             if (isDesktopViewport) {
               if (voteTabDisabled) return;
-              setDesktopInteractionTab('vote');
+              setDesktopInteractionTab((prev) => (prev === 'vote' ? '' : 'vote'));
             } else {
               setMobilePanel('vote');
             }
@@ -2559,7 +2559,7 @@ export default function LivePage() {
           </p>
         </button>
       </div>
-      {isDesktopViewport ? (
+      {isDesktopViewport && desktopInteractionTab ? (
         <div className="mt-4">
         {desktopInteractionTab === 'vote'
           ? (voteTabDisabled
@@ -3277,7 +3277,7 @@ export default function LivePage() {
             {songsSection}
           </div>
         ) : (
-          <div className={`grid gap-5 ${desktopViewerColumns}`}>
+          <div className={`grid items-start gap-5 ${desktopViewerColumns}`}>
             <div className="space-y-4">
               <NowPlayingPanel
                 play={lastPlay}
