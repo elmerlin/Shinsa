@@ -161,6 +161,13 @@ function shiftMonthKey(monthKey, offset) {
   return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+function monthDistance(laterMonthKey, earlierMonthKey) {
+  if (!isValidMonthKey(laterMonthKey) || !isValidMonthKey(earlierMonthKey)) return 0;
+  const [laterYear, laterMonth] = laterMonthKey.split('-').map((part) => parseInt(part, 10));
+  const [earlierYear, earlierMonth] = earlierMonthKey.split('-').map((part) => parseInt(part, 10));
+  return Math.max(0, ((laterYear - earlierYear) * 12) + (laterMonth - earlierMonth));
+}
+
 function formatMonthLabel(monthKey) {
   if (!isValidMonthKey(monthKey)) return monthKey || '';
   const date = new Date(`${monthKey}-01T00:00:00Z`);
@@ -1150,7 +1157,9 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
   const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
   const selectedMonth = isValidMonthKey(req.query.month) ? String(req.query.month) : currentMonthKey();
-  const monthKeys = Array.from({ length: 6 }, (_, index) => shiftMonthKey(selectedMonth, -index));
+  const currentMonth = currentMonthKey();
+  const monthsBack = Math.max(11, monthDistance(currentMonth, selectedMonth));
+  const monthKeys = Array.from({ length: monthsBack + 1 }, (_, index) => shiftMonthKey(currentMonth, -index));
 
   const subscribers = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
@@ -1162,6 +1171,18 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
     WHERE vs.venue_id = ? AND substr(vs.created_at, 1, 7) = ?
     ORDER BY vs.created_at DESC
   `).all(venue.id, selectedMonth);
+
+  const activeSubscribers = db.prepare(`
+    SELECT vs.id, vs.user_id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
+           u.username, u.avatar, u.avatar_v,
+           vap.name AS plan_name, vap.price_amount, vap.currency
+    FROM venue_subscriptions vs
+    JOIN users u ON u.id = vs.user_id
+    JOIN venue_access_plans vap ON vap.id = vs.plan_id
+    WHERE vs.venue_id = ? AND vs.status = 'active'
+    ORDER BY vs.current_period_end DESC, vs.created_at ASC
+  `).all(venue.id);
 
   const today = todayDateString();
   const dayPasses = db.prepare(`
@@ -1271,6 +1292,7 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
     venue,
     plans: plans.map((plan) => attachPlanCadenceMeta(plan)),
     subscribers,
+    active_subscribers: activeSubscribers,
     day_passes: dayPasses,
     payments,
     discounts,
@@ -1334,6 +1356,91 @@ router.get('/admin/members/:venueSlug', requireAuth, requireDojoAdmin, (req, res
   });
 
   res.json({ venue, members: result });
+});
+
+// GET /api/venue-access/admin/member-details/:venueSlug/:userId
+router.get('/admin/member-details/:venueSlug/:userId', requireAuth, requireDojoAdmin, (req, res) => {
+  const db = getDb();
+  const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
+  if (!venue) return res.status(404).json({ error: 'Venue not found' });
+
+  const member = db.prepare(`
+    SELECT id, username, avatar, avatar_v
+    FROM users
+    WHERE id = ?
+  `).get(req.params.userId);
+  if (!member) return res.status(404).json({ error: 'User not found' });
+
+  const subscriptions = db.prepare(`
+    SELECT vs.id, vs.status, vs.created_at, vs.current_period_start, vs.current_period_end, vs.cancelled_at,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
+           vap.name AS plan_name, vap.price_amount, vap.currency
+    FROM venue_subscriptions vs
+    JOIN venue_access_plans vap ON vap.id = vs.plan_id
+    WHERE vs.user_id = ? AND vs.venue_id = ?
+    ORDER BY vs.created_at ASC
+  `).all(member.id, venue.id);
+
+  const dayPasses = db.prepare(`
+    SELECT vdp.id, vdp.pass_date, vdp.status, vdp.created_at,
+           vap.name AS plan_name, vap.price_amount, vap.currency
+    FROM venue_day_passes vdp
+    JOIN venue_access_plans vap ON vap.id = vdp.plan_id
+    WHERE vdp.user_id = ? AND vdp.venue_id = ?
+    ORDER BY vdp.pass_date DESC, vdp.created_at DESC
+    LIMIT 50
+  `).all(member.id, venue.id);
+
+  const payments = db.prepare(`
+    SELECT id, payment_type, amount, currency, status, description, created_at
+    FROM venue_payments
+    WHERE user_id = ? AND venue_id = ? AND status = 'succeeded'
+    ORDER BY created_at DESC
+    LIMIT 50
+  `).all(member.id, venue.id);
+
+  const checkins = db.prepare(`
+    SELECT c.id, c.checked_in_at, c.checked_out_at,
+           m.name AS machine_name
+    FROM checkins c
+    LEFT JOIN venue_machines m ON m.id = c.machine_id
+    WHERE c.user_id = ? AND c.venue_id = ?
+    ORDER BY c.checked_in_at DESC
+    LIMIT 100
+  `).all(member.id, venue.id);
+
+  const firstSubscription = subscriptions[0] || null;
+  const totalSpentRow = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS total
+    FROM venue_payments
+    WHERE user_id = ? AND venue_id = ? AND status = 'succeeded'
+  `).get(member.id, venue.id);
+
+  const totalSubscribedMonths = subscriptions.reduce((sum, sub) => sum + Math.max(1, parseInt(sub.billing_interval_months, 10) || 1), 0);
+  const firstSubscriptionDate = firstSubscription?.created_at
+    ? new Date(String(firstSubscription.created_at).endsWith('Z') ? String(firstSubscription.created_at) : `${firstSubscription.created_at}Z`)
+    : null;
+  const weeksSinceStart = firstSubscriptionDate
+    ? Math.max(1, (Date.now() - firstSubscriptionDate.getTime()) / (1000 * 60 * 60 * 24 * 7))
+    : 1;
+  const avgVisitsPerWeek = checkins.length > 0 ? Math.round((checkins.length / weeksSinceStart) * 10) / 10 : 0;
+
+  res.json({
+    venue,
+    member: {
+      ...member,
+      total_spent: Number(totalSpentRow?.total || 0),
+      first_subscribed_at: firstSubscription?.created_at || '',
+      total_subscribed_months: totalSubscribedMonths,
+      average_visits_per_week: avgVisitsPerWeek,
+      total_checkins: checkins.length,
+      active_subscription: subscriptions.find((sub) => sub.status === 'active') || null,
+    },
+    subscriptions,
+    day_passes: dayPasses,
+    payments,
+    checkins,
+  });
 });
 
 // GET /api/venue-access/admin/payments/:venueSlug

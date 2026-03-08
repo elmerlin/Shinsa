@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { getAvatarUrl } from './AvatarPicker';
 import {
   getAdminVenueAccessOverview,
+  getAdminVenueMemberDetail,
   getAdminVenueAccessPlans,
   createAdminVenueAccessPlan,
   updateAdminVenueAccessPlan,
@@ -32,9 +33,35 @@ function formatDate(dateStr) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function formatDateTime(dateStr) {
+  if (!dateStr) return '—';
+  const raw = String(dateStr);
+  const d = new Date(/[zZ]|[+-]\d{2}:\d{2}$/.test(raw) ? raw : raw + 'Z');
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function currentMonthKey() {
   const now = new Date();
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function shiftMonthKey(monthKey, offset) {
+  const raw = String(monthKey || '').trim();
+  const [year, month] = raw.split('-').map((part) => parseInt(part, 10));
+  const next = new Date(Date.UTC(year, (month || 1) - 1 + offset, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatAverageVisits(value) {
+  const num = Number(value || 0);
+  if (num === 0) return '0';
+  return num >= 10 ? num.toFixed(0) : num.toFixed(1);
 }
 
 const PLAN_TYPE_LABELS = {
@@ -61,6 +88,11 @@ export default function AdminVenueAccessTab() {
   const [overview, setOverview] = useState(null);
   const [message, setMessage] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
+  const [overviewPanel, setOverviewPanel] = useState('');
+  const [selectedSubscriberId, setSelectedSubscriberId] = useState('');
+  const [subscriberDetail, setSubscriberDetail] = useState(null);
+  const [subscriberDetailLoading, setSubscriberDetailLoading] = useState(false);
+  const monthStripRef = useRef(null);
 
   // Plans state
   const [plans, setPlans] = useState([]);
@@ -103,6 +135,14 @@ export default function AdminVenueAccessTab() {
     if (subTab === 'discounts') loadDiscounts();
     if (subTab === 'plans') loadPlans();
   }, [subTab]);
+
+  useEffect(() => {
+    if (!monthStripRef.current) return;
+    const target = monthStripRef.current.querySelector(`[data-month-key="${selectedMonth}"]`);
+    if (target && typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }, [overview, selectedMonth]);
 
   async function loadOverview() {
     setLoading(true);
@@ -368,10 +408,33 @@ export default function AdminVenueAccessTab() {
     }
   }
 
+  async function handleSelectSubscriber(userId) {
+    setSelectedSubscriberId(String(userId));
+    setSubscriberDetailLoading(true);
+    setSubscriberDetail(null);
+    try {
+      const data = await getAdminVenueMemberDetail(VENUE_SLUG, userId);
+      setSubscriberDetail(data);
+    } catch (err) {
+      setError(err.message || 'Failed to load subscriber history');
+    } finally {
+      setSubscriberDetailLoading(false);
+    }
+  }
+
   if (loading) return <div className="text-center py-10 text-gray-400">Loading venue access data...</div>;
 
   const subTabs = ['overview', 'plans', 'approved', 'discounts', 'grant', 'payments'];
   const selectedMonthLabel = overview?.selected_month_label || 'Selected month';
+  const isCurrentMonth = selectedMonth === currentMonthKey();
+  const groupedDayPasses = Object.entries(
+    (overview?.day_passes || []).reduce((acc, pass) => {
+      const key = pass.pass_date || 'Unknown date';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(pass);
+      return acc;
+    }, {}),
+  );
 
   return (
     <div className="space-y-4">
@@ -399,19 +462,38 @@ export default function AdminVenueAccessTab() {
               <p className="text-xs text-gray-400">Select a month to drill into venue access activity.</p>
               <span className="text-xs text-gray-500">{selectedMonthLabel}</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedMonth((prev) => shiftMonthKey(prev, -1))}
+                className="rounded-lg border border-piu-border/60 bg-piu-card/50 px-3 py-2 text-xs font-display font-bold text-gray-200 hover:border-piu-accent/50 hover:text-white"
+              >
+                Older
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedMonth((prev) => (prev === currentMonthKey() ? prev : shiftMonthKey(prev, 1)))}
+                disabled={isCurrentMonth}
+                className="rounded-lg border border-piu-border/60 bg-piu-card/50 px-3 py-2 text-xs font-display font-bold text-gray-200 hover:border-piu-accent/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Newer
+              </button>
+              <span className="text-[11px] text-gray-500">Scroll the month strip or move one month at a time.</span>
+            </div>
+            <div ref={monthStripRef} className="flex gap-3 overflow-x-auto pb-2">
               {(overview.month_cards || []).map((monthCard) => (
                 <button
                   key={monthCard.month_key}
                   type="button"
                   onClick={() => setSelectedMonth(monthCard.month_key)}
-                  className={`aspect-square rounded-2xl border p-3 text-left transition-colors ${
+                  data-month-key={monthCard.month_key}
+                  className={`min-w-[180px] shrink-0 rounded-2xl border p-3 text-left transition-colors ${
                     monthCard.selected
                       ? 'border-piu-accent bg-piu-accent/10'
                       : 'border-piu-border/50 bg-piu-card/50 hover:border-piu-accent/45'
                   }`}
                 >
-                  <div className="flex h-full flex-col">
+                  <div className="flex h-full min-h-[156px] flex-col">
                     <div className="text-[11px] uppercase tracking-wide text-gray-500">{monthCard.month_label}</div>
                     <div className="mt-2 text-lg font-display font-bold text-white">{formatCurrency(monthCard.revenue)}</div>
                     <div className="mt-auto space-y-1 text-[11px] text-gray-400">
@@ -426,78 +508,248 @@ export default function AdminVenueAccessTab() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             {[
               { label: `${selectedMonthLabel} Revenue`, value: formatCurrency(overview.stats?.selected_month_revenue) },
               { label: `${selectedMonthLabel} Payments`, value: overview.stats?.selected_month_payments || 0 },
-              { label: `${selectedMonthLabel} Day Passes`, value: overview.stats?.selected_month_day_passes || 0 },
-              { label: `${selectedMonthLabel} Subs`, value: overview.stats?.selected_month_subscriptions || 0 },
-            ].map(s => (
+            ].map((s) => (
               <div key={s.label} className="bg-piu-card rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold font-display">{s.value}</div>
                 <div className="text-xs text-gray-400">{s.label}</div>
               </div>
             ))}
+            <button
+              type="button"
+              onClick={() => setOverviewPanel((prev) => (prev === 'day_passes' ? '' : 'day_passes'))}
+              className={`rounded-lg p-3 text-center transition-colors ${
+                overviewPanel === 'day_passes'
+                  ? 'bg-piu-accent/10 ring-1 ring-piu-accent'
+                  : 'bg-piu-card hover:bg-piu-card/80'
+              }`}
+            >
+              <div className="text-2xl font-bold font-display">{overview.stats?.selected_month_day_passes || 0}</div>
+              <div className="text-xs text-gray-400">{selectedMonthLabel} Day Passes</div>
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { label: 'Active Subscribers', value: overview.stats?.active_subscriptions || 0 },
-              { label: 'Today\'s Day Passes', value: overview.stats?.today_day_passes || 0 },
-              { label: 'Total Revenue', value: formatCurrency(overview.stats?.total_revenue) },
-            ].map(s => (
-              <div key={s.label} className="bg-piu-card rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold font-display">{s.value}</div>
-                <div className="text-xs text-gray-400">{s.label}</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setOverviewPanel((prev) => (prev === 'active_subscribers' ? '' : 'active_subscribers'))}
+              className={`rounded-lg p-3 text-center transition-colors ${
+                overviewPanel === 'active_subscribers'
+                  ? 'bg-piu-accent/10 ring-1 ring-piu-accent'
+                  : 'bg-piu-card hover:bg-piu-card/80'
+              }`}
+            >
+              <div className="text-2xl font-bold font-display">{overview.stats?.active_subscriptions || 0}</div>
+              <div className="text-xs text-gray-400">Active Subscribers</div>
+            </button>
+            <div className="bg-piu-card rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold font-display">{formatCurrency(overview.stats?.total_revenue)}</div>
+              <div className="text-xs text-gray-400">Total Revenue</div>
+            </div>
+          </div>
+
+          {overviewPanel === 'day_passes' && (
+            <div className="rounded-2xl border border-piu-border/50 bg-piu-card/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h4 className="text-sm font-display font-bold text-gray-200">
+                  {selectedMonthLabel} Day Passes ({overview.day_passes?.length || 0})
+                </h4>
+                <span className="text-xs text-gray-500">Each entry shows the day pass date and the purchase/grant timestamp.</span>
               </div>
-            ))}
-          </div>
+              {groupedDayPasses.length === 0 ? (
+                <p className="text-gray-500 text-sm">No day passes recorded in this month.</p>
+              ) : (
+                <div className="space-y-4">
+                  {groupedDayPasses.map(([passDate, passes]) => (
+                    <div key={passDate} className="space-y-2">
+                      <div className="text-xs font-display font-bold uppercase tracking-wide text-piu-accent">
+                        {formatDate(passDate)}
+                      </div>
+                      <div className="space-y-1">
+                        {passes.map((dp) => (
+                          <div key={dp.id} className="flex flex-wrap items-center gap-3 rounded-lg bg-piu-card/60 px-3 py-2 text-sm">
+                            <img src={getAvatarUrl(dp.avatar)} alt="" className="h-7 w-7 rounded-full" />
+                            <span className="min-w-0 font-bold text-white">{dp.username}</span>
+                            <span className="text-xs text-gray-400">{dp.plan_name}</span>
+                            <span className="text-xs text-gray-500">Logged {formatDateTime(dp.created_at)}</span>
+                            <span className={`ml-auto text-xs font-bold ${dp.status === 'used' ? 'text-blue-400' : 'text-green-400'}`}>
+                              {dp.status.toUpperCase()}
+                            </span>
+                            <button onClick={() => handleRevoke('day_pass', dp.id)} className="text-xs text-red-400 hover:text-red-300">Revoke</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Active Subscribers */}
-          <div>
-            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">
-              {selectedMonthLabel} Subscriptions ({overview.subscribers?.length || 0})
-            </h4>
-            {overview.subscribers?.length === 0 ? (
-              <p className="text-gray-500 text-sm">No subscriptions started in this month.</p>
-            ) : (
-              <div className="space-y-1">
-                {overview.subscribers.map(sub => (
-                  <div key={sub.id} className="flex items-center gap-3 bg-piu-card/50 rounded-lg px-3 py-2 text-sm">
-                    <img src={getAvatarUrl(sub.avatar)} alt="" className="w-7 h-7 rounded-full" />
-                    <span className="font-bold min-w-0 truncate">{sub.username}</span>
-                    <span className="text-gray-400 text-xs">{sub.plan_name}</span>
-                    <span className="text-gray-400 text-xs ml-auto">
-                      {formatDate(sub.created_at)}
-                      {sub.subscription_cadence_label ? ` • ${sub.subscription_cadence_label}` : ''}
-                    </span>
-                    {sub.status === 'past_due' && <span className="text-yellow-400 text-xs font-bold">PAST DUE</span>}
-                    <button onClick={() => handleRevoke('subscription', sub.id)} className="text-red-400 text-xs hover:text-red-300">Revoke</button>
+          {overviewPanel === 'active_subscribers' && (
+            <div className="rounded-2xl border border-piu-border/50 bg-piu-card/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h4 className="text-sm font-display font-bold text-gray-200">
+                  Active Subscribers ({overview.active_subscribers?.length || 0})
+                </h4>
+                <span className="text-xs text-gray-500">Click a subscriber to inspect subscription history, venue usage, and lifetime value.</span>
+              </div>
+              {overview.active_subscribers?.length === 0 ? (
+                <p className="text-gray-500 text-sm">There are no active subscribers right now.</p>
+              ) : (
+                <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+                  <div className="space-y-1">
+                    {overview.active_subscribers.map((sub) => (
+                      <div
+                        key={sub.id}
+                        className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                          selectedSubscriberId === String(sub.user_id)
+                            ? 'bg-piu-accent/10 ring-1 ring-piu-accent'
+                            : 'bg-piu-card/60'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSubscriber(sub.user_id)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <img src={getAvatarUrl(sub.avatar)} alt="" className="h-8 w-8 rounded-full" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-bold text-white">{sub.username}</div>
+                            <div className="truncate text-xs text-gray-400">
+                              {sub.subscription_cadence_label || sub.plan_name}
+                              {sub.current_period_end ? ` • renews ${formatDate(sub.current_period_end)}` : ''}
+                            </div>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRevoke('subscription', sub.id)}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* Today's + Upcoming Day Passes */}
-          <div>
-            <h4 className="text-sm font-display font-bold text-gray-300 mb-2">{selectedMonthLabel} Day Passes ({overview.day_passes?.length || 0})</h4>
-            {overview.day_passes?.length === 0 ? (
-              <p className="text-gray-500 text-sm">No day passes recorded in this month.</p>
-            ) : (
-              <div className="space-y-1">
-                {overview.day_passes.map(dp => (
-                  <div key={dp.id} className="flex items-center gap-3 bg-piu-card/50 rounded-lg px-3 py-2 text-sm">
-                    <img src={getAvatarUrl(dp.avatar)} alt="" className="w-7 h-7 rounded-full" />
-                    <span className="font-bold min-w-0 truncate">{dp.username}</span>
-                    <span className="text-gray-400 text-xs">{dp.pass_date}</span>
-                    <span className={`text-xs font-bold ml-auto ${dp.status === 'used' ? 'text-blue-400' : 'text-green-400'}`}>{dp.status.toUpperCase()}</span>
-                    <button onClick={() => handleRevoke('day_pass', dp.id)} className="text-red-400 text-xs hover:text-red-300">Revoke</button>
+                  <div className="rounded-xl border border-piu-border/40 bg-piu-dark/50 p-4">
+                    {!selectedSubscriberId ? (
+                      <p className="text-sm text-gray-500">Select a subscriber from the list to see their history.</p>
+                    ) : subscriberDetailLoading ? (
+                      <p className="text-sm text-gray-400">Loading subscriber history...</p>
+                    ) : !subscriberDetail ? (
+                      <p className="text-sm text-gray-500">Subscriber details unavailable.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <img src={getAvatarUrl(subscriberDetail.member?.avatar)} alt="" className="h-12 w-12 rounded-full" />
+                          <div>
+                            <div className="text-lg font-display font-bold text-white">{subscriberDetail.member?.username}</div>
+                            <div className="text-xs text-gray-400">
+                              Started {formatDate(subscriberDetail.member?.first_subscribed_at)}
+                              {subscriberDetail.member?.active_subscription?.subscription_cadence_label
+                                ? ` • ${subscriberDetail.member.active_subscription.subscription_cadence_label}`
+                                : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          {[
+                            {
+                              label: 'Subscribed Since',
+                              value: formatDate(subscriberDetail.member?.first_subscribed_at),
+                            },
+                            {
+                              label: 'Months Subscribed',
+                              value: subscriberDetail.member?.total_subscribed_months || 0,
+                            },
+                            {
+                              label: 'Avg Visits / Week',
+                              value: formatAverageVisits(subscriberDetail.member?.average_visits_per_week),
+                            },
+                            {
+                              label: 'Total Money Spent',
+                              value: formatCurrency(
+                                subscriberDetail.member?.total_spent,
+                                subscriberDetail.payments?.[0]?.currency || 'gbp',
+                              ),
+                            },
+                          ].map((item) => (
+                            <div key={item.label} className="rounded-lg bg-piu-card/60 p-3 text-center">
+                              <div className="text-xl font-display font-bold text-white">{item.value}</div>
+                              <div className="text-[11px] uppercase tracking-wide text-gray-500">{item.label}</div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid gap-4 xl:grid-cols-3">
+                          <div className="space-y-2">
+                            <h5 className="text-xs font-display font-bold uppercase tracking-wide text-gray-400">Subscription History</h5>
+                            {subscriberDetail.subscriptions?.length === 0 ? (
+                              <p className="text-sm text-gray-500">No subscriptions recorded.</p>
+                            ) : (
+                              <div className="space-y-1">
+                                {subscriberDetail.subscriptions.map((sub) => (
+                                  <div key={sub.id} className="rounded-lg bg-piu-card/60 px-3 py-2 text-sm">
+                                    <div className="font-bold text-white">{sub.subscription_cadence_label || sub.plan_name}</div>
+                                    <div className="text-xs text-gray-400">
+                                      {formatDate(sub.created_at)}
+                                      {sub.current_period_end ? ` → ${formatDate(sub.current_period_end)}` : ''}
+                                    </div>
+                                    <div className="text-xs text-gray-500">{sub.status}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <h5 className="text-xs font-display font-bold uppercase tracking-wide text-gray-400">Payments</h5>
+                            {subscriberDetail.payments?.length === 0 ? (
+                              <p className="text-sm text-gray-500">No payments recorded.</p>
+                            ) : (
+                              <div className="space-y-1">
+                                {subscriberDetail.payments.slice(0, 10).map((payment) => (
+                                  <div key={payment.id} className="rounded-lg bg-piu-card/60 px-3 py-2 text-sm">
+                                    <div className="font-bold text-white">
+                                      {formatCurrency(payment.amount, payment.currency)}
+                                    </div>
+                                    <div className="text-xs text-gray-400">{payment.description || payment.payment_type}</div>
+                                    <div className="text-xs text-gray-500">{formatDateTime(payment.created_at)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <h5 className="text-xs font-display font-bold uppercase tracking-wide text-gray-400">Venue Visits</h5>
+                            {subscriberDetail.checkins?.length === 0 ? (
+                              <p className="text-sm text-gray-500">No venue check-ins recorded.</p>
+                            ) : (
+                              <div className="space-y-1">
+                                {subscriberDetail.checkins.slice(0, 12).map((checkin) => (
+                                  <div key={checkin.id} className="rounded-lg bg-piu-card/60 px-3 py-2 text-sm">
+                                    <div className="font-bold text-white">{checkin.machine_name || 'Venue access'}</div>
+                                    <div className="text-xs text-gray-400">{formatDateTime(checkin.checked_in_at)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Recent Payments */}
           <div>
