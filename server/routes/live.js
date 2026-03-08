@@ -734,6 +734,7 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId) {
     id: session.id,
     title: session.title || '',
     stream_url: session.stream_url || '',
+    requests_enabled: toInt(session.requests_enabled) !== 0,
     status: session.status || 'live',
     host_user_id: session.host_user_id,
     recent_anchor_id: toInt(session.recent_anchor_id),
@@ -1436,11 +1437,14 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
     }
 
     const nextStreamUrl = normalizeUrl(req.body?.stream_url, 400);
+    const nextRequestsEnabled = req.body?.requests_enabled === undefined
+      ? (toInt(session.requests_enabled) !== 0)
+      : !!req.body.requests_enabled;
     db.prepare(`
       UPDATE live_sessions
-      SET stream_url = ?, updated_at = datetime('now')
+      SET stream_url = ?, requests_enabled = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(nextStreamUrl, session.id);
+    `).run(nextStreamUrl, nextRequestsEnabled ? 1 : 0, session.id);
 
     broadcastLiveSessionSnapshot(db, session.id, 'stream_updated');
     return res.json(buildSessionSnapshot(db, session.id, req.user.id));
@@ -1624,7 +1628,11 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
-    if (String(req.user.id || '') !== String(session.host_user_id || '')) {
+    const isHost = String(req.user.id || '') === String(session.host_user_id || '');
+    if (!isHost && toInt(session.requests_enabled) === 0) {
+      return res.status(403).json({ error: 'Song requests are currently disabled for this session' });
+    }
+    if (!isHost) {
       const moderation = getLiveModerationState(db, session.id, req.user.id);
       if (moderation.requests_blocked) {
         return res.status(403).json({ error: 'The host has blocked your requests for this session' });

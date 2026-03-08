@@ -697,10 +697,10 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen }) {
     <div className="rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Now Playing</p>
+          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Latest Play</p>
           <p className="text-sm text-cyan-50/80 mt-1">
             {play
-              ? 'Latest chart synced into the live room.'
+              ? 'Most recently fetched song result from the live sync.'
               : live?.status === 'live'
                 ? 'Waiting for the first chart to land.'
                 : 'This live room has wrapped.'}
@@ -1049,8 +1049,10 @@ export default function LivePage() {
   const [editStreamUrl, setEditStreamUrl] = useState('');
   const [creating, setCreating] = useState(false);
   const [savingStreamUrl, setSavingStreamUrl] = useState(false);
+  const [savingRequestsEnabled, setSavingRequestsEnabled] = useState(false);
   const [playerMode, setPlayerMode] = useState(false);
   const [mobilePanel, setMobilePanel] = useState('');
+  const [desktopInteractionTab, setDesktopInteractionTab] = useState('requests');
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(() => (
@@ -1108,6 +1110,7 @@ export default function LivePage() {
   const currentVote = snapshot?.active_vote || null;
   const lastPlay = snapshot?.last_play || null;
   const youtubeId = getYouTubeId(live?.stream_url || '');
+  const requestsEnabled = live?.requests_enabled !== false;
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
   const isHost = !!live?.is_host;
@@ -1139,6 +1142,14 @@ export default function LivePage() {
   useEffect(() => {
     setEditStreamUrl(live?.stream_url || '');
   }, [live?.id, live?.stream_url]);
+
+  useEffect(() => {
+    if (currentVote) {
+      setDesktopInteractionTab('vote');
+      return;
+    }
+    setDesktopInteractionTab('requests');
+  }, [currentVote?.id]);
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -1684,6 +1695,24 @@ export default function LivePage() {
     }
   };
 
+  const handleToggleRequestsEnabled = async () => {
+    if (!activeSessionId || !isHost) return;
+    setSavingRequestsEnabled(true);
+    setError('');
+    try {
+      const data = await updateLiveSession(activeSessionId, {
+        stream_url: editStreamUrl,
+        requests_enabled: !requestsEnabled,
+      });
+      applySnapshot(data, { markMessagesSeen: false });
+      setStatusNote(!requestsEnabled ? 'Song requests are now open.' : 'Song requests are now closed.');
+    } catch (err) {
+      setError(err.message || 'Failed to update request availability');
+    } finally {
+      setSavingRequestsEnabled(false);
+    }
+  };
+
   const handleSendChat = async (e) => {
     e.preventDefault();
     const trimmed = chatInput.trim();
@@ -1981,8 +2010,11 @@ export default function LivePage() {
         : 'Offline';
   const syncLabel = formatRelativeSyncTime(live?.last_sync_at);
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
+  const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const viewerNowCount = live?.viewer_count || 0;
   const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
+  const requestTabDisabled = !isHost && (!requestsEnabled || live?.status !== 'live');
+  const voteTabDisabled = !isHost && !currentVote;
   const playerSummaryCards = [
     {
       label: 'Last Score',
@@ -2064,7 +2096,7 @@ export default function LivePage() {
           </select>
         </div>
       </div>
-      <div className="space-y-2 mt-3">
+      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-3 2xl:grid-cols-4">
         {visiblePlays.map((play) => {
           const requestInfo = requestLookup.get(buildRequestKey(play.song_title, play.mode, play.level));
           const requestStatus = requestInfo
@@ -2081,14 +2113,17 @@ export default function LivePage() {
               type="button"
               key={play.id}
               onClick={() => setSelectedPlay(play)}
-              className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
+              className="w-full rounded-2xl border border-piu-border bg-black/15 p-3 text-left transition-colors hover:border-cyan-400/40"
             >
-              <div className="flex items-center gap-3">
-                <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-display font-bold text-white truncate">{play.song_title}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <p className="text-[11px] text-gray-400">{modeShort(play.mode)}{play.level}</p>
+              <div className="flex items-start gap-3">
+                <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-display font-bold text-white">{play.song_title}</p>
+                  <div className="mt-2 flex items-baseline justify-between gap-2">
+                    <p className="text-lg font-display font-black text-white">{play.grade || '-'}</p>
+                    <p className="text-[11px] font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {play.pumbility_gain > 0 ? (
                       <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-emerald-200">
                         +{play.pumbility_gain} p
@@ -2106,15 +2141,11 @@ export default function LivePage() {
                     ) : null}
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
-                  <p className="text-[11px] text-gray-400">{play.grade || '-'}</p>
-                </div>
               </div>
             </button>
           );
         })}
-        {visiblePlays.length === 0 ? <p className="text-sm text-gray-500">No plays match the current filter yet.</p> : null}
+        {visiblePlays.length === 0 ? <p className="col-span-full text-sm text-gray-500">No plays match the current filter yet.</p> : null}
       </div>
     </div>
   );
@@ -2129,11 +2160,15 @@ export default function LivePage() {
             {requestCounts.skipped ? ` • ${requestCounts.skipped} skipped` : ''}
           </p>
         </div>
-        {live?.status !== 'live' ? (
-          <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">
-            Closed
-          </span>
-        ) : null}
+        <span className={`rounded-full px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${
+          live?.status !== 'live'
+            ? 'border border-piu-border bg-black/20 text-gray-400'
+            : requestsEnabled
+              ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+              : 'border border-piu-border bg-black/20 text-gray-400'
+        }`}>
+          {live?.status !== 'live' ? 'Closed' : requestsEnabled ? 'Open' : 'Disabled'}
+        </span>
       </div>
       <input
         value={songSearch}
@@ -2142,12 +2177,17 @@ export default function LivePage() {
         placeholder={
           live?.status !== 'live'
             ? 'Requests are closed'
+            : !requestsEnabled && !isHost
+              ? 'Host has not enabled requests'
             : viewerState.requests_blocked
               ? 'Host has blocked your requests'
               : 'Search song or chart'
         }
-        disabled={live?.status !== 'live' || viewerState.requests_blocked}
+        disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
       />
+      {!isHost && !requestsEnabled && live?.status === 'live' ? (
+        <p className="mt-2 text-[11px] text-gray-400">The host has not enabled song requests for this session.</p>
+      ) : null}
       {!isHost && viewerState.requests_blocked ? (
         <p className="mt-2 text-[11px] text-fuchsia-200">The host has disabled requests from your account for this session.</p>
       ) : null}
@@ -2158,7 +2198,7 @@ export default function LivePage() {
             type="button"
             key={`${chart.chart_id}-${chart.mode}-${chart.level}`}
             onClick={() => handleLiveRequest(chart)}
-            disabled={live?.status !== 'live' || viewerState.requests_blocked}
+            disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
             className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
           >
             <div className="flex items-center gap-3">
@@ -2269,6 +2309,90 @@ export default function LivePage() {
           );
         })}
         {requests.length === 0 ? <p className="text-sm text-gray-500">No requests yet.</p> : null}
+      </div>
+    </div>
+  );
+
+  const desktopInteractionsSection = hasPlayerPanels ? null : (
+    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Session Interactions</p>
+          <p className="text-sm font-display font-bold text-white">Requests and votes</p>
+        </div>
+        {isHost ? (
+          <button
+            type="button"
+            onClick={handleToggleRequestsEnabled}
+            disabled={savingRequestsEnabled || live?.status !== 'live'}
+            className={`rounded-full px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide ${
+              requestsEnabled
+                ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                : 'border border-piu-border bg-black/20 text-gray-400'
+            } disabled:opacity-60`}
+          >
+            {savingRequestsEnabled ? 'Saving...' : requestsEnabled ? 'Requests on' : 'Requests off'}
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (requestTabDisabled) return;
+            setDesktopInteractionTab('requests');
+          }}
+          disabled={requestTabDisabled}
+          className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
+            desktopInteractionTab === 'requests' && !requestTabDisabled
+              ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
+              : requestTabDisabled
+                ? 'border-piu-border/60 bg-black/10 text-gray-500'
+                : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
+          }`}
+        >
+          <p className="text-xs font-display font-bold uppercase tracking-wide">Requests</p>
+          <p className="mt-1 text-[11px]">
+            {requestTabDisabled ? 'Waiting for host' : `${requestCounts.open} open`}
+          </p>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (voteTabDisabled) return;
+            setDesktopInteractionTab('vote');
+          }}
+          disabled={voteTabDisabled}
+          className={`rounded-2xl border px-3 py-2 text-left transition-colors ${
+            desktopInteractionTab === 'vote' && !voteTabDisabled
+              ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
+              : voteTabDisabled
+                ? 'border-piu-border/60 bg-black/10 text-gray-500'
+                : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
+          }`}
+        >
+          <p className="text-xs font-display font-bold uppercase tracking-wide">Vote</p>
+          <p className="mt-1 text-[11px]">
+            {voteTabDisabled ? 'No active vote' : currentVote?.status === 'active' ? 'Live now' : 'Available'}
+          </p>
+        </button>
+      </div>
+      <div className="mt-4">
+        {desktopInteractionTab === 'vote'
+          ? (voteTabDisabled
+            ? (
+              <div className="rounded-2xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
+                The host has not started a vote yet.
+              </div>
+            )
+            : voteSection)
+          : (requestTabDisabled
+            ? (
+              <div className="rounded-2xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
+                The host has not enabled song requests yet.
+              </div>
+            )
+            : requestsSection)}
       </div>
     </div>
   );
@@ -2793,10 +2917,20 @@ export default function LivePage() {
               <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
                 Songs
               </button>
-              <button type="button" onClick={() => setMobilePanel('requests')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+              <button
+                type="button"
+                onClick={() => setMobilePanel('requests')}
+                disabled={!isHost && (!requestsEnabled || live?.status !== 'live')}
+                className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+              >
                 Requests
               </button>
-              <button type="button" onClick={() => setMobilePanel('vote')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+              <button
+                type="button"
+                onClick={() => setMobilePanel('vote')}
+                disabled={!isHost && !currentVote}
+                className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+              >
                 Vote
               </button>
               <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
@@ -2824,7 +2958,25 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      {youtubeId ? (
+      {useDesktopViewerLayout ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+          <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                className="absolute inset-0 h-full w-full"
+                src={`https://www.youtube-nocookie.com/embed/${youtubeId}`}
+                title="Shinsa Live stream"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                frameBorder="0"
+              />
+            </div>
+          </div>
+          <div className="min-h-[560px]">
+            {chatSection}
+          </div>
+        </div>
+      ) : youtubeId ? (
         <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
           <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
             <iframe
@@ -2839,7 +2991,7 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+      <div className={`grid gap-4 ${useDesktopViewerLayout ? 'xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]' : 'xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]'}`}>
         <div className="space-y-4">
           <NowPlayingPanel
             play={lastPlay}
@@ -2854,9 +3006,12 @@ export default function LivePage() {
 
         {hasPlayerPanels ? null : (
           <div className="space-y-4">
-            {voteSection}
-            {requestsSection}
-            {chatSection}
+            {useDesktopViewerLayout ? desktopInteractionsSection : (
+              <>
+                {desktopInteractionsSection}
+                {chatSection}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -2866,10 +3021,20 @@ export default function LivePage() {
           <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
             Songs
           </button>
-          <button type="button" onClick={() => setMobilePanel('requests')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+          <button
+            type="button"
+            onClick={() => setMobilePanel('requests')}
+            disabled={!isHost && (!requestsEnabled || live?.status !== 'live')}
+            className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+          >
             Requests
           </button>
-          <button type="button" onClick={() => setMobilePanel('vote')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+          <button
+            type="button"
+            onClick={() => setMobilePanel('vote')}
+            disabled={!isHost && !currentVote}
+            className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+          >
             Vote
           </button>
           <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">

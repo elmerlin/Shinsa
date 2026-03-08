@@ -1818,6 +1818,7 @@ function initializeDb() {
       host_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL DEFAULT '',
       stream_url TEXT DEFAULT '',
+      requests_enabled INTEGER NOT NULL DEFAULT 1,
       status TEXT NOT NULL DEFAULT 'live',
       recent_anchor_id INTEGER NOT NULL DEFAULT 0,
       last_recent_row_id INTEGER NOT NULL DEFAULT 0,
@@ -2410,6 +2411,11 @@ function initializeDb() {
     db.exec("ALTER TABLE user_list_items ADD COLUMN sort_order INTEGER DEFAULT 0");
     // Backfill sort_order based on existing id order
     db.exec("UPDATE user_list_items SET sort_order = id WHERE sort_order = 0");
+  }
+
+  const liveSessionCols = db.prepare("PRAGMA table_info(live_sessions)").all().map((c) => c.name);
+  if (!liveSessionCols.includes('requests_enabled')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN requests_enabled INTEGER NOT NULL DEFAULT 1");
   }
 
   const liveRequestCols = db.prepare("PRAGMA table_info(live_session_requests)").all().map((c) => c.name);
