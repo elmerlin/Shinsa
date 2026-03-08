@@ -572,7 +572,7 @@ function StreamUrlEditorCard({
   onSubmit,
 }) {
   return (
-    <div className="rounded-3xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_40%),linear-gradient(180deg,#0d1524,#09101b)] p-4">
+    <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_40%),linear-gradient(180deg,rgba(12,20,38,0.96),rgba(9,16,29,0.96))] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Stream Link</p>
@@ -2022,6 +2022,7 @@ export default function LivePage() {
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
   const desktopViewerColumns = 'xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]';
+  const showCompactStreamEditor = isHost && activeSessionId && hostWorkspaceTab === 'stream';
   const viewerNowCount = live?.viewer_count || 0;
   const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
   const requestTabDisabled = !isHost && (!requestsEnabled || live?.status !== 'live');
@@ -2787,6 +2788,17 @@ export default function LivePage() {
             </button>
             <button
               type="button"
+              onClick={() => setHostWorkspaceTab('stream')}
+              className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+                hostWorkspaceTab === 'stream'
+                  ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
+                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
+              }`}
+            >
+              Stream Link
+            </button>
+            <button
+              type="button"
               onClick={() => setHostWorkspaceTab('overlay')}
               className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
                 hostWorkspaceTab === 'overlay'
@@ -2797,7 +2809,7 @@ export default function LivePage() {
               Overlay Studio
             </button>
             <p className="self-center text-[11px] text-gray-400">
-              Use `Overlay Studio` for setup, then switch back to `Live Room`.
+              Use `Stream Link` to attach or replace the YouTube URL, and `Overlay Studio` only when setting up OBS.
             </p>
           </div>
         ) : null}
@@ -2852,6 +2864,16 @@ export default function LivePage() {
 
         {statusNote ? <p className="mt-3 text-sm text-cyan-200">{statusNote}</p> : null}
         {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
+        {showCompactStreamEditor ? (
+          <StreamUrlEditorCard
+            streamUrl={editStreamUrl}
+            saving={savingStreamUrl}
+            attached={!!String(live?.stream_url || '').trim()}
+            recognized={!!youtubeId}
+            onChange={setEditStreamUrl}
+            onSubmit={handleUpdateStreamUrl}
+          />
+        ) : null}
       </div>
 
       {!youtubeId && isHost ? (
@@ -2870,24 +2892,7 @@ export default function LivePage() {
               </div>
             </div>
           </div>
-          <StreamUrlEditorCard
-            streamUrl={editStreamUrl}
-            saving={savingStreamUrl}
-            attached={!!String(live?.stream_url || '').trim()}
-            recognized={!!youtubeId}
-            onChange={setEditStreamUrl}
-            onSubmit={handleUpdateStreamUrl}
-          />
         </div>
-      ) : isHost ? (
-        <StreamUrlEditorCard
-          streamUrl={editStreamUrl}
-          saving={savingStreamUrl}
-          attached={!!String(live?.stream_url || '').trim()}
-          recognized={!!youtubeId}
-          onChange={setEditStreamUrl}
-          onSubmit={handleUpdateStreamUrl}
-        />
       ) : null}
 
       {isHost && activeSessionId && hostWorkspaceTab === 'overlay' ? (
