@@ -2662,7 +2662,7 @@ export default function LivePage() {
 
   if (!live && !sessionId) {
     return (
-      <div className="space-y-5 px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-[1280px] space-y-5 px-4 py-6 sm:px-8 xl:px-10">
         {error ? <p className="mb-4 text-sm text-red-300">{error}</p> : null}
         <div className="grid gap-4 xl:grid-cols-[minmax(340px,0.85fr)_minmax(0,1.15fr)]">
           <CreateSessionCard
