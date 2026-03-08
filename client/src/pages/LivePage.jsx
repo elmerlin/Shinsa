@@ -812,6 +812,9 @@ function OverlayStudioCard({
               <li>3. Click `Copy browser source URL`, then paste it into an OBS `Browser Source`.</li>
               <li>4. Position and size it in OBS, then come back here only if you want to change the scene.</li>
             </ol>
+            <p className="mt-3 text-xs text-cyan-100/85">
+              Use `Transparent Rail` when you want chat or status cards to float over gameplay without a dark slab behind them.
+            </p>
           </div>
         </div>
 
@@ -963,6 +966,9 @@ function OverlayStudioCard({
                   }`}
                 >
                   <p className="text-sm font-display font-bold">{option.label}</p>
+                  {option.id === 'transparent' ? (
+                    <p className="mt-1 text-xs text-gray-400">Minimal chrome for browser sources that should sit directly over gameplay.</p>
+                  ) : null}
                 </button>
               ))}
             </div>

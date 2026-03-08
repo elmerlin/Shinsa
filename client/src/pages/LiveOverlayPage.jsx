@@ -163,10 +163,10 @@ function showBurstPayload(message) {
 function OverlayPanel({ theme, className = '', children, style = {} }) {
   return (
     <div
-      className={`rounded-[30px] border backdrop-blur-xl ${theme.chipClass} ${className}`.trim()}
+      className={`rounded-[30px] border ${theme.panelClass || 'backdrop-blur-xl'} ${theme.chipClass} ${className}`.trim()}
       style={{
         background: theme.surface,
-        boxShadow: `0 28px 70px ${theme.shadow}`,
+        boxShadow: theme.shadow ? `0 28px 70px ${theme.shadow}` : 'none',
         ...style,
       }}
     >
@@ -388,7 +388,7 @@ function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widge
         />
 
         {widgetSet.has('play') ? (
-          <div className="mt-4 rounded-[28px] border border-white/10 bg-black/18 p-4">
+          <div className={`mt-4 rounded-[28px] border p-4 ${theme.insetClass || theme.faintClass}`}>
             <div className="flex items-center gap-4">
               <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="md" />
               <div className="min-w-0 flex-1">
@@ -480,7 +480,7 @@ function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widget
         />
 
         {widgetSet.has('play') ? (
-          <div className="mt-4 rounded-[26px] border border-white/10 bg-black/18 p-4">
+          <div className={`mt-4 rounded-[26px] border p-4 ${theme.insetClass || theme.faintClass}`}>
             <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Play</p>
             <div className="mt-3 flex items-center gap-3">
               <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
@@ -754,7 +754,9 @@ export default function LiveOverlayPage() {
         </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-40 bg-gradient-to-t from-black/18 to-transparent" />
+      {!theme.hideFooterGradient ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-40 bg-gradient-to-t from-black/18 to-transparent" />
+      ) : null}
 
       {guidesEnabled ? (
         <div className="pointer-events-none absolute right-5 top-5 z-20">
