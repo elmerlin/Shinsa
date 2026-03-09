@@ -370,22 +370,78 @@ function MessageBody({ message, tone, isSystem, compact = false }) {
   );
 }
 
-function flattenSongResults(payload) {
+function normalizeSongResults(payload) {
   const songs = Array.isArray(payload?.songs) ? payload.songs : [];
-  const charts = [];
+  const grouped = [];
+  let totalCharts = 0;
   for (const song of songs) {
-    for (const chart of Array.isArray(song?.charts) ? song.charts : []) {
-      charts.push({
-        chart_id: chart.chart_id,
-        song_title: song.title || chart.title || '',
-        mode: chart.mode || '',
-        level: parseInt(chart.level, 10) || 0,
-        jacket_url: chart.jacket_url || song.jacket_url || '',
-      });
-      if (charts.length >= 24) return charts;
-    }
+    const charts = (Array.isArray(song?.charts) ? song.charts : []).map((chart) => ({
+      ...chart,
+      song_title: song.title || chart.song_title || chart.title || '',
+      jacket_url: chart.jacket_url || song.jacket_url || '',
+    }));
+    if (charts.length === 0) continue;
+    grouped.push({
+      song_group_key: song.song_group_key || song.song_key || song.title || `song-${grouped.length}`,
+      title: song.title || charts[0]?.song_title || 'Unknown song',
+      artist: song.artist || '',
+      jacket_url: song.jacket_url || charts[0]?.jacket_url || '',
+      charts,
+    });
+    totalCharts += charts.length;
+    if (grouped.length >= 10 || totalCharts >= 30) break;
   }
-  return charts;
+  return grouped;
+}
+
+function getRequestChartTone(mode) {
+  if (mode === 'Single') {
+    return 'border-rose-200/40 bg-gradient-to-b from-[#ff8a9d] via-[#f43f5e] to-[#8b1231] text-white shadow-[0_8px_20px_rgba(244,63,94,0.28)]';
+  }
+  if (mode === 'Double') {
+    return 'border-emerald-200/40 bg-gradient-to-b from-[#7df2bf] via-[#10b981] to-[#065f46] text-white shadow-[0_8px_20px_rgba(16,185,129,0.24)]';
+  }
+  return 'border-sky-200/40 bg-gradient-to-b from-[#7dd3fc] via-[#0ea5e9] to-[#075985] text-white shadow-[0_8px_20px_rgba(14,165,233,0.24)]';
+}
+
+function SongRequestSearchResult({ song, disabled, onSelectChart }) {
+  return (
+    <div className="rounded-xl border border-piu-border/60 bg-black/15 p-3">
+      <div className="flex gap-3">
+        {song.jacket_url ? (
+          <img
+            src={song.jacket_url}
+            alt={song.title}
+            className="h-14 w-24 rounded border border-piu-border/40 object-cover sm:h-16 sm:w-28"
+          />
+        ) : (
+          <div className="flex h-14 w-24 items-center justify-center rounded border border-piu-border/40 bg-piu-dark text-[10px] text-gray-500 sm:h-16 sm:w-28">
+            No image
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-display font-bold text-white sm:text-base">{song.title}</p>
+          <p className="truncate text-[11px] text-gray-400">{song.artist || 'Unknown artist'}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {song.charts.map((chart) => (
+          <button
+            type="button"
+            key={`${song.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`}
+            onClick={() => onSelectChart(chart)}
+            disabled={disabled}
+            className={`inline-flex min-h-[44px] min-w-[52px] items-center justify-center gap-1 rounded-2xl border px-3 py-2 font-display transition-transform hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-50 ${getRequestChartTone(chart.mode)}`}
+            title={`Request ${song.title} (${modeShort(chart.mode)}${chart.level})`}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wide">{modeShort(chart.mode)}</span>
+            <span className="text-sm font-black leading-none">{chart.level}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function makePresenceId() {
@@ -1951,7 +2007,7 @@ export default function LivePage() {
     getSongLibrary({ search: deferredSongSearch.trim() })
       .then((data) => {
         if (cancelled) return;
-        startTransition(() => setSongResults(flattenSongResults(data)));
+        startTransition(() => setSongResults(normalizeSongResults(data)));
       })
       .catch(() => {
         if (!cancelled) setSongResults([]);
@@ -2609,7 +2665,7 @@ export default function LivePage() {
               ? 'Host has not enabled requests'
             : viewerState.requests_blocked
               ? 'Host has blocked your requests'
-              : 'Search song or chart'
+              : 'Search songs to request'
         }
         disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
       />
@@ -2621,23 +2677,19 @@ export default function LivePage() {
       ) : null}
       {searchingSongs ? <p className="text-[11px] text-gray-500 mt-2">Searching...</p> : null}
       <div className="space-y-2 mt-3">
-        {songResults.map((chart) => (
-          <button
-            type="button"
-            key={`${chart.chart_id}-${chart.mode}-${chart.level}`}
-            onClick={() => handleLiveRequest(chart)}
+        {songResults.map((song) => (
+          <SongRequestSearchResult
+            key={song.song_group_key}
+            song={song}
             disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
-            className="w-full rounded-xl border border-piu-border bg-black/15 px-3 py-2 text-left hover:border-cyan-400/40 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <PiuChartJacket title={chart.song_title} mode={chart.mode} level={chart.level} jacketUrl={chart.jacket_url} size="sm" />
-              <div className="min-w-0">
-                <p className="text-sm font-display font-bold text-white truncate">{chart.song_title}</p>
-                <p className="text-[11px] text-gray-400">{modeShort(chart.mode)}{chart.level}</p>
-              </div>
-            </div>
-          </button>
+            onSelectChart={handleLiveRequest}
+          />
         ))}
+        {!searchingSongs && deferredSongSearch.trim().length >= 2 && songResults.length === 0 ? (
+          <p className="rounded-xl border border-piu-border/60 bg-black/10 px-3 py-4 text-center text-sm text-gray-500">
+            No songs matched that request search.
+          </p>
+        ) : null}
       </div>
       <div className="space-y-2 mt-4">
         {requests.slice(0, 10).map((request) => {
