@@ -394,19 +394,19 @@ function normalizeSongResults(payload) {
   return grouped;
 }
 
-function getRequestChartTone(mode) {
+function getRequestChartBadgeTone(mode) {
   if (mode === 'Single') {
-    return 'border-rose-200/40 bg-gradient-to-b from-[#ff8a9d] via-[#f43f5e] to-[#8b1231] text-white shadow-[0_8px_20px_rgba(244,63,94,0.28)]';
+    return 'from-red-500 to-red-700 border-red-300/50';
   }
   if (mode === 'Double') {
-    return 'border-emerald-200/40 bg-gradient-to-b from-[#7df2bf] via-[#10b981] to-[#065f46] text-white shadow-[0_8px_20px_rgba(16,185,129,0.24)]';
+    return 'from-green-500 to-emerald-700 border-green-300/50';
   }
-  return 'border-sky-200/40 bg-gradient-to-b from-[#7dd3fc] via-[#0ea5e9] to-[#075985] text-white shadow-[0_8px_20px_rgba(14,165,233,0.24)]';
+  return 'from-sky-500 to-blue-700 border-sky-300/50';
 }
 
 function SongRequestSearchResult({ song, disabled, onSelectChart }) {
   return (
-    <div className="rounded-xl border border-piu-border/60 bg-black/15 p-3">
+    <div className="rounded-xl border border-piu-border/50 bg-gradient-to-r from-[#112947] to-[#1b3554] p-3">
       <div className="flex gap-3">
         {song.jacket_url ? (
           <img
@@ -415,29 +415,32 @@ function SongRequestSearchResult({ song, disabled, onSelectChart }) {
             className="h-14 w-24 rounded border border-piu-border/40 object-cover sm:h-16 sm:w-28"
           />
         ) : (
-          <div className="flex h-14 w-24 items-center justify-center rounded border border-piu-border/40 bg-piu-dark text-[10px] text-gray-500 sm:h-16 sm:w-28">
+          <div className="flex h-14 w-24 items-center justify-center rounded border border-piu-border/40 bg-piu-dark text-xs text-gray-500 sm:h-16 sm:w-28">
             No image
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-display font-bold text-white sm:text-base">{song.title}</p>
-          <p className="truncate text-[11px] text-gray-400">{song.artist || 'Unknown artist'}</p>
+          <p className="truncate text-lg font-display font-bold leading-tight text-white">{song.title}</p>
+          <p className="truncate text-xs text-gray-400">{song.artist || 'Unknown artist'}</p>
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
         {song.charts.map((chart) => (
-          <button
-            type="button"
-            key={`${song.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`}
-            onClick={() => onSelectChart(chart)}
-            disabled={disabled}
-            className={`inline-flex min-h-[44px] min-w-[52px] items-center justify-center gap-1 rounded-2xl border px-3 py-2 font-display transition-transform hover:-translate-y-0.5 hover:brightness-110 disabled:translate-y-0 disabled:opacity-50 ${getRequestChartTone(chart.mode)}`}
-            title={`Request ${song.title} (${modeShort(chart.mode)}${chart.level})`}
-          >
-            <span className="text-[10px] font-bold uppercase tracking-wide">{modeShort(chart.mode)}</span>
-            <span className="text-sm font-black leading-none">{chart.level}</span>
-          </button>
+          <div key={`${song.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`} className="relative">
+            <button
+              type="button"
+              onClick={() => onSelectChart(chart)}
+              disabled={disabled}
+              className={`inline-flex h-[42px] min-w-[42px] items-center justify-center rounded-full border bg-gradient-to-b px-3 text-sm font-display font-black text-white shadow-md transition-all hover:brightness-110 disabled:opacity-50 ${getRequestChartBadgeTone(chart.mode)}`}
+              title={`Request ${song.title} (${modeShort(chart.mode)}${chart.level})`}
+            >
+              {chart.level}
+            </button>
+            <span className="absolute -bottom-1 -right-1 rounded-full border border-piu-border bg-piu-dark px-1 text-[9px] font-mono text-piu-accent">
+              {modeShort(chart.mode)}
+            </span>
+          </div>
         ))}
       </div>
     </div>
