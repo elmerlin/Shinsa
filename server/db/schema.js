@@ -2135,11 +2135,11 @@ function initializeDb() {
 
   db.prepare(`
     UPDATE venues
-    SET latitude = COALESCE(latitude, ?),
-        longitude = COALESCE(longitude, ?),
-        proximity_radius_m = COALESCE(proximity_radius_m, ?)
+    SET latitude = ?,
+        longitude = ?,
+        proximity_radius_m = ?
     WHERE slug = ?
-  `).run(51.510815, -0.269995, 180, 'london-pump-dojo');
+  `).run(51.53639, -0.31489, 180, 'london-pump-dojo');
 
   // Seed default venue and machines if empty
   const venueCount = db.prepare('SELECT COUNT(*) AS cnt FROM venues').get().cnt;
@@ -2148,7 +2148,7 @@ function initializeDb() {
     db.prepare(`
       INSERT INTO venues (id, name, slug, latitude, longitude, proximity_radius_m)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(venueId, 'London Pump Dojo', 'london-pump-dojo', 51.510815, -0.269995, 180);
+    `).run(venueId, 'London Pump Dojo', 'london-pump-dojo', 51.53639, -0.31489, 180);
     db.prepare("INSERT INTO venue_machines (id, venue_id, name, position, sort_order) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), venueId, 'London Pump Dojo 1', 'left', 0);
     db.prepare("INSERT INTO venue_machines (id, venue_id, name, position, sort_order) VALUES (?, ?, ?, ?, ?)").run(randomUUID(), venueId, 'London Pump Dojo 2', 'right', 1);
   }

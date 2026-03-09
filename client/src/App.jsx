@@ -61,9 +61,9 @@ const DOJO_GEO_TIMEOUT_MS = 10000;
 const DOJO_GEO_MAX_AGE_MS = 120000;
 const DOJO_GEOFENCE = {
   name: 'London Pump Dojo',
-  address: '59 Summerlands Avenue, London W3 6EW',
-  lat: 51.510815,
-  lng: -0.269995,
+  address: 'Unit 5, 2 Wadsworth Rd, Perivale, Greenford UB6 7JD',
+  lat: 51.53639,
+  lng: -0.31489,
   radiusMeters: 180,
   maxAccuracyMeters: 120,
 };
