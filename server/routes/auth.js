@@ -325,9 +325,11 @@ function toSqliteDateTime(date) {
 }
 
 function getRequestOrigin(req) {
+  const host = String(req.get('host') || '').trim();
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
-  const proto = forwardedProto || req.protocol || 'https';
-  return `${proto}://${req.get('host')}`;
+  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host);
+  const proto = forwardedProto || (!isLocalHost ? 'https' : (req.protocol || 'http'));
+  return `${proto}://${host}`;
 }
 
 function getRequestIp(req) {
