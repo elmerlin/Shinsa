@@ -348,14 +348,13 @@ export default function Dashboard() {
         </h1>
         <div className="grid grid-cols-4 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-2">
           <Link
-            to="/world-max"
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-700 border border-sky-200/30 text-white font-display font-bold text-[11px] sm:text-sm tracking-wide shadow-lg shadow-sky-900/30 hover:brightness-110 transition-all whitespace-nowrap min-h-[40px]"
+            to="/live"
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-700 border border-cyan-200/30 text-white font-display font-bold text-[11px] sm:text-sm tracking-wide shadow-lg shadow-cyan-900/30 hover:brightness-110 transition-all whitespace-nowrap min-h-[40px]"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            World Max
+            Live
           </Link>
           <Link
             to="/songs"
