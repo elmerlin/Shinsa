@@ -254,6 +254,23 @@ function formatRequestStateLabel(info) {
   return '';
 }
 
+function formatCompactRequestStateLabel(info) {
+  if (!info) return '';
+  if ((info.queuedCount || 0) > 0) {
+    return info.queuedCount === 1 ? 'Queued' : `${info.queuedCount} queued`;
+  }
+  if ((info.openCount || 0) > 0) {
+    return info.openCount === 1 ? 'Request' : `${info.openCount} requests`;
+  }
+  if ((info.playedCount || 0) > 0) {
+    return info.playedCount === 1 ? 'Request ✔' : `${info.playedCount} fulfilled`;
+  }
+  if ((info.skippedCount || 0) > 0) {
+    return info.skippedCount === 1 ? 'Skipped' : `${info.skippedCount} skipped`;
+  }
+  return '';
+}
+
 function getMessageTone(message) {
   if (!message?.is_system && message?.message_type !== 'request') {
     return {
@@ -1009,18 +1026,22 @@ function DirectorySection({ title, subtitle, sessions }) {
   );
 }
 
-function MobilePanelSheet({ open, title, subtitle = '', onClose, children }) {
+function MobilePanelSheet({ open, title, subtitle = '', onClose, children, allowDesktop = false }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[95] lg:hidden">
+    <div className={`fixed inset-0 z-[95] ${allowDesktop ? '' : 'lg:hidden'}`}>
       <button
         type="button"
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
         aria-label="Close panel"
       />
-      <div className="absolute inset-x-0 bottom-0 max-h-[86vh] overflow-hidden rounded-t-[32px] border border-piu-border bg-[linear-gradient(180deg,#0d1322,#09101b)] shadow-[0_-18px_50px_rgba(0,0,0,0.45)]">
+      <div className={`absolute overflow-hidden border border-piu-border bg-[linear-gradient(180deg,#0d1322,#09101b)] ${
+        allowDesktop
+          ? 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-[32px] shadow-[0_-18px_50px_rgba(0,0,0,0.45)] lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-[min(92vw,64rem)] lg:max-h-[86vh] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[32px] lg:shadow-[0_28px_80px_rgba(0,0,0,0.5)]'
+          : 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-[32px] shadow-[0_-18px_50px_rgba(0,0,0,0.45)]'
+      }`}>
         <div className="flex items-center justify-between gap-3 border-b border-piu-border/60 px-4 py-3">
           <div>
             <p className="text-[10px] font-display uppercase tracking-[0.24em] text-rose-300">{title}</p>
@@ -1074,6 +1095,18 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
 }
 
 function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
+  const requestStatus = requestInfo
+    ? (requestInfo.queuedCount > 0
+      ? 'queued'
+      : requestInfo.openCount > 0
+        ? 'open'
+        : requestInfo.playedCount > 0
+          ? 'played'
+          : 'skipped')
+    : '';
+  const requestPillClass = requestStatus ? getRequestStatusMeta(requestStatus).pill : '';
+  const requestLabel = compact ? formatCompactRequestStateLabel(requestInfo) : formatRequestStateLabel(requestInfo);
+
   return (
     <div className={`flex flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)] ${compact ? 'h-full min-h-0' : ''}`}>
       <div className="flex items-start justify-between gap-3">
@@ -1095,42 +1128,42 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
       {play ? (
         <div className={`${compact ? 'mt-2' : 'mt-4'} flex flex-1 flex-col`}>
           <p className={`truncate font-display font-black text-white ${compact ? 'text-base leading-tight' : 'text-lg'}`}>{play.song_title}</p>
-          <div className={`${compact ? 'mt-2 flex items-end gap-2.5' : 'mt-3 flex items-center gap-3'} flex-1`}>
+          <div className={`${compact ? 'mt-2 flex items-center gap-2.5' : 'mt-3 flex items-center gap-3'} flex-1`}>
             <button type="button" onClick={onOpen} className="shrink-0 text-left">
               <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size={compact ? 'sm' : 'md'} />
             </button>
             <div className="min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={onOpen}
-                className="flex items-baseline gap-2 text-left transition-colors hover:text-white"
-              >
-                <span className={`font-display font-black ${compact ? 'text-xl' : 'text-2xl'} ${getGradeColor(play.grade || '-', play.score || 0)}`}>
-                  {play.grade || '-'}
-                </span>
-                <span className={`${compact ? 'text-sm' : 'text-base'} font-display font-bold text-cyan-100/90`}>{formatNumber(play.score)}</span>
-              </button>
-              <div className={`${compact ? 'mt-1.5' : 'mt-3'} flex flex-wrap gap-2`}>
+              <div className={`flex ${compact ? 'flex-wrap items-center gap-1.5 sm:gap-2' : 'items-baseline gap-2'} min-w-0`}>
+                <button
+                  type="button"
+                  onClick={onOpen}
+                  className={`min-w-0 text-left transition-colors hover:text-white ${compact ? 'flex items-center gap-2' : 'flex items-baseline gap-2'}`}
+                >
+                  <span className={`font-display font-black ${compact ? 'text-xl leading-none' : 'text-2xl'} ${getGradeColor(play.grade || '-', play.score || 0)}`}>
+                    {play.grade || '-'}
+                  </span>
+                  <span className={`${compact ? 'text-sm leading-none' : 'text-base'} font-display font-bold text-cyan-100/90`}>{formatNumber(play.score)}</span>
+                </button>
+                {requestInfo ? (
+                  <span className={`shrink-0 whitespace-nowrap rounded-full font-display font-bold ${compact ? 'px-2.5 py-1 text-[10px]' : 'px-3 py-1 text-[11px]'} ${requestPillClass}`}>
+                    {requestLabel}
+                  </span>
+                ) : null}
+              </div>
+              <div className={`${compact ? 'mt-1.5 flex flex-wrap gap-1.5' : 'mt-3 flex flex-wrap gap-2'}`}>
                 {play.pumbility_gain > 0 ? (
-                  <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
+                  <span className={`rounded-full border border-emerald-400/30 bg-emerald-500/10 font-display font-bold text-emerald-200 ${compact ? 'px-2.5 py-0.5 text-[10px]' : 'px-3 py-1 text-[11px]'}`}>
                     +{play.pumbility_gain} pumbility
                   </span>
                 ) : null}
                 {play.over_top100_rank > 0 ? (
-                  <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-bold text-yellow-200">
+                  <span className={`rounded-full border border-yellow-400/30 bg-yellow-500/10 font-display font-bold text-yellow-200 ${compact ? 'px-2.5 py-0.5 text-[10px]' : 'px-3 py-1 text-[11px]'}`}>
                     OVER Top 100 #{play.over_top100_rank}
                   </span>
                 ) : null}
                 {play.session_result_type ? (
-                  <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300 capitalize">
+                  <span className={`rounded-full border border-piu-border bg-black/20 text-gray-300 capitalize ${compact ? 'px-2.5 py-0.5 text-[10px]' : 'px-3 py-1 text-[11px]'}`}>
                     {play.session_result_type}
-                  </span>
-                ) : null}
-                {requestInfo ? (
-                  <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${getRequestStatusMeta(
-                    requestInfo.queuedCount > 0 ? 'queued' : requestInfo.openCount > 0 ? 'open' : requestInfo.playedCount > 0 ? 'played' : 'skipped'
-                  ).pill}`}>
-                    {formatRequestStateLabel(requestInfo)}
                   </span>
                 ) : null}
               </div>
@@ -1474,7 +1507,6 @@ export default function LivePage() {
   const [mobileVideoDockHeight, setMobileVideoDockHeight] = useState(0);
   const [mobileVideoDockStyle, setMobileVideoDockStyle] = useState(null);
   const [mobilePanel, setMobilePanel] = useState('');
-  const [desktopInteractionTab, setDesktopInteractionTab] = useState('');
   const [hostWorkspaceTab, setHostWorkspaceTab] = useState('room');
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
@@ -3083,14 +3115,14 @@ export default function LivePage() {
           onClick={() => {
             if (isDesktopViewport) {
               if (requestTabDisabled) return;
-              setDesktopInteractionTab((prev) => (prev === 'requests' ? '' : 'requests'));
+              setMobilePanel((prev) => (prev === 'requests' ? '' : 'requests'));
             } else {
               setMobilePanel('requests');
             }
           }}
           disabled={isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled}
           className={`min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition-colors ${
-            (desktopInteractionTab === 'requests' || mobilePanel === 'requests') && !(isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
+            mobilePanel === 'requests' && !(isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
               ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
               : (isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
                 ? 'border-piu-border/60 bg-black/10 text-gray-500'
@@ -3107,14 +3139,14 @@ export default function LivePage() {
           onClick={() => {
             if (isDesktopViewport) {
               if (voteTabDisabled) return;
-              setDesktopInteractionTab((prev) => (prev === 'vote' ? '' : 'vote'));
+              setMobilePanel((prev) => (prev === 'vote' ? '' : 'vote'));
             } else {
               setMobilePanel('vote');
             }
           }}
           disabled={isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled}
           className={`min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition-colors ${
-            (desktopInteractionTab === 'vote' || mobilePanel === 'vote') && !(isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
+            mobilePanel === 'vote' && !(isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
               ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
               : (isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
                 ? 'border-piu-border/60 bg-black/10 text-gray-500'
@@ -3127,27 +3159,20 @@ export default function LivePage() {
           </p>
         </button>
       </div>
-      {isDesktopViewport && desktopInteractionTab ? (
-        <div className="mt-4">
-        {desktopInteractionTab === 'vote'
-          ? (voteTabDisabled
-            ? (
-              <div className="rounded-2xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
-                The host has not started a vote yet.
-              </div>
-            )
-            : voteSection)
-          : (requestTabDisabled
-            ? (
-              <div className="rounded-2xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
-                The host has not enabled song requests yet.
-              </div>
-            )
-            : requestsSection)}
-        </div>
-      ) : null}
     </div>
   );
+
+  const desktopTopCardsSection = isDesktopViewport && !hasPlayerPanels ? (
+    <div className="grid items-stretch gap-4 lg:grid-cols-2">
+      <NowPlayingPanel
+        play={lastPlay}
+        live={live}
+        requestInfo={nowPlayingRequestInfo}
+        onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+      />
+      {desktopInteractionsSection}
+    </div>
+  ) : null;
 
   const chatSection = (
     <div
@@ -3839,6 +3864,22 @@ export default function LivePage() {
             {chatSection}
             {songsSection}
           </div>
+        ) : isDesktopViewport && !hasPlayerPanels ? (
+          <div className="space-y-4">
+            {desktopTopCardsSection}
+            {useDesktopViewerLayout ? (
+              songsSection
+            ) : (
+              <div className={`grid items-start gap-5 ${desktopViewerColumns}`}>
+                <div className="space-y-4">
+                  {songsSection}
+                </div>
+                <div className="space-y-4">
+                  {chatSection}
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div className={`grid items-start gap-5 ${desktopViewerColumns}`}>
             <div className="space-y-4">
@@ -3908,6 +3949,7 @@ export default function LivePage() {
         title="Song Requests"
         subtitle="Viewer requests, queue management, and quick search."
         onClose={() => setMobilePanel('')}
+        allowDesktop
       >
         {requestsSection}
       </MobilePanelSheet>
@@ -3917,6 +3959,7 @@ export default function LivePage() {
         title="Vote Control"
         subtitle="Run the next-chart vote without leaving the player HUD."
         onClose={() => setMobilePanel('')}
+        allowDesktop
       >
         {voteSection}
       </MobilePanelSheet>
