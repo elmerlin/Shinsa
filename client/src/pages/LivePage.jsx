@@ -924,6 +924,65 @@ function VotePanel({ vote, canVote, onVote }) {
   );
 }
 
+function formatPinnedVoteSummary(vote) {
+  if (!vote) return '';
+
+  const optionCount = Array.isArray(vote?.options) ? vote.options.length : 0;
+  const winningOption = Array.isArray(vote?.options)
+    ? vote.options.find((option) => option?.is_winner) || null
+    : null;
+
+  if (vote.status === 'active') {
+    return `${optionCount} option${optionCount === 1 ? '' : 's'} live`;
+  }
+
+  if (winningOption) {
+    return `${formatPlayLabel(winningOption)} won`;
+  }
+
+  return optionCount > 0
+    ? `${optionCount} option${optionCount === 1 ? '' : 's'} locked`
+    : 'Vote locked';
+}
+
+function PinnedVoteCard({
+  vote,
+  canVote,
+  onVote,
+  collapsed,
+  onToggle,
+  label,
+}) {
+  if (!vote) return null;
+
+  return (
+    <div className="rounded-2xl border border-rose-400/25 bg-rose-500/8 p-2">
+      <div className="flex items-start justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-rose-200">
+            {label}
+          </p>
+          <p className="mt-1 text-[11px] text-rose-100/75">
+            {formatPinnedVoteSummary(vote)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="shrink-0 rounded-full border border-rose-300/30 bg-black/15 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100 transition-colors hover:bg-black/25"
+        >
+          {collapsed ? 'Expand' : 'Collapse'}
+        </button>
+      </div>
+      {!collapsed ? (
+        <div className="mt-2">
+          <VotePanel vote={vote} canVote={canVote} onVote={onVote} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStreamUrlChange, onSubmit }) {
   return (
     <div className="max-w-xl rounded-3xl border border-piu-border bg-[#0c1220] p-5 shadow-2xl">
@@ -1580,6 +1639,7 @@ export default function LivePage() {
   const [syncing, setSyncing] = useState(false);
   const [ending, setEnding] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [votePinCollapsed, setVotePinCollapsed] = useState(false);
   const [requestActionKey, setRequestActionKey] = useState('');
   const [moderationActionKey, setModerationActionKey] = useState('');
   const [deletingMessageId, setDeletingMessageId] = useState('');
@@ -1642,6 +1702,7 @@ export default function LivePage() {
   const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px`, minHeight: `${desktopMediaHeight}px` }
     : undefined;
+  const desktopChatFallbackHeight = 'clamp(24rem, calc(100dvh - 16rem), 46rem)';
   const overlayPreviewUrl = useMemo(() => {
     if (!activeSessionId || typeof window === 'undefined') return '';
     return buildLiveOverlayUrl(activeSessionId, {
@@ -2040,6 +2101,10 @@ export default function LivePage() {
       window.removeEventListener('resize', updateHeight);
     };
   }, [useDesktopViewerLayout, youtubeId]);
+
+  useEffect(() => {
+    setVotePinCollapsed(false);
+  }, [currentVote?.id, currentVote?.status]);
 
   useEffect(() => {
     if (!isHost || typeof window === 'undefined') return;
@@ -2925,12 +2990,14 @@ export default function LivePage() {
       ) : null}
 
       {currentVote ? (
-        <div className="rounded-2xl border border-rose-400/25 bg-rose-500/8 p-2">
-          <p className="px-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-rose-200">
-            {currentVote.status === 'active' ? 'Pinned Vote' : 'Last Vote'}
-          </p>
-          <VotePanel vote={currentVote} canVote={!isHost && live?.status === 'live'} onVote={handleCastVote} />
-        </div>
+        <PinnedVoteCard
+          vote={currentVote}
+          canVote={!isHost && live?.status === 'live'}
+          onVote={handleCastVote}
+          collapsed={votePinCollapsed}
+          onToggle={() => setVotePinCollapsed((prev) => !prev)}
+          label={currentVote.status === 'active' ? 'Pinned Vote' : 'Last Vote'}
+        />
       ) : null}
 
       {!hostCanCreateVote && !currentVote ? (
@@ -3294,7 +3361,7 @@ export default function LivePage() {
             ? 'min-h-0'
             : hasPlayerPanels
               ? 'min-h-[420px]'
-              : 'min-h-[520px]'
+              : 'min-h-0'
       }`}
       style={
         desktopMediaHeightStyle
@@ -3303,7 +3370,11 @@ export default function LivePage() {
             ? { maxHeight: isMobileChatSheet ? 'calc(100dvh - 8.5rem)' : 'min(68dvh, calc(100dvh - 10rem))' }
             : isMobileChatSheet
               ? { maxHeight: 'calc(100dvh - 8.5rem)' }
-            : undefined
+              : {
+                  height: desktopChatFallbackHeight,
+                  maxHeight: desktopChatFallbackHeight,
+                  minHeight: desktopChatFallbackHeight,
+                }
       }
     >
       {reactionBursts.map((burst) => (
@@ -3368,11 +3439,15 @@ export default function LivePage() {
       </div>
 
       {currentVote && !hasPlayerPanels ? (
-        <div className="mt-3 rounded-2xl border border-rose-400/25 bg-rose-500/8 p-2">
-          <p className="px-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-rose-200">
-            Pinned Vote
-          </p>
-          <VotePanel vote={currentVote} canVote={!isHost && live?.status === 'live'} onVote={handleCastVote} />
+        <div className="mt-3">
+          <PinnedVoteCard
+            vote={currentVote}
+            canVote={!isHost && live?.status === 'live'}
+            onVote={handleCastVote}
+            collapsed={votePinCollapsed}
+            onToggle={() => setVotePinCollapsed((prev) => !prev)}
+            label="Pinned Vote"
+          />
         </div>
       ) : null}
 
