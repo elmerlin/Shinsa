@@ -1128,47 +1128,93 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
       {play ? (
         <div className={`${compact ? 'mt-2' : 'mt-4'} flex flex-1 flex-col`}>
           <p className={`truncate font-display font-black text-white ${compact ? 'text-base leading-tight' : 'text-lg'}`}>{play.song_title}</p>
-          <div className={`${compact ? 'mt-2 flex items-center gap-2.5' : 'mt-3 flex items-center gap-3'} flex-1`}>
-            <button type="button" onClick={onOpen} className="shrink-0 text-left">
-              <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size={compact ? 'sm' : 'md'} />
-            </button>
-            <div className="min-w-0 flex-1">
-              <div className={`flex ${compact ? 'flex-wrap items-center gap-1.5 sm:gap-2' : 'items-baseline gap-2'} min-w-0`}>
-                <button
-                  type="button"
-                  onClick={onOpen}
-                  className={`min-w-0 text-left transition-colors hover:text-white ${compact ? 'flex items-center gap-2' : 'flex items-baseline gap-2'}`}
-                >
-                  <span className={`font-display font-black ${compact ? 'text-xl leading-none' : 'text-2xl'} ${getGradeColor(play.grade || '-', play.score || 0)}`}>
-                    {play.grade || '-'}
-                  </span>
-                  <span className={`${compact ? 'text-sm leading-none' : 'text-base'} font-display font-bold text-cyan-100/90`}>{formatNumber(play.score)}</span>
+          {compact ? (
+            <div className="mt-2 flex flex-1 flex-col">
+              <div className="flex items-start gap-2">
+                <button type="button" onClick={onOpen} className="shrink-0 text-left">
+                  <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="xs" />
                 </button>
-                {requestInfo ? (
-                  <span className={`shrink-0 whitespace-nowrap rounded-full font-display font-bold ${compact ? 'px-2.5 py-1 text-[10px]' : 'px-3 py-1 text-[11px]'} ${requestPillClass}`}>
-                    {requestLabel}
-                  </span>
-                ) : null}
+                <div className="min-w-0 flex flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                  <button
+                    type="button"
+                    onClick={onOpen}
+                    className="flex shrink-0 items-center gap-1.5 text-left transition-colors hover:text-white"
+                  >
+                    <span className={`font-display font-black text-xl leading-none ${getGradeColor(play.grade || '-', play.score || 0)}`}>
+                      {play.grade || '-'}
+                    </span>
+                    <span className="font-display text-sm font-bold leading-none text-cyan-100/90">
+                      {formatNumber(play.score)}
+                    </span>
+                  </button>
+                  {requestInfo ? (
+                    <span className={`min-w-0 shrink rounded-full px-2 py-0.5 text-[9px] font-display font-bold ${requestPillClass}`}>
+                      {requestLabel}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-              <div className={`${compact ? 'mt-1.5 flex flex-wrap gap-1.5' : 'mt-3 flex flex-wrap gap-2'}`}>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {play.pumbility_gain > 0 ? (
-                  <span className={`rounded-full border border-emerald-400/30 bg-emerald-500/10 font-display font-bold text-emerald-200 ${compact ? 'px-2.5 py-0.5 text-[10px]' : 'px-3 py-1 text-[11px]'}`}>
+                  <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-display font-bold text-emerald-200">
                     +{play.pumbility_gain} pumbility
                   </span>
                 ) : null}
                 {play.over_top100_rank > 0 ? (
-                  <span className={`rounded-full border border-yellow-400/30 bg-yellow-500/10 font-display font-bold text-yellow-200 ${compact ? 'px-2.5 py-0.5 text-[10px]' : 'px-3 py-1 text-[11px]'}`}>
+                  <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-0.5 text-[10px] font-display font-bold text-yellow-200">
                     OVER Top 100 #{play.over_top100_rank}
                   </span>
                 ) : null}
                 {play.session_result_type ? (
-                  <span className={`rounded-full border border-piu-border bg-black/20 text-gray-300 capitalize ${compact ? 'px-2.5 py-0.5 text-[10px]' : 'px-3 py-1 text-[11px]'}`}>
+                  <span className="rounded-full border border-piu-border bg-black/20 px-2.5 py-0.5 text-[10px] text-gray-300 capitalize">
                     {play.session_result_type}
                   </span>
                 ) : null}
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="mt-3 flex flex-1 items-center gap-3">
+              <button type="button" onClick={onOpen} className="shrink-0 text-left">
+                <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <button
+                    type="button"
+                    onClick={onOpen}
+                    className="flex min-w-0 items-baseline gap-2 text-left transition-colors hover:text-white"
+                  >
+                    <span className={`font-display font-black text-2xl ${getGradeColor(play.grade || '-', play.score || 0)}`}>
+                      {play.grade || '-'}
+                    </span>
+                    <span className="text-base font-display font-bold text-cyan-100/90">{formatNumber(play.score)}</span>
+                  </button>
+                  {requestInfo ? (
+                    <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-display font-bold ${requestPillClass}`}>
+                      {requestLabel}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {play.pumbility_gain > 0 ? (
+                    <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
+                      +{play.pumbility_gain} pumbility
+                    </span>
+                  ) : null}
+                  {play.over_top100_rank > 0 ? (
+                    <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-bold text-yellow-200">
+                      OVER Top 100 #{play.over_top100_rank}
+                    </span>
+                  ) : null}
+                  {play.session_result_type ? (
+                    <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300 capitalize">
+                      {play.session_result_type}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
           {play.machine_name ? (
             <p className={`mt-auto text-right text-gray-400 ${compact ? 'pt-1 text-[10px]' : 'pt-2 text-sm'}`}>at {play.machine_name}</p>
           ) : null}
