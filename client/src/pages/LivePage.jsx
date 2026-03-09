@@ -495,15 +495,15 @@ function buildStructuredSongMessage(entry, lookups = {}) {
   };
 }
 
-function StructuredSongMessageBody({ structured, tone, compact = false }) {
+function StructuredSongMessageBody({ structured, tone, compact = false, dense = false }) {
   const showResult = structured.messageType === 'play' && (structured.displayGrade || structured.score > 0);
   const gradeClass = structured.displayGrade
     ? `${getGradeColor(structured.displayGrade, structured.score)} ${structured.parsedGrade.isBroken ? 'grade-broken' : ''}`.trim()
     : '';
-  const rowGapClass = compact ? 'mt-1 gap-2' : 'mt-1.5 gap-2.5';
-  const textSizeClass = compact ? 'text-[12px]' : 'text-sm';
-  const metaTextSizeClass = compact ? 'text-[11px]' : 'text-xs';
-  const pillSizeClass = compact ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]';
+  const rowGapClass = compact ? 'mt-1 gap-2' : dense ? 'mt-1 gap-2' : 'mt-1.5 gap-2.5';
+  const textSizeClass = compact ? 'text-[12px]' : dense ? 'text-[13px]' : 'text-sm';
+  const metaTextSizeClass = compact ? 'text-[11px]' : dense ? 'text-[10px]' : 'text-xs';
+  const pillSizeClass = compact ? 'px-1.5 py-0.5 text-[9px]' : dense ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]';
 
   return (
     <div className={`${rowGapClass} flex min-w-0 items-center`}>
@@ -512,7 +512,7 @@ function StructuredSongMessageBody({ structured, tone, compact = false }) {
         mode={structured.mode}
         level={structured.level}
         jacketUrl={structured.jacketUrl}
-        size={compact ? 'xs' : 'sm'}
+        size={compact ? 'xs' : dense ? 'xs' : 'sm'}
       />
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden">
         <p className={`${textSizeClass} min-w-0 shrink truncate font-display font-bold text-white`}>
@@ -520,7 +520,7 @@ function StructuredSongMessageBody({ structured, tone, compact = false }) {
         </p>
         {showResult && structured.displayGrade ? (
           <span
-            className={`${compact ? 'text-[13px]' : 'text-[15px]'} shrink-0 font-display font-black leading-none ${gradeClass}`}
+            className={`${compact ? 'text-[13px]' : dense ? 'text-[14px]' : 'text-[15px]'} shrink-0 font-display font-black leading-none ${gradeClass}`}
             data-grade={structured.displayGrade}
           >
             {structured.displayGrade}
@@ -549,32 +549,33 @@ function StructuredSongMessageBody({ structured, tone, compact = false }) {
   );
 }
 
-function MessageBody({ entry, tone, compact = false }) {
+function MessageBody({ entry, tone, compact = false, dense = false }) {
   const message = entry?.message || '';
   const isSystem = !!entry?.is_system;
   const reaction = !isSystem ? getLiveReactionPayload(message) : null;
   if (entry?.structured) {
-    return <StructuredSongMessageBody structured={entry.structured} tone={tone} compact={compact} />;
+    return <StructuredSongMessageBody structured={entry.structured} tone={tone} compact={compact} dense={dense} />;
   }
   if (reaction?.kind === 'emoji') {
-    return <p className="mt-1 max-w-full overflow-hidden text-2xl leading-none">{reaction.emoji}</p>;
+    return <p className={`${compact || dense ? 'mt-0.5 text-xl' : 'mt-1 text-2xl'} max-w-full overflow-hidden leading-none`}>{reaction.emoji}</p>;
   }
   if (reaction?.kind === 'emote') {
     return (
-      <div className="mt-2 max-w-full overflow-hidden">
+      <div className={`${compact || dense ? 'mt-1.5' : 'mt-2'} max-w-full overflow-hidden`}>
         <LiveEmote emote={reaction.emote} size="reaction" />
       </div>
     );
   }
 
   const segments = tokenizeLiveMessage(message);
-  const textSizeClass = compact ? 'text-[12px]' : 'text-sm';
+  const textSizeClass = compact ? 'text-[12px]' : dense ? 'text-[13px]' : 'text-sm';
+  const marginTopClass = compact || dense ? 'mt-0.5' : 'mt-1';
   if (segments.length === 0) {
-    return <p className={`mt-1 w-full max-w-full overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>{message}</p>;
+    return <p className={`${marginTopClass} w-full max-w-full overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>{message}</p>;
   }
 
   return (
-    <p className={`mt-1 flex w-full max-w-full min-w-0 flex-wrap items-center gap-1.5 overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>
+    <p className={`${marginTopClass} flex w-full max-w-full min-w-0 flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'} overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>
       {segments.map((segment, idx) => (
         segment.type === 'emote'
           ? <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
@@ -1118,11 +1119,11 @@ function MobilePanelSheet({ open, title, subtitle = '', onClose, children, allow
   );
 }
 
-function UserIdentity({ avatar, username, skillTitle, isHost, className = '', compact = false }) {
+function UserIdentity({ avatar, username, skillTitle, isHost, className = '', compact = false, dense = false }) {
   return (
-    <div className={`flex min-w-0 items-center gap-2 ${className}`.trim()}>
+    <div className={`flex min-w-0 items-center ${compact || dense ? 'gap-1.5' : 'gap-2'} ${className}`.trim()}>
       <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark font-display font-bold text-white ${
-        compact ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
+        compact ? 'h-7 w-7 text-[10px]' : dense ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
       }`}>
         {avatar ? (
           <img src={avatar} alt={username || 'User'} className="h-full w-full object-cover" />
@@ -1131,18 +1132,18 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
         )}
       </div>
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <p className={`truncate font-display font-bold text-white ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
+        <div className={`flex flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'}`}>
+          <p className={`truncate font-display font-bold text-white ${compact ? 'text-[10px]' : dense ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
           {isHost ? (
             <span className={`rounded-full border border-rose-400/30 bg-rose-500/10 font-display font-bold uppercase tracking-wide text-rose-200 ${
-              compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
+              compact ? 'px-1.5 py-0.5 text-[8px]' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
             }`}>
               Host
             </span>
           ) : null}
           {skillTitle ? (
             <span className={`rounded-full border border-cyan-400/20 bg-cyan-500/10 font-display font-bold uppercase tracking-wide text-cyan-200 ${
-              compact ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
+              compact ? 'px-1.5 py-0.5 text-[8px]' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
             }`}>
               {skillTitle}
             </span>
@@ -2103,7 +2104,7 @@ export default function LivePage() {
   }, [useDesktopViewerLayout, youtubeId]);
 
   useEffect(() => {
-    setVotePinCollapsed(false);
+    setVotePinCollapsed(!!currentVote && currentVote.status !== 'active');
   }, [currentVote?.id, currentVote?.status]);
 
   useEffect(() => {
@@ -3452,7 +3453,7 @@ export default function LivePage() {
       ) : null}
 
       {showEmoteTray && live?.status === 'live' ? (
-        <div className="mt-3 rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(244,114,182,0.14),transparent_38%),linear-gradient(180deg,#111827,#0b1220)] p-3">
+        <div className="mt-3 min-h-0 overflow-hidden rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(244,114,182,0.14),transparent_38%),linear-gradient(180deg,#111827,#0b1220)] p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-display uppercase tracking-[0.24em] text-fuchsia-200">Emotes and Stickers</p>
@@ -3463,7 +3464,7 @@ export default function LivePage() {
             </button>
           </div>
 
-          <div className="mt-3 max-h-[52vh] overflow-y-auto overscroll-contain pr-1 sm:max-h-none sm:overflow-visible sm:pr-0">
+          <div className="mt-3 max-h-[52vh] overflow-y-auto overscroll-contain pr-1 lg:max-h-64 xl:max-h-72">
             {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
               <div key={group.label} className="mt-3 first:mt-0">
                 <div className="px-1">
@@ -3510,22 +3511,22 @@ export default function LivePage() {
 
       <div
         ref={chatScrollRef}
-        className="mt-3 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1"
+        className={`mt-3 min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 ${isDesktopViewport ? 'space-y-1.5' : 'space-y-2'}`}
         style={{ scrollbarGutter: 'stable' }}
       >
         {chatMessages.map((msg) => {
           const tone = getMessageTone(msg);
           return (
-            <div key={msg.id} className={`overflow-hidden ${isMobileChatLayout ? 'rounded-lg px-2.5 py-2' : 'rounded-xl px-3 py-2'} ${tone.wrapper}`}>
+            <div key={msg.id} className={`overflow-hidden ${isMobileChatLayout ? 'rounded-lg px-2.5 py-2' : isDesktopViewport ? 'rounded-lg px-2.5 py-1.5' : 'rounded-xl px-3 py-2'} ${tone.wrapper}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                   {tone.label ? (
-                    <span className={`shrink-0 rounded-full font-display font-bold uppercase tracking-wide ${tone.labelClass} ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                    <span className={`shrink-0 rounded-full font-display font-bold uppercase tracking-wide ${tone.labelClass} ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[9px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                       {tone.label}
                     </span>
                   ) : null}
                   {msg.is_system ? (
-                    <p className={`truncate ${isMobileChatLayout ? 'text-[10px]' : 'text-[11px]'} font-display font-bold ${tone.usernameClass}`}>
+                    <p className={`truncate ${isMobileChatLayout ? 'text-[10px]' : isDesktopViewport ? 'text-[10px]' : 'text-[11px]'} font-display font-bold ${tone.usernameClass}`}>
                       {msg.username || 'System'}
                     </p>
                   ) : (
@@ -3535,24 +3536,25 @@ export default function LivePage() {
                       skillTitle={msg.skill_title}
                       isHost={msg.is_host}
                       compact={isMobileChatLayout}
+                      dense={isDesktopViewport}
                     />
                   )}
                   {isHost && !msg.is_system && msg.chat_muted ? (
-                    <span className={`rounded-full border border-amber-400/30 bg-amber-500/10 font-display font-bold uppercase tracking-wide text-amber-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
+                    <span className={`rounded-full border border-amber-400/30 bg-amber-500/10 font-display font-bold uppercase tracking-wide text-amber-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
                       Muted
                     </span>
                   ) : null}
                   {isHost && !msg.is_system && msg.requests_blocked ? (
-                    <span className={`rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 font-display font-bold uppercase tracking-wide text-fuchsia-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
+                    <span className={`rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 font-display font-bold uppercase tracking-wide text-fuchsia-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
                       Requests off
                     </span>
                   ) : null}
                 </div>
-                <p className={`shrink-0 ${isMobileChatLayout ? 'text-[9px]' : 'text-[10px]'} text-gray-500`}>
+                <p className={`shrink-0 ${isMobileChatLayout ? 'text-[9px]' : isDesktopViewport ? 'text-[9px]' : 'text-[10px]'} text-gray-500`}>
                   {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </p>
               </div>
-              <MessageBody entry={msg} tone={tone} compact={isMobileChatLayout} />
+              <MessageBody entry={msg} tone={tone} compact={isMobileChatLayout} dense={isDesktopViewport} />
               {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
