@@ -483,9 +483,13 @@ function StructuredSongMessageBody({ structured, tone, compact = false }) {
   const gradeClass = structured.displayGrade
     ? `${getGradeColor(structured.displayGrade, structured.score)} ${structured.parsedGrade.isBroken ? 'grade-broken' : ''}`.trim()
     : '';
+  const rowGapClass = compact ? 'mt-1 gap-2' : 'mt-1.5 gap-2.5';
+  const textSizeClass = compact ? 'text-[12px]' : 'text-sm';
+  const metaTextSizeClass = compact ? 'text-[11px]' : 'text-xs';
+  const pillSizeClass = compact ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]';
 
   return (
-    <div className={`${compact ? 'mt-1.5 gap-2.5' : 'mt-2 gap-3'} flex min-w-0 items-start`}>
+    <div className={`${rowGapClass} flex min-w-0 items-center`}>
       <PiuChartJacket
         title={structured.songTitle}
         mode={structured.mode}
@@ -493,44 +497,36 @@ function StructuredSongMessageBody({ structured, tone, compact = false }) {
         jacketUrl={structured.jacketUrl}
         size={compact ? 'xs' : 'sm'}
       />
-      <div className="min-w-0 flex-1">
-        <p className={`${compact ? 'text-[12px]' : 'text-sm'} truncate font-display font-bold text-white`}>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden">
+        <p className={`${textSizeClass} min-w-0 shrink truncate font-display font-bold text-white`}>
           {structured.songTitle}
         </p>
-        {showResult ? (
-          <div className={`${compact ? 'mt-1 gap-x-2 gap-y-1' : 'mt-1.5 gap-x-2.5 gap-y-1.5'} flex flex-wrap items-baseline`}>
-            {structured.displayGrade ? (
-              <span
-                className={`${compact ? 'text-[13px]' : 'text-[15px]'} font-display font-black leading-none ${gradeClass}`}
-                data-grade={structured.displayGrade}
-              >
-                {structured.displayGrade}
-              </span>
-            ) : null}
-            {structured.score > 0 ? (
-              <span className={`${compact ? 'text-[11px]' : 'text-xs'} font-display font-bold text-cyan-100/90`}>
-                {formatNumber(structured.score)}
-              </span>
-            ) : null}
-          </div>
+        {showResult && structured.displayGrade ? (
+          <span
+            className={`${compact ? 'text-[13px]' : 'text-[15px]'} shrink-0 font-display font-black leading-none ${gradeClass}`}
+            data-grade={structured.displayGrade}
+          >
+            {structured.displayGrade}
+          </span>
+        ) : null}
+        {showResult && structured.score > 0 ? (
+          <span className={`${metaTextSizeClass} shrink-0 font-display font-bold text-cyan-100/90`}>
+            {formatNumber(structured.score)}
+          </span>
         ) : null}
         {structured.detail ? (
-          <p className={`${compact ? 'mt-1 text-[11px]' : 'mt-1.5 text-xs'} ${tone.bodyClass}`}>
+          <span className={`${metaTextSizeClass} min-w-0 shrink truncate ${tone.bodyClass}`}>
             {structured.detail}
-          </p>
+          </span>
         ) : null}
-        {structured.tags.length > 0 ? (
-          <div className={`${compact ? 'mt-1 gap-1' : 'mt-1.5 gap-1.5'} flex flex-wrap`}>
-            {structured.tags.map((tag) => (
-              <span
-                key={`${structured.songTitle}-${tag.label}`}
-                className={`${compact ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'} rounded-full border font-display font-bold ${tag.tone}`}
-              >
-                {tag.label}
-              </span>
-            ))}
-          </div>
-        ) : null}
+        {structured.tags.map((tag) => (
+          <span
+            key={`${structured.songTitle}-${tag.label}`}
+            className={`${pillSizeClass} shrink-0 rounded-full border font-display font-bold ${tag.tone}`}
+          >
+            {tag.label}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -1563,7 +1559,7 @@ export default function LivePage() {
   const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && !hasPlayerPanels && hostWorkspaceTab !== 'overlay';
   const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
   const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
-    ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px` }
+    ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px`, minHeight: `${desktopMediaHeight}px` }
     : undefined;
   const overlayPreviewUrl = useMemo(() => {
     if (!activeSessionId || typeof window === 'undefined') return '';
@@ -3155,7 +3151,7 @@ export default function LivePage() {
 
   const chatSection = (
     <div
-      className={`relative flex flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${
+      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${
         useDesktopViewerLayout
           ? 'h-full min-h-0'
           : isMobileChatLayout
@@ -3301,7 +3297,11 @@ export default function LivePage() {
         </div>
       ) : null}
 
-      <div ref={chatScrollRef} className={`mt-3 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1`}>
+      <div
+        ref={chatScrollRef}
+        className="mt-3 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1"
+        style={{ scrollbarGutter: 'stable' }}
+      >
         {chatMessages.map((msg) => {
           const tone = getMessageTone(msg);
           return (
@@ -3793,7 +3793,7 @@ export default function LivePage() {
               />
               </div>
             </div>
-            <div className="h-full min-h-0 overflow-hidden" style={desktopMediaHeightStyle}>
+            <div className="flex h-full min-h-0 overflow-hidden" style={desktopMediaHeightStyle}>
               {chatSection}
             </div>
           </div>
