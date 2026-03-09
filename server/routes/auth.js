@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const QRCode = require('qrcode');
 const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { addNotificationClient } = require('../lib/notificationHub');
@@ -13,6 +14,8 @@ const { evaluateAchievementSeries } = require('../lib/achievements');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
+const QR_LOGIN_CHALLENGE_TTL_MS = 2 * 60 * 1000;
+const QR_LOGIN_POLL_AFTER_MS = 2500;
 const MAX_ACTIVITY_ITEMS = 200;
 const ADMIN_USERNAMES = new Set(
   String(process.env.ADMIN_USERNAMES || 'elmer')
@@ -36,6 +39,15 @@ const GROUP_BADGE_UPLOAD = multer({
     cb(null, allowed.includes(file.mimetype));
   },
 });
+
+const AUTH_USER_SELECT = `
+  SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
+         date_of_birth, show_age, age, height_cm, weight_kg, description,
+         location_country, location_country_code, location_city, location_lat, location_lng,
+         playing_status, created_at
+  FROM users
+  WHERE id = ?
+`;
 
 function textSnippet(text, max = 90) {
   const compact = String(text || '').replace(/\s+/g, ' ').trim();
@@ -294,6 +306,86 @@ function toClientAuthUser(db, user, avatarSize = 96) {
   };
 }
 
+function signAuthToken(user, clientUser, expiresIn = TOKEN_EXPIRY) {
+  return jwt.sign(
+    { id: user.id, username: user.username, is_admin: !!clientUser?.is_admin },
+    JWT_SECRET,
+    { expiresIn }
+  );
+}
+
+function getAuthUserById(db, userId) {
+  if (!db || !userId) return null;
+  return db.prepare(AUTH_USER_SELECT).get(userId);
+}
+
+function toSqliteDateTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function getRequestOrigin(req) {
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  const proto = forwardedProto || req.protocol || 'https';
+  return `${proto}://${req.get('host')}`;
+}
+
+function getRequestIp(req) {
+  const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwardedFor || req.ip || req.socket?.remoteAddress || '';
+}
+
+function getBrowserLabel(userAgent) {
+  const ua = String(userAgent || '');
+  const browser = /Edg\//.test(ua)
+    ? 'Edge'
+    : /Chrome\//.test(ua)
+      ? 'Chrome'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Safari\//.test(ua) && !/Chrome\//.test(ua)
+          ? 'Safari'
+          : /SamsungBrowser\//.test(ua)
+            ? 'Samsung Internet'
+            : 'Browser';
+  const os = /Windows NT/.test(ua)
+    ? 'Windows'
+    : /Android/.test(ua)
+      ? 'Android'
+      : /iPhone|iPad|iPod/.test(ua)
+        ? 'iPhone'
+        : /Mac OS X/.test(ua)
+          ? 'Mac'
+          : /Linux/.test(ua)
+            ? 'Linux'
+            : '';
+  return os ? `${browser} on ${os}` : browser;
+}
+
+function cleanupExpiredQrLoginChallenges(db) {
+  if (!db) return;
+  db.prepare(`
+    UPDATE auth_qr_login_challenges
+    SET status = 'expired',
+        updated_at = datetime('now')
+    WHERE status IN ('pending', 'approved')
+      AND datetime(expires_at) <= datetime('now')
+  `).run();
+}
+
+function getQrLoginChallengeById(db, challengeId) {
+  if (!db || !challengeId) return null;
+  cleanupExpiredQrLoginChallenges(db);
+  return db.prepare(`
+    SELECT
+      c.*,
+      u.username AS approved_username
+    FROM auth_qr_login_challenges c
+    LEFT JOIN users u ON u.id = c.approved_user_id
+    WHERE c.id = ?
+  `).get(challengeId);
+}
+
 // Middleware to extract user from token (optional auth)
 function optionalAuth(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -382,7 +474,7 @@ router.post('/register', (req, res) => {
     FROM users WHERE id = ?
   `).get(id);
   const clientUser = toClientAuthUser(db, user, 96);
-  const token = jwt.sign({ id: user.id, username: user.username, is_admin: !!clientUser?.is_admin }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  const token = signAuthToken(user, clientUser);
 
   res.status(201).json({ user: clientUser, token });
 });
@@ -402,20 +494,205 @@ router.post('/login', (req, res) => {
   }
 
   const clientUser = toClientAuthUser(db, user, 96);
-  const token = jwt.sign({ id: user.id, username: user.username, is_admin: !!clientUser?.is_admin }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
+  const token = signAuthToken(user, clientUser);
   res.json({ user: clientUser, token });
+});
+
+// POST /api/auth/qr-login/challenges
+router.post('/qr-login/challenges', (req, res) => {
+  const db = getDb();
+  cleanupExpiredQrLoginChallenges(db);
+
+  const challengeId = uuidv4();
+  const claimToken = uuidv4();
+  const expiresAt = new Date(Date.now() + QR_LOGIN_CHALLENGE_TTL_MS);
+  const browserUserAgent = String(req.headers['user-agent'] || '').slice(0, 300);
+  const browserLabel = getBrowserLabel(browserUserAgent);
+  const browserIp = String(getRequestIp(req) || '').slice(0, 120);
+
+  db.prepare(`
+    INSERT INTO auth_qr_login_challenges (
+      id,
+      claim_token,
+      status,
+      browser_label,
+      browser_user_agent,
+      browser_ip,
+      expires_at
+    )
+    VALUES (?, ?, 'pending', ?, ?, ?, ?)
+  `).run(
+    challengeId,
+    claimToken,
+    browserLabel,
+    browserUserAgent,
+    browserIp,
+    toSqliteDateTime(expiresAt)
+  );
+
+  const approvePath = `/login/approve?challenge=${encodeURIComponent(challengeId)}`;
+  res.status(201).json({
+    challengeId,
+    claimToken,
+    expiresAt: expiresAt.toISOString(),
+    pollAfterMs: QR_LOGIN_POLL_AFTER_MS,
+    approveUrl: `${getRequestOrigin(req)}${approvePath}`,
+    qrImageUrl: `/api/auth/qr-login/challenges/${encodeURIComponent(challengeId)}/qr`,
+  });
+});
+
+// GET /api/auth/qr-login/challenges/:id
+router.get('/qr-login/challenges/:id', (req, res) => {
+  const db = getDb();
+  const challenge = getQrLoginChallengeById(db, req.params.id);
+  if (!challenge) return res.status(404).json({ error: 'QR login request not found' });
+
+  res.json({
+    challengeId: challenge.id,
+    status: challenge.status,
+    expiresAt: challenge.expires_at ? `${String(challenge.expires_at).replace(' ', 'T')}Z` : '',
+    browserLabel: challenge.browser_label || 'Shared browser',
+    approvedUsername: challenge.approved_username || '',
+  });
+});
+
+// GET /api/auth/qr-login/challenges/:id/qr
+router.get('/qr-login/challenges/:id/qr', async (req, res) => {
+  const db = getDb();
+  const challenge = getQrLoginChallengeById(db, req.params.id);
+  if (!challenge || challenge.status === 'consumed') {
+    return res.status(404).json({ error: 'QR login request not found' });
+  }
+
+  try {
+    const approveUrl = `${getRequestOrigin(req)}/login/approve?challenge=${encodeURIComponent(challenge.id)}`;
+    const svg = await QRCode.toString(approveUrl, {
+      type: 'svg',
+      margin: 1,
+      width: 320,
+      color: {
+        dark: '#06142b',
+        light: '#ffffff',
+      },
+    });
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(svg);
+  } catch (err) {
+    console.error('Failed to render QR login SVG:', err.message);
+    res.status(500).json({ error: 'Failed to render QR code' });
+  }
+});
+
+// POST /api/auth/qr-login/challenges/:id/approve
+router.post('/qr-login/challenges/:id/approve', requireAuth, (req, res) => {
+  const db = getDb();
+  const challenge = getQrLoginChallengeById(db, req.params.id);
+  if (!challenge) return res.status(404).json({ error: 'QR login request not found' });
+  if (challenge.status === 'expired') return res.status(410).json({ error: 'QR login request has expired' });
+  if (challenge.status === 'consumed') return res.status(409).json({ error: 'QR login request has already been used' });
+  if (challenge.status === 'approved') {
+    return res.json({
+      success: true,
+      status: 'approved',
+      approvedUsername: challenge.approved_username || req.user.username || '',
+    });
+  }
+
+  db.prepare(`
+    UPDATE auth_qr_login_challenges
+    SET status = 'approved',
+        approved_user_id = ?,
+        approved_at = datetime('now'),
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(req.user.id, challenge.id);
+
+  res.json({
+    success: true,
+    status: 'approved',
+    approvedUsername: req.user.username || '',
+  });
+});
+
+// GET /api/auth/qr-login/challenges/:id/poll
+router.get('/qr-login/challenges/:id/poll', (req, res) => {
+  const db = getDb();
+  const claimToken = String(req.headers['x-qr-claim-token'] || '').trim();
+  if (!claimToken) return res.status(400).json({ error: 'Missing QR login claim token' });
+
+  const challenge = getQrLoginChallengeById(db, req.params.id);
+  if (!challenge) return res.status(404).json({ error: 'QR login request not found' });
+  if (challenge.claim_token !== claimToken) return res.status(403).json({ error: 'Invalid QR login claim token' });
+
+  if (challenge.status === 'expired') {
+    return res.status(410).json({
+      status: 'expired',
+      error: 'QR login request has expired',
+    });
+  }
+
+  if (challenge.status === 'pending') {
+    return res.json({
+      status: 'pending',
+      pollAfterMs: QR_LOGIN_POLL_AFTER_MS,
+      expiresAt: challenge.expires_at ? `${String(challenge.expires_at).replace(' ', 'T')}Z` : '',
+    });
+  }
+
+  if (challenge.status === 'consumed') {
+    return res.json({ status: 'consumed' });
+  }
+
+  if (challenge.status !== 'approved' || !challenge.approved_user_id) {
+    return res.json({ status: challenge.status || 'pending' });
+  }
+
+  const issueApprovedLogin = db.transaction((challengeId, approvedUserId) => {
+    const freshChallenge = getQrLoginChallengeById(db, challengeId);
+    if (!freshChallenge || freshChallenge.status !== 'approved' || !freshChallenge.approved_user_id) {
+      return { state: freshChallenge?.status || 'pending' };
+    }
+
+    db.prepare(`
+      UPDATE auth_qr_login_challenges
+      SET status = 'consumed',
+          consumed_at = datetime('now'),
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(challengeId);
+
+    const approvedUser = getAuthUserById(db, approvedUserId);
+    if (!approvedUser) {
+      return { state: 'missing-user' };
+    }
+    const clientUser = toClientAuthUser(db, approvedUser, 96);
+    return {
+      state: 'approved',
+      user: clientUser,
+      token: signAuthToken(approvedUser, clientUser),
+    };
+  });
+
+  const payload = issueApprovedLogin(challenge.id, challenge.approved_user_id);
+  if (payload.state === 'missing-user') {
+    return res.status(404).json({ error: 'Approved user no longer exists' });
+  }
+  if (payload.state !== 'approved') {
+    return res.json({ status: payload.state || 'pending' });
+  }
+
+  return res.json({
+    status: 'approved',
+    user: payload.user,
+    token: payload.token,
+  });
 });
 
 // GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
-  const user = db.prepare(`
-    SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
-           date_of_birth, show_age, age, height_cm, weight_kg, description,
-           location_country, location_country_code, location_city, location_lat, location_lng,
-           playing_status, created_at
-    FROM users WHERE id = ?
-  `).get(req.user.id);
+  const user = getAuthUserById(db, req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json(toClientAuthUser(db, user, 96));
 });

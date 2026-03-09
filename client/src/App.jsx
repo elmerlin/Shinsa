@@ -16,6 +16,7 @@ import DuelSetup from './pages/DuelSetup';
 import DuelView from './pages/DuelView';
 import AdminPanel from './pages/AdminPanel';
 import LoginPage from './pages/LoginPage';
+import QrLoginApprovePage from './pages/QrLoginApprovePage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import MyAccountPage from './pages/MyAccountPage';
@@ -1275,6 +1276,7 @@ export default function App() {
           <Route path="/duel/:id" element={<DuelView />} />
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/login/approve" element={<QrLoginApprovePage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/:username" element={<ProfilePage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />

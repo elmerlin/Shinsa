@@ -1182,6 +1182,21 @@ function initializeDb() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS auth_qr_login_challenges (
+      id TEXT PRIMARY KEY,
+      claim_token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      approved_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      browser_label TEXT DEFAULT '',
+      browser_user_agent TEXT DEFAULT '',
+      browser_ip TEXT DEFAULT '',
+      approved_at TEXT DEFAULT '',
+      consumed_at TEXT DEFAULT '',
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS user_follows (
       follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       following_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1274,6 +1289,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_activity_notif_target ON user_activity_notification_subscriptions(target_user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON user_push_subscriptions(user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON user_push_subscriptions(endpoint);
+    CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_status ON auth_qr_login_challenges(status, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_approved_user ON auth_qr_login_challenges(approved_user_id, created_at);
 
     CREATE TABLE IF NOT EXISTS user_lists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

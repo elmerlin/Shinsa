@@ -191,6 +191,25 @@ export const endDuel = (id) => request(`/duels/${id}/end`, { method: 'POST' });
 // Auth
 export const register = (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) });
 export const login = (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) });
+export const createQrLoginChallenge = () => request('/auth/qr-login/challenges', { method: 'POST' });
+export const getQrLoginChallenge = (challengeId) => request(`/auth/qr-login/challenges/${encodeURIComponent(challengeId)}`, {
+  cache: 'no-store',
+  headers: { 'Cache-Control': 'no-cache' },
+});
+export const approveQrLoginChallenge = (challengeId) => request(`/auth/qr-login/challenges/${encodeURIComponent(challengeId)}/approve`, {
+  method: 'POST',
+});
+export const pollQrLoginChallenge = (challengeId, claimToken) => request(
+  `/auth/qr-login/challenges/${encodeURIComponent(challengeId)}/poll`,
+  {
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache',
+      'X-QR-Claim-Token': claimToken,
+    },
+  }
+);
+export const getQrLoginChallengeQrUrl = (challengeId) => `${API_BASE}/auth/qr-login/challenges/${encodeURIComponent(challengeId)}/qr`;
 export const getMe = () => request('/auth/me');
 export const updateMe = (data) => request('/auth/me', { method: 'PUT', body: JSON.stringify(data) });
 export const changePassword = (data) => request('/auth/password', { method: 'PUT', body: JSON.stringify(data) });
