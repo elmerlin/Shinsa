@@ -1584,6 +1584,9 @@ export default function LivePage() {
   const [moderationActionKey, setModerationActionKey] = useState('');
   const [deletingMessageId, setDeletingMessageId] = useState('');
   const [streamState, setStreamState] = useState('idle');
+  const [isDocumentVisible, setIsDocumentVisible] = useState(() => (
+    typeof document === 'undefined' ? true : document.visibilityState === 'visible'
+  ));
   const [copied, setCopied] = useState(false);
   const [overlayPreset, setOverlayPreset] = useState('compact');
   const [overlayTheme, setOverlayTheme] = useState('arena');
@@ -1833,6 +1836,34 @@ export default function LivePage() {
     });
   };
 
+  const applySessionUpdate = (sessionPayload) => {
+    if (!sessionPayload) return;
+    startTransition(() => {
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          session: sessionPayload,
+        };
+      });
+    });
+  };
+
+  const applyPlaysPayload = (payload = {}) => {
+    startTransition(() => {
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          session: payload?.session || prev.session,
+          plays: Array.isArray(payload?.plays) ? payload.plays : prev.plays,
+          last_play: Object.prototype.hasOwnProperty.call(payload, 'last_play') ? payload.last_play : prev.last_play,
+          summary: payload?.summary || prev.summary,
+        };
+      });
+    });
+  };
+
   const applyVoteUpdate = (vote) => {
     startTransition(() => {
       setSnapshot((prev) => {
@@ -1929,7 +1960,7 @@ export default function LivePage() {
   }, [sessionId, user]);
 
   useEffect(() => {
-    if (!user || sessionId || live) return undefined;
+    if (!user || sessionId || live || !isDocumentVisible) return undefined;
 
     let cancelled = false;
     const loadDirectory = async () => {
@@ -1952,7 +1983,19 @@ export default function LivePage() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [live, sessionId, user]);
+  }, [isDocumentVisible, live, sessionId, user]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    const handleVisibilityChange = () => {
+      setIsDocumentVisible(document.visibilityState === 'visible');
+    };
+
+    handleVisibilityChange();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   useEffect(() => {
     if (typeof navigator === 'undefined') return;
@@ -2201,6 +2244,26 @@ export default function LivePage() {
       } catch {}
     };
 
+    const handleSessionUpdated = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        if (payload?.session) {
+          applySessionUpdate(payload.session);
+        }
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    const handlePlaysUpdated = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        applyPlaysPayload(payload);
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
     const handleMessageAdded = (event) => {
       try {
         const payload = JSON.parse(event.data || '{}');
@@ -2257,6 +2320,8 @@ export default function LivePage() {
     source.addEventListener('ready', handleReady);
     source.addEventListener('snapshot', handleSnapshot);
     source.addEventListener('presence', handlePresence);
+    source.addEventListener('session_updated', handleSessionUpdated);
+    source.addEventListener('plays_updated', handlePlaysUpdated);
     source.addEventListener('message_added', handleMessageAdded);
     source.addEventListener('message_removed', handleMessageRemoved);
     source.addEventListener('requests_updated', handleRequestsUpdated);
@@ -2279,7 +2344,7 @@ export default function LivePage() {
   }, [activeSessionId, user]);
 
   useEffect(() => {
-    if (!user || !activeSessionId || loading || streamState === 'live') return undefined;
+    if (!user || !activeSessionId || !isDocumentVisible || loading || streamState === 'live') return undefined;
 
     let cancelled = false;
     const refreshSnapshot = async () => {
@@ -2301,15 +2366,15 @@ export default function LivePage() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [activeSessionId, loading, streamState, user]);
+  }, [activeSessionId, isDocumentVisible, loading, streamState, user]);
 
   useEffect(() => {
-    if (!user || !activeSessionId || live?.status !== 'live') return undefined;
+    if (!user || !activeSessionId || !isDocumentVisible || live?.status !== 'live') return undefined;
     const ping = () => sendLivePresence(activeSessionId, { session_id: presenceIdRef.current }).catch(() => {});
     ping();
     const interval = setInterval(ping, 10000);
     return () => clearInterval(interval);
-  }, [activeSessionId, live?.status, user]);
+  }, [activeSessionId, isDocumentVisible, live?.status, user]);
 
   useEffect(() => {
     if (!deferredSongSearch || deferredSongSearch.trim().length < 2) {

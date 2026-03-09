@@ -118,6 +118,7 @@ const voteCloseTimers = new Map();
 const liveSyncTimers = new Map();
 const liveSyncInFlight = new Set();
 const livePresenceBroadcastState = new Map();
+const livePlayOutcomeCache = new Map();
 
 function getOptionalAuthUserId(req) {
   const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
@@ -325,6 +326,12 @@ function clearPresenceBroadcastState(liveSessionId) {
   livePresenceBroadcastState.delete(key);
 }
 
+function clearPlayOutcomeCache(liveSessionId) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return;
+  livePlayOutcomeCache.delete(key);
+}
+
 function getHostProfile(db, userId) {
   const row = db.prepare(`
     SELECT id, username, avatar, avatar_v, nationality, skill_title, pumbility, weight_kg
@@ -401,13 +408,13 @@ async function performLiveSessionSync(db, sessionOrId, options = {}) {
     username: actor.username,
     persistActivityPosts: false,
   });
-  const delta = applyLiveSyncResult(db, session, syncResult);
+  const syncUpdate = applyLiveSyncResult(db, session, syncResult);
   const nextSession = getLiveSession(db, session.id);
   if (options.broadcast !== false && nextSession) {
-    broadcastLiveSessionSnapshot(db, nextSession.id, options.reason || 'sync');
+    broadcastLiveSyncUpdates(db, nextSession, syncUpdate, options.reason || 'sync');
   }
   return {
-    delta,
+    delta: syncUpdate?.delta || null,
     session: nextSession || session,
   };
 }
@@ -452,7 +459,7 @@ function ensureLiveSyncTimer(db, sessionOrId) {
       try {
         const currentDb = getDb();
         markLiveSessionSyncError(currentDb, key);
-        broadcastLiveSessionSnapshot(currentDb, key, 'sync_error');
+        broadcastLiveSessionUpdated(currentDb, key, 'sync_error');
       } catch {
         // Ignore secondary errors while surfacing the original sync failure in logs.
       }
@@ -681,6 +688,12 @@ function getLiveMessageRow(db, messageId) {
 }
 
 function getPlayOutcomeMap(db, liveSessionId) {
+  const cacheKey = String(liveSessionId || '').trim();
+  if (!cacheKey) return new Map();
+
+  const cached = livePlayOutcomeCache.get(cacheKey);
+  if (cached) return cached;
+
   const map = new Map();
 
   const upscoreRows = db.prepare(`
@@ -720,6 +733,7 @@ function getPlayOutcomeMap(db, liveSessionId) {
     });
   }
 
+  livePlayOutcomeCache.set(cacheKey, map);
   return map;
 }
 
@@ -822,7 +836,7 @@ function getSessionMessages(db, liveSessionId) {
       ON mod.live_session_id = m.live_session_id
      AND mod.user_id = m.user_id
     WHERE m.live_session_id = ?
-    ORDER BY datetime(m.created_at) DESC, m.id DESC
+    ORDER BY m.created_at DESC, m.id DESC
     LIMIT ?
   `).all(liveSessionId, CHAT_LIMIT);
 
@@ -855,8 +869,8 @@ function getSessionRequests(db, liveSessionId) {
       WHEN 'skipped' THEN 3
       ELSE 4
     END ASC,
-    datetime(COALESCE(NULLIF(r.updated_at, ''), r.created_at)) DESC,
-    datetime(r.created_at) DESC,
+    r.updated_at DESC,
+    r.created_at DESC,
     r.id DESC
     LIMIT ?
   `).all(liveSessionId, REQUEST_LIMIT);
@@ -1002,7 +1016,7 @@ function getLatestVoteSnapshot(db, liveSessionId, currentUserId = '') {
     SELECT id, status, ends_at
     FROM live_session_votes
     WHERE live_session_id = ?
-    ORDER BY datetime(created_at) DESC, id DESC
+    ORDER BY created_at DESC, id DESC
     LIMIT 1
   `).get(liveSessionId);
   if (!vote) return null;
@@ -1220,7 +1234,7 @@ function getDirectorySessions(db, currentUserId = '', limit = 18) {
     FROM live_sessions s
     JOIN users u ON u.id = s.host_user_id
     WHERE s.status = 'live'
-    ORDER BY datetime(s.started_at) DESC, s.id DESC
+    ORDER BY s.started_at DESC, s.id DESC
     LIMIT ?
   `).all(currentUserId || '', Math.max(1, Math.min(36, toInt(limit) || 18)));
 
@@ -1303,7 +1317,7 @@ function fulfillMatchingRequests(db, liveSessionId, plays = [], actorUserId = ''
     FROM live_session_requests
     WHERE live_session_id = ?
       AND COALESCE(NULLIF(status, ''), CASE WHEN fulfilled = 1 THEN 'played' ELSE 'open' END) IN ('open', 'queued')
-    ORDER BY datetime(created_at) ASC, id ASC
+    ORDER BY created_at ASC, id ASC
   `).all(liveSessionId);
   if (!requests.length) return [];
 
@@ -1392,6 +1406,7 @@ function bufferSyncResults(db, liveSessionId, syncResult) {
     INSERT INTO live_session_buffered_clears (live_session_id, payload_json, pumbility_gain, singles_pumbility_gain)
     VALUES (?, ?, ?, ?)
   `);
+  let bufferedRowsAdded = false;
 
   for (const row of Array.isArray(syncResult?.upscores) ? syncResult.upscores : []) {
     insertBufferedUpscore.run(
@@ -1400,6 +1415,7 @@ function bufferSyncResults(db, liveSessionId, syncResult) {
       toInt(row?.pumbility_gain),
       toInt(row?.singles_pumbility_gain)
     );
+    bufferedRowsAdded = true;
   }
 
   const clearRows = [
@@ -1413,6 +1429,11 @@ function bufferSyncResults(db, liveSessionId, syncResult) {
       toInt(row?.pumbility_gain),
       toInt(row?.singles_pumbility_gain)
     );
+    bufferedRowsAdded = true;
+  }
+
+  if (bufferedRowsAdded) {
+    clearPlayOutcomeCache(liveSessionId);
   }
 }
 
@@ -1471,6 +1492,7 @@ function applyLiveSyncResult(db, session, syncResult) {
 
   const insertedRows = appendRecentRowsToSession(db, session, recentRows);
   bufferSyncResults(db, session.id, syncResult);
+  const syncMessageIds = [];
 
   const outcomeMap = new Map();
   for (const row of Array.isArray(syncResult?.upscores) ? syncResult.upscores : []) {
@@ -1483,7 +1505,7 @@ function applyLiveSyncResult(db, session, syncResult) {
 
   for (const row of insertedRows) {
     const outcome = outcomeMap.get(buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score)) || null;
-    addSystemMessage(
+    syncMessageIds.push(addSystemMessage(
       db,
       session.id,
       buildPlayAnnouncement(row, outcome),
@@ -1500,7 +1522,7 @@ function applyLiveSyncResult(db, session, syncResult) {
         session_result_type: outcome?.type || '',
         over_top100_rank: Math.max(toInt(row.over_top100_rank), toInt(outcome?.over_top100_rank)),
       }
-    );
+    ));
   }
 
   const fulfilledRequests = fulfillMatchingRequests(db, session.id, insertedRows, session.host_user_id);
@@ -1520,7 +1542,7 @@ function applyLiveSyncResult(db, session, syncResult) {
     }
 
     for (const group of groups.values()) {
-      addSystemMessage(
+      syncMessageIds.push(addSystemMessage(
         db,
         session.id,
         buildRequestFulfillmentMessage(group.play, group.requesters),
@@ -1535,7 +1557,7 @@ function applyLiveSyncResult(db, session, syncResult) {
           score: toInt(group.play?.score),
           grade: group.play?.grade || '',
         }
-      );
+      ));
     }
   }
 
@@ -1543,13 +1565,13 @@ function applyLiveSyncResult(db, session, syncResult) {
   if (unlockedTitles.length > 0) {
     const titleNames = unlockedTitles.map((title) => title?.name || title?.skill_title).filter(Boolean).slice(0, 3);
     const suffix = unlockedTitles.length > 3 ? ` (+${unlockedTitles.length - 3} more)` : '';
-    addSystemMessage(
+    syncMessageIds.push(addSystemMessage(
       db,
       session.id,
       `Title earned: ${titleNames.join(', ')}${suffix}.`,
       'title_unlock',
       { titles: titleNames, count: unlockedTitles.length }
-    );
+    ));
   }
 
   const lastRecentRowId = recentRows.length > 0
@@ -1565,13 +1587,18 @@ function applyLiveSyncResult(db, session, syncResult) {
   `).run(lastRecentRowId, session.id);
 
   return {
-    recent_rows_seen: recentRows.length,
-    new_plays_added: insertedRows.length,
-    requests_fulfilled: fulfilledRequests.length,
-    buffered_upscores: Array.isArray(syncResult?.upscores) ? syncResult.upscores.length : 0,
-    buffered_clears: (Array.isArray(syncResult?.new_clears) ? syncResult.new_clears.length : 0)
-      + (Array.isArray(syncResult?.title_unlock_rows) ? syncResult.title_unlock_rows.length : 0),
-    title_unlocks: unlockedTitles.length,
+    delta: {
+      recent_rows_seen: recentRows.length,
+      new_plays_added: insertedRows.length,
+      requests_fulfilled: fulfilledRequests.length,
+      buffered_upscores: Array.isArray(syncResult?.upscores) ? syncResult.upscores.length : 0,
+      buffered_clears: (Array.isArray(syncResult?.new_clears) ? syncResult.new_clears.length : 0)
+        + (Array.isArray(syncResult?.title_unlock_rows) ? syncResult.title_unlock_rows.length : 0),
+      title_unlocks: unlockedTitles.length,
+    },
+    plays_changed: insertedRows.length > 0,
+    requests_changed: fulfilledRequests.length > 0,
+    message_ids: syncMessageIds,
   };
 }
 
@@ -1656,6 +1683,66 @@ function broadcastLivePresence(liveSessionId, payload = {}) {
   });
 }
 
+function buildLiveSessionUpdateBase(db, sessionOrId) {
+  const freshSession = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : getLiveSession(db, sessionOrId?.id);
+  if (!freshSession) return null;
+
+  const viewerCount = getViewerCount(db, freshSession);
+  const viewerPeak = getViewerPeak(freshSession, viewerCount);
+  const host = getHostProfile(db, freshSession.host_user_id);
+  return {
+    freshSession,
+    host,
+    viewerCount,
+    viewerPeak,
+  };
+}
+
+function broadcastLiveSessionUpdated(db, liveSessionId, reason = 'session_updated') {
+  const base = buildLiveSessionUpdateBase(db, liveSessionId);
+  if (!base) return 0;
+
+  return emitLiveSessionEvent(liveSessionId, 'session_updated', ({ userId }) => ({
+    reason,
+    session: normalizeSessionPayload(
+      { ...base.freshSession, viewer_peak: base.viewerPeak },
+      base.host,
+      base.viewerCount,
+      userId
+    ),
+    emitted_at: new Date().toISOString(),
+  }));
+}
+
+function broadcastLivePlaysUpdated(db, liveSessionId, reason = 'plays_updated') {
+  const base = buildLiveSessionUpdateBase(db, liveSessionId);
+  if (!base) return 0;
+
+  const plays = getSessionPlays(db, base.freshSession.id);
+  const summary = buildLiveSessionSummary(plays, base.host || {}, {
+    viewerCount: base.viewerCount,
+    viewerPeak: base.viewerPeak,
+    streamUrl: base.freshSession.stream_url,
+    hostUsername: base.host?.username || '',
+  });
+
+  return emitLiveSessionEvent(liveSessionId, 'plays_updated', ({ userId }) => ({
+    reason,
+    session: normalizeSessionPayload(
+      { ...base.freshSession, viewer_peak: base.viewerPeak },
+      base.host,
+      base.viewerCount,
+      userId
+    ),
+    plays,
+    last_play: plays[0] || null,
+    summary,
+    emitted_at: new Date().toISOString(),
+  }));
+}
+
 function getNormalizedLiveMessage(db, messageId) {
   return normalizeMessageRow(getLiveMessageRow(db, messageId));
 }
@@ -1710,6 +1797,33 @@ function broadcastLiveVoteUpdated(db, liveSessionId, reason = 'vote_updated') {
     vote: getLatestVoteSnapshot(db, liveSessionId, userId),
     emitted_at: new Date().toISOString(),
   }));
+}
+
+function broadcastLiveSyncUpdates(db, sessionOrId, syncUpdate = {}, reason = 'sync') {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  if (!session?.id) return 0;
+
+  let eventsSent = 0;
+  if (syncUpdate?.plays_changed) {
+    eventsSent += broadcastLivePlaysUpdated(db, session.id, reason);
+  } else {
+    eventsSent += broadcastLiveSessionUpdated(db, session.id, reason);
+  }
+
+  if (syncUpdate?.requests_changed) {
+    eventsSent += broadcastLiveRequestsUpdated(session.id, getSessionRequests(db, session.id), reason);
+  }
+
+  for (const messageId of Array.isArray(syncUpdate?.message_ids) ? syncUpdate.message_ids : []) {
+    const message = getNormalizedLiveMessage(db, messageId);
+    if (message) {
+      eventsSent += broadcastLiveMessageAdded(session.id, message, reason);
+    }
+  }
+
+  return eventsSent;
 }
 
 function clearVoteCloseTimer(voteId) {
