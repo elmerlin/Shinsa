@@ -1689,22 +1689,6 @@ export default function LivePage() {
   }, [activeSessionId, live?.status, user]);
 
   useEffect(() => {
-    if (!user || !activeSessionId || !live?.is_host || live?.status !== 'live') return undefined;
-    const interval = setInterval(async () => {
-      if (syncing) return;
-      try {
-        const data = await syncLiveSession(activeSessionId);
-        if (data?.snapshot) applySnapshot(data.snapshot);
-        if (data?.sync_result) {
-          const note = buildSyncStatusNote(data.sync_result, '');
-          if (note) setStatusNote(note);
-        }
-      } catch {}
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [activeSessionId, live?.is_host, live?.status, syncing, user]);
-
-  useEffect(() => {
     if (!deferredSongSearch || deferredSongSearch.trim().length < 2) {
       setSongResults([]);
       return undefined;

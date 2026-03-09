@@ -54,6 +54,7 @@ const invalidateRecentActivityCache = socialRoutes.invalidateRecentActivityCache
 const voteCloseTimers = new Map();
 const liveSyncTimers = new Map();
 const liveSyncInFlight = new Set();
+const livePresenceBroadcastState = new Map();
 
 function getOptionalAuthUserId(req) {
   const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
@@ -172,8 +173,10 @@ function cleanupPresence(db, liveSessionId) {
   `).run(liveSessionId, `-${PRESENCE_TTL_SECONDS} seconds`);
 }
 
-function getViewerCount(db, session) {
-  cleanupPresence(db, session.id);
+function getViewerCount(db, session, options = {}) {
+  if (options.cleanup === true) {
+    cleanupPresence(db, session.id);
+  }
   const row = db.prepare(`
     SELECT COUNT(DISTINCT user_id) AS count
     FROM live_session_presence
@@ -185,14 +188,47 @@ function getViewerCount(db, session) {
 
 function updateViewerPeak(db, sessionId, viewerCount) {
   const count = Math.max(0, toInt(viewerCount));
-  db.prepare(`
-    UPDATE live_sessions
-    SET viewer_peak = CASE WHEN viewer_peak < ? THEN ? ELSE viewer_peak END,
-        updated_at = datetime('now')
-    WHERE id = ?
-  `).run(count, count, sessionId);
   const row = db.prepare('SELECT viewer_peak FROM live_sessions WHERE id = ?').get(sessionId);
-  return Math.max(0, toInt(row?.viewer_peak));
+  const currentPeak = Math.max(0, toInt(row?.viewer_peak));
+  if (count > currentPeak) {
+    db.prepare(`
+      UPDATE live_sessions
+      SET viewer_peak = ?
+      WHERE id = ?
+    `).run(count, sessionId);
+    return count;
+  }
+  return currentPeak;
+}
+
+function getViewerPeak(session, viewerCount = 0) {
+  return Math.max(Math.max(0, toInt(session?.viewer_peak)), Math.max(0, toInt(viewerCount)));
+}
+
+function shouldBroadcastPresence(liveSessionId, viewerCount, viewerPeak) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return false;
+
+  const nextState = {
+    viewer_count: Math.max(0, toInt(viewerCount)),
+    viewer_peak: Math.max(0, toInt(viewerPeak)),
+  };
+  const previousState = livePresenceBroadcastState.get(key);
+  if (
+    previousState
+    && previousState.viewer_count === nextState.viewer_count
+    && previousState.viewer_peak === nextState.viewer_peak
+  ) {
+    return false;
+  }
+  livePresenceBroadcastState.set(key, nextState);
+  return true;
+}
+
+function clearPresenceBroadcastState(liveSessionId) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return;
+  livePresenceBroadcastState.delete(key);
 }
 
 function getHostProfile(db, userId) {
@@ -888,7 +924,7 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   if (!freshSession) return null;
 
   const viewerCount = getViewerCount(db, freshSession);
-  const viewerPeak = updateViewerPeak(db, freshSession.id, viewerCount);
+  const viewerPeak = getViewerPeak(freshSession, viewerCount);
   const host = getHostProfile(db, freshSession.host_user_id);
   const plays = getSessionPlays(db, freshSession.id);
   const messages = getSessionMessages(db, freshSession.id);
@@ -977,7 +1013,7 @@ function buildDirectorySessionPayload(db, session, currentUserId = '') {
     pumbility: toInt(session.pumbility),
   };
   const viewerCount = getViewerCount(db, session);
-  const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
+  const viewerPeak = getViewerPeak(session, viewerCount);
   const lastPlay = getLatestSessionPlay(db, session.id);
   const activeVote = getLatestVoteSnapshot(db, session.id, currentUserId);
 
@@ -995,7 +1031,7 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
   if (!session) return null;
   const host = getHostProfile(db, session.host_user_id);
   const viewerCount = getViewerCount(db, session);
-  const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
+  const viewerPeak = getViewerPeak(session, viewerCount);
   const plays = getSessionPlays(db, session.id);
   const messageCount = getSessionMessageCount(db, session.id);
   const summary = plays.length > 0
@@ -1777,6 +1813,14 @@ router.post('/sessions/:id/presence', requireAuth, (req, res) => {
   try {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
+    if (session.status !== 'live') {
+      clearPresenceBroadcastState(session.id);
+      return res.json({
+        viewer_count: 0,
+        viewer_peak: Math.max(0, toInt(session.viewer_peak)),
+        ended: true,
+      });
+    }
     const sessionId = normalizeText(req.body?.session_id, 80);
     if (!sessionId) return res.status(400).json({ error: 'session_id is required' });
 
@@ -1788,9 +1832,11 @@ router.post('/sessions/:id/presence', requireAuth, (req, res) => {
         last_seen = datetime('now')
     `).run(session.id, sessionId, req.user.id);
 
-    const viewerCount = getViewerCount(db, session);
+    const viewerCount = getViewerCount(db, session, { cleanup: true });
     const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
-    broadcastLivePresence(session.id, { viewer_count: viewerCount, viewer_peak: viewerPeak });
+    if (shouldBroadcastPresence(session.id, viewerCount, viewerPeak)) {
+      broadcastLivePresence(session.id, { viewer_count: viewerCount, viewer_peak: viewerPeak });
+    }
     res.json({ viewer_count: viewerCount, viewer_peak: viewerPeak });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -2259,7 +2305,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
 
     const host = getHostProfile(db, session.host_user_id);
     const plays = getSessionPlays(db, session.id);
-    const viewerCount = getViewerCount(db, session);
+    const viewerCount = getViewerCount(db, session, { cleanup: true });
     const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
     const messageCount = getSessionMessageCount(db, session.id);
     const summary = buildLiveSessionSummary(plays, host || {}, {
@@ -2320,6 +2366,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     });
     txn();
     clearLiveSyncTimer(session.id);
+    clearPresenceBroadcastState(session.id);
 
     if (typeof invalidateRecentActivityCache === 'function' && (upscorePostId || clearPostId || summaryPostId)) {
       invalidateRecentActivityCache();

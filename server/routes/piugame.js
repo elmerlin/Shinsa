@@ -248,6 +248,21 @@ function findOverRankingChart(db, chartKey, sourceNo = '') {
   return null;
 }
 
+let overRankingLookupCacheKey = '';
+let overRankingLookupCache = null;
+
+function getOverRankingLookupCacheVersion(meta) {
+  const totalCharts = parseInt(meta?.total_charts, 10) || 0;
+  const lastSync = String(meta?.last_sync || '').trim();
+  if (totalCharts <= 0 || !lastSync) return '';
+  return `${totalCharts}|${lastSync}`;
+}
+
+function invalidateOverRankingLookupCache() {
+  overRankingLookupCacheKey = '';
+  overRankingLookupCache = null;
+}
+
 function buildOverRankingLookup(db) {
   const charts = db.prepare(`
     SELECT chart_key, song_title, mode, level, top100_count, min_score
@@ -1712,6 +1727,7 @@ async function refreshOverRankingCache(db, options = {}) {
     `).run(charts.length, totalEntries, parseInt(scraped?.total_pages, 10) || 0);
   });
   txn(normalizedCharts);
+  invalidateOverRankingLookupCache();
   clearPlayerSheetCache();
 
   const refreshedMeta = db.prepare(`
@@ -2165,17 +2181,23 @@ async function ensureOverRankingLookupForScoring(db, options = {}) {
     FROM over_level_ranking_meta
     WHERE id = 1
   `).get();
-  const hasCache = !!(meta && parseInt(meta.total_charts, 10) > 0);
+  let currentMeta = meta;
+  const hasCache = !!(currentMeta && parseInt(currentMeta.total_charts, 10) > 0);
 
   if (!hasCache && allowColdStartRefresh) {
     try {
       await refreshOverRankingCache(db, { force: true, maxAgeMinutes });
+      currentMeta = db.prepare(`
+        SELECT total_charts, last_sync
+        FROM over_level_ranking_meta
+        WHERE id = 1
+      `).get();
     } catch (err) {
       console.error('Initial over ranking cache sync error:', err.message);
     }
   }
 
-  if (allowAutoRefresh && hasCache && isLeaderboardRefreshNeeded(meta.last_sync, maxAgeMinutes)) {
+  if (allowAutoRefresh && hasCache && isLeaderboardRefreshNeeded(currentMeta?.last_sync, maxAgeMinutes)) {
     (async () => {
       try {
         const refreshed = await refreshOverRankingCache(db, { maxAgeMinutes });
@@ -2188,7 +2210,17 @@ async function ensureOverRankingLookupForScoring(db, options = {}) {
     })();
   }
 
-  return buildOverRankingLookup(db);
+  const cacheVersion = getOverRankingLookupCacheVersion(currentMeta);
+  if (cacheVersion && overRankingLookupCache && overRankingLookupCacheKey === cacheVersion) {
+    return overRankingLookupCache;
+  }
+
+  const lookup = buildOverRankingLookup(db);
+  if (cacheVersion && lookup.size > 0) {
+    overRankingLookupCacheKey = cacheVersion;
+    overRankingLookupCache = lookup;
+  }
+  return lookup;
 }
 
 function findLeaderboardRankByName(db, name) {
