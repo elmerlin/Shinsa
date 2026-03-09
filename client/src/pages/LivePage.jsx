@@ -79,6 +79,34 @@ const REQUEST_STATUS_META = {
   },
 };
 
+function LiveEmoteTrayTile({ emote, disabled, onReact, onAdd }) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-black/20 p-2">
+      <button
+        type="button"
+        onClick={onReact}
+        disabled={disabled}
+        title={`React with ${emote.label}`}
+        className="flex min-h-[4.75rem] w-full items-center justify-center rounded-xl border border-white/8 bg-white/[0.03] px-2 py-2 transition-colors hover:bg-white/[0.06] disabled:opacity-40"
+      >
+        <LiveEmote emote={emote} size="compact" showLabel={false} />
+      </button>
+      <div className="mt-2 min-w-0">
+        <p className="truncate text-[11px] font-display font-bold text-white">{emote.label}</p>
+        <p className="mt-0.5 truncate text-[10px] text-gray-500">{emote.token}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={disabled}
+        className="mt-2 w-full rounded-lg bg-piu-dark/70 px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+      >
+        Add
+      </button>
+    </div>
+  );
+}
+
 function getGradeIndex(grade) {
   const normalized = String(grade || '').trim().toUpperCase();
   const idx = GRADE_SORT.indexOf(normalized);
@@ -2909,56 +2937,47 @@ export default function LivePage() {
             </button>
           </div>
 
-          {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
-            <div key={group.label} className="mt-3">
-              <div className="px-1">
-                <p className="text-[10px] font-display uppercase tracking-[0.22em] text-fuchsia-100">{group.label}</p>
-                <p className="mt-1 text-[11px] text-gray-400">{group.description}</p>
-              </div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                {group.emotes.map((emote) => (
-                  <div key={emote.token} className="rounded-2xl border border-white/8 bg-black/20 p-2">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickReaction(emote.token)}
+          <div className="mt-3 max-h-[52vh] overflow-y-auto overscroll-contain pr-1 sm:max-h-none sm:overflow-visible sm:pr-0">
+            {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
+              <div key={group.label} className="mt-3 first:mt-0">
+                <div className="px-1">
+                  <p className="text-[10px] font-display uppercase tracking-[0.22em] text-fuchsia-100">{group.label}</p>
+                  <p className="mt-1 text-[11px] text-gray-400">{group.description}</p>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 xl:grid-cols-4">
+                  {group.emotes.map((emote) => (
+                    <LiveEmoteTrayTile
+                      key={emote.token}
+                      emote={emote}
                       disabled={viewerState.chat_muted || live?.status !== 'live'}
-                      className="w-full disabled:opacity-40"
-                    >
-                      <LiveEmote emote={emote} size="tray" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInsertChatToken(emote.token)}
-                      disabled={viewerState.chat_muted || live?.status !== 'live'}
-                      className="mt-2 w-full rounded-lg bg-piu-dark/70 px-3 py-2 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
-                    >
-                      Add to message
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {LIVE_EMOJI_GROUPS.map((group) => (
-              <div key={group.label} className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{group.label}</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {group.emojis.map((emoji) => (
-                    <button
-                      key={`${group.label}-${emoji}`}
-                      type="button"
-                      onClick={() => handleQuickReaction(emoji)}
-                      disabled={viewerState.chat_muted || live?.status !== 'live'}
-                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-piu-dark/70 text-base transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
-                    >
-                      {emoji}
-                    </button>
+                      onReact={() => handleQuickReaction(emote.token)}
+                      onAdd={() => handleInsertChatToken(emote.token)}
+                    />
                   ))}
                 </div>
               </div>
             ))}
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {LIVE_EMOJI_GROUPS.map((group) => (
+                <div key={group.label} className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{group.label}</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    {group.emojis.map((emoji) => (
+                      <button
+                        key={`${group.label}-${emoji}`}
+                        type="button"
+                        onClick={() => handleQuickReaction(emoji)}
+                        disabled={viewerState.chat_muted || live?.status !== 'live'}
+                        className="flex h-10 items-center justify-center rounded-xl bg-piu-dark/70 text-[22px] leading-none transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       ) : null}
@@ -3051,7 +3070,7 @@ export default function LivePage() {
             ref={chatInputRef}
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            className={`input-field flex-1 ${isMobileChatLayout ? 'text-[13px]' : ''}`}
+            className={`input-field flex-1 ${isMobileChatLayout ? 'text-base' : ''}`}
             placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message or use :shinsa_hype:'}
             maxLength={500}
             disabled={viewerState.chat_muted}

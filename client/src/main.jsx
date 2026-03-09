@@ -6,6 +6,32 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import App from './App';
 import './index.css';
 
+function enableAppleMobileInputZoomGuard() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+  const ua = window.navigator.userAgent || '';
+  const isAppleMobile = /iPhone|iPod|iPad/i.test(ua)
+    || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+
+  if (!isAppleMobile) return;
+
+  const viewportMeta = document.querySelector('meta[name="viewport"]');
+  if (!viewportMeta) return;
+
+  const currentContent = viewportMeta.getAttribute('content') || 'width=device-width, initial-scale=1.0';
+  const nextContent = currentContent
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => !/^maximum-scale=/i.test(part));
+
+  nextContent.push('maximum-scale=1');
+  viewportMeta.setAttribute('content', nextContent.join(', '));
+}
+
+// Prevent Apple mobile browsers from auto-zooming focused form fields.
+enableAppleMobileInputZoomGuard();
+
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/push-sw.js', { scope: '/' }).then((registration) => {
