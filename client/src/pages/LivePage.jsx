@@ -3135,7 +3135,7 @@ export default function LivePage() {
   );
 
   const desktopInteractionsSection = hasPlayerPanels ? null : (
-    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
+    <div className={`flex flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)] ${isDesktopViewport ? '' : 'h-full min-h-0'}`}>
       <div className={`gap-2 ${isDesktopViewport ? 'flex flex-wrap items-start justify-between' : 'flex flex-col items-start'}`}>
         <div className="min-w-0">
           <p className="text-[10px] font-display uppercase tracking-[0.2em] text-cyan-200">Interactions</p>
@@ -3209,7 +3209,7 @@ export default function LivePage() {
   );
 
   const desktopTopCardsSection = isDesktopViewport && !hasPlayerPanels ? (
-    <div className="grid items-stretch gap-4 lg:grid-cols-2">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <NowPlayingPanel
         play={lastPlay}
         live={live}
