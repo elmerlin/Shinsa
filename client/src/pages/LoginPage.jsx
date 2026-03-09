@@ -272,15 +272,15 @@ export default function LoginPage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-white/10 bg-piu-dark/40 px-4 py-3">
                     <p className="text-[11px] font-display tracking-[0.28em] text-piu-accent/80">1</p>
-                    <p className="text-sm text-white mt-1">Open your phone camera and scan the code.</p>
+                    <p className="text-sm text-white mt-1">Scan</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-piu-dark/40 px-4 py-3">
                     <p className="text-[11px] font-display tracking-[0.28em] text-piu-accent/80">2</p>
-                    <p className="text-sm text-white mt-1">Confirm the login on your phone.</p>
+                    <p className="text-sm text-white mt-1">Confirm</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-piu-dark/40 px-4 py-3">
                     <p className="text-[11px] font-display tracking-[0.28em] text-piu-accent/80">3</p>
-                    <p className="text-sm text-white mt-1">This shared browser logs in automatically.</p>
+                    <p className="text-sm text-white mt-1">Log In</p>
                   </div>
                 </div>
 
