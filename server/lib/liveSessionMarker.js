@@ -1,5 +1,6 @@
 const LIVE_MARKER_PREFIX = '[[SHINSA_LIVE_V1:';
 const LIVE_MARKER_SUFFIX = ']]';
+const LIVE_MARKER_REGEX = /\[\[SHINSA_LIVE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
 
 function toInt(value) {
   return parseInt(value, 10) || 0;
@@ -32,6 +33,7 @@ function sanitizeLiveSummary(summary) {
   const src = summary || {};
   return {
     version: 1,
+    sessionId: String(src.sessionId || src.session_id || ''),
     sessionDateLabel: String(src.sessionDateLabel || ''),
     sessionTimeRange: String(src.sessionTimeRange || ''),
     sessionDurationMinutes: toInt(src.sessionDurationMinutes),
@@ -62,6 +64,10 @@ function sanitizeLiveSummary(summary) {
     averageRating: toInt(src.averageRating),
     viewerCount: toInt(src.viewerCount),
     viewerPeak: toInt(src.viewerPeak),
+    messageCount: toInt(src.messageCount),
+    requestPlayCount: toInt(src.requestPlayCount),
+    votedSongPlayCount: toInt(src.votedSongPlayCount),
+    interactions: toInt(src.interactions),
     streamUrl: String(src.streamUrl || ''),
     hostUsername: String(src.hostUsername || ''),
     topSongsByScore: sanitizeSongRows(src.topSongsByScore),
@@ -75,9 +81,41 @@ function serializeLiveSessionMarker(summary) {
   return `${LIVE_MARKER_PREFIX}${encoded}${LIVE_MARKER_SUFFIX}`;
 }
 
+function parseLiveSessionMarker(content) {
+  const raw = String(content || '');
+  const match = raw.match(LIVE_MARKER_REGEX);
+  if (!match) return null;
+
+  try {
+    const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+    return sanitizeLiveSummary(JSON.parse(decoded));
+  } catch {
+    return null;
+  }
+}
+
+function splitLiveSessionContent(content) {
+  const raw = String(content || '');
+  const match = raw.match(LIVE_MARKER_REGEX);
+  if (!match) {
+    return {
+      text: raw,
+      live: null,
+    };
+  }
+
+  return {
+    text: raw.replace(match[0], '').replace(/\n{3,}/g, '\n\n').trim(),
+    live: parseLiveSessionMarker(raw),
+  };
+}
+
 module.exports = {
   LIVE_MARKER_PREFIX,
   LIVE_MARKER_SUFFIX,
-  serializeLiveSessionMarker,
+  LIVE_MARKER_REGEX,
+  parseLiveSessionMarker,
   sanitizeLiveSummary,
+  serializeLiveSessionMarker,
+  splitLiveSessionContent,
 };

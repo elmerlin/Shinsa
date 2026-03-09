@@ -48,6 +48,7 @@ function sanitizeLiveSummary(summary) {
   const src = summary || {};
   return {
     version: 1,
+    sessionId: String(src.sessionId || src.session_id || ''),
     sessionDateLabel: String(src.sessionDateLabel || ''),
     sessionTimeRange: String(src.sessionTimeRange || ''),
     sessionDurationMinutes: toInt(src.sessionDurationMinutes),
@@ -79,6 +80,9 @@ function sanitizeLiveSummary(summary) {
     viewerCount: toInt(src.viewerCount),
     viewerPeak: toInt(src.viewerPeak),
     messageCount: toInt(src.messageCount),
+    requestPlayCount: toInt(src.requestPlayCount),
+    votedSongPlayCount: toInt(src.votedSongPlayCount),
+    interactions: toInt(src.interactions),
     streamUrl: String(src.streamUrl || ''),
     hostUsername: String(src.hostUsername || ''),
     topSongsByScore: sanitizeSongRows(src.topSongsByScore),
@@ -126,4 +130,13 @@ export function splitLiveSessionContent(content) {
     text,
     live,
   };
+}
+
+export function mergeLiveSessionSummary(summary, overrides) {
+  if (!summary) return null;
+  if (!overrides || typeof overrides !== 'object') return sanitizeLiveSummary(summary);
+  return sanitizeLiveSummary({
+    ...summary,
+    ...overrides,
+  });
 }

@@ -14,7 +14,7 @@ import SessionPlanCard from './SessionPlanCard';
 import DojoCatStickerPicker from './DojoCatStickerPicker';
 import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
-import { splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
+import { mergeLiveSessionSummary, splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 
 function timeAgo(dateStr) {
@@ -868,6 +868,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const [saving, setSaving] = useState(false);
   const [currentContent, setCurrentContent] = useState(post.content || '');
   const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
+  const [currentLiveMetrics, setCurrentLiveMetrics] = useState(post.live_summary_metrics || null);
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
   const parsedSummary = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
   const parsedShare = useMemo(() => splitSessionShareContent(parsedSummary.text || ''), [parsedSummary.text]);
@@ -876,7 +877,10 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const rawVisibleContent = planParsed.text || '';
   const currentSummary = parsedSummary.summary;
   const currentShare = parsedShare.share;
-  const currentLive = parsedLive.live;
+  const currentLive = useMemo(
+    () => mergeLiveSessionSummary(parsedLive.live, currentLiveMetrics),
+    [parsedLive.live, currentLiveMetrics]
+  );
   const currentPlan = planParsed.plan;
   const visibleContent = currentLive && rawVisibleContent.trim().startsWith('🔴 **Shinsa Live Recap**')
     ? ''
@@ -888,6 +892,10 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
 
   const flag = showAuthor ? getCountryFlag(post.nationality) : null;
   const canEdit = user && user.id === post.user_id;
+
+  useEffect(() => {
+    setCurrentLiveMetrics(post.live_summary_metrics || null);
+  }, [post.live_summary_metrics]);
 
   const handleEdit = () => {
     setEditContent(visibleContent);
@@ -906,6 +914,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
       const updated = await editPost(post.id, { content: contentToSave, youtube_url: editYoutubeUrl });
       setCurrentContent(updated.content || '');
       setCurrentYoutubeUrl(updated.youtube_url || '');
+      setCurrentLiveMetrics(updated.live_summary_metrics || null);
       setWasEdited(true);
       setEditing(false);
       if (onUpdate) onUpdate(updated);

@@ -181,6 +181,27 @@ export const LIVE_OVERLAY_SCENES = [
   },
 ];
 
+const LIVE_OVERLAY_OUTPUT_WIDTHS = {
+  full: { source: 1200, frame: 1152 },
+  phone: { source: 392, frame: 352 },
+  rail: { source: 424, frame: 384 },
+  wide: {
+    default: { source: 1090, frame: 1024 },
+    mobile: { source: 424, frame: 384 },
+  },
+  card: {
+    default: { source: 592, frame: 544 },
+    compact: { source: 886, frame: 832 },
+  },
+};
+
+const LIVE_OVERLAY_OUTPUT_HEIGHTS = {
+  compact: 320,
+  results: 620,
+  chat: 920,
+  mobile: 860,
+};
+
 const PRESET_MAP = new Map(LIVE_OVERLAY_PRESETS.map((preset) => [preset.id, preset]));
 const THEME_MAP = new Map(LIVE_OVERLAY_THEMES.map((theme) => [theme.id, theme]));
 const FIT_MAP = new Map(LIVE_OVERLAY_FITS.map((fit) => [fit.id, fit]));
@@ -280,6 +301,32 @@ export function getLiveOverlaySceneOptions(sceneId) {
     motion: scene.options?.motion !== false,
     guides: normalizeLiveOverlayGuides(scene.options?.guides),
     autoHide: normalizeLiveOverlayAutoHide(scene.options?.autoHide),
+  };
+}
+
+function getLiveOverlayOutputWidthSpec(presetId, fitId) {
+  const fitSpec = LIVE_OVERLAY_OUTPUT_WIDTHS[fitId] || LIVE_OVERLAY_OUTPUT_WIDTHS.wide;
+  if (typeof fitSpec.source === 'number') return fitSpec;
+  return fitSpec[presetId] || fitSpec.default || LIVE_OVERLAY_OUTPUT_WIDTHS.wide.default;
+}
+
+export function getLiveOverlayOutputSpec(options = {}) {
+  const scene = getLiveOverlayScene(options.scene || options.sceneId);
+  const presetId = normalizeLiveOverlayPreset(options.preset || options.presetId || scene?.options?.preset);
+  const fitId = normalizeLiveOverlayFit(options.fit || options.fitId || scene?.options?.fit);
+  const widthSpec = getLiveOverlayOutputWidthSpec(presetId, fitId);
+  const height = LIVE_OVERLAY_OUTPUT_HEIGHTS[presetId] || 540;
+
+  return {
+    source: {
+      width: widthSpec.source,
+      height,
+    },
+    frame: {
+      width: widthSpec.frame,
+    },
+    sourceLabel: `${widthSpec.source} x ${height}`,
+    frameLabel: `${widthSpec.frame}px wide`,
   };
 }
 

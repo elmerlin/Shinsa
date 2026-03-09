@@ -995,6 +995,7 @@ export const castLiveVote = (voteId, optionId) => request(`/live/votes/${encodeU
 export const endLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/end`, {
   method: 'POST',
   body: '{}',
+  timeoutMs: 300000,
 });
 
 // Parser

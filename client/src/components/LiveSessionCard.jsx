@@ -45,8 +45,8 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
         </div>
         <div className="grid grid-cols-3 gap-2 min-w-[320px] max-sm:min-w-full">
           <StatPill label="Peak Viewers" value={summary.viewerPeak || 0} />
-          <StatPill label="Viewers End" value={summary.viewerCount || 0} />
           <StatPill label="Messages" value={summary.messageCount || 0} />
+          <StatPill label="Interactions" value={summary.interactions || 0} />
         </div>
       </div>
 

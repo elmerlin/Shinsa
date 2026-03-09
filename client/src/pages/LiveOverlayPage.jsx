@@ -562,6 +562,37 @@ export default function LiveOverlayPage() {
     nowMs: activityNowMs,
   });
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    const root = document.getElementById('root');
+    const elements = [
+      document.documentElement,
+      document.body,
+      root,
+    ].filter(Boolean);
+    const previousStyles = elements.map((element) => ({
+      element,
+      background: element.style.background,
+      backgroundColor: element.style.backgroundColor,
+      backgroundImage: element.style.backgroundImage,
+    }));
+
+    for (const { element } of previousStyles) {
+      element.style.background = 'transparent';
+      element.style.backgroundColor = 'transparent';
+      element.style.backgroundImage = 'none';
+    }
+
+    return () => {
+      for (const previous of previousStyles) {
+        previous.element.style.background = previous.background;
+        previous.element.style.backgroundColor = previous.backgroundColor;
+        previous.element.style.backgroundImage = previous.backgroundImage;
+      }
+    };
+  }, []);
+
   const showFloatingReaction = (payload) => {
     if (!payload || !motionEnabled) return;
     const reaction = typeof payload === 'string'

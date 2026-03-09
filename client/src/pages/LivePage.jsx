@@ -34,6 +34,7 @@ import {
 } from '../utils/liveEmotes';
 import {
   getLiveOverlaySceneOptions,
+  getLiveOverlayOutputSpec,
   buildLiveOverlayUrl,
   getDefaultLiveOverlayWidgets,
   LIVE_OVERLAY_ANCHORS,
@@ -340,8 +341,208 @@ function getMessageTone(message) {
   }
 }
 
-function MessageBody({ message, tone, isSystem, compact = false }) {
+function buildLiveChatMessageLookups(plays, currentVote) {
+  const playById = new Map();
+  const playByChartKey = new Map();
+  for (const play of Array.isArray(plays) ? plays : []) {
+    const playId = String(play?.id || '').trim();
+    if (playId) {
+      playById.set(playId, play);
+    }
+    const chartKey = buildRequestKey(play?.song_title, play?.mode, play?.level);
+    if (chartKey && !playByChartKey.has(chartKey)) {
+      playByChartKey.set(chartKey, play);
+    }
+  }
+
+  const voteById = new Map();
+  const voteOptionById = new Map();
+  const voteId = String(currentVote?.id || '').trim();
+  if (voteId) {
+    voteById.set(voteId, currentVote);
+    for (const option of Array.isArray(currentVote?.options) ? currentVote.options : []) {
+      const optionId = String(option?.id || '').trim();
+      if (optionId) {
+        voteOptionById.set(`${voteId}:${optionId}`, option);
+      }
+    }
+  }
+
+  return {
+    playById,
+    playByChartKey,
+    voteById,
+    voteOptionById,
+  };
+}
+
+function getLiveChatRequesterLabel(message) {
+  const match = String(message || '').match(/\b(?:for|from)\s+(.+?)\.\s*$/i);
+  return match?.[1]?.trim() || '';
+}
+
+function getLiveChatPlayDetail(message) {
+  const normalized = String(message || '').trim();
+  if (!normalized) return '';
+  const separatorIndex = normalized.indexOf('. ');
+  if (separatorIndex < 0) return '';
+  return normalized.slice(separatorIndex + 2).trim();
+}
+
+function buildStructuredSongMessage(entry, lookups = {}) {
+  const messageType = String(entry?.message_type || '').trim().toLowerCase();
+  if (!['play', 'request', 'request_fulfilled', 'request_queue', 'vote_result'].includes(messageType)) {
+    return null;
+  }
+
+  const metadata = entry?.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+  const voteId = String(metadata.vote_id || '').trim();
+  const winningOptionId = String(metadata.winning_option_id || '').trim();
+  const vote = voteId ? lookups.voteById?.get(voteId) || null : null;
+  const winningOption = voteId && winningOptionId
+    ? lookups.voteOptionById?.get(`${voteId}:${winningOptionId}`) || null
+    : Array.isArray(vote?.options)
+      ? vote.options.find((option) => option?.is_winner) || null
+      : null;
+  const recentlyPlayedId = String(metadata.recently_played_id || '').trim();
+  const linkedPlay = recentlyPlayedId ? lookups.playById?.get(recentlyPlayedId) || null : null;
+
+  const songTitle = String(metadata.song_title || winningOption?.song_title || linkedPlay?.song_title || '').trim();
+  const mode = String(metadata.mode || winningOption?.mode || linkedPlay?.mode || '').trim();
+  const level = parseInt(metadata.level, 10) || parseInt(winningOption?.level, 10) || parseInt(linkedPlay?.level, 10) || 0;
+  const fallbackPlay = songTitle
+    ? lookups.playByChartKey?.get(buildRequestKey(songTitle, mode, level)) || null
+    : null;
+  const resolvedPlay = linkedPlay || fallbackPlay;
+  const jacketUrl = String(
+    metadata.jacket_url
+      || winningOption?.jacket_url
+      || resolvedPlay?.background_url
+      || ''
+  ).trim();
+
+  if (!songTitle || !mode || level <= 0) {
+    return null;
+  }
+
+  const score = parseInt(metadata.score, 10) || parseInt(resolvedPlay?.score, 10) || 0;
+  const parsedGrade = parseGrade(
+    metadata.grade || resolvedPlay?.grade || '',
+    score > 0 ? getRank(score).label : ''
+  );
+  const displayGrade = parsedGrade.display || '';
+  const requesterLabel = getLiveChatRequesterLabel(entry?.message);
+  const requestStatus = String(metadata.request_status || '').trim().toLowerCase();
+  let detail = '';
+
+  if (messageType === 'play') {
+    detail = getLiveChatPlayDetail(entry?.message);
+  } else if (messageType === 'request_fulfilled') {
+    detail = requesterLabel ? `Request hit for ${requesterLabel}.` : 'Request hit.';
+  } else if (messageType === 'request_queue') {
+    if (requestStatus === 'skipped') {
+      detail = requesterLabel ? `Skipped from ${requesterLabel}.` : 'Request skipped.';
+    } else if (requestStatus === 'open') {
+      detail = requesterLabel ? `Back open for ${requesterLabel}.` : 'Request reopened.';
+    } else {
+      detail = requesterLabel ? `Queued from ${requesterLabel}.` : 'Request queued.';
+    }
+  } else if (messageType === 'vote_result') {
+    const voteCount = parseInt(metadata.vote_count, 10) || parseInt(winningOption?.vote_count, 10) || 0;
+    detail = voteCount > 0
+      ? `Wins with ${voteCount} vote${voteCount === 1 ? '' : 's'}.`
+      : 'Vote locked.';
+  }
+
+  const tags = [];
+  const pumbilityGain = parseInt(metadata.pumbility_gain, 10) || 0;
+  const overTop100Rank = parseInt(metadata.over_top100_rank, 10) || 0;
+  const resultType = String(metadata.session_result_type || '').trim().toLowerCase();
+
+  if (resultType === 'upscore') tags.push({ label: 'Upscore', tone: 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100' });
+  else if (resultType === 'clear') tags.push({ label: 'First clear', tone: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100' });
+  if (pumbilityGain > 0) tags.push({ label: `+${pumbilityGain} p`, tone: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100' });
+  if (overTop100Rank > 0) tags.push({ label: `OVER #${overTop100Rank}`, tone: 'border-yellow-400/25 bg-yellow-500/10 text-yellow-100' });
+
+  return {
+    messageType,
+    songTitle,
+    mode,
+    level,
+    jacketUrl,
+    score,
+    parsedGrade,
+    displayGrade,
+    detail,
+    tags,
+  };
+}
+
+function StructuredSongMessageBody({ structured, tone, compact = false }) {
+  const showResult = structured.messageType === 'play' && (structured.displayGrade || structured.score > 0);
+  const gradeClass = structured.displayGrade
+    ? `${getGradeColor(structured.displayGrade, structured.score)} ${structured.parsedGrade.isBroken ? 'grade-broken' : ''}`.trim()
+    : '';
+
+  return (
+    <div className={`${compact ? 'mt-1.5 gap-2.5' : 'mt-2 gap-3'} flex min-w-0 items-start`}>
+      <PiuChartJacket
+        title={structured.songTitle}
+        mode={structured.mode}
+        level={structured.level}
+        jacketUrl={structured.jacketUrl}
+        size={compact ? 'xs' : 'sm'}
+      />
+      <div className="min-w-0 flex-1">
+        <p className={`${compact ? 'text-[12px]' : 'text-sm'} truncate font-display font-bold text-white`}>
+          {structured.songTitle}
+        </p>
+        {showResult ? (
+          <div className={`${compact ? 'mt-1 gap-x-2 gap-y-1' : 'mt-1.5 gap-x-2.5 gap-y-1.5'} flex flex-wrap items-baseline`}>
+            {structured.displayGrade ? (
+              <span
+                className={`${compact ? 'text-[13px]' : 'text-[15px]'} font-display font-black leading-none ${gradeClass}`}
+                data-grade={structured.displayGrade}
+              >
+                {structured.displayGrade}
+              </span>
+            ) : null}
+            {structured.score > 0 ? (
+              <span className={`${compact ? 'text-[11px]' : 'text-xs'} font-display font-bold text-cyan-100/90`}>
+                {formatNumber(structured.score)}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+        {structured.detail ? (
+          <p className={`${compact ? 'mt-1 text-[11px]' : 'mt-1.5 text-xs'} ${tone.bodyClass}`}>
+            {structured.detail}
+          </p>
+        ) : null}
+        {structured.tags.length > 0 ? (
+          <div className={`${compact ? 'mt-1 gap-1' : 'mt-1.5 gap-1.5'} flex flex-wrap`}>
+            {structured.tags.map((tag) => (
+              <span
+                key={`${structured.songTitle}-${tag.label}`}
+                className={`${compact ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'} rounded-full border font-display font-bold ${tag.tone}`}
+              >
+                {tag.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MessageBody({ entry, tone, compact = false }) {
+  const message = entry?.message || '';
+  const isSystem = !!entry?.is_system;
   const reaction = !isSystem ? getLiveReactionPayload(message) : null;
+  if (entry?.structured) {
+    return <StructuredSongMessageBody structured={entry.structured} tone={tone} compact={compact} />;
+  }
   if (reaction?.kind === 'emoji') {
     return <p className="mt-1 max-w-full overflow-hidden text-2xl leading-none">{reaction.emoji}</p>;
   }
@@ -985,6 +1186,7 @@ function OverlayStudioCard({
   const fitLabel = LIVE_OVERLAY_FITS.find((item) => item.id === fit)?.label || fit;
   const anchorLabel = LIVE_OVERLAY_ANCHORS.find((item) => item.id === anchor)?.label || anchor;
   const autoHideLabel = LIVE_OVERLAY_AUTO_HIDE_MODES.find((item) => item.id === autoHide)?.label || autoHide;
+  const outputSpec = getLiveOverlayOutputSpec({ preset, fit });
 
   return (
     <div className="rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(236,72,153,0.16),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.12),transparent_36%),linear-gradient(180deg,#0d1322,#09101b)] p-4 sm:p-5 shadow-[0_20px_44px_rgba(17,24,39,0.3)]">
@@ -1002,7 +1204,7 @@ function OverlayStudioCard({
               <li>1. Pick a quick scene or preset that matches the stream layout you want.</li>
               <li>2. Click `Preview overlay` to see the transparent browser-source page.</li>
               <li>3. Click `Copy browser source URL`, then paste it into an OBS `Browser Source`.</li>
-              <li>4. Position and size it in OBS, then come back here only if you want to change the scene.</li>
+              <li>4. Set the OBS browser source to the recommended size shown here, then position it in scene.</li>
             </ol>
             <p className="mt-3 text-xs text-cyan-100/85">
               Use `Transparent Rail` when you want chat or status cards to float over gameplay without a dark slab behind them.
@@ -1024,6 +1226,11 @@ function OverlayStudioCard({
               </span>
             ) : null}
           </div>
+          <div className="mt-3 rounded-xl border border-cyan-400/20 bg-cyan-500/8 px-3 py-2.5">
+            <p className="text-[10px] font-display uppercase tracking-wide text-cyan-200">OBS start size</p>
+            <p className="mt-1 text-lg font-display font-black text-white">{outputSpec.sourceLabel}</p>
+            <p className="mt-1 text-[11px] text-cyan-100/80">Card frame: {outputSpec.frameLabel}</p>
+          </div>
           <p className="mt-3 truncate rounded-xl border border-piu-border/60 bg-black/20 px-3 py-2 text-[11px] text-cyan-100">
             {previewUrl}
           </p>
@@ -1037,20 +1244,28 @@ function OverlayStudioCard({
           <div>
             <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Quick Scenes</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {LIVE_OVERLAY_SCENES.map((scene) => (
-                <div key={scene.id} className="rounded-[24px] border border-piu-border bg-black/12 px-4 py-3">
-                  <p className="text-sm font-display font-bold text-white">{scene.label}</p>
-                  <p className="mt-1 text-xs text-gray-400">{scene.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => onApplyScene(scene.id)} className="btn-secondary px-3 py-2 text-[11px]">
-                      Load
-                    </button>
-                    <button type="button" onClick={() => onCopyScene(scene.id)} disabled={copying} className="btn-primary px-3 py-2 text-[11px]">
-                      {copying ? 'Preparing...' : 'Copy'}
-                    </button>
+              {LIVE_OVERLAY_SCENES.map((scene) => {
+                const sceneOutputSpec = getLiveOverlayOutputSpec({ sceneId: scene.id });
+                return (
+                  <div key={scene.id} className="rounded-[24px] border border-piu-border bg-black/12 px-4 py-3">
+                    <p className="text-sm font-display font-bold text-white">{scene.label}</p>
+                    <p className="mt-1 text-xs text-gray-400">{scene.description}</p>
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/18 px-3 py-2">
+                      <p className="text-[10px] font-display uppercase tracking-wide text-cyan-200">OBS start size</p>
+                      <p className="mt-1 text-sm font-display font-black text-white">{sceneOutputSpec.sourceLabel}</p>
+                      <p className="mt-1 text-[11px] text-gray-400">Card frame: {sceneOutputSpec.frameLabel}</p>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" onClick={() => onApplyScene(scene.id)} className="btn-secondary px-3 py-2 text-[11px]">
+                        Load
+                      </button>
+                      <button type="button" onClick={() => onCopyScene(scene.id)} disabled={copying} className="btn-primary px-3 py-2 text-[11px]">
+                        {copying ? 'Preparing...' : 'Copy'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1441,6 +1656,28 @@ export default function LivePage() {
     startTransition(() => {
       setSnapshot(data);
       setMessages(nextMessages);
+    });
+  };
+
+  const applyEndedSessionResult = (payload = {}) => {
+    startTransition(() => {
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const nextSession = payload?.session
+          ? { ...(prev.session || {}), ...payload.session }
+          : prev.session
+            ? { ...prev.session, status: 'ended' }
+            : prev.session;
+        const nextVote = prev?.active_vote?.status === 'active'
+          ? { ...prev.active_vote, status: 'closed' }
+          : prev?.active_vote || null;
+        return {
+          ...prev,
+          session: nextSession,
+          summary: payload?.summary || prev.summary,
+          active_vote: nextVote,
+        };
+      });
     });
   };
 
@@ -2094,6 +2331,17 @@ export default function LivePage() {
     acc[status] += 1;
     return acc;
   }, { open: 0, queued: 0, played: 0, skipped: 0 }), [requests]);
+  const liveChatMessageLookups = useMemo(
+    () => buildLiveChatMessageLookups(snapshot?.plays, currentVote),
+    [snapshot?.plays, currentVote]
+  );
+  const chatMessages = useMemo(
+    () => messages.map((message) => ({
+      ...message,
+      structured: buildStructuredSongMessage(message, liveChatMessageLookups),
+    })),
+    [messages, liveChatMessageLookups]
+  );
   const nowPlayingRequestInfo = lastPlay
     ? requestLookup.get(buildRequestKey(lastPlay.song_title, lastPlay.mode, lastPlay.level))
     : null;
@@ -2334,14 +2582,30 @@ export default function LivePage() {
 
   const handleConfirmEndSession = async () => {
     if (!activeSessionId) return;
+    setError('');
     setEnding(true);
+    setShowEndConfirm(false);
+    setStatusNote('Ending live session...');
     try {
       const data = await endLiveSession(activeSessionId);
+      applyEndedSessionResult(data);
       setStatusNote(data?.summary_post_id ? `Live session ended. Recap post #${data.summary_post_id} created.` : 'Live session ended.');
-      setShowEndConfirm(false);
-      const fresh = await getLiveSession(activeSessionId);
-      applySnapshot(fresh);
+      getLiveSession(activeSessionId)
+        .then((fresh) => {
+          if (fresh?.session) {
+            applySnapshot(fresh);
+          }
+        })
+        .catch(() => {});
     } catch (err) {
+      try {
+        const fresh = await getLiveSession(activeSessionId);
+        if (fresh?.session?.status === 'ended') {
+          applySnapshot(fresh);
+          setStatusNote(fresh?.summary_post_id ? `Live session ended. Recap post #${fresh.summary_post_id} created.` : 'Live session ended.');
+          return;
+        }
+      } catch {}
       setError(err.message || 'Failed to end live session');
     } finally {
       setEnding(false);
@@ -3038,7 +3302,7 @@ export default function LivePage() {
       ) : null}
 
       <div ref={chatScrollRef} className={`mt-3 min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto pr-1`}>
-        {messages.map((msg) => {
+        {chatMessages.map((msg) => {
           const tone = getMessageTone(msg);
           return (
             <div key={msg.id} className={`overflow-hidden ${isMobileChatLayout ? 'rounded-lg px-2.5 py-2' : 'rounded-xl px-3 py-2'} ${tone.wrapper}`}>
@@ -3077,7 +3341,7 @@ export default function LivePage() {
                   {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </p>
               </div>
-              <MessageBody message={msg.message} tone={tone} isSystem={msg.is_system} compact={isMobileChatLayout} />
+              <MessageBody entry={msg} tone={tone} compact={isMobileChatLayout} />
               {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button

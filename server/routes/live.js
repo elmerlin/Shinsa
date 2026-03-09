@@ -7,6 +7,11 @@ const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
 const { addLiveSessionClient, emitLiveSessionEvent } = require('../lib/liveSessionHub');
 const { buildLiveSessionSummary } = require('../lib/liveSessionSummary');
+const {
+  getSessionInteractionCounts,
+  getSessionMessageCount,
+  getSessionRequestCounts,
+} = require('../lib/liveSessionMetrics');
 const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
 const { createUserNotification } = require('../lib/notifications');
 const piugameRoutes = require('./piugame');
@@ -141,6 +146,18 @@ function formatPlayLabel(play) {
   const mode = String(play?.mode || '');
   const modeShort = mode === 'Single' ? 'S' : mode === 'Double' ? 'D' : mode ? mode[0].toUpperCase() : 'X';
   return `${normalizeText(play?.song_title || 'Unknown chart', 160)} (${modeShort}${toInt(play?.level) || '?'})`;
+}
+
+function getSongJacketUrl(db, chartId) {
+  const normalizedChartId = toInt(chartId);
+  if (normalizedChartId <= 0) return '';
+  const row = db.prepare(`
+    SELECT jacket_url
+    FROM songs
+    WHERE id = ?
+    LIMIT 1
+  `).get(normalizedChartId);
+  return row?.jacket_url || '';
 }
 
 function buildRequestFulfillmentMessage(play, requesters = []) {
@@ -423,9 +440,11 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
       message_type: 'request_fulfilled',
       metadata: {
         request_ids: [requestRow.id],
+        chart_id: toInt(requestRow.chart_id),
         song_title: requestRow.song_title || '',
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
+        jacket_url: requestRow.jacket_url || '',
         manual: true,
         request_status: nextStatus,
       },
@@ -438,9 +457,11 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
       message_type: 'request_queue',
       metadata: {
         request_id: requestRow.id,
+        chart_id: toInt(requestRow.chart_id),
         song_title: requestRow.song_title || '',
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
+        jacket_url: requestRow.jacket_url || '',
         request_status: nextStatus,
       },
     };
@@ -452,9 +473,11 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
       message_type: 'request_queue',
       metadata: {
         request_id: requestRow.id,
+        chart_id: toInt(requestRow.chart_id),
         song_title: requestRow.song_title || '',
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
+        jacket_url: requestRow.jacket_url || '',
         request_status: nextStatus,
       },
     };
@@ -466,9 +489,11 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
       message_type: 'request_queue',
       metadata: {
         request_id: requestRow.id,
+        chart_id: toInt(requestRow.chart_id),
         song_title: requestRow.song_title || '',
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
+        jacket_url: requestRow.jacket_url || '',
         request_status: nextStatus,
       },
     };
@@ -515,7 +540,15 @@ function updateLiveRequestStatus(db, requestRow, nextStatus, options = {}) {
 
   let announcementMessageId = '';
   if (options.emitMessage !== false && previousStatus !== normalizedStatus) {
-    const announcement = buildRequestStatusAnnouncement({ ...requestRow, ...updatedRow }, normalizedStatus, previousStatus);
+    const announcement = buildRequestStatusAnnouncement(
+      {
+        ...requestRow,
+        ...updatedRow,
+        jacket_url: getSongJacketUrl(db, requestRow.chart_id),
+      },
+      normalizedStatus,
+      previousStatus
+    );
     if (announcement?.message) {
       announcementMessageId = addSystemMessage(
         db,
@@ -861,7 +894,15 @@ function closeVote(db, voteId, options = {}) {
         snapshot.live_session_id,
         `Vote locked: ${formatPlayLabel(winner)} wins with ${winner.vote_count} vote${winner.vote_count === 1 ? '' : 's'}.`,
         'vote_result',
-        { vote_id: voteId, winning_option_id: winner.id }
+        {
+          vote_id: voteId,
+          winning_option_id: winner.id,
+          song_title: winner.song_title || '',
+          mode: winner.mode || '',
+          level: toInt(winner.level),
+          jacket_url: winner.jacket_url || '',
+          vote_count: toInt(winner.vote_count),
+        }
       );
     } else {
       announcementMessageId = addSystemMessage(db, snapshot.live_session_id, 'Vote locked. No ballots were cast.', 'vote_result', { vote_id: voteId });
@@ -959,35 +1000,6 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   };
 }
 
-function getSessionRequestCounts(db, liveSessionId) {
-  const rows = db.prepare(`
-    SELECT
-      CASE
-        WHEN COALESCE(NULLIF(status, ''), '') IN ('open', 'queued', 'played', 'skipped') THEN status
-        WHEN fulfilled = 1 THEN 'played'
-        ELSE 'open'
-      END AS status_key,
-      COUNT(*) AS count
-    FROM live_session_requests
-    WHERE live_session_id = ?
-    GROUP BY 1
-  `).all(liveSessionId);
-
-  const counts = {
-    open: 0,
-    queued: 0,
-    played: 0,
-    skipped: 0,
-  };
-
-  for (const row of rows) {
-    const key = normalizeRequestStatus(row?.status_key, false);
-    counts[key] = toInt(row?.count);
-  }
-
-  return counts;
-}
-
 function summarizeVoteForDirectory(vote) {
   if (!vote) return null;
   const winningOption = Array.isArray(vote.options) ? vote.options.find((option) => option.is_winner) || null : null;
@@ -1044,11 +1056,16 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
   const viewerPeak = getViewerPeak(session, viewerCount);
   const plays = getSessionPlays(db, session.id);
   const messageCount = getSessionMessageCount(db, session.id);
+  const interactionCounts = getSessionInteractionCounts(db, session.id);
   const summary = plays.length > 0
     ? buildLiveSessionSummary(plays, host || {}, {
+        sessionId: session.id,
         viewerCount,
         viewerPeak,
         messageCount,
+        requestPlayCount: interactionCounts.requestPlayCount,
+        votedSongPlayCount: interactionCounts.votedSongPlayCount,
+        interactions: interactionCounts.interactions,
         streamUrl: session.stream_url,
         hostUsername: host?.username || '',
       })
@@ -1069,11 +1086,16 @@ function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
   const host = getHostProfile(db, session.host_user_id);
   const plays = getSessionPlays(db, session.id);
   const messageCount = getSessionMessageCount(db, session.id);
+  const interactionCounts = getSessionInteractionCounts(db, session.id);
   const summary = plays.length > 0
     ? buildLiveSessionSummary(plays, host || {}, {
+        sessionId: session.id,
         viewerCount: 0,
         viewerPeak: Math.max(0, toInt(session.viewer_peak)),
         messageCount,
+        requestPlayCount: interactionCounts.requestPlayCount,
+        votedSongPlayCount: interactionCounts.votedSongPlayCount,
+        interactions: interactionCounts.interactions,
         streamUrl: session.stream_url,
         hostUsername: host?.username || '',
       })
@@ -1386,6 +1408,7 @@ function applyLiveSyncResult(db, session, syncResult) {
         song_title: row.song_title || '',
         mode: row.mode || '',
         level: toInt(row.level),
+        jacket_url: row.background_url || '',
         score: toInt(row.score),
         grade: row.grade || '',
         pumbility_gain: toInt(outcome?.pumbility_gain),
@@ -1422,7 +1445,10 @@ function applyLiveSyncResult(db, session, syncResult) {
           song_title: group.play?.song_title || '',
           mode: group.play?.mode || '',
           level: toInt(group.play?.level),
+          jacket_url: group.play?.background_url || '',
           recently_played_id: toInt(group.play?.id),
+          score: toInt(group.play?.score),
+          grade: group.play?.grade || '',
         }
       );
     }
@@ -1482,16 +1508,6 @@ function buildSummaryPostContent(summary) {
   if (!summary) return '';
   const marker = serializeLiveSessionMarker(summary);
   return marker;
-}
-
-function getSessionMessageCount(db, liveSessionId) {
-  if (!liveSessionId) return 0;
-  const row = db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM live_session_messages
-    WHERE live_session_id = ?
-  `).get(liveSessionId);
-  return toInt(row?.count);
 }
 
 function createLiveOverlayAccessToken(sessionId) {
@@ -1997,7 +2013,7 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
     let chart = null;
     if (chartId > 0) {
       chart = db.prepare(`
-        SELECT id, title, mode, level
+        SELECT id, title, mode, level, jacket_url
         FROM songs
         WHERE id = ?
       `).get(chartId);
@@ -2006,7 +2022,7 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
       const mode = normalizeText(req.body?.mode, 20);
       const level = toInt(req.body?.level);
       chart = db.prepare(`
-        SELECT id, title, mode, level
+        SELECT id, title, mode, level, jacket_url
         FROM songs
         WHERE title = ?
           AND mode = ?
@@ -2050,6 +2066,7 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
         song_title: chart.title,
         mode: chart.mode,
         level: toInt(chart.level),
+        jacket_url: chart.jacket_url || '',
       })
     );
 
@@ -2406,10 +2423,15 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     const viewerCount = getViewerCount(db, session, { cleanup: true });
     const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
     const messageCount = getSessionMessageCount(db, session.id);
+    const interactionCounts = getSessionInteractionCounts(db, session.id);
     const summary = buildLiveSessionSummary(plays, host || {}, {
+      sessionId: session.id,
       viewerCount,
       viewerPeak,
       messageCount,
+      requestPlayCount: interactionCounts.requestPlayCount,
+      votedSongPlayCount: interactionCounts.votedSongPlayCount,
+      interactions: interactionCounts.interactions,
       streamUrl: session.stream_url,
       hostUsername: host?.username || '',
     });

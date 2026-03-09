@@ -14,6 +14,12 @@ const {
 } = require('../lib/activitySubscriptions');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { checkPumpAchievements } = require('../lib/achievements');
+const { parseLiveSessionMarker } = require('../lib/liveSessionMarker');
+const {
+  getSessionInteractionCounts,
+  getSessionMessageCount,
+  parseSqliteDateTime,
+} = require('../lib/liveSessionMetrics');
 
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
@@ -77,6 +83,96 @@ function normalizeCommentUserRows(rows = [], size = 40) {
     ...row,
     avatar: normalizeUserAvatarForList(row.avatar, row.user_id, size, row.avatar_v),
   }));
+}
+
+function normalizeComparableUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '').toLowerCase();
+  } catch {
+    return raw.replace(/\/$/, '').toLowerCase();
+  }
+}
+
+function findMatchingEndedLiveSession(db, post, liveSummary) {
+  const directSessionId = String(liveSummary?.sessionId || '').trim();
+  if (directSessionId) {
+    const session = db.prepare(`
+      SELECT id, host_user_id, stream_url, ended_at, updated_at, created_at
+      FROM live_sessions
+      WHERE id = ?
+        AND host_user_id = ?
+      LIMIT 1
+    `).get(directSessionId, post.user_id);
+    if (session) return session;
+  }
+
+  const candidates = db.prepare(`
+    SELECT id, host_user_id, stream_url, ended_at, updated_at, created_at
+    FROM live_sessions
+    WHERE host_user_id = ?
+      AND status = 'ended'
+    ORDER BY datetime(COALESCE(NULLIF(ended_at, ''), updated_at, created_at)) DESC, id DESC
+    LIMIT 24
+  `).all(post.user_id);
+  if (candidates.length === 0) return null;
+
+  const targetUrl = normalizeComparableUrl(liveSummary?.streamUrl || post.youtube_url || '');
+  const postCreatedAt = parseSqliteDateTime(post.created_at);
+  const postCreatedAtMs = postCreatedAt ? postCreatedAt.getTime() : NaN;
+
+  let best = null;
+  for (const session of candidates) {
+    const streamMatch = targetUrl && normalizeComparableUrl(session.stream_url) === targetUrl;
+    const endedAt = parseSqliteDateTime(session.ended_at || session.updated_at || session.created_at);
+    const diff = endedAt && Number.isFinite(postCreatedAtMs)
+      ? Math.abs(endedAt.getTime() - postCreatedAtMs)
+      : Number.MAX_SAFE_INTEGER;
+
+    if (!best) {
+      best = { session, streamMatch, diff };
+      continue;
+    }
+
+    if (streamMatch && !best.streamMatch) {
+      best = { session, streamMatch, diff };
+      continue;
+    }
+    if (streamMatch === best.streamMatch && diff < best.diff) {
+      best = { session, streamMatch, diff };
+    }
+  }
+
+  if (!best) return null;
+  if (best.streamMatch) return best.session;
+  return best.diff <= 12 * 60 * 60 * 1000 ? best.session : null;
+}
+
+function enrichPostWithLiveSummaryMetrics(db, post) {
+  if (!post?.content) return post;
+  const liveSummary = parseLiveSessionMarker(post.content);
+  if (!liveSummary) return post;
+
+  const session = findMatchingEndedLiveSession(db, post, liveSummary);
+  if (!session) return post;
+
+  const interactionCounts = getSessionInteractionCounts(db, session.id);
+  post.live_summary_metrics = {
+    sessionId: session.id,
+    messageCount: getSessionMessageCount(db, session.id),
+    requestPlayCount: interactionCounts.requestPlayCount,
+    votedSongPlayCount: interactionCounts.votedSongPlayCount,
+    interactions: interactionCounts.interactions,
+  };
+  return post;
+}
+
+function enrichPostsWithLiveSummaryMetrics(db, posts = []) {
+  for (const post of posts) enrichPostWithLiveSummaryMetrics(db, post);
+  return posts;
 }
 
 function toInt(value) {
@@ -542,7 +638,7 @@ router.post('/posts', requireAuth, upload.array('images', 9), async (req, res) =
   });
   invalidateRecentActivityCache();
 
-  res.status(201).json({ ...post, pump_count: 0, comment_count: 0 });
+  res.status(201).json(enrichPostWithLiveSummaryMetrics(db, { ...post, pump_count: 0, comment_count: 0 }));
 });
 
 // GET /api/social/posts/user/:userId — get a user's posts with pump/comment counts
@@ -575,7 +671,7 @@ router.get('/posts/user/:userId', optionalAuth, (req, res) => {
     }
   }
 
-  res.json(posts);
+  res.json(enrichPostsWithLiveSummaryMetrics(db, posts));
 });
 
 // PUT /api/social/posts/:id — edit own post (text/youtube only, images unchanged)
@@ -597,7 +693,7 @@ router.put('/posts/:id', requireAuth, (req, res) => {
     WHERE p.id = ?
   `).get(req.params.id);
 
-  res.json(updated);
+  res.json(enrichPostWithLiveSummaryMetrics(db, updated));
 });
 
 // DELETE /api/social/posts/:id — delete own post
@@ -913,7 +1009,7 @@ router.get('/posts/:id', optionalAuth, (req, res) => {
     ).get(post.id, req.user.id);
   }
   post.type = 'post';
-  res.json(post);
+  res.json(enrichPostWithLiveSummaryMetrics(db, post));
 });
 
 // GET /api/social/upscores/:id — get a single upscore by ID (public)
@@ -1030,6 +1126,7 @@ router.get('/feed', requireAuth, (req, res) => {
       WHERE p.id IN (${placeholders})
     `).all(req.user.id, ...postIds);
 
+    enrichPostsWithLiveSummaryMetrics(db, posts);
     for (const post of posts) {
       post.avatar = normalizeUserAvatarForList(post.avatar, post.user_id, 64);
       itemMap.set(`post:${post.id}`, post);
