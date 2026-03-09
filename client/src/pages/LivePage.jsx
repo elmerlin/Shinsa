@@ -1126,7 +1126,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
       </div>
 
       {play ? (
-        <div className={`${compact ? 'mt-2' : 'mt-4'} flex flex-1 flex-col`}>
+        <div className={`${compact ? 'mt-2 flex flex-1 flex-col' : 'mt-4 flex flex-col'}`}>
           <p className={`truncate font-display font-black text-white ${compact ? 'text-base leading-tight' : 'text-lg'}`}>{play.song_title}</p>
           {compact ? (
             <div className="mt-2 flex flex-1 flex-col">
@@ -1173,7 +1173,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
               </div>
             </div>
           ) : (
-            <div className="mt-3 flex flex-1 items-center gap-3">
+            <div className="mt-3 flex items-center gap-3">
               <button type="button" onClick={onOpen} className="shrink-0 text-left">
                 <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="md" />
               </button>
@@ -1216,7 +1216,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
             </div>
           )}
           {play.machine_name ? (
-            <p className={`mt-auto text-right text-gray-400 ${compact ? 'pt-1 text-[10px]' : 'pt-2 text-sm'}`}>at {play.machine_name}</p>
+            <p className={`text-right text-gray-400 ${compact ? 'mt-auto pt-1 text-[10px]' : 'mt-2 text-sm'}`}>at {play.machine_name}</p>
           ) : null}
         </div>
       ) : (
