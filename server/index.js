@@ -35,7 +35,14 @@ app.set('trust proxy', true);
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({
+  limit: '50mb',
+  verify: (req, _res, buf) => {
+    if (req.originalUrl === '/api/venue-access/webhook') {
+      req.rawBody = buf.toString('utf8');
+    }
+  },
+}));
 
 // Combined dashboard endpoint — single request instead of 3
 app.get('/api/dashboard', (req, res) => {

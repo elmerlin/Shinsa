@@ -1188,13 +1188,15 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
 
 // ── Square Webhook ──────────────────────────────────────────────────────
 
-router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+router.post('/webhook', (req, res) => {
   if (!isSquareConfigured()) {
     return res.status(503).json({ error: 'Square not configured' });
   }
 
   const sig = req.headers['x-square-hmacsha256-signature'];
-  const rawBody = Buffer.isBuffer(req.body)
+  const rawBody = typeof req.rawBody === 'string'
+    ? req.rawBody
+    : Buffer.isBuffer(req.body)
     ? req.body.toString('utf8')
     : typeof req.body === 'string'
       ? req.body
@@ -1211,11 +1213,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res) =>
 
   let event = null;
   try {
-    event = Buffer.isBuffer(req.body)
-      ? JSON.parse(req.body.toString('utf8'))
-      : typeof req.body === 'string'
-        ? JSON.parse(req.body)
-        : req.body;
+    if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      event = req.body;
+    } else {
+      event = JSON.parse(rawBody);
+    }
   } catch (err) {
     console.error('[Square Webhook] Invalid payload:', err.message);
     return res.status(400).json({ error: 'Invalid webhook payload' });

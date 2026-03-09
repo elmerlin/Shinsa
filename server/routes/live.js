@@ -513,10 +513,11 @@ function updateLiveRequestStatus(db, requestRow, nextStatus, options = {}) {
     LIMIT 1
   `).get(requestRow.id);
 
+  let announcementMessageId = '';
   if (options.emitMessage !== false && previousStatus !== normalizedStatus) {
     const announcement = buildRequestStatusAnnouncement({ ...requestRow, ...updatedRow }, normalizedStatus, previousStatus);
     if (announcement?.message) {
-      addSystemMessage(
+      announcementMessageId = addSystemMessage(
         db,
         requestRow.live_session_id,
         announcement.message,
@@ -526,7 +527,10 @@ function updateLiveRequestStatus(db, requestRow, nextStatus, options = {}) {
     }
   }
 
-  return updatedRow;
+  return {
+    request: updatedRow,
+    announcement_message_id: announcementMessageId,
+  };
 }
 
 function buildModerationAnnouncement(targetUser, previousState, nextState) {
@@ -848,9 +852,11 @@ function closeVote(db, voteId, options = {}) {
     WHERE id = ?
   `).run(winner?.id || '', voteId);
 
+  let announcementMessage = null;
   if (options.emitMessage !== false) {
+    let announcementMessageId = '';
     if (winner) {
-      addSystemMessage(
+      announcementMessageId = addSystemMessage(
         db,
         snapshot.live_session_id,
         `Vote locked: ${formatPlayLabel(winner)} wins with ${winner.vote_count} vote${winner.vote_count === 1 ? '' : 's'}.`,
@@ -858,13 +864,17 @@ function closeVote(db, voteId, options = {}) {
         { vote_id: voteId, winning_option_id: winner.id }
       );
     } else {
-      addSystemMessage(db, snapshot.live_session_id, 'Vote locked. No ballots were cast.', 'vote_result', { vote_id: voteId });
+      announcementMessageId = addSystemMessage(db, snapshot.live_session_id, 'Vote locked. No ballots were cast.', 'vote_result', { vote_id: voteId });
     }
+    announcementMessage = getNormalizedLiveMessage(db, announcementMessageId);
   }
 
   const closedSnapshot = getVoteSnapshot(db, voteId, options.currentUserId || '');
   if (options.broadcast !== false) {
-    broadcastLiveSessionSnapshot(db, snapshot.live_session_id, options.reason || 'vote_closed');
+    broadcastLiveVoteUpdated(db, snapshot.live_session_id, options.reason || 'vote_closed');
+    if (announcementMessage) {
+      broadcastLiveMessageAdded(snapshot.live_session_id, announcementMessage, options.reason || 'vote_closed');
+    }
   }
   return closedSnapshot;
 }
@@ -1545,6 +1555,62 @@ function broadcastLivePresence(liveSessionId, payload = {}) {
   });
 }
 
+function getNormalizedLiveMessage(db, messageId) {
+  return normalizeMessageRow(getLiveMessageRow(db, messageId));
+}
+
+function broadcastLiveMessageAdded(liveSessionId, message, reason = 'message_added') {
+  if (!message?.id) return 0;
+  return emitLiveSessionEvent(liveSessionId, 'message_added', {
+    reason,
+    message,
+    emitted_at: new Date().toISOString(),
+  });
+}
+
+function broadcastLiveMessageRemoved(liveSessionId, messageId, reason = 'message_removed') {
+  const normalizedMessageId = String(messageId || '').trim();
+  if (!normalizedMessageId) return 0;
+  return emitLiveSessionEvent(liveSessionId, 'message_removed', {
+    reason,
+    message_id: normalizedMessageId,
+    emitted_at: new Date().toISOString(),
+  });
+}
+
+function broadcastLiveRequestsUpdated(liveSessionId, requests, reason = 'requests_updated') {
+  return emitLiveSessionEvent(liveSessionId, 'requests_updated', {
+    reason,
+    requests: Array.isArray(requests) ? requests : [],
+    emitted_at: new Date().toISOString(),
+  });
+}
+
+function broadcastLiveModerationUpdated(db, sessionOrId, targetUserId, moderation, reason = 'moderation_updated') {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  if (!session?.id) return 0;
+
+  const normalizedTargetUserId = String(targetUserId || '').trim();
+  const nextModeration = moderation || getLiveModerationState(db, session.id, normalizedTargetUserId);
+  return emitLiveSessionEvent(session.id, 'moderation_updated', ({ userId }) => ({
+    reason,
+    target_user_id: normalizedTargetUserId,
+    moderation: nextModeration,
+    viewer_state: getSessionViewerState(db, session, userId),
+    emitted_at: new Date().toISOString(),
+  }));
+}
+
+function broadcastLiveVoteUpdated(db, liveSessionId, reason = 'vote_updated') {
+  return emitLiveSessionEvent(liveSessionId, 'vote_updated', ({ userId }) => ({
+    reason,
+    vote: getLatestVoteSnapshot(db, liveSessionId, userId),
+    emitted_at: new Date().toISOString(),
+  }));
+}
+
 function clearVoteCloseTimer(voteId) {
   const key = String(voteId || '').trim();
   const timer = voteCloseTimers.get(key);
@@ -1882,9 +1948,9 @@ router.post('/sessions/:id/messages', requireAuth, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 'chat', '{}')
     `).run(id, session.id, user.id, user.username || req.user.username || 'User', avatar, message);
 
-    const row = getLiveMessageRow(db, id);
-    broadcastLiveSessionSnapshot(db, session.id, 'message');
-    res.status(201).json({ message: normalizeMessageRow(row) });
+    const normalizedMessage = getNormalizedLiveMessage(db, id);
+    broadcastLiveMessageAdded(session.id, normalizedMessage, 'message');
+    res.status(201).json({ message: normalizedMessage });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
@@ -1987,11 +2053,17 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
       })
     );
 
+    const requests = getSessionRequests(db, session.id);
+    const request = requests.find((row) => row.id === requestId) || null;
+    const messageRow = getNormalizedLiveMessage(db, messageId);
+
     res.status(201).json({
-      request: getSessionRequests(db, session.id).find((row) => row.id === requestId) || null,
-      message: normalizeMessageRow(getLiveMessageRow(db, messageId)),
+      request,
+      requests,
+      message: messageRow,
     });
-    broadcastLiveSessionSnapshot(db, session.id, 'request_created');
+    broadcastLiveRequestsUpdated(session.id, requests, 'request_created');
+    broadcastLiveMessageAdded(session.id, messageRow, 'request_created');
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
@@ -2013,16 +2085,24 @@ router.post('/sessions/:id/requests/:requestId/fulfill', requireAuth, (req, res)
     `).get(req.params.requestId, session.id);
     if (!requestRow) return res.status(404).json({ error: 'Request not found' });
 
-    updateLiveRequestStatus(db, requestRow, 'played', {
+    const updateResult = updateLiveRequestStatus(db, requestRow, 'played', {
       actorUserId: req.user.id,
       emitMessage: normalizeRequestStatus(requestRow.status, toInt(requestRow.fulfilled) === 1) !== 'played',
     });
 
-    const request = getSessionRequests(db, session.id).find((row) => row.id === requestRow.id) || null;
-    broadcastLiveSessionSnapshot(db, session.id, 'request_fulfilled');
+    const requests = getSessionRequests(db, session.id);
+    const request = requests.find((row) => row.id === requestRow.id) || null;
+    const message = updateResult?.announcement_message_id
+      ? getNormalizedLiveMessage(db, updateResult.announcement_message_id)
+      : null;
+    broadcastLiveRequestsUpdated(session.id, requests, 'request_fulfilled');
+    if (message) {
+      broadcastLiveMessageAdded(session.id, message, 'request_fulfilled');
+    }
     res.json({
       request,
-      snapshot: buildSessionSnapshot(db, session, req.user.id),
+      requests,
+      message,
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -2051,16 +2131,24 @@ router.post('/sessions/:id/requests/:requestId/status', requireAuth, (req, res) 
     }
     const nextStatus = normalizeRequestStatus(requestedStatus, requestedStatus === 'played');
 
-    updateLiveRequestStatus(db, requestRow, nextStatus, {
+    const updateResult = updateLiveRequestStatus(db, requestRow, nextStatus, {
       actorUserId: req.user.id,
       emitMessage: normalizeRequestStatus(requestRow.status, toInt(requestRow.fulfilled) === 1) !== nextStatus,
     });
 
-    const request = getSessionRequests(db, session.id).find((row) => row.id === requestRow.id) || null;
-    broadcastLiveSessionSnapshot(db, session.id, `request_${nextStatus}`);
+    const requests = getSessionRequests(db, session.id);
+    const request = requests.find((row) => row.id === requestRow.id) || null;
+    const message = updateResult?.announcement_message_id
+      ? getNormalizedLiveMessage(db, updateResult.announcement_message_id)
+      : null;
+    broadcastLiveRequestsUpdated(session.id, requests, `request_${nextStatus}`);
+    if (message) {
+      broadcastLiveMessageAdded(session.id, message, `request_${nextStatus}`);
+    }
     res.json({
       request,
-      snapshot: buildSessionSnapshot(db, session, req.user.id),
+      requests,
+      message,
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -2121,8 +2209,9 @@ router.post('/sessions/:id/moderation', requireAuth, (req, res) => {
 
     const moderation = getLiveModerationState(db, session.id, targetUserId);
     const announcement = buildModerationAnnouncement(targetUser, previousState, moderation);
+    let announcementMessage = null;
     if (announcement) {
-      addSystemMessage(
+      const announcementMessageId = addSystemMessage(
         db,
         session.id,
         announcement,
@@ -2133,12 +2222,18 @@ router.post('/sessions/:id/moderation', requireAuth, (req, res) => {
           requests_blocked: moderation.requests_blocked,
         }
       );
+      announcementMessage = getNormalizedLiveMessage(db, announcementMessageId);
     }
 
-    broadcastLiveSessionSnapshot(db, session.id, 'moderation');
+    broadcastLiveModerationUpdated(db, session, targetUserId, moderation, 'moderation');
+    if (announcementMessage) {
+      broadcastLiveMessageAdded(session.id, announcementMessage, 'moderation');
+    }
     res.json({
+      target_user_id: targetUserId,
       moderation,
-      snapshot: buildSessionSnapshot(db, session, req.user.id),
+      viewer_state: getSessionViewerState(db, session, req.user.id),
+      message: announcementMessage,
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -2168,10 +2263,10 @@ router.post('/sessions/:id/messages/:messageId/delete', requireAuth, (req, res) 
       WHERE id = ?
     `).run(message.id);
 
-    broadcastLiveSessionSnapshot(db, session.id, 'message_deleted');
+    broadcastLiveMessageRemoved(session.id, message.id, 'message_deleted');
     res.json({
       success: true,
-      snapshot: buildSessionSnapshot(db, session, req.user.id),
+      message_id: message.id,
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
@@ -2239,9 +2334,12 @@ router.post('/sessions/:id/votes', requireAuth, (req, res) => {
       WHERE id = ?
     `).run(pinnedMessageId, voteId);
     scheduleVoteClose(db, voteId);
-    broadcastLiveSessionSnapshot(db, session.id, 'vote_created');
+    const vote = getVoteSnapshot(db, voteId, req.user.id);
+    const message = getNormalizedLiveMessage(db, pinnedMessageId);
+    broadcastLiveVoteUpdated(db, session.id, 'vote_created');
+    broadcastLiveMessageAdded(session.id, message, 'vote_created');
 
-    res.status(201).json({ vote: getVoteSnapshot(db, voteId, req.user.id) });
+    res.status(201).json({ vote, message });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
@@ -2277,7 +2375,7 @@ router.post('/votes/:voteId/cast', requireAuth, (req, res) => {
         option_id = excluded.option_id,
         created_at = datetime('now')
     `).run(vote.id, optionId, req.user.id);
-    broadcastLiveSessionSnapshot(db, vote.live_session_id, 'vote_updated');
+    broadcastLiveVoteUpdated(db, vote.live_session_id, 'vote_updated');
 
     res.json({ vote: getVoteSnapshot(db, vote.id, req.user.id) });
   } catch (err) {

@@ -364,6 +364,74 @@ function makePresenceId() {
   return `live_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 }
 
+function appendUniqueLiveMessage(messages, message) {
+  const current = Array.isArray(messages) ? messages : [];
+  if (!message?.id) return current;
+
+  const existingIndex = current.findIndex((row) => row.id === message.id);
+  if (existingIndex >= 0) {
+    if (current[existingIndex] === message) return current;
+    const next = current.slice();
+    next[existingIndex] = message;
+    return next;
+  }
+
+  const next = [...current, message];
+  return next.length > 200 ? next.slice(next.length - 200) : next;
+}
+
+function removeLiveMessageById(messages, messageId) {
+  const current = Array.isArray(messages) ? messages : [];
+  const normalizedMessageId = String(messageId || '').trim();
+  if (!normalizedMessageId) return current;
+  const next = current.filter((row) => row?.id !== normalizedMessageId);
+  return next.length === current.length ? current : next;
+}
+
+function applyModerationToMessages(messages, targetUserId, moderation) {
+  const current = Array.isArray(messages) ? messages : [];
+  const normalizedTargetUserId = String(targetUserId || '').trim();
+  if (!normalizedTargetUserId) return current;
+
+  let changed = false;
+  const next = current.map((row) => {
+    if (String(row?.user_id || '') !== normalizedTargetUserId) return row;
+    const chatMuted = !!moderation?.chat_muted;
+    const requestsBlocked = !!moderation?.requests_blocked;
+    if (row.chat_muted === chatMuted && row.requests_blocked === requestsBlocked) return row;
+    changed = true;
+    return {
+      ...row,
+      chat_muted: chatMuted,
+      requests_blocked: requestsBlocked,
+    };
+  });
+
+  return changed ? next : current;
+}
+
+function applyModerationToRequests(requests, targetUserId, moderation) {
+  const current = Array.isArray(requests) ? requests : [];
+  const normalizedTargetUserId = String(targetUserId || '').trim();
+  if (!normalizedTargetUserId) return current;
+
+  let changed = false;
+  const next = current.map((row) => {
+    if (String(row?.user_id || '') !== normalizedTargetUserId) return row;
+    const chatMuted = !!moderation?.chat_muted;
+    const requestsBlocked = !!moderation?.requests_blocked;
+    if (row.chat_muted === chatMuted && row.requests_blocked === requestsBlocked) return row;
+    changed = true;
+    return {
+      ...row,
+      chat_muted: chatMuted,
+      requests_blocked: requestsBlocked,
+    };
+  });
+
+  return changed ? next : current;
+}
+
 function PlayDetailModal({ play, onClose }) {
   if (!play) return null;
   const rank = getRank(play.score ?? 0);
@@ -1260,13 +1328,13 @@ export default function LivePage() {
     }
   };
 
-  const applySnapshot = (data, options = {}) => {
-    const nextMessages = Array.isArray(data?.messages) ? data.messages : [];
+  const reconcileSeenMessages = (nextMessages, options = {}) => {
+    const normalizedMessages = Array.isArray(nextMessages) ? nextMessages : [];
     if (options.markMessagesSeen) {
-      seenMessageIdsRef.current = new Set(nextMessages.map((msg) => msg.id));
+      seenMessageIdsRef.current = new Set(normalizedMessages.map((msg) => msg.id));
     } else {
       const seen = seenMessageIdsRef.current;
-      for (const msg of nextMessages) {
+      for (const msg of normalizedMessages) {
         if (seen.has(msg.id)) continue;
         seen.add(msg.id);
         if (!msg?.is_system) {
@@ -1277,10 +1345,123 @@ export default function LivePage() {
         }
       }
     }
+  };
+
+  const applySnapshot = (data, options = {}) => {
+    const nextMessages = Array.isArray(data?.messages) ? data.messages : [];
+    reconcileSeenMessages(nextMessages, options);
 
     startTransition(() => {
       setSnapshot(data);
       setMessages(nextMessages);
+    });
+  };
+
+  const appendLiveMessage = (message, options = {}) => {
+    if (!message?.id) return;
+
+    if (options.markMessagesSeen) {
+      seenMessageIdsRef.current.add(message.id);
+    } else if (!seenMessageIdsRef.current.has(message.id)) {
+      seenMessageIdsRef.current.add(message.id);
+      if (!message?.is_system) {
+        const reaction = getLiveReactionPayload(message?.message);
+        if (reaction) {
+          showFloatingReaction(reaction);
+        }
+      }
+    }
+
+    startTransition(() => {
+      setMessages((prev) => appendUniqueLiveMessage(prev, message));
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: appendUniqueLiveMessage(prev.messages, message),
+        };
+      });
+    });
+  };
+
+  const removeLiveMessage = (messageId) => {
+    const normalizedMessageId = String(messageId || '').trim();
+    if (!normalizedMessageId) return;
+    seenMessageIdsRef.current.delete(normalizedMessageId);
+
+    startTransition(() => {
+      setMessages((prev) => removeLiveMessageById(prev, normalizedMessageId));
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: removeLiveMessageById(prev.messages, normalizedMessageId),
+        };
+      });
+    });
+  };
+
+  const replaceLiveRequests = (nextRequests) => {
+    const normalizedRequests = Array.isArray(nextRequests) ? nextRequests : [];
+    startTransition(() => {
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          requests: normalizedRequests,
+        };
+      });
+    });
+  };
+
+  const applyPresenceUpdate = (viewerCount, viewerPeak) => {
+    startTransition(() => {
+      setSnapshot((prev) => {
+        if (!prev?.session) return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            viewer_count: viewerCount,
+            viewer_peak: viewerPeak,
+          },
+          summary: prev.summary ? {
+            ...prev.summary,
+            viewerCount,
+            viewerPeak,
+          } : prev.summary,
+        };
+      });
+    });
+  };
+
+  const applyVoteUpdate = (vote) => {
+    startTransition(() => {
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          active_vote: vote || null,
+        };
+      });
+    });
+  };
+
+  const applyModerationPayload = (payload) => {
+    const targetUserId = String(payload?.target_user_id || '').trim();
+    const moderation = payload?.moderation || { chat_muted: false, requests_blocked: false };
+
+    startTransition(() => {
+      setMessages((prev) => applyModerationToMessages(prev, targetUserId, moderation));
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: applyModerationToMessages(prev.messages, targetUserId, moderation),
+          requests: applyModerationToRequests(prev.requests, targetUserId, moderation),
+          viewer_state: payload?.viewer_state || prev.viewer_state,
+        };
+      });
     });
   };
 
@@ -1616,22 +1797,61 @@ export default function LivePage() {
         const payload = JSON.parse(event.data || '{}');
         const viewerCount = parseInt(payload?.viewer_count, 10) || 0;
         const viewerPeak = parseInt(payload?.viewer_peak, 10) || 0;
-        setSnapshot((prev) => {
-          if (!prev?.session) return prev;
-          return {
-            ...prev,
-            session: {
-              ...prev.session,
-              viewer_count: viewerCount,
-              viewer_peak: viewerPeak,
-            },
-            summary: prev.summary ? {
-              ...prev.summary,
-              viewerCount,
-              viewerPeak,
-            } : prev.summary,
-          };
-        });
+        applyPresenceUpdate(viewerCount, viewerPeak);
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    const handleMessageAdded = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        if (payload?.message) {
+          appendLiveMessage(payload.message);
+        }
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    const handleMessageRemoved = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        if (payload?.message_id) {
+          removeLiveMessage(payload.message_id);
+        }
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    const handleRequestsUpdated = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        if (Array.isArray(payload?.requests)) {
+          replaceLiveRequests(payload.requests);
+        }
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    const handleModerationUpdated = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        applyModerationPayload(payload);
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
+    const handleVoteUpdated = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        if (Object.prototype.hasOwnProperty.call(payload || {}, 'vote')) {
+          applyVoteUpdate(payload.vote || null);
+        }
+        if (!closed) setError('');
         if (!closed) setStreamState('live');
       } catch {}
     };
@@ -1639,6 +1859,11 @@ export default function LivePage() {
     source.addEventListener('ready', handleReady);
     source.addEventListener('snapshot', handleSnapshot);
     source.addEventListener('presence', handlePresence);
+    source.addEventListener('message_added', handleMessageAdded);
+    source.addEventListener('message_removed', handleMessageRemoved);
+    source.addEventListener('requests_updated', handleRequestsUpdated);
+    source.addEventListener('moderation_updated', handleModerationUpdated);
+    source.addEventListener('vote_updated', handleVoteUpdated);
     source.onopen = handleReady;
     source.onerror = () => {
       if (!closed) setStreamState('reconnecting');
@@ -1846,8 +2071,7 @@ export default function LivePage() {
     setSendingChat(true);
     try {
       const data = await sendLiveMessage(activeSessionId, { message: trimmed });
-      setMessages((prev) => [...prev, data.message]);
-      seenMessageIdsRef.current.add(data.message.id);
+      appendLiveMessage(data.message, { markMessagesSeen: true });
       setChatInput('');
       const reaction = getLiveReactionPayload(trimmed);
       if (reaction) showFloatingReaction(reaction);
@@ -1863,8 +2087,7 @@ export default function LivePage() {
     showFloatingReaction(emoji);
     try {
       const data = await sendLiveMessage(activeSessionId, { message: emoji });
-      setMessages((prev) => [...prev, data.message]);
-      seenMessageIdsRef.current.add(data.message.id);
+      appendLiveMessage(data.message, { markMessagesSeen: true });
       setShowEmoteTray(false);
     } catch (err) {
       setError(err.message || 'Failed to send reaction');
@@ -1889,12 +2112,16 @@ export default function LivePage() {
   const handleLiveRequest = async (chart) => {
     if (!activeSessionId || viewerState.requests_blocked) return;
     try {
-      await sendLiveRequest(activeSessionId, { chart_id: chart.chart_id });
+      const data = await sendLiveRequest(activeSessionId, { chart_id: chart.chart_id });
+      if (Array.isArray(data?.requests)) {
+        replaceLiveRequests(data.requests);
+      }
+      if (data?.message) {
+        appendLiveMessage(data.message, { markMessagesSeen: true });
+      }
       setStatusNote(`Requested ${chart.song_title} (${modeShort(chart.mode)}${chart.level}).`);
       setSongSearch('');
       setSongResults([]);
-      const data = await getLiveSession(activeSessionId);
-      applySnapshot(data);
     } catch (err) {
       setError(err.message || 'Failed to send request');
     }
@@ -1904,13 +2131,17 @@ export default function LivePage() {
     if (!activeSessionId) return;
     setCreatingVote(true);
     try {
-      await createLiveVote(activeSessionId, {
+      const data = await createLiveVote(activeSessionId, {
         mode_filter: voteModeFilter,
         min_level: parseInt(voteMinLevel, 10) || 1,
         max_level: parseInt(voteMaxLevel, 10) || parseInt(voteMinLevel, 10) || 1,
       });
-      const data = await getLiveSession(activeSessionId);
-      applySnapshot(data);
+      if (Object.prototype.hasOwnProperty.call(data || {}, 'vote')) {
+        applyVoteUpdate(data.vote || null);
+      }
+      if (data?.message) {
+        appendLiveMessage(data.message, { markMessagesSeen: true });
+      }
     } catch (err) {
       setError(err.message || 'Failed to create vote');
     } finally {
@@ -1922,7 +2153,7 @@ export default function LivePage() {
     if (!currentVote) return;
     try {
       const data = await castLiveVote(currentVote.id, optionId);
-      setSnapshot((prev) => ({ ...prev, active_vote: data.vote }));
+      applyVoteUpdate(data.vote);
     } catch (err) {
       setError(err.message || 'Failed to cast vote');
     }
@@ -1948,7 +2179,12 @@ export default function LivePage() {
     setRequestActionKey(`${request.id}:${nextStatus}`);
     try {
       const data = await setLiveRequestStatus(activeSessionId, request.id, nextStatus);
-      if (data?.snapshot) applySnapshot(data.snapshot);
+      if (Array.isArray(data?.requests)) {
+        replaceLiveRequests(data.requests);
+      }
+      if (data?.message) {
+        appendLiveMessage(data.message, { markMessagesSeen: true });
+      }
       setStatusNote(`Request ${request.song_title} is now ${getRequestStatusMeta(nextStatus).label.toLowerCase()}.`);
     } catch (err) {
       setError(err.message || 'Failed to update request');
@@ -1972,7 +2208,10 @@ export default function LivePage() {
         chat_muted: chatMuted,
         requests_blocked: requestsBlocked,
       });
-      if (data?.snapshot) applySnapshot(data.snapshot);
+      applyModerationPayload(data);
+      if (data?.message) {
+        appendLiveMessage(data.message, { markMessagesSeen: true });
+      }
       setStatusNote(
         field === 'chat_muted'
           ? `${target.username || 'Viewer'} ${chatMuted ? 'was muted in chat.' : 'can chat again.'}`
@@ -1990,7 +2229,9 @@ export default function LivePage() {
     setDeletingMessageId(messageId);
     try {
       const data = await deleteLiveMessage(activeSessionId, messageId);
-      if (data?.snapshot) applySnapshot(data.snapshot);
+      if (data?.message_id) {
+        removeLiveMessage(data.message_id);
+      }
       setStatusNote('Viewer message removed.');
     } catch (err) {
       setError(err.message || 'Failed to remove message');
