@@ -28,29 +28,87 @@ const PLAY_LIMIT = 250;
 const VOTE_DURATION_SECONDS = 30;
 const STREAM_HEARTBEAT_MS = 25000;
 const LIVE_SYNC_INTERVAL_MS = 60000;
-const FAIL_MESSAGES = [
-  'Better luck next time!',
-  'Shake it off and go again.',
-  'That chart bites back. Run it again.',
-  'Reset, breathe, and send the next one.',
+const FAILURE_MESSAGES = [
+  "Oof. That stage break screen is looking a little too familiar today, don't you think? Shake the lactic acid out and run it back!",
+  "My circuits literally hurt for you. You were this close to the finish line! Take a breath, drink some water, and go again.",
+  "Gravity: 1. Your legs: 0. It's okay, the floor looked like it needed a hug anyway. Get back up there!",
+  "Even the legendary Pumpers hit the floor sometimes. That song is a beast, but you're tougher. Reset, refocus, revenge pass.",
+  "System Alert: User has temporarily forgotten how to move their feet. Rebooting motivation protocols... 3... 2... 1... PUMP!",
 ];
-const PASS_MESSAGES = [
+const PERFORMANCE_MESSAGE_TIERS = [
+  {
+    id: 'tier_1_a_rank',
+    grades: ['A', 'A+'],
+    messages: [
+      "You survived... but my sensors suggest your legs might be made of cooked noodles. A pass is a pass, I guess!",
+      "The machine survived your stomping, and you survived the chart. It wasn't pretty, but hey, you're still standing... mostly.",
+      'That looked more like a struggle for survival than a dance. You got the A, but the pads are definitely judging you right now.',
+      "I've seen cardboard boxes with more rhythm, but a pass is a pass! Let's shake off the rust and try that again.",
+      'You finished! Barely. If this were a movie, this is the part where the hero collapses. Take a breather, champ.',
+    ],
+  },
+  {
+    id: 'tier_2_aa_rank',
+    grades: ['AA', 'AA+'],
+    messages: [
+      "Not bad! You're definitely finding the rhythm, though those 'Greats' are looking a little lonely. Tighten it up for that S!",
+      "You're getting there! Your feet are moving, but your soul is still buffering. A little more 'oomph' next time.",
+      "Solid effort. You've got the pattern down, now you just need the precision. Don't let those blues get in your head!",
+      "I see what you're trying to do, and I like it. You're hovering right on the edge of greatness. Push just a little harder!",
+      "Consistent and reliable, but missing that 'wow' factor. You're like a high-end sedan - smooth, but I know you've got a sports car in there.",
+    ],
+  },
+  {
+    id: 'tier_3_aaa_rank',
+    grades: ['AAA', 'AAA+'],
+    messages: [
+      "Okay, okay! I see those fast feet! You're starting to make this look easy. That was smooth and stylish.",
+      "Now we're talking! That was a high-voltage performance. You're slicing through these charts like a hot knife through butter.",
+      "The rhythm is strong with this one. You've officially entered the 'Don't Blink' zone. That was seriously impressive stepping!",
+      "Look at those combos! You're turning this cabinet into a concert stage. If you keep this up, we're going to need a bigger leaderboard.",
+      "Your stamina is actually frightening. You handled those runs like a pro. Triple A? More like Triple Threat!",
+    ],
+  },
+  {
+    id: 'tier_4_s_ss_rank',
+    grades: ['S', 'S+', 'SS', 'SS+'],
+    messages: [
+      "Absolute heat! You're dancing like the machine owes you money. If you get any faster, we'll need a fire extinguisher!",
+      "You aren't just playing the game anymore; you're dominating it. That score is high enough to give the local legends a heart attack.",
+      "Pure, unadulterated skill. Every step was a statement. You're making the elite tiers look like a playground right now.",
+      "I'm honestly worried about the structural integrity of the floor. That was an absolute masterclass in Pump It Up. Bravo!",
+      "Witnessed! That was a marathon of precision. You're hitting notes I didn't even know existed. Keep that elite energy flowing!",
+    ],
+  },
+  {
+    id: 'tier_5_sss_rank',
+    grades: ['SSS', 'SSS+'],
+    messages: [
+      'Error 404: Flawless detected. Are you even human, or did you just transcend space and time? Someone clip that!',
+      "UNREAL. You just achieved a state of rhythmic nirvana. I'm checking your shoes for hidden jetpacks because that was out of this world.",
+      "A Golden Performance! The machine should honestly just retire now; it's never going to be played better than that.",
+      "Did the game even register a 'Good'? Oh wait, no, it didn't. Because you're a literal god. Bow down to the SSS King!",
+      "Total perfection. You and the rhythm are one. That wasn't just a play session; that was a historical event. We are all witnesses!",
+    ],
+  },
+];
+const FALLBACK_PASS_MESSAGES = [
   'Clear secured.',
   'Nice work. Keep the run going.',
   'Solid pass. Stay locked in.',
   'That one is on the board.',
 ];
-const STRONG_MESSAGES = [
-  'Great score. The session is heating up.',
-  'Sharp run. Chat should be paying attention.',
-  'That looked strong.',
-  'Momentum is building.',
+const UPSCORE_CONTEXT_MESSAGES = [
+  'New upscore.',
+  'Fresh personal best.',
+  'Score line pushed higher.',
+  'That PB just moved.',
 ];
-const ELITE_MESSAGES = [
-  'That is a huge result.',
-  'Elite run. Keep cooking.',
-  'Monster score.',
-  'That chart just got handled.',
+const CLEAR_CONTEXT_MESSAGES = [
+  'First clear on this chart.',
+  'New clear secured.',
+  'Clear banner unlocked.',
+  'That chart is officially conquered.',
 ];
 
 const syncRecentlyPlayedForUser = piugameRoutes.syncRecentlyPlayedForUser;
@@ -134,12 +192,31 @@ function isFailLike(play) {
   return /^X(?:[_-]|$)/.test(grade);
 }
 
-function getGradeBucket(play) {
-  const grade = String(play?.grade || '').trim().toUpperCase();
-  if (isFailLike(play)) return 'fail';
-  if (/SSS|SS\+|SS\b|S\+|S\b/.test(grade)) return 'elite';
-  if (/AAA|AA/.test(grade)) return 'strong';
-  return 'pass';
+function normalizeGradeKey(value) {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function getPerformanceMessageSelection(play) {
+  if (isFailLike(play)) {
+    return {
+      key: 'fail',
+      messages: FAILURE_MESSAGES,
+    };
+  }
+
+  const grade = normalizeGradeKey(play?.grade);
+  const tier = PERFORMANCE_MESSAGE_TIERS.find((entry) => entry.grades.includes(grade));
+  if (tier) {
+    return {
+      key: tier.id,
+      messages: tier.messages,
+    };
+  }
+
+  return {
+    key: 'fallback_pass',
+    messages: FALLBACK_PASS_MESSAGES,
+  };
 }
 
 function formatPlayLabel(play) {
@@ -1279,18 +1356,26 @@ function buildPlayAnnouncement(play, outcome) {
   const label = formatPlayLabel(play);
   const score = toInt(play?.score);
   const grade = String(play?.grade || '').trim() || (score > 0 ? score.toLocaleString() : 'FAIL');
-  const bucket = getGradeBucket(play);
-  const base = bucket === 'fail'
-    ? pickDeterministicMessage(FAIL_MESSAGES, `${label}|${score}|fail`)
-    : bucket === 'elite'
-      ? pickDeterministicMessage(ELITE_MESSAGES, `${label}|${score}|elite`)
-      : bucket === 'strong'
-        ? pickDeterministicMessage(STRONG_MESSAGES, `${label}|${score}|strong`)
-        : pickDeterministicMessage(PASS_MESSAGES, `${label}|${score}|pass`);
+  const normalizedGrade = normalizeGradeKey(play?.grade);
+  const commentary = getPerformanceMessageSelection(play);
+  const base = pickDeterministicMessage(
+    commentary.messages,
+    `${label}|${normalizedGrade}|${score}|${commentary.key}`
+  );
 
   const extras = [];
-  if (outcome?.type === 'upscore') extras.push('New upscore.');
-  if (outcome?.type === 'clear') extras.push('First clear on this chart.');
+  if (outcome?.type === 'upscore') {
+    extras.push(pickDeterministicMessage(
+      UPSCORE_CONTEXT_MESSAGES,
+      `${label}|${normalizedGrade}|${score}|upscore_context`
+    ));
+  }
+  if (outcome?.type === 'clear') {
+    extras.push(pickDeterministicMessage(
+      CLEAR_CONTEXT_MESSAGES,
+      `${label}|${normalizedGrade}|${score}|clear_context`
+    ));
+  }
   if (toInt(outcome?.pumbility_gain) > 0) extras.push(`+${toInt(outcome.pumbility_gain)} pumbility.`);
   const overRank = Math.max(toInt(play?.over_top100_rank), toInt(outcome?.over_top100_rank));
   if (overRank > 0) extras.push(`OVER Top 100 #${overRank}.`);
