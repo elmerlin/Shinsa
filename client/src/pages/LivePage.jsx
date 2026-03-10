@@ -1168,7 +1168,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
   const requestLabel = compact ? formatCompactRequestStateLabel(requestInfo) : formatRequestStateLabel(requestInfo);
 
   return (
-    <div className={`flex flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)] ${compact ? 'h-full min-h-0' : ''}`}>
+    <div className={`flex h-full flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)] ${compact ? 'min-h-0' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Latest Play</p>
@@ -1698,12 +1698,13 @@ export default function LivePage() {
   const isCompactSongCardLayout = !isDesktopViewport;
   const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
   const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
+  const useDesktopSidebarLayout = isDesktopViewport && !hasPlayerPanels && !useDesktopViewerLayout;
   const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && !hasPlayerPanels && hostWorkspaceTab !== 'overlay';
   const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
   const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px`, minHeight: `${desktopMediaHeight}px` }
     : undefined;
-  const desktopChatFallbackHeight = 'clamp(24rem, calc(100dvh - 16rem), 46rem)';
+  const desktopChatFallbackHeight = 'clamp(24rem, calc(100dvh - 16rem), 64rem)';
   const overlayPreviewUrl = useMemo(() => {
     if (!activeSessionId || typeof window === 'undefined') return '';
     return buildLiveOverlayUrl(activeSessionId, {
@@ -2939,6 +2940,7 @@ export default function LivePage() {
         : 'Offline';
   const syncLabel = formatRelativeSyncTime(live?.last_sync_at);
   const desktopViewerColumns = 'xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]';
+  const desktopSidebarColumns = 'lg:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]';
   const showCompactStreamEditor = isHost && activeSessionId && hostWorkspaceTab === 'stream';
   const viewerNowCount = live?.viewer_count || 0;
   const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
@@ -3010,10 +3012,10 @@ export default function LivePage() {
   );
 
   const songsSection = (
-    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-2.5 sm:p-3">
+    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-2.5 sm:p-3 lg:p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Songs This Session</p>
+          <p className="text-[10px] font-display uppercase tracking-[0.2em] text-gray-500">Songs This Session</p>
           <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[320px]">
@@ -3056,7 +3058,7 @@ export default function LivePage() {
               type="button"
               key={play.id}
               onClick={() => setSelectedPlay(play)}
-              className={`w-full rounded-2xl border border-piu-border bg-black/15 text-left transition-colors hover:border-cyan-400/40 ${
+              className={`w-full rounded-2xl border border-piu-border bg-black/15 text-left transition-all hover:border-cyan-400/40 hover:shadow-[0_4px_16px_rgba(34,211,238,0.06)] ${
                 isCompactSongCardLayout ? 'p-2.5' : 'p-3'
               }`}
             >
@@ -3112,7 +3114,7 @@ export default function LivePage() {
     <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Song requests</p>
+          <p className="text-[10px] font-display uppercase tracking-[0.2em] text-gray-500">Song requests</p>
           <p className="text-sm font-display font-bold text-white">
             {requestCounts.open} open • {requestCounts.queued} queued • {requestCounts.played} played
             {requestCounts.skipped ? ` • ${requestCounts.skipped} skipped` : ''}
@@ -3342,7 +3344,7 @@ export default function LivePage() {
   );
 
   const desktopTopCardsSection = isDesktopViewport && !hasPlayerPanels ? (
-    <div className="grid items-stretch gap-4 lg:grid-cols-2">
+    <div className="grid items-stretch gap-4 lg:grid-cols-2 lg:gap-5">
       <NowPlayingPanel
         play={lastPlay}
         live={live}
@@ -3355,7 +3357,7 @@ export default function LivePage() {
 
   const chatSection = (
     <div
-      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] p-3 ${
+      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] p-3 ${
         useDesktopViewerLayout
           ? 'h-full min-h-0'
           : isMobileChatLayout
@@ -3367,15 +3369,17 @@ export default function LivePage() {
       style={
         desktopMediaHeightStyle
           ? desktopMediaHeightStyle
-          : isMobileChatLayout
-            ? { maxHeight: isMobileChatSheet ? 'calc(100dvh - 8.5rem)' : 'min(68dvh, calc(100dvh - 10rem))' }
-            : isMobileChatSheet
-              ? { maxHeight: 'calc(100dvh - 8.5rem)' }
-              : {
-                  height: desktopChatFallbackHeight,
-                  maxHeight: desktopChatFallbackHeight,
-                  minHeight: desktopChatFallbackHeight,
-                }
+          : useDesktopSidebarLayout
+            ? { height: 'calc(100dvh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }
+            : isMobileChatLayout
+              ? { maxHeight: isMobileChatSheet ? 'calc(100dvh - 8.5rem)' : 'min(68dvh, calc(100dvh - 10rem))' }
+              : isMobileChatSheet
+                ? { maxHeight: 'calc(100dvh - 8.5rem)' }
+                : {
+                    height: desktopChatFallbackHeight,
+                    maxHeight: desktopChatFallbackHeight,
+                    minHeight: desktopChatFallbackHeight,
+                  }
       }
     >
       {reactionBursts.map((burst) => (
@@ -3708,7 +3712,7 @@ export default function LivePage() {
 
     return (
       <div className={`mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
-      <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.18),transparent_42%),linear-gradient(180deg,#0d1322,#09101d)] p-4 sm:p-5">
+      <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.14),transparent_50%),linear-gradient(180deg,#0d1424,#09101d)] p-4 sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between">
           <div className="min-w-0 w-full md:flex-1">
             <p className="text-[10px] font-display uppercase tracking-[0.28em] text-rose-300">Shinsa Live</p>
@@ -3809,7 +3813,7 @@ export default function LivePage() {
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 mt-3">
+        <div className="flex flex-wrap items-center gap-2 lg:gap-2.5 mt-3">
           <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
             {live?.viewer_count || 0} watching now
           </span>
@@ -4058,11 +4062,11 @@ export default function LivePage() {
             {useDesktopViewerLayout ? (
               songsSection
             ) : (
-              <div className={`grid items-start gap-5 ${desktopViewerColumns}`}>
+              <div className={`grid items-start gap-5 ${desktopSidebarColumns}`}>
                 <div className="space-y-4">
                   {songsSection}
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-4 lg:sticky lg:top-5">
                   {chatSection}
                 </div>
               </div>
