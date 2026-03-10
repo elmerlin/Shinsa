@@ -277,7 +277,7 @@ function VoteCard({ vote, theme, compact = false }) {
   );
 }
 
-function ResultBadges({ play, requests, theme, compact = false }) {
+function ResultBadges({ play, requests, theme, compact = false, includeRequestBadges = true }) {
   if (!play) return null;
 
   const items = [
@@ -286,8 +286,8 @@ function ResultBadges({ play, requests, theme, compact = false }) {
   ];
   if (play.pumbility_gain > 0) items.push({ label: 'Pumbility', value: `+${play.pumbility_gain}`, emphasis: 'alt' });
   if (play.over_top100_rank > 0) items.push({ label: 'OVER', value: `Top 100 #${play.over_top100_rank}`, emphasis: 'alt' });
-  if (requests.queued > 0) items.push({ label: 'Queued', value: `${requests.queued}`, emphasis: 'accent' });
-  if (requests.open > 0) items.push({ label: 'Open req', value: `${requests.open}`, emphasis: 'strong' });
+  if (includeRequestBadges && requests.queued > 0) items.push({ label: 'Queued', value: `${requests.queued}`, emphasis: 'accent' });
+  if (includeRequestBadges && requests.open > 0) items.push({ label: 'Open req', value: `${requests.open}`, emphasis: 'strong' });
 
   return (
     <div className={`grid gap-2 ${compact ? 'grid-cols-2' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
@@ -400,7 +400,16 @@ function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widge
           </div>
         ) : null}
 
-        {widgetSet.has('result') ? <div className="mt-4"><ResultBadges play={play} requests={requestCounts} theme={theme} /></div> : null}
+        {widgetSet.has('result') ? (
+          <div className="mt-4">
+            <ResultBadges
+              play={play}
+              requests={requestCounts}
+              theme={theme}
+              includeRequestBadges={!widgetSet.has('requests')}
+            />
+          </div>
+        ) : null}
 
         {widgetSet.has('summary') && summary ? (
           <div className="mt-4 grid gap-2 sm:grid-cols-4">
@@ -492,7 +501,17 @@ function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widget
           </div>
         ) : null}
 
-        {widgetSet.has('result') ? <div className="mt-3"><ResultBadges play={play} requests={requestCounts} theme={theme} compact /></div> : null}
+        {widgetSet.has('result') ? (
+          <div className="mt-3">
+            <ResultBadges
+              play={play}
+              requests={requestCounts}
+              theme={theme}
+              compact
+              includeRequestBadges={!widgetSet.has('requests')}
+            />
+          </div>
+        ) : null}
 
         {widgetSet.has('summary') && summary ? (
           <div className="mt-3 grid grid-cols-2 gap-2">

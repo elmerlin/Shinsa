@@ -32,66 +32,66 @@ const LIVE_SYNC_IDLE_INTERVAL_MS = 45000;
 const LIVE_SYNC_IDLE_AFTER_MS = 3 * 60 * 1000;
 const DEFAULT_REQUEST_MAX_LEVEL = 30;
 const FAILURE_MESSAGES = [
-  "Oof. That stage break screen is looking a little too familiar today, don't you think? Shake the lactic acid out and run it back!",
-  "My circuits literally hurt for you. You were this close to the finish line! Take a breath, drink some water, and go again.",
-  "Gravity: 1. Your legs: 0. It's okay, the floor looked like it needed a hug anyway. Get back up there!",
-  "Even the legendary Pumpers hit the floor sometimes. That song is a beast, but you're tougher. Reset, refocus, revenge pass.",
-  "System Alert: User has temporarily forgotten how to move their feet. Rebooting motivation protocols... 3... 2... 1... PUMP!",
+  'Stage break. Run it back.',
+  'Close miss. Reset and clear it.',
+  'Missed this one. Next run.',
+  'Tough chart. Go again.',
+  'Not this pass. Reload.',
 ];
 const PERFORMANCE_MESSAGE_TIERS = [
   {
     id: 'tier_1_a_rank',
     grades: ['A', 'A+'],
     messages: [
-      "You survived... but my sensors suggest your legs might be made of cooked noodles. A pass is a pass, I guess!",
-      "The machine survived your stomping, and you survived the chart. It wasn't pretty, but hey, you're still standing... mostly.",
-      'That looked more like a struggle for survival than a dance. You got the A, but the pads are definitely judging you right now.',
-      "I've seen cardboard boxes with more rhythm, but a pass is a pass! Let's shake off the rust and try that again.",
-      'You finished! Barely. If this were a movie, this is the part where the hero collapses. Take a breather, champ.',
+      'Clutch clear.',
+      'Messy but clear.',
+      'Pass secured.',
+      'Barely, but boarded.',
+      'Survived the chart.',
     ],
   },
   {
     id: 'tier_2_aa_rank',
     grades: ['AA', 'AA+'],
     messages: [
-      "Not bad! You're definitely finding the rhythm, though those 'Greats' are looking a little lonely. Tighten it up for that S!",
-      "You're getting there! Your feet are moving, but your soul is still buffering. A little more 'oomph' next time.",
-      "Solid effort. You've got the pattern down, now you just need the precision. Don't let those blues get in your head!",
-      "I see what you're trying to do, and I like it. You're hovering right on the edge of greatness. Push just a little harder!",
-      "Consistent and reliable, but missing that 'wow' factor. You're like a high-end sedan - smooth, but I know you've got a sports car in there.",
+      'Solid run.',
+      'Getting cleaner.',
+      'Close to S.',
+      'Rhythm locked in.',
+      'Tighten the timing.',
     ],
   },
   {
     id: 'tier_3_aaa_rank',
     grades: ['AAA', 'AAA+'],
     messages: [
-      "Okay, okay! I see those fast feet! You're starting to make this look easy. That was smooth and stylish.",
-      "Now we're talking! That was a high-voltage performance. You're slicing through these charts like a hot knife through butter.",
-      "The rhythm is strong with this one. You've officially entered the 'Don't Blink' zone. That was seriously impressive stepping!",
-      "Look at those combos! You're turning this cabinet into a concert stage. If you keep this up, we're going to need a bigger leaderboard.",
-      "Your stamina is actually frightening. You handled those runs like a pro. Triple A? More like Triple Threat!",
+      'Sharp run.',
+      'Very clean.',
+      'AAA heat.',
+      'Strong control.',
+      'Smooth work.',
     ],
   },
   {
     id: 'tier_4_s_ss_rank',
     grades: ['S', 'S+', 'SS', 'SS+'],
     messages: [
-      "Absolute heat! You're dancing like the machine owes you money. If you get any faster, we'll need a fire extinguisher!",
-      "You aren't just playing the game anymore; you're dominating it. That score is high enough to give the local legends a heart attack.",
-      "Pure, unadulterated skill. Every step was a statement. You're making the elite tiers look like a playground right now.",
-      "I'm honestly worried about the structural integrity of the floor. That was an absolute masterclass in Pump It Up. Bravo!",
-      "Witnessed! That was a marathon of precision. You're hitting notes I didn't even know existed. Keep that elite energy flowing!",
+      'Absolute heat.',
+      'Elite pace.',
+      'Top-tier run.',
+      'Machine-melting form.',
+      'Ridiculous control.',
     ],
   },
   {
     id: 'tier_5_sss_rank',
     grades: ['SSS', 'SSS+'],
     messages: [
-      'Error 404: Flawless detected. Are you even human, or did you just transcend space and time? Someone clip that!',
-      "UNREAL. You just achieved a state of rhythmic nirvana. I'm checking your shoes for hidden jetpacks because that was out of this world.",
-      "A Golden Performance! The machine should honestly just retire now; it's never going to be played better than that.",
-      "Did the game even register a 'Good'? Oh wait, no, it didn't. Because you're a literal god. Bow down to the SSS King!",
-      "Total perfection. You and the rhythm are one. That wasn't just a play session; that was a historical event. We are all witnesses!",
+      'Unreal run.',
+      'Legend pace.',
+      'Peak form.',
+      'Clip that.',
+      'Total shutdown.',
     ],
   },
 ];
@@ -1504,24 +1504,7 @@ function buildPlayAnnouncement(play, outcome) {
     `${label}|${normalizedGrade}|${score}|${commentary.key}`
   );
 
-  const extras = [];
-  if (outcome?.type === 'upscore') {
-    extras.push(pickDeterministicMessage(
-      UPSCORE_CONTEXT_MESSAGES,
-      `${label}|${normalizedGrade}|${score}|upscore_context`
-    ));
-  }
-  if (outcome?.type === 'clear') {
-    extras.push(pickDeterministicMessage(
-      CLEAR_CONTEXT_MESSAGES,
-      `${label}|${normalizedGrade}|${score}|clear_context`
-    ));
-  }
-  if (toInt(outcome?.pumbility_gain) > 0) extras.push(`+${toInt(outcome.pumbility_gain)} pumbility.`);
-  const overRank = Math.max(toInt(play?.over_top100_rank), toInt(outcome?.over_top100_rank));
-  if (overRank > 0) extras.push(`OVER Top 100 #${overRank}.`);
-
-  return `Last played: ${label} • ${grade} ${score > 0 ? score.toLocaleString() : ''}`.trim() + `. ${base}${extras.length ? ` ${extras.join(' ')}` : ''}`;
+  return `Last played: ${label} • ${grade} ${score > 0 ? score.toLocaleString() : ''}`.trim() + `. ${base}`;
 }
 
 function bufferSyncResults(db, liveSessionId, syncResult) {
