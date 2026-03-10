@@ -79,6 +79,13 @@ const REQUEST_STATUS_META = {
     card: 'border-amber-400/25 bg-amber-500/8',
   },
 };
+const REQUEST_MODE_OPTIONS = [
+  { value: 'All', label: 'All' },
+  { value: 'Single', label: 'Singles' },
+  { value: 'Double', label: 'Doubles' },
+];
+const DEFAULT_REQUEST_MAX_LEVEL = 30;
+const REQUEST_MAX_LEVEL_OPTIONS = Array.from({ length: DEFAULT_REQUEST_MAX_LEVEL }, (_, index) => index + 1);
 
 function LiveEmoteTrayTile({ emote, disabled, onReact, onAdd }) {
   return (
@@ -100,7 +107,7 @@ function LiveEmoteTrayTile({ emote, disabled, onReact, onAdd }) {
         type="button"
         onClick={onAdd}
         disabled={disabled}
-        className="mt-2 w-full rounded-lg bg-piu-dark/70 px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+        className="mt-2 w-full rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-white/15 hover:text-white disabled:opacity-40"
       >
         Add
       </button>
@@ -201,6 +208,45 @@ function buildRequestKey(songTitle, mode, level) {
     String(mode || '').trim().toLowerCase(),
     parseInt(level, 10) || 0,
   ].join('|');
+}
+
+function normalizeRequestModeFilterValue(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'single' || normalized === 'singles') return 'Single';
+  if (normalized === 'double' || normalized === 'doubles') return 'Double';
+  return 'All';
+}
+
+function normalizeRequestMaxLevelValue(value) {
+  const parsed = parseInt(value, 10) || 0;
+  return parsed > 0 ? Math.min(parsed, DEFAULT_REQUEST_MAX_LEVEL) : DEFAULT_REQUEST_MAX_LEVEL;
+}
+
+function requestPolicyAllowsChart(chart, modeFilter = 'All', maxLevel = DEFAULT_REQUEST_MAX_LEVEL) {
+  const normalizedModeFilter = normalizeRequestModeFilterValue(modeFilter);
+  const normalizedMaxLevel = normalizeRequestMaxLevelValue(maxLevel);
+  if (normalizedModeFilter !== 'All' && String(chart?.mode || '') !== normalizedModeFilter) return false;
+  return (parseInt(chart?.level, 10) || 0) <= normalizedMaxLevel;
+}
+
+function filterSongResultsForRequests(results, modeFilter = 'All', maxLevel = DEFAULT_REQUEST_MAX_LEVEL) {
+  return (Array.isArray(results) ? results : []).map((song) => {
+    const charts = (Array.isArray(song?.charts) ? song.charts : []).filter((chart) => (
+      requestPolicyAllowsChart(chart, modeFilter, maxLevel)
+    ));
+    return charts.length > 0 ? { ...song, charts } : null;
+  }).filter(Boolean);
+}
+
+function formatRequestPolicySummary(modeFilter = 'All', maxLevel = DEFAULT_REQUEST_MAX_LEVEL) {
+  const normalizedModeFilter = normalizeRequestModeFilterValue(modeFilter);
+  const normalizedMaxLevel = normalizeRequestMaxLevelValue(maxLevel);
+  const modeLabel = normalizedModeFilter === 'Single'
+    ? 'Singles'
+    : normalizedModeFilter === 'Double'
+      ? 'Doubles'
+      : 'All charts';
+  return `${modeLabel} up to Lv.${normalizedMaxLevel}`;
 }
 
 function formatCountdownLabel(remainingMs) {
@@ -611,17 +657,17 @@ function normalizeSongResults(payload) {
 
 function getRequestChartBadgeTone(mode) {
   if (mode === 'Single') {
-    return 'from-red-500 to-red-700 border-red-300/50';
+    return 'border-red-500/35 bg-[#171215] text-red-100';
   }
   if (mode === 'Double') {
-    return 'from-green-500 to-emerald-700 border-green-300/50';
+    return 'border-emerald-500/35 bg-[#111714] text-emerald-100';
   }
-  return 'from-sky-500 to-blue-700 border-sky-300/50';
+  return 'border-slate-500/40 bg-[#151a22] text-slate-100';
 }
 
-function SongRequestSearchResult({ song, disabled, onSelectChart }) {
+function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores = false }) {
   return (
-    <div className="rounded-xl border border-piu-border/50 bg-gradient-to-r from-[#112947] to-[#1b3554] p-3">
+    <div className="rounded-lg border border-white/8 bg-[#141923] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex gap-3">
         {song.jacket_url ? (
           <img
@@ -641,22 +687,38 @@ function SongRequestSearchResult({ song, disabled, onSelectChart }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {song.charts.map((chart) => (
-          <div key={`${song.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`} className="relative">
-            <button
-              type="button"
-              onClick={() => onSelectChart(chart)}
-              disabled={disabled}
-              className={`inline-flex h-[42px] min-w-[42px] items-center justify-center rounded-full border bg-gradient-to-b px-3 text-sm font-display font-black text-white shadow-md transition-all hover:brightness-110 disabled:opacity-50 ${getRequestChartBadgeTone(chart.mode)}`}
-              title={`Request ${song.title} (${modeShort(chart.mode)}${chart.level})`}
-            >
-              {chart.level}
-            </button>
-            <span className="absolute -bottom-1 -right-1 rounded-full border border-piu-border bg-piu-dark px-1 text-[9px] font-mono text-piu-accent">
-              {modeShort(chart.mode)}
-            </span>
-          </div>
-        ))}
+        {song.charts.map((chart) => {
+          const bestScore = parseInt(chart.best_score, 10) || 0;
+          const parsedBestGrade = parseGrade(
+            chart.best_grade || '',
+            bestScore > 0 ? getRank(bestScore).label : ''
+          );
+          const displayBestGrade = parsedBestGrade.display || '';
+          return (
+            <div key={`${song.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`} className="relative">
+              <button
+                type="button"
+                onClick={() => onSelectChart(chart)}
+                disabled={disabled}
+                className={`inline-flex h-[42px] min-w-[42px] items-center justify-center rounded-full border px-3 text-sm font-display font-black transition-colors hover:border-white/20 hover:text-white disabled:opacity-50 ${getRequestChartBadgeTone(chart.mode)}`}
+                title={`Request ${song.title} (${modeShort(chart.mode)}${chart.level})`}
+              >
+                {chart.level}
+              </button>
+              <span className="absolute -bottom-1 -right-1 rounded-full border border-piu-border bg-piu-dark px-1 text-[9px] font-mono text-piu-accent">
+                {modeShort(chart.mode)}
+              </span>
+              {showHostScores && displayBestGrade ? (
+                <span
+                  className={`pointer-events-none absolute -right-1 -top-1 rounded-full border border-piu-border bg-[#09101d] px-1.5 py-0.5 text-[9px] font-display font-black leading-none ${getGradeColor(displayBestGrade, bestScore)} ${parsedBestGrade.isBroken ? 'grade-broken' : ''}`}
+                  data-grade={displayBestGrade}
+                >
+                  {displayBestGrade}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -756,7 +818,7 @@ function PlayDetailModal({ play, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-[90] flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+        className="relative w-full max-w-sm overflow-hidden rounded-xl border border-white/8 bg-[#11161f] shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
         onClick={(e) => e.stopPropagation()}
       >
         {modalBg ? (
@@ -765,12 +827,12 @@ function PlayDetailModal({ play, onClose }) {
             style={{ backgroundImage: `url(${modalBg})` }}
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
+        <div className="absolute inset-0 bg-[#11161f]/92" />
 
         <div className="relative p-5">
           <button
             type="button"
-            className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
+            className="absolute right-3 top-3 text-xl leading-none text-gray-500 hover:text-white"
             onClick={onClose}
           >
             x
@@ -779,14 +841,14 @@ function PlayDetailModal({ play, onClose }) {
           <p className="font-display font-bold text-lg leading-tight pr-6 break-words">{play.song_title || 'Song'}</p>
 
           <div className="flex items-center gap-3 mt-4">
-            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
-              play.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : play.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
+            <div className={`flex items-center gap-1 rounded-md border px-2.5 py-1 ${
+              play.mode === 'Single' ? 'border-red-500/40 bg-red-500/10' : play.mode === 'Double' ? 'border-green-500/40 bg-green-500/10' : 'border-slate-500/40 bg-white/[0.04]'
             }`}>
-              <span className={`font-display font-bold text-[10px] uppercase ${play.mode === 'Single' ? 'text-red-400' : play.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{play.mode}</span>
-              <span className={`font-display font-bold text-base ${play.mode === 'Single' ? 'text-red-300' : play.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{play.level}</span>
+              <span className={`font-display text-[10px] font-semibold ${play.mode === 'Single' ? 'text-red-300' : play.mode === 'Double' ? 'text-green-300' : 'text-slate-300'}`}>{play.mode}</span>
+              <span className={`font-display text-base font-bold ${play.mode === 'Single' ? 'text-red-200' : play.mode === 'Double' ? 'text-green-200' : 'text-slate-100'}`}>{play.level}</span>
             </div>
             {overRank > 0 ? (
-              <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
+              <span className="rounded-md border border-piu-gold/40 bg-piu-gold/12 px-2 py-0.5 text-[11px] leading-none text-yellow-200">
                 TOP #{overRank}
               </span>
             ) : null}
@@ -839,10 +901,10 @@ function EndSessionConfirmModal({ open, ending, onClose, onConfirm }) {
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-3xl border border-rose-400/35 bg-gradient-to-br from-[#10173a] via-[#09142c] to-[#08101f] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+        className="w-full max-w-md rounded-xl border border-white/8 bg-[#11161f] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-rose-300">Shinsa Live</p>
+        <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
         <h3 className="mt-2 text-2xl font-display font-black text-white">End session and post recap?</h3>
         <p className="mt-3 text-sm leading-relaxed text-slate-300">
           This will end the live session now, post the Shinsa Live recap automatically, and flush any buffered upscore and clear posts.
@@ -876,15 +938,15 @@ function VotePanel({ vote, canVote, onVote }) {
   }, [vote.id, vote.status, vote.ends_at]);
 
   return (
-    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
+    <div className="rounded-lg border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Live Vote</p>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Live vote</p>
           <p className="text-sm font-display font-bold text-white">
             {vote.mode_filter} Lv.{vote.min_level}{vote.max_level !== vote.min_level ? `-${vote.max_level}` : ''}
           </p>
         </div>
-        <span className={`text-[10px] font-display font-bold uppercase tracking-wide ${vote.status === 'active' ? 'text-emerald-300' : 'text-orange-300'}`}>
+        <span className={`rounded-md border px-2 py-1 text-[10px] font-display font-semibold ${vote.status === 'active' ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-200' : 'border-amber-500/35 bg-amber-500/10 text-amber-200'}`}>
           {vote.status === 'active' ? 'Open' : 'Locked'}
         </span>
       </div>
@@ -897,7 +959,7 @@ function VotePanel({ vote, canVote, onVote }) {
       </p>
       <div className="space-y-2 mt-3">
         {vote.options.map((option) => (
-          <div key={option.id} className={`rounded-xl border px-3 py-2 ${option.is_winner ? 'border-emerald-400/40 bg-emerald-500/10' : 'border-piu-border bg-black/15'}`}>
+          <div key={option.id} className={`rounded-lg border px-3 py-2 ${option.is_winner ? 'border-emerald-500/35 bg-emerald-500/10' : 'border-white/8 bg-[#0d1218]'}`}>
             <div className="flex items-center gap-3">
               <PiuChartJacket title={option.song_title} mode={option.mode} level={option.level} jacketUrl={option.jacket_url} size="sm" />
               <div className="flex-1 min-w-0">
@@ -913,7 +975,7 @@ function VotePanel({ vote, canVote, onVote }) {
               <button
                 type="button"
                 onClick={() => onVote(option.id)}
-                className={`mt-2 w-full rounded-lg px-3 py-2 text-xs font-display font-bold transition-colors ${option.user_voted ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-300 hover:text-white hover:bg-piu-dark/70'}`}
+                className={`mt-2 w-full rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${option.user_voted ? 'border-cyan-500/35 bg-cyan-500/12 text-white' : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'}`}
               >
                 {option.user_voted ? 'Your vote' : 'Vote for this chart'}
               </button>
@@ -957,20 +1019,20 @@ function PinnedVoteCard({
   if (!vote) return null;
 
   return (
-    <div className="rounded-2xl border border-rose-400/25 bg-rose-500/8 p-2">
+    <div className="rounded-lg border border-white/8 bg-[#151923] p-2">
       <div className="flex items-start justify-between gap-3 px-1">
         <div className="min-w-0">
-          <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-rose-200">
+          <p className="text-[11px] font-display font-semibold text-gray-300">
             {label}
           </p>
-          <p className="mt-1 text-[11px] text-rose-100/75">
+          <p className="mt-1 text-[11px] text-gray-400">
             {formatPinnedVoteSummary(vote)}
           </p>
         </div>
         <button
           type="button"
           onClick={onToggle}
-          className="shrink-0 rounded-full border border-rose-300/30 bg-black/15 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100 transition-colors hover:bg-black/25"
+          className="shrink-0 rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-white/15 hover:text-white"
         >
           {collapsed ? 'Expand' : 'Collapse'}
         </button>
@@ -986,8 +1048,8 @@ function PinnedVoteCard({
 
 function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStreamUrlChange, onSubmit }) {
   return (
-    <div className="max-w-xl rounded-3xl border border-piu-border bg-[#0c1220] p-5 shadow-2xl">
-      <p className="text-[10px] font-display uppercase tracking-[0.28em] text-rose-300">Shinsa Live</p>
+    <div className="max-w-xl rounded-xl border border-white/8 bg-[#11161f] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+      <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
       <h1 className="text-2xl font-display font-black text-white mt-1">Start a live session</h1>
       <p className="text-sm text-gray-400 mt-2">
         This opens a session lobby with live score polling, viewer chat, requests, votes, and an automatic recap post when you end it.
@@ -1024,15 +1086,15 @@ function StreamUrlEditorCard({
   onSubmit,
 }) {
   return (
-    <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_40%),linear-gradient(180deg,rgba(12,20,38,0.96),rgba(9,16,29,0.96))] p-4">
+    <div className="mt-4 rounded-lg border border-white/8 bg-[#11161f] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Stream Link</p>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Stream link</p>
           <p className="mt-2 text-sm text-gray-300">
             Attach or replace your YouTube live URL without ending the session.
           </p>
         </div>
-        <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold ${
+        <span className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
           attached
             ? recognized
               ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
@@ -1073,7 +1135,7 @@ function DirectorySection({ title, subtitle, sessions }) {
     <section>
       <div className="mb-3 flex items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-[0.28em] text-rose-300">{title}</p>
+          <p className="text-base font-display font-semibold text-white">{title}</p>
           {subtitle ? <p className="mt-1 text-sm text-gray-400">{subtitle}</p> : null}
         </div>
       </div>
@@ -1097,14 +1159,14 @@ function MobilePanelSheet({ open, title, subtitle = '', onClose, children, allow
         onClick={onClose}
         aria-label="Close panel"
       />
-      <div className={`absolute overflow-hidden border border-piu-border bg-[linear-gradient(180deg,#0d1322,#09101b)] ${
+      <div className={`absolute overflow-hidden border border-white/8 bg-[#11161f] ${
         allowDesktop
-          ? 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-[32px] shadow-[0_-18px_50px_rgba(0,0,0,0.45)] lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-[min(92vw,64rem)] lg:max-h-[86vh] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[32px] lg:shadow-[0_28px_80px_rgba(0,0,0,0.5)]'
-          : 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-[32px] shadow-[0_-18px_50px_rgba(0,0,0,0.45)]'
+          ? 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-xl shadow-[0_-8px_24px_rgba(0,0,0,0.28)] lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-[min(92vw,64rem)] lg:max-h-[86vh] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-xl lg:shadow-[0_8px_24px_rgba(0,0,0,0.28)]'
+          : 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-xl shadow-[0_-8px_24px_rgba(0,0,0,0.28)]'
       }`}>
         <div className="flex items-center justify-between gap-3 border-b border-piu-border/60 px-4 py-3">
           <div>
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-rose-300">{title}</p>
+            <p className="text-sm font-display font-semibold text-white">{title}</p>
             {subtitle ? <p className="mt-1 text-xs text-gray-400">{subtitle}</p> : null}
           </div>
           <button type="button" onClick={onClose} className="btn-secondary px-3 py-2 text-xs">
@@ -1135,14 +1197,14 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
         <div className={`flex flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'}`}>
           <p className={`truncate font-display font-bold text-white ${compact ? 'text-[10px]' : dense ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
           {isHost ? (
-            <span className={`rounded-full border border-rose-400/30 bg-rose-500/10 font-display font-bold uppercase tracking-wide text-rose-200 ${
+            <span className={`rounded-md border border-rose-400/25 bg-rose-500/10 font-display font-semibold text-rose-200 ${
               compact ? 'px-1.5 py-0.5 text-[8px]' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
             }`}>
               Host
             </span>
           ) : null}
           {skillTitle ? (
-            <span className={`rounded-full border border-cyan-400/20 bg-cyan-500/10 font-display font-bold uppercase tracking-wide text-cyan-200 ${
+            <span className={`rounded-md border border-cyan-400/20 bg-cyan-500/10 font-display font-semibold text-cyan-200 ${
               compact ? 'px-1.5 py-0.5 text-[8px]' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
             }`}>
               {skillTitle}
@@ -1168,19 +1230,19 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
   const requestLabel = compact ? formatCompactRequestStateLabel(requestInfo) : formatRequestStateLabel(requestInfo);
 
   return (
-    <div className={`flex h-full flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)] ${compact ? 'min-h-0' : ''}`}>
+    <div className={`flex h-full flex-col rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Latest Play</p>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Latest play</p>
           {!play ? (
-            <p className="text-sm text-cyan-50/80 mt-1">
+            <p className="mt-1 text-sm text-gray-400">
               {live?.status === 'live'
                 ? 'Waiting for the first chart to land.'
                 : 'Live wrapped.'}
             </p>
           ) : null}
         </div>
-        <span className={`shrink-0 whitespace-nowrap rounded-full ${compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-1 text-[10px]'} font-display font-bold uppercase tracking-wide ${live?.status === 'live' ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border border-piu-border bg-black/20 text-gray-400'}`}>
+        <span className={`shrink-0 whitespace-nowrap rounded-md border ${compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-1 text-[10px]'} font-display font-semibold ${live?.status === 'live' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-white/8 bg-[#0d1218] text-gray-400'}`}>
           {live?.status === 'live' ? 'Live sync' : 'Session ended'}
         </span>
       </div>
@@ -1208,7 +1270,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
                     </span>
                   </button>
                   {requestInfo ? (
-                    <span className={`min-w-0 shrink rounded-full px-2 py-0.5 text-[9px] font-display font-bold ${requestPillClass}`}>
+                    <span className={`min-w-0 shrink rounded-md px-2 py-0.5 text-[9px] font-display font-semibold ${requestPillClass}`}>
                       {requestLabel}
                     </span>
                   ) : null}
@@ -1216,17 +1278,17 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {play.pumbility_gain > 0 ? (
-                  <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-display font-bold text-emerald-200">
+                  <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-display font-semibold text-emerald-200">
                     +{play.pumbility_gain} pumbility
                   </span>
                 ) : null}
                 {play.over_top100_rank > 0 ? (
-                  <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-0.5 text-[10px] font-display font-bold text-yellow-200">
+                  <span className="rounded-md border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-0.5 text-[10px] font-display font-semibold text-yellow-200">
                     OVER Top 100 #{play.over_top100_rank}
                   </span>
                 ) : null}
                 {play.session_result_type ? (
-                  <span className="rounded-full border border-piu-border bg-black/20 px-2.5 py-0.5 text-[10px] text-gray-300 capitalize">
+                  <span className="rounded-md border border-white/8 bg-[#0d1218] px-2.5 py-0.5 text-[10px] text-gray-300 capitalize">
                     {play.session_result_type}
                   </span>
                 ) : null}
@@ -1250,24 +1312,24 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
                     <span className="text-base font-display font-bold text-cyan-100/90">{formatNumber(play.score)}</span>
                   </button>
                   {requestInfo ? (
-                    <span className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-display font-bold ${requestPillClass}`}>
+                    <span className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-[11px] font-display font-semibold ${requestPillClass}`}>
                       {requestLabel}
                     </span>
                   ) : null}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {play.pumbility_gain > 0 ? (
-                    <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
+                    <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-semibold text-emerald-200">
                       +{play.pumbility_gain} pumbility
                     </span>
                   ) : null}
                   {play.over_top100_rank > 0 ? (
-                    <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-bold text-yellow-200">
+                    <span className="rounded-md border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-semibold text-yellow-200">
                       OVER Top 100 #{play.over_top100_rank}
                     </span>
                   ) : null}
                   {play.session_result_type ? (
-                    <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300 capitalize">
+                    <span className="rounded-md border border-white/8 bg-[#0d1218] px-3 py-1 text-[11px] text-gray-300 capitalize">
                       {play.session_result_type}
                     </span>
                   ) : null}
@@ -1281,7 +1343,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
         </div>
       ) : (
         <div className="mt-3 flex flex-1 items-center">
-          <p className={`${compact ? 'text-sm' : 'text-base'} text-cyan-50/75`}>
+          <p className={`${compact ? 'text-sm' : 'text-base'} text-gray-400`}>
             No song played.
           </p>
         </div>
@@ -1324,17 +1386,17 @@ function OverlayStudioCard({
   const outputSpec = getLiveOverlayOutputSpec({ preset, fit });
 
   return (
-    <div className="rounded-3xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(236,72,153,0.16),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.12),transparent_36%),linear-gradient(180deg,#0d1322,#09101b)] p-4 sm:p-5 shadow-[0_20px_44px_rgba(17,24,39,0.3)]">
+    <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
-          <p className="text-[10px] font-display uppercase tracking-[0.28em] text-fuchsia-200">Overlay Studio</p>
+          <p className="text-sm font-display font-semibold text-gray-300">Overlay Studio</p>
           <h2 className="mt-1 text-xl font-display font-black text-white">Browser-source layouts for stream scenes</h2>
           <p className="mt-2 text-sm text-gray-300">
             Use this once to set up OBS or Streamlabs, then return to the live room tab.
             The overlay reads the same Shinsa Live stream, so scores, chat, votes, and reactions update in real time.
           </p>
-          <div className="mt-4 rounded-[24px] border border-white/10 bg-black/18 p-4">
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">How To Use It</p>
+          <div className="mt-4 rounded-lg border border-white/8 bg-[#0d1218] p-4">
+            <p className="text-[11px] font-display font-semibold text-gray-300">How to use it</p>
             <ol className="mt-3 space-y-2 text-sm text-gray-300">
               <li>1. Pick a quick scene or preset that matches the stream layout you want.</li>
               <li>2. Click `Preview overlay` to see the transparent browser-source page.</li>
@@ -1347,26 +1409,26 @@ function OverlayStudioCard({
           </div>
         </div>
 
-        <div className="min-w-[240px] rounded-[24px] border border-piu-border/70 bg-black/15 p-3">
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current output</p>
+        <div className="min-w-[240px] rounded-lg border border-white/8 bg-[#0d1218] p-3">
+          <p className="text-[11px] font-display font-semibold text-gray-400">Current output</p>
           <p className="mt-2 text-sm font-display font-bold text-white">{presetLabel}</p>
           <p className="mt-1 text-xs text-gray-400">{themeLabel}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="rounded-full border border-piu-border/70 bg-black/20 px-2.5 py-1 text-[10px] font-display font-bold text-cyan-100">{fitLabel}</span>
-            <span className="rounded-full border border-piu-border/70 bg-black/20 px-2.5 py-1 text-[10px] font-display font-bold text-cyan-100">{anchorLabel}</span>
-            <span className="rounded-full border border-piu-border/70 bg-black/20 px-2.5 py-1 text-[10px] font-display font-bold text-cyan-100">{autoHideLabel}</span>
+            <span className="rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-cyan-100">{fitLabel}</span>
+            <span className="rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-cyan-100">{anchorLabel}</span>
+            <span className="rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-cyan-100">{autoHideLabel}</span>
             {guidesEnabled ? (
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold text-amber-100">
+              <span className="rounded-md border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-semibold text-amber-100">
                 Guides on
               </span>
             ) : null}
           </div>
-          <div className="mt-3 rounded-xl border border-cyan-400/20 bg-cyan-500/8 px-3 py-2.5">
-            <p className="text-[10px] font-display uppercase tracking-wide text-cyan-200">OBS start size</p>
+          <div className="mt-3 rounded-lg border border-cyan-400/20 bg-cyan-500/8 px-3 py-2.5">
+            <p className="text-[11px] font-display font-semibold text-cyan-200">OBS start size</p>
             <p className="mt-1 text-lg font-display font-black text-white">{outputSpec.sourceLabel}</p>
             <p className="mt-1 text-[11px] text-cyan-100/80">Card frame: {outputSpec.frameLabel}</p>
           </div>
-          <p className="mt-3 truncate rounded-xl border border-piu-border/60 bg-black/20 px-3 py-2 text-[11px] text-cyan-100">
+          <p className="mt-3 truncate rounded-lg border border-white/8 bg-[#171d27] px-3 py-2 text-[11px] text-cyan-100">
             {previewUrl}
           </p>
           {copiedLabel ? <p className="mt-2 text-xs text-emerald-200">{copiedLabel}</p> : null}
@@ -1377,16 +1439,16 @@ function OverlayStudioCard({
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
           <div>
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Quick Scenes</p>
+            <p className="text-[11px] font-display font-semibold text-gray-400">Quick scenes</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {LIVE_OVERLAY_SCENES.map((scene) => {
                 const sceneOutputSpec = getLiveOverlayOutputSpec({ sceneId: scene.id });
                 return (
-                  <div key={scene.id} className="rounded-[24px] border border-piu-border bg-black/12 px-4 py-3">
+                  <div key={scene.id} className="rounded-lg border border-white/8 bg-[#0d1218] px-4 py-3">
                     <p className="text-sm font-display font-bold text-white">{scene.label}</p>
                     <p className="mt-1 text-xs text-gray-400">{scene.description}</p>
-                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/18 px-3 py-2">
-                      <p className="text-[10px] font-display uppercase tracking-wide text-cyan-200">OBS start size</p>
+                    <div className="mt-3 rounded-lg border border-white/8 bg-[#171d27] px-3 py-2">
+                      <p className="text-[11px] font-display font-semibold text-cyan-200">OBS start size</p>
                       <p className="mt-1 text-sm font-display font-black text-white">{sceneOutputSpec.sourceLabel}</p>
                       <p className="mt-1 text-[11px] text-gray-400">Card frame: {sceneOutputSpec.frameLabel}</p>
                     </div>
@@ -1405,17 +1467,17 @@ function OverlayStudioCard({
           </div>
 
           <div>
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Preset</p>
+            <p className="text-[11px] font-display font-semibold text-gray-400">Preset</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {LIVE_OVERLAY_PRESETS.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onPresetChange(option.id)}
-                  className={`rounded-[24px] border px-4 py-3 text-left transition-colors ${
+                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
                     option.id === preset
-                      ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-white shadow-[0_12px_28px_rgba(217,70,239,0.16)]'
-                      : 'border-piu-border bg-black/12 text-gray-300 hover:border-fuchsia-300/25 hover:text-white'
+                      ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-white'
+                      : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
                   }`}
                 >
                   <p className="text-sm font-display font-bold">{option.label}</p>
@@ -1426,17 +1488,17 @@ function OverlayStudioCard({
           </div>
 
           <div>
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Fit</p>
+            <p className="text-[11px] font-display font-semibold text-gray-400">Fit</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {LIVE_OVERLAY_FITS.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onFitChange(option.id)}
-                  className={`rounded-full border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${
+                  className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
                     option.id === fit
                       ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100'
-                      : 'border-piu-border bg-black/18 text-gray-400 hover:text-white'
+                      : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
                   }`}
                 >
                   {option.label}
@@ -1449,17 +1511,17 @@ function OverlayStudioCard({
           </div>
 
           <div>
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Position</p>
+            <p className="text-[11px] font-display font-semibold text-gray-400">Position</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {LIVE_OVERLAY_ANCHORS.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onAnchorChange(option.id)}
-                  className={`rounded-full border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${
+                  className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
                     option.id === anchor
                       ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
-                      : 'border-piu-border bg-black/18 text-gray-400 hover:text-white'
+                      : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
                   }`}
                 >
                   {option.label}
@@ -1469,7 +1531,7 @@ function OverlayStudioCard({
           </div>
 
           <div>
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Widgets</p>
+            <p className="text-[11px] font-display font-semibold text-gray-400">Widgets</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {LIVE_OVERLAY_WIDGETS.map((widget) => {
                 const active = widgets.includes(widget.id);
@@ -1478,10 +1540,10 @@ function OverlayStudioCard({
                     key={widget.id}
                     type="button"
                     onClick={() => onToggleWidget(widget.id)}
-                    className={`rounded-full border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${
+                    className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
                       active
                         ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
-                        : 'border-piu-border bg-black/18 text-gray-400 hover:text-white'
+                        : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
                     }`}
                   >
                     {widget.label}
@@ -1494,17 +1556,17 @@ function OverlayStudioCard({
 
         <div className="space-y-4">
           <div>
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Theme</p>
+            <p className="text-[11px] font-display font-semibold text-gray-400">Theme</p>
             <div className="mt-2 grid gap-2">
               {LIVE_OVERLAY_THEMES.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onThemeChange(option.id)}
-                  className={`rounded-[22px] border px-4 py-3 text-left transition-colors ${
+                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
                     option.id === theme
                       ? 'border-cyan-400/35 bg-cyan-500/10 text-white'
-                      : 'border-piu-border bg-black/12 text-gray-300 hover:border-cyan-300/25 hover:text-white'
+                      : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
                   }`}
                 >
                   <p className="text-sm font-display font-bold">{option.label}</p>
@@ -1516,18 +1578,18 @@ function OverlayStudioCard({
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-piu-border/70 bg-black/12 p-4">
-            <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Visibility</p>
+          <div className="rounded-lg border border-white/8 bg-[#0d1218] p-4">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Visibility</p>
             <div className="mt-3 grid gap-2">
               {LIVE_OVERLAY_AUTO_HIDE_MODES.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onAutoHideChange(option.id)}
-                  className={`rounded-[18px] border px-4 py-3 text-left transition-colors ${
+                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
                     option.id === autoHide
                       ? 'border-emerald-400/35 bg-emerald-500/10 text-white'
-                      : 'border-piu-border bg-black/12 text-gray-300 hover:border-emerald-300/25 hover:text-white'
+                      : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
                   }`}
                 >
                   <p className="text-sm font-display font-bold">{option.label}</p>
@@ -1536,18 +1598,18 @@ function OverlayStudioCard({
               ))}
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-[18px] border border-piu-border/70 bg-black/14 px-4 py-3">
+            <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-[#171d27] px-4 py-3">
               <div>
-                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Safe-zone guides</p>
+                <p className="text-[11px] font-display font-semibold text-gray-400">Safe-zone guides</p>
                 <p className="mt-1 text-sm text-gray-300">Useful while placing the browser source. Turn them off before going live.</p>
               </div>
               <button
                 type="button"
                 onClick={onToggleGuides}
-                className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+                className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                   guidesEnabled
-                    ? 'border border-amber-400/35 bg-amber-500/12 text-amber-100'
-                    : 'border border-piu-border bg-black/18 text-gray-400'
+                    ? 'border-amber-400/35 bg-amber-500/12 text-amber-100'
+                    : 'border-white/8 bg-[#0d1218] text-gray-400'
                 }`}
               >
                 {guidesEnabled ? 'Guides on' : 'Guides off'}
@@ -1555,19 +1617,19 @@ function OverlayStudioCard({
             </div>
           </div>
 
-          <div className="rounded-[24px] border border-piu-border/70 bg-black/12 p-4">
+          <div className="rounded-lg border border-white/8 bg-[#0d1218] p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-gray-500">Motion</p>
+                <p className="text-[11px] font-display font-semibold text-gray-400">Motion</p>
                 <p className="mt-1 text-sm text-gray-300">Toggle emote bursts and animated reaction flourishes.</p>
               </div>
               <button
                 type="button"
                 onClick={onToggleMotion}
-                className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+                className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                   motionEnabled
-                    ? 'border border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
-                    : 'border border-piu-border bg-black/18 text-gray-400'
+                    ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
+                    : 'border-white/8 bg-[#171d27] text-gray-400'
                 }`}
               >
                 {motionEnabled ? 'Motion on' : 'Motion off'}
@@ -1607,6 +1669,7 @@ export default function LivePage() {
   const [creating, setCreating] = useState(false);
   const [savingStreamUrl, setSavingStreamUrl] = useState(false);
   const [savingRequestsEnabled, setSavingRequestsEnabled] = useState(false);
+  const [savingRequestPolicy, setSavingRequestPolicy] = useState(false);
   const [playerMode, setPlayerMode] = useState(false);
   const [lockVideo, setLockVideo] = useState(false);
   const [mobileVideoDocked, setMobileVideoDocked] = useState(false);
@@ -1685,6 +1748,10 @@ export default function LivePage() {
   const lastPlay = snapshot?.last_play || null;
   const youtubeId = getYouTubeId(live?.stream_url || '');
   const requestsEnabled = live?.requests_enabled !== false;
+  const requestModeFilter = normalizeRequestModeFilterValue(live?.request_mode_filter);
+  const requestMaxLevel = normalizeRequestMaxLevelValue(live?.request_max_level);
+  const requestShowScores = live?.request_show_scores !== false;
+  const requestPolicySummary = formatRequestPolicySummary(requestModeFilter, requestMaxLevel);
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
   const isHost = !!live?.is_host;
@@ -2462,16 +2529,26 @@ export default function LivePage() {
   }, [activeSessionId, isDocumentVisible, live?.status, user]);
 
   useEffect(() => {
-    if (!deferredSongSearch || deferredSongSearch.trim().length < 2) {
+    const trimmedSearch = deferredSongSearch.trim();
+    if (!trimmedSearch || trimmedSearch.length < 2) {
       setSongResults([]);
       return undefined;
     }
     let cancelled = false;
     setSearchingSongs(true);
-    getSongLibrary({ search: deferredSongSearch.trim() })
+    const params = { search: trimmedSearch };
+    if (requestShowScores && live?.host_user_id) {
+      params.user_id = live.host_user_id;
+    }
+    getSongLibrary(params)
       .then((data) => {
         if (cancelled) return;
-        startTransition(() => setSongResults(normalizeSongResults(data)));
+        const filteredResults = filterSongResultsForRequests(
+          normalizeSongResults(data),
+          requestModeFilter,
+          requestMaxLevel
+        );
+        startTransition(() => setSongResults(filteredResults));
       })
       .catch(() => {
         if (!cancelled) setSongResults([]);
@@ -2480,7 +2557,7 @@ export default function LivePage() {
         if (!cancelled) setSearchingSongs(false);
       });
     return () => { cancelled = true; };
-  }, [deferredSongSearch]);
+  }, [deferredSongSearch, live?.host_user_id, requestMaxLevel, requestModeFilter, requestShowScores]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -2620,6 +2697,21 @@ export default function LivePage() {
       setError(err.message || 'Failed to update request availability');
     } finally {
       setSavingRequestsEnabled(false);
+    }
+  };
+
+  const handleUpdateRequestSettings = async (changes, successMessage) => {
+    if (!activeSessionId || !isHost) return;
+    setSavingRequestPolicy(true);
+    setError('');
+    try {
+      const data = await updateLiveSession(activeSessionId, changes);
+      applySnapshot(data, { markMessagesSeen: false });
+      setStatusNote(successMessage);
+    } catch (err) {
+      setError(err.message || 'Failed to update request settings');
+    } finally {
+      setSavingRequestPolicy(false);
     }
   };
 
@@ -2993,8 +3085,8 @@ export default function LivePage() {
   const voteSection = (
     <div className="space-y-4">
       {hostCanCreateVote ? (
-        <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Start vote</p>
+        <div className="rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+          <p className="text-[11px] font-display font-semibold text-gray-400">Start vote</p>
           <div className="grid grid-cols-3 gap-2 mt-3">
             <select value={voteModeFilter} onChange={(e) => setVoteModeFilter(e.target.value)} className="input-field text-xs py-2">
               <option>All</option>
@@ -3022,7 +3114,7 @@ export default function LivePage() {
       ) : null}
 
       {!hostCanCreateVote && !currentVote ? (
-        <div className="rounded-2xl border border-dashed border-piu-border bg-black/15 px-4 py-5 text-sm text-gray-400">
+        <div className="rounded-xl border border-dashed border-white/8 bg-[#11161f] px-4 py-5 text-sm text-gray-400">
           No live vote is open right now.
         </div>
       ) : null}
@@ -3030,14 +3122,14 @@ export default function LivePage() {
   );
 
   const songsSection = (
-    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-2.5 sm:p-3 lg:p-3.5">
+    <div className="rounded-xl border border-white/8 bg-[#11161f] p-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.18)] sm:p-3 lg:p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-[0.2em] text-gray-500">Songs This Session</p>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Songs this session</p>
           <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[320px]">
-          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field rounded-2xl border border-piu-border bg-black/15 ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
+          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field rounded-lg border border-white/8 bg-[#0d1218] ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
             <option>All</option>
             <option>Single</option>
             <option>Double</option>
@@ -3045,13 +3137,13 @@ export default function LivePage() {
           <button
             type="button"
             onClick={() => setPlayPassOnly((prev) => !prev)}
-            className={`rounded-2xl border px-3 text-left transition-colors ${
+            className={`rounded-lg border px-3 text-left transition-colors ${
               playPassOnly
                 ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'
-                : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
+                : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
             } ${isCompactSongCardLayout ? 'py-2' : 'py-2.5'}`}
           >
-            <p className="text-[10px] font-display font-bold uppercase tracking-wide">Pass</p>
+            <p className="text-[11px] font-display font-semibold text-gray-300">Pass</p>
             <p className="mt-1 text-[11px]">{playPassOnly ? 'Showing passes only' : 'Showing all results'}</p>
           </button>
         </div>
@@ -3076,7 +3168,7 @@ export default function LivePage() {
               type="button"
               key={play.id}
               onClick={() => setSelectedPlay(play)}
-              className={`w-full rounded-2xl border border-piu-border bg-black/15 text-left transition-all hover:border-cyan-400/40 hover:shadow-[0_4px_16px_rgba(34,211,238,0.06)] ${
+              className={`w-full rounded-lg border border-white/8 bg-[#0d1218] text-left transition-colors hover:border-white/15 ${
                 isCompactSongCardLayout ? 'p-2.5' : 'p-3'
               }`}
             >
@@ -3103,17 +3195,17 @@ export default function LivePage() {
                   </div>
                   <div className={`flex flex-wrap ${isCompactSongCardLayout ? 'mt-1.5 gap-1' : 'mt-2 gap-1.5'}`}>
                     {play.pumbility_gain > 0 ? (
-                      <span className={`rounded-full border border-emerald-400/25 bg-emerald-500/10 font-display font-bold text-emerald-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                      <span className={`rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                         +{play.pumbility_gain} p
                       </span>
                     ) : null}
                     {play.over_top100_rank > 0 ? (
-                      <span className={`rounded-full border border-yellow-400/25 bg-yellow-500/10 font-display font-bold text-yellow-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                      <span className={`rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                         Top 100 #{play.over_top100_rank}
                       </span>
                     ) : null}
                     {requestInfo ? (
-                      <span className={`rounded-full font-display font-bold ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'} ${getRequestStatusMeta(requestStatus).pill}`}>
+                      <span className={`rounded-md font-display font-semibold ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'} ${getRequestStatusMeta(requestStatus).pill}`}>
                         {formatRequestStateLabel(requestInfo)}
                       </span>
                     ) : null}
@@ -3129,25 +3221,89 @@ export default function LivePage() {
   );
 
   const requestsSection = (
-    <div className="rounded-2xl border border-piu-border bg-[#0c1220] p-3">
+    <div className="rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-[0.2em] text-gray-500">Song requests</p>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Song requests</p>
           <p className="text-sm font-display font-bold text-white">
             {requestCounts.open} open • {requestCounts.queued} queued • {requestCounts.played} played
             {requestCounts.skipped ? ` • ${requestCounts.skipped} skipped` : ''}
           </p>
         </div>
-        <span className={`rounded-full px-3 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${
+        <span className={`rounded-md border px-3 py-1 text-[10px] font-display font-semibold ${
           live?.status !== 'live'
-            ? 'border border-piu-border bg-black/20 text-gray-400'
+            ? 'border-white/8 bg-[#0d1218] text-gray-400'
             : requestsEnabled
-              ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-              : 'border border-piu-border bg-black/20 text-gray-400'
+              ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+              : 'border-white/8 bg-[#0d1218] text-gray-400'
         }`}>
           {live?.status !== 'live' ? 'Closed' : requestsEnabled ? 'Open' : 'Disabled'}
         </span>
       </div>
+      {isHost ? (
+        <div className="mt-3 rounded-lg border border-white/8 bg-[#0d1218] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-display font-semibold text-gray-300">Request settings</p>
+              <p className="mt-1 text-xs text-gray-300">Viewers can request {requestPolicySummary}.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleUpdateRequestSettings(
+                { request_show_scores: !requestShowScores },
+                !requestShowScores ? 'Host grades are now visible in request search.' : 'Host grades are now hidden in request search.'
+              )}
+              disabled={savingRequestPolicy || live?.status !== 'live'}
+              className={`rounded-md border px-3 py-1.5 text-[10px] font-display font-semibold ${
+                requestShowScores
+                  ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
+                  : 'border-white/8 bg-[#171d27] text-gray-400'
+              } disabled:opacity-60`}
+            >
+              {savingRequestPolicy ? 'Saving...' : requestShowScores ? 'Scores shown' : 'Scores hidden'}
+            </button>
+          </div>
+          <div className="mt-3">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Chart type</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {REQUEST_MODE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleUpdateRequestSettings(
+                    { request_mode_filter: option.value },
+                    `Request settings updated: ${formatRequestPolicySummary(option.value, requestMaxLevel)}.`
+                  )}
+                  disabled={savingRequestPolicy || live?.status !== 'live'}
+                  className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
+                    requestModeFilter === option.value
+                      ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
+                      : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
+                  } disabled:opacity-60`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Max level</p>
+            <select
+              value={requestMaxLevel}
+              onChange={(e) => handleUpdateRequestSettings(
+                { request_max_level: parseInt(e.target.value, 10) || DEFAULT_REQUEST_MAX_LEVEL },
+                `Request settings updated: ${formatRequestPolicySummary(requestModeFilter, e.target.value)}.`
+              )}
+              disabled={savingRequestPolicy || live?.status !== 'live'}
+              className="input-field mt-2 w-full text-xs py-2"
+            >
+              {REQUEST_MAX_LEVEL_OPTIONS.map((level) => (
+                <option key={level} value={level}>Lv. {level}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      ) : null}
       <input
         value={songSearch}
         onChange={(e) => setSongSearch(e.target.value)}
@@ -3163,6 +3319,12 @@ export default function LivePage() {
         }
         disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
       />
+      {live?.status === 'live' ? (
+        <p className="mt-2 text-[11px] text-gray-400">
+          Host is taking {requestPolicySummary}.
+          {requestShowScores ? ' Host grades are shown on chart buttons.' : ' Host grades are hidden.'}
+        </p>
+      ) : null}
       {!isHost && !requestsEnabled && live?.status === 'live' ? (
         <p className="mt-2 text-[11px] text-gray-400">The host has not enabled song requests for this session.</p>
       ) : null}
@@ -3177,11 +3339,12 @@ export default function LivePage() {
             song={song}
             disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
             onSelectChart={handleLiveRequest}
+            showHostScores={requestShowScores}
           />
         ))}
         {!searchingSongs && deferredSongSearch.trim().length >= 2 && songResults.length === 0 ? (
           <p className="rounded-xl border border-piu-border/60 bg-black/10 px-3 py-4 text-center text-sm text-gray-500">
-            No songs matched that request search.
+            No songs matched that search within the host&apos;s request settings.
           </p>
         ) : null}
       </div>
@@ -3190,10 +3353,7 @@ export default function LivePage() {
           const requestStatus = getRequestStatus(request.status, request.fulfilled);
           const requestMeta = getRequestStatusMeta(requestStatus, request.fulfilled);
           return (
-            <div
-              key={request.id}
-              className={`rounded-xl border px-3 py-2 ${requestMeta.card}`}
-            >
+            <div key={request.id} className={`rounded-lg border px-3 py-2 ${requestMeta.card}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <UserIdentity
@@ -3209,7 +3369,7 @@ export default function LivePage() {
                     {request.queue_position ? ` • Queue #${request.queue_position}` : ''}
                   </p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${requestMeta.pill}`}>
+                <span className={`shrink-0 rounded-md px-2.5 py-1 text-[10px] font-display font-semibold ${requestMeta.pill}`}>
                   {requestMeta.label}
                 </span>
               </div>
@@ -3288,20 +3448,20 @@ export default function LivePage() {
   );
 
   const desktopInteractionsSection = hasPlayerPanels ? null : (
-    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-cyan-400/25 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_45%),linear-gradient(180deg,#0c1426,#09101d)] p-3 shadow-[0_18px_40px_rgba(8,145,178,0.14)]">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className={`gap-2 ${isDesktopViewport ? 'flex flex-wrap items-start justify-between' : 'flex flex-col items-start'}`}>
         <div className="min-w-0">
-          <p className="text-[10px] font-display uppercase tracking-[0.2em] text-cyan-200">Interactions</p>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Interactions</p>
         </div>
         {isHost ? (
           <button
             type="button"
             onClick={handleToggleRequestsEnabled}
             disabled={savingRequestsEnabled || live?.status !== 'live'}
-            className={`shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[8px] font-display font-bold uppercase tracking-[0.1em] ${
+            className={`shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[8px] font-display font-semibold ${
               requestsEnabled
-                ? 'border border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                : 'border border-piu-border bg-black/20 text-gray-400'
+                ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                : 'border-white/8 bg-[#0d1218] text-gray-400'
             } disabled:opacity-60`}
           >
             {savingRequestsEnabled ? 'Saving...' : requestsEnabled ? 'Requests on' : 'Requests off'}
@@ -3320,15 +3480,15 @@ export default function LivePage() {
             }
           }}
           disabled={isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled}
-          className={`min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition-colors ${
+          className={`min-w-0 rounded-lg border px-2.5 py-2.5 text-left transition-colors ${
             mobilePanel === 'requests' && !(isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
               ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
               : (isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
-                ? 'border-piu-border/60 bg-black/10 text-gray-500'
-                : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
+                ? 'border-white/8 bg-[#0d1218] text-gray-500'
+                : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
           }`}
         >
-          <p className="text-[10px] font-display font-bold uppercase tracking-[0.12em]">Requests</p>
+          <p className="text-[11px] font-display font-semibold text-white">Requests</p>
           <p className="mt-1 text-[10px] leading-tight">
             {isDesktopViewport && requestTabDisabled ? 'Waiting for host' : `${requestCounts.open} open`}
           </p>
@@ -3344,15 +3504,15 @@ export default function LivePage() {
             }
           }}
           disabled={isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled}
-          className={`min-w-0 rounded-2xl border px-2.5 py-2.5 text-left transition-colors ${
+          className={`min-w-0 rounded-lg border px-2.5 py-2.5 text-left transition-colors ${
             mobilePanel === 'vote' && !(isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
               ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
               : (isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
-                ? 'border-piu-border/60 bg-black/10 text-gray-500'
-                : 'border-piu-border bg-black/15 text-gray-300 hover:text-white'
+                ? 'border-white/8 bg-[#0d1218] text-gray-500'
+                : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
           }`}
         >
-          <p className="text-[10px] font-display font-bold uppercase tracking-[0.12em]">Vote</p>
+          <p className="text-[11px] font-display font-semibold text-white">Vote</p>
           <p className="mt-1 text-[10px] leading-tight">
             {isDesktopViewport && voteTabDisabled ? 'No active vote' : currentVote?.status === 'active' ? 'Live now' : 'Available'}
           </p>
@@ -3375,7 +3535,7 @@ export default function LivePage() {
 
   const chatSection = (
     <div
-      className={`relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-piu-border bg-[#0c1220] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] p-3 ${
+      className={`relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${
         useDesktopViewerLayout
           ? 'h-full min-h-0'
           : isMobileChatLayout
@@ -3431,7 +3591,7 @@ export default function LivePage() {
 
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Live chat</p>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Live chat</p>
           <p className={`${isMobileChatLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{messages.length} recent messages</p>
         </div>
         <div className="flex flex-wrap justify-end gap-1">
@@ -3441,7 +3601,7 @@ export default function LivePage() {
               type="button"
               onClick={() => handleQuickReaction(emoji)}
               disabled={viewerState.chat_muted || live?.status !== 'live'}
-              className="w-8 h-8 rounded-lg bg-piu-dark/60 hover:bg-piu-dark text-sm disabled:opacity-40"
+              className="h-8 w-8 rounded-md border border-white/8 bg-[#171d27] text-sm transition-colors hover:border-white/15 hover:text-white disabled:opacity-40"
             >
               {emoji}
             </button>
@@ -3450,10 +3610,10 @@ export default function LivePage() {
             type="button"
             onClick={() => setShowEmoteTray((prev) => !prev)}
             disabled={viewerState.chat_muted || live?.status !== 'live'}
-            className={`rounded-lg px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide transition-colors ${
+            className={`rounded-md border px-2.5 py-1.5 text-[10px] font-display font-semibold transition-colors ${
               showEmoteTray
-                ? 'bg-rose-500/20 text-rose-100'
-                : 'bg-piu-dark/60 text-gray-300 hover:bg-piu-dark hover:text-white'
+                ? 'border-rose-400/30 bg-rose-500/12 text-rose-100'
+                : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
             } disabled:opacity-40`}
           >
             Emotes
@@ -3475,10 +3635,10 @@ export default function LivePage() {
       ) : null}
 
       {showEmoteTray && live?.status === 'live' ? (
-        <div className="mt-3 min-h-0 overflow-hidden rounded-2xl border border-fuchsia-400/20 bg-[radial-gradient(circle_at_top_left,rgba(244,114,182,0.14),transparent_38%),linear-gradient(180deg,#111827,#0b1220)] p-3">
+        <div className="mt-3 min-h-0 overflow-hidden rounded-lg border border-white/8 bg-[#0d1218] p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-display uppercase tracking-[0.24em] text-fuchsia-200">Emotes and Stickers</p>
+              <p className="text-[11px] font-display font-semibold text-gray-300">Emotes and stickers</p>
               <p className="mt-1 text-[11px] text-gray-400">Tap a reaction to fire it instantly, or add its token into your next message.</p>
             </div>
             <button type="button" onClick={() => setShowEmoteTray(false)} className="text-[11px] text-gray-500 hover:text-white">
@@ -3490,7 +3650,7 @@ export default function LivePage() {
             {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
               <div key={group.label} className="mt-3 first:mt-0">
                 <div className="px-1">
-                  <p className="text-[10px] font-display uppercase tracking-[0.22em] text-fuchsia-100">{group.label}</p>
+                  <p className="text-[11px] font-display font-semibold text-gray-300">{group.label}</p>
                   <p className="mt-1 text-[11px] text-gray-400">{group.description}</p>
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2 xl:grid-cols-4">
@@ -3509,8 +3669,8 @@ export default function LivePage() {
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {LIVE_EMOJI_GROUPS.map((group) => (
-                <div key={group.label} className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
-                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{group.label}</p>
+                <div key={group.label} className="rounded-lg border border-white/8 bg-[#11161f] p-3">
+                  <p className="text-[11px] font-display font-semibold text-gray-400">{group.label}</p>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {group.emojis.map((emoji) => (
                       <button
@@ -3543,7 +3703,7 @@ export default function LivePage() {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                   {tone.label ? (
-                    <span className={`shrink-0 rounded-full font-display font-bold uppercase tracking-wide ${tone.labelClass} ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[9px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                    <span className={`shrink-0 rounded-md font-display font-semibold ${tone.labelClass} ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[9px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                       {tone.label}
                     </span>
                   ) : null}
@@ -3562,12 +3722,12 @@ export default function LivePage() {
                     />
                   )}
                   {isHost && !msg.is_system && msg.chat_muted ? (
-                    <span className={`rounded-full border border-amber-400/30 bg-amber-500/10 font-display font-bold uppercase tracking-wide text-amber-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
+                    <span className={`rounded-md border border-amber-400/30 bg-amber-500/10 font-display font-semibold text-amber-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
                       Muted
                     </span>
                   ) : null}
                   {isHost && !msg.is_system && msg.requests_blocked ? (
-                    <span className={`rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 font-display font-bold uppercase tracking-wide text-fuchsia-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
+                    <span className={`rounded-md border border-fuchsia-400/30 bg-fuchsia-500/10 font-display font-semibold text-fuchsia-200 ${isMobileChatLayout ? 'px-1.5 py-0.5 text-[8px]' : isDesktopViewport ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'}`}>
                       Requests off
                     </span>
                   ) : null}
@@ -3583,7 +3743,7 @@ export default function LivePage() {
                     type="button"
                     onClick={() => handleDeleteMessage(msg.id)}
                     disabled={deletingMessageId === msg.id}
-                    className="rounded-lg bg-piu-dark px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300 transition-colors hover:text-white disabled:opacity-60"
+                    className="rounded-md border border-white/8 bg-[#171d27] px-3 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-white/15 hover:text-white disabled:opacity-60"
                   >
                     {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
                   </button>
@@ -3591,7 +3751,7 @@ export default function LivePage() {
                     type="button"
                     onClick={() => handleToggleModeration(msg, 'chat_muted')}
                     disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
-                    className="rounded-lg bg-amber-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-amber-200 transition-colors hover:text-white disabled:opacity-60"
+                    className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-amber-200 transition-colors hover:border-amber-300/30 hover:text-white disabled:opacity-60"
                   >
                     {moderationActionKey === `chat_muted:${msg.user_id}`
                       ? 'Updating...'
@@ -3603,7 +3763,7 @@ export default function LivePage() {
                     type="button"
                     onClick={() => handleToggleModeration(msg, 'requests_blocked')}
                     disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
-                    className="rounded-lg bg-fuchsia-500/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-wide text-fuchsia-200 transition-colors hover:text-white disabled:opacity-60"
+                    className="rounded-md border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-fuchsia-200 transition-colors hover:border-fuchsia-300/30 hover:text-white disabled:opacity-60"
                   >
                     {moderationActionKey === `requests_blocked:${msg.user_id}`
                       ? 'Updating...'
@@ -3645,7 +3805,7 @@ export default function LivePage() {
   if (!user) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4">
-        <div className="max-w-md rounded-3xl border border-piu-border bg-[#0c1220] p-6 text-center">
+        <div className="max-w-md rounded-xl border border-white/8 bg-[#11161f] p-6 text-center shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
           <p className="text-sm text-gray-400">You need a Shinsa account to join Shinsa Live.</p>
           <Link to="/login" className="btn-primary inline-flex mt-4">Log In</Link>
         </div>
@@ -3671,8 +3831,8 @@ export default function LivePage() {
             onSubmit={handleCreate}
           />
 
-          <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_38%),linear-gradient(180deg,#0c1323,#09101c)] p-5 shadow-2xl">
-            <p className="text-[10px] font-display uppercase tracking-[0.28em] text-cyan-200">Live Directory</p>
+          <div className="rounded-xl border border-white/8 bg-[#11161f] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+            <p className="text-sm font-display font-semibold text-gray-300">Live directory</p>
             <h2 className="mt-2 text-2xl font-display font-black text-white">
               {directorySessions.length > 0 ? `${directorySessions.length} room${directorySessions.length === 1 ? '' : 's'} live right now` : 'No live rooms at the moment'}
             </h2>
@@ -3680,16 +3840,16 @@ export default function LivePage() {
               Followed players float to the top, viewer counts stay fresh, and each card shows the latest chart, requests, and vote state before you join.
             </p>
             <div className="mt-4 grid grid-cols-3 gap-3">
-              <div className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Following live</p>
+              <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
+                <p className="text-[11px] font-display font-semibold text-gray-400">Following live</p>
                 <p className="mt-1 text-2xl font-display font-black text-cyan-200">{followedDirectorySessions.length}</p>
               </div>
-              <div className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Open sessions</p>
+              <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
+                <p className="text-[11px] font-display font-semibold text-gray-400">Open sessions</p>
                 <p className="mt-1 text-2xl font-display font-black text-white">{directorySessions.length}</p>
               </div>
-              <div className="rounded-2xl border border-piu-border/70 bg-black/15 p-3">
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Viewer accounts</p>
+              <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
+                <p className="text-[11px] font-display font-semibold text-gray-400">Viewer accounts</p>
                 <p className="mt-1 text-2xl font-display font-black text-rose-200">
                   {directorySessions.reduce((sum, item) => sum + (parseInt(item?.session?.viewer_count, 10) || 0), 0)}
                 </p>
@@ -3713,7 +3873,7 @@ export default function LivePage() {
         />
 
         {!directoryLoading && directorySessions.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-piu-border bg-black/20 px-5 py-8 text-center">
+          <div className="rounded-xl border border-dashed border-white/8 bg-[#11161f] px-5 py-8 text-center">
             <p className="text-lg font-display font-black text-white">Be the first room on the board.</p>
             <p className="mt-2 text-sm text-gray-400">
               Start a Shinsa Live session and your followers will get a go-live notification with a direct link into the room.
@@ -3730,10 +3890,10 @@ export default function LivePage() {
 
     return (
       <div className={`mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
-      <div className="rounded-3xl border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(244,63,94,0.14),transparent_50%),linear-gradient(180deg,#0d1424,#09101d)] p-4 sm:p-5">
+      <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between">
           <div className="min-w-0 w-full md:flex-1">
-            <p className="text-[10px] font-display uppercase tracking-[0.28em] text-rose-300">Shinsa Live</p>
+            <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
             <h1 className="mt-1 text-2xl font-display font-black text-white sm:text-3xl">
               {live?.title || 'Live session'}
             </h1>
@@ -3754,10 +3914,10 @@ export default function LivePage() {
                 <button
                   type="button"
                   onClick={() => setPlayerMode((prev) => !prev)}
-                  className={`text-xs px-3 py-2 rounded-lg font-display font-bold transition-colors ${
+              className={`rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${
                     playerMode
-                      ? 'bg-cyan-500/15 text-cyan-100 border border-cyan-400/30'
-                      : 'bg-black/20 text-gray-300 border border-piu-border hover:text-white'
+                      ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-100'
+                      : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
                   }`}
                 >
                   {playerMode ? 'Player mode on' : 'Player mode'}
@@ -3767,10 +3927,10 @@ export default function LivePage() {
                 <button
                   type="button"
                   onClick={() => setLockVideo((prev) => !prev)}
-                  className={`text-xs px-3 py-2 rounded-lg font-display font-bold transition-colors ${
+                  className={`rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${
                     lockVideo
-                      ? 'bg-cyan-500/15 text-cyan-100 border border-cyan-400/30'
-                      : 'bg-black/20 text-gray-300 border border-piu-border hover:text-white'
+                      ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-100'
+                      : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
                   }`}
                 >
                   {lockVideo ? 'Video locked' : 'Lock video'}
@@ -3798,10 +3958,10 @@ export default function LivePage() {
             <button
               type="button"
               onClick={() => setHostWorkspaceTab('room')}
-              className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+              className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'room'
-                  ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
-                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
+                  ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
+                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
               }`}
             >
               Live Room
@@ -3809,10 +3969,10 @@ export default function LivePage() {
             <button
               type="button"
               onClick={() => setHostWorkspaceTab('stream')}
-              className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+              className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'stream'
-                  ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
-                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
+                  ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
+                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
               }`}
             >
               Stream Link
@@ -3820,10 +3980,10 @@ export default function LivePage() {
             <button
               type="button"
               onClick={() => setHostWorkspaceTab('overlay')}
-              className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-wide ${
+              className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'overlay'
-                  ? 'border border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-100'
-                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
+                  ? 'border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-100'
+                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
               }`}
             >
               Overlay Studio
@@ -3832,25 +3992,25 @@ export default function LivePage() {
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 lg:gap-2.5 mt-3">
-          <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-bold text-emerald-200">
+          <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-semibold text-emerald-200">
             {live?.viewer_count || 0} watching now
           </span>
-          <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-300">
+          <span className="rounded-md border border-white/8 bg-[#0d1218] px-3 py-1 text-[11px] text-gray-300">
             Peak {live?.viewer_peak || 0}
           </span>
           {activeSessionId ? (
-            <span className={`rounded-full px-3 py-1 text-[11px] font-display font-bold uppercase tracking-wide ${
+            <span className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
               streamState === 'live'
-                ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-200'
+                ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200'
                 : streamState === 'reconnecting'
-                  ? 'border border-orange-400/30 bg-orange-500/10 text-orange-200'
-                  : 'border border-piu-border bg-black/20 text-gray-400'
+                  ? 'border-orange-400/30 bg-orange-500/10 text-orange-200'
+                  : 'border-white/8 bg-[#0d1218] text-gray-400'
             }`}>
               {streamStatusLabel}
             </span>
           ) : null}
           {live?.last_sync_at && isDesktopViewport ? (
-            <span className="rounded-full border border-piu-border bg-black/20 px-3 py-1 text-[11px] text-gray-400">
+            <span className="rounded-md border border-white/8 bg-[#0d1218] px-3 py-1 text-[11px] text-gray-400">
               {syncLabel}
             </span>
           ) : null}
@@ -3858,22 +4018,22 @@ export default function LivePage() {
             <button
               type="button"
               onClick={handleToggleWakeLock}
-              className={`rounded-full px-3 py-1 text-[11px] font-display font-bold uppercase tracking-wide ${
+              className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
                 wakeLockActive
-                  ? 'border border-amber-400/30 bg-amber-500/10 text-amber-200'
-                  : 'border border-piu-border bg-black/20 text-gray-300'
+                  ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
+                  : 'border-white/8 bg-[#0d1218] text-gray-300'
               }`}
             >
               {wakeLockActive ? 'Screen awake' : 'Keep awake'}
             </button>
           ) : null}
           {!live?.is_host && viewerState.chat_muted ? (
-            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-display font-bold text-amber-200">
+            <span className="rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-display font-semibold text-amber-200">
               Chat muted
             </span>
           ) : null}
           {!live?.is_host && viewerState.requests_blocked ? (
-            <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-display font-bold text-fuchsia-200">
+            <span className="rounded-md border border-fuchsia-400/30 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-display font-semibold text-fuchsia-200">
               Requests blocked
             </span>
           ) : null}
@@ -3895,16 +4055,16 @@ export default function LivePage() {
 
       {!youtubeId && isHost ? (
         <div className="space-y-4">
-          <div className="rounded-3xl border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_40%),linear-gradient(180deg,#0d1524,#09101b)] p-4">
+          <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Companion Dashboard</p>
+                <p className="text-[11px] font-display font-semibold text-gray-300">Companion dashboard</p>
                 <p className="mt-2 text-sm text-gray-300">
                   No stream link is attached, so this room is running in session-tracker mode. The player HUD can stay pinned while you watch sync state, results, requests, and chat on your phone.
                 </p>
               </div>
-              <div className="rounded-2xl border border-piu-border bg-black/15 px-4 py-3 text-right">
-                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current viewers</p>
+              <div className="rounded-lg border border-white/8 bg-[#0d1218] px-4 py-3 text-right">
+                <p className="text-[11px] font-display font-semibold text-gray-400">Current viewers</p>
                 <p className="text-2xl font-display font-black text-cyan-200">{viewerNowCount}</p>
               </div>
             </div>
@@ -3947,10 +4107,10 @@ export default function LivePage() {
 
       {hostWorkspaceTab !== 'overlay' && hasPlayerPanels ? (
         <div className="lg:hidden sticky top-[68px] z-30 space-y-3">
-          <div className="rounded-[28px] border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_38%),linear-gradient(180deg,rgba(8,14,28,0.96),rgba(7,10,18,0.96))] p-4 shadow-[0_18px_36px_rgba(3,7,18,0.34)] backdrop-blur">
+          <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-display uppercase tracking-[0.24em] text-cyan-200">Player HUD</p>
+                <p className="text-[11px] font-display font-semibold text-gray-300">Player HUD</p>
                 <p className="mt-1 text-sm text-gray-300">
                   {youtubeId ? 'Pinned while the stream sits above.' : 'Built for streamless session tracking on your phone.'}
                 </p>
@@ -3962,22 +4122,22 @@ export default function LivePage() {
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               {playerSummaryCards.map((card) => (
-                <div key={card.label} className="rounded-2xl border border-piu-border/70 bg-black/20 px-3 py-2.5">
-                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{card.label}</p>
+                <div key={card.label} className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
+                  <p className="text-[11px] font-display font-semibold text-gray-400">{card.label}</p>
                   <p className={`mt-1 text-lg font-display font-black ${card.tone}`}>{card.value}</p>
                 </div>
               ))}
             </div>
 
             <div className="mt-3 grid grid-cols-4 gap-2">
-              <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+              <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
                 Songs
               </button>
               <button
                 type="button"
                 onClick={() => setMobilePanel('requests')}
                 disabled={!isHost && (!requestsEnabled || live?.status !== 'live')}
-                className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+                className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
               >
                 Requests
               </button>
@@ -3985,11 +4145,11 @@ export default function LivePage() {
                 type="button"
                 onClick={() => setMobilePanel('vote')}
                 disabled={!isHost && !currentVote}
-                className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+                className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
               >
                 Vote
               </button>
-              <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-2xl border border-piu-border bg-black/15 px-2 py-2 text-[11px] font-display font-bold text-white">
+              <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
                 Chat
               </button>
             </div>
@@ -4016,7 +4176,7 @@ export default function LivePage() {
 
         {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
           <div className={`grid gap-5 items-stretch ${desktopViewerColumns}`}>
-            <div className="rounded-3xl overflow-hidden border border-piu-border bg-black/30">
+            <div className="overflow-hidden rounded-xl border border-white/8 bg-[#0d1218]">
               <div ref={desktopVideoFrameRef} className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                 <iframe
                 className="absolute inset-0 h-full w-full"
@@ -4039,7 +4199,7 @@ export default function LivePage() {
           style={mobileVideoDocked && mobileVideoDockHeight ? { height: `${mobileVideoDockHeight}px` } : undefined}
         >
           <div
-            className={`rounded-3xl overflow-hidden border border-piu-border bg-black/30 ${
+            className={`overflow-hidden rounded-xl border border-white/8 bg-[#0d1218] ${
               mobileVideoDocked ? 'fixed z-40' : ''
             }`}
             style={mobileVideoDocked && mobileVideoDockStyle ? mobileVideoDockStyle : undefined}
@@ -4118,16 +4278,16 @@ export default function LivePage() {
         )
       ) : null}
 
-      <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-piu-border/70 bg-[linear-gradient(180deg,rgba(9,12,20,0.94),rgba(6,8,14,0.98))] px-4 py-3 shadow-[0_-16px_36px_rgba(0,0,0,0.4)] lg:hidden ${hasPlayerPanels && hostWorkspaceTab !== 'overlay' ? '' : 'hidden'}`}>
+      <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-white/8 bg-[#11161f] px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.28)] lg:hidden ${hasPlayerPanels && hostWorkspaceTab !== 'overlay' ? '' : 'hidden'}`}>
         <div className="mx-auto grid max-w-2xl grid-cols-4 gap-2">
-          <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+          <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
             Songs
           </button>
           <button
             type="button"
             onClick={() => setMobilePanel('requests')}
             disabled={!isHost && (!requestsEnabled || live?.status !== 'live')}
-            className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+            className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
           >
             Requests
           </button>
@@ -4135,11 +4295,11 @@ export default function LivePage() {
             type="button"
             onClick={() => setMobilePanel('vote')}
             disabled={!isHost && !currentVote}
-            className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white disabled:text-gray-500 disabled:opacity-60"
+            className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
           >
             Vote
           </button>
-          <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-2xl border border-piu-border bg-black/20 px-2 py-2 text-[11px] font-display font-bold text-white">
+          <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
             Chat
           </button>
         </div>

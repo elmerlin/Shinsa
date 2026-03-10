@@ -28,6 +28,7 @@ const PLAY_LIMIT = 250;
 const VOTE_DURATION_SECONDS = 30;
 const STREAM_HEARTBEAT_MS = 25000;
 const LIVE_SYNC_INTERVAL_MS = 60000;
+const DEFAULT_REQUEST_MAX_LEVEL = 30;
 const FAILURE_MESSAGES = [
   "Oof. That stage break screen is looking a little too familiar today, don't you think? Shake the lactic acid out and run it back!",
   "My circuits literally hurt for you. You were this close to the finish line! Take a breath, drink some water, and go again.",
@@ -145,6 +146,32 @@ function normalizeUrl(value, max = 500) {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (/^(www\.)/i.test(trimmed)) return `https://${trimmed}`;
   return trimmed;
+}
+
+function normalizeRequestModeFilter(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'single' || normalized === 'singles') return 'Single';
+  if (normalized === 'double' || normalized === 'doubles') return 'Double';
+  return 'All';
+}
+
+function normalizeRequestMaxLevel(value) {
+  const level = toInt(value);
+  return level > 0 ? Math.min(level, 30) : DEFAULT_REQUEST_MAX_LEVEL;
+}
+
+function requestPolicyAllowsChart(session, chart) {
+  const modeFilter = normalizeRequestModeFilter(session?.request_mode_filter);
+  const maxLevel = normalizeRequestMaxLevel(session?.request_max_level);
+  if (modeFilter !== 'All' && String(chart?.mode || '') !== modeFilter) return false;
+  return toInt(chart?.level) <= maxLevel;
+}
+
+function buildRequestPolicyDescription(session) {
+  const modeFilter = normalizeRequestModeFilter(session?.request_mode_filter);
+  const maxLevel = normalizeRequestMaxLevel(session?.request_max_level);
+  const modeLabel = modeFilter === 'Single' ? 'Singles' : modeFilter === 'Double' ? 'Doubles' : 'All charts';
+  return `${modeLabel} up to Lv.${maxLevel}`;
 }
 
 function safeParseJson(raw, fallback) {
@@ -1035,6 +1062,9 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId) {
     title: session.title || '',
     stream_url: session.stream_url || '',
     requests_enabled: toInt(session.requests_enabled) !== 0,
+    request_mode_filter: normalizeRequestModeFilter(session.request_mode_filter),
+    request_max_level: normalizeRequestMaxLevel(session.request_max_level),
+    request_show_scores: toInt(session.request_show_scores) !== 0,
     is_hidden_from_profile: toInt(session.is_hidden_from_profile) !== 0,
     status: session.status || 'live',
     host_user_id: session.host_user_id,
@@ -1978,11 +2008,32 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
     const nextRequestsEnabled = req.body?.requests_enabled === undefined
       ? (toInt(session.requests_enabled) !== 0)
       : !!req.body.requests_enabled;
+    const nextRequestModeFilter = req.body?.request_mode_filter === undefined
+      ? normalizeRequestModeFilter(session.request_mode_filter)
+      : normalizeRequestModeFilter(req.body.request_mode_filter);
+    const nextRequestMaxLevel = req.body?.request_max_level === undefined
+      ? normalizeRequestMaxLevel(session.request_max_level)
+      : normalizeRequestMaxLevel(req.body.request_max_level);
+    const nextRequestShowScores = req.body?.request_show_scores === undefined
+      ? (toInt(session.request_show_scores) !== 0)
+      : !!req.body.request_show_scores;
     db.prepare(`
       UPDATE live_sessions
-      SET stream_url = ?, requests_enabled = ?, updated_at = datetime('now')
+      SET stream_url = ?,
+          requests_enabled = ?,
+          request_mode_filter = ?,
+          request_max_level = ?,
+          request_show_scores = ?,
+          updated_at = datetime('now')
       WHERE id = ?
-    `).run(nextStreamUrl, nextRequestsEnabled ? 1 : 0, session.id);
+    `).run(
+      nextStreamUrl,
+      nextRequestsEnabled ? 1 : 0,
+      nextRequestModeFilter,
+      nextRequestMaxLevel,
+      nextRequestShowScores ? 1 : 0,
+      session.id
+    );
 
     broadcastLiveSessionSnapshot(db, session.id, 'stream_updated');
     return res.json(buildSessionSnapshot(db, session.id, req.user.id));
@@ -2230,6 +2281,9 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
       `).get(songTitle, mode, level);
     }
     if (!chart) return res.status(404).json({ error: 'Chart not found' });
+    if (!isHost && !requestPolicyAllowsChart(session, chart)) {
+      return res.status(403).json({ error: `The host is currently taking ${buildRequestPolicyDescription(session)}.` });
+    }
 
     const user = db.prepare(`
       SELECT id, username, avatar, avatar_v
