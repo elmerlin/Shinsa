@@ -4036,7 +4036,7 @@ export default function LivePage() {
               {live?.status === 'ended' ? ' • ended' : ' • live'}
             </p>
           </div>
-          <div className="flex w-full flex-col items-start gap-2 md:w-auto md:shrink-0 md:items-end">
+          <div className="flex w-full flex-col items-start gap-2 md:w-auto md:max-w-[30rem] md:shrink-0 md:items-end">
             {!isDesktopViewport ? (
               <p className="text-xs text-left text-gray-400">
                 {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
@@ -4084,6 +4084,18 @@ export default function LivePage() {
                 </>
               )}
             </div>
+            {liveStatusText || isHost ? (
+              <div className="w-full md:max-w-[28rem]">
+                <LiveHeaderStatusStrip
+                  isHost={isHost}
+                  liveStatusText={liveStatusText}
+                  statusText={editStatusText}
+                  saving={savingStatusText}
+                  onChange={setEditStatusText}
+                  onSubmit={handleUpdateStatusText}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -4172,17 +4184,6 @@ export default function LivePage() {
             </span>
           ) : null}
         </div>
-
-        {liveStatusText || isHost ? (
-          <LiveHeaderStatusStrip
-            isHost={isHost}
-            liveStatusText={liveStatusText}
-            statusText={editStatusText}
-            saving={savingStatusText}
-            onChange={setEditStatusText}
-            onSubmit={handleUpdateStatusText}
-          />
-        ) : null}
 
         {statusNote ? <p className="mt-3 text-sm text-cyan-200">{statusNote}</p> : null}
         {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
