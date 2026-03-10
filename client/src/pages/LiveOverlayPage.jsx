@@ -4,6 +4,7 @@ import PiuChartJacket from '../components/PiuChartJacket';
 import LiveEmote from '../components/LiveEmote';
 import { openLiveSessionStream } from '../utils/api';
 import { getLiveReactionPayload, tokenizeLiveMessage } from '../utils/liveEmotes';
+import { parseGrade } from '../utils/grades';
 import {
   getLiveOverlayAutoHide,
   getLiveOverlayFit,
@@ -24,6 +25,8 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
+const GRADE_SORT = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
+
 function modeShort(mode) {
   if (mode === 'Single') return 'S';
   if (mode === 'Double') return 'D';
@@ -33,6 +36,12 @@ function modeShort(mode) {
 function formatPlayLabel(play) {
   if (!play) return 'Waiting for the next chart';
   return `${play.song_title || 'Unknown chart'} (${modeShort(play.mode)}${parseInt(play.level, 10) || '?'})`;
+}
+
+function getPlayGradeRank(grade) {
+  const normalized = parseGrade(grade).normalized;
+  const index = GRADE_SORT.indexOf(normalized);
+  return index >= 0 ? index : -1;
 }
 
 function formatCountdownLabel(remainingMs) {
@@ -106,6 +115,11 @@ function getOverlayShellClass(anchorId) {
 
 function getOverlayPanelClass(fitId, presetId) {
   const preset = String(presetId || '').trim().toLowerCase();
+  if (preset === 'marquee') {
+    if (fitId === 'full') return 'w-[min(99vw,96rem)]';
+    if (fitId === 'card') return 'w-[min(96vw,76rem)]';
+    return 'w-[min(98vw,92rem)]';
+  }
   if (fitId === 'full') return 'w-[min(96vw,72rem)]';
   if (fitId === 'phone') return 'w-[min(92vw,22rem)]';
   if (fitId === 'rail') return 'w-[min(92vw,24rem)]';
@@ -153,6 +167,45 @@ function getRecentChatMessages(messages) {
   return (Array.isArray(messages) ? messages : [])
     .filter((message) => message?.message || message?.is_system)
     .slice(-5);
+}
+
+function getLatestViewerChatMessage(messages) {
+  const rows = Array.isArray(messages) ? messages : [];
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const message = rows[index];
+    if (!message?.message || message?.is_system) continue;
+    return message;
+  }
+  return null;
+}
+
+function getLatestRequest(requests) {
+  const rows = Array.isArray(requests) ? requests : [];
+  let latest = null;
+  let latestTimestamp = -Infinity;
+  for (const request of rows) {
+    const timestamp = Math.max(
+      parseTimestamp(request?.created_at),
+      parseTimestamp(request?.updated_at)
+    );
+    if (!Number.isFinite(timestamp) || timestamp < latestTimestamp) continue;
+    latest = request;
+    latestTimestamp = timestamp;
+  }
+  return latest;
+}
+
+function getBestRatedPlay(plays) {
+  const rows = Array.isArray(plays) ? plays : [];
+  if (rows.length === 0) return null;
+  return rows.slice().sort((left, right) => {
+    const gradeDelta = getPlayGradeRank(right?.grade) - getPlayGradeRank(left?.grade);
+    if (gradeDelta !== 0) return gradeDelta;
+    const scoreDelta = (parseInt(right?.score, 10) || 0) - (parseInt(left?.score, 10) || 0);
+    if (scoreDelta !== 0) return scoreDelta;
+    return parseTimestamp(right?.date_played || right?.created_at || right?.updated_at)
+      - parseTimestamp(left?.date_played || left?.created_at || left?.updated_at);
+  })[0] || null;
 }
 
 function showBurstPayload(message) {
@@ -327,6 +380,121 @@ function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showS
         </div>
       ) : null}
     </div>
+  );
+}
+
+function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, theme, widgetSet }) {
+  const items = [];
+
+  if (widgetSet.has('play')) {
+    items.push(
+      <div key="play" className={`flex min-w-[20rem] items-center gap-3 rounded-[24px] border px-4 py-3 ${theme.chipClass}`}>
+        <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
+        <div className="min-w-0">
+          <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Play</p>
+          <p className="truncate text-sm font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
+          <p className="text-[11px] text-white/65">
+            {play ? `${modeShort(play.mode)}${play.level} • ${play.grade || '-'} • ${formatNumber(play.score)}` : 'Sync armed'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (widgetSet.has('latest_request')) {
+    items.push(
+      <div key="request" className={`min-w-[18rem] rounded-[24px] border px-4 py-3 ${theme.faintClass}`}>
+        <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Request</p>
+        <p className="mt-1 truncate text-sm font-display font-black text-white">
+          {latestRequest ? `${latestRequest.song_title} (${modeShort(latestRequest.mode)}${latestRequest.level})` : 'No requests yet'}
+        </p>
+        <p className="text-[11px] text-white/65">
+          {latestRequest ? `${latestRequest.username || 'Viewer'} • ${latestRequest.status || 'open'}` : 'Waiting for the first request'}
+        </p>
+      </div>
+    );
+  }
+
+  if (widgetSet.has('chat')) {
+    items.push(
+      <div key="chat" className={`min-w-[18rem] rounded-[24px] border px-4 py-3 ${theme.faintClass}`}>
+        <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Last Chat</p>
+        <p className="mt-1 truncate text-sm font-display font-black text-white">
+          {latestChat?.username || 'Chat idle'}
+        </p>
+        <p className="text-[11px] text-white/65 truncate">
+          {latestChat?.message || 'Waiting for the next viewer message'}
+        </p>
+      </div>
+    );
+  }
+
+  if (widgetSet.has('status')) {
+    items.push(
+      <div key="status" className={`min-w-[16rem] rounded-[24px] border px-4 py-3 ${theme.altClass}`}>
+        <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] opacity-80">Stream Status</p>
+        <p className="mt-1 text-sm font-display font-black">
+          {live?.status_text || 'No status set'}
+        </p>
+      </div>
+    );
+  }
+
+  if (widgetSet.has('best')) {
+    items.push(
+      <div key="best" className={`flex min-w-[20rem] items-center gap-3 rounded-[24px] border px-4 py-3 ${theme.strongClass}`}>
+        <PiuChartJacket title={bestPlay?.song_title} mode={bestPlay?.mode} level={bestPlay?.level} jacketUrl={bestPlay?.background_url} size="sm" />
+        <div className="min-w-0">
+          <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] opacity-80">Best Rated Score</p>
+          <p className="truncate text-sm font-display font-black">
+            {bestPlay?.song_title || 'No scores yet'}
+          </p>
+          <p className="text-[11px] opacity-85">
+            {bestPlay ? `${bestPlay.grade || '-'} • ${formatNumber(bestPlay.score)} • ${modeShort(bestPlay.mode)}${bestPlay.level}` : 'Play a chart to set the pace'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return items;
+}
+
+function MarqueeOverlay({ live, play, latestRequest, latestChat, bestPlay, theme, widgetSet, panelClassName = '' }) {
+  const items = useMemo(
+    () => getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, theme, widgetSet }),
+    [bestPlay, latestChat, latestRequest, live, play, theme, widgetSet]
+  );
+  const shouldAnimate = items.length > 1;
+  const trackItems = shouldAnimate ? [...items, ...items] : items;
+
+  return (
+    <OverlayPanel theme={theme} className={`${panelClassName} px-4 py-4 md:px-5 md:py-4`}>
+      <style>{`
+        @keyframes shinsa-live-marquee {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-50%, 0, 0); }
+        }
+      `}</style>
+      <div className="space-y-3">
+        <OverlayHeader
+          live={live}
+          theme={theme}
+          presetLabel="News ticker"
+          showBrand={widgetSet.has('brand')}
+          showViewers={widgetSet.has('viewers')}
+          showSync={widgetSet.has('sync')}
+        />
+        <div className="overflow-hidden">
+          <div
+            className="flex w-max items-stretch gap-3"
+            style={shouldAnimate ? { animation: 'shinsa-live-marquee 34s linear infinite' } : undefined}
+          >
+            {trackItems.map((item, index) => React.cloneElement(item, { key: `${item.key || 'item'}-${index}` }))}
+          </div>
+        </div>
+      </div>
+    </OverlayPanel>
   );
 }
 
@@ -570,8 +738,13 @@ export default function LiveOverlayPage() {
   const play = snapshot?.last_play || null;
   const summary = snapshot?.summary || null;
   const vote = snapshot?.active_vote || null;
+  const plays = useMemo(() => (Array.isArray(snapshot?.plays) ? snapshot.plays : []), [snapshot?.plays]);
+  const requests = useMemo(() => (Array.isArray(snapshot?.requests) ? snapshot.requests : []), [snapshot?.requests]);
   const requestCounts = useMemo(() => getRequestCounts(snapshot?.requests), [snapshot?.requests]);
   const recentMessages = useMemo(() => getRecentChatMessages(snapshot?.messages), [snapshot?.messages]);
+  const latestRequest = useMemo(() => getLatestRequest(requests), [requests]);
+  const latestChat = useMemo(() => getLatestViewerChatMessage(snapshot?.messages), [snapshot?.messages]);
+  const bestPlay = useMemo(() => getBestRatedPlay(plays), [plays]);
   const shellClassName = useMemo(() => `flex min-h-screen w-full ${getOverlayShellClass(anchorId)}`, [anchorId]);
   const panelClassName = useMemo(() => getOverlayPanelClass(fit.id, preset.id), [fit.id, preset.id]);
   const overlayVisible = shouldShowOverlay(autoHide.id, {
@@ -753,6 +926,8 @@ export default function LiveOverlayPage() {
     layout = <ChatOverlay live={live} play={play} vote={vote} messages={recentMessages} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
   } else if (preset.id === 'mobile') {
     layout = <MobileOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
+  } else if (preset.id === 'marquee') {
+    layout = <MarqueeOverlay live={live} play={play} latestRequest={latestRequest} latestChat={latestChat} bestPlay={bestPlay} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
   } else {
     layout = <CompactOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
   }

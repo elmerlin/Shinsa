@@ -1156,6 +1156,7 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId) {
     id: session.id,
     title: session.title || '',
     stream_url: session.stream_url || '',
+    status_text: normalizeText(session.status_text || '', 160),
     requests_enabled: toInt(session.requests_enabled) !== 0,
     request_mode_filter: normalizeRequestModeFilter(session.request_mode_filter),
     request_max_level: normalizeRequestMaxLevel(session.request_max_level),
@@ -2031,6 +2032,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
 
     const title = normalizeText(req.body?.title, 120) || `${req.user.username || 'Player'} live session`;
     const streamUrl = normalizeUrl(req.body?.stream_url, 400);
+    const statusText = normalizeText(req.body?.status_text, 160);
     const defaultRequestMaxLevel = getDefaultRequestMaxLevelForUser(db, req.user.id);
 
     await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: true });
@@ -2044,10 +2046,10 @@ router.post('/sessions', requireAuth, async (req, res) => {
 
     db.prepare(`
       INSERT INTO live_sessions (
-        id, host_user_id, title, stream_url, status, recent_anchor_id, last_recent_row_id,
+        id, host_user_id, title, stream_url, status_text, status, recent_anchor_id, last_recent_row_id,
         request_max_level, last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
-      ) VALUES (?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
-    `).run(id, req.user.id, title, streamUrl, toInt(anchor?.max_id), toInt(anchor?.max_id), defaultRequestMaxLevel);
+      ) VALUES (?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
+    `).run(id, req.user.id, title, streamUrl, statusText, toInt(anchor?.max_id), toInt(anchor?.max_id), defaultRequestMaxLevel);
 
     addSystemMessage(db, id, `${req.user.username || 'Player'} started a Shinsa Live session.`, 'session_start', {
       stream_url: streamUrl,
@@ -2085,7 +2087,12 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
       return res.status(403).json({ error: 'Only the host can update this live session' });
     }
 
-    const nextStreamUrl = normalizeUrl(req.body?.stream_url, 400);
+    const nextStreamUrl = req.body?.stream_url === undefined
+      ? normalizeUrl(session.stream_url, 400)
+      : normalizeUrl(req.body.stream_url, 400);
+    const nextStatusText = req.body?.status_text === undefined
+      ? normalizeText(session.status_text, 160)
+      : normalizeText(req.body.status_text, 160);
     const nextRequestsEnabled = req.body?.requests_enabled === undefined
       ? (toInt(session.requests_enabled) !== 0)
       : !!req.body.requests_enabled;
@@ -2101,6 +2108,7 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
     db.prepare(`
       UPDATE live_sessions
       SET stream_url = ?,
+          status_text = ?,
           requests_enabled = ?,
           request_mode_filter = ?,
           request_max_level = ?,
@@ -2109,6 +2117,7 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
       WHERE id = ?
     `).run(
       nextStreamUrl,
+      nextStatusText,
       nextRequestsEnabled ? 1 : 0,
       nextRequestModeFilter,
       nextRequestMaxLevel,

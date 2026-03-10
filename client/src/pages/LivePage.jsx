@@ -1046,7 +1046,16 @@ function PinnedVoteCard({
   );
 }
 
-function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStreamUrlChange, onSubmit }) {
+function CreateSessionCard({
+  title,
+  streamUrl,
+  statusText,
+  creating,
+  onTitleChange,
+  onStreamUrlChange,
+  onStatusTextChange,
+  onSubmit,
+}) {
   return (
     <div className="max-w-xl rounded-xl border border-piu-border bg-piu-card p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
       <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
@@ -1068,6 +1077,13 @@ function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStream
           className="input-field w-full"
           placeholder="YouTube stream URL (optional)"
           maxLength={400}
+        />
+        <input
+          value={statusText}
+          onChange={(e) => onStatusTextChange(e.target.value)}
+          className="input-field w-full"
+          placeholder="Current status (optional)"
+          maxLength={160}
         />
       </div>
       <button type="button" onClick={onSubmit} disabled={creating} className="btn-primary mt-4 w-full py-2.5">
@@ -1124,6 +1140,55 @@ function StreamUrlEditorCard({
           The link is attached to the room, but Shinsa could not turn it into an embedded YouTube player yet.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function StatusEditorCard({
+  statusText,
+  saving,
+  onChange,
+  onSubmit,
+}) {
+  const trimmedStatus = String(statusText || '').trim();
+
+  return (
+    <div className="mt-4 rounded-lg border border-white/8 bg-[#11161f] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Stream status</p>
+          <p className="mt-2 text-sm text-gray-300">
+            Share a short now-playing note like warming up, taking requests, on break, or setting up the next segment.
+          </p>
+        </div>
+        <span className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
+          trimmedStatus
+            ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
+            : 'border border-piu-border bg-black/20 text-gray-400'
+        }`}>
+          {trimmedStatus ? 'Status live' : 'No status set'}
+        </span>
+      </div>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
+        <textarea
+          value={statusText}
+          onChange={(e) => onChange(e.target.value)}
+          className="input-field min-h-[84px] w-full resize-y"
+          placeholder="What are you doing right now?"
+          maxLength={160}
+        />
+        <button type="button" onClick={onSubmit} disabled={saving} className="btn-primary px-4 py-2.5 sm:w-auto">
+          {saving ? 'Saving...' : 'Save status'}
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-gray-400">
+          This shows in the room header and can be pulled into overlays like the news ticker preset.
+        </p>
+        <p className="text-[11px] text-gray-500">
+          {Math.max(0, 160 - String(statusText || '').length)} chars left
+        </p>
+      </div>
     </div>
   );
 }
@@ -1693,9 +1758,12 @@ export default function LivePage() {
   const [directoryError, setDirectoryError] = useState('');
   const [createTitle, setCreateTitle] = useState('');
   const [createStreamUrl, setCreateStreamUrl] = useState('');
+  const [createStatusText, setCreateStatusText] = useState('');
   const [editStreamUrl, setEditStreamUrl] = useState('');
+  const [editStatusText, setEditStatusText] = useState('');
   const [creating, setCreating] = useState(false);
   const [savingStreamUrl, setSavingStreamUrl] = useState(false);
+  const [savingStatusText, setSavingStatusText] = useState(false);
   const [savingRequestsEnabled, setSavingRequestsEnabled] = useState(false);
   const [savingRequestPolicy, setSavingRequestPolicy] = useState(false);
   const [playerMode, setPlayerMode] = useState(false);
@@ -1823,6 +1891,10 @@ export default function LivePage() {
   useEffect(() => {
     setEditStreamUrl(live?.stream_url || '');
   }, [live?.id, live?.stream_url]);
+
+  useEffect(() => {
+    setEditStatusText(live?.status_text || '');
+  }, [live?.id, live?.status_text]);
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -2679,7 +2751,11 @@ export default function LivePage() {
     setCreating(true);
     setError('');
     try {
-      const data = await createLiveSession({ title: createTitle, stream_url: createStreamUrl });
+      const data = await createLiveSession({
+        title: createTitle,
+        stream_url: createStreamUrl,
+        status_text: createStatusText,
+      });
       seenMessageIdsRef.current = new Set((data?.messages || []).map((msg) => msg.id));
       applySnapshot(data, { markMessagesSeen: true });
       if ((parseInt(data?.notified_followers, 10) || 0) > 0) {
@@ -2690,6 +2766,23 @@ export default function LivePage() {
       setError(err.message || 'Failed to create live session');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleUpdateStatusText = async () => {
+    if (!activeSessionId || !isHost) return;
+    setSavingStatusText(true);
+    setError('');
+    try {
+      const data = await updateLiveSession(activeSessionId, { status_text: editStatusText });
+      applySnapshot(data, { markMessagesSeen: false });
+      const savedStatus = String(data?.session?.status_text || '').trim();
+      setEditStatusText(data?.session?.status_text || '');
+      setStatusNote(savedStatus ? 'Live status updated.' : 'Live status cleared.');
+    } catch (err) {
+      setError(err.message || 'Failed to update live status');
+    } finally {
+      setSavingStatusText(false);
     }
   };
 
@@ -3069,6 +3162,7 @@ export default function LivePage() {
   };
 
   const hostCanCreateVote = isHost && (!currentVote || currentVote.status !== 'active') && live?.status === 'live';
+  const liveStatusText = String(live?.status_text || '').trim();
   const streamStatusLabel = streamState === 'live'
     ? 'Channel live'
     : streamState === 'reconnecting'
@@ -3853,9 +3947,11 @@ export default function LivePage() {
           <CreateSessionCard
             title={createTitle}
             streamUrl={createStreamUrl}
+            statusText={createStatusText}
             creating={creating}
             onTitleChange={setCreateTitle}
             onStreamUrlChange={setCreateStreamUrl}
+            onStatusTextChange={setCreateStatusText}
             onSubmit={handleCreate}
           />
 
@@ -4067,8 +4163,25 @@ export default function LivePage() {
           ) : null}
         </div>
 
+        {liveStatusText || isHost ? (
+          <div className="mt-4 rounded-lg border border-white/8 bg-[#11161f] px-4 py-3">
+            <p className="text-[11px] font-display font-semibold uppercase tracking-[0.18em] text-cyan-200/90">Status</p>
+            <p className="mt-2 text-sm text-gray-100">
+              {liveStatusText || (isHost ? 'Add a short update so viewers and overlays know what you are doing right now.' : 'No status set right now.')}
+            </p>
+          </div>
+        ) : null}
+
         {statusNote ? <p className="mt-3 text-sm text-cyan-200">{statusNote}</p> : null}
         {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
+        {isHost ? (
+          <StatusEditorCard
+            statusText={editStatusText}
+            saving={savingStatusText}
+            onChange={setEditStatusText}
+            onSubmit={handleUpdateStatusText}
+          />
+        ) : null}
         {showCompactStreamEditor ? (
           <StreamUrlEditorCard
             streamUrl={editStreamUrl}

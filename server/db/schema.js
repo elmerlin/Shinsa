@@ -1835,6 +1835,7 @@ function initializeDb() {
       host_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL DEFAULT '',
       stream_url TEXT DEFAULT '',
+      status_text TEXT DEFAULT '',
       requests_enabled INTEGER NOT NULL DEFAULT 1,
       request_mode_filter TEXT NOT NULL DEFAULT 'All',
       request_max_level INTEGER NOT NULL DEFAULT 30,
@@ -2501,6 +2502,9 @@ function initializeDb() {
   }
 
   const liveSessionCols = db.prepare("PRAGMA table_info(live_sessions)").all().map((c) => c.name);
+  if (!liveSessionCols.includes('status_text')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN status_text TEXT DEFAULT ''");
+  }
   if (!liveSessionCols.includes('requests_enabled')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN requests_enabled INTEGER NOT NULL DEFAULT 1");
   }

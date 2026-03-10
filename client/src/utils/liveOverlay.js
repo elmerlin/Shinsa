@@ -23,18 +23,27 @@ export const LIVE_OVERLAY_PRESETS = [
     description: 'Tall phone-safe stack for latest play, sync state, and queue info.',
     defaultWidgets: ['brand', 'viewers', 'play', 'result', 'requests', 'vote', 'sync'],
   },
+  {
+    id: 'marquee',
+    label: 'News ticker',
+    description: 'Scrolling marquee with latest play, request, chat, stream status, and best score.',
+    defaultWidgets: ['brand', 'viewers', 'play', 'latest_request', 'chat', 'status', 'best'],
+  },
 ];
 
 export const LIVE_OVERLAY_WIDGETS = [
   { id: 'brand', label: 'Brand' },
   { id: 'viewers', label: 'Viewers' },
   { id: 'play', label: 'Latest play' },
+  { id: 'status', label: 'Streamer status' },
   { id: 'result', label: 'Last result' },
   { id: 'requests', label: 'Requests' },
+  { id: 'latest_request', label: 'Latest request' },
   { id: 'vote', label: 'Vote' },
   { id: 'summary', label: 'Session recap' },
   { id: 'sync', label: 'Sync status' },
   { id: 'chat', label: 'Chat' },
+  { id: 'best', label: 'Best session score' },
   { id: 'reactions', label: 'Reactions' },
 ];
 
@@ -179,6 +188,21 @@ export const LIVE_OVERLAY_SCENES = [
       autoHide: 'smart',
     },
   },
+  {
+    id: 'ticker',
+    label: 'News Ticker',
+    description: 'Scrolling headline bar for latest play, stream status, chat, and requests.',
+    options: {
+      preset: 'marquee',
+      theme: 'transparent',
+      fit: 'wide',
+      anchor: 'bottom-center',
+      widgets: ['brand', 'viewers', 'play', 'latest_request', 'chat', 'status', 'best'],
+      motion: true,
+      guides: false,
+      autoHide: 'smart',
+    },
+  },
 ];
 
 const LIVE_OVERLAY_OUTPUT_WIDTHS = {
@@ -200,6 +224,7 @@ const LIVE_OVERLAY_OUTPUT_HEIGHTS = {
   results: 620,
   chat: 920,
   mobile: 860,
+  marquee: 240,
 };
 
 const PRESET_MAP = new Map(LIVE_OVERLAY_PRESETS.map((preset) => [preset.id, preset]));
