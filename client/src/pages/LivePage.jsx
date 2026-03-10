@@ -1621,6 +1621,11 @@ export default function LivePage() {
       ? window.matchMedia('(min-width: 1024px)').matches
       : false
   ));
+  const [isXlViewport, setIsXlViewport] = useState(() => (
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia('(min-width: 1280px)').matches
+      : false
+  ));
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [floatingReactions, setFloatingReactions] = useState([]);
@@ -1701,7 +1706,7 @@ export default function LivePage() {
   const useDesktopSidebarLayout = isDesktopViewport && !hasPlayerPanels && !useDesktopViewerLayout;
   const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && !hasPlayerPanels && hostWorkspaceTab !== 'overlay';
   const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
-  const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
+  const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight && isXlViewport
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px`, minHeight: `${desktopMediaHeight}px` }
     : undefined;
   const desktopChatFallbackHeight = 'clamp(24rem, calc(100dvh - 16rem), 64rem)';
@@ -2069,6 +2074,19 @@ export default function LivePage() {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
     const query = window.matchMedia('(min-width: 1024px)');
     const update = () => setIsDesktopViewport(query.matches);
+    update();
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', update);
+      return () => query.removeEventListener('change', update);
+    }
+    query.addListener(update);
+    return () => query.removeListener(update);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const query = window.matchMedia('(min-width: 1280px)');
+    const update = () => setIsXlViewport(query.matches);
     update();
     if (typeof query.addEventListener === 'function') {
       query.addEventListener('change', update);
