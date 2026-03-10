@@ -1230,7 +1230,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
   const requestLabel = compact ? formatCompactRequestStateLabel(requestInfo) : formatRequestStateLabel(requestInfo);
 
   return (
-    <div className={`flex h-full flex-col rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
+    <div className={`flex h-full flex-col rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-display font-semibold text-gray-400">Latest play</p>
@@ -1242,7 +1242,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
             </p>
           ) : null}
         </div>
-        <span className={`shrink-0 whitespace-nowrap rounded-md border ${compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-1 text-[10px]'} font-display font-semibold ${live?.status === 'live' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-white/8 bg-[#0d1218] text-gray-400'}`}>
+        <span className={`shrink-0 whitespace-nowrap rounded-md border ${compact ? 'px-2 py-1 text-[9px]' : 'px-3 py-1 text-[10px]'} font-display font-semibold ${live?.status === 'live' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-piu-border/60 bg-piu-dark/60 text-gray-400'}`}>
           {live?.status === 'live' ? 'Live sync' : 'Session ended'}
         </span>
       </div>
@@ -1288,7 +1288,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
                   </span>
                 ) : null}
                 {play.session_result_type ? (
-                  <span className="rounded-md border border-white/8 bg-[#0d1218] px-2.5 py-0.5 text-[10px] text-gray-300 capitalize">
+                  <span className="rounded-md border border-piu-border/60 bg-piu-dark/60 px-2.5 py-0.5 text-[10px] text-gray-300 capitalize">
                     {play.session_result_type}
                   </span>
                 ) : null}
@@ -1329,7 +1329,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
                     </span>
                   ) : null}
                   {play.session_result_type ? (
-                    <span className="rounded-md border border-white/8 bg-[#0d1218] px-3 py-1 text-[11px] text-gray-300 capitalize">
+                    <span className="rounded-md border border-piu-border/60 bg-piu-dark/60 px-3 py-1 text-[11px] text-gray-300 capitalize">
                       {play.session_result_type}
                     </span>
                   ) : null}
@@ -3890,7 +3890,7 @@ export default function LivePage() {
 
     return (
       <div className={`mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
-      <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-5">
+      <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between">
           <div className="min-w-0 w-full md:flex-1">
             <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
@@ -3914,10 +3914,10 @@ export default function LivePage() {
                 <button
                   type="button"
                   onClick={() => setPlayerMode((prev) => !prev)}
-              className={`rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${
+                  className={`rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${
                     playerMode
                       ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-100'
-                      : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+                      : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
                   }`}
                 >
                   {playerMode ? 'Player mode on' : 'Player mode'}
@@ -3930,7 +3930,7 @@ export default function LivePage() {
                   className={`rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${
                     lockVideo
                       ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-100'
-                      : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+                      : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
                   }`}
                 >
                   {lockVideo ? 'Video locked' : 'Lock video'}
@@ -3961,7 +3961,7 @@ export default function LivePage() {
               className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'room'
                   ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
-                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+                  : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
               }`}
             >
               Live Room
@@ -3972,7 +3972,7 @@ export default function LivePage() {
               className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'stream'
                   ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
-                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+                  : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
               }`}
             >
               Stream Link
@@ -3983,7 +3983,7 @@ export default function LivePage() {
               className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'overlay'
                   ? 'border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-100'
-                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+                  : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
               }`}
             >
               Overlay Studio
@@ -3995,7 +3995,7 @@ export default function LivePage() {
           <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-semibold text-emerald-200">
             {live?.viewer_count || 0} watching now
           </span>
-          <span className="rounded-md border border-white/8 bg-[#0d1218] px-3 py-1 text-[11px] text-gray-300">
+          <span className="rounded-md border border-piu-border/60 bg-piu-dark/60 px-3 py-1 text-[11px] text-gray-300">
             Peak {live?.viewer_peak || 0}
           </span>
           {activeSessionId ? (
@@ -4004,13 +4004,13 @@ export default function LivePage() {
                 ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200'
                 : streamState === 'reconnecting'
                   ? 'border-orange-400/30 bg-orange-500/10 text-orange-200'
-                  : 'border-white/8 bg-[#0d1218] text-gray-400'
+                  : 'border-piu-border/60 bg-piu-dark/60 text-gray-400'
             }`}>
               {streamStatusLabel}
             </span>
           ) : null}
           {live?.last_sync_at && isDesktopViewport ? (
-            <span className="rounded-md border border-white/8 bg-[#0d1218] px-3 py-1 text-[11px] text-gray-400">
+            <span className="rounded-md border border-piu-border/60 bg-piu-dark/60 px-3 py-1 text-[11px] text-gray-400">
               {syncLabel}
             </span>
           ) : null}
@@ -4021,7 +4021,7 @@ export default function LivePage() {
               className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
                 wakeLockActive
                   ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
-                  : 'border-white/8 bg-[#0d1218] text-gray-300'
+                  : 'border-piu-border/60 bg-piu-dark/60 text-gray-300'
               }`}
             >
               {wakeLockActive ? 'Screen awake' : 'Keep awake'}
@@ -4055,7 +4055,7 @@ export default function LivePage() {
 
       {!youtubeId && isHost ? (
         <div className="space-y-4">
-          <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+          <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-display font-semibold text-gray-300">Companion dashboard</p>
@@ -4063,7 +4063,7 @@ export default function LivePage() {
                   No stream link is attached, so this room is running in session-tracker mode. The player HUD can stay pinned while you watch sync state, results, requests, and chat on your phone.
                 </p>
               </div>
-              <div className="rounded-lg border border-white/8 bg-[#0d1218] px-4 py-3 text-right">
+              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-4 py-3 text-right">
                 <p className="text-[11px] font-display font-semibold text-gray-400">Current viewers</p>
                 <p className="text-2xl font-display font-black text-cyan-200">{viewerNowCount}</p>
               </div>
@@ -4107,7 +4107,7 @@ export default function LivePage() {
 
       {hostWorkspaceTab !== 'overlay' && hasPlayerPanels ? (
         <div className="lg:hidden sticky top-[68px] z-30 space-y-3">
-          <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+          <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-display font-semibold text-gray-300">Player HUD</p>
@@ -4122,7 +4122,7 @@ export default function LivePage() {
 
             <div className="mt-3 grid grid-cols-2 gap-2">
               {playerSummaryCards.map((card) => (
-                <div key={card.label} className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
+                <div key={card.label} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
                   <p className="text-[11px] font-display font-semibold text-gray-400">{card.label}</p>
                   <p className={`mt-1 text-lg font-display font-black ${card.tone}`}>{card.value}</p>
                 </div>
@@ -4130,14 +4130,14 @@ export default function LivePage() {
             </div>
 
             <div className="mt-3 grid grid-cols-4 gap-2">
-              <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
+              <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50">
                 Songs
               </button>
               <button
                 type="button"
                 onClick={() => setMobilePanel('requests')}
                 disabled={!isHost && (!requestsEnabled || live?.status !== 'live')}
-                className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
+                className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50 disabled:text-gray-500 disabled:opacity-60"
               >
                 Requests
               </button>
@@ -4145,11 +4145,11 @@ export default function LivePage() {
                 type="button"
                 onClick={() => setMobilePanel('vote')}
                 disabled={!isHost && !currentVote}
-                className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
+                className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50 disabled:text-gray-500 disabled:opacity-60"
               >
                 Vote
               </button>
-              <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
+              <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50">
                 Chat
               </button>
             </div>
@@ -4176,7 +4176,7 @@ export default function LivePage() {
 
         {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
           <div className={`grid gap-5 items-stretch ${desktopViewerColumns}`}>
-            <div className="overflow-hidden rounded-xl border border-white/8 bg-[#0d1218]">
+            <div className="overflow-hidden rounded-xl border border-piu-border/60 bg-piu-dark/60">
               <div ref={desktopVideoFrameRef} className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                 <iframe
                 className="absolute inset-0 h-full w-full"
@@ -4199,7 +4199,7 @@ export default function LivePage() {
           style={mobileVideoDocked && mobileVideoDockHeight ? { height: `${mobileVideoDockHeight}px` } : undefined}
         >
           <div
-            className={`overflow-hidden rounded-xl border border-white/8 bg-[#0d1218] ${
+            className={`overflow-hidden rounded-xl border border-piu-border/60 bg-piu-dark/60 ${
               mobileVideoDocked ? 'fixed z-40' : ''
             }`}
             style={mobileVideoDocked && mobileVideoDockStyle ? mobileVideoDockStyle : undefined}

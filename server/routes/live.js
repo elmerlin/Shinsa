@@ -160,6 +160,34 @@ function normalizeRequestMaxLevel(value) {
   return level > 0 ? Math.min(level, 30) : DEFAULT_REQUEST_MAX_LEVEL;
 }
 
+function isPassingBestScore(score, grade) {
+  const numericScore = toInt(score);
+  if (numericScore <= 0) return false;
+  const normalizedGrade = String(grade || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!normalizedGrade) return true;
+  if (normalizedGrade === 'F' || normalizedGrade === 'STAGEBREAK' || normalizedGrade === 'STAGE_BREAK') return false;
+  return !/^X(?:[_-]|$)/.test(normalizedGrade);
+}
+
+function getDefaultRequestMaxLevelForUser(db, userId) {
+  const rows = db.prepare(`
+    SELECT level, score, grade
+    FROM user_best_scores
+    WHERE user_id = ?
+      AND score > 0
+  `).all(userId);
+
+  let highestPassedLevel = 0;
+  for (const row of rows) {
+    if (!isPassingBestScore(row?.score, row?.grade)) continue;
+    highestPassedLevel = Math.max(highestPassedLevel, toInt(row?.level));
+  }
+
+  return highestPassedLevel > 0
+    ? Math.min(highestPassedLevel, DEFAULT_REQUEST_MAX_LEVEL)
+    : DEFAULT_REQUEST_MAX_LEVEL;
+}
+
 function requestPolicyAllowsChart(session, chart) {
   const modeFilter = normalizeRequestModeFilter(session?.request_mode_filter);
   const maxLevel = normalizeRequestMaxLevel(session?.request_max_level);
@@ -1951,6 +1979,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
 
     const title = normalizeText(req.body?.title, 120) || `${req.user.username || 'Player'} live session`;
     const streamUrl = normalizeUrl(req.body?.stream_url, 400);
+    const defaultRequestMaxLevel = getDefaultRequestMaxLevelForUser(db, req.user.id);
 
     await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: true });
 
@@ -1964,9 +1993,9 @@ router.post('/sessions', requireAuth, async (req, res) => {
     db.prepare(`
       INSERT INTO live_sessions (
         id, host_user_id, title, stream_url, status, recent_anchor_id, last_recent_row_id,
-        last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
-      ) VALUES (?, ?, ?, ?, 'live', ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
-    `).run(id, req.user.id, title, streamUrl, toInt(anchor?.max_id), toInt(anchor?.max_id));
+        request_max_level, last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
+    `).run(id, req.user.id, title, streamUrl, toInt(anchor?.max_id), toInt(anchor?.max_id), defaultRequestMaxLevel);
 
     addSystemMessage(db, id, `${req.user.username || 'Player'} started a Shinsa Live session.`, 'session_start', {
       stream_url: streamUrl,
