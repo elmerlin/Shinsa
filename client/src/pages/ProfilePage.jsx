@@ -321,35 +321,37 @@ function ProfileLiveTopSongTile({ row }) {
   });
 
   return (
-    <div className="min-w-0">
-      <div className="relative aspect-[16/9] overflow-hidden rounded-lg border border-white/8 bg-[#0d1218]">
+    <div
+      className="relative aspect-[4/3] overflow-hidden rounded-lg border border-piu-border/50 bg-piu-dark/70"
+      title={`${row?.song_title || 'Unknown song'} • ${getProfileLiveModeShort(row?.mode)}${parseInt(row?.level, 10) || '?'}${rating > 0 ? ` • Rating ${rating.toLocaleString()}` : ''}${score > 0 ? ` • ${score.toLocaleString()}` : ''}`}
+    >
         {jacketUrl ? (
           <img src={jacketUrl} alt={row?.song_title || 'Song jacket'} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-[#151b24] text-lg font-display font-black text-gray-500">
+          <div className="flex h-full w-full items-center justify-center bg-piu-dark text-lg font-display font-black text-gray-500">
             {String(row?.song_title || '?').trim().charAt(0).toUpperCase() || '?'}
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-        <span className="absolute right-2 top-2 rounded-md border border-white/10 bg-black/70 px-1.5 py-0.5 text-[10px] font-display font-semibold text-white">
-          {getProfileLiveModeShort(row?.mode)}{parseInt(row?.level, 10) || '?'}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/90 via-[#050816]/30 to-transparent" />
+      {rating > 0 ? (
+        <span className="absolute left-1.5 top-1.5 rounded-md border border-piu-border/60 bg-black/55 px-1.5 py-0.5 text-[9px] font-mono font-bold text-piu-accent">
+          R{rating.toLocaleString()}
         </span>
-        <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 text-center">
-          <span
-            className={`text-lg font-display font-black leading-none drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] ${getGradeColor(gradeLabel)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
-            data-grade={gradeLabel}
-          >
-            {gradeLabel}
-          </span>
-        </div>
-        <div className="absolute inset-x-2 bottom-2">
-          <p className="truncate text-center font-mono text-[11px] font-bold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">
-            {score > 0 ? score.toLocaleString() : '-'}
-          </p>
-        </div>
+      ) : null}
+      <span className="absolute right-1.5 top-1.5 rounded-md border border-piu-border/60 bg-black/65 px-1.5 py-0.5 text-[9px] font-display font-semibold text-white">
+        {getProfileLiveModeShort(row?.mode)}{parseInt(row?.level, 10) || '?'}
+      </span>
+      <div className="absolute inset-x-1.5 bottom-1.5 flex items-end justify-between gap-1.5">
+        <span
+          className={`rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-display font-black leading-none drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] ${getGradeColor(gradeLabel)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+          data-grade={gradeLabel}
+        >
+          {gradeLabel}
+        </span>
+        <span className="truncate rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-mono font-bold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">
+          {score > 0 ? score.toLocaleString() : '-'}
+        </span>
       </div>
-      <p className="mt-1 truncate text-[11px] font-display font-semibold text-white">{row?.song_title || 'Unknown song'}</p>
-      <p className="text-[10px] text-gray-500">{rating > 0 ? `R ${rating.toLocaleString()}` : 'No rating'}</p>
     </div>
   );
 }
@@ -372,6 +374,7 @@ function ProfileEndedLiveSessionCard({
   const peakViewers = summary?.viewerPeak || session?.viewer_peak || 0;
   const isHidden = !!session?.is_hidden_from_profile;
   const topSongs = getProfileLiveTopSongs(summary);
+  const hasTopSongs = topSongs.length > 0;
   const metaParts = [
     sessionDuration || '',
     `${songCount} plays`,
@@ -382,75 +385,66 @@ function ProfileEndedLiveSessionCard({
   return (
     <Link
       to={session?.live_url || `/live/${session?.id}`}
-      className="block rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)] transition-colors hover:border-white/15"
+      className="card-hover block p-3 sm:p-3.5"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-lg font-display font-bold text-white">
-            {session?.title || `${profileUsername} live session`}
-          </p>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
-            {metaParts.map((part) => (
-              <span key={part}>{part}</span>
-            ))}
-          </p>
-          {summary?.sessionMachineName || streamHost ? (
-            <p className="mt-2 text-sm text-gray-300">
-              {summary?.sessionMachineName || 'Unknown machine'}
-              {streamHost ? ` · ${streamHost}` : ''}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          {isOwner ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onToggleVisibility(session.id, !isHidden);
-              }}
-              disabled={liveVisibilityBusyId === session?.id}
-              className={`rounded-md border px-2.5 py-1 text-[10px] font-display font-semibold transition-colors ${
-                isHidden
-                  ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
-                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
-              } disabled:opacity-60`}
-            >
-              {liveVisibilityBusyId === session?.id ? 'Saving...' : isHidden ? 'Hidden' : 'Visible'}
-            </button>
-          ) : null}
-          {endedLabel ? <span className="text-[11px] text-gray-500">{endedLabel}</span> : null}
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
-            <p className="text-[11px] font-display font-semibold text-gray-400">Duration</p>
-            <p className="mt-1 text-sm font-display font-bold text-white">{sessionDuration || '--'}</p>
-          </div>
-          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
-            <p className="text-[11px] font-display font-semibold text-gray-400">Songs</p>
-            <p className="mt-1 text-sm font-display font-bold text-white">{songCount}</p>
-          </div>
-          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
-            <p className="text-[11px] font-display font-semibold text-gray-400">Messages</p>
-            <p className="mt-1 text-sm font-display font-bold text-white">{totalMessages}</p>
-          </div>
-          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
-            <p className="text-[11px] font-display font-semibold text-gray-400">Peak viewers</p>
-            <p className="mt-1 text-sm font-display font-bold text-white">{peakViewers}</p>
+      <div className={`grid gap-3 ${hasTopSongs ? 'lg:grid-cols-[minmax(0,1fr)_170px] xl:grid-cols-[minmax(0,1fr)_186px]' : ''}`}>
+        <div className="min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center rounded-md border border-piu-border/50 bg-piu-dark/60 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-gray-400">
+                  Ended session
+                </span>
+                {streamHost ? (
+                  <span className="inline-flex items-center rounded-md border border-piu-border/40 bg-piu-dark/50 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-gray-500">
+                    {streamHost}
+                  </span>
+                ) : null}
+                {isHidden ? (
+                  <span className="inline-flex items-center rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-amber-200">
+                    Hidden
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-2 truncate text-base font-display font-bold text-white">
+                {session?.title || `${profileUsername} live session`}
+              </p>
+              <p className="mt-1 text-[11px] text-gray-400">
+                {metaParts.join(' • ')}
+              </p>
+              {summary?.sessionMachineName ? (
+                <p className="mt-2 truncate text-[12px] text-cyan-100">
+                  {summary.sessionMachineName}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {isOwner ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onToggleVisibility(session.id, !isHidden);
+                  }}
+                  disabled={liveVisibilityBusyId === session?.id}
+                  className={`rounded-md border px-2.5 py-1 text-[10px] font-display font-semibold transition-colors ${
+                    isHidden
+                      ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
+                      : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+                  } disabled:opacity-60`}
+                >
+                  {liveVisibilityBusyId === session?.id ? 'Saving...' : isHidden ? 'Hidden' : 'Visible'}
+                </button>
+              ) : null}
+              {endedLabel ? <span className="text-[11px] text-gray-500">{endedLabel}</span> : null}
+            </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[11px] font-display font-semibold text-gray-300">Top songs by rating</p>
-            {isHidden ? <span className="text-[11px] text-amber-200">Hidden from others</span> : null}
-          </div>
-          {topSongs.length > 0 ? (
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-3">
+        {hasTopSongs ? (
+          <div className="rounded-lg border border-piu-border/40 bg-piu-dark/35 p-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {topSongs.map((row, index) => (
                 <ProfileLiveTopSongTile
                   key={`${session?.id || 'live'}-${row?.song_title || 'song'}-${row?.mode || 'mode'}-${row?.level || index}-${index}`}
@@ -458,10 +452,8 @@ function ProfileEndedLiveSessionCard({
                 />
               ))}
             </div>
-          ) : (
-            <p className="mt-3 text-sm text-gray-500">No scored songs in this session.</p>
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
     </Link>
   );

@@ -89,13 +89,13 @@ const REQUEST_MAX_LEVEL_OPTIONS = Array.from({ length: DEFAULT_REQUEST_MAX_LEVEL
 
 function LiveEmoteTrayTile({ emote, disabled, onReact, onAdd }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-black/20 p-2">
+    <div className="rounded-2xl border border-piu-border/50 bg-piu-card/70 p-2">
       <button
         type="button"
         onClick={onReact}
         disabled={disabled}
         title={`React with ${emote.label}`}
-        className="flex min-h-[4.75rem] w-full items-center justify-center rounded-xl border border-white/8 bg-white/[0.03] px-2 py-2 transition-colors hover:bg-white/[0.06] disabled:opacity-40"
+        className="flex min-h-[4.75rem] w-full items-center justify-center rounded-xl border border-piu-border/50 bg-piu-dark/50 px-2 py-2 transition-colors hover:border-piu-accent/40 hover:bg-piu-dark/70 disabled:opacity-40"
       >
         <LiveEmote emote={emote} size="compact" showLabel={false} />
       </button>
@@ -107,7 +107,7 @@ function LiveEmoteTrayTile({ emote, disabled, onReact, onAdd }) {
         type="button"
         onClick={onAdd}
         disabled={disabled}
-        className="mt-2 w-full rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-white/15 hover:text-white disabled:opacity-40"
+        className="mt-2 w-full rounded-md border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/50 hover:text-white disabled:opacity-40"
       >
         Add
       </button>
@@ -657,17 +657,17 @@ function normalizeSongResults(payload) {
 
 function getRequestChartBadgeTone(mode) {
   if (mode === 'Single') {
-    return 'border-red-500/35 bg-[#171215] text-red-100';
+    return 'border-red-500/35 bg-red-500/10 text-red-100';
   }
   if (mode === 'Double') {
-    return 'border-emerald-500/35 bg-[#111714] text-emerald-100';
+    return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-100';
   }
-  return 'border-slate-500/40 bg-[#151a22] text-slate-100';
+  return 'border-piu-border/60 bg-piu-dark/70 text-slate-100';
 }
 
 function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores = false }) {
   return (
-    <div className="rounded-lg border border-white/8 bg-[#141923] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+    <div className="rounded-lg border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex gap-3">
         {song.jacket_url ? (
           <img
@@ -700,7 +700,7 @@ function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores
                 type="button"
                 onClick={() => onSelectChart(chart)}
                 disabled={disabled}
-                className={`inline-flex h-[42px] min-w-[42px] items-center justify-center rounded-full border px-3 text-sm font-display font-black transition-colors hover:border-white/20 hover:text-white disabled:opacity-50 ${getRequestChartBadgeTone(chart.mode)}`}
+                className={`inline-flex h-[42px] min-w-[42px] items-center justify-center rounded-full border px-3 text-sm font-display font-black transition-colors hover:border-piu-accent/50 hover:text-white disabled:opacity-50 ${getRequestChartBadgeTone(chart.mode)}`}
                 title={`Request ${song.title} (${modeShort(chart.mode)}${chart.level})`}
               >
                 {chart.level}
@@ -710,7 +710,7 @@ function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores
               </span>
               {showHostScores && displayBestGrade ? (
                 <span
-                  className={`pointer-events-none absolute -right-1 -top-1 rounded-full border border-piu-border bg-[#09101d] px-1.5 py-0.5 text-[9px] font-display font-black leading-none ${getGradeColor(displayBestGrade, bestScore)} ${parsedBestGrade.isBroken ? 'grade-broken' : ''}`}
+                  className={`pointer-events-none absolute -right-1 -top-1 rounded-full border border-piu-border bg-piu-dark/95 px-1.5 py-0.5 text-[9px] font-display font-black leading-none ${getGradeColor(displayBestGrade, bestScore)} ${parsedBestGrade.isBroken ? 'grade-broken' : ''}`}
                   data-grade={displayBestGrade}
                 >
                   {displayBestGrade}
@@ -938,7 +938,7 @@ function VotePanel({ vote, canVote, onVote }) {
   }, [vote.id, vote.status, vote.ends_at]);
 
   return (
-    <div className="rounded-lg border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+    <div className="rounded-lg border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Live vote</p>
@@ -959,7 +959,7 @@ function VotePanel({ vote, canVote, onVote }) {
       </p>
       <div className="space-y-2 mt-3">
         {vote.options.map((option) => (
-          <div key={option.id} className={`rounded-lg border px-3 py-2 ${option.is_winner ? 'border-emerald-500/35 bg-emerald-500/10' : 'border-white/8 bg-[#0d1218]'}`}>
+          <div key={option.id} className={`rounded-lg border px-3 py-2 ${option.is_winner ? 'border-emerald-500/35 bg-emerald-500/10' : 'border-piu-border/50 bg-piu-dark/60'}`}>
             <div className="flex items-center gap-3">
               <PiuChartJacket title={option.song_title} mode={option.mode} level={option.level} jacketUrl={option.jacket_url} size="sm" />
               <div className="flex-1 min-w-0">
@@ -975,7 +975,7 @@ function VotePanel({ vote, canVote, onVote }) {
               <button
                 type="button"
                 onClick={() => onVote(option.id)}
-                className={`mt-2 w-full rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${option.user_voted ? 'border-cyan-500/35 bg-cyan-500/12 text-white' : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'}`}
+                className={`mt-2 w-full rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${option.user_voted ? 'border-cyan-500/35 bg-cyan-500/12 text-white' : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'}`}
               >
                 {option.user_voted ? 'Your vote' : 'Vote for this chart'}
               </button>
@@ -1019,7 +1019,7 @@ function PinnedVoteCard({
   if (!vote) return null;
 
   return (
-    <div className="rounded-lg border border-white/8 bg-[#151923] p-2">
+    <div className="rounded-lg border border-piu-border/60 bg-piu-card/90 p-2">
       <div className="flex items-start justify-between gap-3 px-1">
         <div className="min-w-0">
           <p className="text-[11px] font-display font-semibold text-gray-300">
@@ -1032,7 +1032,7 @@ function PinnedVoteCard({
         <button
           type="button"
           onClick={onToggle}
-          className="shrink-0 rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-white/15 hover:text-white"
+          className="shrink-0 rounded-md border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/50 hover:text-white"
         >
           {collapsed ? 'Expand' : 'Collapse'}
         </button>
@@ -1048,7 +1048,7 @@ function PinnedVoteCard({
 
 function CreateSessionCard({ title, streamUrl, creating, onTitleChange, onStreamUrlChange, onSubmit }) {
   return (
-    <div className="max-w-xl rounded-xl border border-white/8 bg-[#11161f] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+    <div className="max-w-xl rounded-xl border border-piu-border bg-piu-card p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
       <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
       <h1 className="text-2xl font-display font-black text-white mt-1">Start a live session</h1>
       <p className="text-sm text-gray-400 mt-2">
@@ -3085,7 +3085,7 @@ export default function LivePage() {
   const voteSection = (
     <div className="space-y-4">
       {hostCanCreateVote ? (
-        <div className="rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
           <p className="text-[11px] font-display font-semibold text-gray-400">Start vote</p>
           <div className="grid grid-cols-3 gap-2 mt-3">
             <select value={voteModeFilter} onChange={(e) => setVoteModeFilter(e.target.value)} className="input-field text-xs py-2">
@@ -3114,7 +3114,7 @@ export default function LivePage() {
       ) : null}
 
       {!hostCanCreateVote && !currentVote ? (
-        <div className="rounded-xl border border-dashed border-white/8 bg-[#11161f] px-4 py-5 text-sm text-gray-400">
+        <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-card/90 px-4 py-5 text-sm text-gray-400">
           No live vote is open right now.
         </div>
       ) : null}
@@ -3122,14 +3122,14 @@ export default function LivePage() {
   );
 
   const songsSection = (
-    <div className="rounded-xl border border-white/8 bg-[#11161f] p-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.18)] sm:p-3 lg:p-3.5">
+    <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.18)] sm:p-3 lg:p-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Songs this session</p>
           <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[320px]">
-          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field rounded-lg border border-white/8 bg-[#0d1218] ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
+          <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field rounded-lg border border-piu-border/60 bg-piu-dark/60 ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
             <option>All</option>
             <option>Single</option>
             <option>Double</option>
@@ -3140,7 +3140,7 @@ export default function LivePage() {
             className={`rounded-lg border px-3 text-left transition-colors ${
               playPassOnly
                 ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'
-                : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
+                : 'border-piu-border/60 bg-piu-dark/60 text-gray-300 hover:border-piu-accent/50 hover:text-white'
             } ${isCompactSongCardLayout ? 'py-2' : 'py-2.5'}`}
           >
             <p className="text-[11px] font-display font-semibold text-gray-300">Pass</p>
@@ -3168,7 +3168,7 @@ export default function LivePage() {
               type="button"
               key={play.id}
               onClick={() => setSelectedPlay(play)}
-              className={`w-full rounded-lg border border-white/8 bg-[#0d1218] text-left transition-colors hover:border-white/15 ${
+              className={`w-full rounded-lg border border-piu-border/60 bg-piu-dark/60 text-left transition-colors hover:border-piu-accent/50 ${
                 isCompactSongCardLayout ? 'p-2.5' : 'p-3'
               }`}
             >
@@ -3221,7 +3221,7 @@ export default function LivePage() {
   );
 
   const requestsSection = (
-    <div className="rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+    <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Song requests</p>
@@ -3232,16 +3232,16 @@ export default function LivePage() {
         </div>
         <span className={`rounded-md border px-3 py-1 text-[10px] font-display font-semibold ${
           live?.status !== 'live'
-            ? 'border-white/8 bg-[#0d1218] text-gray-400'
+            ? 'border-piu-border/60 bg-piu-dark/60 text-gray-400'
             : requestsEnabled
               ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-              : 'border-white/8 bg-[#0d1218] text-gray-400'
+              : 'border-piu-border/60 bg-piu-dark/60 text-gray-400'
         }`}>
           {live?.status !== 'live' ? 'Closed' : requestsEnabled ? 'Open' : 'Disabled'}
         </span>
       </div>
       {isHost ? (
-        <div className="mt-3 rounded-lg border border-white/8 bg-[#0d1218] p-3">
+        <div className="mt-3 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-[11px] font-display font-semibold text-gray-300">Request settings</p>
@@ -3257,7 +3257,7 @@ export default function LivePage() {
               className={`rounded-md border px-3 py-1.5 text-[10px] font-display font-semibold ${
                 requestShowScores
                   ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
-                  : 'border-white/8 bg-[#171d27] text-gray-400'
+                  : 'border-piu-border/60 bg-piu-dark/80 text-gray-400'
               } disabled:opacity-60`}
             >
               {savingRequestPolicy ? 'Saving...' : requestShowScores ? 'Scores shown' : 'Scores hidden'}
@@ -3278,7 +3278,7 @@ export default function LivePage() {
                   className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
                     requestModeFilter === option.value
                       ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
-                      : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
+                      : 'border-piu-border/60 bg-piu-dark/80 text-gray-400 hover:border-piu-accent/50 hover:text-white'
                   } disabled:opacity-60`}
                 >
                   {option.label}
@@ -3448,7 +3448,7 @@ export default function LivePage() {
   );
 
   const desktopInteractionsSection = hasPlayerPanels ? null : (
-    <div className="flex h-full min-h-0 flex-col rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+    <div className="flex h-full min-h-0 flex-col rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className={`gap-2 ${isDesktopViewport ? 'flex flex-wrap items-start justify-between' : 'flex flex-col items-start'}`}>
         <div className="min-w-0">
           <p className="text-[11px] font-display font-semibold text-gray-400">Interactions</p>
@@ -3461,7 +3461,7 @@ export default function LivePage() {
             className={`shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-[8px] font-display font-semibold ${
               requestsEnabled
                 ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                : 'border-white/8 bg-[#0d1218] text-gray-400'
+                : 'border-piu-border/60 bg-piu-dark/60 text-gray-400'
             } disabled:opacity-60`}
           >
             {savingRequestsEnabled ? 'Saving...' : requestsEnabled ? 'Requests on' : 'Requests off'}
@@ -3484,8 +3484,8 @@ export default function LivePage() {
             mobilePanel === 'requests' && !(isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
               ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
               : (isDesktopViewport ? requestTabDisabled : mobileRequestModalDisabled)
-                ? 'border-white/8 bg-[#0d1218] text-gray-500'
-                : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
+                ? 'border-piu-border/60 bg-piu-dark/60 text-gray-500'
+                : 'border-piu-border/60 bg-piu-dark/60 text-gray-300 hover:border-piu-accent/50 hover:text-white'
           }`}
         >
           <p className="text-[11px] font-display font-semibold text-white">Requests</p>
@@ -3508,8 +3508,8 @@ export default function LivePage() {
             mobilePanel === 'vote' && !(isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
               ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
               : (isDesktopViewport ? voteTabDisabled : mobileVoteModalDisabled)
-                ? 'border-white/8 bg-[#0d1218] text-gray-500'
-                : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
+                ? 'border-piu-border/60 bg-piu-dark/60 text-gray-500'
+                : 'border-piu-border/60 bg-piu-dark/60 text-gray-300 hover:border-piu-accent/50 hover:text-white'
           }`}
         >
           <p className="text-[11px] font-display font-semibold text-white">Vote</p>
@@ -3535,7 +3535,7 @@ export default function LivePage() {
 
   const chatSection = (
     <div
-      className={`relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/8 bg-[#11161f] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${
+      className={`relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${
         useDesktopViewerLayout
           ? 'h-full min-h-0'
           : isMobileChatLayout
@@ -3601,7 +3601,7 @@ export default function LivePage() {
               type="button"
               onClick={() => handleQuickReaction(emoji)}
               disabled={viewerState.chat_muted || live?.status !== 'live'}
-              className="h-8 w-8 rounded-md border border-white/8 bg-[#171d27] text-sm transition-colors hover:border-white/15 hover:text-white disabled:opacity-40"
+              className="h-8 w-8 rounded-md border border-piu-border/60 bg-piu-dark/80 text-sm transition-colors hover:border-piu-accent/50 hover:text-white disabled:opacity-40"
             >
               {emoji}
             </button>
@@ -3613,7 +3613,7 @@ export default function LivePage() {
             className={`rounded-md border px-2.5 py-1.5 text-[10px] font-display font-semibold transition-colors ${
               showEmoteTray
                 ? 'border-rose-400/30 bg-rose-500/12 text-rose-100'
-                : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+                : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
             } disabled:opacity-40`}
           >
             Emotes
@@ -3635,7 +3635,7 @@ export default function LivePage() {
       ) : null}
 
       {showEmoteTray && live?.status === 'live' ? (
-        <div className="mt-3 min-h-0 overflow-hidden rounded-lg border border-white/8 bg-[#0d1218] p-3">
+        <div className="mt-3 min-h-0 overflow-hidden rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-display font-semibold text-gray-300">Emotes and stickers</p>
