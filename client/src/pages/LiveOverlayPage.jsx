@@ -7,6 +7,7 @@ import { getLiveReactionPayload, tokenizeLiveMessage } from '../utils/liveEmotes
 import { parseGrade } from '../utils/grades';
 import {
   getLiveOverlayAutoHide,
+  normalizeLiveOverlayBrandMotion,
   getLiveOverlayFit,
   getLiveOverlayPreset,
   getLiveOverlayScene,
@@ -15,6 +16,7 @@ import {
   normalizeLiveOverlayAutoHide,
   normalizeLiveOverlayFit,
   normalizeLiveOverlayGuides,
+  normalizeLiveOverlayOpacity,
   normalizeLiveOverlayPreset,
   normalizeLiveOverlayScene,
   normalizeLiveOverlayTheme,
@@ -52,6 +54,15 @@ function formatCountdownLabel(remainingMs) {
   return `${seconds}s`;
 }
 
+function formatElapsedMinutesLabel(totalMinutes) {
+  const minutes = Math.max(0, parseInt(totalMinutes, 10) || 0);
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours > 0 && remainder > 0) return `${hours}h ${remainder}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainder}m`;
+}
+
 function formatRelativeSyncTime(timestamp) {
   if (!timestamp) return 'Awaiting sync';
   const parsed = Date.parse(`${timestamp}Z`);
@@ -73,6 +84,16 @@ function parseTimestamp(value) {
   if (Number.isFinite(parsed)) return parsed;
   const fallback = Date.parse(raw);
   return Number.isFinite(fallback) ? fallback : NaN;
+}
+
+function getSessionDurationLabel(summary, live, nowMs = Date.now()) {
+  const summaryMinutes = parseInt(summary?.sessionDurationMinutes, 10);
+  if (Number.isFinite(summaryMinutes) && summaryMinutes > 0) {
+    return summary?.sessionDurationLabel || formatElapsedMinutesLabel(summaryMinutes);
+  }
+  const startedAtMs = parseTimestamp(live?.started_at);
+  if (!Number.isFinite(startedAtMs)) return '0m';
+  return formatElapsedMinutesLabel(Math.max(0, Math.round((nowMs - startedAtMs) / 60000)));
 }
 
 function isRecent(timestampMs, nowMs, windowMs) {
@@ -213,13 +234,25 @@ function showBurstPayload(message) {
   return getLiveReactionPayload(message?.message);
 }
 
-function OverlayPanel({ theme, className = '', children, style = {} }) {
+function buildOverlayPanelSurfaceStyle(theme, opacity) {
+  const normalizedOpacity = Math.max(0, Math.min(100, parseInt(opacity, 10) || 0)) / 100;
+  const transparentTheme = theme?.id === 'transparent';
+  const backgroundAlpha = (transparentTheme ? 0.52 : 0.94) * normalizedOpacity;
+  const shadowAlpha = (transparentTheme ? 0.24 : 0.34) * normalizedOpacity;
+
+  return {
+    background: `rgba(14, 20, 31, ${backgroundAlpha.toFixed(3)})`,
+    boxShadow: `0 ${transparentTheme ? 16 : 22}px ${transparentTheme ? 36 : 54}px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})`,
+  };
+}
+
+function OverlayPanel({ theme, opacity = 100, className = '', children, style = {} }) {
+  const transparentTheme = theme?.id === 'transparent';
   return (
     <div
-      className={`rounded-[30px] border ${theme.panelClass || 'backdrop-blur-xl'} ${theme.chipClass} ${className}`.trim()}
+      className={`border border-piu-border/60 text-white ${transparentTheme ? 'backdrop-blur-md' : 'backdrop-blur-xl'} ${className}`.trim()}
       style={{
-        background: theme.surface,
-        boxShadow: theme.shadow ? `0 28px 70px ${theme.shadow}` : 'none',
+        ...buildOverlayPanelSurfaceStyle(theme, opacity),
         ...style,
       }}
     >
@@ -230,15 +263,17 @@ function OverlayPanel({ theme, className = '', children, style = {} }) {
 
 function OverlayBadge({ theme, label, value, emphasis = 'accent' }) {
   const toneClass = emphasis === 'strong'
-    ? theme.strongClass
+    ? 'text-fuchsia-100'
     : emphasis === 'alt'
-      ? theme.altClass
-      : theme.accentClass;
+      ? 'text-amber-100'
+      : 'text-cyan-100';
 
   return (
-    <div className={`rounded-2xl border px-3 py-2 ${toneClass}`}>
-      <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] opacity-75">{label}</p>
-      <p className="mt-1 text-sm font-display font-black">{value}</p>
+    <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
+      <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">
+        {label}
+      </span>
+      <p className={`mt-2 text-sm font-display font-semibold ${toneClass}`}>{value}</p>
     </div>
   );
 }
@@ -248,13 +283,15 @@ function OverlayMessage({ message, theme }) {
   const segments = tokenizeLiveMessage(message?.message || '');
 
   return (
-    <div className={`rounded-2xl border px-3 py-2.5 ${message?.is_system ? theme.faintClass : theme.chipClass}`}>
+    <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
       <div className="flex items-center justify-between gap-3">
-        <p className="truncate text-[11px] font-display font-bold text-white/90">
-          {message?.is_system ? (message?.message_type || 'live').replace(/_/g, ' ') : (message?.username || 'Viewer')}
-        </p>
-        <p className="text-[10px] uppercase tracking-wide text-white/35">
-          {message?.is_system ? 'system' : 'chat'}
+        <div className="min-w-0">
+          <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">
+            {message?.is_system ? 'System' : (message?.username || 'Viewer')}
+          </span>
+        </div>
+        <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">
+          {message?.is_system ? (message?.message_type || 'live').replace(/_/g, ' ') : 'chat'}
         </p>
       </div>
       {reaction?.kind === 'emote' ? (
@@ -264,7 +301,7 @@ function OverlayMessage({ message, theme }) {
       ) : reaction?.kind === 'emoji' ? (
         <p className="mt-2 text-2xl leading-none">{reaction.emoji}</p>
       ) : segments.length > 0 ? (
-        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-white/80">
+        <p className="mt-2 flex flex-wrap items-center gap-1.5 text-sm text-gray-200">
           {segments.map((segment, idx) => (
             segment.type === 'emote'
               ? <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
@@ -272,7 +309,7 @@ function OverlayMessage({ message, theme }) {
           ))}
         </p>
       ) : (
-        <p className="mt-1 text-sm text-white/80 whitespace-pre-wrap break-words">{message?.message || ''}</p>
+        <p className="mt-2 whitespace-pre-wrap break-words text-sm text-gray-200">{message?.message || ''}</p>
       )}
     </div>
   );
@@ -294,37 +331,45 @@ function VoteCard({ vote, theme, compact = false }) {
   if (!vote) return null;
 
   return (
-    <div className={`rounded-[26px] border p-3 ${theme.chipClass}`}>
+    <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/50">Vote</p>
-          <p className="mt-1 text-sm font-display font-black text-white">
+          <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">Vote</span>
+          <p className="mt-2 text-sm font-display font-semibold text-gray-100">
             {vote.mode_filter} Lv.{vote.min_level}{vote.max_level !== vote.min_level ? `-${vote.max_level}` : ''}
           </p>
         </div>
-        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${vote.status === 'active' ? theme.accentClass : theme.altClass}`}>
+        <span className={`rounded-md border px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] ${
+          vote.status === 'active'
+            ? 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100'
+            : 'border-piu-border/60 bg-piu-card/70 text-gray-300'
+        }`}>
           {vote.status === 'active' ? formatCountdownLabel(remainingMs) : 'Locked'}
         </span>
       </div>
       <div className="mt-3 space-y-2">
         {(vote.options || []).slice(0, compact ? 2 : 3).map((option) => (
-          <div key={option.id} className={`rounded-2xl border px-3 py-2 ${option.is_winner ? theme.strongClass : theme.faintClass}`}>
+          <div key={option.id} className={`rounded-lg border px-3 py-2 ${
+            option.is_winner
+              ? 'border-fuchsia-400/25 bg-fuchsia-500/10'
+              : 'border-piu-border/60 bg-piu-card/70'
+          }`}>
             <div className="flex items-center gap-3">
               <PiuChartJacket title={option.song_title} mode={option.mode} level={option.level} jacketUrl={option.jacket_url} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-display font-bold text-white">{option.song_title}</p>
-                <p className="text-[11px] text-white/55">{modeShort(option.mode)}{option.level}</p>
+                <p className="truncate text-sm font-display font-semibold text-gray-100">{option.song_title}</p>
+                <p className="text-[11px] text-gray-400">{modeShort(option.mode)}{option.level}</p>
               </div>
               <div className="text-right">
-                <p className="text-sm font-display font-black text-white">{option.vote_count || 0}</p>
-                <p className="text-[10px] uppercase tracking-wide text-white/35">votes</p>
+                <p className="text-sm font-display font-semibold text-gray-100">{option.vote_count || 0}</p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500">votes</p>
               </div>
             </div>
           </div>
         ))}
       </div>
       {vote.status !== 'active' && winner ? (
-        <p className="mt-3 text-xs text-white/70">Winner: {formatPlayLabel(winner)}</p>
+        <p className="mt-3 text-xs text-gray-300">Winner: {formatPlayLabel(winner)}</p>
       ) : null}
     </div>
   );
@@ -351,39 +396,64 @@ function ResultBadges({ play, requests, theme, compact = false, includeRequestBa
   );
 }
 
-function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showSync }) {
+function BrandChip({ animated = true }) {
+  return (
+    <div className="relative overflow-hidden rounded-md border border-piu-border/60 bg-piu-card/70 px-3 py-2">
+      <div className="relative z-[1] flex items-center gap-2.5">
+        <span className="text-[10px] font-display font-semibold uppercase tracking-[0.28em] text-gray-200">Shinsa</span>
+        <span className="text-[10px] font-display font-semibold uppercase tracking-[0.28em] text-cyan-100">Live</span>
+        <span
+          className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-300"
+          style={animated ? { animation: 'shinsa-live-brand-pulse 1.9s ease-in-out infinite' } : undefined}
+        />
+        <span
+          className="inline-block text-[11px] text-amber-200"
+          style={animated ? { animation: 'shinsa-live-brand-spin 2.6s linear infinite' } : undefined}
+        >
+          ✦
+        </span>
+      </div>
+      {animated ? (
+        <span
+          className="pointer-events-none absolute inset-y-[5px] left-[-22%] w-8 bg-gradient-to-r from-transparent via-white/18 to-transparent"
+          style={{ animation: 'shinsa-live-brand-sweep 2.8s linear infinite' }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showSync, brandMotionEnabled = true }) {
   if (!showBrand && !showViewers && !showSync) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {showBrand ? (
-        <div className={`rounded-full border px-3 py-1.5 ${theme.accentClass}`}>
-          <p className="text-[10px] font-display font-bold uppercase tracking-[0.28em]">Shinsa Live</p>
-        </div>
+        <BrandChip animated={brandMotionEnabled} />
       ) : null}
       {live?.host?.username ? (
-        <div className={`rounded-full border px-3 py-1.5 ${theme.faintClass}`}>
-          <p className="text-[11px] font-display font-bold text-white">{live.host.username}</p>
-          <p className="text-[10px] text-white/40">{presetLabel}</p>
+        <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2">
+          <p className="text-[11px] font-display font-semibold text-gray-100">{live.host.username}</p>
+          <p className="text-[10px] text-gray-500">{presetLabel}</p>
         </div>
       ) : null}
       {showViewers ? (
-        <div className={`rounded-full border px-3 py-1.5 ${theme.strongClass}`}>
-          <p className="text-[10px] font-display font-bold uppercase tracking-wide">Watching</p>
-          <p className="text-sm font-display font-black">{live?.viewer_count || 0}</p>
+        <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2">
+          <p className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-400">Watching</p>
+          <p className="text-sm font-display font-semibold text-gray-100">{live?.viewer_count || 0}</p>
         </div>
       ) : null}
       {showSync ? (
-        <div className={`rounded-full border px-3 py-1.5 ${theme.faintClass}`}>
-          <p className="text-[10px] font-display font-bold uppercase tracking-wide">Sync</p>
-          <p className="text-xs text-white/75">{formatRelativeSyncTime(live?.last_sync_at)}</p>
+        <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2">
+          <p className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-400">Sync</p>
+          <p className="text-[11px] text-gray-300">{formatRelativeSyncTime(live?.last_sync_at)}</p>
         </div>
       ) : null}
     </div>
   );
 }
 
-function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, widgetSet }) {
+function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summary, nowMs, widgetSet }) {
   const items = [];
   const stripClassName = 'flex min-w-[15rem] items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5';
   const labelClassName = 'shrink-0 rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300';
@@ -448,6 +518,39 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, widg
     );
   }
 
+  if (widgetSet.has('time_played')) {
+    items.push(
+      <div key="time-played" className={stripClassName}>
+        <span className={labelClassName}>Time</span>
+        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
+          {getSessionDurationLabel(summary, live, nowMs)}
+        </p>
+      </div>
+    );
+  }
+
+  if (widgetSet.has('songs_played')) {
+    items.push(
+      <div key="songs-played" className={stripClassName}>
+        <span className={labelClassName}>Songs</span>
+        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
+          {summary?.songCount ?? 0} played
+        </p>
+      </div>
+    );
+  }
+
+  if (widgetSet.has('calories')) {
+    items.push(
+      <div key="calories" className={stripClassName}>
+        <span className={labelClassName}>Calories</span>
+        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
+          ~{formatNumber(summary?.estimatedKcal || 0)} kcal
+        </p>
+      </div>
+    );
+  }
+
   if (widgetSet.has('best')) {
     items.push(
       <div key="best" className={stripClassName}>
@@ -468,22 +571,29 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, widg
   return items;
 }
 
-function MarqueeOverlay({ live, play, latestRequest, latestChat, bestPlay, theme, widgetSet, panelClassName = '' }) {
+function MarqueeOverlay({
+  live,
+  play,
+  latestRequest,
+  latestChat,
+  bestPlay,
+  summary,
+  theme,
+  widgetSet,
+  nowMs,
+  panelOpacity,
+  brandMotionEnabled,
+  panelClassName = '',
+}) {
   const items = useMemo(
-    () => getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, widgetSet }),
-    [bestPlay, latestChat, latestRequest, live, play, widgetSet]
+    () => getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summary, nowMs, widgetSet }),
+    [bestPlay, latestChat, latestRequest, live, nowMs, play, summary, widgetSet]
   );
   const shouldAnimate = items.length > 1;
   const trackItems = shouldAnimate ? [...items, ...items] : items;
-  const chipClassName = 'rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300';
-  const headerItemClassName = 'rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2';
 
   return (
-    <OverlayPanel
-      theme={theme}
-      className={`${panelClassName} rounded-xl border-piu-border/60 bg-piu-card/95 px-3 py-3 backdrop-blur-xl md:px-4 md:py-3`}
-      style={{ background: 'rgba(14, 20, 31, 0.94)', boxShadow: '0 22px 54px rgba(0, 0, 0, 0.34)' }}
-    >
+    <OverlayPanel theme={theme} opacity={panelOpacity} className={`${panelClassName} rounded-xl px-3 py-3 md:px-4 md:py-3`}>
       <style>{`
         @keyframes shinsa-live-marquee {
           0% { transform: translate3d(0, 0, 0); }
@@ -491,29 +601,15 @@ function MarqueeOverlay({ live, play, latestRequest, latestChat, bestPlay, theme
         }
       `}</style>
       <div className="space-y-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          {widgetSet.has('brand') ? (
-            <span className={chipClassName}>Shinsa Live</span>
-          ) : null}
-          {live?.host?.username ? (
-            <div className={headerItemClassName}>
-              <p className="text-[11px] font-display font-semibold text-gray-100">{live.host.username}</p>
-              <p className="text-[10px] text-gray-500">News ticker</p>
-            </div>
-          ) : null}
-          {widgetSet.has('viewers') ? (
-            <div className={headerItemClassName}>
-              <p className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-400">Watching</p>
-              <p className="text-sm font-display font-semibold text-gray-100">{live?.viewer_count || 0}</p>
-            </div>
-          ) : null}
-          {widgetSet.has('sync') ? (
-            <div className={headerItemClassName}>
-              <p className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-400">Sync</p>
-              <p className="text-[11px] text-gray-300">{formatRelativeSyncTime(live?.last_sync_at)}</p>
-            </div>
-          ) : null}
-        </div>
+        <OverlayHeader
+          live={live}
+          theme={theme}
+          presetLabel="News ticker"
+          showBrand={widgetSet.has('brand')}
+          showViewers={widgetSet.has('viewers')}
+          showSync={widgetSet.has('sync')}
+          brandMotionEnabled={brandMotionEnabled}
+        />
         <div className="overflow-hidden">
           <div
             className="flex w-max items-stretch gap-2.5"
@@ -527,9 +623,9 @@ function MarqueeOverlay({ live, play, latestRequest, latestChat, bestPlay, theme
   );
 }
 
-function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelClassName = '' }) {
+function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelOpacity, brandMotionEnabled, panelClassName = '' }) {
   return (
-    <OverlayPanel theme={theme} className={`${panelClassName} px-4 py-4 md:px-5 md:py-5`}>
+    <OverlayPanel theme={theme} opacity={panelOpacity} className={`${panelClassName} rounded-xl px-4 py-4 md:px-5 md:py-5`}>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.9fr)] xl:items-start">
         <div className="space-y-3">
           <OverlayHeader
@@ -539,15 +635,16 @@ function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widge
             showBrand={widgetSet.has('brand')}
             showViewers={widgetSet.has('viewers')}
             showSync={widgetSet.has('sync')}
+            brandMotionEnabled={brandMotionEnabled}
           />
           {widgetSet.has('play') ? (
-            <div className={`rounded-[28px] border px-4 py-4 ${theme.chipClass}`}>
+            <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-4 py-4">
               <div className="flex items-center gap-4">
                 <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="md" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/45">Latest Play</p>
-                  <p className="mt-1 truncate text-xl font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
-                  <p className="mt-1 text-sm text-white/65">
+                  <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">Latest Play</span>
+                  <p className="mt-2 truncate text-xl font-display font-semibold text-gray-100">{play?.song_title || 'Waiting for the next chart'}</p>
+                  <p className="mt-1 text-sm text-gray-400">
                     {play ? `${modeShort(play.mode)}${play.level} • ${play.machine_name || 'Live floor'}` : 'Live sync will pin the next result here.'}
                   </p>
                 </div>
@@ -572,9 +669,9 @@ function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widge
   );
 }
 
-function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelClassName = '' }) {
+function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelOpacity, brandMotionEnabled, panelClassName = '' }) {
   return (
-    <OverlayPanel theme={theme} className={`${panelClassName} p-4 md:p-5`}>
+    <OverlayPanel theme={theme} opacity={panelOpacity} className={`${panelClassName} rounded-xl p-4 md:p-5`}>
         <OverlayHeader
           live={live}
           theme={theme}
@@ -582,16 +679,17 @@ function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widge
           showBrand={widgetSet.has('brand')}
           showViewers={widgetSet.has('viewers')}
           showSync={widgetSet.has('sync')}
+          brandMotionEnabled={brandMotionEnabled}
         />
 
         {widgetSet.has('play') ? (
-          <div className={`mt-4 rounded-[28px] border p-4 ${theme.insetClass || theme.faintClass}`}>
+          <div className="mt-4 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-4">
             <div className="flex items-center gap-4">
               <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="md" />
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-white/45">Last Result</p>
-                <p className="mt-1 truncate text-2xl font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
-                <p className="mt-1 text-sm text-white/65">{formatPlayLabel(play)}</p>
+                <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">Last Result</span>
+                <p className="mt-2 truncate text-2xl font-display font-semibold text-gray-100">{play?.song_title || 'Waiting for the next chart'}</p>
+                <p className="mt-1 text-sm text-gray-400">{formatPlayLabel(play)}</p>
               </div>
             </div>
           </div>
@@ -631,9 +729,9 @@ function ResultsOverlay({ live, play, vote, summary, requestCounts, theme, widge
   );
 }
 
-function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelClassName = '' }) {
+function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelOpacity, brandMotionEnabled, panelClassName = '' }) {
   return (
-    <OverlayPanel theme={theme} className={`${panelClassName} p-4 md:p-5`}>
+    <OverlayPanel theme={theme} opacity={panelOpacity} className={`${panelClassName} rounded-xl p-4 md:p-5`}>
         <OverlayHeader
           live={live}
           theme={theme}
@@ -641,16 +739,17 @@ function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelClassN
           showBrand={widgetSet.has('brand')}
           showViewers={widgetSet.has('viewers')}
           showSync={widgetSet.has('sync')}
+          brandMotionEnabled={brandMotionEnabled}
         />
 
         {widgetSet.has('play') && play ? (
-          <div className={`mt-4 rounded-[26px] border p-3 ${theme.faintClass}`}>
-            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Play</p>
+          <div className="mt-4 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+            <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">Latest Play</span>
             <div className="mt-2 flex items-center gap-3">
               <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-display font-black text-white">{play.song_title}</p>
-                <p className="text-[11px] text-white/60">{modeShort(play.mode)}{play.level} • {play.grade || '-'}</p>
+                <p className="truncate text-sm font-display font-semibold text-gray-100">{play.song_title}</p>
+                <p className="text-[11px] text-gray-400">{modeShort(play.mode)}{play.level} • {play.grade || '-'}</p>
               </div>
             </div>
           </div>
@@ -661,7 +760,7 @@ function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelClassN
             {messages.length > 0 ? messages.map((message) => (
               <OverlayMessage key={message.id} message={message} theme={theme} />
             )) : (
-              <div className={`rounded-2xl border px-3 py-4 text-sm ${theme.faintClass}`}>
+              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-4 text-sm text-gray-300">
                 Chat is waiting for the next message.
               </div>
             )}
@@ -673,9 +772,9 @@ function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelClassN
   );
 }
 
-function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelClassName = '' }) {
+function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widgetSet, panelOpacity, brandMotionEnabled, panelClassName = '' }) {
   return (
-    <OverlayPanel theme={theme} className={`${panelClassName} p-4`}>
+    <OverlayPanel theme={theme} opacity={panelOpacity} className={`${panelClassName} rounded-xl p-4`}>
         <OverlayHeader
           live={live}
           theme={theme}
@@ -683,16 +782,17 @@ function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widget
           showBrand={widgetSet.has('brand')}
           showViewers={widgetSet.has('viewers')}
           showSync={widgetSet.has('sync')}
+          brandMotionEnabled={brandMotionEnabled}
         />
 
         {widgetSet.has('play') ? (
-          <div className={`mt-4 rounded-[26px] border p-4 ${theme.insetClass || theme.faintClass}`}>
-            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Play</p>
+          <div className="mt-4 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-4">
+            <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">Latest Play</span>
             <div className="mt-3 flex items-center gap-3">
               <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
-                <p className="text-[11px] text-white/60">{play ? `${modeShort(play.mode)}${play.level}` : 'Sync armed'}</p>
+                <p className="truncate text-base font-display font-semibold text-gray-100">{play?.song_title || 'Waiting for the next chart'}</p>
+                <p className="text-[11px] text-gray-400">{play ? `${modeShort(play.mode)}${play.level}` : 'Sync armed'}</p>
               </div>
             </div>
           </div>
@@ -746,6 +846,8 @@ export default function LiveOverlayPage() {
   const autoHideId = normalizeLiveOverlayAutoHide(searchParams.get('autohide'));
   const guidesEnabled = normalizeLiveOverlayGuides(searchParams.get('guides'));
   const motionEnabled = searchParams.get('motion') !== '0';
+  const brandMotionEnabled = normalizeLiveOverlayBrandMotion(searchParams.get('brandmotion'));
+  const overlayOpacity = normalizeLiveOverlayOpacity(searchParams.get('opacity'));
   const widgetIds = normalizeLiveOverlayWidgets(searchParams.get('widgets'), presetId);
   const widgetSet = useMemo(() => new Set(widgetIds), [widgetIds]);
   const theme = getLiveOverlayTheme(themeId);
@@ -776,6 +878,7 @@ export default function LiveOverlayPage() {
   const bestPlay = useMemo(() => getBestRatedPlay(plays), [plays]);
   const shellClassName = useMemo(() => `flex min-h-screen w-full ${getOverlayShellClass(anchorId)}`, [anchorId]);
   const panelClassName = useMemo(() => getOverlayPanelClass(fit.id, preset.id), [fit.id, preset.id]);
+  const reactionMotionVisible = motionEnabled && widgetSet.has('reactions');
   const overlayVisible = shouldShowOverlay(autoHide.id, {
     play,
     vote,
@@ -846,10 +949,10 @@ export default function LiveOverlayPage() {
   };
 
   useEffect(() => {
-    if (autoHide.id === 'off' && vote?.status !== 'active') return undefined;
+    if (autoHide.id === 'off' && vote?.status !== 'active' && !widgetSet.has('time_played')) return undefined;
     const interval = setInterval(() => setActivityNowMs(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [autoHide.id, vote?.status]);
+  }, [autoHide.id, vote?.status, widgetSet]);
 
   const applySnapshot = (nextSnapshot, { markMessagesSeen = false } = {}) => {
     const nextMessages = Array.isArray(nextSnapshot?.messages) ? nextSnapshot.messages : [];
@@ -950,22 +1053,37 @@ export default function LiveOverlayPage() {
 
   let layout = null;
   if (preset.id === 'results') {
-    layout = <ResultsOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
+    layout = <ResultsOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelOpacity={overlayOpacity} brandMotionEnabled={brandMotionEnabled} panelClassName={panelClassName} />;
   } else if (preset.id === 'chat') {
-    layout = <ChatOverlay live={live} play={play} vote={vote} messages={recentMessages} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
+    layout = <ChatOverlay live={live} play={play} vote={vote} messages={recentMessages} theme={theme} widgetSet={widgetSet} panelOpacity={overlayOpacity} brandMotionEnabled={brandMotionEnabled} panelClassName={panelClassName} />;
   } else if (preset.id === 'mobile') {
-    layout = <MobileOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
+    layout = <MobileOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelOpacity={overlayOpacity} brandMotionEnabled={brandMotionEnabled} panelClassName={panelClassName} />;
   } else if (preset.id === 'marquee') {
-    layout = <MarqueeOverlay live={live} play={play} latestRequest={latestRequest} latestChat={latestChat} bestPlay={bestPlay} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
+    layout = <MarqueeOverlay live={live} play={play} latestRequest={latestRequest} latestChat={latestChat} bestPlay={bestPlay} summary={summary} theme={theme} widgetSet={widgetSet} nowMs={activityNowMs} panelOpacity={overlayOpacity} brandMotionEnabled={brandMotionEnabled} panelClassName={panelClassName} />;
   } else {
-    layout = <CompactOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelClassName={panelClassName} />;
+    layout = <CompactOverlay live={live} play={play} vote={vote} summary={summary} requestCounts={requestCounts} theme={theme} widgetSet={widgetSet} panelOpacity={overlayOpacity} brandMotionEnabled={brandMotionEnabled} panelClassName={panelClassName} />;
   }
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-transparent text-white">
+      <style>{`
+        @keyframes shinsa-live-brand-sweep {
+          0% { transform: translate3d(0, 0, 0); opacity: 0; }
+          12% { opacity: 1; }
+          100% { transform: translate3d(560%, 0, 0); opacity: 0; }
+        }
+        @keyframes shinsa-live-brand-spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes shinsa-live-brand-pulse {
+          0%, 100% { transform: scale(1); opacity: 0.55; }
+          50% { transform: scale(1.85); opacity: 1; }
+        }
+      `}</style>
       {guidesEnabled ? <SafeZoneGuides /> : null}
 
-      {widgetSet.has('reactions') && motionEnabled ? (
+      {reactionMotionVisible ? (
         <>
           {reactionBursts.map((burst) => (
             <div key={burst.id} className="live-reaction-burst" style={{ left: `${burst.x}%` }}>
@@ -984,7 +1102,11 @@ export default function LiveOverlayPage() {
             </div>
           ))}
           {floatingReactions.map((entry) => (
-            <div key={entry.id} className="pointer-events-none absolute bottom-20 z-20 animate-float-up" style={{ left: `${entry.x}%` }}>
+            <div
+              key={entry.id}
+              className={`pointer-events-none absolute z-20 animate-float-up ${preset.id === 'marquee' ? 'bottom-28' : 'bottom-20'}`}
+              style={{ left: `${entry.x}%` }}
+            >
               {entry.reaction.kind === 'emote' ? (
                 <LiveEmote emote={entry.reaction.emote} size="reaction" />
               ) : (

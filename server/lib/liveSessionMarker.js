@@ -46,7 +46,6 @@ function sanitizeLiveSummary(summary) {
     totalSteps: toInt(src.totalSteps),
     estimatedKcal: toInt(src.estimatedKcal),
     estimatedKcalPerHour: toInt(src.estimatedKcalPerHour),
-    calorieWeightKg: toNumber(src.calorieWeightKg),
     calorieEstimatePersonalized: toBoolean(src.calorieEstimatePersonalized),
     singleCount: toInt(src.singleCount),
     doubleCount: toInt(src.doubleCount),

@@ -47,8 +47,10 @@ import {
   LIVE_OVERLAY_WIDGETS,
   normalizeLiveOverlayAnchor,
   normalizeLiveOverlayAutoHide,
+  normalizeLiveOverlayBrandMotion,
   normalizeLiveOverlayFit,
   normalizeLiveOverlayGuides,
+  normalizeLiveOverlayOpacity,
   normalizeLiveOverlayPreset,
   normalizeLiveOverlayTheme,
   normalizeLiveOverlayWidgets,
@@ -1377,6 +1379,8 @@ function OverlayStudioCard({
   anchor,
   widgets,
   motionEnabled,
+  brandMotionEnabled,
+  opacity,
   guidesEnabled,
   autoHide,
   copying,
@@ -1390,6 +1394,8 @@ function OverlayStudioCard({
   onToggleGuides,
   onToggleWidget,
   onToggleMotion,
+  onToggleBrandMotion,
+  onOpacityChange,
   onApplyScene,
   onPreview,
   onCopyBrowserSource,
@@ -1457,6 +1463,7 @@ function OverlayStudioCard({
             <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-amber-100">{fitLabel}</span>
             <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-cyan-100">{anchorLabel}</span>
             <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-rose-100">{autoHideLabel}</span>
+            <span className="rounded-full border border-slate-300/25 bg-slate-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-slate-100">{opacity}% opacity</span>
             {guidesEnabled ? (
               <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-amber-100">
                 Guides on
@@ -1681,6 +1688,45 @@ function OverlayStudioCard({
               </button>
             </div>
 
+            <div className={`mt-4 flex items-center justify-between gap-3 ${insetClass} px-4 py-3`}>
+              <div>
+                <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-fuchsia-200">Brand motion</p>
+                <p className="mt-1 text-sm text-slate-300">Animate the `SHINSA LIVE` label with pulse and sparkle motion.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onToggleBrandMotion}
+                className={`rounded-xl border px-3 py-2 text-[11px] font-display font-bold ${
+                  brandMotionEnabled
+                    ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
+                    : 'border-piu-border/70 bg-black/20 text-gray-300'
+                }`}
+              >
+                {brandMotionEnabled ? 'Brand on' : 'Brand off'}
+              </button>
+            </div>
+
+            <div className={`mt-4 ${insetClass} px-4 py-3`}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-cyan-200">Opacity</p>
+                  <p className="mt-1 text-sm text-slate-300">Control how transparent the browser source appears over gameplay.</p>
+                </div>
+                <span className="rounded-xl border border-piu-border/70 bg-black/20 px-3 py-2 text-[11px] font-display font-bold text-cyan-100">
+                  {opacity}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={opacity}
+                onChange={(e) => onOpacityChange(e.target.value)}
+                className="mt-3 w-full accent-cyan-400"
+              />
+            </div>
+
             <div className="mt-4 flex flex-wrap gap-2">
               <button type="button" onClick={onPreview} className="btn-secondary px-4 py-2 text-xs">
                 Preview overlay
@@ -1771,6 +1817,8 @@ export default function LivePage() {
   const [overlayAnchor, setOverlayAnchor] = useState('bottom-center');
   const [overlayWidgets, setOverlayWidgets] = useState(() => getDefaultLiveOverlayWidgets('compact'));
   const [overlayMotion, setOverlayMotion] = useState(true);
+  const [overlayBrandMotion, setOverlayBrandMotion] = useState(true);
+  const [overlayOpacity, setOverlayOpacity] = useState(100);
   const [overlayGuides, setOverlayGuides] = useState(false);
   const [overlayAutoHide, setOverlayAutoHide] = useState('off');
   const [overlayCopying, setOverlayCopying] = useState(false);
@@ -1834,11 +1882,13 @@ export default function LivePage() {
       anchor: overlayAnchor,
       widgets: overlayWidgets,
       motion: overlayMotion,
+      brandMotion: overlayBrandMotion,
+      opacity: overlayOpacity,
       guides: overlayGuides,
       autoHide: overlayAutoHide,
       baseUrl: window.location.origin,
     });
-  }, [activeSessionId, overlayAnchor, overlayAutoHide, overlayFit, overlayGuides, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
+  }, [activeSessionId, overlayAnchor, overlayAutoHide, overlayBrandMotion, overlayFit, overlayGuides, overlayMotion, overlayOpacity, overlayPreset, overlayTheme, overlayWidgets]);
 
   useEffect(() => {
     setEditStreamUrl(live?.stream_url || '');
@@ -2339,6 +2389,8 @@ export default function LivePage() {
       setOverlayAnchor(normalizeLiveOverlayAnchor(parsed?.anchor));
       setOverlayWidgets(normalizeLiveOverlayWidgets(parsed?.widgets, normalizedPreset));
       setOverlayMotion(parsed?.motion !== false);
+      setOverlayBrandMotion(normalizeLiveOverlayBrandMotion(parsed?.brandMotion));
+      setOverlayOpacity(normalizeLiveOverlayOpacity(parsed?.opacity));
       setOverlayGuides(normalizeLiveOverlayGuides(parsed?.guides));
       setOverlayAutoHide(normalizeLiveOverlayAutoHide(parsed?.autoHide));
     } catch {
@@ -2356,13 +2408,15 @@ export default function LivePage() {
         anchor: overlayAnchor,
         widgets: overlayWidgets,
         motion: overlayMotion,
+        brandMotion: overlayBrandMotion,
+        opacity: overlayOpacity,
         guides: overlayGuides,
         autoHide: overlayAutoHide,
       }));
     } catch {
       // Ignore storage write failures.
     }
-  }, [isHost, overlayAnchor, overlayAutoHide, overlayFit, overlayGuides, overlayMotion, overlayPreset, overlayTheme, overlayWidgets]);
+  }, [isHost, overlayAnchor, overlayAutoHide, overlayBrandMotion, overlayFit, overlayGuides, overlayMotion, overlayOpacity, overlayPreset, overlayTheme, overlayWidgets]);
 
   useEffect(() => {
     if (!useMobilePlayerHud) {
@@ -3029,6 +3083,8 @@ export default function LivePage() {
     anchor: overlayAnchor,
     widgets: overlayWidgets,
     motion: overlayMotion,
+    brandMotion: overlayBrandMotion,
+    opacity: overlayOpacity,
     guides: overlayGuides,
     autoHide: overlayAutoHide,
     ...overrides,
@@ -3043,6 +3099,8 @@ export default function LivePage() {
     setOverlayAnchor(sceneOptions.anchor);
     setOverlayWidgets(sceneOptions.widgets);
     setOverlayMotion(sceneOptions.motion);
+    setOverlayBrandMotion(sceneOptions.brandMotion);
+    setOverlayOpacity(sceneOptions.opacity);
     setOverlayGuides(sceneOptions.guides);
     setOverlayAutoHide(sceneOptions.autoHide);
     setStatusNote(`${LIVE_OVERLAY_SCENES.find((item) => item.id === sceneId)?.label || 'Overlay scene'} loaded into the studio.`);
@@ -4168,6 +4226,8 @@ export default function LivePage() {
           anchor={overlayAnchor}
           widgets={overlayWidgets}
           motionEnabled={overlayMotion}
+          brandMotionEnabled={overlayBrandMotion}
+          opacity={overlayOpacity}
           guidesEnabled={overlayGuides}
           autoHide={overlayAutoHide}
           copying={overlayCopying}
@@ -4185,6 +4245,8 @@ export default function LivePage() {
           onToggleGuides={() => setOverlayGuides((prev) => !prev)}
           onToggleWidget={handleToggleOverlayWidget}
           onToggleMotion={() => setOverlayMotion((prev) => !prev)}
+          onToggleBrandMotion={() => setOverlayBrandMotion((prev) => !prev)}
+          onOpacityChange={(nextOpacity) => setOverlayOpacity(normalizeLiveOverlayOpacity(nextOpacity))}
           onApplyScene={applyOverlayScene}
           onPreview={handleOpenOverlayPreview}
           onCopyBrowserSource={handleCopyOverlayBrowserSource}

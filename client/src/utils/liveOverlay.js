@@ -27,7 +27,7 @@ export const LIVE_OVERLAY_PRESETS = [
     id: 'marquee',
     label: 'News ticker',
     description: 'Scrolling marquee with latest play, request, chat, stream status, and best score.',
-    defaultWidgets: ['brand', 'viewers', 'play', 'latest_request', 'chat', 'status', 'best'],
+    defaultWidgets: ['brand', 'viewers', 'play', 'latest_request', 'chat', 'status', 'best', 'time_played', 'songs_played', 'calories', 'reactions'],
   },
 ];
 
@@ -35,6 +35,9 @@ export const LIVE_OVERLAY_WIDGETS = [
   { id: 'brand', label: 'Brand' },
   { id: 'viewers', label: 'Viewers' },
   { id: 'play', label: 'Latest play' },
+  { id: 'time_played', label: 'Time played' },
+  { id: 'songs_played', label: 'Songs played' },
+  { id: 'calories', label: 'Calories' },
   { id: 'status', label: 'Streamer status' },
   { id: 'result', label: 'Last result' },
   { id: 'requests', label: 'Requests' },
@@ -139,6 +142,8 @@ export const LIVE_OVERLAY_SCENES = [
       anchor: 'bottom-center',
       widgets: ['brand', 'viewers', 'play', 'result', 'vote'],
       motion: true,
+      brandMotion: true,
+      opacity: 100,
       guides: false,
       autoHide: 'smart',
     },
@@ -154,6 +159,8 @@ export const LIVE_OVERLAY_SCENES = [
       anchor: 'bottom-right',
       widgets: ['brand', 'viewers', 'play', 'result', 'requests', 'summary'],
       motion: true,
+      brandMotion: true,
+      opacity: 100,
       guides: false,
       autoHide: 'results',
     },
@@ -169,6 +176,8 @@ export const LIVE_OVERLAY_SCENES = [
       anchor: 'top-right',
       widgets: ['brand', 'viewers', 'chat', 'reactions', 'vote'],
       motion: true,
+      brandMotion: true,
+      opacity: 100,
       guides: false,
       autoHide: 'chat',
     },
@@ -184,6 +193,8 @@ export const LIVE_OVERLAY_SCENES = [
       anchor: 'top-left',
       widgets: ['brand', 'viewers', 'play', 'result', 'requests', 'vote', 'sync'],
       motion: true,
+      brandMotion: true,
+      opacity: 100,
       guides: false,
       autoHide: 'smart',
     },
@@ -197,8 +208,10 @@ export const LIVE_OVERLAY_SCENES = [
       theme: 'transparent',
       fit: 'wide',
       anchor: 'bottom-center',
-      widgets: ['brand', 'viewers', 'play', 'latest_request', 'chat', 'status', 'best'],
+      widgets: ['brand', 'viewers', 'play', 'latest_request', 'chat', 'status', 'best', 'time_played', 'songs_played', 'calories', 'reactions'],
       motion: true,
+      brandMotion: true,
+      opacity: 100,
       guides: false,
       autoHide: 'smart',
     },
@@ -314,6 +327,19 @@ export function normalizeLiveOverlayGuides(value) {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 }
 
+export function normalizeLiveOverlayOpacity(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 100;
+  return Math.max(0, Math.min(100, Math.round(parsed)));
+}
+
+export function normalizeLiveOverlayBrandMotion(value) {
+  if (value === false || value === 0) return false;
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
 export function getLiveOverlaySceneOptions(sceneId) {
   const scene = getLiveOverlayScene(sceneId);
   if (!scene) return null;
@@ -324,6 +350,8 @@ export function getLiveOverlaySceneOptions(sceneId) {
     anchor: normalizeLiveOverlayAnchor(scene.options?.anchor),
     widgets: normalizeLiveOverlayWidgets(scene.options?.widgets, scene.options?.preset),
     motion: scene.options?.motion !== false,
+    brandMotion: normalizeLiveOverlayBrandMotion(scene.options?.brandMotion),
+    opacity: normalizeLiveOverlayOpacity(scene.options?.opacity),
     guides: normalizeLiveOverlayGuides(scene.options?.guides),
     autoHide: normalizeLiveOverlayAutoHide(scene.options?.autoHide),
   };
@@ -367,6 +395,8 @@ export function buildLiveOverlayUrl(sessionId, options = {}) {
   const autoHideId = normalizeLiveOverlayAutoHide(options.autoHide);
   const widgetIds = normalizeLiveOverlayWidgets(options.widgets, presetId);
   const motion = options.motion === false ? '0' : '1';
+  const brandMotion = normalizeLiveOverlayBrandMotion(options.brandMotion) ? '1' : '0';
+  const opacity = String(normalizeLiveOverlayOpacity(options.opacity));
   const guides = normalizeLiveOverlayGuides(options.guides) ? '1' : '0';
   const sceneId = normalizeLiveOverlayScene(options.scene);
 
@@ -376,6 +406,8 @@ export function buildLiveOverlayUrl(sessionId, options = {}) {
   params.set('anchor', anchorId);
   params.set('widgets', widgetIds.join(','));
   params.set('motion', motion);
+  params.set('brandmotion', brandMotion);
+  params.set('opacity', opacity);
   params.set('guides', guides);
   params.set('autohide', autoHideId);
   if (sceneId) params.set('scene', sceneId);

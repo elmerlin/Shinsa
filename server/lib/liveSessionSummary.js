@@ -254,7 +254,6 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     totalSteps,
     estimatedKcal: calorieEstimate.estimatedKcal,
     estimatedKcalPerHour: calorieEstimate.kcalPerHour,
-    calorieWeightKg: calorieEstimate.weightKgUsed,
     calorieEstimatePersonalized: calorieEstimate.personalized,
     singleCount,
     doubleCount,
