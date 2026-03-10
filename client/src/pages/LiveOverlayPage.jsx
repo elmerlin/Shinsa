@@ -398,7 +398,7 @@ function ResultBadges({ play, requests, theme, compact = false, includeRequestBa
 
 function BrandChip({ animated = true }) {
   return (
-    <div className="relative overflow-hidden rounded-md border border-piu-border/60 bg-piu-card/70 px-3 py-2">
+    <div className="relative flex min-h-[58px] min-w-[8.5rem] items-center overflow-hidden rounded-lg border border-cyan-400/20 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_42%),linear-gradient(180deg,rgba(21,29,45,0.98),rgba(15,22,35,0.94))] px-3 py-2.5">
       <div className="relative z-[1] flex items-center gap-2.5">
         <span className="text-[10px] font-display font-semibold uppercase tracking-[0.28em] text-gray-200">Shinsa</span>
         <span className="text-[10px] font-display font-semibold uppercase tracking-[0.28em] text-cyan-100">Live</span>
@@ -565,9 +565,7 @@ function MarqueeOverlay({
 
   if (widgetSet.has('brand')) {
     topRowItems.push(
-      <div key="brand" className="flex min-h-[58px] items-center">
-        <BrandChip animated={brandMotionEnabled} />
-      </div>
+      <BrandChip key="brand" animated={brandMotionEnabled} />
     );
   }
 
