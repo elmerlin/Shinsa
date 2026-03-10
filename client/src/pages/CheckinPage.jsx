@@ -183,7 +183,11 @@ function RoomLayout({ venue, machines, activeCheckins, myUserId, onSelectMachine
 }
 
 // ─── Check-In Confirm Modal ──────────────────────────────────────────
-function CheckinModal({ machine, venue, onConfirm, onClose, loading }) {
+function CheckinModal({ machine, venue, currentCheckin, onConfirm, onClose, loading }) {
+  const currentMachineId = String(currentCheckin?.machine_id || '').trim();
+  const targetMachineId = String(machine?.id || '').trim();
+  const isSwitchingMachines = !!currentMachineId && !!targetMachineId && currentMachineId !== targetMachineId;
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-piu-card border border-piu-border rounded-2xl p-5 sm:p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -198,6 +202,15 @@ function CheckinModal({ machine, venue, onConfirm, onClose, loading }) {
             Playing at {machine.name}
           </div>
         </div>
+
+        {isSwitchingMachines && (
+          <div className="bg-amber-500/10 border border-amber-400/30 rounded-xl p-3 mb-4">
+            <div className="text-[10px] text-amber-300 uppercase tracking-wider mb-1">Active session found</div>
+            <div className="text-sm text-amber-100">
+              This will check you out from <span className="font-display font-bold">{currentCheckin.machine_name}</span> first.
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button
@@ -307,11 +320,12 @@ function StatCard({ label, value, suffix, sub, raw }) {
 }
 
 // ─── QR Check-In Handler ──────────────────────────────────────────────
-function QRCheckinHandler({ venues, onCheckin }) {
+function QRCheckinHandler({ venues, myStatus, onCheckin, onAlreadyCheckedIn }) {
   const [searchParams] = useSearchParams();
   const venueSlug = searchParams.get('venue');
   const machinePos = searchParams.get('machine');
   const [resolved, setResolved] = useState(null);
+  const handledTargetRef = useRef('');
 
   useEffect(() => {
     if (!venueSlug || !venues.length) return;
@@ -327,9 +341,23 @@ function QRCheckinHandler({ venues, onCheckin }) {
 
   useEffect(() => {
     if (resolved?.venue && resolved?.machine) {
+      const targetKey = `${resolved.venue.id}:${resolved.machine.id}`;
+      if (handledTargetRef.current === targetKey) return;
+      handledTargetRef.current = targetKey;
+
+      const activeCheckin = myStatus?.checked_in ? myStatus.checkin : null;
+      const sameVenue = String(activeCheckin?.venue_id || '').trim() === String(resolved.venue.id || '').trim()
+        || String(activeCheckin?.venue_slug || '').trim() === String(resolved.venue.slug || '').trim();
+      const sameMachine = String(activeCheckin?.machine_id || '').trim() === String(resolved.machine.id || '').trim();
+
+      if (sameVenue && sameMachine) {
+        onAlreadyCheckedIn?.(resolved.venue, resolved.machine);
+        return;
+      }
+
       onCheckin(resolved.venue, resolved.machine);
     }
-  }, [resolved]);
+  }, [myStatus, onAlreadyCheckedIn, onCheckin, resolved]);
 
   return null;
 }
@@ -348,6 +376,7 @@ export default function CheckinPage() {
   const [checkinLoading, setCheckinLoading] = useState(false);
   const [tab, setTab] = useState('live');
   const [error, setError] = useState('');
+  const [qrNotice, setQrNotice] = useState('');
   const [dojoOverview, setDojoOverview] = useState(null);
   const [dojoLoading, setDojoLoading] = useState(true);
   const [dojoError, setDojoError] = useState('');
@@ -367,6 +396,7 @@ export default function CheckinPage() {
       setVenues([]);
       setActiveCheckins([]);
       setMyStatus(null);
+      setQrNotice('');
       setDojoOverview(null);
       setDojoError('');
       setCheckinNotifyPrefs({
@@ -517,6 +547,7 @@ export default function CheckinPage() {
     if (!user) return;
     // If already checked in at this machine, don't show modal
     if (myStatus?.checked_in && myStatus?.checkin?.machine_id === machine.id) return;
+    setQrNotice('');
     setSelectedMachine(machine);
     setSelectedVenue(venues[0]);
   };
@@ -528,6 +559,7 @@ export default function CheckinPage() {
     try {
       await checkin(selectedVenue.id, selectedMachine.id);
       markDojoPopupHandledToday(user?.id);
+      setQrNotice('');
       setSelectedMachine(null);
       setSelectedVenue(null);
       await loadData();
@@ -541,6 +573,7 @@ export default function CheckinPage() {
     setError('');
     try {
       await checkout();
+      setQrNotice('');
       await loadData();
     } catch (e) {
       setError(e.message);
@@ -600,8 +633,18 @@ export default function CheckinPage() {
 
   const handleQRCheckin = (venue, machine) => {
     if (!user) return;
+    setQrNotice('');
+    setTab('live');
     setSelectedMachine(machine);
     setSelectedVenue(venue);
+  };
+
+  const handleQRAlreadyCheckedIn = (venue, machine) => {
+    if (!user) return;
+    setSelectedMachine(null);
+    setSelectedVenue(venue);
+    setTab('live');
+    setQrNotice(`You're already checked in at ${machine.name}. This shared browser is showing your current session.`);
   };
 
   if (loading) {
@@ -617,7 +660,12 @@ export default function CheckinPage() {
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
       {/* QR handler */}
-      <QRCheckinHandler venues={venues} onCheckin={handleQRCheckin} />
+      <QRCheckinHandler
+        venues={venues}
+        myStatus={myStatus}
+        onCheckin={handleQRCheckin}
+        onAlreadyCheckedIn={handleQRAlreadyCheckedIn}
+      />
 
       {/* Page header */}
       <div className="flex items-center justify-between mb-4">
@@ -745,6 +793,10 @@ export default function CheckinPage() {
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-4 text-xs text-red-400">{error}</div>
       )}
 
+      {qrNotice && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2 mb-4 text-xs text-emerald-200">{qrNotice}</div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 bg-piu-dark/50 p-1 rounded-xl mb-4">
         {['live', 'access', 'history'].map(t => (
@@ -819,6 +871,7 @@ export default function CheckinPage() {
         <CheckinModal
           machine={selectedMachine}
           venue={selectedVenue}
+          currentCheckin={myStatus?.checked_in ? myStatus.checkin : null}
           onConfirm={handleConfirmCheckin}
           onClose={() => setSelectedMachine(null)}
           loading={checkinLoading}
