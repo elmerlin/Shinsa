@@ -455,7 +455,7 @@ function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showS
 
 function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summary, nowMs, widgetSet }) {
   const items = [];
-  const stripClassName = 'flex min-w-[15rem] items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5';
+  const stripClassName = 'flex min-h-[58px] min-w-[15rem] items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5';
   const labelClassName = 'shrink-0 rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300';
   const metaClassName = 'rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[11px] font-display font-semibold text-gray-200';
   const subTextClassName = 'text-[11px] text-gray-400';
@@ -507,50 +507,6 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summ
     );
   }
 
-  if (widgetSet.has('status')) {
-    items.push(
-      <div key="status" className={stripClassName}>
-        <span className={labelClassName}>Status</span>
-        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
-          {live?.status_text || 'No status set'}
-        </p>
-      </div>
-    );
-  }
-
-  if (widgetSet.has('time_played')) {
-    items.push(
-      <div key="time-played" className={stripClassName}>
-        <span className={labelClassName}>Time</span>
-        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
-          {getSessionDurationLabel(summary, live, nowMs)}
-        </p>
-      </div>
-    );
-  }
-
-  if (widgetSet.has('songs_played')) {
-    items.push(
-      <div key="songs-played" className={stripClassName}>
-        <span className={labelClassName}>Songs</span>
-        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
-          {summary?.songCount ?? 0} played
-        </p>
-      </div>
-    );
-  }
-
-  if (widgetSet.has('calories')) {
-    items.push(
-      <div key="calories" className={stripClassName}>
-        <span className={labelClassName}>Calories</span>
-        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
-          ~{formatNumber(summary?.estimatedKcal || 0)} kcal
-        </p>
-      </div>
-    );
-  }
-
   if (widgetSet.has('best')) {
     items.push(
       <div key="best" className={stripClassName}>
@@ -569,6 +525,20 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summ
   }
 
   return items;
+}
+
+function MarqueeHeaderCard({ label, value, subvalue = '', wide = false }) {
+  return (
+    <div className={`flex min-h-[58px] min-w-[8.5rem] items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5 ${wide ? 'min-w-[13rem]' : ''}`}>
+      <span className="shrink-0 rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">
+        {label}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-display font-semibold text-gray-100">{value}</p>
+        {subvalue ? <p className="truncate text-[11px] text-gray-400">{subvalue}</p> : null}
+      </div>
+    </div>
+  );
 }
 
 function MarqueeOverlay({
@@ -591,6 +561,87 @@ function MarqueeOverlay({
   );
   const shouldAnimate = items.length > 1;
   const trackItems = shouldAnimate ? [...items, ...items] : items;
+  const topRowItems = [];
+
+  if (widgetSet.has('brand')) {
+    topRowItems.push(
+      <div key="brand" className="flex min-h-[58px] items-center">
+        <BrandChip animated={brandMotionEnabled} />
+      </div>
+    );
+  }
+
+  if (live?.host?.username) {
+    topRowItems.push(
+      <MarqueeHeaderCard
+        key="host"
+        label={live.host.username}
+        value="News ticker"
+        wide
+      />
+    );
+  }
+
+  if (widgetSet.has('status')) {
+    topRowItems.push(
+      <MarqueeHeaderCard
+        key="status"
+        label="Status"
+        value={live?.status_text || 'No status set'}
+        wide
+      />
+    );
+  }
+
+  if (widgetSet.has('time_played')) {
+    topRowItems.push(
+      <MarqueeHeaderCard
+        key="time"
+        label="Time"
+        value={getSessionDurationLabel(summary, live, nowMs)}
+      />
+    );
+  }
+
+  if (widgetSet.has('songs_played')) {
+    topRowItems.push(
+      <MarqueeHeaderCard
+        key="songs"
+        label="Songs"
+        value={`${summary?.songCount ?? 0} played`}
+      />
+    );
+  }
+
+  if (widgetSet.has('calories')) {
+    topRowItems.push(
+      <MarqueeHeaderCard
+        key="calories"
+        label="Calories"
+        value={`~${formatNumber(summary?.estimatedKcal || 0)} kcal`}
+      />
+    );
+  }
+
+  if (widgetSet.has('viewers')) {
+    topRowItems.push(
+      <MarqueeHeaderCard
+        key="viewers"
+        label="Watching"
+        value={String(live?.viewer_count || 0)}
+      />
+    );
+  }
+
+  if (widgetSet.has('sync')) {
+    topRowItems.push(
+      <MarqueeHeaderCard
+        key="sync"
+        label="Sync"
+        value={formatRelativeSyncTime(live?.last_sync_at)}
+      />
+    );
+  }
 
   return (
     <OverlayPanel theme={theme} opacity={panelOpacity} className={`${panelClassName} rounded-xl px-3 py-3 md:px-4 md:py-3`}>
@@ -601,15 +652,11 @@ function MarqueeOverlay({
         }
       `}</style>
       <div className="space-y-2.5">
-        <OverlayHeader
-          live={live}
-          theme={theme}
-          presetLabel="News ticker"
-          showBrand={widgetSet.has('brand')}
-          showViewers={widgetSet.has('viewers')}
-          showSync={widgetSet.has('sync')}
-          brandMotionEnabled={brandMotionEnabled}
-        />
+        {topRowItems.length > 0 ? (
+          <div className="flex flex-wrap items-stretch gap-2.5">
+            {topRowItems}
+          </div>
+        ) : null}
         <div className="overflow-hidden">
           <div
             className="flex w-max items-stretch gap-2.5"
