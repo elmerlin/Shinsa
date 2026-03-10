@@ -4,6 +4,7 @@ const PIU_SESSION_MET = 11.8;
 const PIU_SONG_LENGTH_MINUTES = 2;
 const DEFAULT_WEIGHT_KG = 70;
 const SUMMARY_TOP_SONGS = 3;
+const SUMMARY_PREVIEW_TOP_SONGS = 6;
 
 function toInt(value) {
   return parseInt(value, 10) || 0;
@@ -212,6 +213,16 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     .slice(0, SUMMARY_TOP_SONGS)
     .map((row) => sanitizeTopSong(row, row._rating));
 
+  const topSongsByRatingPreview = normalizedRows
+    .filter((row) => row._score > 0)
+    .slice()
+    .sort((a, b) => {
+      if (b._rating !== a._rating) return b._rating - a._rating;
+      return b._score - a._score;
+    })
+    .slice(0, SUMMARY_PREVIEW_TOP_SONGS)
+    .map((row) => sanitizeTopSong(row, row._rating));
+
   const newest = normalizedRows[0]?._playedAt || null;
   const oldest = normalizedRows[normalizedRows.length - 1]?._playedAt || null;
   const sessionDateLabel = newest
@@ -255,6 +266,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     averageRating,
     topSongsByScore,
     topSongsByRating,
+    topSongsByRatingPreview,
     viewerCount: Math.max(0, toInt(extras?.viewerCount)),
     viewerPeak: Math.max(0, toInt(extras?.viewerPeak)),
     messageCount: Math.max(0, toInt(extras?.messageCount)),

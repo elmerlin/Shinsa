@@ -293,6 +293,180 @@ function getLiveSessionStreamHost(url) {
   }
 }
 
+function getProfileLiveModeShort(mode) {
+  if (mode === 'Single') return 'S';
+  if (mode === 'Double') return 'D';
+  if (mode === 'CoOp') return 'C';
+  return 'X';
+}
+
+function getProfileLiveTopSongs(summary) {
+  if (Array.isArray(summary?.topSongsByRatingPreview) && summary.topSongsByRatingPreview.length > 0) {
+    return summary.topSongsByRatingPreview.slice(0, 6);
+  }
+  return Array.isArray(summary?.topSongsByRating) ? summary.topSongsByRating.slice(0, 6) : [];
+}
+
+function ProfileLiveTopSongTile({ row }) {
+  const score = parseInt(row?.score, 10) || 0;
+  const rating = parseInt(row?.rating, 10) || 0;
+  const rank = getRank(score);
+  const displayGrade = parseGrade(row?.grade, rank.label);
+  const gradeLabel = displayGrade.display || rank.label || '-';
+  const jacketUrl = resolveChartJacketUrl({
+    title: row?.song_title,
+    mode: row?.mode,
+    level: row?.level,
+    jacketUrl: row?.jacket_url,
+  });
+
+  return (
+    <div className="min-w-0">
+      <div className="relative aspect-[16/9] overflow-hidden rounded-lg border border-white/8 bg-[#0d1218]">
+        {jacketUrl ? (
+          <img src={jacketUrl} alt={row?.song_title || 'Song jacket'} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-[#151b24] text-lg font-display font-black text-gray-500">
+            {String(row?.song_title || '?').trim().charAt(0).toUpperCase() || '?'}
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+        <span className="absolute right-2 top-2 rounded-md border border-white/10 bg-black/70 px-1.5 py-0.5 text-[10px] font-display font-semibold text-white">
+          {getProfileLiveModeShort(row?.mode)}{parseInt(row?.level, 10) || '?'}
+        </span>
+        <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 text-center">
+          <span
+            className={`text-lg font-display font-black leading-none drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] ${getGradeColor(gradeLabel)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+            data-grade={gradeLabel}
+          >
+            {gradeLabel}
+          </span>
+        </div>
+        <div className="absolute inset-x-2 bottom-2">
+          <p className="truncate text-center font-mono text-[11px] font-bold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">
+            {score > 0 ? score.toLocaleString() : '-'}
+          </p>
+        </div>
+      </div>
+      <p className="mt-1 truncate text-[11px] font-display font-semibold text-white">{row?.song_title || 'Unknown song'}</p>
+      <p className="text-[10px] text-gray-500">{rating > 0 ? `R ${rating.toLocaleString()}` : 'No rating'}</p>
+    </div>
+  );
+}
+
+function ProfileEndedLiveSessionCard({
+  session,
+  summary,
+  profileUsername,
+  isOwner,
+  liveVisibilityBusyId,
+  onToggleVisibility,
+  playCount,
+  messageCount,
+}) {
+  const endedLabel = session?.ended_at ? timeAgo(session.ended_at) : '';
+  const sessionDuration = formatLiveSessionDurationLabel(summary, session);
+  const streamHost = getLiveSessionStreamHost(session?.stream_url);
+  const songCount = summary?.songCount || playCount || 0;
+  const totalMessages = summary?.messageCount || messageCount || 0;
+  const peakViewers = summary?.viewerPeak || session?.viewer_peak || 0;
+  const isHidden = !!session?.is_hidden_from_profile;
+  const topSongs = getProfileLiveTopSongs(summary);
+  const metaParts = [
+    sessionDuration || '',
+    `${songCount} plays`,
+    `${totalMessages} messages`,
+    `Peak ${peakViewers}`,
+  ].filter(Boolean);
+
+  return (
+    <Link
+      to={session?.live_url || `/live/${session?.id}`}
+      className="block rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)] transition-colors hover:border-white/15"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-lg font-display font-bold text-white">
+            {session?.title || `${profileUsername} live session`}
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-400">
+            {metaParts.map((part) => (
+              <span key={part}>{part}</span>
+            ))}
+          </p>
+          {summary?.sessionMachineName || streamHost ? (
+            <p className="mt-2 text-sm text-gray-300">
+              {summary?.sessionMachineName || 'Unknown machine'}
+              {streamHost ? ` · ${streamHost}` : ''}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          {isOwner ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onToggleVisibility(session.id, !isHidden);
+              }}
+              disabled={liveVisibilityBusyId === session?.id}
+              className={`rounded-md border px-2.5 py-1 text-[10px] font-display font-semibold transition-colors ${
+                isHidden
+                  ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
+                  : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+              } disabled:opacity-60`}
+            >
+              {liveVisibilityBusyId === session?.id ? 'Saving...' : isHidden ? 'Hidden' : 'Visible'}
+            </button>
+          ) : null}
+          {endedLabel ? <span className="text-[11px] text-gray-500">{endedLabel}</span> : null}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Duration</p>
+            <p className="mt-1 text-sm font-display font-bold text-white">{sessionDuration || '--'}</p>
+          </div>
+          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Songs</p>
+            <p className="mt-1 text-sm font-display font-bold text-white">{songCount}</p>
+          </div>
+          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Messages</p>
+            <p className="mt-1 text-sm font-display font-bold text-white">{totalMessages}</p>
+          </div>
+          <div className="rounded-lg border border-white/8 bg-[#0d1218] px-3 py-2.5">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Peak viewers</p>
+            <p className="mt-1 text-sm font-display font-bold text-white">{peakViewers}</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-display font-semibold text-gray-300">Top songs by rating</p>
+            {isHidden ? <span className="text-[11px] text-amber-200">Hidden from others</span> : null}
+          </div>
+          {topSongs.length > 0 ? (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-3">
+              {topSongs.map((row, index) => (
+                <ProfileLiveTopSongTile
+                  key={`${session?.id || 'live'}-${row?.song_title || 'song'}-${row?.mode || 'mode'}-${row?.level || index}-${index}`}
+                  row={row}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">No scored songs in this session.</p>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function isNonClearScoreEntry(entry) {
   if (entry?.is_uncleared) return true;
   const score = parseInt(entry?.score, 10) || 0;
@@ -2650,17 +2824,9 @@ export default function ProfilePage() {
         <div className="space-y-4">
           {activeProfileLiveSession ? (
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3 px-1">
-                <div>
-                  <p className="text-[10px] font-display font-black uppercase tracking-[0.22em] text-rose-300">Live Now</p>
-                  <p className="text-xs text-gray-400">Current Shinsa Live session</p>
-                </div>
-                <Link
-                  to={activeProfileLiveUrl}
-                  className="inline-flex items-center rounded-full border border-cyan-300/30 bg-cyan-500/10 px-3 py-1 text-[11px] font-display font-bold uppercase tracking-wide text-cyan-200 hover:text-white transition-colors"
-                >
-                  Open live room
-                </Link>
+              <div className="px-1">
+                <p className="text-base font-display font-semibold text-white">Live now</p>
+                <p className="mt-1 text-sm text-gray-400">Current Shinsa Live session</p>
               </div>
               <LiveDirectoryCard item={activeProfileLiveSession} compact />
             </div>
@@ -2669,8 +2835,8 @@ export default function ProfilePage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3 px-1">
               <div>
-                <p className="text-[10px] font-display font-black uppercase tracking-[0.22em] text-gray-500">Ended Sessions</p>
-                <p className="text-xs text-gray-400">Past Shinsa Live sessions</p>
+                <p className="text-base font-display font-semibold text-white">Past Shinsa Live sessions</p>
+                <p className="mt-1 text-sm text-gray-400">Ended sessions on this profile</p>
               </div>
               <span className="text-[11px] text-gray-500">{endedProfileLiveSessions.length}</span>
             </div>
@@ -2682,80 +2848,18 @@ export default function ProfilePage() {
                 {endedProfileLiveSessions.map((item) => {
                   const session = item?.session || {};
                   const summary = item?.summary || null;
-                  const endedLabel = session.ended_at ? timeAgo(session.ended_at) : '';
-                  const sessionDuration = formatLiveSessionDurationLabel(summary, session);
-                  const streamHost = getLiveSessionStreamHost(session.stream_url);
-                  const songCount = summary?.songCount || item?.play_count || 0;
-                  const messageCount = summary?.messageCount || item?.message_count || 0;
-                  const peakViewers = summary?.viewerPeak || session?.viewer_peak || 0;
-                  const isHidden = !!session.is_hidden_from_profile;
                   return (
-                    <div key={session.id} className="space-y-2">
-                      <div className="flex items-center justify-between gap-3 px-1">
-                        <p className="min-w-0 truncate text-sm font-display font-bold text-white">
-                          {session.title || `${profile.username} live session`}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          {isOwner ? (
-                            <button
-                              type="button"
-                              onClick={() => handleToggleLiveProfileVisibility(session.id, !isHidden)}
-                              disabled={liveVisibilityBusyId === session.id}
-                              className={`rounded-full px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide transition-colors ${
-                                isHidden
-                                  ? 'border border-amber-400/30 bg-amber-500/10 text-amber-200'
-                                  : 'border border-piu-border bg-black/20 text-gray-300 hover:text-white'
-                              } disabled:opacity-60`}
-                            >
-                              {liveVisibilityBusyId === session.id ? 'Saving...' : isHidden ? 'Hidden' : 'Visible'}
-                            </button>
-                          ) : null}
-                          {endedLabel ? (
-                            <span className="shrink-0 text-[11px] text-gray-500">{endedLabel}</span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <Link
-                        to={session.live_url || `/live/${session.id}`}
-                        className="card-hover block overflow-hidden rounded-[24px] border border-piu-border bg-[radial-gradient(circle_at_top_left,rgba(251,113,133,0.12),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.1),transparent_34%),linear-gradient(180deg,#0d1322,#09101b)] p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-piu-border/70 bg-black/15 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300">
-                                Ended session
-                              </span>
-                              {streamHost ? (
-                                <span className="rounded-full border border-rose-400/20 bg-rose-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100">
-                                  {streamHost}
-                                </span>
-                              ) : null}
-                              {isHidden ? (
-                                <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-amber-200">
-                                  Hidden from others
-                                </span>
-                              ) : null}
-                            </div>
-                            <p className="mt-3 truncate text-lg font-display font-black text-white">
-                              {session.title || `${profile.username} live session`}
-                            </p>
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
-                              {sessionDuration ? <span>{sessionDuration}</span> : null}
-                              <span>{songCount} plays</span>
-                              <span>{messageCount} messages</span>
-                              <span>Peak {peakViewers}</span>
-                            </div>
-                            {summary?.sessionMachineName ? (
-                              <p className="mt-2 text-xs text-cyan-200">{summary.sessionMachineName}</p>
-                            ) : null}
-                          </div>
-                          <div className="shrink-0 rounded-2xl border border-piu-border/70 bg-black/15 px-3 py-2 text-right">
-                            <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Open</p>
-                            <p className="text-sm font-display font-black text-cyan-200">Session</p>
-                          </div>
-                        </div>
-                      </Link>
-                    </div>
+                    <ProfileEndedLiveSessionCard
+                      key={session.id}
+                      session={session}
+                      summary={summary}
+                      profileUsername={profile.username}
+                      isOwner={isOwner}
+                      liveVisibilityBusyId={liveVisibilityBusyId}
+                      onToggleVisibility={handleToggleLiveProfileVisibility}
+                      playCount={item?.play_count}
+                      messageCount={item?.message_count}
+                    />
                   );
                 })}
               </div>
