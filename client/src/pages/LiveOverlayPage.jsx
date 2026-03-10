@@ -383,57 +383,65 @@ function OverlayHeader({ live, theme, presetLabel, showBrand, showViewers, showS
   );
 }
 
-function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, theme, widgetSet }) {
+function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, widgetSet }) {
   const items = [];
+  const stripClassName = 'flex min-w-[15rem] items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5';
+  const labelClassName = 'shrink-0 rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300';
+  const metaClassName = 'rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[11px] font-display font-semibold text-gray-200';
+  const subTextClassName = 'text-[11px] text-gray-400';
 
   if (widgetSet.has('play')) {
     items.push(
-      <div key="play" className={`flex min-w-[20rem] items-center gap-3 rounded-[24px] border px-4 py-3 ${theme.chipClass}`}>
+      <div key="play" className={stripClassName}>
+        <span className={labelClassName}>Latest Play</span>
         <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
-        <div className="min-w-0">
-          <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Play</p>
-          <p className="truncate text-sm font-display font-black text-white">{play?.song_title || 'Waiting for the next chart'}</p>
-          <p className="text-[11px] text-white/65">
-            {play ? `${modeShort(play.mode)}${play.level} • ${play.grade || '-'} • ${formatNumber(play.score)}` : 'Sync armed'}
-          </p>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-display font-semibold text-gray-100">{play?.song_title || 'Waiting for the next chart'}</p>
+          <p className={subTextClassName}>{play ? `${modeShort(play.mode)}${play.level}` : 'Sync armed'}</p>
         </div>
+        <span className={metaClassName}>{play?.grade || '-'}</span>
+        <span className="shrink-0 text-[11px] font-display font-semibold text-gray-300">{play ? formatNumber(play.score) : '-'}</span>
       </div>
     );
   }
 
   if (widgetSet.has('latest_request')) {
     items.push(
-      <div key="request" className={`min-w-[18rem] rounded-[24px] border px-4 py-3 ${theme.faintClass}`}>
-        <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Latest Request</p>
-        <p className="mt-1 truncate text-sm font-display font-black text-white">
-          {latestRequest ? `${latestRequest.song_title} (${modeShort(latestRequest.mode)}${latestRequest.level})` : 'No requests yet'}
-        </p>
-        <p className="text-[11px] text-white/65">
-          {latestRequest ? `${latestRequest.username || 'Viewer'} • ${latestRequest.status || 'open'}` : 'Waiting for the first request'}
-        </p>
+      <div key="request" className={stripClassName}>
+        <span className={labelClassName}>Request</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-display font-semibold text-gray-100">
+            {latestRequest ? `${latestRequest.song_title} (${modeShort(latestRequest.mode)}${latestRequest.level})` : 'No requests yet'}
+          </p>
+          <p className={`truncate ${subTextClassName}`}>
+            {latestRequest ? `${latestRequest.username || 'Viewer'} • ${latestRequest.status || 'open'}` : 'Waiting for the first request'}
+          </p>
+        </div>
       </div>
     );
   }
 
   if (widgetSet.has('chat')) {
     items.push(
-      <div key="chat" className={`min-w-[18rem] rounded-[24px] border px-4 py-3 ${theme.faintClass}`}>
-        <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-white/45">Last Chat</p>
-        <p className="mt-1 truncate text-sm font-display font-black text-white">
-          {latestChat?.username || 'Chat idle'}
-        </p>
-        <p className="text-[11px] text-white/65 truncate">
-          {latestChat?.message || 'Waiting for the next viewer message'}
-        </p>
+      <div key="chat" className={stripClassName}>
+        <span className={labelClassName}>Chat</span>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <p className="truncate text-sm font-display font-semibold text-gray-100">
+            {latestChat?.username || 'Chat idle'}
+          </p>
+          <p className={`truncate ${subTextClassName}`}>
+            {latestChat?.message || 'Waiting for the next viewer message'}
+          </p>
+        </div>
       </div>
     );
   }
 
   if (widgetSet.has('status')) {
     items.push(
-      <div key="status" className={`min-w-[16rem] rounded-[24px] border px-4 py-3 ${theme.altClass}`}>
-        <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] opacity-80">Stream Status</p>
-        <p className="mt-1 text-sm font-display font-black">
+      <div key="status" className={stripClassName}>
+        <span className={labelClassName}>Status</span>
+        <p className="min-w-0 flex-1 truncate text-sm text-gray-200">
           {live?.status_text || 'No status set'}
         </p>
       </div>
@@ -442,17 +450,17 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, them
 
   if (widgetSet.has('best')) {
     items.push(
-      <div key="best" className={`flex min-w-[20rem] items-center gap-3 rounded-[24px] border px-4 py-3 ${theme.strongClass}`}>
+      <div key="best" className={stripClassName}>
+        <span className={labelClassName}>Best</span>
         <PiuChartJacket title={bestPlay?.song_title} mode={bestPlay?.mode} level={bestPlay?.level} jacketUrl={bestPlay?.background_url} size="sm" />
-        <div className="min-w-0">
-          <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] opacity-80">Best Rated Score</p>
-          <p className="truncate text-sm font-display font-black">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-display font-semibold text-gray-100">
             {bestPlay?.song_title || 'No scores yet'}
           </p>
-          <p className="text-[11px] opacity-85">
-            {bestPlay ? `${bestPlay.grade || '-'} • ${formatNumber(bestPlay.score)} • ${modeShort(bestPlay.mode)}${bestPlay.level}` : 'Play a chart to set the pace'}
-          </p>
+          <p className={subTextClassName}>{bestPlay ? `${modeShort(bestPlay.mode)}${bestPlay.level}` : 'Play a chart to set the pace'}</p>
         </div>
+        <span className={metaClassName}>{bestPlay?.grade || '-'}</span>
+        <span className="shrink-0 text-[11px] font-display font-semibold text-gray-300">{bestPlay ? formatNumber(bestPlay.score) : '-'}</span>
       </div>
     );
   }
@@ -462,32 +470,53 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, them
 
 function MarqueeOverlay({ live, play, latestRequest, latestChat, bestPlay, theme, widgetSet, panelClassName = '' }) {
   const items = useMemo(
-    () => getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, theme, widgetSet }),
-    [bestPlay, latestChat, latestRequest, live, play, theme, widgetSet]
+    () => getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, widgetSet }),
+    [bestPlay, latestChat, latestRequest, live, play, widgetSet]
   );
   const shouldAnimate = items.length > 1;
   const trackItems = shouldAnimate ? [...items, ...items] : items;
+  const chipClassName = 'rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300';
+  const headerItemClassName = 'rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2';
 
   return (
-    <OverlayPanel theme={theme} className={`${panelClassName} px-4 py-4 md:px-5 md:py-4`}>
+    <OverlayPanel
+      theme={theme}
+      className={`${panelClassName} rounded-xl border-piu-border/60 bg-piu-card/95 px-3 py-3 backdrop-blur-xl md:px-4 md:py-3`}
+      style={{ background: 'rgba(14, 20, 31, 0.94)', boxShadow: '0 22px 54px rgba(0, 0, 0, 0.34)' }}
+    >
       <style>{`
         @keyframes shinsa-live-marquee {
           0% { transform: translate3d(0, 0, 0); }
           100% { transform: translate3d(-50%, 0, 0); }
         }
       `}</style>
-      <div className="space-y-3">
-        <OverlayHeader
-          live={live}
-          theme={theme}
-          presetLabel="News ticker"
-          showBrand={widgetSet.has('brand')}
-          showViewers={widgetSet.has('viewers')}
-          showSync={widgetSet.has('sync')}
-        />
+      <div className="space-y-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {widgetSet.has('brand') ? (
+            <span className={chipClassName}>Shinsa Live</span>
+          ) : null}
+          {live?.host?.username ? (
+            <div className={headerItemClassName}>
+              <p className="text-[11px] font-display font-semibold text-gray-100">{live.host.username}</p>
+              <p className="text-[10px] text-gray-500">News ticker</p>
+            </div>
+          ) : null}
+          {widgetSet.has('viewers') ? (
+            <div className={headerItemClassName}>
+              <p className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-400">Watching</p>
+              <p className="text-sm font-display font-semibold text-gray-100">{live?.viewer_count || 0}</p>
+            </div>
+          ) : null}
+          {widgetSet.has('sync') ? (
+            <div className={headerItemClassName}>
+              <p className="text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-400">Sync</p>
+              <p className="text-[11px] text-gray-300">{formatRelativeSyncTime(live?.last_sync_at)}</p>
+            </div>
+          ) : null}
+        </div>
         <div className="overflow-hidden">
           <div
-            className="flex w-max items-stretch gap-3"
+            className="flex w-max items-stretch gap-2.5"
             style={shouldAnimate ? { animation: 'shinsa-live-marquee 34s linear infinite' } : undefined}
           >
             {trackItems.map((item, index) => React.cloneElement(item, { key: `${item.key || 'item'}-${index}` }))}
