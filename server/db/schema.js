@@ -1840,6 +1840,7 @@ function initializeDb() {
       request_max_level INTEGER NOT NULL DEFAULT 30,
       request_show_scores INTEGER NOT NULL DEFAULT 1,
       is_hidden_from_profile INTEGER NOT NULL DEFAULT 0,
+      deleted_at TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'live',
       recent_anchor_id INTEGER NOT NULL DEFAULT 0,
       last_recent_row_id INTEGER NOT NULL DEFAULT 0,
@@ -2514,6 +2515,9 @@ function initializeDb() {
   }
   if (!liveSessionCols.includes('is_hidden_from_profile')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN is_hidden_from_profile INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!liveSessionCols.includes('deleted_at')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN deleted_at TEXT DEFAULT ''");
   }
 
   const liveRequestCols = db.prepare("PRAGMA table_info(live_session_requests)").all().map((c) => c.name);

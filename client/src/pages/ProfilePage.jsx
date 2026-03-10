@@ -13,7 +13,7 @@ import {
   followUser, unfollowUser, getFollowStatus, getSocialCounts,
   getUserPosts, getFollowers, getFollowing,
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
-  getProfileLiveSessions, updateLiveSessionProfileVisibility,
+  getProfileLiveSessions, updateLiveSessionProfileVisibility, deleteLiveSession,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -362,7 +362,9 @@ function ProfileEndedLiveSessionCard({
   profileUsername,
   isOwner,
   liveVisibilityBusyId,
+  liveDeleteBusyId,
   onToggleVisibility,
+  onDeleteSession,
   playCount,
   messageCount,
 }) {
@@ -375,6 +377,8 @@ function ProfileEndedLiveSessionCard({
   const isHidden = !!session?.is_hidden_from_profile;
   const topSongs = getProfileLiveTopSongs(summary);
   const hasTopSongs = topSongs.length > 0;
+  const isVisibilityBusy = liveVisibilityBusyId === session?.id;
+  const isDeleteBusy = liveDeleteBusyId === session?.id;
   const metaParts = [
     sessionDuration || '',
     `${songCount} plays`,
@@ -418,24 +422,38 @@ function ProfileEndedLiveSessionCard({
                 </p>
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
               {isOwner ? (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onToggleVisibility(session.id, !isHidden);
-                  }}
-                  disabled={liveVisibilityBusyId === session?.id}
-                  className={`rounded-md border px-2.5 py-1 text-[10px] font-display font-semibold transition-colors ${
-                    isHidden
-                      ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
-                      : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
-                  } disabled:opacity-60`}
-                >
-                  {liveVisibilityBusyId === session?.id ? 'Saving...' : isHidden ? 'Hidden' : 'Visible'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleVisibility(session.id, !isHidden);
+                    }}
+                    disabled={isVisibilityBusy || isDeleteBusy}
+                    className={`rounded-md border px-2.5 py-1 text-[10px] font-display font-semibold transition-colors ${
+                      isHidden
+                        ? 'border-amber-400/30 bg-amber-500/10 text-amber-200 hover:text-white'
+                        : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+                    } disabled:opacity-60`}
+                  >
+                    {isVisibilityBusy ? 'Saving...' : isHidden ? 'Show' : 'Hide'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onDeleteSession(session.id, session?.title || `${profileUsername} live session`);
+                    }}
+                    disabled={isVisibilityBusy || isDeleteBusy}
+                    className="rounded-md border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-display font-semibold text-rose-200 transition-colors hover:border-rose-300/60 hover:text-white disabled:opacity-60"
+                  >
+                    {isDeleteBusy ? 'Deleting...' : 'Delete'}
+                  </button>
+                </>
               ) : null}
               {endedLabel ? <span className="text-[11px] text-gray-500">{endedLabel}</span> : null}
             </div>
@@ -1049,8 +1067,9 @@ export default function ProfilePage() {
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
   const [songAnalytics, setSongAnalytics] = useState(null);
-  const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
-  const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
+const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
+const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
+const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
@@ -1267,6 +1286,33 @@ export default function ProfilePage() {
       }));
     } finally {
       setLiveVisibilityBusyId('');
+    }
+  }
+
+  async function handleDeleteLiveSession(sessionId, sessionTitle = '') {
+    if (!isOwner || !sessionId || liveDeleteBusyId === sessionId) return;
+
+    const label = String(sessionTitle || 'this live session').trim() || 'this live session';
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(`Delete "${label}" from your live session history? This hides the session archive without changing synced scores, clears, or recently played songs from that stream.`);
+      if (!confirmed) return;
+    }
+
+    setLiveDeleteBusyId(sessionId);
+    try {
+      await deleteLiveSession(sessionId);
+      setProfileLive((prev) => ({
+        ...prev,
+        ended_sessions: (Array.isArray(prev?.ended_sessions) ? prev.ended_sessions : []).filter(
+          (item) => String(item?.session?.id || '') !== String(sessionId)
+        ),
+      }));
+    } catch (err) {
+      if (typeof window !== 'undefined') {
+        window.alert(err?.message || 'Failed to delete live session');
+      }
+    } finally {
+      setLiveDeleteBusyId('');
     }
   }
 
@@ -2848,7 +2894,9 @@ export default function ProfilePage() {
                       profileUsername={profile.username}
                       isOwner={isOwner}
                       liveVisibilityBusyId={liveVisibilityBusyId}
+                      liveDeleteBusyId={liveDeleteBusyId}
                       onToggleVisibility={handleToggleLiveProfileVisibility}
+                      onDeleteSession={handleDeleteLiveSession}
                       playCount={item?.play_count}
                       messageCount={item?.message_count}
                     />

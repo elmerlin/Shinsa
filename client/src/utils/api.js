@@ -938,6 +938,9 @@ export const updateLiveSessionProfileVisibility = (sessionId, hidden) => request
   method: 'PATCH',
   body: JSON.stringify({ hidden: !!hidden }),
 });
+export const deleteLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}`, {
+  method: 'DELETE',
+});
 export const getMyLiveSession = () => request('/live/sessions/mine/active');
 export const createLiveSession = (data) => request('/live/sessions', {
   method: 'POST',

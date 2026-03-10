@@ -27,7 +27,9 @@ const REQUEST_LIMIT = 100;
 const PLAY_LIMIT = 250;
 const VOTE_DURATION_SECONDS = 30;
 const STREAM_HEARTBEAT_MS = 25000;
-const LIVE_SYNC_INTERVAL_MS = 60000;
+const LIVE_SYNC_ACTIVE_INTERVAL_MS = 30000;
+const LIVE_SYNC_IDLE_INTERVAL_MS = 45000;
+const LIVE_SYNC_IDLE_AFTER_MS = 3 * 60 * 1000;
 const DEFAULT_REQUEST_MAX_LEVEL = 30;
 const FAILURE_MESSAGES = [
   "Oof. That stage break screen is looking a little too familiar today, don't you think? Shake the lactic acid out and run it back!",
@@ -387,6 +389,29 @@ function clearPlayOutcomeCache(liveSessionId) {
   livePlayOutcomeCache.delete(key);
 }
 
+function clearLiveSessionVoteTimers(db, liveSessionId) {
+  const key = String(liveSessionId || '').trim();
+  if (!db || !key) return;
+  const rows = db.prepare(`
+    SELECT id
+    FROM live_session_votes
+    WHERE live_session_id = ?
+  `).all(key);
+
+  for (const row of rows) {
+    clearVoteCloseTimer(row.id);
+  }
+}
+
+function clearLiveSessionRuntimeState(db, liveSessionId) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return;
+  clearLiveSyncTimer(key);
+  clearPresenceBroadcastState(key);
+  clearPlayOutcomeCache(key);
+  clearLiveSessionVoteTimers(db, key);
+}
+
 function getHostProfile(db, userId) {
   const row = db.prepare(`
     SELECT id, username, avatar, avatar_v, nationality, skill_title, pumbility, weight_kg
@@ -405,6 +430,7 @@ function getLiveSession(db, sessionId) {
     SELECT *
     FROM live_sessions
     WHERE id = ?
+      AND COALESCE(deleted_at, '') = ''
   `).get(sessionId);
 }
 
@@ -413,6 +439,7 @@ function getActiveSessionForHost(db, hostUserId) {
     SELECT *
     FROM live_sessions
     WHERE host_user_id = ?
+      AND COALESCE(deleted_at, '') = ''
       AND status = 'live'
     ORDER BY created_at DESC
     LIMIT 1
@@ -443,6 +470,25 @@ function markLiveSessionSyncError(db, liveSessionId) {
   `).run(liveSessionId);
 }
 
+function markLiveSyncPlayActivity(liveSessionId, at = Date.now()) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return;
+  const state = liveSyncTimers.get(key);
+  if (!state) return;
+  state.lastPlayAt = Number.isFinite(Number(at)) ? Number(at) : Date.now();
+}
+
+function getLiveSyncIntervalMs(liveSessionId) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return LIVE_SYNC_IDLE_INTERVAL_MS;
+  const state = liveSyncTimers.get(key);
+  const lastPlayAt = Number(state?.lastPlayAt) || 0;
+  if (!lastPlayAt) return LIVE_SYNC_ACTIVE_INTERVAL_MS;
+  return (Date.now() - lastPlayAt) >= LIVE_SYNC_IDLE_AFTER_MS
+    ? LIVE_SYNC_IDLE_INTERVAL_MS
+    : LIVE_SYNC_ACTIVE_INTERVAL_MS;
+}
+
 async function performLiveSessionSync(db, sessionOrId, options = {}) {
   const session = typeof sessionOrId === 'string'
     ? getLiveSession(db, sessionOrId)
@@ -464,6 +510,9 @@ async function performLiveSessionSync(db, sessionOrId, options = {}) {
     persistActivityPosts: false,
   });
   const syncUpdate = applyLiveSyncResult(db, session, syncResult);
+  if (syncUpdate?.plays_changed) {
+    markLiveSyncPlayActivity(session.id);
+  }
   const nextSession = getLiveSession(db, session.id);
   if (options.broadcast !== false && nextSession) {
     broadcastLiveSyncUpdates(db, nextSession, syncUpdate, options.reason || 'sync');
@@ -477,11 +526,11 @@ async function performLiveSessionSync(db, sessionOrId, options = {}) {
 function clearLiveSyncTimer(liveSessionId) {
   const key = String(liveSessionId || '').trim();
   if (!key) return;
-  const timer = liveSyncTimers.get(key);
-  if (timer) {
-    clearInterval(timer);
-    liveSyncTimers.delete(key);
+  const state = liveSyncTimers.get(key);
+  if (state?.timeout) {
+    clearTimeout(state.timeout);
   }
+  liveSyncTimers.delete(key);
   liveSyncInFlight.delete(key);
 }
 
@@ -499,32 +548,50 @@ function ensureLiveSyncTimer(db, sessionOrId) {
   }
   if (liveSyncTimers.has(key)) return;
 
-  const timer = setInterval(async () => {
-    if (liveSyncInFlight.has(key)) return;
-    liveSyncInFlight.add(key);
-    try {
-      const currentDb = getDb();
-      const currentSession = getLiveSession(currentDb, key);
-      if (!currentSession || currentSession.status !== 'live') {
-        clearLiveSyncTimer(key);
+  const state = { timeout: null, lastPlayAt: Date.now() };
+  const scheduleNextSync = () => {
+    if (liveSyncTimers.get(key) !== state) return;
+    const delay = getLiveSyncIntervalMs(key);
+    state.timeout = setTimeout(async () => {
+      if (liveSyncTimers.get(key) !== state) return;
+      if (liveSyncInFlight.has(key)) {
+        scheduleNextSync();
         return;
       }
-      await performLiveSessionSync(currentDb, currentSession, { reason: 'sync' });
-    } catch (err) {
+
+      liveSyncInFlight.add(key);
       try {
         const currentDb = getDb();
-        markLiveSessionSyncError(currentDb, key);
-        broadcastLiveSessionUpdated(currentDb, key, 'sync_error');
-      } catch {
-        // Ignore secondary errors while surfacing the original sync failure in logs.
+        const currentSession = getLiveSession(currentDb, key);
+        if (!currentSession || currentSession.status !== 'live') {
+          clearLiveSyncTimer(key);
+          return;
+        }
+        await performLiveSessionSync(currentDb, currentSession, { reason: 'sync' });
+      } catch (err) {
+        try {
+          const currentDb = getDb();
+          markLiveSessionSyncError(currentDb, key);
+          broadcastLiveSessionUpdated(currentDb, key, 'sync_error');
+        } catch {
+          // Ignore secondary errors while surfacing the original sync failure in logs.
+        }
+        console.error('Live session background sync error:', err.message);
+      } finally {
+        liveSyncInFlight.delete(key);
+        if (liveSyncTimers.get(key) === state) {
+          scheduleNextSync();
+        }
       }
-      console.error('Live session background sync error:', err.message);
-    } finally {
-      liveSyncInFlight.delete(key);
-    }
-  }, LIVE_SYNC_INTERVAL_MS);
+    }, delay);
 
-  liveSyncTimers.set(key, timer);
+    if (typeof state.timeout?.unref === 'function') {
+      state.timeout.unref();
+    }
+  };
+
+  liveSyncTimers.set(key, state);
+  scheduleNextSync();
 }
 
 function normalizeRequestStatus(status, fulfilled = false) {
@@ -1264,6 +1331,7 @@ function getProfileEndedSessions(db, hostUserId, currentUserId = '', limit = 12)
     SELECT *
     FROM live_sessions
     WHERE host_user_id = ?
+      AND COALESCE(deleted_at, '') = ''
       AND status = 'ended'
       AND (? = host_user_id OR COALESCE(is_hidden_from_profile, 0) = 0)
     ORDER BY datetime(COALESCE(NULLIF(ended_at, ''), updated_at, created_at)) DESC, id DESC
@@ -1292,6 +1360,7 @@ function getDirectorySessions(db, currentUserId = '', limit = 18) {
     FROM live_sessions s
     JOIN users u ON u.id = s.host_user_id
     WHERE s.status = 'live'
+      AND COALESCE(s.deleted_at, '') = ''
     ORDER BY s.started_at DESC, s.id DESC
     LIMIT ?
   `).all(currentUserId || '', Math.max(1, Math.min(36, toInt(limit) || 18)));
@@ -2096,6 +2165,34 @@ router.patch('/sessions/:id/profile-visibility', requireAuth, (req, res) => {
   }
 });
 
+router.delete('/sessions/:id', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+
+    if (String(session.status || '').trim() === 'live') {
+      return res.status(409).json({ error: 'End the live session before deleting it' });
+    }
+
+    db.prepare(`
+      UPDATE live_sessions
+      SET deleted_at = datetime('now'),
+          is_hidden_from_profile = 1,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(session.id);
+    clearLiveSessionRuntimeState(db, session.id);
+
+    return res.json({
+      success: true,
+      session_id: session.id,
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 router.post('/sessions/:id/overlay-token', requireAuth, (req, res) => {
   try {
     const db = getDb();
@@ -2767,8 +2864,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       db.prepare('DELETE FROM live_session_presence WHERE live_session_id = ?').run(session.id);
     });
     txn();
-    clearLiveSyncTimer(session.id);
-    clearPresenceBroadcastState(session.id);
+    clearLiveSessionRuntimeState(db, session.id);
 
     if (typeof invalidateRecentActivityCache === 'function' && (upscorePostId || clearPostId || summaryPostId)) {
       invalidateRecentActivityCache();
@@ -2859,6 +2955,7 @@ function scheduleActiveLiveSessionSyncs() {
     SELECT id
     FROM live_sessions
     WHERE status = 'live'
+      AND COALESCE(deleted_at, '') = ''
   `).all();
   for (const row of rows) {
     ensureLiveSyncTimer(db, row.id);

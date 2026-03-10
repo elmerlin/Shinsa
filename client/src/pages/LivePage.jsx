@@ -1384,73 +1384,97 @@ function OverlayStudioCard({
   const anchorLabel = LIVE_OVERLAY_ANCHORS.find((item) => item.id === anchor)?.label || anchor;
   const autoHideLabel = LIVE_OVERLAY_AUTO_HIDE_MODES.find((item) => item.id === autoHide)?.label || autoHide;
   const outputSpec = getLiveOverlayOutputSpec({ preset, fit });
+  const themeToneById = {
+    arena: {
+      active: 'border-cyan-400/35 bg-cyan-500/10 text-cyan-50',
+      strip: 'from-cyan-300 via-fuchsia-400 to-rose-400',
+    },
+    skyline: {
+      active: 'border-sky-400/35 bg-sky-500/10 text-sky-50',
+      strip: 'from-sky-300 via-blue-400 to-cyan-300',
+    },
+    ember: {
+      active: 'border-orange-400/35 bg-orange-500/10 text-orange-50',
+      strip: 'from-amber-300 via-orange-400 to-rose-400',
+    },
+    transparent: {
+      active: 'border-slate-300/30 bg-slate-500/10 text-slate-100',
+      strip: 'from-slate-200/70 via-slate-400/35 to-cyan-300/55',
+    },
+  };
+  const studioShellClass = 'rounded-3xl border border-piu-border/70 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.16),transparent_34%),radial-gradient(circle_at_top_right,rgba(68,136,255,0.16),transparent_36%),linear-gradient(180deg,#0d1322,#09101b)] p-4 shadow-[0_24px_60px_rgba(6,10,22,0.45)] sm:p-5';
+  const panelClass = 'rounded-2xl border border-piu-border/70 bg-[linear-gradient(180deg,rgba(11,16,29,0.95),rgba(8,12,24,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]';
+  const insetClass = 'rounded-2xl border border-piu-border/70 bg-black/20';
+  const inactiveTileClass = 'border-piu-border/70 bg-black/20 text-gray-300 hover:border-cyan-400/30 hover:text-cyan-100';
+  const inactiveChipClass = 'border-piu-border/70 bg-[#121a2b] text-gray-300 hover:border-cyan-400/30 hover:text-cyan-100';
 
   return (
-    <div className="rounded-xl border border-white/8 bg-[#11161f] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-5">
+    <div className={studioShellClass}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-2xl">
-          <p className="text-sm font-display font-semibold text-gray-300">Overlay Studio</p>
-          <h2 className="mt-1 text-xl font-display font-black text-white">Browser-source layouts for stream scenes</h2>
-          <p className="mt-2 text-sm text-gray-300">
+          <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-rose-300">Overlay Studio</p>
+          <h2 className="mt-2 text-xl font-display font-black text-cyan-50">Browser-source layouts for stream scenes</h2>
+          <p className="mt-2 text-sm text-slate-300">
             Use this once to set up OBS or Streamlabs, then return to the live room tab.
             The overlay reads the same Shinsa Live stream, so scores, chat, votes, and reactions update in real time.
           </p>
-          <div className="mt-4 rounded-lg border border-white/8 bg-[#0d1218] p-4">
-            <p className="text-[11px] font-display font-semibold text-gray-300">How to use it</p>
-            <ol className="mt-3 space-y-2 text-sm text-gray-300">
+          <div className="mt-4 rounded-2xl border border-piu-border/70 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.12),transparent_38%),linear-gradient(180deg,rgba(13,18,31,0.96),rgba(9,13,24,0.98))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-amber-200">How to use it</p>
+            <ol className="mt-3 space-y-2 text-sm text-slate-300">
               <li>1. Pick a quick scene or preset that matches the stream layout you want.</li>
               <li>2. Click `Preview overlay` to see the transparent browser-source page.</li>
               <li>3. Click `Copy browser source URL`, then paste it into an OBS `Browser Source`.</li>
               <li>4. Set the OBS browser source to the recommended size shown here, then position it in scene.</li>
             </ol>
-            <p className="mt-3 text-xs text-cyan-100/85">
+            <p className="mt-3 text-[11px] text-cyan-200/90">
               Use `Transparent Rail` when you want chat or status cards to float over gameplay without a dark slab behind them.
             </p>
           </div>
         </div>
 
-        <div className="min-w-[240px] rounded-lg border border-white/8 bg-[#0d1218] p-3">
-          <p className="text-[11px] font-display font-semibold text-gray-400">Current output</p>
-          <p className="mt-2 text-sm font-display font-bold text-white">{presetLabel}</p>
-          <p className="mt-1 text-xs text-gray-400">{themeLabel}</p>
+        <div className="min-w-[240px] rounded-2xl border border-piu-border/70 bg-[radial-gradient(circle_at_top_right,rgba(68,136,255,0.16),transparent_36%),linear-gradient(180deg,rgba(12,18,34,0.96),rgba(8,12,24,0.99))] p-4 shadow-[0_18px_36px_rgba(8,14,28,0.34)]">
+          <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-cyan-200">Current output</p>
+          <p className="mt-2 text-base font-display font-black text-cyan-50">{presetLabel}</p>
+          <p className="mt-1 text-[11px] text-fuchsia-200/85">{themeLabel}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <span className="rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-cyan-100">{fitLabel}</span>
-            <span className="rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-cyan-100">{anchorLabel}</span>
-            <span className="rounded-md border border-white/8 bg-[#171d27] px-2.5 py-1 text-[10px] font-display font-semibold text-cyan-100">{autoHideLabel}</span>
+            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-amber-100">{fitLabel}</span>
+            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-cyan-100">{anchorLabel}</span>
+            <span className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-rose-100">{autoHideLabel}</span>
             {guidesEnabled ? (
-              <span className="rounded-md border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-semibold text-amber-100">
+              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-amber-100">
                 Guides on
               </span>
             ) : null}
           </div>
-          <div className="mt-3 rounded-lg border border-cyan-400/20 bg-cyan-500/8 px-3 py-2.5">
-            <p className="text-[11px] font-display font-semibold text-cyan-200">OBS start size</p>
-            <p className="mt-1 text-lg font-display font-black text-white">{outputSpec.sourceLabel}</p>
+          <div className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/8 px-3 py-3">
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-cyan-200">OBS start size</p>
+            <p className="mt-1 text-lg font-display font-black text-cyan-50">{outputSpec.sourceLabel}</p>
             <p className="mt-1 text-[11px] text-cyan-100/80">Card frame: {outputSpec.frameLabel}</p>
           </div>
-          <p className="mt-3 truncate rounded-lg border border-white/8 bg-[#171d27] px-3 py-2 text-[11px] text-cyan-100">
+          <p className="mt-3 truncate rounded-2xl border border-piu-border/70 bg-black/25 px-3 py-2.5 text-[11px] text-cyan-100">
             {previewUrl}
           </p>
           {copiedLabel ? <p className="mt-2 text-xs text-emerald-200">{copiedLabel}</p> : null}
-          {tokenExpiresAt ? <p className="mt-1 text-[11px] text-gray-400">Overlay access valid until {new Date(tokenExpiresAt).toLocaleString()}</p> : null}
+          {tokenExpiresAt ? <p className="mt-2 text-[11px] text-slate-400">Overlay access valid until {new Date(tokenExpiresAt).toLocaleString()}</p> : null}
         </div>
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="space-y-4">
           <div>
-            <p className="text-[11px] font-display font-semibold text-gray-400">Quick scenes</p>
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-gray-500">Quick scenes</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {LIVE_OVERLAY_SCENES.map((scene) => {
                 const sceneOutputSpec = getLiveOverlayOutputSpec({ sceneId: scene.id });
                 return (
-                  <div key={scene.id} className="rounded-lg border border-white/8 bg-[#0d1218] px-4 py-3">
-                    <p className="text-sm font-display font-bold text-white">{scene.label}</p>
-                    <p className="mt-1 text-xs text-gray-400">{scene.description}</p>
-                    <div className="mt-3 rounded-lg border border-white/8 bg-[#171d27] px-3 py-2">
-                      <p className="text-[11px] font-display font-semibold text-cyan-200">OBS start size</p>
-                      <p className="mt-1 text-sm font-display font-black text-white">{sceneOutputSpec.sourceLabel}</p>
-                      <p className="mt-1 text-[11px] text-gray-400">Card frame: {sceneOutputSpec.frameLabel}</p>
+                  <div key={scene.id} className={`${panelClass} overflow-hidden px-4 py-3`}>
+                    <div className="h-1.5 rounded-full bg-gradient-to-r from-cyan-400/80 via-fuchsia-400/70 to-rose-400/80" />
+                    <p className="mt-3 text-sm font-display font-bold text-cyan-50">{scene.label}</p>
+                    <p className="mt-1 text-xs text-slate-400">{scene.description}</p>
+                    <div className="mt-3 rounded-2xl border border-piu-border/70 bg-black/20 px-3 py-2.5">
+                      <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-cyan-200">OBS start size</p>
+                      <p className="mt-1 text-sm font-display font-black text-cyan-50">{sceneOutputSpec.sourceLabel}</p>
+                      <p className="mt-1 text-[11px] text-slate-400">Card frame: {sceneOutputSpec.frameLabel}</p>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => onApplyScene(scene.id)} className="btn-secondary px-3 py-2 text-[11px]">
@@ -1467,61 +1491,61 @@ function OverlayStudioCard({
           </div>
 
           <div>
-            <p className="text-[11px] font-display font-semibold text-gray-400">Preset</p>
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-gray-500">Preset</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {LIVE_OVERLAY_PRESETS.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onPresetChange(option.id)}
-                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
                     option.id === preset
-                      ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-white'
-                      : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
+                      ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-rose-50'
+                      : inactiveTileClass
                   }`}
                 >
                   <p className="text-sm font-display font-bold">{option.label}</p>
-                  <p className="mt-1 text-xs text-gray-400">{option.description}</p>
+                  <p className="mt-1 text-xs text-slate-400">{option.description}</p>
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <p className="text-[11px] font-display font-semibold text-gray-400">Fit</p>
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-gray-500">Fit</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {LIVE_OVERLAY_FITS.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onFitChange(option.id)}
-                  className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
+                  className={`rounded-xl border px-3 py-2 text-[11px] font-display font-bold transition-colors ${
                     option.id === fit
-                      ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100'
-                      : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
+                      ? 'border-amber-400/35 bg-amber-500/12 text-amber-100'
+                      : inactiveChipClass
                   }`}
                 >
                   {option.label}
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="mt-2 text-xs text-slate-400">
               {LIVE_OVERLAY_FITS.find((item) => item.id === fit)?.description || ''}
             </p>
           </div>
 
           <div>
-            <p className="text-[11px] font-display font-semibold text-gray-400">Position</p>
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-gray-500">Position</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {LIVE_OVERLAY_ANCHORS.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onAnchorChange(option.id)}
-                  className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
+                  className={`rounded-xl border px-3 py-2 text-[11px] font-display font-bold transition-colors ${
                     option.id === anchor
                       ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
-                      : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
+                      : inactiveChipClass
                   }`}
                 >
                   {option.label}
@@ -1531,7 +1555,7 @@ function OverlayStudioCard({
           </div>
 
           <div>
-            <p className="text-[11px] font-display font-semibold text-gray-400">Widgets</p>
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-gray-500">Widgets</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {LIVE_OVERLAY_WIDGETS.map((widget) => {
                 const active = widgets.includes(widget.id);
@@ -1540,10 +1564,10 @@ function OverlayStudioCard({
                     key={widget.id}
                     type="button"
                     onClick={() => onToggleWidget(widget.id)}
-                    className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
+                    className={`rounded-xl border px-3 py-2 text-[11px] font-display font-bold transition-colors ${
                       active
                         ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
-                        : 'border-white/8 bg-[#171d27] text-gray-400 hover:border-white/15 hover:text-white'
+                        : inactiveChipClass
                     }`}
                   >
                     {widget.label}
@@ -1556,60 +1580,64 @@ function OverlayStudioCard({
 
         <div className="space-y-4">
           <div>
-            <p className="text-[11px] font-display font-semibold text-gray-400">Theme</p>
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-gray-500">Theme</p>
             <div className="mt-2 grid gap-2">
-              {LIVE_OVERLAY_THEMES.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => onThemeChange(option.id)}
-                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
-                    option.id === theme
-                      ? 'border-cyan-400/35 bg-cyan-500/10 text-white'
-                      : 'border-white/8 bg-[#0d1218] text-gray-300 hover:border-white/15 hover:text-white'
-                  }`}
-                >
-                  <p className="text-sm font-display font-bold">{option.label}</p>
-                  {option.id === 'transparent' ? (
-                    <p className="mt-1 text-xs text-gray-400">Minimal chrome for browser sources that should sit directly over gameplay.</p>
-                  ) : null}
-                </button>
-              ))}
+              {LIVE_OVERLAY_THEMES.map((option) => {
+                const tone = themeToneById[option.id] || themeToneById.arena;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => onThemeChange(option.id)}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      option.id === theme
+                        ? tone.active
+                        : inactiveTileClass
+                    }`}
+                  >
+                    <div className={`h-1.5 rounded-full bg-gradient-to-r ${tone.strip}`} />
+                    <p className="mt-3 text-sm font-display font-bold">{option.label}</p>
+                    {option.id === 'transparent' ? (
+                      <p className="mt-1 text-xs text-slate-400">Minimal chrome for browser sources that should sit directly over gameplay.</p>
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/8 bg-[#0d1218] p-4">
-            <p className="text-[11px] font-display font-semibold text-gray-400">Visibility</p>
+          <div className={`${panelClass} p-4`}>
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-rose-200">Visibility</p>
             <div className="mt-3 grid gap-2">
               {LIVE_OVERLAY_AUTO_HIDE_MODES.map((option) => (
                 <button
                   key={option.id}
                   type="button"
                   onClick={() => onAutoHideChange(option.id)}
-                  className={`rounded-lg border px-4 py-3 text-left transition-colors ${
+                  className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
                     option.id === autoHide
-                      ? 'border-emerald-400/35 bg-emerald-500/10 text-white'
-                      : 'border-white/8 bg-[#171d27] text-gray-300 hover:border-white/15 hover:text-white'
+                      ? 'border-emerald-400/35 bg-emerald-500/10 text-emerald-50'
+                      : inactiveChipClass
                   }`}
                 >
                   <p className="text-sm font-display font-bold">{option.label}</p>
-                  <p className="mt-1 text-xs text-gray-400">{option.description}</p>
+                  <p className="mt-1 text-xs text-slate-400">{option.description}</p>
                 </button>
               ))}
             </div>
 
-            <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-[#171d27] px-4 py-3">
+            <div className={`mt-4 flex items-center justify-between gap-3 ${insetClass} px-4 py-3`}>
               <div>
-                <p className="text-[11px] font-display font-semibold text-gray-400">Safe-zone guides</p>
-                <p className="mt-1 text-sm text-gray-300">Useful while placing the browser source. Turn them off before going live.</p>
+                <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-amber-200">Safe-zone guides</p>
+                <p className="mt-1 text-sm text-slate-300">Useful while placing the browser source. Turn them off before going live.</p>
               </div>
               <button
                 type="button"
                 onClick={onToggleGuides}
-                className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
+                className={`rounded-xl border px-3 py-2 text-[11px] font-display font-bold ${
                   guidesEnabled
                     ? 'border-amber-400/35 bg-amber-500/12 text-amber-100'
-                    : 'border-white/8 bg-[#0d1218] text-gray-400'
+                    : 'border-piu-border/70 bg-black/15 text-gray-300'
                 }`}
               >
                 {guidesEnabled ? 'Guides on' : 'Guides off'}
@@ -1617,19 +1645,19 @@ function OverlayStudioCard({
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/8 bg-[#0d1218] p-4">
+          <div className={`${panelClass} p-4`}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[11px] font-display font-semibold text-gray-400">Motion</p>
-                <p className="mt-1 text-sm text-gray-300">Toggle emote bursts and animated reaction flourishes.</p>
+                <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-cyan-200">Motion</p>
+                <p className="mt-1 text-sm text-slate-300">Toggle emote bursts and animated reaction flourishes.</p>
               </div>
               <button
                 type="button"
                 onClick={onToggleMotion}
-                className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
+                className={`rounded-xl border px-3 py-2 text-[11px] font-display font-bold ${
                   motionEnabled
                     ? 'border-emerald-400/35 bg-emerald-500/12 text-emerald-100'
-                    : 'border-white/8 bg-[#171d27] text-gray-400'
+                    : 'border-piu-border/70 bg-black/20 text-gray-300'
                 }`}
               >
                 {motionEnabled ? 'Motion on' : 'Motion off'}
