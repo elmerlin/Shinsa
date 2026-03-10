@@ -1764,7 +1764,6 @@ export default function LivePage() {
   const [savingStatusText, setSavingStatusText] = useState(false);
   const [savingRequestsEnabled, setSavingRequestsEnabled] = useState(false);
   const [savingRequestPolicy, setSavingRequestPolicy] = useState(false);
-  const [playerMode, setPlayerMode] = useState(false);
   const [lockVideo, setLockVideo] = useState(false);
   const [mobileVideoDocked, setMobileVideoDocked] = useState(false);
   const [mobileVideoDockHeight, setMobileVideoDockHeight] = useState(0);
@@ -1834,7 +1833,6 @@ export default function LivePage() {
   const presenceIdRef = useRef('');
   const liveStreamRef = useRef(null);
   const wakeLockRef = useRef(null);
-  const playerModeInitRef = useRef(false);
   const overlayPrefsKeyRef = useRef('');
   const overlayCopyTimerRef = useRef(null);
 
@@ -1859,15 +1857,11 @@ export default function LivePage() {
     () => directorySessions.filter((item) => !item?.is_following),
     [directorySessions]
   );
-  const isPlayerMode = isHost && playerMode;
-  const useMobilePlayerHud = isPlayerMode && !isDesktopViewport;
   const isMobileChatLayout = !isDesktopViewport;
-  const isMobileChatSheet = mobilePanel === 'chat' && !isDesktopViewport;
   const isCompactSongCardLayout = !isDesktopViewport;
-  const hasPlayerPanels = useMobilePlayerHud && live?.status === 'live';
-  const useDesktopViewerLayout = !!youtubeId && !hasPlayerPanels && isDesktopViewport;
-  const useDesktopSidebarLayout = isDesktopViewport && !hasPlayerPanels && !useDesktopViewerLayout;
-  const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && !hasPlayerPanels && hostWorkspaceTab !== 'overlay';
+  const useDesktopViewerLayout = !!youtubeId && isDesktopViewport;
+  const useDesktopSidebarLayout = isDesktopViewport && !useDesktopViewerLayout;
+  const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && hostWorkspaceTab !== 'overlay';
   const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
   const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight && isXlViewport
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px`, minHeight: `${desktopMediaHeight}px` }
@@ -2296,29 +2290,6 @@ export default function LivePage() {
   }, [currentVote?.id, currentVote?.status]);
 
   useEffect(() => {
-    if (!isHost || typeof window === 'undefined') return;
-
-    const storageKey = `shinsa_live_player_mode:${user?.id || 'host'}`;
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored === '1' || stored === '0') {
-      setPlayerMode(stored === '1');
-      playerModeInitRef.current = true;
-      return;
-    }
-
-    if (!playerModeInitRef.current) {
-      const autoEnable = window.matchMedia ? window.matchMedia('(max-width: 1023px)').matches : false;
-      setPlayerMode(autoEnable);
-      playerModeInitRef.current = true;
-    }
-  }, [isHost, user?.id]);
-
-  useEffect(() => {
-    if (!isHost || typeof window === 'undefined' || !playerModeInitRef.current) return;
-    window.localStorage.setItem(`shinsa_live_player_mode:${user?.id || 'host'}`, playerMode ? '1' : '0');
-  }, [isHost, playerMode, user?.id]);
-
-  useEffect(() => {
     if (typeof window === 'undefined') return;
     const storageKey = `shinsa_live_video_lock:${user?.id || 'viewer'}`;
     const stored = window.localStorage.getItem(storageKey);
@@ -2340,10 +2311,14 @@ export default function LivePage() {
       return undefined;
     }
 
-    const lockTop = 76;
     const updateDockState = () => {
       const shell = mobileVideoShellRef.current;
       if (!shell) return;
+
+      const headerRect = typeof document !== 'undefined'
+        ? document.querySelector('header')?.getBoundingClientRect?.()
+        : null;
+      const lockTop = headerRect ? Math.max(0, headerRect.bottom) : 56;
 
       const rect = shell.getBoundingClientRect();
       const height = shell.offsetHeight || rect.height || 0;
@@ -2419,14 +2394,7 @@ export default function LivePage() {
   }, [isHost, overlayAnchor, overlayAutoHide, overlayBrandMotion, overlayFit, overlayGuides, overlayMotion, overlayOpacity, overlayPreset, overlayTheme, overlayWidgets]);
 
   useEffect(() => {
-    if (!useMobilePlayerHud) {
-      setMobilePanel('');
-      if (wakeLockRef.current) releaseWakeLock();
-    }
-  }, [useMobilePlayerHud]);
-
-  useEffect(() => {
-    if (live?.status !== 'live' && mobilePanel && mobilePanel !== 'requests' && mobilePanel !== 'vote') {
+    if (live?.status !== 'live' && mobilePanel === 'vote') {
       setMobilePanel('');
     }
   }, [live?.status, mobilePanel]);
@@ -2670,30 +2638,6 @@ export default function LivePage() {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [messages]);
-
-  useEffect(() => {
-    if (mobilePanel !== 'chat' || isDesktopViewport || typeof window === 'undefined') return undefined;
-
-    const focusInput = () => {
-      const input = chatInputRef.current;
-      if (!input) return;
-      try {
-        input.focus({ preventScroll: true });
-      } catch {
-        input.focus();
-      }
-      if (typeof input.scrollIntoView === 'function') {
-        input.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      }
-    };
-
-    const frameId = window.requestAnimationFrame(focusInput);
-    const timeoutId = window.setTimeout(focusInput, 160);
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.clearTimeout(timeoutId);
-    };
-  }, [isDesktopViewport, mobilePanel]);
 
   const visiblePlays = useMemo(() => {
     const rows = Array.isArray(snapshot?.plays) ? [...snapshot.plays] : [];
@@ -3191,29 +3135,6 @@ export default function LivePage() {
   const mobileRequestModalDisabled = false;
   const mobileVoteModalDisabled = false;
   const showOverlayStudioTab = isHost && activeSessionId;
-  const playerSummaryCards = [
-    {
-      label: 'Last Score',
-      value: lastPlay ? formatNumber(lastPlay.score) : 'Waiting',
-      tone: 'text-cyan-200',
-    },
-    {
-      label: 'Grade',
-      value: lastPlay?.grade || '-',
-      tone: 'text-white',
-    },
-    {
-      label: 'Requests',
-      value: `${requestCounts.open}/${requestCounts.queued}`,
-      tone: 'text-fuchsia-200',
-    },
-    {
-      label: 'Songs',
-      value: songCount,
-      tone: 'text-rose-200',
-    },
-  ];
-
   const voteSection = (
     <div className="space-y-4">
       {hostCanCreateVote ? (
@@ -3579,7 +3500,7 @@ export default function LivePage() {
     </div>
   );
 
-  const desktopInteractionsSection = hasPlayerPanels ? null : (
+  const desktopInteractionsSection = (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className={`gap-2 ${isDesktopViewport ? 'flex flex-wrap items-start justify-between' : 'flex flex-col items-start'}`}>
         <div className="min-w-0">
@@ -3653,7 +3574,7 @@ export default function LivePage() {
     </div>
   );
 
-  const desktopTopCardsSection = isDesktopViewport && !hasPlayerPanels ? (
+  const desktopTopCardsSection = isDesktopViewport ? (
     <div className="grid items-stretch gap-4 lg:grid-cols-2 lg:gap-5">
       <NowPlayingPanel
         play={lastPlay}
@@ -3672,9 +3593,7 @@ export default function LivePage() {
           ? 'h-full min-h-0'
           : isMobileChatLayout
             ? 'min-h-0'
-            : hasPlayerPanels
-              ? 'min-h-[420px]'
-              : 'min-h-0'
+            : 'min-h-0'
       }`}
       style={
         desktopMediaHeightStyle
@@ -3682,14 +3601,12 @@ export default function LivePage() {
           : useDesktopSidebarLayout
             ? { height: 'calc(100dvh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }
             : isMobileChatLayout
-              ? { maxHeight: isMobileChatSheet ? 'calc(100dvh - 8.5rem)' : 'min(68dvh, calc(100dvh - 10rem))' }
-              : isMobileChatSheet
-                ? { maxHeight: 'calc(100dvh - 8.5rem)' }
-                : {
-                    height: desktopChatFallbackHeight,
-                    maxHeight: desktopChatFallbackHeight,
-                    minHeight: desktopChatFallbackHeight,
-                  }
+              ? { maxHeight: 'min(68dvh, calc(100dvh - 10rem))' }
+              : {
+                  height: desktopChatFallbackHeight,
+                  maxHeight: desktopChatFallbackHeight,
+                  minHeight: desktopChatFallbackHeight,
+                }
       }
     >
       {reactionBursts.map((burst) => (
@@ -3753,7 +3670,7 @@ export default function LivePage() {
         </div>
       </div>
 
-      {currentVote && !hasPlayerPanels ? (
+      {currentVote ? (
         <div className="mt-3">
           <PinnedVoteCard
             vote={currentVote}
@@ -4023,14 +3940,31 @@ export default function LivePage() {
   }
 
     return (
-      <div className={`mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4 ${hasPlayerPanels ? 'pb-28 lg:pb-5' : ''}`}>
+      <div className="mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4">
       <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between">
           <div className="min-w-0 w-full md:flex-1">
-            <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
-            <h1 className="mt-1 text-2xl font-display font-black text-white sm:text-3xl">
-              {live?.title || 'Live session'}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
+                <h1 className="mt-1 text-2xl font-display font-black text-white sm:text-3xl">
+                  {live?.title || 'Live session'}
+                </h1>
+              </div>
+              {liveStatusText || isHost ? (
+                <div className="w-[10.75rem] shrink-0 md:hidden">
+                  <LiveHeaderStatusStrip
+                    isHost={isHost}
+                    liveStatusText={liveStatusText}
+                    statusText={editStatusText}
+                    saving={savingStatusText}
+                    compact
+                    onChange={setEditStatusText}
+                    onSubmit={handleUpdateStatusText}
+                  />
+                </div>
+              ) : null}
+            </div>
             <p className={`text-sm text-gray-400 mt-1 ${isDesktopViewport ? '' : 'hidden'}`}>
               {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
               {live?.status === 'ended' ? ' • ended' : ' • live'}
@@ -4044,19 +3978,6 @@ export default function LivePage() {
               </p>
             ) : null}
             <div className="flex w-full flex-wrap items-center gap-2 justify-start md:w-auto md:justify-end">
-              {isHost ? (
-                <button
-                  type="button"
-                  onClick={() => setPlayerMode((prev) => !prev)}
-                  className={`rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${
-                    playerMode
-                      ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-100'
-                      : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
-                  }`}
-                >
-                  {playerMode ? 'Player mode on' : 'Player mode'}
-                </button>
-              ) : null}
               {mobileVideoLockAvailable ? (
                 <button
                   type="button"
@@ -4085,7 +4006,7 @@ export default function LivePage() {
               )}
             </div>
             {liveStatusText || isHost ? (
-              <div className="w-full md:max-w-[28rem]">
+              <div className="hidden w-full md:block md:max-w-[28rem]">
                 <LiveHeaderStatusStrip
                   isHost={isHost}
                   liveStatusText={liveStatusText}
@@ -4160,7 +4081,7 @@ export default function LivePage() {
               {syncLabel}
             </span>
           ) : null}
-          {isHost && wakeLockSupported && playerMode ? (
+          {isHost && wakeLockSupported && !isDesktopViewport ? (
             <button
               type="button"
               onClick={handleToggleWakeLock}
@@ -4206,7 +4127,7 @@ export default function LivePage() {
               <div>
                 <p className="text-[11px] font-display font-semibold text-gray-300">Companion dashboard</p>
                 <p className="mt-2 text-sm text-gray-300">
-                  No stream link is attached, so this room is running in session-tracker mode. The player HUD can stay pinned while you watch sync state, results, requests, and chat on your phone.
+                  No stream link is attached, so this room is running in session-tracker mode with the same compact live-room layout on your phone.
                 </p>
               </div>
               <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-4 py-3 text-right">
@@ -4255,75 +4176,6 @@ export default function LivePage() {
         />
       ) : null}
 
-      {hostWorkspaceTab !== 'overlay' && hasPlayerPanels ? (
-        <div className="lg:hidden sticky top-[68px] z-30 space-y-3">
-          <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-display font-semibold text-gray-300">Player HUD</p>
-                <p className="mt-1 text-sm text-gray-300">
-                  {youtubeId ? 'Pinned while the stream sits above.' : 'Built for streamless session tracking on your phone.'}
-                </p>
-              </div>
-              <button type="button" onClick={() => setPlayerMode(false)} className="btn-secondary px-3 py-2 text-xs">
-                Full page
-              </button>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {playerSummaryCards.map((card) => (
-                <div key={card.label} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
-                  <p className="text-[11px] font-display font-semibold text-gray-400">{card.label}</p>
-                  <p className={`mt-1 text-lg font-display font-black ${card.tone}`}>{card.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 grid grid-cols-4 gap-2">
-              <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50">
-                Songs
-              </button>
-              <button
-                type="button"
-                onClick={() => setMobilePanel('requests')}
-                disabled={!isHost && (!requestsEnabled || live?.status !== 'live')}
-                className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50 disabled:text-gray-500 disabled:opacity-60"
-              >
-                Requests
-              </button>
-              <button
-                type="button"
-                onClick={() => setMobilePanel('vote')}
-                disabled={!isHost && !currentVote}
-                className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50 disabled:text-gray-500 disabled:opacity-60"
-              >
-                Vote
-              </button>
-              <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-2 text-[11px] font-display font-semibold text-white hover:border-piu-accent/50">
-                Chat
-              </button>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn-secondary flex-1 min-w-[120px] px-3 py-2 text-xs">
-                {syncing ? 'Syncing...' : 'Sync now'}
-              </button>
-              <button type="button" onClick={handleCopyLink} className="btn-secondary flex-1 min-w-[120px] px-3 py-2 text-xs">
-                {copied ? 'Copied' : 'Copy link'}
-              </button>
-              {wakeLockSupported ? (
-                <button type="button" onClick={handleToggleWakeLock} className="btn-secondary flex-1 min-w-[120px] px-3 py-2 text-xs">
-                  {wakeLockActive ? 'Screen awake' : 'Keep awake'}
-                </button>
-              ) : null}
-              <button type="button" onClick={handleEndSession} disabled={ending} className="btn-primary flex-1 min-w-[120px] px-3 py-2 text-xs">
-                {ending ? 'Ending...' : 'End session'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
         {hostWorkspaceTab !== 'overlay' && useDesktopViewerLayout ? (
           <div className={`grid gap-5 items-stretch ${desktopViewerColumns}`}>
             <div className="overflow-hidden rounded-xl border border-piu-border/60 bg-piu-dark/60">
@@ -4369,7 +4221,7 @@ export default function LivePage() {
       ) : null}
 
       {hostWorkspaceTab !== 'overlay' ? (
-        !isDesktopViewport && !hasPlayerPanels ? (
+        !isDesktopViewport ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 items-stretch gap-3">
               <NowPlayingPanel
@@ -4384,7 +4236,7 @@ export default function LivePage() {
             {chatSection}
             {songsSection}
           </div>
-        ) : isDesktopViewport && !hasPlayerPanels ? (
+        ) : (
           <div className="space-y-4">
             {desktopTopCardsSection}
             {useDesktopViewerLayout ? (
@@ -4400,69 +4252,8 @@ export default function LivePage() {
               </div>
             )}
           </div>
-        ) : (
-          <div className={`grid items-start gap-5 ${desktopViewerColumns}`}>
-            <div className="space-y-4">
-              <NowPlayingPanel
-                play={lastPlay}
-                live={live}
-                requestInfo={nowPlayingRequestInfo}
-                onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
-                compact={!isDesktopViewport}
-              />
-
-            {hasPlayerPanels ? null : songsSection}
-          </div>
-
-          {hasPlayerPanels ? null : (
-            <div className="space-y-4">
-              {useDesktopViewerLayout ? desktopInteractionsSection : (
-                <>
-                  {desktopInteractionsSection}
-                  {chatSection}
-                </>
-              )}
-            </div>
-          )}
-        </div>
         )
       ) : null}
-
-      <div className={`fixed inset-x-0 bottom-0 z-40 border-t border-white/8 bg-[#11161f] px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.28)] lg:hidden ${hasPlayerPanels && hostWorkspaceTab !== 'overlay' ? '' : 'hidden'}`}>
-        <div className="mx-auto grid max-w-2xl grid-cols-4 gap-2">
-          <button type="button" onClick={() => setMobilePanel('songs')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
-            Songs
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobilePanel('requests')}
-            disabled={!isHost && (!requestsEnabled || live?.status !== 'live')}
-            className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
-          >
-            Requests
-          </button>
-          <button
-            type="button"
-            onClick={() => setMobilePanel('vote')}
-            disabled={!isHost && !currentVote}
-            className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white disabled:text-gray-500 disabled:opacity-60"
-          >
-            Vote
-          </button>
-          <button type="button" onClick={() => setMobilePanel('chat')} className="rounded-lg border border-white/8 bg-[#0d1218] px-2 py-2 text-[11px] font-display font-semibold text-white">
-            Chat
-          </button>
-        </div>
-      </div>
-
-      <MobilePanelSheet
-        open={mobilePanel === 'songs'}
-        title="Songs This Session"
-        subtitle="Full session results with sorting and judgment drill-in."
-        onClose={() => setMobilePanel('')}
-      >
-        {songsSection}
-      </MobilePanelSheet>
 
       <MobilePanelSheet
         open={mobilePanel === 'requests'}
@@ -4477,20 +4268,11 @@ export default function LivePage() {
       <MobilePanelSheet
         open={mobilePanel === 'vote'}
         title="Vote Control"
-        subtitle="Run the next-chart vote without leaving the player HUD."
+        subtitle="Run the next-chart vote without leaving the live room."
         onClose={() => setMobilePanel('')}
         allowDesktop
       >
         {voteSection}
-      </MobilePanelSheet>
-
-      <MobilePanelSheet
-        open={mobilePanel === 'chat'}
-        title="Live Chat"
-        subtitle="Chat, emotes, moderation, and crowd reactions."
-        onClose={() => setMobilePanel('')}
-      >
-        {chatSection}
       </MobilePanelSheet>
 
       <EndSessionConfirmModal
