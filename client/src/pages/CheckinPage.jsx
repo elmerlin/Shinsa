@@ -10,6 +10,7 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { getProfilePath } from '../utils/profile';
 import DojoActivityPanel from '../components/DojoActivityPanel';
 import VenueAccessPanel from '../components/VenueAccessPanel';
+import { getCheckinClientSessionId } from '../utils/checkinClient';
 
 const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
 
@@ -557,7 +558,7 @@ export default function CheckinPage() {
     setCheckinLoading(true);
     setError('');
     try {
-      await checkin(selectedVenue.id, selectedMachine.id);
+      await checkin(selectedVenue.id, selectedMachine.id, getCheckinClientSessionId());
       markDojoPopupHandledToday(user?.id);
       setQrNotice('');
       setSelectedMachine(null);

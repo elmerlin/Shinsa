@@ -2113,6 +2113,7 @@ function initializeDb() {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       venue_id TEXT NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
       machine_id TEXT NOT NULL REFERENCES venue_machines(id) ON DELETE CASCADE,
+      client_session_id TEXT NOT NULL DEFAULT '',
       checked_in_at TEXT DEFAULT (datetime('now')),
       checked_out_at TEXT DEFAULT NULL,
       last_proximity_check_at TEXT DEFAULT NULL,
@@ -2177,6 +2178,7 @@ function initializeDb() {
 
   const checkinCols = db.prepare("PRAGMA table_info(checkins)").all().map(c => c.name);
   const checkinMigrations = [
+    ['client_session_id', "TEXT NOT NULL DEFAULT ''"],
     ['last_proximity_check_at', 'TEXT DEFAULT NULL'],
     ['last_near_venue_at', 'TEXT DEFAULT NULL'],
     ['last_proximity_lat', 'REAL DEFAULT NULL'],

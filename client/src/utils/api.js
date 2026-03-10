@@ -906,7 +906,7 @@ export const getTrainingRecommendations = (options = {}) => {
 export const getVenues = () => request('/checkins/venues');
 export const getVenueBySlug = (slug) => request(`/checkins/venue/${encodeURIComponent(slug)}`);
 export const getActiveCheckins = (venueSlug) => request(`/checkins/active/${encodeURIComponent(venueSlug)}`);
-export const checkin = (venue_id, machine_id) => request('/checkins/checkin', { method: 'POST', body: JSON.stringify({ venue_id, machine_id }) });
+export const checkin = (venue_id, machine_id, client_session_id = '') => request('/checkins/checkin', { method: 'POST', body: JSON.stringify({ venue_id, machine_id, client_session_id }) });
 export const checkout = () => request('/checkins/checkout', { method: 'POST' });
 export const getMyCheckinStatus = () => request('/checkins/my-status');
 export const sendCheckinProximity = (data) => request('/checkins/proximity', { method: 'POST', body: JSON.stringify(data) });

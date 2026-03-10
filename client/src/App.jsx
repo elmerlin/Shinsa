@@ -6,6 +6,7 @@ import { useNotifications } from './contexts/NotificationContext';
 import { getAvatarUrl } from './components/AvatarPicker';
 import MarkdownContent from './components/MarkdownContent';
 import { searchUsers, consumeGroupPopup, getMyCheckinStatus, sendCheckinProximity, checkout, getMyVenueAccess } from './utils/api';
+import { getCheckinClientSessionId } from './utils/checkinClient';
 import { getProfilePath } from './utils/profile';
 import { getCountryFlag } from './components/PlayerRegistration';
 import Dashboard from './pages/Dashboard';
@@ -1061,6 +1062,7 @@ export default function App() {
                 latitude: lat,
                 longitude: lng,
                 accuracy,
+                client_session_id: getCheckinClientSessionId(),
               });
               if (!proximity?.checked_in) {
                 clearDojoCheckoutPopupState(user.id);
@@ -1068,6 +1070,11 @@ export default function App() {
                 setDojoCheckoutPrompt(null);
                 setDojoCheckoutError('');
                 scheduleNext(DOJO_RECHECK_DEFAULT_MS);
+                return;
+              }
+
+              if (proximity?.tracked === false) {
+                scheduleNext(DOJO_RECHECK_NEARBY_MS);
                 return;
               }
 

@@ -34,6 +34,10 @@ function formatSqlDateTime(value = new Date()) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
+function normalizeClientSessionId(value) {
+  return String(value || '').trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 80);
+}
+
 function toRadians(value) {
   return (value * Math.PI) / 180;
 }
@@ -411,6 +415,7 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   runAutoCheckoutSweep(db);
   const { venue_id, machine_id } = req.body;
+  const clientSessionId = normalizeClientSessionId(req.body?.client_session_id || req.body?.clientSessionId);
   const userId = req.user.id;
 
   if (!venue_id || !machine_id) {
@@ -444,10 +449,10 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   const id = uuidv4();
   db.prepare(`
     INSERT INTO checkins (
-      id, user_id, venue_id, machine_id,
+      id, user_id, venue_id, machine_id, client_session_id,
       last_near_venue_at, last_proximity_status
-    ) VALUES (?, ?, ?, ?, datetime('now'), 'near')
-  `).run(id, userId, venue_id, machine_id);
+    ) VALUES (?, ?, ?, ?, ?, datetime('now'), 'near')
+  `).run(id, userId, venue_id, machine_id, clientSessionId);
 
   // Set playing status
   const status = `Playing at ${machine.name}`;
@@ -507,6 +512,7 @@ router.post('/proximity', requireAuth, requireCheckinFeature, (req, res) => {
 
   const active = db.prepare(`
     SELECT c.id,
+           c.client_session_id,
            c.checked_in_at,
            c.last_near_venue_at,
            c.last_proximity_check_at,
@@ -542,8 +548,21 @@ router.post('/proximity', requireAuth, requireCheckinFeature, (req, res) => {
   const latitude = Number(req.body?.lat ?? req.body?.latitude);
   const longitude = Number(req.body?.lng ?? req.body?.longitude);
   const accuracy = Number(req.body?.accuracy);
+  const clientSessionId = normalizeClientSessionId(req.body?.client_session_id || req.body?.clientSessionId);
+  const boundClientSessionId = normalizeClientSessionId(active.client_session_id);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     return res.status(400).json({ error: 'latitude and longitude are required' });
+  }
+
+  if (!clientSessionId) {
+    return res.json({
+      checked_in: true,
+      tracked: false,
+      reason: 'client_session_required',
+      venue_slug: active.venue_slug,
+      venue_name: active.venue_name,
+      machine_name: active.machine_name,
+    });
   }
 
   const distanceMeters = haversineDistanceMeters(latitude, longitude, venueLat, venueLng);
@@ -553,10 +572,36 @@ router.post('/proximity', requireAuth, requireCheckinFeature, (req, res) => {
   const nowSql = formatSqlDateTime(now);
   const roundedDistance = Math.round(distanceMeters);
 
+  if (boundClientSessionId && boundClientSessionId !== clientSessionId) {
+    return res.json({
+      checked_in: true,
+      tracked: false,
+      reason: 'different_client_session',
+      venue_slug: active.venue_slug,
+      venue_name: active.venue_name,
+      machine_name: active.machine_name,
+    });
+  }
+
+  if (!boundClientSessionId && !isNear) {
+    return res.json({
+      checked_in: true,
+      tracked: false,
+      reason: 'client_session_unclaimed',
+      venue_slug: active.venue_slug,
+      venue_name: active.venue_name,
+      machine_name: active.machine_name,
+    });
+  }
+
   if (isNear) {
     db.prepare(`
       UPDATE checkins
-      SET last_proximity_check_at = ?,
+      SET client_session_id = CASE
+            WHEN COALESCE(client_session_id, '') = '' THEN ?
+            ELSE client_session_id
+          END,
+          last_proximity_check_at = ?,
           last_near_venue_at = ?,
           last_proximity_lat = ?,
           last_proximity_lng = ?,
@@ -565,6 +610,7 @@ router.post('/proximity', requireAuth, requireCheckinFeature, (req, res) => {
           last_proximity_status = 'near'
       WHERE id = ? AND checked_out_at IS NULL
     `).run(
+      clientSessionId,
       nowSql,
       nowSql,
       latitude,
