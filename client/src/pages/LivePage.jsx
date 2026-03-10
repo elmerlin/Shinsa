@@ -4028,7 +4028,7 @@ export default function LivePage() {
               />
               </div>
             </div>
-            <div className="flex h-full min-h-0 overflow-hidden" style={desktopMediaHeightStyle}>
+            <div className="h-full min-h-0 overflow-hidden" style={desktopMediaHeightStyle}>
               {chatSection}
             </div>
           </div>
