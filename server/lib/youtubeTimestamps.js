@@ -21,8 +21,8 @@ function parseUtcLike(value) {
 
 function parsePlayEndedAt(play) {
   return (
-    parseUtcSqliteDateTime(play?.played_at_utc)
-    || parsePiugamePlayedAtUtc(play?.date_played)
+    parsePiugamePlayedAtUtc(play?.date_played)
+    || parseUtcSqliteDateTime(play?.played_at_utc)
     || null
   );
 }

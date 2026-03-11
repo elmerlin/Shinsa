@@ -18,17 +18,25 @@ function parsePiugamePlayedAtUtc(value) {
   if (!raw) return null;
 
   const normalized = raw.replace(/[./]/g, '-').replace(/\s+/g, ' ');
+  const timezoneMatch = normalized.match(/\((?:GMT|UTC)\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?\)$/i);
+  const normalizedWithoutTimezone = timezoneMatch
+    ? normalized.slice(0, timezoneMatch.index).trim()
+    : normalized;
+  const explicitOffsetMinutes = timezoneMatch
+    ? ((timezoneMatch[1] === '-' ? -1 : 1)
+      * (((parseInt(timezoneMatch[2], 10) || 0) * 60) + (parseInt(timezoneMatch[3] || '0', 10) || 0)))
+    : null;
 
-  if (/[zZ]$/.test(normalized) || /[+-]\d{2}:\d{2}$/.test(normalized) || /[+-]\d{4}$/.test(normalized)) {
-    const direct = new Date(normalized);
+  if (/[zZ]$/.test(normalizedWithoutTimezone) || /[+-]\d{2}:\d{2}$/.test(normalizedWithoutTimezone) || /[+-]\d{4}$/.test(normalizedWithoutTimezone)) {
+    const direct = new Date(normalizedWithoutTimezone);
     return Number.isNaN(direct.getTime()) ? null : direct;
   }
 
-  const ymd = normalized.match(
+  const ymd = normalizedWithoutTimezone.match(
     /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
   );
   if (!ymd) {
-    const fallback = new Date(normalized);
+    const fallback = new Date(normalizedWithoutTimezone);
     return Number.isNaN(fallback.getTime()) ? null : fallback;
   }
 
@@ -40,7 +48,8 @@ function parsePiugamePlayedAtUtc(value) {
   const second = parseInt(ymd[6] || '0', 10);
 
   const sourceMs = Date.UTC(year, month, day, hour, minute, second);
-  return new Date(sourceMs - (PIUGAME_SOURCE_UTC_OFFSET_MINUTES * 60 * 1000));
+  const offsetMinutes = explicitOffsetMinutes == null ? PIUGAME_SOURCE_UTC_OFFSET_MINUTES : explicitOffsetMinutes;
+  return new Date(sourceMs - (offsetMinutes * 60 * 1000));
 }
 
 function normalizePiugamePlayedAtUtc(value) {
