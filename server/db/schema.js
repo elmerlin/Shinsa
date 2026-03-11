@@ -3,8 +3,11 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const { ensureBuiltInAchievementSeries } = require('../lib/achievements');
+const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'shinsa.db');
+const SONG_ALIAS_PATH = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
+const PIUCENTER_DURATION_PATH = path.join(__dirname, '..', 'data', 'piucenter-song-durations.json');
 
 // Shared singleton connection — reused across all requests
 const db = new Database(DB_PATH);
@@ -21,6 +24,22 @@ function normalizeShoeText(value, max = 80) {
 
 function normalizeSongTitle(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeSongLookupName(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function compactSongLookupKey(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[(){}\[\]'"`~:;,.!?]/g, ' ')
+    .replace(/[+/_-]+/g, ' ')
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
 function parseSongFlags(flags) {
@@ -51,6 +70,188 @@ function resolveSongTitleForStorage(title, songKey, flags) {
   }
 
   return normalizedTitle;
+}
+
+function loadSongAliases() {
+  if (!fs.existsSync(SONG_ALIAS_PATH)) return {};
+  try {
+    const payload = JSON.parse(fs.readFileSync(SONG_ALIAS_PATH, 'utf-8'));
+    const rawAliases = (payload && typeof payload.aliases === 'object' && payload.aliases) || {};
+    const normalized = {};
+    for (const [alias, canonical] of Object.entries(rawAliases)) {
+      const aliasNorm = normalizeSongLookupName(alias);
+      const canonicalNorm = normalizeSongLookupName(canonical);
+      if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
+      if (!normalized[aliasNorm]) normalized[aliasNorm] = canonicalNorm;
+    }
+    return normalized;
+  } catch {
+    return {};
+  }
+}
+
+function toCanonicalSongName(title, aliases) {
+  let normalized = normalizeSongLookupName(title);
+  if (!normalized) return '';
+  const seen = new Set();
+  while (aliases[normalized] && !seen.has(normalized)) {
+    seen.add(normalized);
+    normalized = aliases[normalized];
+  }
+  return normalized;
+}
+
+function buildSongDurationGroupKey(row, aliases) {
+  const songKey = String(row?.song_key || '').trim();
+  if (songKey) return `song_key:${songKey}`;
+
+  const resolvedTitle = resolveSongTitleForStorage(row?.title || '', row?.song_key || '', row?.flags || '');
+  const canonicalTitle = toCanonicalSongName(resolvedTitle, aliases);
+  const titleKey = compactSongLookupKey(canonicalTitle || resolvedTitle);
+  const artistKey = compactSongLookupKey(row?.artist || '');
+  return `${titleKey}|${artistKey}`;
+}
+
+function backfillSongDurationsFromSnapshot() {
+  const songColumns = db.prepare("PRAGMA table_info(songs)").all().map((column) => column.name);
+  if (!songColumns.includes('duration_seconds')) return;
+  if (!fs.existsSync(PIUCENTER_DURATION_PATH)) return;
+
+  let payload;
+  try {
+    payload = JSON.parse(fs.readFileSync(PIUCENTER_DURATION_PATH, 'utf-8'));
+  } catch (err) {
+    console.error('Failed to read piucenter-song-durations.json:', err.message);
+    return;
+  }
+
+  const sourceSongs = Array.isArray(payload?.songs) ? payload.songs : [];
+  if (sourceSongs.length === 0) return;
+
+  const aliases = loadSongAliases();
+  const exactMatches = new Map();
+  const titleBuckets = new Map();
+
+  for (const row of sourceSongs) {
+    const durationSeconds = parseInt(row?.duration_seconds, 10) || 0;
+    if (durationSeconds <= 0) continue;
+
+    const canonicalTitle = toCanonicalSongName(
+      row?.canonical_title || row?.title || '',
+      aliases
+    );
+    const titleKey = compactSongLookupKey(row?.compact_title || canonicalTitle || row?.title || '');
+    if (!titleKey) continue;
+
+    const artistKey = compactSongLookupKey(row?.compact_artist || row?.canonical_artist || row?.artist || '');
+    const snapshotRow = {
+      duration_seconds: durationSeconds,
+      duration_source: 'piucenter',
+      titleKey,
+      artistKey,
+    };
+
+    if (artistKey) {
+      const exactKey = `${titleKey}|${artistKey}`;
+      if (!exactMatches.has(exactKey)) exactMatches.set(exactKey, snapshotRow);
+    }
+
+    if (!titleBuckets.has(titleKey)) titleBuckets.set(titleKey, []);
+    titleBuckets.get(titleKey).push(snapshotRow);
+  }
+
+  const uniqueTitleMatches = new Map();
+  for (const [titleKey, rows] of titleBuckets.entries()) {
+    const uniqueArtistRows = [];
+    const seenArtists = new Set();
+    for (const row of rows) {
+      const key = `${row.titleKey}|${row.artistKey}`;
+      if (seenArtists.has(key)) continue;
+      seenArtists.add(key);
+      uniqueArtistRows.push(row);
+    }
+    if (uniqueArtistRows.length === 1) {
+      uniqueTitleMatches.set(titleKey, uniqueArtistRows[0]);
+    }
+  }
+
+  const songRows = db.prepare(`
+    SELECT id, title, artist, song_key, flags, duration_seconds, duration_source
+    FROM songs
+    ORDER BY id ASC
+  `).all();
+  if (songRows.length === 0) return;
+
+  const groups = new Map();
+  for (const row of songRows) {
+    const groupKey = buildSongDurationGroupKey(row, aliases);
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        ids: [],
+        titleKey: compactSongLookupKey(toCanonicalSongName(
+          resolveSongTitleForStorage(row.title || '', row.song_key || '', row.flags || ''),
+          aliases
+        ) || row.title || ''),
+        artistKey: compactSongLookupKey(row.artist || ''),
+        existingDuration: 0,
+        existingSource: '',
+      });
+    }
+    const group = groups.get(groupKey);
+    group.ids.push(parseInt(row.id, 10) || 0);
+    const durationSeconds = parseInt(row.duration_seconds, 10) || 0;
+    if (durationSeconds > 0 && group.existingDuration <= 0) {
+      group.existingDuration = durationSeconds;
+      group.existingSource = String(row.duration_source || '').trim();
+    }
+  }
+
+  const updateStmt = db.prepare(`
+    UPDATE songs
+    SET duration_seconds = ?,
+        duration_source = ?,
+        duration_updated_at = datetime('now')
+    WHERE id = ?
+      AND (
+        COALESCE(duration_seconds, -1) <> ?
+        OR COALESCE(duration_source, '') <> ?
+      )
+  `);
+
+  const apply = db.transaction(() => {
+    let seededGroups = 0;
+    let syncedRows = 0;
+
+    for (const group of groups.values()) {
+      let durationSeconds = group.existingDuration;
+      let durationSource = group.existingSource || 'manual';
+
+      if (durationSeconds <= 0) {
+        const snapshotRow = exactMatches.get(`${group.titleKey}|${group.artistKey}`)
+          || uniqueTitleMatches.get(group.titleKey);
+        if (!snapshotRow) continue;
+        durationSeconds = snapshotRow.duration_seconds;
+        durationSource = snapshotRow.duration_source || 'piucenter';
+        seededGroups++;
+      }
+
+      for (const id of group.ids) {
+        const result = updateStmt.run(durationSeconds, durationSource, id, durationSeconds, durationSource);
+        syncedRows += result.changes;
+      }
+    }
+
+    return { seededGroups, syncedRows };
+  });
+
+  try {
+    const result = apply();
+    if (result.seededGroups > 0 || result.syncedRows > 0) {
+      console.log(`Backfilled song durations for ${result.seededGroups} groups (${result.syncedRows} chart rows synced)`);
+    }
+  } catch (err) {
+    console.error('Failed to backfill song durations:', err.message);
+  }
 }
 
 function escapeRegExp(value) {
@@ -573,7 +774,10 @@ function initializeDb() {
       level INT NOT NULL,
       bpm TEXT DEFAULT '',
       song_key TEXT DEFAULT '',
-      flags TEXT DEFAULT ''
+      flags TEXT DEFAULT '',
+      duration_seconds INTEGER DEFAULT NULL,
+      duration_source TEXT DEFAULT '',
+      duration_updated_at TEXT DEFAULT NULL
     );
 
     CREATE TABLE IF NOT EXISTS chart_tiers (
@@ -984,6 +1188,26 @@ function initializeDb() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS user_youtube_connections (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      channel_id TEXT DEFAULT '',
+      channel_title TEXT DEFAULT '',
+      channel_thumbnail_url TEXT DEFAULT '',
+      encrypted_access_token TEXT NOT NULL DEFAULT '',
+      access_token_iv TEXT NOT NULL DEFAULT '',
+      access_token_auth_tag TEXT NOT NULL DEFAULT '',
+      encrypted_refresh_token TEXT NOT NULL DEFAULT '',
+      refresh_token_iv TEXT NOT NULL DEFAULT '',
+      refresh_token_auth_tag TEXT NOT NULL DEFAULT '',
+      token_scope TEXT DEFAULT '',
+      token_type TEXT DEFAULT '',
+      token_expires_at TEXT DEFAULT '',
+      connected_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      last_used_at TEXT DEFAULT (datetime('now')),
+      last_error TEXT DEFAULT ''
+    );
+
     CREATE TABLE IF NOT EXISTS user_pumbility_scores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1057,6 +1281,7 @@ function initializeDb() {
       machine_name TEXT DEFAULT '',
       background_url TEXT DEFAULT '',
       date_played TEXT DEFAULT '',
+      played_at_utc TEXT DEFAULT '',
       perfect INTEGER,
       great INTEGER,
       good INTEGER,
@@ -1400,6 +1625,15 @@ function initializeDb() {
   if (!songColumns.includes('flags')) {
     db.exec("ALTER TABLE songs ADD COLUMN flags TEXT DEFAULT ''");
   }
+  if (!songColumns.includes('duration_seconds')) {
+    db.exec("ALTER TABLE songs ADD COLUMN duration_seconds INTEGER DEFAULT NULL");
+  }
+  if (!songColumns.includes('duration_source')) {
+    db.exec("ALTER TABLE songs ADD COLUMN duration_source TEXT DEFAULT ''");
+  }
+  if (!songColumns.includes('duration_updated_at')) {
+    db.exec("ALTER TABLE songs ADD COLUMN duration_updated_at TEXT DEFAULT NULL");
+  }
 
   // Migrations for online_duel_songs - add decline columns
   const onlineDuelSongCols = db.prepare("PRAGMA table_info(online_duel_songs)").all().map(c => c.name);
@@ -1433,6 +1667,7 @@ function initializeDb() {
     ['plate', "TEXT DEFAULT ''"],
     ['machine_name', "TEXT DEFAULT ''"],
     ['over_top100_rank', 'INT DEFAULT 0'],
+    ['played_at_utc', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of recentMigrations) {
     if (!recentCols.includes(col)) {
@@ -1453,6 +1688,9 @@ function initializeDb() {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_recently_played_unique_play
         ON user_recently_played(user_id, song_title, mode, level, score, grade, date_played);
     `);
+  }
+  if (!recentIndexes.includes('idx_recently_played_played_at_utc')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_played_at_utc ON user_recently_played(user_id, played_at_utc DESC, id DESC)');
   }
   if (!recentIndexes.includes('idx_recently_played_shoe')) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_shoe ON user_recently_played(shoe_id)');
@@ -1835,6 +2073,13 @@ function initializeDb() {
       host_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       title TEXT NOT NULL DEFAULT '',
       stream_url TEXT DEFAULT '',
+      youtube_broadcast_id TEXT DEFAULT '',
+      youtube_video_id TEXT DEFAULT '',
+      youtube_channel_id TEXT DEFAULT '',
+      youtube_stream_title TEXT DEFAULT '',
+      youtube_lifecycle_status TEXT DEFAULT '',
+      youtube_scheduled_start_time TEXT DEFAULT '',
+      youtube_actual_start_time TEXT DEFAULT '',
       status_text TEXT DEFAULT '',
       requests_enabled INTEGER NOT NULL DEFAULT 1,
       request_mode_filter TEXT NOT NULL DEFAULT 'All',
@@ -1951,6 +2196,7 @@ function initializeDb() {
       machine_name TEXT DEFAULT '',
       background_url TEXT DEFAULT '',
       date_played TEXT DEFAULT '',
+      played_at_utc TEXT DEFAULT '',
       perfect INTEGER DEFAULT 0,
       great INTEGER DEFAULT 0,
       good INTEGER DEFAULT 0,
@@ -2260,6 +2506,8 @@ function initializeDb() {
     console.error('Failed to normalize Yog-Sothoth short cut rows:', err.message);
   }
 
+  backfillSongDurationsFromSnapshot();
+
   // Migrations for grouped new-clear payloads
   const newClearCols = db.prepare("PRAGMA table_info(user_new_clears)").all().map(c => c.name);
   if (!newClearCols.includes('clears_json')) {
@@ -2504,6 +2752,27 @@ function initializeDb() {
   }
 
   const liveSessionCols = db.prepare("PRAGMA table_info(live_sessions)").all().map((c) => c.name);
+  if (!liveSessionCols.includes('youtube_broadcast_id')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN youtube_broadcast_id TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('youtube_video_id')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN youtube_video_id TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('youtube_channel_id')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN youtube_channel_id TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('youtube_stream_title')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN youtube_stream_title TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('youtube_lifecycle_status')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN youtube_lifecycle_status TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('youtube_scheduled_start_time')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN youtube_scheduled_start_time TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('youtube_actual_start_time')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN youtube_actual_start_time TEXT DEFAULT ''");
+  }
   if (!liveSessionCols.includes('status_text')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN status_text TEXT DEFAULT ''");
   }
@@ -2524,6 +2793,71 @@ function initializeDb() {
   }
   if (!liveSessionCols.includes('deleted_at')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN deleted_at TEXT DEFAULT ''");
+  }
+
+  const livePlayCols = db.prepare("PRAGMA table_info(live_session_plays)").all().map((c) => c.name);
+  if (!livePlayCols.includes('played_at_utc')) {
+    db.exec("ALTER TABLE live_session_plays ADD COLUMN played_at_utc TEXT DEFAULT ''");
+  }
+  const livePlayIndexes = db.prepare("PRAGMA index_list(live_session_plays)").all().map((c) => c.name);
+  if (!livePlayIndexes.includes('idx_live_session_plays_session_time_utc')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_live_session_plays_session_time_utc ON live_session_plays(live_session_id, played_at_utc, id)');
+  }
+
+  const recentMissingUtcRows = db.prepare(`
+    SELECT id, date_played
+    FROM user_recently_played
+    WHERE TRIM(COALESCE(date_played, '')) <> ''
+      AND TRIM(COALESCE(played_at_utc, '')) = ''
+  `).all();
+  if (recentMissingUtcRows.length > 0) {
+    const updateRecentUtc = db.prepare(`
+      UPDATE user_recently_played
+      SET played_at_utc = ?
+      WHERE id = ?
+    `);
+    const backfillRecentUtc = db.transaction((rows) => {
+      let updatedCount = 0;
+      for (const row of rows) {
+        const normalizedUtc = normalizePiugamePlayedAtUtc(row.date_played);
+        if (!normalizedUtc) continue;
+        updateRecentUtc.run(normalizedUtc, row.id);
+        updatedCount += 1;
+      }
+      return updatedCount;
+    });
+    const updatedCount = backfillRecentUtc(recentMissingUtcRows);
+    if (updatedCount > 0) {
+      console.log(`Backfilled played_at_utc for ${updatedCount} recently played rows`);
+    }
+  }
+
+  const liveMissingUtcRows = db.prepare(`
+    SELECT id, date_played
+    FROM live_session_plays
+    WHERE TRIM(COALESCE(date_played, '')) <> ''
+      AND TRIM(COALESCE(played_at_utc, '')) = ''
+  `).all();
+  if (liveMissingUtcRows.length > 0) {
+    const updateLiveUtc = db.prepare(`
+      UPDATE live_session_plays
+      SET played_at_utc = ?
+      WHERE id = ?
+    `);
+    const backfillLiveUtc = db.transaction((rows) => {
+      let updatedCount = 0;
+      for (const row of rows) {
+        const normalizedUtc = normalizePiugamePlayedAtUtc(row.date_played);
+        if (!normalizedUtc) continue;
+        updateLiveUtc.run(normalizedUtc, row.id);
+        updatedCount += 1;
+      }
+      return updatedCount;
+    });
+    const updatedCount = backfillLiveUtc(liveMissingUtcRows);
+    if (updatedCount > 0) {
+      console.log(`Backfilled played_at_utc for ${updatedCount} live session plays`);
+    }
   }
 
   const liveRequestCols = db.prepare("PRAGMA table_info(live_session_requests)").all().map((c) => c.name);

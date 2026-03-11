@@ -1,4 +1,4 @@
-const { parsePlayedAt } = require('./liveSessionSummary');
+const { parsePlayedAt, parseUtcSqliteDateTime } = require('./liveSessionSummary');
 
 function toInt(value) {
   return parseInt(value, 10) || 0;
@@ -95,7 +95,7 @@ function getSessionVotedSongPlayCount(db, liveSessionId) {
   if (voteRows.length === 0) return 0;
 
   const playRows = db.prepare(`
-    SELECT id, song_title, mode, level, date_played
+    SELECT id, song_title, mode, level, date_played, played_at_utc
     FROM live_session_plays
     WHERE live_session_id = ?
   `).all(liveSessionId);
@@ -108,7 +108,9 @@ function getSessionVotedSongPlayCount(db, liveSessionId) {
     if (!playsByKey.has(key)) playsByKey.set(key, []);
     playsByKey.get(key).push({
       id: toInt(row.id),
-      playedAt: parsePlayedAt(row.date_played),
+      playedAt: row.played_at_utc
+        ? parseUtcSqliteDateTime(row.played_at_utc)
+        : parsePlayedAt(row.date_played),
       consumed: false,
     });
   }

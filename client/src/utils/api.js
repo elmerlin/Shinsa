@@ -112,6 +112,14 @@ export const getSongs = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs${qs ? `?${qs}` : ''}`);
 };
+export const getAdminMissingSongDurations = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/admin/durations/missing${qs ? `?${qs}` : ''}`);
+};
+export const updateAdminSongDuration = ({ song_group_key, duration_seconds }) => request('/songs/admin/durations', {
+  method: 'PUT',
+  body: JSON.stringify({ song_group_key, duration_seconds }),
+});
 export const getJacketMap = () => request('/songs/jacket-map');
 export const getChartKeyMap = () => request('/songs/chart-key-map');
 export const getSongLibrary = (params = {}) => {
@@ -417,6 +425,15 @@ export const getPumbilityRecommendations = (userId, options = {}) => {
   const query = qs.toString();
   return request(`/piugame/pumbility-recommendations/${userId}${query ? `?${query}` : ''}`);
 };
+
+// YouTube Integration
+export const getYoutubeConnectionStatus = () => request('/youtube/status');
+export const startYoutubeConnection = (nextPath) => request('/youtube/connect/start', {
+  method: 'POST',
+  body: JSON.stringify({ next_path: nextPath }),
+});
+export const getYoutubeBroadcasts = () => request('/youtube/broadcasts');
+export const deleteYoutubeConnection = () => request('/youtube/connection', { method: 'DELETE' });
 export const getPumbilityRanking = () => request('/piugame/pumbility-ranking');
 export const syncPumbilityRanking = () => longRequest('/piugame/sync/pumbility-ranking', { method: 'POST' });
 export const getAdminOverRankingScheduler = () => request('/piugame/admin/over-ranking/scheduler');

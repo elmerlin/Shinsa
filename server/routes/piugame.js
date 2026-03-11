@@ -19,6 +19,7 @@ const { createUserNotification } = require('../lib/notifications');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const { checkStreakAchievements } = require('../lib/achievements');
+const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
@@ -2399,8 +2400,8 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
 
   const insertRecent = db.prepare(`
     INSERT INTO user_recently_played
-    (user_id, shoe_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo, kcal, plate, over_top100_rank)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (user_id, shoe_id, song_title, mode, level, score, grade, machine_name, background_url, date_played, played_at_utc, perfect, great, good, bad, miss, max_combo, kcal, plate, over_top100_rank)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, song_title, mode, level, score, grade, date_played) DO NOTHING
   `);
 
@@ -2475,6 +2476,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
       const machineName = p.machine_name || '';
       const backgroundUrl = p.background_url || '';
       const datePlayed = p.date_played || '';
+      const playedAtUtc = normalizePiugamePlayedAtUtc(datePlayed);
       const perfect = parseInt(p.perfect, 10) || 0;
       const great = parseInt(p.great, 10) || 0;
       const good = parseInt(p.good, 10) || 0;
@@ -2506,6 +2508,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           machineName,
           backgroundUrl,
           datePlayed,
+          playedAtUtc,
           perfect,
           great,
           good,

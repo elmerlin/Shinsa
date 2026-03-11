@@ -22,6 +22,13 @@ function modeShort(mode) {
   return 'X';
 }
 
+function parseUtcSqliteDateTime(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const parsed = new Date(`${raw.replace(' ', 'T')}Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function parsePlayedAt(value) {
   if (!value) return null;
   const raw = String(value).trim();
@@ -121,7 +128,9 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
       const score = toInt(row?.score);
       const level = toInt(row?.level);
       const rating = calculateRatingPoints(level, row?.grade, score);
-      const playedAt = parsePlayedAt(row?.date_played);
+      const playedAt = row?.played_at_utc
+        ? parseUtcSqliteDateTime(row.played_at_utc)
+        : parsePlayedAt(row?.date_played);
       return {
         ...row,
         _score: score,
@@ -286,4 +295,5 @@ module.exports = {
   formatDurationLabel,
   modeShort,
   parsePlayedAt,
+  parseUtcSqliteDateTime,
 };

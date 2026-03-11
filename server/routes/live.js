@@ -14,6 +14,8 @@ const {
 } = require('../lib/liveSessionMetrics');
 const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
 const { createUserNotification } = require('../lib/notifications');
+const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
+const { extractYoutubeVideoId, getYoutubeBroadcastById } = require('../lib/youtube');
 const piugameRoutes = require('./piugame');
 const socialRoutes = require('./social');
 
@@ -148,6 +150,86 @@ function normalizeUrl(value, max = 500) {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (/^(www\.)/i.test(trimmed)) return `https://${trimmed}`;
   return trimmed;
+}
+
+function getEmptyYoutubeSessionFields() {
+  return {
+    youtube_broadcast_id: '',
+    youtube_video_id: '',
+    youtube_channel_id: '',
+    youtube_stream_title: '',
+    youtube_lifecycle_status: '',
+    youtube_scheduled_start_time: '',
+    youtube_actual_start_time: '',
+  };
+}
+
+function getCurrentYoutubeSessionFields(session) {
+  return {
+    youtube_broadcast_id: String(session?.youtube_broadcast_id || '').trim(),
+    youtube_video_id: String(session?.youtube_video_id || '').trim(),
+    youtube_channel_id: String(session?.youtube_channel_id || '').trim(),
+    youtube_stream_title: String(session?.youtube_stream_title || '').trim(),
+    youtube_lifecycle_status: String(session?.youtube_lifecycle_status || '').trim(),
+    youtube_scheduled_start_time: String(session?.youtube_scheduled_start_time || '').trim(),
+    youtube_actual_start_time: String(session?.youtube_actual_start_time || '').trim(),
+  };
+}
+
+function buildYoutubeSessionFields(broadcast) {
+  if (!broadcast?.id) return getEmptyYoutubeSessionFields();
+  return {
+    youtube_broadcast_id: String(broadcast.id || '').trim(),
+    youtube_video_id: String(broadcast.video_id || broadcast.id || '').trim(),
+    youtube_channel_id: String(broadcast.channel_id || '').trim(),
+    youtube_stream_title: normalizeText(broadcast.title || '', 160),
+    youtube_lifecycle_status: normalizeText(broadcast.life_cycle_status || '', 40),
+    youtube_scheduled_start_time: normalizeText(broadcast.scheduled_start_time || '', 40),
+    youtube_actual_start_time: normalizeText(broadcast.actual_start_time || '', 40),
+  };
+}
+
+async function resolveLiveStreamSelection(db, hostUserId, payload, currentSession = null) {
+  const hasStreamUrl = !!payload && Object.prototype.hasOwnProperty.call(payload, 'stream_url');
+  const hasYoutubeBroadcastId = !!payload && Object.prototype.hasOwnProperty.call(payload, 'youtube_broadcast_id');
+  const nextStreamUrl = hasStreamUrl
+    ? normalizeUrl(payload?.stream_url, 400)
+    : normalizeUrl(currentSession?.stream_url, 400);
+
+  if (hasYoutubeBroadcastId) {
+    const requestedBroadcastId = String(payload?.youtube_broadcast_id || '').trim();
+    if (!requestedBroadcastId) {
+      return {
+        streamUrl: nextStreamUrl,
+        youtubeFields: getEmptyYoutubeSessionFields(),
+      };
+    }
+    const broadcast = await getYoutubeBroadcastById(db, hostUserId, requestedBroadcastId);
+    if (!broadcast) {
+      const err = new Error('Unable to find that YouTube live stream on the linked channel');
+      err.statusCode = 404;
+      throw err;
+    }
+    return {
+      streamUrl: normalizeUrl(broadcast.stream_url, 400),
+      youtubeFields: buildYoutubeSessionFields(broadcast),
+    };
+  }
+
+  if (!hasStreamUrl) {
+    return {
+      streamUrl: nextStreamUrl,
+      youtubeFields: currentSession ? getCurrentYoutubeSessionFields(currentSession) : getEmptyYoutubeSessionFields(),
+    };
+  }
+
+  const currentYoutubeVideoId = String(currentSession?.youtube_video_id || '').trim();
+  const nextVideoId = extractYoutubeVideoId(nextStreamUrl);
+  const keepCurrentYoutubeSelection = currentSession && currentYoutubeVideoId && nextVideoId && currentYoutubeVideoId === nextVideoId;
+  return {
+    streamUrl: nextStreamUrl,
+    youtubeFields: keepCurrentYoutubeSelection ? getCurrentYoutubeSessionFields(currentSession) : getEmptyYoutubeSessionFields(),
+  };
 }
 
 function normalizeRequestModeFilter(value) {
@@ -1156,6 +1238,13 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId) {
     id: session.id,
     title: session.title || '',
     stream_url: session.stream_url || '',
+    youtube_broadcast_id: session.youtube_broadcast_id || '',
+    youtube_video_id: session.youtube_video_id || '',
+    youtube_channel_id: session.youtube_channel_id || '',
+    youtube_stream_title: session.youtube_stream_title || '',
+    youtube_lifecycle_status: session.youtube_lifecycle_status || '',
+    youtube_scheduled_start_time: session.youtube_scheduled_start_time || '',
+    youtube_actual_start_time: session.youtube_actual_start_time || '',
     status_text: normalizeText(session.status_text || '', 160),
     requests_enabled: toInt(session.requests_enabled) !== 0,
     request_mode_filter: normalizeRequestModeFilter(session.request_mode_filter),
@@ -1552,9 +1641,9 @@ function appendRecentRowsToSession(db, session, recentRows) {
   const insertPlay = db.prepare(`
     INSERT OR IGNORE INTO live_session_plays (
       live_session_id, user_id, recently_played_id, song_title, mode, level, score, grade,
-      machine_name, background_url, date_played, perfect, great, good, bad, miss, max_combo,
+      machine_name, background_url, date_played, played_at_utc, perfect, great, good, bad, miss, max_combo,
       kcal, plate, over_top100_rank, shoe_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const inserted = [];
@@ -1571,6 +1660,7 @@ function appendRecentRowsToSession(db, session, recentRows) {
       row.machine_name || '',
       row.background_url || '',
       row.date_played || '',
+      row.played_at_utc || normalizePiugamePlayedAtUtc(row.date_played || ''),
       toInt(row.perfect),
       toInt(row.great),
       toInt(row.good),
@@ -2031,9 +2121,11 @@ router.post('/sessions', requireAuth, async (req, res) => {
     }
 
     const title = normalizeText(req.body?.title, 120) || `${req.user.username || 'Player'} live session`;
-    const streamUrl = normalizeUrl(req.body?.stream_url, 400);
     const statusText = normalizeText(req.body?.status_text, 160);
     const defaultRequestMaxLevel = getDefaultRequestMaxLevelForUser(db, req.user.id);
+    const streamSelection = await resolveLiveStreamSelection(db, req.user.id, req.body || {}, null);
+    const streamUrl = streamSelection.streamUrl;
+    const youtubeFields = streamSelection.youtubeFields;
 
     await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: true });
 
@@ -2046,10 +2138,28 @@ router.post('/sessions', requireAuth, async (req, res) => {
 
     db.prepare(`
       INSERT INTO live_sessions (
-        id, host_user_id, title, stream_url, status_text, status, recent_anchor_id, last_recent_row_id,
+        id, host_user_id, title, stream_url, youtube_broadcast_id, youtube_video_id, youtube_channel_id,
+        youtube_stream_title, youtube_lifecycle_status, youtube_scheduled_start_time, youtube_actual_start_time,
+        status_text, status, recent_anchor_id, last_recent_row_id,
         request_max_level, last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
-    `).run(id, req.user.id, title, streamUrl, statusText, toInt(anchor?.max_id), toInt(anchor?.max_id), defaultRequestMaxLevel);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
+    `).run(
+      id,
+      req.user.id,
+      title,
+      streamUrl,
+      youtubeFields.youtube_broadcast_id,
+      youtubeFields.youtube_video_id,
+      youtubeFields.youtube_channel_id,
+      youtubeFields.youtube_stream_title,
+      youtubeFields.youtube_lifecycle_status,
+      youtubeFields.youtube_scheduled_start_time,
+      youtubeFields.youtube_actual_start_time,
+      statusText,
+      toInt(anchor?.max_id),
+      toInt(anchor?.max_id),
+      defaultRequestMaxLevel
+    );
 
     addSystemMessage(db, id, `${req.user.username || 'Player'} started a Shinsa Live session.`, 'session_start', {
       stream_url: streamUrl,
@@ -2064,7 +2174,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Create live session error:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 
@@ -2079,7 +2189,7 @@ router.get('/sessions/:id', requireAuth, (req, res) => {
   }
 });
 
-router.patch('/sessions/:id', requireAuth, (req, res) => {
+router.patch('/sessions/:id', requireAuth, async (req, res) => {
   try {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
@@ -2087,9 +2197,9 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
       return res.status(403).json({ error: 'Only the host can update this live session' });
     }
 
-    const nextStreamUrl = req.body?.stream_url === undefined
-      ? normalizeUrl(session.stream_url, 400)
-      : normalizeUrl(req.body.stream_url, 400);
+    const streamSelection = await resolveLiveStreamSelection(db, req.user.id, req.body || {}, session);
+    const nextStreamUrl = streamSelection.streamUrl;
+    const nextYoutubeFields = streamSelection.youtubeFields;
     const nextStatusText = req.body?.status_text === undefined
       ? normalizeText(session.status_text, 160)
       : normalizeText(req.body.status_text, 160);
@@ -2108,6 +2218,13 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
     db.prepare(`
       UPDATE live_sessions
       SET stream_url = ?,
+          youtube_broadcast_id = ?,
+          youtube_video_id = ?,
+          youtube_channel_id = ?,
+          youtube_stream_title = ?,
+          youtube_lifecycle_status = ?,
+          youtube_scheduled_start_time = ?,
+          youtube_actual_start_time = ?,
           status_text = ?,
           requests_enabled = ?,
           request_mode_filter = ?,
@@ -2117,6 +2234,13 @@ router.patch('/sessions/:id', requireAuth, (req, res) => {
       WHERE id = ?
     `).run(
       nextStreamUrl,
+      nextYoutubeFields.youtube_broadcast_id,
+      nextYoutubeFields.youtube_video_id,
+      nextYoutubeFields.youtube_channel_id,
+      nextYoutubeFields.youtube_stream_title,
+      nextYoutubeFields.youtube_lifecycle_status,
+      nextYoutubeFields.youtube_scheduled_start_time,
+      nextYoutubeFields.youtube_actual_start_time,
       nextStatusText,
       nextRequestsEnabled ? 1 : 0,
       nextRequestModeFilter,

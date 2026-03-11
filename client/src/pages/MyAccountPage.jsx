@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   updateMe, changePassword, getInvitations, respondInvitation,
   getPiugameCredentialStatus, savePiugameCredentials, deletePiugameCredentials,
   syncPumbility, syncBestScores, syncRecentlyPlayed, saveWorldMaxLocation,
   getProfileShoes, searchProfileShoeCatalog, createProfileShoe, updateProfileShoePhoto, retireProfileShoe, deleteProfileShoe,
+  getYoutubeConnectionStatus, startYoutubeConnection, deleteYoutubeConnection,
 } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
@@ -35,6 +36,7 @@ function resolveCountryCode(input) {
 
 export default function MyAccountPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, refreshUser } = useAuth();
   const [tab, setTab] = useState('profile');
   const [invitations, setInvitations] = useState([]);
@@ -58,6 +60,18 @@ export default function MyAccountPage() {
   const [piuForm, setPiuForm] = useState({ piugame_username: '', piugame_password: '' });
   const [piuSyncing, setPiuSyncing] = useState('');
   const [piuMessage, setPiuMessage] = useState('');
+  const [youtubeStatus, setYoutubeStatus] = useState({
+    configured: true,
+    linked: false,
+    channel_id: '',
+    channel_title: '',
+    channel_thumbnail_url: '',
+    updated_at: null,
+    last_error: '',
+  });
+  const [youtubeLoading, setYoutubeLoading] = useState(true);
+  const [youtubeBusy, setYoutubeBusy] = useState('');
+  const [youtubeMessage, setYoutubeMessage] = useState('');
   const [shoeCabinet, setShoeCabinet] = useState(null);
   const [shoeLoading, setShoeLoading] = useState(false);
   const [shoeBusy, setShoeBusy] = useState(false);
@@ -79,6 +93,34 @@ export default function MyAccountPage() {
   const [shoeCatalogSelectedId, setShoeCatalogSelectedId] = useState(null);
   const [shoeCatalogPage, setShoeCatalogPage] = useState(1);
   const [shoeCatalogTotalPages, setShoeCatalogTotalPages] = useState(0);
+
+  const loadYoutubeStatus = async () => {
+    setYoutubeLoading(true);
+    try {
+      const payload = await getYoutubeConnectionStatus();
+      setYoutubeStatus({
+        configured: !!payload?.configured,
+        linked: !!payload?.linked,
+        channel_id: payload?.channel_id || '',
+        channel_title: payload?.channel_title || '',
+        channel_thumbnail_url: payload?.channel_thumbnail_url || '',
+        updated_at: payload?.updated_at || null,
+        last_error: payload?.last_error || '',
+      });
+    } catch (err) {
+      setYoutubeStatus({
+        configured: false,
+        linked: false,
+        channel_id: '',
+        channel_title: '',
+        channel_thumbnail_url: '',
+        updated_at: null,
+        last_error: err?.message || 'Failed to load YouTube status',
+      });
+    } finally {
+      setYoutubeLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -115,7 +157,25 @@ export default function MyAccountPage() {
     setShoeForm({ make: '', model: '', colorway: '', setCurrent: true, photoFile: null, catalogId: null });
     getInvitations().then(setInvitations).catch(() => {});
     getPiugameCredentialStatus().then(r => setPiuLinked(r.linked)).catch(() => {});
+    loadYoutubeStatus().catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedTab = String(params.get('tab') || '').trim();
+    if (requestedTab && ['profile', 'health', 'password', 'piugame', 'youtube', 'shoes'].includes(requestedTab)) {
+      setTab(requestedTab);
+    }
+
+    const youtubeState = String(params.get('youtube') || '').trim();
+    const youtubeStatusMessage = String(params.get('youtube_message') || '').trim();
+    if (youtubeState === 'connected') {
+      setYoutubeMessage(youtubeStatusMessage || 'YouTube connected!');
+      loadYoutubeStatus().catch(() => {});
+    } else if (youtubeState === 'error') {
+      setYoutubeMessage(youtubeStatusMessage || 'Failed to connect YouTube.');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (!user || tab !== 'shoes') return;
@@ -321,6 +381,42 @@ export default function MyAccountPage() {
     }
   };
 
+  const handleConnectYoutube = async () => {
+    setYoutubeBusy('connecting');
+    setYoutubeMessage('');
+    try {
+      const payload = await startYoutubeConnection('/account?tab=youtube');
+      if (!payload?.auth_url) throw new Error('Failed to start YouTube connection');
+      window.location.assign(payload.auth_url);
+    } catch (err) {
+      setYoutubeMessage(err.message || 'Failed to connect YouTube.');
+      setYoutubeBusy('');
+    }
+  };
+
+  const handleDisconnectYoutube = async () => {
+    if (!window.confirm('Disconnect your YouTube account from Shinsa?')) return;
+    setYoutubeBusy('disconnecting');
+    setYoutubeMessage('');
+    try {
+      await deleteYoutubeConnection();
+      setYoutubeStatus({
+        configured: youtubeStatus.configured,
+        linked: false,
+        channel_id: '',
+        channel_title: '',
+        channel_thumbnail_url: '',
+        updated_at: null,
+        last_error: '',
+      });
+      setYoutubeMessage('YouTube disconnected.');
+    } catch (err) {
+      setYoutubeMessage(err.message || 'Failed to disconnect YouTube.');
+    } finally {
+      setYoutubeBusy('');
+    }
+  };
+
   const refreshShoeCabinet = async () => {
     if (!user?.id) return null;
     const data = await getProfileShoes(user.id);
@@ -508,11 +604,12 @@ export default function MyAccountPage() {
           { key: 'health', label: 'Health' },
           { key: 'password', label: 'Change Password' },
           { key: 'piugame', label: 'PIUGame Link' },
+          { key: 'youtube', label: 'YouTube' },
           { key: 'shoes', label: 'Shoes' },
         ].map(t => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setMessage(''); setPiuMessage(''); setShoeMessage(''); }}
+            onClick={() => { setTab(t.key); setMessage(''); setPiuMessage(''); setYoutubeMessage(''); setShoeMessage(''); }}
             className={`px-4 py-2 rounded-lg text-sm font-display font-bold transition-colors ${
               tab === t.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
@@ -784,6 +881,102 @@ export default function MyAccountPage() {
             {saving ? 'Changing...' : 'Change Password'}
           </button>
         </form>
+      ) : tab === 'youtube' ? (
+        <div className="space-y-4">
+          <div className="card space-y-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${youtubeStatus.linked ? 'bg-piu-green' : 'bg-gray-600'}`} />
+              <h3 className="font-display font-bold text-sm">
+                {youtubeStatus.linked ? 'YouTube Connected' : 'Connect Your YouTube Channel'}
+              </h3>
+            </div>
+
+            <p className="text-xs text-gray-400">
+              Link the YouTube channel you stream from so Shinsa Live can list your active and upcoming streams instead of making you paste the URL manually.
+            </p>
+
+            {youtubeMessage && (
+              <div className={`px-4 py-2 rounded-lg text-sm ${
+                youtubeMessage.toLowerCase().includes('fail') || youtubeMessage.toLowerCase().includes('error')
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                  : 'bg-piu-green/10 text-piu-green border border-piu-green/30'
+              }`}>
+                {youtubeMessage}
+              </div>
+            )}
+
+            {!youtubeStatus.configured ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+                YouTube OAuth is not configured on this server yet. Add the Google client credentials first, then reconnect here.
+              </div>
+            ) : youtubeLoading ? (
+              <p className="text-sm text-gray-400">Loading YouTube status...</p>
+            ) : !youtubeStatus.linked ? (
+              <button
+                type="button"
+                onClick={handleConnectYoutube}
+                className="btn-primary w-full"
+                disabled={!!youtubeBusy}
+              >
+                {youtubeBusy === 'connecting' ? 'Redirecting to Google...' : 'Connect YouTube'}
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-piu-border/40 bg-piu-dark/40 p-4">
+                  <div className="flex items-center gap-3">
+                    {youtubeStatus.channel_thumbnail_url ? (
+                      <img
+                        src={youtubeStatus.channel_thumbnail_url}
+                        alt={youtubeStatus.channel_title || 'YouTube channel'}
+                        className="h-12 w-12 rounded-full border border-piu-border/50 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-piu-border/50 bg-piu-card text-xs font-display font-bold text-red-200">
+                        YT
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-display font-semibold uppercase tracking-wide text-gray-400">Connected channel</p>
+                      <p className="mt-1 truncate text-base font-display font-bold text-white">
+                        {youtubeStatus.channel_title || 'Unnamed channel'}
+                      </p>
+                      {youtubeStatus.updated_at ? (
+                        <p className="text-[11px] text-gray-500">
+                          Linked {new Date(`${youtubeStatus.updated_at}Z`).toLocaleString()}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {youtubeStatus.last_error ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    Last YouTube sync error: {youtubeStatus.last_error}
+                  </div>
+                ) : null}
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={handleConnectYoutube}
+                    className="btn-primary w-full"
+                    disabled={!!youtubeBusy}
+                  >
+                    {youtubeBusy === 'connecting' ? 'Redirecting...' : 'Reconnect Google Account'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDisconnectYoutube}
+                    className="w-full rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-display font-bold text-red-300 transition-colors hover:bg-red-500/20"
+                    disabled={!!youtubeBusy}
+                  >
+                    {youtubeBusy === 'disconnecting' ? 'Disconnecting...' : 'Disconnect YouTube'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       ) : tab === 'shoes' ? (
         <div className="space-y-4">
           <div className="card space-y-3">

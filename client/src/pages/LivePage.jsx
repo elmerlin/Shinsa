@@ -1,5 +1,5 @@
 import React, { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   castLiveVote,
@@ -12,10 +12,13 @@ import {
   getLiveSessions,
   getMyLiveSession,
   getSongLibrary,
+  getYoutubeBroadcasts,
+  getYoutubeConnectionStatus,
   openLiveSessionStream,
   sendLiveMessage,
   sendLivePresence,
   sendLiveRequest,
+  startYoutubeConnection,
   setLiveModeration,
   setLiveRequestStatus,
   syncLiveSession,
@@ -1049,11 +1052,193 @@ function PinnedVoteCard({
   );
 }
 
+function formatYoutubeBroadcastTimeLabel(broadcast) {
+  const actual = broadcast?.actual_start_time ? new Date(broadcast.actual_start_time) : null;
+  if (actual && Number.isFinite(actual.getTime())) {
+    return `Started ${actual.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+  }
+  const scheduled = broadcast?.scheduled_start_time ? new Date(broadcast.scheduled_start_time) : null;
+  if (scheduled && Number.isFinite(scheduled.getTime())) {
+    return `Scheduled ${scheduled.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+  }
+  return 'No start time from YouTube';
+}
+
+function getYoutubeBroadcastBadge(broadcast) {
+  if (broadcast?.is_live_now) {
+    return {
+      label: 'Live now',
+      className: 'border border-rose-400/30 bg-rose-500/10 text-rose-200',
+    };
+  }
+  if (broadcast?.life_cycle_status === 'ready' || broadcast?.life_cycle_status === 'created') {
+    return {
+      label: 'Upcoming',
+      className: 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-200',
+    };
+  }
+  return {
+    label: broadcast?.life_cycle_status || 'Attached',
+    className: 'border border-piu-border/60 bg-piu-dark/70 text-gray-300',
+  };
+}
+
+function YoutubeBroadcastSelector({
+  connection,
+  broadcasts,
+  loading,
+  selectedBroadcastId,
+  disabled,
+  helperText,
+  onConnect,
+  onRefresh,
+  onSelectBroadcast,
+}) {
+  if (loading && !connection?.linked && !connection?.configured && !connection?.last_error) {
+    return (
+      <div className="rounded-lg border border-piu-border/60 bg-piu-dark/40 p-3 text-sm text-gray-300">
+        Loading YouTube streams...
+      </div>
+    );
+  }
+
+  if (!connection?.configured) {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+        YouTube OAuth is not configured on this server yet.
+      </div>
+    );
+  }
+
+  if (!connection?.linked) {
+    return (
+      <div className="rounded-lg border border-piu-border/60 bg-piu-dark/40 p-3">
+        <p className="text-sm text-gray-300">
+          Link your YouTube channel to pick the active or upcoming stream instead of pasting a URL manually.
+        </p>
+        <button
+          type="button"
+          onClick={onConnect}
+          className="btn-primary mt-3 w-full sm:w-auto"
+          disabled={disabled}
+        >
+          Connect YouTube
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border border-piu-border/60 bg-piu-dark/40 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {connection.channel_thumbnail_url ? (
+            <img
+              src={connection.channel_thumbnail_url}
+              alt={connection.channel_title || 'YouTube channel'}
+              className="h-10 w-10 rounded-full border border-piu-border/50 object-cover"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-piu-border/50 bg-piu-card text-[10px] font-display font-bold text-red-200">
+              YT
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-[11px] font-display font-semibold text-gray-400">Linked YouTube channel</p>
+            <p className="truncate text-sm font-display font-bold text-white">
+              {connection.channel_title || 'Unnamed channel'}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const maybePromise = onRefresh?.();
+            if (maybePromise?.catch) maybePromise.catch(() => {});
+          }}
+          className="rounded-md border border-piu-border/60 bg-piu-card/70 px-3 py-1.5 text-[11px] font-display font-semibold text-gray-300 hover:border-piu-accent/50 hover:text-white disabled:opacity-60"
+          disabled={disabled || loading}
+        >
+          {loading ? 'Refreshing...' : 'Refresh streams'}
+        </button>
+      </div>
+
+      {connection.last_error ? (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+          Last YouTube error: {connection.last_error}
+        </div>
+      ) : null}
+
+      {helperText ? <p className="text-[11px] text-gray-400">{helperText}</p> : null}
+
+      <button
+        type="button"
+        onClick={() => onSelectBroadcast('')}
+        className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
+          !selectedBroadcastId
+            ? 'border-piu-accent/50 bg-piu-accent/10 text-white'
+            : 'border-piu-border/60 bg-piu-card/70 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+        }`}
+        disabled={disabled}
+      >
+        Manual URL only
+      </button>
+
+      {broadcasts.length === 0 ? (
+        <div className="rounded-md border border-piu-border/60 bg-piu-card/60 px-3 py-3 text-sm text-gray-300">
+          No active or upcoming broadcasts were returned for this channel.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {broadcasts.map((broadcast) => {
+            const selected = selectedBroadcastId === broadcast.id;
+            const badge = getYoutubeBroadcastBadge(broadcast);
+            return (
+              <button
+                key={broadcast.id}
+                type="button"
+                onClick={() => onSelectBroadcast(selected ? '' : broadcast.id)}
+                className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                  selected
+                    ? 'border-piu-accent/50 bg-piu-accent/10'
+                    : 'border-piu-border/60 bg-piu-card/60 hover:border-piu-accent/40'
+                }`}
+                disabled={disabled}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-display font-bold text-white">
+                      {broadcast.title || 'Untitled stream'}
+                    </p>
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      {formatYoutubeBroadcastTimeLabel(broadcast)}
+                    </p>
+                  </div>
+                  <span className={`rounded-md px-2.5 py-1 text-[10px] font-display font-semibold ${badge.className}`}>
+                    {badge.label}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CreateSessionCard({
   title,
   streamUrl,
+  youtubeConnection,
+  youtubeBroadcasts,
+  youtubeLoading,
+  selectedBroadcastId,
   statusText,
   creating,
+  onConnectYoutube,
+  onRefreshYoutube,
+  onSelectBroadcast,
   onTitleChange,
   onStreamUrlChange,
   onStatusTextChange,
@@ -1074,11 +1259,22 @@ function CreateSessionCard({
           placeholder="Session title"
           maxLength={120}
         />
+        <YoutubeBroadcastSelector
+          connection={youtubeConnection}
+          broadcasts={youtubeBroadcasts}
+          loading={youtubeLoading}
+          selectedBroadcastId={selectedBroadcastId}
+          disabled={creating}
+          helperText="Choose the live or upcoming YouTube broadcast you started in OBS, or leave it on manual URL mode."
+          onConnect={onConnectYoutube}
+          onRefresh={onRefreshYoutube}
+          onSelectBroadcast={onSelectBroadcast}
+        />
         <input
           value={streamUrl}
           onChange={(e) => onStreamUrlChange(e.target.value)}
           className="input-field w-full"
-          placeholder="YouTube stream URL (optional)"
+          placeholder="YouTube stream URL fallback (optional)"
           maxLength={400}
         />
         <input
@@ -1098,10 +1294,17 @@ function CreateSessionCard({
 
 function StreamUrlEditorCard({
   streamUrl,
+  youtubeConnection,
+  youtubeBroadcasts,
+  youtubeLoading,
+  selectedBroadcastId,
   saving,
   attached,
   recognized,
+  onConnectYoutube,
   onChange,
+  onRefreshYoutube,
+  onSelectBroadcast,
   onSubmit,
 }) {
   return (
@@ -1123,12 +1326,25 @@ function StreamUrlEditorCard({
           {attached ? (recognized ? 'Video ready' : 'Link saved') : 'No link attached'}
         </span>
       </div>
+      <div className="mt-4">
+        <YoutubeBroadcastSelector
+          connection={youtubeConnection}
+          broadcasts={youtubeBroadcasts}
+          loading={youtubeLoading}
+          selectedBroadcastId={selectedBroadcastId}
+          disabled={saving}
+          helperText="Attach a broadcast from your linked channel, or leave the session on a pasted manual URL."
+          onConnect={onConnectYoutube}
+          onRefresh={onRefreshYoutube}
+          onSelectBroadcast={onSelectBroadcast}
+        />
+      </div>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
         <input
           value={streamUrl}
           onChange={(e) => onChange(e.target.value)}
           className="input-field w-full"
-          placeholder="YouTube stream URL"
+          placeholder="YouTube stream URL fallback"
           maxLength={400}
         />
         <button type="button" onClick={onSubmit} disabled={saving} className="btn-primary px-4 py-2.5 sm:w-auto">
@@ -1745,6 +1961,7 @@ function OverlayStudioCard({
 export default function LivePage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [snapshot, setSnapshot] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -1756,9 +1973,21 @@ export default function LivePage() {
   const [directoryError, setDirectoryError] = useState('');
   const [createTitle, setCreateTitle] = useState('');
   const [createStreamUrl, setCreateStreamUrl] = useState('');
+  const [createYoutubeBroadcastId, setCreateYoutubeBroadcastId] = useState('');
   const [createStatusText, setCreateStatusText] = useState('');
   const [editStreamUrl, setEditStreamUrl] = useState('');
+  const [editYoutubeBroadcastId, setEditYoutubeBroadcastId] = useState('');
   const [editStatusText, setEditStatusText] = useState('');
+  const [youtubeConnection, setYoutubeConnection] = useState({
+    configured: true,
+    linked: false,
+    channel_title: '',
+    channel_thumbnail_url: '',
+    last_error: '',
+  });
+  const [youtubeBroadcasts, setYoutubeBroadcasts] = useState([]);
+  const [youtubeStatusLoading, setYoutubeStatusLoading] = useState(true);
+  const [youtubeBroadcastsLoading, setYoutubeBroadcastsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [savingStreamUrl, setSavingStreamUrl] = useState(false);
   const [savingStatusText, setSavingStatusText] = useState(false);
@@ -1840,7 +2069,7 @@ export default function LivePage() {
   const live = snapshot?.session || null;
   const currentVote = snapshot?.active_vote || null;
   const lastPlay = snapshot?.last_play || null;
-  const youtubeId = getYouTubeId(live?.stream_url || '');
+  const youtubeId = String(live?.youtube_video_id || '').trim() || getYouTubeId(live?.stream_url || '');
   const requestsEnabled = live?.requests_enabled !== false;
   const requestModeFilter = normalizeRequestModeFilterValue(live?.request_mode_filter);
   const requestMaxLevel = normalizeRequestMaxLevelValue(live?.request_max_level);
@@ -1891,6 +2120,106 @@ export default function LivePage() {
   useEffect(() => {
     setEditStatusText(live?.status_text || '');
   }, [live?.id, live?.status_text]);
+
+  useEffect(() => {
+    setEditYoutubeBroadcastId(String(live?.youtube_broadcast_id || '').trim());
+  }, [live?.id, live?.youtube_broadcast_id]);
+
+  const loadYoutubeStatus = async () => {
+    if (!user) return null;
+    setYoutubeStatusLoading(true);
+    try {
+      const payload = await getYoutubeConnectionStatus();
+      const nextStatus = {
+        configured: !!payload?.configured,
+        linked: !!payload?.linked,
+        channel_title: payload?.channel_title || '',
+        channel_thumbnail_url: payload?.channel_thumbnail_url || '',
+        last_error: payload?.last_error || '',
+      };
+      setYoutubeConnection(nextStatus);
+      return nextStatus;
+    } catch (err) {
+      const fallback = {
+        configured: false,
+        linked: false,
+        channel_title: '',
+        channel_thumbnail_url: '',
+        last_error: err.message || 'Failed to load YouTube connection',
+      };
+      setYoutubeConnection(fallback);
+      return fallback;
+    } finally {
+      setYoutubeStatusLoading(false);
+    }
+  };
+
+  const loadYoutubeBroadcastOptions = async () => {
+    if (!user) return;
+    setYoutubeBroadcastsLoading(true);
+    try {
+      const payload = await getYoutubeBroadcasts();
+      setYoutubeConnection({
+        configured: !!payload?.configured,
+        linked: !!payload?.linked,
+        channel_title: payload?.channel_title || '',
+        channel_thumbnail_url: payload?.channel_thumbnail_url || '',
+        last_error: payload?.last_error || '',
+      });
+      setYoutubeBroadcasts(Array.isArray(payload?.broadcasts) ? payload.broadcasts : []);
+    } catch (err) {
+      setYoutubeBroadcasts([]);
+      setYoutubeConnection((prev) => ({
+        ...prev,
+        last_error: err.message || 'Failed to load YouTube streams',
+      }));
+      throw err;
+    } finally {
+      setYoutubeBroadcastsLoading(false);
+    }
+  };
+
+  const handleConnectYoutube = async () => {
+    setError('');
+    try {
+      const payload = await startYoutubeConnection(location.pathname || '/live');
+      if (!payload?.auth_url) throw new Error('Failed to start YouTube connection');
+      window.location.assign(payload.auth_url);
+    } catch (err) {
+      setError(err.message || 'Failed to connect YouTube');
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    loadYoutubeStatus()
+      .then((status) => {
+        if (cancelled || !status?.linked) return;
+        return loadYoutubeBroadcastOptions().catch(() => {});
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const youtubeState = String(params.get('youtube') || '').trim();
+    const youtubeMessage = String(params.get('youtube_message') || '').trim();
+    if (youtubeState === 'connected') {
+      setStatusNote(youtubeMessage || 'YouTube connected. Select your stream below.');
+      loadYoutubeStatus()
+        .then((status) => {
+          if (status?.linked) return loadYoutubeBroadcastOptions().catch(() => {});
+          return null;
+        })
+        .catch(() => {});
+    } else if (youtubeState === 'error') {
+      setError(youtubeMessage || 'Failed to connect YouTube');
+    }
+  }, [location.search]);
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -2704,6 +3033,7 @@ export default function LivePage() {
       const data = await createLiveSession({
         title: createTitle,
         stream_url: createStreamUrl,
+        youtube_broadcast_id: createYoutubeBroadcastId,
         status_text: createStatusText,
       });
       seenMessageIdsRef.current = new Set((data?.messages || []).map((msg) => msg.id));
@@ -2741,7 +3071,10 @@ export default function LivePage() {
     setSavingStreamUrl(true);
     setError('');
     try {
-      const data = await updateLiveSession(activeSessionId, { stream_url: editStreamUrl });
+      const data = await updateLiveSession(activeSessionId, {
+        stream_url: editStreamUrl,
+        youtube_broadcast_id: editYoutubeBroadcastId,
+      });
       applySnapshot(data, { markMessagesSeen: false });
       const savedUrl = String(data?.session?.stream_url || '').trim();
       setEditStreamUrl(savedUrl);
@@ -3874,8 +4207,15 @@ export default function LivePage() {
           <CreateSessionCard
             title={createTitle}
             streamUrl={createStreamUrl}
+            youtubeConnection={youtubeConnection}
+            youtubeBroadcasts={youtubeBroadcasts}
+            youtubeLoading={youtubeStatusLoading || youtubeBroadcastsLoading}
+            selectedBroadcastId={createYoutubeBroadcastId}
             statusText={createStatusText}
             creating={creating}
+            onConnectYoutube={handleConnectYoutube}
+            onRefreshYoutube={loadYoutubeBroadcastOptions}
+            onSelectBroadcast={setCreateYoutubeBroadcastId}
             onTitleChange={setCreateTitle}
             onStreamUrlChange={setCreateStreamUrl}
             onStatusTextChange={setCreateStatusText}
@@ -4111,10 +4451,17 @@ export default function LivePage() {
         {showCompactStreamEditor ? (
           <StreamUrlEditorCard
             streamUrl={editStreamUrl}
+            youtubeConnection={youtubeConnection}
+            youtubeBroadcasts={youtubeBroadcasts}
+            youtubeLoading={youtubeStatusLoading || youtubeBroadcastsLoading}
+            selectedBroadcastId={editYoutubeBroadcastId}
             saving={savingStreamUrl}
             attached={!!String(live?.stream_url || '').trim()}
             recognized={!!youtubeId}
+            onConnectYoutube={handleConnectYoutube}
             onChange={setEditStreamUrl}
+            onRefreshYoutube={loadYoutubeBroadcastOptions}
+            onSelectBroadcast={setEditYoutubeBroadcastId}
             onSubmit={handleUpdateStreamUrl}
           />
         ) : null}

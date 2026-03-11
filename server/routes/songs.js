@@ -3,7 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { getDb } = require('../db/schema');
-const { optionalAuth, requireAuth } = require('./auth');
+const { optionalAuth, requireAuth, isAdminUser } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 // Cache the jacket map in memory (loaded once from pump-phoenix.json)
@@ -190,6 +190,14 @@ function humanizeSkillSlug(slug) {
 
 function normalizeSkillName(name) {
   return String(name || '').replace(/\s+/g, ' ').trim();
+}
+
+function requireAdmin(req, res, next) {
+  const db = getDb();
+  if (!isAdminUser(db, req.user)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 }
 
 function getSkillNameForSlug(slug, fallbackName = '') {
@@ -509,11 +517,98 @@ function expandMode(mode) {
   return ['Single', 'Double'];
 }
 
+function makeSongGroupKey(row, aliases) {
+  const resolvedTitle = resolveKnownSongVariantTitle(row.title, row.song_key, row.flags);
+  const canonicalTitle = toCanonicalTitle(resolvedTitle, aliases);
+  const artistNorm = normalizeSongName(row.artist);
+  return (row.song_key && String(row.song_key).trim())
+    ? `song_key:${String(row.song_key).trim()}`
+    : `${canonicalTitle}|${artistNorm}`;
+}
+
+function formatChartLabel(mode, level) {
+  const normalizedMode = normalizeMode(mode);
+  const lv = parseInt(level, 10) || 0;
+  if (!normalizedMode || lv <= 0) return '';
+  const prefix = normalizedMode === 'Single'
+    ? 'S'
+    : normalizedMode === 'Double'
+      ? 'D'
+      : normalizedMode === 'CoOp'
+        ? 'C'
+        : '';
+  return prefix ? `${prefix}${lv}` : String(lv);
+}
+
+function buildAdminSongDurationGroups(db, aliases) {
+  const rows = db.prepare(`
+    SELECT id, title, artist, jacket_url, mode, level, song_key, flags,
+           duration_seconds, duration_source, duration_updated_at
+    FROM songs
+    ORDER BY title COLLATE NOCASE ASC, artist COLLATE NOCASE ASC, mode ASC, level ASC, id ASC
+  `).all();
+
+  const groups = new Map();
+  for (const row of rows) {
+    const groupKey = makeSongGroupKey(row, aliases);
+    const chartLabel = formatChartLabel(row.mode, row.level);
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        song_group_key: groupKey,
+        title: resolveKnownSongVariantTitle(row.title, row.song_key, row.flags),
+        artist: row.artist || '',
+        jacket_url: row.jacket_url || '',
+        song_key: row.song_key || '',
+        flags: row.flags || '',
+        song_ids: [],
+        chart_labels: [],
+        chart_count: 0,
+        duration_seconds: null,
+        duration_source: '',
+        duration_updated_at: '',
+      });
+    }
+
+    const group = groups.get(groupKey);
+    group.song_ids.push(parseInt(row.id, 10) || 0);
+    group.chart_count += 1;
+    if (chartLabel && !group.chart_labels.includes(chartLabel)) {
+      group.chart_labels.push(chartLabel);
+    }
+
+    const durationSeconds = parseInt(row.duration_seconds, 10) || 0;
+    if (durationSeconds > 0 && !group.duration_seconds) {
+      group.duration_seconds = durationSeconds;
+      group.duration_source = String(row.duration_source || '').trim();
+      group.duration_updated_at = row.duration_updated_at || '';
+    }
+  }
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      chart_labels: group.chart_labels.slice().sort((a, b) => {
+        const modeOrder = { S: 0, D: 1, C: 2 };
+        const modeA = modeOrder[a[0]] ?? 99;
+        const modeB = modeOrder[b[0]] ?? 99;
+        if (modeA !== modeB) return modeA - modeB;
+        return (parseInt(a.slice(1), 10) || 0) - (parseInt(b.slice(1), 10) || 0);
+      }),
+    }))
+    .sort((a, b) => {
+      const byTitle = a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+      if (byTitle !== 0) return byTitle;
+      return a.artist.localeCompare(b.artist, undefined, { sensitivity: 'base' });
+    });
+}
+
 function getSongCatalogVersion(db) {
   const row = db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM songs) as songs_count,
       (SELECT IFNULL(MAX(id), 0) FROM songs) as songs_max_id,
+      (SELECT COUNT(*) FROM songs WHERE duration_seconds IS NOT NULL) as duration_count,
+      (SELECT IFNULL(MAX(duration_updated_at), '') FROM songs) as duration_max_updated_at,
       (SELECT COUNT(*) FROM chart_skills) as skills_count,
       (SELECT IFNULL(MAX(updated_at), '') FROM chart_skills) as skills_max_updated_at
   `).get();
@@ -521,6 +616,8 @@ function getSongCatalogVersion(db) {
   return [
     parseInt(row?.songs_count, 10) || 0,
     parseInt(row?.songs_max_id, 10) || 0,
+    parseInt(row?.duration_count, 10) || 0,
+    String(row?.duration_max_updated_at || ''),
     parseInt(row?.skills_count, 10) || 0,
     String(row?.skills_max_updated_at || ''),
   ].join('|');
@@ -544,7 +641,8 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
   const chartSkillsById = loadChartSkillsById(db);
 
   const rows = db.prepare(`
-    SELECT id, title, artist, jacket_url, mode, level, bpm, song_key, flags
+    SELECT id, title, artist, jacket_url, mode, level, bpm, song_key, flags,
+           duration_seconds, duration_source, duration_updated_at
     FROM songs
     ORDER BY title COLLATE NOCASE ASC, artist COLLATE NOCASE ASC, mode ASC, level ASC, id ASC
   `).all();
@@ -573,11 +671,7 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
     if (!chartKey || seenChartKeys.has(chartKey)) continue;
     seenChartKeys.add(chartKey);
 
-    const canonicalTitle = toCanonicalTitle(resolvedTitle, aliases);
-    const artistNorm = normalizeSongName(row.artist);
-    const groupKey = (row.song_key && String(row.song_key).trim())
-      ? `song_key:${String(row.song_key).trim()}`
-      : `${canonicalTitle}|${artistNorm}`;
+    const groupKey = makeSongGroupKey(row, aliases);
 
     if (!songsByGroup.has(groupKey)) {
       songsByGroup.set(groupKey, {
@@ -587,12 +681,21 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
         jacket_url: row.jacket_url || '',
         song_key: row.song_key || '',
         flags: row.flags || '',
+        duration_seconds: (parseInt(row.duration_seconds, 10) || 0) || null,
+        duration_source: row.duration_source || '',
+        duration_updated_at: row.duration_updated_at || '',
         charts: [],
-        searchable_title: canonicalTitle,
+        searchable_title: toCanonicalTitle(resolvedTitle, aliases),
       });
     }
 
     const group = songsByGroup.get(groupKey);
+    const groupDuration = parseInt(row.duration_seconds, 10) || 0;
+    if (groupDuration > 0 && !group.duration_seconds) {
+      group.duration_seconds = groupDuration;
+      group.duration_source = row.duration_source || '';
+      group.duration_updated_at = row.duration_updated_at || '';
+    }
     const chart = {
       chart_id: row.id,
       key: chartKey,
@@ -604,6 +707,9 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
       bpm: row.bpm || '',
       song_key: row.song_key || '',
       flags: row.flags || '',
+      duration_seconds: groupDuration || null,
+      duration_source: row.duration_source || '',
+      duration_updated_at: row.duration_updated_at || '',
       skills: chartSkillsById.get(String(row.id)) || [],
     };
 
@@ -3360,6 +3466,101 @@ router.get('/tiers', optionalAuth, (req, res) => {
     tier_order: TIER_NAME_ORDER,
     total_charts: rows.length,
     tiers,
+  });
+});
+
+// GET /api/songs/admin/durations/missing — grouped songs with no duration yet
+router.get('/admin/durations/missing', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(250, Math.max(1, parseInt(req.query.limit, 10) || 100));
+
+  const allGroups = buildAdminSongDurationGroups(db, aliases);
+  const missingGroups = allGroups.filter((group) => !(parseInt(group.duration_seconds, 10) > 0));
+  const filtered = q
+    ? missingGroups.filter((group) => (
+      String(group.title || '').toLowerCase().includes(q)
+      || String(group.artist || '').toLowerCase().includes(q)
+      || String(group.chart_labels || []).toLowerCase().includes(q)
+    ))
+    : missingGroups;
+
+  const total = filtered.length;
+  const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+  const start = (page - 1) * limit;
+  const results = filtered.slice(start, start + limit).map((group) => ({
+    song_group_key: group.song_group_key,
+    title: group.title,
+    artist: group.artist,
+    jacket_url: group.jacket_url,
+    song_key: group.song_key,
+    flags: group.flags,
+    chart_labels: group.chart_labels,
+    chart_count: group.chart_count,
+    duration_seconds: group.duration_seconds,
+    duration_source: group.duration_source,
+    duration_updated_at: group.duration_updated_at,
+  }));
+
+  res.json({
+    total,
+    page,
+    limit,
+    total_pages: totalPages,
+    coverage: {
+      total_songs: allGroups.length,
+      with_duration: allGroups.length - missingGroups.length,
+      missing_duration: missingGroups.length,
+    },
+    results,
+  });
+});
+
+// PUT /api/songs/admin/durations — set a manual duration for an entire song group
+router.put('/admin/durations', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songGroupKey = String(req.body?.song_group_key || '').trim();
+  const durationSeconds = parseInt(req.body?.duration_seconds, 10) || 0;
+
+  if (!songGroupKey) {
+    return res.status(400).json({ error: 'song_group_key is required' });
+  }
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 3600) {
+    return res.status(400).json({ error: 'duration_seconds must be between 1 and 3600' });
+  }
+
+  const groups = buildAdminSongDurationGroups(db, aliases);
+  const target = groups.find((group) => group.song_group_key === songGroupKey);
+  if (!target || !Array.isArray(target.song_ids) || target.song_ids.length === 0) {
+    return res.status(404).json({ error: 'Song group not found' });
+  }
+
+  const updateStmt = db.prepare(`
+    UPDATE songs
+    SET duration_seconds = ?,
+        duration_source = 'manual',
+        duration_updated_at = datetime('now')
+    WHERE id = ?
+  `);
+  const updateAll = db.transaction((songIds) => {
+    let updated = 0;
+    for (const id of songIds) {
+      updated += updateStmt.run(durationSeconds, id).changes;
+    }
+    return updated;
+  });
+
+  const updatedRows = updateAll(target.song_ids);
+  invalidateSongCaches();
+
+  res.json({
+    updated: updatedRows,
+    song_group_key: target.song_group_key,
+    duration_seconds: durationSeconds,
+    duration_source: 'manual',
   });
 });
 
