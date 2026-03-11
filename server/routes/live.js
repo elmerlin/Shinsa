@@ -15,7 +15,16 @@ const {
 const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
 const { createUserNotification } = require('../lib/notifications');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
-const { extractYoutubeVideoId, getYoutubeBroadcastById } = require('../lib/youtube');
+const {
+  extractYoutubeVideoId,
+  getYoutubeBroadcastById,
+  getYoutubeVideoById,
+  updateYoutubeVideoDescription,
+} = require('../lib/youtube');
+const {
+  buildYoutubeTimestampPayload,
+  upsertManagedYoutubeChaptersBlock,
+} = require('../lib/youtubeTimestamps');
 const piugameRoutes = require('./piugame');
 const socialRoutes = require('./social');
 
@@ -994,6 +1003,70 @@ function getLatestSessionPlay(db, liveSessionId) {
     singles_pumbility_gain: outcome ? outcome.singles_pumbility_gain : 0,
     session_result_type: outcome ? outcome.type : '',
     over_top100_rank: Math.max(toInt(row.over_top100_rank), toInt(outcome?.over_top100_rank)),
+  };
+}
+
+function getLiveSessionYoutubeVideoId(session) {
+  const linkedVideoId = String(session?.youtube_video_id || '').trim();
+  if (linkedVideoId) return linkedVideoId;
+  return extractYoutubeVideoId(session?.stream_url || '');
+}
+
+function getSessionPlaysWithDurations(db, liveSessionId) {
+  return db.prepare(`
+    SELECT
+      p.*,
+      COALESCE(song_duration.duration_seconds, 0) AS duration_seconds,
+      COALESCE(song_duration.duration_source, '') AS duration_source
+    FROM live_session_plays p
+    LEFT JOIN (
+      SELECT
+        LOWER(TRIM(title)) AS title_key,
+        LOWER(TRIM(mode)) AS mode_key,
+        level,
+        MAX(COALESCE(duration_seconds, 0)) AS duration_seconds,
+        MAX(COALESCE(NULLIF(duration_source, ''), '')) AS duration_source
+      FROM songs
+      GROUP BY LOWER(TRIM(title)), LOWER(TRIM(mode)), level
+    ) song_duration
+      ON song_duration.title_key = LOWER(TRIM(p.song_title))
+     AND song_duration.mode_key = LOWER(TRIM(p.mode))
+     AND song_duration.level = p.level
+    WHERE p.live_session_id = ?
+    ORDER BY COALESCE(NULLIF(p.played_at_utc, ''), p.date_played) ASC, p.id ASC
+  `).all(liveSessionId);
+}
+
+async function buildLiveSessionYoutubeTimestampPreview(db, session, userId) {
+  const videoId = getLiveSessionYoutubeVideoId(session);
+  if (!videoId) {
+    const err = new Error('Attach a YouTube live stream to this session before generating timestamps');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const plays = getSessionPlaysWithDurations(db, session.id);
+  if (!plays.length) {
+    const err = new Error('No synced live-session plays are available yet');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  const timestamps = buildYoutubeTimestampPayload(session, plays);
+  const video = await getYoutubeVideoById(db, userId, videoId);
+  if (!video) {
+    const err = new Error('Unable to load the linked YouTube video');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  return {
+    video_id: videoId,
+    video_title: video.title || '',
+    video_description: video.description || '',
+    next_description: upsertManagedYoutubeChaptersBlock(video.description || '', timestamps.text),
+    play_count: plays.length,
+    ...timestamps,
   };
 }
 
@@ -2186,6 +2259,49 @@ router.get('/sessions/:id', requireAuth, (req, res) => {
     res.json(buildSessionSnapshot(db, session, req.user.id));
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.get('/sessions/:id/youtube-timestamps', requireAuth, async (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+    const payload = await buildLiveSessionYoutubeTimestampPreview(db, session, req.user.id);
+    return res.json(payload);
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/youtube-timestamps/publish', requireAuth, async (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+    const preview = await buildLiveSessionYoutubeTimestampPreview(db, session, req.user.id);
+    const updatedVideo = await updateYoutubeVideoDescription(
+      db,
+      req.user.id,
+      preview.video_id,
+      preview.next_description
+    );
+    return res.json({
+      success: true,
+      video_id: preview.video_id,
+      video_title: updatedVideo?.title || preview.video_title,
+      published_text: preview.text,
+      description: updatedVideo?.description || preview.next_description,
+      chapters: preview.chapters,
+      source_start_at: preview.source_start_at,
+      source_start_kind: preview.source_start_kind,
+      matched_count: preview.matched_count,
+      missing_duration_count: preview.missing_duration_count,
+      missing_durations: preview.missing_durations,
+      skipped_negative_offset_count: preview.skipped_negative_offset_count,
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
   }
 });
 

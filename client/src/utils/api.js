@@ -994,6 +994,15 @@ export const syncLiveSession = (sessionId) => request(`/live/sessions/${encodeUR
   body: '{}',
   timeoutMs: 60000,
 });
+export const getLiveYoutubeTimestamps = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/youtube-timestamps`);
+export const publishLiveYoutubeTimestamps = (sessionId) => request(
+  `/live/sessions/${encodeURIComponent(sessionId)}/youtube-timestamps/publish`,
+  {
+    method: 'POST',
+    body: '{}',
+    timeoutMs: 60000,
+  }
+);
 export const sendLiveRequest = (sessionId, data) => request(`/live/sessions/${encodeURIComponent(sessionId)}/requests`, {
   method: 'POST',
   body: JSON.stringify(data),

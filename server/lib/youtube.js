@@ -19,6 +19,7 @@ const YOUTUBE_OAUTH_SCOPES = String(process.env.YOUTUBE_OAUTH_SCOPES || YOUTUBE_
 const YOUTUBE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const YOUTUBE_CHANNELS_URL = 'https://www.googleapis.com/youtube/v3/channels';
 const YOUTUBE_BROADCASTS_URL = 'https://www.googleapis.com/youtube/v3/liveBroadcasts';
+const YOUTUBE_VIDEOS_URL = 'https://www.googleapis.com/youtube/v3/videos';
 
 function isYoutubeConfigured() {
   return !!(YOUTUBE_CLIENT_ID && YOUTUBE_CLIENT_SECRET && APP_URL && YOUTUBE_REDIRECT_URI);
@@ -261,6 +262,18 @@ async function youtubeApiGet(accessToken, url, params = {}) {
   return response?.data || {};
 }
 
+async function youtubeApiPut(accessToken, url, data = {}, params = {}) {
+  const response = await axios.put(url, data, {
+    params,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 15000,
+  });
+  return response?.data || {};
+}
+
 async function fetchYoutubeChannel(accessToken) {
   const payload = await youtubeApiGet(accessToken, YOUTUBE_CHANNELS_URL, {
     part: 'snippet',
@@ -430,6 +443,75 @@ async function getYoutubeBroadcastById(db, userId, broadcastId) {
   return broadcast;
 }
 
+async function getYoutubeVideoById(db, userId, videoId) {
+  const normalizedId = String(videoId || '').trim();
+  if (!normalizedId) return null;
+  const { accessToken, row } = await getAuthorizedYoutubeConnection(db, userId);
+  const payload = await youtubeApiGet(accessToken, YOUTUBE_VIDEOS_URL, {
+    part: 'snippet,status',
+    id: normalizedId,
+  });
+  const item = Array.isArray(payload?.items) ? payload.items[0] : null;
+  if (!item?.id) return null;
+  const channelId = String(item?.snippet?.channelId || '').trim();
+  if (row?.channel_id && channelId && String(row.channel_id) !== channelId) {
+    const err = new Error('That YouTube video does not belong to the linked channel');
+    err.statusCode = 403;
+    throw err;
+  }
+  return {
+    id: String(item.id).trim(),
+    channel_id: channelId,
+    title: String(item?.snippet?.title || '').trim(),
+    description: String(item?.snippet?.description || ''),
+    category_id: String(item?.snippet?.categoryId || '').trim(),
+    tags: Array.isArray(item?.snippet?.tags) ? item.snippet.tags : [],
+    default_language: String(item?.snippet?.defaultLanguage || '').trim(),
+    default_audio_language: String(item?.snippet?.defaultAudioLanguage || '').trim(),
+    privacy_status: String(item?.status?.privacyStatus || '').trim(),
+  };
+}
+
+async function updateYoutubeVideoDescription(db, userId, videoId, description) {
+  const normalizedId = String(videoId || '').trim();
+  if (!normalizedId) {
+    const err = new Error('A YouTube video is required');
+    err.statusCode = 400;
+    throw err;
+  }
+  const { accessToken } = await getAuthorizedYoutubeConnection(db, userId);
+  const currentVideo = await getYoutubeVideoById(db, userId, normalizedId);
+  if (!currentVideo) {
+    const err = new Error('Unable to load that YouTube video');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const snippet = {
+    title: currentVideo.title,
+    description: String(description || ''),
+    categoryId: currentVideo.category_id || '20',
+  };
+  if (Array.isArray(currentVideo.tags) && currentVideo.tags.length > 0) {
+    snippet.tags = currentVideo.tags;
+  }
+  if (currentVideo.default_language) {
+    snippet.defaultLanguage = currentVideo.default_language;
+  }
+  if (currentVideo.default_audio_language) {
+    snippet.defaultAudioLanguage = currentVideo.default_audio_language;
+  }
+
+  await youtubeApiPut(accessToken, YOUTUBE_VIDEOS_URL, {
+    id: normalizedId,
+    snippet,
+  }, {
+    part: 'snippet',
+  });
+
+  return getYoutubeVideoById(db, userId, normalizedId);
+}
+
 function buildYoutubeConnectionStatus(row) {
   if (!row) {
     return {
@@ -476,9 +558,11 @@ module.exports = {
   fetchYoutubeChannel,
   getStoredYoutubeConnection,
   getYoutubeBroadcastById,
+  getYoutubeVideoById,
   getYoutubeErrorMessage,
   isYoutubeConfigured,
   listYoutubeBroadcasts,
   storeYoutubeConnection,
+  updateYoutubeVideoDescription,
   verifyYoutubeState,
 };
