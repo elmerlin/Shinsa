@@ -43,7 +43,7 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
   return (
     <Link
       to={session.live_url || `/live/${session.id}`}
-      className={`group block overflow-hidden rounded-[28px] border border-rose-400/18 bg-[radial-gradient(circle_at_top_left,rgba(251,113,133,0.16),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.12),transparent_34%),linear-gradient(180deg,#0d1322,#09101b)] p-4 shadow-[0_18px_44px_rgba(3,7,18,0.42)] transition-all hover:-translate-y-0.5 hover:border-cyan-300/30 hover:shadow-[0_24px_52px_rgba(14,165,233,0.16)] ${className}`.trim()}
+      className={`group block overflow-hidden rounded-[28px] border border-piu-border/70 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.10),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(255,215,0,0.08),transparent_32%),linear-gradient(180deg,rgba(20,20,40,0.98),rgba(13,13,32,0.96))] p-4 shadow-[0_18px_44px_rgba(3,7,18,0.34)] transition-all hover:-translate-y-0.5 hover:border-piu-accent/35 hover:shadow-[0_24px_52px_rgba(255,51,102,0.14)] ${className}`.trim()}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -52,17 +52,17 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
               Live now
             </span>
             {item.is_following ? (
-              <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-cyan-200">
+              <span className="rounded-full border border-piu-accent/25 bg-piu-accent/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100">
                 Following
               </span>
             ) : null}
             {streamHost ? (
-              <span className="rounded-full border border-rose-400/20 bg-rose-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100">
+              <span className="rounded-full border border-piu-gold/20 bg-piu-gold/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-amber-100">
                 {streamHost}
               </span>
             ) : null}
           </div>
-          <h3 className="mt-3 truncate font-display text-xl font-black text-white transition-colors group-hover:text-cyan-100">
+          <h3 className="mt-3 truncate font-display text-xl font-black text-white transition-colors group-hover:text-rose-100">
             {session.title || `${host.username || 'Player'} live`}
           </h3>
           <div className="mt-2 flex min-w-0 items-center gap-3">
@@ -80,7 +80,7 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                 {host.skill_title ? (
-                  <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-0.5 font-display font-bold uppercase tracking-wide text-cyan-200">
+                  <span className="rounded-full border border-piu-gold/20 bg-piu-gold/10 px-2 py-0.5 font-display font-bold uppercase tracking-wide text-amber-100">
                     {host.skill_title}
                   </span>
                 ) : null}
@@ -91,14 +91,14 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
           </div>
         </div>
 
-        <div className="shrink-0 rounded-2xl border border-piu-border/70 bg-black/15 px-3 py-2 text-right">
+        <div className="shrink-0 rounded-2xl border border-piu-border/70 bg-piu-dark/60 px-3 py-2 text-right">
           <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Watching</p>
-          <p className="text-xl font-display font-black text-cyan-200">{session.viewer_count || 0}</p>
+          <p className="text-xl font-display font-black text-rose-100">{session.viewer_count || 0}</p>
         </div>
       </div>
 
       <div className={`mt-4 grid gap-3 ${compact ? 'md:grid-cols-[1fr]' : 'md:grid-cols-[minmax(0,1fr)_220px]'}`}>
-        <div className="rounded-2xl border border-piu-border/80 bg-black/15 p-3">
+        <div className="rounded-2xl border border-piu-border/80 bg-piu-dark/60 p-3">
           <p className="text-[10px] font-display uppercase tracking-[0.22em] text-gray-500">Now Playing</p>
           {lastPlay ? (
             <div className="mt-2 flex items-center gap-3">
@@ -107,7 +107,7 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
                 <p className="truncate text-sm font-display font-bold text-white">{lastPlay.song_title}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                   <span>{modeShort(lastPlay.mode)}{lastPlay.level}</span>
-                  <span className="font-display font-bold text-cyan-200">{lastPlay.grade || '-'}</span>
+                  <span className="font-display font-bold text-amber-100">{lastPlay.grade || '-'}</span>
                   <span>{(parseInt(lastPlay.score, 10) || 0).toLocaleString()}</span>
                   {lastPlay.pumbility_gain > 0 ? (
                     <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-display font-bold text-emerald-200">
@@ -124,12 +124,12 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
 
         {!compact ? (
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-piu-border/80 bg-black/15 p-3">
+            <div className="rounded-2xl border border-piu-border/80 bg-piu-dark/60 p-3">
               <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Requests</p>
               <p className="mt-2 text-lg font-display font-black text-white">{requestCounts.open || 0}</p>
               <p className="text-[11px] text-gray-400">open • {requestCounts.queued || 0} queued</p>
             </div>
-            <div className="rounded-2xl border border-piu-border/80 bg-black/15 p-3">
+            <div className="rounded-2xl border border-piu-border/80 bg-piu-dark/60 p-3">
               <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Vote</p>
               {activeVote ? (
                 <>

@@ -824,7 +824,7 @@ function PlayDetailModal({ play, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-[90] flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="relative w-full max-w-sm overflow-hidden rounded-xl border border-white/8 bg-[#11161f] shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
+        className="relative w-full max-w-sm overflow-hidden rounded-xl border border-piu-border/60 bg-piu-card/95 shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
         onClick={(e) => e.stopPropagation()}
       >
         {modalBg ? (
@@ -833,7 +833,7 @@ function PlayDetailModal({ play, onClose }) {
             style={{ backgroundImage: `url(${modalBg})` }}
           />
         ) : null}
-        <div className="absolute inset-0 bg-[#11161f]/92" />
+        <div className="absolute inset-0 bg-piu-card/90" />
 
         <div className="relative p-5">
           <button
@@ -907,7 +907,7 @@ function EndSessionConfirmModal({ open, ending, onClose, onConfirm }) {
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-xl border border-white/8 bg-[#11161f] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
+        className="w-full max-w-md rounded-xl border border-piu-border/60 bg-piu-card/95 p-5 shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
         onClick={(event) => event.stopPropagation()}
       >
         <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
@@ -1308,7 +1308,7 @@ function StreamUrlEditorCard({
   onSubmit,
 }) {
   return (
-    <div className="mt-4 rounded-lg border border-white/8 bg-[#11161f] p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+    <div className="mt-4 rounded-lg border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Stream link</p>
@@ -1394,7 +1394,7 @@ function MobilePanelSheet({ open, title, subtitle = '', onClose, children, allow
         onClick={onClose}
         aria-label="Close panel"
       />
-      <div className={`absolute overflow-hidden border border-white/8 bg-[#11161f] ${
+      <div className={`absolute overflow-hidden border border-piu-border/60 bg-piu-card/95 ${
         allowDesktop
           ? 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-xl shadow-[0_-8px_24px_rgba(0,0,0,0.28)] lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:w-[min(92vw,64rem)] lg:max-h-[86vh] lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-xl lg:shadow-[0_8px_24px_rgba(0,0,0,0.28)]'
           : 'inset-x-0 bottom-0 max-h-[86vh] rounded-t-xl shadow-[0_-8px_24px_rgba(0,0,0,0.28)]'
@@ -4051,7 +4051,7 @@ export default function LivePage() {
 
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {LIVE_EMOJI_GROUPS.map((group) => (
-                <div key={group.label} className="rounded-lg border border-white/8 bg-[#11161f] p-3">
+                <div key={group.label} className="rounded-lg border border-piu-border/60 bg-piu-card/95 p-3">
                   <p className="text-[11px] font-display font-semibold text-gray-400">{group.label}</p>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     {group.emojis.map((emoji) => (
@@ -4125,7 +4125,7 @@ export default function LivePage() {
                     type="button"
                     onClick={() => handleDeleteMessage(msg.id)}
                     disabled={deletingMessageId === msg.id}
-                    className="rounded-md border border-white/8 bg-[#171d27] px-3 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-white/15 hover:text-white disabled:opacity-60"
+                    className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-3 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/35 hover:text-white disabled:opacity-60"
                   >
                     {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
                   </button>
@@ -4187,7 +4187,7 @@ export default function LivePage() {
   if (!user) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4">
-        <div className="max-w-md rounded-xl border border-white/8 bg-[#11161f] p-6 text-center shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+        <div className="max-w-md rounded-xl border border-piu-border/60 bg-piu-card/95 p-6 text-center shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
           <p className="text-sm text-gray-400">You need a Shinsa account to join Shinsa Live.</p>
           <Link to="/login" className="btn-primary inline-flex mt-4">Log In</Link>
         </div>
@@ -4222,7 +4222,7 @@ export default function LivePage() {
             onSubmit={handleCreate}
           />
 
-          <div className="rounded-xl border border-white/8 bg-[#11161f] p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
+          <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
             <p className="text-sm font-display font-semibold text-gray-300">Live directory</p>
             <h2 className="mt-2 text-2xl font-display font-black text-white">
               {directorySessions.length > 0 ? `${directorySessions.length} room${directorySessions.length === 1 ? '' : 's'} live right now` : 'No live rooms at the moment'}
@@ -4231,17 +4231,17 @@ export default function LivePage() {
               Followed players float to the top, viewer counts stay fresh, and each card shows the latest chart, requests, and vote state before you join.
             </p>
             <div className="mt-4 grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
+              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/70 p-3">
                 <p className="text-[11px] font-display font-semibold text-gray-400">Following live</p>
-                <p className="mt-1 text-2xl font-display font-black text-cyan-200">{followedDirectorySessions.length}</p>
+                <p className="mt-1 text-2xl font-display font-black text-rose-100">{followedDirectorySessions.length}</p>
               </div>
-              <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
+              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/70 p-3">
                 <p className="text-[11px] font-display font-semibold text-gray-400">Open sessions</p>
                 <p className="mt-1 text-2xl font-display font-black text-white">{directorySessions.length}</p>
               </div>
-              <div className="rounded-lg border border-white/8 bg-[#0d1218] p-3">
+              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/70 p-3">
                 <p className="text-[11px] font-display font-semibold text-gray-400">Viewer accounts</p>
-                <p className="mt-1 text-2xl font-display font-black text-rose-200">
+                <p className="mt-1 text-2xl font-display font-black text-amber-100">
                   {directorySessions.reduce((sum, item) => sum + (parseInt(item?.session?.viewer_count, 10) || 0), 0)}
                 </p>
               </div>
@@ -4264,7 +4264,7 @@ export default function LivePage() {
         />
 
         {!directoryLoading && directorySessions.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/8 bg-[#11161f] px-5 py-8 text-center">
+          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-card/95 px-5 py-8 text-center">
             <p className="text-lg font-display font-black text-white">Be the first room on the board.</p>
             <p className="mt-2 text-sm text-gray-400">
               Start a Shinsa Live session and your followers will get a go-live notification with a direct link into the room.
