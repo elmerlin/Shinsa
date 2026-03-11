@@ -340,6 +340,7 @@ async function getAuthorizedYoutubeConnection(db, userId) {
       SET last_used_at = datetime('now'), last_error = ''
       WHERE user_id = ?
     `).run(userId);
+    activeRow = getStoredYoutubeConnection(db, userId);
   }
 
   return {
@@ -395,7 +396,7 @@ async function listYoutubeBroadcasts(db, userId) {
   const payload = await youtubeApiGet(accessToken, YOUTUBE_BROADCASTS_URL, {
     part: 'id,snippet,status',
     mine: 'true',
-    broadcastStatus: 'all',
+    broadcastType: 'all',
     maxResults: 50,
   });
   const items = Array.isArray(payload?.items) ? payload.items : [];
