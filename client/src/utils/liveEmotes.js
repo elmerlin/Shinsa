@@ -118,12 +118,12 @@ export const LIVE_EMOJI_GROUPS = [
 export const LIVE_EMOTE_TRAY_GROUPS = [
   {
     label: 'Shinsa Emotes',
-    description: 'Fire branded hype chips instantly, or add their token into your next message.',
+    description: '',
     emotes: LIVE_EMOTES.filter((emote) => emote.variant !== 'sticker'),
   },
   {
     label: 'Featured DojoCat',
-    description: 'Bigger sticker reactions that also work in the live overlay and chat replays.',
+    description: '',
     emotes: LIVE_EMOTES.filter((emote) => emote.variant === 'sticker'),
   },
 ];

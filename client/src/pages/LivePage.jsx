@@ -3938,7 +3938,7 @@ export default function LivePage() {
           : useDesktopSidebarLayout
             ? { height: 'calc(100dvh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }
             : isMobileChatLayout
-              ? { maxHeight: 'min(68dvh, calc(100dvh - 10rem))' }
+              ? undefined
               : {
                   height: desktopChatFallbackHeight,
                   maxHeight: desktopChatFallbackHeight,
@@ -4030,23 +4030,25 @@ export default function LivePage() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-display font-semibold text-gray-300">Emotes and stickers</p>
-              <p className="mt-1 text-[11px] text-gray-400">Tap a reaction to fire it instantly, or add its token into your next message.</p>
             </div>
             <button type="button" onClick={() => setShowEmoteTray(false)} className="text-[11px] text-gray-500 hover:text-white">
               Close
             </button>
           </div>
 
-          <div className={`mt-3 overflow-y-auto overscroll-contain pr-1 ${
-            isMobileChatLayout
-              ? 'max-h-[min(42dvh,22rem)]'
-              : 'max-h-[52vh] lg:max-h-64 xl:max-h-72'
-          }`}>
+          <div
+            className={`mt-3 overflow-y-auto overscroll-contain pr-1 ${
+              isMobileChatLayout
+                ? 'max-h-[min(42dvh,22rem)]'
+                : 'max-h-[52vh] lg:max-h-64 xl:max-h-72'
+            }`}
+            style={isMobileChatLayout ? { WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : undefined}
+          >
             {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
               <div key={group.label} className="mt-3 first:mt-0">
                 <div className="px-1">
                   <p className="text-[11px] font-display font-semibold text-gray-300">{group.label}</p>
-                  <p className="mt-1 text-[11px] text-gray-400">{group.description}</p>
+                  {group.description ? <p className="mt-1 text-[11px] text-gray-400">{group.description}</p> : null}
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-2 xl:grid-cols-4">
                   {group.emotes.map((emote) => (
@@ -4088,8 +4090,12 @@ export default function LivePage() {
 
       <div
         ref={chatScrollRef}
-        className={`mt-3 min-h-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 ${isDesktopViewport ? 'space-y-1.5' : 'space-y-2'}`}
-        style={{ scrollbarGutter: 'stable' }}
+        className={`mt-3 min-h-0 overflow-x-hidden ${
+          isMobileChatLayout
+            ? 'overflow-y-visible pr-0'
+            : 'flex-1 overflow-y-auto pr-1'
+        } ${isDesktopViewport ? 'space-y-1.5' : 'space-y-2'}`}
+        style={isMobileChatLayout ? undefined : { scrollbarGutter: 'stable' }}
       >
         {chatMessages.map((msg) => {
           const tone = getMessageTone(msg);
