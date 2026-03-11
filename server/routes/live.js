@@ -877,7 +877,11 @@ function buildModerationAnnouncement(targetUser, previousState, nextState) {
   return `${name}: ${changes.join(' • ')}.`;
 }
 
-function getLiveMessageRow(db, messageId) {
+function isPumpableLiveMessageType(messageType) {
+  return String(messageType || '').trim().toLowerCase() !== 'system';
+}
+
+function getLiveMessageRow(db, messageId, currentUserId = '') {
   return db.prepare(`
     SELECT
       m.*,
@@ -888,7 +892,21 @@ function getLiveMessageRow(db, messageId) {
       COALESCE(u.pumbility, 0) AS pumbility,
       COALESCE(u.nationality, '') AS nationality,
       COALESCE(mod.chat_muted, 0) AS chat_muted,
-      COALESCE(mod.requests_blocked, 0) AS requests_blocked
+      COALESCE(mod.requests_blocked, 0) AS requests_blocked,
+      (
+        SELECT COUNT(*)
+        FROM live_message_pumps pump
+        WHERE pump.message_id = m.id
+      ) AS pump_count,
+      CASE
+        WHEN ? <> '' AND EXISTS (
+          SELECT 1
+          FROM live_message_pumps pump
+          WHERE pump.message_id = m.id
+            AND pump.user_id = ?
+        ) THEN 1
+        ELSE 0
+      END AS user_pumped
     FROM live_session_messages m
     JOIN live_sessions s ON s.id = m.live_session_id
     LEFT JOIN users u ON u.id = m.user_id
@@ -897,7 +915,7 @@ function getLiveMessageRow(db, messageId) {
      AND mod.user_id = m.user_id
     WHERE m.id = ?
     LIMIT 1
-  `).get(messageId);
+  `).get(currentUserId, currentUserId, messageId);
 }
 
 function getPlayOutcomeMap(db, liveSessionId) {
@@ -1091,10 +1109,12 @@ function normalizeMessageRow(row) {
     is_host: !!row.user_id && String(row.host_user_id || '') === String(row.user_id || ''),
     chat_muted: toInt(row.chat_muted) === 1,
     requests_blocked: toInt(row.requests_blocked) === 1,
+    pump_count: Math.max(0, toInt(row.pump_count)),
+    user_pumped: toInt(row.user_pumped) === 1,
   };
 }
 
-function getSessionMessages(db, liveSessionId) {
+function getSessionMessages(db, liveSessionId, currentUserId = '') {
   const rows = db.prepare(`
     SELECT
       m.*,
@@ -1105,7 +1125,21 @@ function getSessionMessages(db, liveSessionId) {
       COALESCE(u.pumbility, 0) AS pumbility,
       COALESCE(u.nationality, '') AS nationality,
       COALESCE(mod.chat_muted, 0) AS chat_muted,
-      COALESCE(mod.requests_blocked, 0) AS requests_blocked
+      COALESCE(mod.requests_blocked, 0) AS requests_blocked,
+      (
+        SELECT COUNT(*)
+        FROM live_message_pumps pump
+        WHERE pump.message_id = m.id
+      ) AS pump_count,
+      CASE
+        WHEN ? <> '' AND EXISTS (
+          SELECT 1
+          FROM live_message_pumps pump
+          WHERE pump.message_id = m.id
+            AND pump.user_id = ?
+        ) THEN 1
+        ELSE 0
+      END AS user_pumped
     FROM live_session_messages m
     JOIN live_sessions s ON s.id = m.live_session_id
     LEFT JOIN users u ON u.id = m.user_id
@@ -1115,7 +1149,7 @@ function getSessionMessages(db, liveSessionId) {
     WHERE m.live_session_id = ?
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT ?
-  `).all(liveSessionId, CHAT_LIMIT);
+  `).all(currentUserId, currentUserId, liveSessionId, CHAT_LIMIT);
 
   return rows.reverse().map(normalizeMessageRow);
 }
@@ -1357,7 +1391,7 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   const viewerPeak = getViewerPeak(freshSession, viewerCount);
   const host = getHostProfile(db, freshSession.host_user_id);
   const plays = getSessionPlays(db, freshSession.id);
-  const messages = getSessionMessages(db, freshSession.id);
+  const messages = getSessionMessages(db, freshSession.id, currentUserId);
   const requests = getSessionRequests(db, freshSession.id);
   const activeVote = getLatestVoteSnapshot(db, freshSession.id, currentUserId);
   const summary = buildLiveSessionSummary(plays, host || {}, {
@@ -2017,8 +2051,8 @@ function broadcastLivePlaysUpdated(db, liveSessionId, reason = 'plays_updated') 
   }));
 }
 
-function getNormalizedLiveMessage(db, messageId) {
-  return normalizeMessageRow(getLiveMessageRow(db, messageId));
+function getNormalizedLiveMessage(db, messageId, currentUserId = '') {
+  return normalizeMessageRow(getLiveMessageRow(db, messageId, currentUserId));
 }
 
 function broadcastLiveMessageAdded(liveSessionId, message, reason = 'message_added') {
@@ -2027,6 +2061,21 @@ function broadcastLiveMessageAdded(liveSessionId, message, reason = 'message_add
     reason,
     message,
     emitted_at: new Date().toISOString(),
+  });
+}
+
+function broadcastLiveMessageUpdated(db, liveSessionId, messageId, reason = 'message_updated') {
+  const normalizedMessageId = String(messageId || '').trim();
+  if (!normalizedMessageId) return 0;
+
+  return emitLiveSessionEvent(liveSessionId, 'message_updated', ({ userId }) => {
+    const message = getNormalizedLiveMessage(db, normalizedMessageId, userId);
+    if (!message?.id) return undefined;
+    return {
+      reason,
+      message,
+      emitted_at: new Date().toISOString(),
+    };
   });
 }
 
@@ -2537,7 +2586,7 @@ router.get('/sessions/:id/messages', requireAuth, (req, res) => {
   try {
     const db = getDb();
     requireLiveSession(db, req.params.id);
-    res.json({ messages: getSessionMessages(db, req.params.id) });
+    res.json({ messages: getSessionMessages(db, req.params.id, req.user.id) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }
@@ -2572,9 +2621,85 @@ router.post('/sessions/:id/messages', requireAuth, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 'chat', '{}')
     `).run(id, session.id, user.id, user.username || req.user.username || 'User', avatar, message);
 
-    const normalizedMessage = getNormalizedLiveMessage(db, id);
+    const normalizedMessage = getNormalizedLiveMessage(db, id, req.user.id);
     broadcastLiveMessageAdded(session.id, normalizedMessage, 'message');
     res.status(201).json({ message: normalizedMessage });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/messages/:messageId/pump', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    const messageId = normalizeText(req.params.messageId, 80);
+    if (!messageId) return res.status(400).json({ error: 'Message ID is required' });
+
+    const togglePump = db.transaction(() => {
+      const messageRow = db.prepare(`
+        SELECT id, live_session_id, message_type
+        FROM live_session_messages
+        WHERE id = ?
+          AND live_session_id = ?
+        LIMIT 1
+      `).get(messageId, session.id);
+      if (!messageRow) {
+        const err = new Error('Message not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      if (!isPumpableLiveMessageType(messageRow.message_type)) {
+        const err = new Error('This message cannot be pumped');
+        err.statusCode = 400;
+        throw err;
+      }
+
+      const existing = db.prepare(`
+        SELECT 1
+        FROM live_message_pumps
+        WHERE message_id = ?
+          AND user_id = ?
+        LIMIT 1
+      `).get(messageRow.id, req.user.id);
+
+      let pumped = false;
+      if (existing) {
+        db.prepare(`
+          DELETE FROM live_message_pumps
+          WHERE message_id = ?
+            AND user_id = ?
+        `).run(messageRow.id, req.user.id);
+      } else {
+        db.prepare(`
+          INSERT INTO live_message_pumps (message_id, user_id)
+          VALUES (?, ?)
+        `).run(messageRow.id, req.user.id);
+        pumped = true;
+      }
+
+      const pumpCount = toInt(db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM live_message_pumps
+        WHERE message_id = ?
+      `).get(messageRow.id)?.count);
+
+      return {
+        message_id: messageRow.id,
+        pumped,
+        pump_count: pumpCount,
+      };
+    });
+
+    const result = togglePump();
+    const message = getNormalizedLiveMessage(db, result.message_id, req.user.id);
+    broadcastLiveMessageUpdated(db, session.id, result.message_id, result.pumped ? 'message_pumped' : 'message_unpumped');
+    res.json({
+      success: true,
+      pumped: result.pumped,
+      pump_count: result.pump_count,
+      message,
+    });
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }

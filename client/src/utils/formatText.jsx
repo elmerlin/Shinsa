@@ -1,19 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { getProfilePathByUsername } from './profile';
-import { getDojoCatEmoji } from './dojoCatEmojis';
+import { getStickerEmoji, isStickerOnlyMessage, STICKER_TOKEN_PATTERN, STICKER_TOKEN_REGEX } from './stickers';
 
-const INLINE_TOKEN_REGEX = /(:dojocat_[0-9]+_[0-9]+:|(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{2,30}))/g;
-const DOJO_CAT_TOKEN_REGEX = /:dojocat_[0-9]+_[0-9]+:/gi;
-const DOJO_CAT_ONLY_REGEX = /^(?:\s*:dojocat_[0-9]+_[0-9]+:\s*)+$/i;
+const INLINE_TOKEN_REGEX = new RegExp(`(${STICKER_TOKEN_PATTERN}|(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{2,30}))`, 'g');
 
 function renderStickerOnlyMessage(text, keyRef) {
   const raw = String(text || '');
-  if (!DOJO_CAT_ONLY_REGEX.test(raw)) return null;
+  if (!isStickerOnlyMessage(raw)) return null;
 
-  const tokens = raw.match(DOJO_CAT_TOKEN_REGEX) || [];
+  const tokens = raw.match(STICKER_TOKEN_REGEX) || [];
   const stickers = tokens
-    .map((token) => getDojoCatEmoji(token))
+    .map((token) => getStickerEmoji(token))
     .filter(Boolean);
 
   if (stickers.length === 0) return null;
@@ -44,18 +42,18 @@ function renderInlineTokens(text, keyRef) {
   INLINE_TOKEN_REGEX.lastIndex = 0;
   while ((match = INLINE_TOKEN_REGEX.exec(text)) !== null) {
     const token = match[1] || '';
-    const dojoCat = getDojoCatEmoji(token);
+    const sticker = getStickerEmoji(token);
 
-    if (dojoCat) {
+    if (sticker) {
       if (match.index > lastIndex) {
         parts.push(text.slice(lastIndex, match.index));
       }
       parts.push(
         <img
           key={keyRef.value++}
-          src={dojoCat.image}
-          alt={dojoCat.label}
-          title={dojoCat.label}
+          src={sticker.image}
+          alt={sticker.label}
+          title={sticker.label}
           className="mx-0.5 inline-block h-8 w-8 rounded-md object-contain align-middle"
         />
       );

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { DOJO_CAT_EMOJI_GROUP } from '../utils/dojoCatEmojis';
+import { STICKER_GROUPS } from '../utils/stickers';
 
 export default function DojoCatStickerPicker({
   onSelect,
@@ -56,7 +56,7 @@ export default function DojoCatStickerPicker({
     <>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-display text-cyan-300">{DOJO_CAT_EMOJI_GROUP.label}</p>
+          <p className="text-[10px] font-display text-cyan-300">Stickers</p>
           <p className="mt-1 text-[11px] text-gray-400">Tap a sticker to drop it into the current message.</p>
         </div>
         {isMobileSheet ? (
@@ -69,17 +69,24 @@ export default function DojoCatStickerPicker({
           </button>
         ) : null}
       </div>
-      <div className={`grid gap-1.5 ${isMobileSheet ? 'grid-cols-4' : 'grid-cols-5 sm:grid-cols-6'}`}>
-        {DOJO_CAT_EMOJI_GROUP.emojis.map((emoji) => (
-          <button
-            key={emoji.id}
-            type="button"
-            onClick={() => handleSelect(emoji.token)}
-            className={`flex w-full items-center justify-center rounded-lg border border-white/8 bg-black/20 transition-colors hover:bg-piu-dark/50 ${isMobileSheet ? 'h-14' : 'h-12'}`}
-            title={emoji.label}
-          >
-            <img src={emoji.image} alt={emoji.label} className={`${isMobileSheet ? 'h-9 w-9' : 'h-8 w-8'} object-contain`} />
-          </button>
+      <div className="space-y-4">
+        {STICKER_GROUPS.map((group) => (
+          <div key={group.label}>
+            <p className="mb-2 text-[10px] font-display text-gray-400">{group.label}</p>
+            <div className={`grid gap-1.5 ${isMobileSheet ? 'grid-cols-4' : 'grid-cols-5 sm:grid-cols-6'}`}>
+              {group.emojis.map((emoji) => (
+                <button
+                  key={emoji.id}
+                  type="button"
+                  onClick={() => handleSelect(emoji.token)}
+                  className={`flex w-full items-center justify-center rounded-lg border border-white/8 bg-black/20 transition-colors hover:bg-piu-dark/50 ${isMobileSheet ? 'h-14' : 'h-12'}`}
+                  title={emoji.label}
+                >
+                  <img src={emoji.image} alt={emoji.label} className={`${isMobileSheet ? 'h-9 w-9' : 'h-8 w-8'} object-contain`} />
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </>
@@ -113,7 +120,7 @@ export default function DojoCatStickerPicker({
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         className={`flex items-center justify-center rounded text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors ${compact ? 'p-1.5 text-sm' : 'w-8 h-8 text-[18px] leading-none'} ${buttonClassName}`.trim()}
-        title="DojoCat stickers"
+        title="Stickers"
       >
         🐾
       </button>

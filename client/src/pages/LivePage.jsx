@@ -17,6 +17,7 @@ import {
   getYoutubeBroadcasts,
   getYoutubeConnectionStatus,
   openLiveSessionStream,
+  pumpLiveMessage,
   sendLiveMessage,
   sendLivePresence,
   sendLiveRequest,
@@ -323,6 +324,10 @@ function formatCompactRequestStateLabel(info) {
     return info.skippedCount === 1 ? 'Skipped' : `${info.skippedCount} skipped`;
   }
   return '';
+}
+
+function canPumpLiveMessage(entry) {
+  return String(entry?.message_type || '').trim().toLowerCase() !== 'system';
 }
 
 function getMessageTone(message) {
@@ -921,6 +926,12 @@ function removeLiveMessageById(messages, messageId) {
   if (!normalizedMessageId) return current;
   const next = current.filter((row) => row?.id !== normalizedMessageId);
   return next.length === current.length ? current : next;
+}
+
+function replaceLiveMessageById(messages, message) {
+  const current = Array.isArray(messages) ? messages : [];
+  if (!message?.id) return current;
+  return appendUniqueLiveMessage(current, message);
 }
 
 function applyModerationToMessages(messages, targetUserId, moderation) {
@@ -2280,6 +2291,7 @@ export default function LivePage() {
   const [votePinCollapsed, setVotePinCollapsed] = useState(false);
   const [requestActionKey, setRequestActionKey] = useState('');
   const [moderationActionKey, setModerationActionKey] = useState('');
+  const [messagePumpActionKey, setMessagePumpActionKey] = useState('');
   const [deletingMessageId, setDeletingMessageId] = useState('');
   const [streamState, setStreamState] = useState('idle');
   const [isDocumentVisible, setIsDocumentVisible] = useState(() => (
@@ -2674,6 +2686,21 @@ export default function LivePage() {
         return {
           ...prev,
           messages: appendUniqueLiveMessage(prev.messages, message),
+        };
+      });
+    });
+  };
+
+  const replaceLiveMessage = (message) => {
+    if (!message?.id) return;
+
+    startTransition(() => {
+      setMessages((prev) => replaceLiveMessageById(prev, message));
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          messages: replaceLiveMessageById(prev.messages, message),
         };
       });
     });
@@ -3175,6 +3202,17 @@ export default function LivePage() {
       } catch {}
     };
 
+    const handleMessageUpdated = (event) => {
+      try {
+        const payload = JSON.parse(event.data || '{}');
+        if (payload?.message) {
+          replaceLiveMessage(payload.message);
+        }
+        if (!closed) setError('');
+        if (!closed) setStreamState('live');
+      } catch {}
+    };
+
     const handleRequestsUpdated = (event) => {
       try {
         const payload = JSON.parse(event.data || '{}');
@@ -3212,6 +3250,7 @@ export default function LivePage() {
     source.addEventListener('session_updated', handleSessionUpdated);
     source.addEventListener('plays_updated', handlePlaysUpdated);
     source.addEventListener('message_added', handleMessageAdded);
+    source.addEventListener('message_updated', handleMessageUpdated);
     source.addEventListener('message_removed', handleMessageRemoved);
     source.addEventListener('requests_updated', handleRequestsUpdated);
     source.addEventListener('moderation_updated', handleModerationUpdated);
@@ -3684,6 +3723,22 @@ export default function LivePage() {
       setError(err.message || 'Failed to update moderation');
     } finally {
       setModerationActionKey('');
+    }
+  };
+
+  const handlePumpChatMessage = async (message) => {
+    const messageId = String(message?.id || '').trim();
+    if (!activeSessionId || !messageId || !canPumpLiveMessage(message)) return;
+    setMessagePumpActionKey(messageId);
+    try {
+      const data = await pumpLiveMessage(activeSessionId, messageId);
+      if (data?.message) {
+        replaceLiveMessage(data.message);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to pump message');
+    } finally {
+      setMessagePumpActionKey('');
     }
   };
 
@@ -4599,6 +4654,11 @@ export default function LivePage() {
       >
         {chatMessages.map((msg) => {
           const tone = getMessageTone(msg);
+          const canPump = canPumpLiveMessage(msg);
+          const isPumpingMessage = messagePumpActionKey === msg.id;
+          const pumpButtonClasses = msg.user_pumped
+            ? 'border-piu-gold/35 bg-piu-gold/10 text-piu-gold'
+            : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-gold/35 hover:text-piu-gold';
           return (
             <div key={msg.id} className={`overflow-hidden ${isMobileChatLayout ? 'rounded-lg px-2.5 py-2' : isDesktopViewport ? 'rounded-lg px-2.5 py-1.5' : 'rounded-xl px-3 py-2'} ${tone.wrapper}`}>
               <div className="flex items-center justify-between gap-2">
@@ -4638,40 +4698,60 @@ export default function LivePage() {
                 </p>
               </div>
               <MessageBody entry={msg} tone={tone} compact={isMobileChatLayout} dense={isDesktopViewport} />
-              {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteMessage(msg.id)}
-                    disabled={deletingMessageId === msg.id}
-                    className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-3 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/35 hover:text-white disabled:opacity-60"
-                  >
-                    {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleModeration(msg, 'chat_muted')}
-                    disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
-                    className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-amber-200 transition-colors hover:border-amber-300/30 hover:text-white disabled:opacity-60"
-                  >
-                    {moderationActionKey === `chat_muted:${msg.user_id}`
-                      ? 'Updating...'
-                      : msg.chat_muted
-                        ? 'Unmute chat'
-                        : 'Mute chat'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleModeration(msg, 'requests_blocked')}
-                    disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
-                    className="rounded-md border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-fuchsia-200 transition-colors hover:border-fuchsia-300/30 hover:text-white disabled:opacity-60"
-                  >
-                    {moderationActionKey === `requests_blocked:${msg.user_id}`
-                      ? 'Updating...'
-                      : msg.requests_blocked
-                        ? 'Allow requests'
-                        : 'Block requests'}
-                  </button>
+              {canPump || (isHost && live?.status === 'live' && !msg.is_system && !msg.is_host) ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {canPump ? (
+                    <button
+                      type="button"
+                      onClick={() => handlePumpChatMessage(msg)}
+                      disabled={isPumpingMessage}
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors disabled:opacity-60 ${pumpButtonClasses}`}
+                      title={msg.user_pumped ? 'Un-pump' : 'Pump it up!'}
+                    >
+                      <img
+                        src={msg.user_pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+                        alt=""
+                        className={`h-4 w-4 ${isPumpingMessage ? 'animate-bounce' : ''}`}
+                      />
+                      {msg.pump_count > 0 ? <span>{msg.pump_count}</span> : null}
+                    </button>
+                  ) : null}
+                  {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMessage(msg.id)}
+                        disabled={deletingMessageId === msg.id}
+                        className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-3 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/35 hover:text-white disabled:opacity-60"
+                      >
+                        {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleModeration(msg, 'chat_muted')}
+                        disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
+                        className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-amber-200 transition-colors hover:border-amber-300/30 hover:text-white disabled:opacity-60"
+                      >
+                        {moderationActionKey === `chat_muted:${msg.user_id}`
+                          ? 'Updating...'
+                          : msg.chat_muted
+                            ? 'Unmute chat'
+                            : 'Mute chat'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleModeration(msg, 'requests_blocked')}
+                        disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
+                        className="rounded-md border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-fuchsia-200 transition-colors hover:border-fuchsia-300/30 hover:text-white disabled:opacity-60"
+                      >
+                        {moderationActionKey === `requests_blocked:${msg.user_id}`
+                          ? 'Updating...'
+                          : msg.requests_blocked
+                            ? 'Allow requests'
+                            : 'Block requests'}
+                      </button>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </div>

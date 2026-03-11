@@ -2119,6 +2119,13 @@ function initializeDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS live_message_pumps (
+      message_id TEXT NOT NULL REFERENCES live_session_messages(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (message_id, user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS live_session_requests (
       id TEXT PRIMARY KEY,
       live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
@@ -2236,6 +2243,7 @@ function initializeDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_live_sessions_single_active_host ON live_sessions(host_user_id) WHERE status = 'live';
     CREATE INDEX IF NOT EXISTS idx_live_session_presence_session ON live_session_presence(live_session_id, last_seen);
     CREATE INDEX IF NOT EXISTS idx_live_session_messages_session_time ON live_session_messages(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_message_pumps_message ON live_message_pumps(message_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_time ON live_session_requests(live_session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_votes_session_status ON live_session_votes(live_session_id, status, created_at);
@@ -2898,6 +2906,16 @@ function initializeDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_status ON live_session_requests(live_session_id, status, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS live_message_pumps (
+      message_id TEXT NOT NULL REFERENCES live_session_messages(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (message_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_live_message_pumps_message ON live_message_pumps(message_id, created_at);
   `);
 
   // ── Venue Day Pass & Subscription System ──────────────────────────────

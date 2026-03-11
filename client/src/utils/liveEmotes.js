@@ -1,4 +1,4 @@
-import { DOJO_CAT_EMOJIS } from './dojoCatEmojis';
+import { DEVIT_EMOJIS, DOJO_CAT_EMOJIS } from './stickers';
 
 const FEATURED_DOJO_CAT_CONFIG = [
   {
@@ -64,6 +64,46 @@ const FEATURED_DOJO_CAT_EMOTES = FEATURED_DOJO_CAT_CONFIG
   })
   .filter(Boolean);
 
+const FEATURED_DEVIT_CONFIG = [
+  {
+    token: ':devit_cheer:',
+    label: 'Devit Cheer',
+    colors: ['rgba(248, 113, 113, 0.92)', 'rgba(239, 68, 68, 0.82)', 'rgba(252, 165, 165, 0.85)', '#fff5f5'],
+    motion: 'spark',
+  },
+  {
+    token: ':devit_hop:',
+    label: 'Devit Hop',
+    colors: ['rgba(250, 204, 21, 0.92)', 'rgba(249, 115, 22, 0.82)', 'rgba(253, 224, 71, 0.85)', '#fffbeb'],
+    motion: 'pulse',
+  },
+  {
+    token: ':devit_scamper:',
+    label: 'Devit Scamper',
+    colors: ['rgba(59, 130, 246, 0.92)', 'rgba(14, 165, 233, 0.82)', 'rgba(125, 211, 252, 0.85)', '#eff6ff'],
+    motion: 'drift',
+  },
+  {
+    token: ':devit_grin:',
+    label: 'Devit Grin',
+    colors: ['rgba(236, 72, 153, 0.92)', 'rgba(244, 114, 182, 0.82)', 'rgba(251, 182, 206, 0.85)', '#fdf2f8'],
+    motion: 'pulse',
+  },
+];
+
+const FEATURED_DEVIT_EMOTES = FEATURED_DEVIT_CONFIG
+  .map((entry) => {
+    const match = DEVIT_EMOJIS.find((emoji) => emoji.token === entry.token);
+    if (!match) return null;
+    return {
+      ...entry,
+      image: match.image,
+      variant: 'sticker',
+      trayGroup: 'Featured Devit',
+    };
+  })
+  .filter(Boolean);
+
 export const LIVE_EMOTES = [
   {
     token: ':shinsa_hype:',
@@ -108,6 +148,7 @@ export const LIVE_EMOTES = [
     motion: 'spark',
   },
   ...FEATURED_DOJO_CAT_EMOTES,
+  ...FEATURED_DEVIT_EMOTES,
 ];
 
 export const LIVE_EMOJI_GROUPS = [
@@ -124,7 +165,12 @@ export const LIVE_EMOTE_TRAY_GROUPS = [
   {
     label: 'Featured DojoCat',
     description: '',
-    emotes: LIVE_EMOTES.filter((emote) => emote.variant === 'sticker'),
+    emotes: LIVE_EMOTES.filter((emote) => emote.trayGroup === 'Featured DojoCat'),
+  },
+  {
+    label: 'Featured Devit',
+    description: '',
+    emotes: LIVE_EMOTES.filter((emote) => emote.trayGroup === 'Featured Devit'),
   },
 ];
 

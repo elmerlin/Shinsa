@@ -989,6 +989,13 @@ export const sendLiveMessage = (sessionId, data) => request(`/live/sessions/${en
   method: 'POST',
   body: JSON.stringify(data),
 });
+export const pumpLiveMessage = (sessionId, messageId) => pumpRequestWithHaptic(
+  `/live/sessions/${encodeURIComponent(sessionId)}/messages/${encodeURIComponent(messageId)}/pump`,
+  {
+    method: 'POST',
+    body: '{}',
+  }
+);
 export const syncLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/sync`, {
   method: 'POST',
   body: '{}',
