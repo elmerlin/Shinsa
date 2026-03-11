@@ -4986,19 +4986,19 @@ export default function LivePage() {
   }
 
     return (
-      <div className="mx-auto max-w-[1760px] overflow-x-hidden px-4 py-5 sm:px-8 xl:px-10 2xl:px-14 space-y-4">
-      <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start md:justify-between">
+      <div className="mx-auto max-w-[1760px] space-y-4 overflow-x-hidden px-4 py-4 sm:px-8 xl:px-10 2xl:px-14">
+      <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_8px_24px_rgba(0,0,0,0.2)] sm:p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-start md:justify-between">
           <div className="min-w-0 w-full md:flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
-                <h1 className="mt-1 text-2xl font-display font-black text-white sm:text-3xl">
+                <h1 className="mt-0.5 text-2xl font-display font-black text-white sm:text-3xl">
                   {live?.title || 'Live session'}
                 </h1>
               </div>
               {liveStatusText || isHost ? (
-                <div className="w-[10.75rem] shrink-0 md:hidden">
+                <div className="w-[10rem] shrink-0 md:hidden">
                   <LiveHeaderStatusStrip
                     isHost={isHost}
                     liveStatusText={liveStatusText}
@@ -5016,19 +5016,19 @@ export default function LivePage() {
               {live?.status === 'ended' ? ' • ended' : ' • live'}
             </p>
           </div>
-          <div className="flex w-full flex-col items-start gap-2 md:w-auto md:max-w-[30rem] md:shrink-0 md:items-end">
+          <div className="flex w-full flex-col items-start gap-1.5 md:w-auto md:max-w-[30rem] md:shrink-0 md:items-end">
             {!isDesktopViewport ? (
               <p className="text-xs text-left text-gray-400">
                 {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
                 {syncLabel ? ` • ${syncLabel}` : ''}
               </p>
             ) : null}
-            <div className="flex w-full flex-wrap items-center gap-2 justify-start md:w-auto md:justify-end">
+            <div className="flex w-full flex-wrap items-center gap-1.5 justify-start md:w-auto md:justify-end">
               {mobileVideoLockAvailable ? (
                 <button
                   type="button"
                   onClick={() => setLockVideo((prev) => !prev)}
-                  className={`rounded-md border px-3 py-2 text-xs font-display font-semibold transition-colors ${
+                  className={`rounded-md border px-3 py-1.5 text-xs font-display font-semibold transition-colors ${
                     lockVideo
                       ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-100'
                       : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
@@ -5037,15 +5037,15 @@ export default function LivePage() {
                   {lockVideo ? 'Video locked' : 'Lock video'}
                 </button>
               ) : null}
-              <button type="button" onClick={handleCopyLink} className="btn-secondary text-xs px-3 py-2">
+              <button type="button" onClick={handleCopyLink} className="btn-secondary px-3 py-1.5 text-xs">
                 {copied ? 'Copied' : 'Copy viewer link'}
               </button>
               {live?.is_host && live?.status === 'live' && (
                 <>
-                  <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn-secondary text-xs px-3 py-2">
+                  <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn-secondary px-3 py-1.5 text-xs">
                     {syncing ? 'Syncing...' : 'Sync now'}
                   </button>
-                  <button type="button" onClick={handleEndSession} disabled={ending} className="btn-primary text-xs px-3 py-2">
+                  <button type="button" onClick={handleEndSession} disabled={ending} className="btn-primary px-3 py-1.5 text-xs">
                     {ending ? 'Ending...' : 'End session'}
                   </button>
                 </>
@@ -5067,11 +5067,11 @@ export default function LivePage() {
         </div>
 
         {showOverlayStudioTab ? (
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => setHostWorkspaceTab('room')}
-              className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
+              className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'room'
                   ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
                   : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
@@ -5082,7 +5082,7 @@ export default function LivePage() {
             <button
               type="button"
               onClick={() => setHostWorkspaceTab('stream')}
-              className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
+              className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'stream'
                   ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
                   : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
@@ -5094,7 +5094,7 @@ export default function LivePage() {
               <button
                 type="button"
                 onClick={() => setHostWorkspaceTab('chapters')}
-                className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
+                className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
                   hostWorkspaceTab === 'chapters'
                     ? 'border-amber-400/30 bg-amber-500/10 text-amber-100'
                     : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
@@ -5106,52 +5106,56 @@ export default function LivePage() {
             <button
               type="button"
               onClick={() => setHostWorkspaceTab('overlay')}
-              className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold ${
+              className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
                 hostWorkspaceTab === 'overlay'
                   ? 'border-fuchsia-400/30 bg-fuchsia-500/10 text-fuchsia-100'
                   : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
               }`}
             >
-              Overlay Studio
+              Overlays
             </button>
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 lg:gap-2.5 mt-3">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 lg:gap-2">
           <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-semibold text-emerald-200">
-            {live?.viewer_count || 0} watching now
+            {live?.viewer_count || 0} viewers
           </span>
           <span className="rounded-md border border-piu-border/60 bg-piu-dark/60 px-3 py-1 text-[11px] text-gray-300">
             Peak {live?.viewer_peak || 0}
           </span>
-          {activeSessionId ? (
-            <span className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
-              streamState === 'live'
-                ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200'
-                : streamState === 'reconnecting'
-                  ? 'border-orange-400/30 bg-orange-500/10 text-orange-200'
-                  : 'border-piu-border/60 bg-piu-dark/60 text-gray-400'
-            }`}>
-              {streamStatusLabel}
-            </span>
+          {activeSessionId || (isHost && wakeLockSupported && !isDesktopViewport) ? (
+            <div className="flex items-center gap-1.5">
+              {activeSessionId ? (
+                <span className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
+                  streamState === 'live'
+                    ? 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200'
+                    : streamState === 'reconnecting'
+                      ? 'border-orange-400/30 bg-orange-500/10 text-orange-200'
+                      : 'border-piu-border/60 bg-piu-dark/60 text-gray-400'
+                }`}>
+                  {streamStatusLabel}
+                </span>
+              ) : null}
+              {isHost && wakeLockSupported && !isDesktopViewport ? (
+                <button
+                  type="button"
+                  onClick={handleToggleWakeLock}
+                  className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
+                    wakeLockActive
+                      ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
+                      : 'border-piu-border/60 bg-piu-dark/60 text-gray-300'
+                  }`}
+                >
+                  {wakeLockActive ? 'Screen awake' : 'Keep awake'}
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {live?.last_sync_at && isDesktopViewport ? (
             <span className="rounded-md border border-piu-border/60 bg-piu-dark/60 px-3 py-1 text-[11px] text-gray-400">
               {syncLabel}
             </span>
-          ) : null}
-          {isHost && wakeLockSupported && !isDesktopViewport ? (
-            <button
-              type="button"
-              onClick={handleToggleWakeLock}
-              className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${
-                wakeLockActive
-                  ? 'border-amber-400/30 bg-amber-500/10 text-amber-200'
-                  : 'border-piu-border/60 bg-piu-dark/60 text-gray-300'
-              }`}
-            >
-              {wakeLockActive ? 'Screen awake' : 'Keep awake'}
-            </button>
           ) : null}
           {!live?.is_host && viewerState.chat_muted ? (
             <span className="rounded-md border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-display font-semibold text-amber-200">
