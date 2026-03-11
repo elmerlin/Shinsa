@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../db/schema');
@@ -42,6 +44,7 @@ const LIVE_SYNC_ACTIVE_INTERVAL_MS = 30000;
 const LIVE_SYNC_IDLE_INTERVAL_MS = 45000;
 const LIVE_SYNC_IDLE_AFTER_MS = 3 * 60 * 1000;
 const DEFAULT_REQUEST_MAX_LEVEL = 30;
+const SONG_ALIAS_PATH = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
 const FAILURE_MESSAGES = [
   'Stage break. Run it back.',
   'Close miss. Reset and clear it.',
@@ -133,6 +136,7 @@ const liveSyncTimers = new Map();
 const liveSyncInFlight = new Set();
 const livePresenceBroadcastState = new Map();
 const livePlayOutcomeCache = new Map();
+let cachedSongAliases = null;
 
 function getOptionalAuthUserId(req) {
   const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
@@ -159,6 +163,49 @@ function normalizeUrl(value, max = 500) {
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   if (/^(www\.)/i.test(trimmed)) return `https://${trimmed}`;
   return trimmed;
+}
+
+function normalizeSongName(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function loadSongAliases() {
+  if (cachedSongAliases) return cachedSongAliases;
+  if (!fs.existsSync(SONG_ALIAS_PATH)) {
+    cachedSongAliases = {};
+    return cachedSongAliases;
+  }
+
+  try {
+    const data = JSON.parse(fs.readFileSync(SONG_ALIAS_PATH, 'utf-8'));
+    const rawAliases = (data && typeof data.aliases === 'object' && data.aliases) || {};
+    const normalizedAliases = {};
+
+    for (const [alias, canonical] of Object.entries(rawAliases)) {
+      const aliasNorm = normalizeSongName(alias);
+      const canonicalNorm = normalizeSongName(canonical);
+      if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
+      if (!normalizedAliases[aliasNorm]) normalizedAliases[aliasNorm] = canonicalNorm;
+    }
+
+    cachedSongAliases = normalizedAliases;
+  } catch {
+    cachedSongAliases = {};
+  }
+
+  return cachedSongAliases;
+}
+
+function toCanonicalSongTitle(title, aliases) {
+  let normalized = normalizeSongName(title);
+  if (!normalized) return '';
+
+  const seen = new Set();
+  while (aliases[normalized] && !seen.has(normalized)) {
+    seen.add(normalized);
+    normalized = aliases[normalized];
+  }
+  return normalized;
 }
 
 function getEmptyYoutubeSessionFields() {
@@ -1031,28 +1078,47 @@ function getLiveSessionYoutubeVideoId(session) {
 }
 
 function getSessionPlaysWithDurations(db, liveSessionId) {
-  return db.prepare(`
-    SELECT
-      p.*,
-      COALESCE(song_duration.duration_seconds, 0) AS duration_seconds,
-      COALESCE(song_duration.duration_source, '') AS duration_source
+  const aliases = loadSongAliases();
+  const durationRows = db.prepare(`
+    SELECT title, mode, level, duration_seconds, duration_source
+    FROM songs
+    WHERE COALESCE(duration_seconds, 0) > 0
+  `).all();
+
+  const durationLookup = new Map();
+  for (const row of durationRows) {
+    const titleKey = toCanonicalSongTitle(row.title, aliases);
+    const modeKey = normalizeSongName(row.mode);
+    const level = toInt(row.level);
+    const durationSeconds = toInt(row.duration_seconds);
+    if (!titleKey || !modeKey || level <= 0 || durationSeconds <= 0) continue;
+
+    const lookupKey = `${titleKey}|${modeKey}|${level}`;
+    const existing = durationLookup.get(lookupKey);
+    if (!existing || durationSeconds > toInt(existing.duration_seconds)) {
+      durationLookup.set(lookupKey, {
+        duration_seconds: durationSeconds,
+        duration_source: String(row.duration_source || '').trim(),
+      });
+    }
+  }
+
+  const plays = db.prepare(`
+    SELECT p.*
     FROM live_session_plays p
-    LEFT JOIN (
-      SELECT
-        LOWER(TRIM(title)) AS title_key,
-        LOWER(TRIM(mode)) AS mode_key,
-        level,
-        MAX(COALESCE(duration_seconds, 0)) AS duration_seconds,
-        MAX(COALESCE(NULLIF(duration_source, ''), '')) AS duration_source
-      FROM songs
-      GROUP BY LOWER(TRIM(title)), LOWER(TRIM(mode)), level
-    ) song_duration
-      ON song_duration.title_key = LOWER(TRIM(p.song_title))
-     AND song_duration.mode_key = LOWER(TRIM(p.mode))
-     AND song_duration.level = p.level
     WHERE p.live_session_id = ?
     ORDER BY COALESCE(NULLIF(p.played_at_utc, ''), p.date_played) ASC, p.id ASC
   `).all(liveSessionId);
+
+  return plays.map((play) => {
+    const lookupKey = `${toCanonicalSongTitle(play.song_title, aliases)}|${normalizeSongName(play.mode)}|${toInt(play.level)}`;
+    const durationMatch = durationLookup.get(lookupKey) || null;
+    return {
+      ...play,
+      duration_seconds: durationMatch ? toInt(durationMatch.duration_seconds) : 0,
+      duration_source: durationMatch?.duration_source || '',
+    };
+  });
 }
 
 async function buildLiveSessionYoutubeTimestampPreview(db, session, userId) {
