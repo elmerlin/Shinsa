@@ -343,17 +343,9 @@ export default function Dashboard() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-4xl font-display font-bold tracking-wider">
-            <span className="text-piu-gold">PUMP</span> SHINSA
-          </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-            <Link to="/privacy-policy" className="font-display text-gray-400 underline-offset-4 transition-colors hover:text-white hover:underline">
-              Privacy Policy
-            </Link>
-            <span>Google and YouTube data is only used for the features you choose to connect.</span>
-          </div>
-        </div>
+        <h1 className="text-4xl font-display font-bold tracking-wider">
+          <span className="text-piu-gold">PUMP</span> SHINSA
+        </h1>
         <div className="grid grid-cols-4 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-2">
           <Link
             to="/live"
