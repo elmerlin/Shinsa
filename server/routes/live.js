@@ -1136,13 +1136,13 @@ async function buildLiveSessionYoutubeTimestampPreview(db, session, userId) {
     throw err;
   }
 
-  const timestamps = buildYoutubeTimestampPayload(session, plays);
   const video = await getYoutubeVideoById(db, userId, videoId);
   if (!video) {
     const err = new Error('Unable to load the linked YouTube video');
     err.statusCode = 404;
     throw err;
   }
+  const timestamps = buildYoutubeTimestampPayload(session, plays, video);
 
   return {
     video_id: videoId,

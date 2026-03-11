@@ -77,20 +77,31 @@ function stripManagedYoutubeChaptersBlock(description) {
   return String(description || '').replace(SHINSA_CHAPTERS_BLOCK_REGEX, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function buildYoutubeTimestampPayload(session, plays = []) {
+function buildYoutubeTimestampPayload(session, plays = [], video = null) {
+  const videoActualStart = parseUtcLike(video?.actual_start_time);
+  const sessionActualStart = parseUtcLike(session?.youtube_actual_start_time);
+  const videoScheduledStart = parseUtcLike(video?.scheduled_start_time);
+  const sessionScheduledStart = parseUtcLike(session?.youtube_scheduled_start_time);
+  const sessionStartedAt = parseUtcSqliteDateTime(session?.started_at) || null;
   const sourceStart = (
-    parseUtcLike(session?.youtube_actual_start_time)
-    || parseUtcLike(session?.youtube_scheduled_start_time)
-    || parseUtcSqliteDateTime(session?.started_at)
+    videoActualStart
+    || sessionActualStart
+    || videoScheduledStart
+    || sessionScheduledStart
+    || sessionStartedAt
     || null
   );
-  const sourceStartKind = parseUtcLike(session?.youtube_actual_start_time)
-    ? 'youtube_actual_start_time'
-    : parseUtcLike(session?.youtube_scheduled_start_time)
-      ? 'youtube_scheduled_start_time'
-      : session?.started_at
-        ? 'session_started_at'
-        : '';
+  const sourceStartKind = videoActualStart
+    ? 'youtube_video_actual_start_time'
+    : sessionActualStart
+      ? 'youtube_actual_start_time'
+      : videoScheduledStart
+        ? 'youtube_video_scheduled_start_time'
+        : sessionScheduledStart
+          ? 'youtube_scheduled_start_time'
+          : sessionStartedAt
+            ? 'session_started_at'
+            : '';
 
   if (!sourceStart) {
     const err = new Error('No usable stream start time is available for this session yet');

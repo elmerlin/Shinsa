@@ -448,7 +448,7 @@ async function getYoutubeVideoById(db, userId, videoId) {
   if (!normalizedId) return null;
   const { accessToken, row } = await getAuthorizedYoutubeConnection(db, userId);
   const payload = await youtubeApiGet(accessToken, YOUTUBE_VIDEOS_URL, {
-    part: 'snippet,status',
+    part: 'snippet,status,liveStreamingDetails',
     id: normalizedId,
   });
   const item = Array.isArray(payload?.items) ? payload.items[0] : null;
@@ -469,6 +469,10 @@ async function getYoutubeVideoById(db, userId, videoId) {
     default_language: String(item?.snippet?.defaultLanguage || '').trim(),
     default_audio_language: String(item?.snippet?.defaultAudioLanguage || '').trim(),
     privacy_status: String(item?.status?.privacyStatus || '').trim(),
+    actual_start_time: String(item?.liveStreamingDetails?.actualStartTime || '').trim(),
+    actual_end_time: String(item?.liveStreamingDetails?.actualEndTime || '').trim(),
+    scheduled_start_time: String(item?.liveStreamingDetails?.scheduledStartTime || '').trim(),
+    scheduled_end_time: String(item?.liveStreamingDetails?.scheduledEndTime || '').trim(),
   };
 }
 
