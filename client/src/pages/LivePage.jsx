@@ -2125,6 +2125,10 @@ export default function LivePage() {
     setEditYoutubeBroadcastId(String(live?.youtube_broadcast_id || '').trim());
   }, [live?.id, live?.youtube_broadcast_id]);
 
+  useEffect(() => {
+    setShowEmoteTray(false);
+  }, [activeSessionId, live?.status]);
+
   const loadYoutubeStatus = async () => {
     if (!user) return null;
     setYoutubeStatusLoading(true);
@@ -3974,7 +3978,6 @@ export default function LivePage() {
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Live chat</p>
-          <p className={`${isMobileChatLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{messages.length} recent messages</p>
         </div>
         <div className="flex flex-wrap justify-end gap-1">
           {QUICK_REACTIONS.map((emoji) => (
@@ -3988,18 +3991,20 @@ export default function LivePage() {
               {emoji}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => setShowEmoteTray((prev) => !prev)}
-            disabled={viewerState.chat_muted || live?.status !== 'live'}
-            className={`rounded-md border px-2.5 py-1.5 text-[10px] font-display font-semibold transition-colors ${
-              showEmoteTray
-                ? 'border-rose-400/30 bg-rose-500/12 text-rose-100'
-                : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
-            } disabled:opacity-40`}
-          >
-            Emotes
-          </button>
+          {!isMobileChatLayout ? (
+            <button
+              type="button"
+              onClick={() => setShowEmoteTray((prev) => !prev)}
+              disabled={viewerState.chat_muted || live?.status !== 'live'}
+              className={`rounded-md border px-2.5 py-1.5 text-[10px] font-display font-semibold transition-colors ${
+                showEmoteTray
+                  ? 'border-rose-400/30 bg-rose-500/12 text-rose-100'
+                  : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+              } disabled:opacity-40`}
+            >
+              Emotes
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -4017,7 +4022,11 @@ export default function LivePage() {
       ) : null}
 
       {showEmoteTray && live?.status === 'live' ? (
-        <div className="mt-3 min-h-0 overflow-hidden rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+        <div className={`min-h-0 overflow-hidden rounded-lg border border-piu-border/60 bg-piu-dark/95 p-3 ${
+          isMobileChatLayout
+            ? 'absolute inset-x-3 bottom-[4.25rem] z-30 shadow-[0_18px_48px_rgba(0,0,0,0.42)]'
+            : 'mt-3'
+        }`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-display font-semibold text-gray-300">Emotes and stickers</p>
@@ -4028,7 +4037,11 @@ export default function LivePage() {
             </button>
           </div>
 
-          <div className="mt-3 max-h-[52vh] overflow-y-auto overscroll-contain pr-1 lg:max-h-64 xl:max-h-72">
+          <div className={`mt-3 overflow-y-auto overscroll-contain pr-1 ${
+            isMobileChatLayout
+              ? 'max-h-[min(42dvh,22rem)]'
+              : 'max-h-[52vh] lg:max-h-64 xl:max-h-72'
+          }`}>
             {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
               <div key={group.label} className="mt-3 first:mt-0">
                 <div className="px-1">
@@ -4171,6 +4184,23 @@ export default function LivePage() {
             maxLength={500}
             disabled={viewerState.chat_muted}
           />
+          {isMobileChatLayout ? (
+            <button
+              type="button"
+              onClick={() => setShowEmoteTray((prev) => !prev)}
+              disabled={viewerState.chat_muted || live?.status !== 'live'}
+              aria-label={showEmoteTray ? 'Close emotes' : 'Open emotes'}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                showEmoteTray
+                  ? 'border-rose-400/30 bg-rose-500/12 text-rose-100'
+                  : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+              } disabled:opacity-40`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 14h.01M16 14h.01M8.5 9.5h7M12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9-9 4.03-9 9c0 1.71.48 3.31 1.31 4.67.18.29.23.64.13.97L3.5 21l3.71-.95c.33-.08.68-.03.97.13A8.95 8.95 0 0 0 12 21Z" />
+              </svg>
+            </button>
+          ) : null}
           <button type="submit" disabled={sendingChat || viewerState.chat_muted} className="btn-primary px-4 disabled:opacity-50">
             {sendingChat ? '...' : 'Send'}
           </button>

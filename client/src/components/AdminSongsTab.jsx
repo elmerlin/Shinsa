@@ -69,11 +69,17 @@ export default function AdminSongsTab() {
           limit: 50,
         });
         if (cancelled) return;
+        const nextTotal = parseInt(payload?.total, 10) || 0;
+        const nextTotalPages = parseInt(payload?.total_pages, 10) || 0;
+        if (nextTotalPages > 0 && page > nextTotalPages) {
+          setPage(nextTotalPages);
+          return;
+        }
         const nextResults = Array.isArray(payload?.results) ? payload.results : [];
         setResults(nextResults);
         setCoverage(payload?.coverage || { total_songs: 0, with_duration: 0, missing_duration: 0 });
-        setTotal(parseInt(payload?.total, 10) || 0);
-        setTotalPages(parseInt(payload?.total_pages, 10) || 0);
+        setTotal(nextTotal);
+        setTotalPages(nextTotalPages);
         setInputs((prev) => {
           const next = { ...prev };
           for (const row of nextResults) {
@@ -181,7 +187,14 @@ export default function AdminSongsTab() {
             <p className="text-[11px] font-display font-bold uppercase tracking-wide text-gray-500">Missing Duration Queue</p>
             <p className="text-sm text-gray-400 mt-1">{total} song{total === 1 ? '' : 's'} currently need a duration.</p>
           </div>
-          {loading ? <p className="text-xs text-gray-500">Loading...</p> : null}
+          <button
+            type="button"
+            onClick={() => setRefreshKey((prev) => prev + 1)}
+            disabled={loading}
+            className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-50"
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </button>
         </div>
 
         <div className="mt-4 space-y-3">
