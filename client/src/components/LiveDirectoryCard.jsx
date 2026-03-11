@@ -56,11 +56,14 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
     ? 'border-piu-border/60 bg-piu-dark/70 text-gray-200'
     : 'border-piu-gold/20 bg-piu-gold/10 text-amber-100';
   const gradeClass = compact ? 'text-white' : 'text-amber-100';
+  const outerRadiusClass = compact ? 'rounded-xl' : 'rounded-[28px]';
+  const avatarRadiusClass = compact ? 'rounded-xl' : 'rounded-2xl';
+  const panelRadiusClass = compact ? 'rounded-xl' : 'rounded-2xl';
 
   return (
     <Link
       to={session.live_url || `/live/${session.id}`}
-      className={`group block overflow-hidden rounded-[28px] border p-4 transition-all hover:-translate-y-0.5 ${cardClass} ${className}`.trim()}
+      className={`group block overflow-hidden border p-4 transition-all hover:-translate-y-0.5 ${outerRadiusClass} ${cardClass} ${className}`.trim()}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -83,7 +86,7 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
             {session.title || `${host.username || 'Player'} live`}
           </h3>
           <div className="mt-2 flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-piu-border bg-piu-dark text-sm font-display font-bold text-white">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-piu-border bg-piu-dark text-sm font-display font-bold text-white ${avatarRadiusClass}`}>
               {host.avatar ? (
                 <img src={host.avatar} alt={host.username || 'Host'} className="h-full w-full object-cover" />
               ) : (
@@ -108,14 +111,14 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
           </div>
         </div>
 
-        <div className={`shrink-0 rounded-2xl border border-piu-border/70 px-3 py-2 text-right ${viewerPanelClass}`}>
+        <div className={`shrink-0 border border-piu-border/70 px-3 py-2 text-right ${panelRadiusClass} ${viewerPanelClass}`}>
           <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Watching</p>
           <p className={`text-xl font-display font-black ${viewerValueClass}`}>{session.viewer_count || 0}</p>
         </div>
       </div>
 
       <div className={`mt-4 grid gap-3 ${compact ? 'md:grid-cols-[1fr]' : 'md:grid-cols-[minmax(0,1fr)_220px]'}`}>
-        <div className={`rounded-2xl border border-piu-border/80 p-3 ${surfaceClass}`}>
+        <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
           <p className="text-[10px] font-display uppercase tracking-[0.22em] text-gray-500">Now Playing</p>
           {lastPlay ? (
             <div className="mt-2 flex items-center gap-3">
@@ -141,12 +144,12 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
 
         {!compact ? (
           <div className="grid grid-cols-2 gap-3">
-            <div className={`rounded-2xl border border-piu-border/80 p-3 ${surfaceClass}`}>
+            <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
               <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Requests</p>
               <p className="mt-2 text-lg font-display font-black text-white">{requestCounts.open || 0}</p>
               <p className="text-[11px] text-gray-400">open • {requestCounts.queued || 0} queued</p>
             </div>
-            <div className={`rounded-2xl border border-piu-border/80 p-3 ${surfaceClass}`}>
+            <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
               <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Vote</p>
               {activeVote ? (
                 <>
