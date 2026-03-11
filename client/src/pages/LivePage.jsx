@@ -3032,7 +3032,7 @@ export default function LivePage() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') return undefined;
-    if (!useDesktopViewerLayout) {
+    if (!useDesktopViewerLayout || !showLiveRoomWorkspace) {
       setDesktopMediaHeight(0);
       return undefined;
     }
@@ -3054,7 +3054,7 @@ export default function LivePage() {
       observer.disconnect();
       window.removeEventListener('resize', updateHeight);
     };
-  }, [useDesktopViewerLayout, youtubeId]);
+  }, [showLiveRoomWorkspace, useDesktopViewerLayout, youtubeId]);
 
   useEffect(() => {
     setVotePinCollapsed(!!currentVote && currentVote.status !== 'active');
