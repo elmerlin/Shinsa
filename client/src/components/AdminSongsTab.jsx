@@ -63,11 +63,9 @@ export default function AdminSongsTab() {
       setLoading(true);
       setError('');
       try {
-        const payload = await getAdminMissingSongDurations({
-          q: trimmed || undefined,
-          page,
-          limit: 50,
-        });
+        const params = { page, limit: 50 };
+        if (trimmed) params.q = trimmed;
+        const payload = await getAdminMissingSongDurations(params);
         if (cancelled) return;
         const nextTotal = parseInt(payload?.total, 10) || 0;
         const nextTotalPages = parseInt(payload?.total_pages, 10) || 0;

@@ -3473,7 +3473,10 @@ router.get('/tiers', optionalAuth, (req, res) => {
 router.get('/admin/durations/missing', requireAuth, requireAdmin, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
-  const q = String(req.query.q || '').trim().toLowerCase();
+  const rawQuery = String(req.query.q || '').trim();
+  const q = rawQuery && rawQuery !== 'undefined' && rawQuery !== 'null'
+    ? rawQuery.toLowerCase()
+    : '';
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(250, Math.max(1, parseInt(req.query.limit, 10) || 100));
 
