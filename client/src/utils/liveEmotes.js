@@ -1,4 +1,4 @@
-import { DEVIT_EMOJIS, DOJO_CAT_EMOJIS } from './stickers';
+import { DEVIT_EMOJIS, DOJO_CAT_EMOJIS, HEAVYBREATHING_EMOJIS } from './stickers';
 
 const FEATURED_DOJO_CAT_CONFIG = [
   {
@@ -104,6 +104,28 @@ const FEATURED_DEVIT_EMOTES = FEATURED_DEVIT_CONFIG
   })
   .filter(Boolean);
 
+const FEATURED_HEAVYBREATHING_CONFIG = [
+  {
+    token: ':heavybreathing:',
+    label: 'Heavy Breathing',
+    colors: ['rgba(249, 115, 22, 0.92)', 'rgba(185, 28, 28, 0.82)', 'rgba(253, 186, 116, 0.85)', '#fff7ed'],
+    motion: 'pulse',
+  },
+];
+
+const FEATURED_HEAVYBREATHING_EMOTES = FEATURED_HEAVYBREATHING_CONFIG
+  .map((entry) => {
+    const match = HEAVYBREATHING_EMOJIS.find((emoji) => emoji.token === entry.token);
+    if (!match) return null;
+    return {
+      ...entry,
+      image: match.image,
+      variant: 'sticker',
+      trayGroup: 'Featured Heavy Breathing',
+    };
+  })
+  .filter(Boolean);
+
 export const LIVE_EMOTES = [
   {
     token: ':shinsa_hype:',
@@ -149,6 +171,7 @@ export const LIVE_EMOTES = [
   },
   ...FEATURED_DOJO_CAT_EMOTES,
   ...FEATURED_DEVIT_EMOTES,
+  ...FEATURED_HEAVYBREATHING_EMOTES,
 ];
 
 export const LIVE_EMOJI_GROUPS = [
@@ -171,6 +194,11 @@ export const LIVE_EMOTE_TRAY_GROUPS = [
     label: 'Featured Devit',
     description: '',
     emotes: LIVE_EMOTES.filter((emote) => emote.trayGroup === 'Featured Devit'),
+  },
+  {
+    label: 'Featured Heavy Breathing',
+    description: '',
+    emotes: LIVE_EMOTES.filter((emote) => emote.trayGroup === 'Featured Heavy Breathing'),
   },
 ];
 

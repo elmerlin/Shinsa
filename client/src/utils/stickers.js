@@ -17,6 +17,10 @@ const DEVIT_STICKER_CONFIG = [
   { key: 'grin', label: 'Devit Grin', image: '/emojis/devit/grin.png', animated: true },
 ];
 
+const HEAVYBREATHING_STICKER_CONFIG = [
+  { key: 'heavybreathing', label: 'Heavy Breathing', image: '/emojis/heavybreathing/heavybreathing.png', animated: true },
+];
+
 export const DOJO_CAT_EMOJIS = DOJO_CAT_FILE_NAMES.map((fileName) => {
   const token = `:dojocat_${fileName.replace('-', '_')}:`;
   return {
@@ -40,6 +44,16 @@ export const DEVIT_EMOJIS = DEVIT_STICKER_CONFIG.map((entry) => ({
   animated: !!entry.animated,
 }));
 
+export const HEAVYBREATHING_EMOJIS = HEAVYBREATHING_STICKER_CONFIG.map((entry) => ({
+  id: `heavybreathing-${entry.key}`,
+  pack: 'heavybreathing',
+  token: ':heavybreathing:',
+  fileName: entry.key,
+  label: entry.label,
+  image: entry.image,
+  animated: !!entry.animated,
+}));
+
 export const DOJO_CAT_EMOJI_GROUP = {
   label: 'DojoCat',
   emojis: DOJO_CAT_EMOJIS,
@@ -50,16 +64,22 @@ export const DEVIT_EMOJI_GROUP = {
   emojis: DEVIT_EMOJIS,
 };
 
+export const HEAVYBREATHING_EMOJI_GROUP = {
+  label: 'Heavy Breathing',
+  emojis: HEAVYBREATHING_EMOJIS,
+};
+
 export const STICKER_GROUPS = [
   DOJO_CAT_EMOJI_GROUP,
   DEVIT_EMOJI_GROUP,
+  HEAVYBREATHING_EMOJI_GROUP,
 ];
 
-export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+):';
-export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+):/gi;
+export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing):';
+export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing):/gi;
 export const DOJO_CAT_TOKEN_REGEX = /:dojocat_[0-9]+_[0-9]+:/gi;
 
-const STICKER_MAP = [...DOJO_CAT_EMOJIS, ...DEVIT_EMOJIS].reduce((acc, emoji) => {
+const STICKER_MAP = [...DOJO_CAT_EMOJIS, ...DEVIT_EMOJIS, ...HEAVYBREATHING_EMOJIS].reduce((acc, emoji) => {
   acc[emoji.token] = emoji;
   return acc;
 }, {});
