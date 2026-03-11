@@ -50,6 +50,7 @@ import DojoPage from './pages/DojoPage';
 import LeaderboardsPage from './pages/LeaderboardsPage';
 import LivePage from './pages/LivePage';
 import LiveOverlayPage from './pages/LiveOverlayPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 
 const DOJO_TARGET_GROUP = 'pump dojo';
 const DOJO_VENUE_SLUG = 'london-pump-dojo';
@@ -1285,6 +1286,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/login/approve" element={<QrLoginApprovePage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
           <Route path="/:username" element={<ProfilePage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/account" element={<MyAccountPage />} />
@@ -1360,6 +1362,11 @@ export default function App() {
         {' '}
         <span className="font-display tracking-wider">SHINSA</span>
         {' '}- PHOENIX 2026
+        {' '}
+        <span className="mx-2 text-gray-700">|</span>
+        <Link to="/privacy-policy" className="text-gray-400 hover:text-white transition-colors">
+          Privacy Policy
+        </Link>
       </footer>
       ) : null}
 

@@ -895,6 +895,23 @@ export default function MyAccountPage() {
               Link the YouTube channel you stream from so Shinsa Live can list your active and upcoming streams instead of making you paste the URL manually.
             </p>
 
+            <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 p-4 text-sm text-cyan-50">
+              <p className="font-display font-bold uppercase tracking-wide text-cyan-200">Google and YouTube data use</p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-cyan-50/90">
+                <li>Shinsa asks Google only for the YouTube access needed to identify your channel and read your own live broadcast data.</li>
+                <li>Shinsa stores your YouTube channel ID, title, thumbnail, and encrypted Google access and refresh tokens so the connection keeps working.</li>
+                <li>Shinsa uses that data only to show your linked channel and active or upcoming broadcasts inside Shinsa Live.</li>
+                <li>Shinsa does not use Google data for ads and does not post, edit, or delete YouTube content through this connection.</li>
+              </ul>
+              <p className="mt-3 text-xs text-cyan-100/80">
+                Full details are in the{' '}
+                <Link to="/privacy-policy" className="font-display font-bold text-cyan-200 underline-offset-4 hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            </div>
+
             {youtubeMessage && (
               <div className={`px-4 py-2 rounded-lg text-sm ${
                 youtubeMessage.toLowerCase().includes('fail') || youtubeMessage.toLowerCase().includes('error')
