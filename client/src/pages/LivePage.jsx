@@ -10,8 +10,10 @@ import {
   endLiveSession,
   getLiveSession,
   getLiveSessions,
+  getLiveYoutubeTimestamps,
   getMyLiveSession,
   getSongLibrary,
+  publishLiveYoutubeTimestamps,
   getYoutubeBroadcasts,
   getYoutubeConnectionStatus,
   openLiveSessionStream,
@@ -637,7 +639,10 @@ function MessageBody({ entry, tone, compact = false, dense = false }) {
   );
 }
 
-function normalizeSongResults(payload) {
+function normalizeSongResults(payload, options = {}) {
+  const unlimited = !!options.unlimited;
+  const maxSongs = parseInt(options.maxSongs, 10) || 10;
+  const maxCharts = parseInt(options.maxCharts, 10) || 30;
   const songs = Array.isArray(payload?.songs) ? payload.songs : [];
   const grouped = [];
   let totalCharts = 0;
@@ -656,9 +661,41 @@ function normalizeSongResults(payload) {
       charts,
     });
     totalCharts += charts.length;
-    if (grouped.length >= 10 || totalCharts >= 30) break;
+    if (!unlimited && (grouped.length >= maxSongs || totalCharts >= maxCharts)) break;
   }
   return grouped;
+}
+
+function parseRequestShortcutSearch(value) {
+  const raw = String(value || '').trim();
+  if (!raw.startsWith('/')) return null;
+  const match = raw.match(/^\/([sdc])\s*(\d{1,2})(?:\s+(.*))?$/i);
+  if (!match) return null;
+  const modeToken = match[1].toLowerCase();
+  const level = parseInt(match[2], 10) || 0;
+  if (level <= 0) return null;
+  return {
+    mode: modeToken === 's' ? 'Single' : modeToken === 'd' ? 'Double' : 'CoOp',
+    level,
+    search: String(match[3] || '').trim(),
+    token: `/${modeToken}${level}`,
+  };
+}
+
+function flattenSongResultsToCharts(results) {
+  const charts = [];
+  for (const song of Array.isArray(results) ? results : []) {
+    for (const chart of Array.isArray(song?.charts) ? song.charts : []) {
+      charts.push({
+        ...chart,
+        song_group_key: song.song_group_key,
+        song_title: chart.song_title || song.title || 'Unknown song',
+        artist: song.artist || '',
+        jacket_url: chart.jacket_url || song.jacket_url || '',
+      });
+    }
+  }
+  return charts;
 }
 
 function getRequestChartBadgeTone(mode) {
@@ -671,7 +708,122 @@ function getRequestChartBadgeTone(mode) {
   return 'border-piu-border/60 bg-piu-dark/70 text-slate-100';
 }
 
-function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores = false }) {
+function SongRequestTierShortcutResult({ chart, disabled, onSelectChart, showHostScores = false, requestInfo = null, livePlayInfo = null }) {
+  const bestScore = parseInt(chart?.best_score, 10) || 0;
+  const parsedBestGrade = parseGrade(
+    chart?.best_grade || '',
+    bestScore > 0 ? getRank(bestScore).label : ''
+  );
+  const displayBestGrade = parsedBestGrade.display || '';
+  const hasHostScoreSnapshot = chart?.best_score !== null && chart?.best_score !== undefined;
+  const overlayVisible = showHostScores && displayBestGrade;
+  const playedCount = parseInt(livePlayInfo?.count, 10) || 0;
+  const queuedCount = parseInt(requestInfo?.queuedCount, 10) || 0;
+  const openCount = parseInt(requestInfo?.openCount, 10) || 0;
+  const playedRequestCount = parseInt(requestInfo?.playedCount, 10) || 0;
+  const skippedCount = parseInt(requestInfo?.skippedCount, 10) || 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelectChart(chart)}
+      disabled={disabled}
+      className="group text-left disabled:opacity-50"
+      title={`Request ${chart.song_title} (${modeShort(chart.mode)}${chart.level})`}
+    >
+      <div className="overflow-hidden rounded-xl border border-piu-border/60 bg-piu-card/95 shadow-[0_2px_8px_rgba(0,0,0,0.18)] transition-colors group-hover:border-piu-accent/50">
+        <div className="relative aspect-[16/10] overflow-hidden bg-piu-dark">
+          {chart.jacket_url ? (
+            <img
+              src={chart.jacket_url}
+              alt={chart.song_title}
+              className="h-full w-full object-cover opacity-90 transition-transform duration-200 group-hover:scale-[1.03]"
+            />
+          ) : (
+            <div className="h-full w-full bg-[radial-gradient(circle_at_top,#14375f,transparent_55%),linear-gradient(135deg,#0b1430,#060913)]" />
+          )}
+          <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2">
+            <span className={`rounded-md border px-2 py-1 text-[11px] font-display font-black shadow-[0_2px_8px_rgba(0,0,0,0.3)] ${getRequestChartBadgeTone(chart.mode)}`}>
+              {modeShort(chart.mode)}{chart.level}
+            </span>
+            {playedCount > 0 ? (
+              <span className="rounded-md border border-emerald-400/30 bg-emerald-500/15 px-2 py-1 text-[10px] font-display font-bold text-emerald-100 shadow-[0_2px_8px_rgba(0,0,0,0.28)]">
+                Played
+              </span>
+            ) : null}
+          </div>
+          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#050816] via-[#050816]/80 to-transparent" />
+          {overlayVisible ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span
+                className={`font-display text-[34px] font-black leading-none ${getGradeColor(displayBestGrade, bestScore)} ${parsedBestGrade.isBroken ? 'grade-broken' : ''}`}
+                data-grade={displayBestGrade}
+                style={{ textShadow: '0 0 12px rgba(0,0,0,0.92), 0 2px 4px rgba(0,0,0,0.92)' }}
+              >
+                {displayBestGrade}
+              </span>
+            </div>
+          ) : null}
+          <div className="absolute inset-x-0 bottom-0 p-2">
+            <p className="truncate text-sm font-display font-bold text-white">
+              {chart.song_title}
+            </p>
+            <p className="truncate text-[11px] text-gray-300/90">
+              {chart.artist || 'Unknown artist'}
+            </p>
+          </div>
+        </div>
+        <div className="space-y-2 p-2.5">
+          <div className="flex min-h-[1.5rem] flex-wrap gap-1.5">
+            {showHostScores ? (
+              hasHostScoreSnapshot ? (
+                displayBestGrade ? (
+                  <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-cyan-100">
+                    {displayBestGrade} {bestScore > 0 ? `• ${formatNumber(bestScore)}` : ''}
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-amber-100">
+                    Not passed yet
+                  </span>
+                )
+              ) : (
+                <span className="rounded-full border border-piu-border/60 bg-piu-dark/70 px-2 py-0.5 text-[10px] font-display font-bold text-gray-300">
+                  No synced score
+                </span>
+              )
+            ) : null}
+            {queuedCount > 0 ? (
+              <span className="rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-fuchsia-100">
+                {queuedCount === 1 ? 'Queued' : `${queuedCount} queued`}
+              </span>
+            ) : openCount > 0 ? (
+              <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-sky-100">
+                {openCount === 1 ? 'Requested' : `${openCount} requests`}
+              </span>
+            ) : null}
+            {playedRequestCount > 0 ? (
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-emerald-100">
+                {playedRequestCount === 1 ? 'Request played' : `${playedRequestCount} played`}
+              </span>
+            ) : null}
+            {skippedCount > 0 ? (
+              <span className="rounded-full border border-amber-400/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-amber-100">
+                {skippedCount === 1 ? 'Skipped once' : `${skippedCount} skipped`}
+              </span>
+            ) : null}
+            {playedCount > 0 ? (
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-emerald-100">
+                {playedCount === 1 ? 'Played this session' : `${playedCount} live plays`}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores = false, requestLookup = null, livePlayLookup = null }) {
   return (
     <div className="rounded-lg border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex gap-3">
@@ -700,8 +852,11 @@ function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores
             bestScore > 0 ? getRank(bestScore).label : ''
           );
           const displayBestGrade = parsedBestGrade.display || '';
+          const requestInfo = requestLookup?.get(buildRequestKey(song.title, chart.mode, chart.level)) || null;
+          const livePlayInfo = livePlayLookup?.get(buildRequestKey(song.title, chart.mode, chart.level)) || null;
+          const playedCount = parseInt(livePlayInfo?.count, 10) || 0;
           return (
-            <div key={`${song.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`} className="relative">
+            <div key={`${song.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`} className="relative flex flex-col gap-1.5">
               <button
                 type="button"
                 onClick={() => onSelectChart(chart)}
@@ -720,6 +875,16 @@ function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores
                   data-grade={displayBestGrade}
                 >
                   {displayBestGrade}
+                </span>
+              ) : null}
+              {playedCount > 0 ? (
+                <span className="pointer-events-none absolute -left-1 -top-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-display font-bold leading-none text-emerald-100">
+                  Played
+                </span>
+              ) : null}
+              {(requestInfo?.queuedCount || requestInfo?.openCount) ? (
+                <span className="pointer-events-none absolute -left-1 -bottom-1 rounded-full border border-fuchsia-400/25 bg-fuchsia-500/12 px-1.5 py-0.5 text-[9px] font-display font-bold leading-none text-fuchsia-100">
+                  {requestInfo?.queuedCount ? 'Queued' : 'Req'}
                 </span>
               ) : null}
             </div>
@@ -1359,6 +1524,88 @@ function StreamUrlEditorCard({
           The link is attached to the room, but Shinsa could not turn it into an embedded YouTube player yet.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function YoutubeTimestampsCard({
+  data,
+  loading,
+  publishing,
+  copiedLabel,
+  onRefresh,
+  onCopy,
+  onPublish,
+}) {
+  const sourceLabel = data?.source_start_kind === 'youtube_actual_start_time'
+    ? 'YouTube live start'
+    : data?.source_start_kind === 'youtube_scheduled_start_time'
+      ? 'Scheduled YouTube start'
+      : data?.source_start_kind === 'session_started_at'
+        ? 'Session start'
+        : 'Unknown start';
+
+  return (
+    <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-display font-semibold text-gray-400">YouTube chapters</p>
+          <p className="mt-2 text-sm text-gray-300">
+            Generate timestamp chapters from synced live-session plays and publish them into the linked YouTube video description.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onRefresh} disabled={loading || publishing} className="btn-secondary px-3 py-2 text-xs">
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+          <button type="button" onClick={onCopy} disabled={!data?.text || loading || publishing} className="btn-secondary px-3 py-2 text-xs">
+            {copiedLabel || 'Copy text'}
+          </button>
+          <button type="button" onClick={onPublish} disabled={!data?.text || loading || publishing} className="btn-primary px-3 py-2 text-xs">
+            {publishing ? 'Publishing...' : 'Publish to YouTube'}
+          </button>
+        </div>
+      </div>
+
+      {data ? (
+        <>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+              <p className="text-[11px] font-display font-semibold text-gray-400">Video</p>
+              <p className="mt-1 truncate text-sm font-display font-bold text-white">{data.video_title || data.video_id || 'Linked video'}</p>
+            </div>
+            <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+              <p className="text-[11px] font-display font-semibold text-gray-400">Matched plays</p>
+              <p className="mt-1 text-sm font-display font-bold text-white">{data.matched_count || 0} chapters</p>
+            </div>
+            <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+              <p className="text-[11px] font-display font-semibold text-gray-400">Start source</p>
+              <p className="mt-1 text-sm font-display font-bold text-white">{sourceLabel}</p>
+            </div>
+          </div>
+
+          {data.missing_duration_count > 0 ? (
+            <p className="mt-3 text-xs text-amber-200">
+              {data.missing_duration_count} play{data.missing_duration_count === 1 ? '' : 's'} skipped because SHINSA could not find a song duration.
+            </p>
+          ) : null}
+          {data.skipped_negative_offset_count > 0 ? (
+            <p className="mt-2 text-xs text-gray-400">
+              {data.skipped_negative_offset_count} early play{data.skipped_negative_offset_count === 1 ? '' : 's'} landed before the detected stream start and were nudged forward.
+            </p>
+          ) : null}
+
+          <textarea
+            className="input-field mt-4 min-h-[14rem] w-full resize-y font-mono text-xs leading-6"
+            value={data.text || ''}
+            readOnly
+          />
+        </>
+      ) : (
+        <p className="mt-4 text-sm text-gray-500">
+          Attach a YouTube stream and sync at least one play to generate chapters.
+        </p>
+      )}
     </div>
   );
 }
@@ -2052,6 +2299,10 @@ export default function LivePage() {
   const [overlayCopying, setOverlayCopying] = useState(false);
   const [overlayCopiedLabel, setOverlayCopiedLabel] = useState('');
   const [overlayTokenExpiresAt, setOverlayTokenExpiresAt] = useState('');
+  const [youtubeTimestampPreview, setYoutubeTimestampPreview] = useState(null);
+  const [youtubeTimestampLoading, setYoutubeTimestampLoading] = useState(false);
+  const [youtubeTimestampPublishing, setYoutubeTimestampPublishing] = useState(false);
+  const [youtubeTimestampCopiedLabel, setYoutubeTimestampCopiedLabel] = useState('');
   const [desktopMediaHeight, setDesktopMediaHeight] = useState(0);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -2064,6 +2315,7 @@ export default function LivePage() {
   const wakeLockRef = useRef(null);
   const overlayPrefsKeyRef = useRef('');
   const overlayCopyTimerRef = useRef(null);
+  const youtubeTimestampCopyTimerRef = useRef(null);
 
   const activeSessionId = sessionId || snapshot?.session?.id || '';
   const live = snapshot?.session || null;
@@ -2074,6 +2326,10 @@ export default function LivePage() {
   const requestModeFilter = normalizeRequestModeFilterValue(live?.request_mode_filter);
   const requestMaxLevel = normalizeRequestMaxLevelValue(live?.request_max_level);
   const requestShowScores = live?.request_show_scores !== false;
+  const requestShortcutSearch = useMemo(
+    () => parseRequestShortcutSearch(deferredSongSearch),
+    [deferredSongSearch]
+  );
   const requestPolicySummary = formatRequestPolicySummary(requestModeFilter, requestMaxLevel);
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
@@ -2194,6 +2450,42 @@ export default function LivePage() {
     }
   };
 
+  const loadYoutubeTimestampPreview = async (targetSessionId = activeSessionId, options = {}) => {
+    if (!user || !targetSessionId || !isHost) {
+      setYoutubeTimestampPreview(null);
+      return null;
+    }
+    if (!options.silent) {
+      setYoutubeTimestampLoading(true);
+    }
+    try {
+      const payload = await getLiveYoutubeTimestamps(targetSessionId);
+      setYoutubeTimestampPreview(payload || null);
+      return payload || null;
+    } catch (err) {
+      setYoutubeTimestampPreview(null);
+      if (!options.silent) {
+        setError(err.message || 'Failed to load YouTube chapters');
+      }
+      return null;
+    } finally {
+      if (!options.silent) {
+        setYoutubeTimestampLoading(false);
+      }
+    }
+  };
+
+  const flashYoutubeTimestampCopiedLabel = (label) => {
+    setYoutubeTimestampCopiedLabel(label);
+    if (youtubeTimestampCopyTimerRef.current) {
+      window.clearTimeout(youtubeTimestampCopyTimerRef.current);
+    }
+    youtubeTimestampCopyTimerRef.current = window.setTimeout(() => {
+      setYoutubeTimestampCopiedLabel('');
+      youtubeTimestampCopyTimerRef.current = null;
+    }, 2200);
+  };
+
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -2224,6 +2516,44 @@ export default function LivePage() {
       setError(youtubeMessage || 'Failed to connect YouTube');
     }
   }, [location.search]);
+
+  useEffect(() => () => {
+    if (youtubeTimestampCopyTimerRef.current) {
+      window.clearTimeout(youtubeTimestampCopyTimerRef.current);
+      youtubeTimestampCopyTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user || !activeSessionId || !isHost || !youtubeId) {
+      setYoutubeTimestampPreview(null);
+      setYoutubeTimestampLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setYoutubeTimestampLoading(true);
+    getLiveYoutubeTimestamps(activeSessionId)
+      .then((payload) => {
+        if (!cancelled) {
+          setYoutubeTimestampPreview(payload || null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setYoutubeTimestampPreview(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setYoutubeTimestampLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, isHost, lastPlay?.id, live?.youtube_actual_start_time, live?.youtube_scheduled_start_time, user, youtubeId]);
 
   if (!presenceIdRef.current && typeof window !== 'undefined') {
     const storageKey = 'shinsa_live_presence_id';
@@ -2937,21 +3267,41 @@ export default function LivePage() {
 
   useEffect(() => {
     const trimmedSearch = deferredSongSearch.trim();
-    if (!trimmedSearch || trimmedSearch.length < 2) {
+    const shortcut = parseRequestShortcutSearch(trimmedSearch);
+    const hasShortcutModeSearch = !!shortcut;
+    const shortcutNeedsHostScores = hasShortcutModeSearch && (!requestShowScores || !live?.host_user_id);
+    const shortcutTextSearch = shortcut?.search || '';
+    if (!trimmedSearch || (!hasShortcutModeSearch && trimmedSearch.length < 2)) {
       setSongResults([]);
+      setSearchingSongs(false);
+      return undefined;
+    }
+    if (shortcutNeedsHostScores) {
+      setSongResults([]);
+      setSearchingSongs(false);
       return undefined;
     }
     let cancelled = false;
     setSearchingSongs(true);
-    const params = { search: trimmedSearch };
-    if (requestShowScores && live?.host_user_id) {
+    const params = {};
+    if (hasShortcutModeSearch) {
+      params.mode = shortcut.mode;
+      params.level = shortcut.level;
+      if (shortcutTextSearch) {
+        params.search = shortcutTextSearch;
+      }
+      params.user_id = live.host_user_id;
+    } else {
+      params.search = trimmedSearch;
+    }
+    if (!hasShortcutModeSearch && requestShowScores && live?.host_user_id) {
       params.user_id = live.host_user_id;
     }
     getSongLibrary(params)
       .then((data) => {
         if (cancelled) return;
         const filteredResults = filterSongResultsForRequests(
-          normalizeSongResults(data),
+          normalizeSongResults(data, hasShortcutModeSearch ? { unlimited: true } : undefined),
           requestModeFilter,
           requestMaxLevel
         );
@@ -3009,12 +3359,63 @@ export default function LivePage() {
     }
     return map;
   }, [requests]);
+  const livePlayLookup = useMemo(() => {
+    const map = new Map();
+    for (const play of Array.isArray(snapshot?.plays) ? snapshot.plays : []) {
+      const key = buildRequestKey(play.song_title, play.mode, play.level);
+      if (!key) continue;
+      if (!map.has(key)) {
+        map.set(key, { count: 0 });
+      }
+      map.get(key).count += 1;
+    }
+    return map;
+  }, [snapshot?.plays]);
 
   const requestCounts = useMemo(() => requests.reduce((acc, request) => {
     const status = getRequestStatus(request.status, request.fulfilled);
     acc[status] += 1;
     return acc;
   }, { open: 0, queued: 0, played: 0, skipped: 0 }), [requests]);
+  const shortcutChartResults = useMemo(() => {
+    if (!requestShortcutSearch) return [];
+    return flattenSongResultsToCharts(songResults).sort((a, b) => {
+      const aKey = buildRequestKey(a.song_title, a.mode, a.level);
+      const bKey = buildRequestKey(b.song_title, b.mode, b.level);
+      const aPlayed = parseInt(livePlayLookup.get(aKey)?.count, 10) || 0;
+      const bPlayed = parseInt(livePlayLookup.get(bKey)?.count, 10) || 0;
+      if ((bPlayed > 0) !== (aPlayed > 0)) return (bPlayed > 0) - (aPlayed > 0);
+
+      const aHasScore = a.best_score !== null && a.best_score !== undefined;
+      const bHasScore = b.best_score !== null && b.best_score !== undefined;
+      if (Number(bHasScore) !== Number(aHasScore)) return Number(bHasScore) - Number(aHasScore);
+      if (Number(a.is_pass) !== Number(b.is_pass)) return Number(a.is_pass) - Number(b.is_pass);
+
+      const bestScoreDiff = (parseInt(b.best_score, 10) || 0) - (parseInt(a.best_score, 10) || 0);
+      if (bestScoreDiff !== 0) return bestScoreDiff;
+
+      const titleDiff = String(a.song_title || '').localeCompare(String(b.song_title || ''));
+      if (titleDiff !== 0) return titleDiff;
+      return (parseInt(a.chart_id, 10) || 0) - (parseInt(b.chart_id, 10) || 0);
+    });
+  }, [livePlayLookup, requestShortcutSearch, songResults]);
+  const shortcutChartSummary = useMemo(() => {
+    if (!requestShortcutSearch) return null;
+    return shortcutChartResults.reduce((acc, chart) => {
+      const key = buildRequestKey(chart.song_title, chart.mode, chart.level);
+      const playedCount = parseInt(livePlayLookup.get(key)?.count, 10) || 0;
+      const hasHostScoreSnapshot = chart.best_score !== null && chart.best_score !== undefined;
+      acc.total += 1;
+      if (playedCount > 0) acc.played += 1;
+      if (hasHostScoreSnapshot) {
+        if (chart.is_pass) acc.passed += 1;
+        else acc.unpassed += 1;
+      } else {
+        acc.unsynced += 1;
+      }
+      return acc;
+    }, { total: 0, played: 0, passed: 0, unpassed: 0, unsynced: 0 });
+  }, [livePlayLookup, requestShortcutSearch, shortcutChartResults]);
   const liveChatMessageLookups = useMemo(
     () => buildLiveChatMessageLookups(snapshot?.plays, currentVote),
     [snapshot?.plays, currentVote]
@@ -3224,6 +3625,9 @@ export default function LivePage() {
     try {
       const data = await syncLiveSession(activeSessionId);
       if (data?.snapshot) applySnapshot(data.snapshot);
+      if (isHost && youtubeId) {
+        loadYoutubeTimestampPreview(activeSessionId, { silent: true }).catch(() => {});
+      }
       setStatusNote(buildSyncStatusNote(data?.sync_result, 'Live session is up to date.'));
     } catch (err) {
       setError(err.message || 'Failed to sync live session');
@@ -3333,6 +3737,36 @@ export default function LivePage() {
       setError(err.message || 'Failed to end live session');
     } finally {
       setEnding(false);
+    }
+  };
+
+  const handleCopyYoutubeTimestamps = async () => {
+    if (!youtubeTimestampPreview?.text) return;
+    try {
+      await navigator.clipboard.writeText(youtubeTimestampPreview.text);
+      flashYoutubeTimestampCopiedLabel('Copied');
+      setStatusNote('YouTube chapters copied to the clipboard.');
+    } catch (err) {
+      setError(err.message || 'Failed to copy YouTube chapters');
+    }
+  };
+
+  const handlePublishYoutubeTimestamps = async () => {
+    if (!activeSessionId || !youtubeTimestampPreview?.text) return;
+    setYoutubeTimestampPublishing(true);
+    setError('');
+    try {
+      const payload = await publishLiveYoutubeTimestamps(activeSessionId);
+      setYoutubeTimestampPreview((prev) => prev ? {
+        ...prev,
+        video_description: payload?.description || prev.video_description || '',
+        next_description: payload?.description || prev.next_description || '',
+      } : prev);
+      setStatusNote('YouTube chapters published to the linked video description.');
+    } catch (err) {
+      setError(err.message || 'Failed to publish YouTube chapters');
+    } finally {
+      setYoutubeTimestampPublishing(false);
     }
   };
 
@@ -3705,14 +4139,23 @@ export default function LivePage() {
               ? 'Host has not enabled requests'
             : viewerState.requests_blocked
               ? 'Host has blocked your requests'
-              : 'Search songs to request'
+              : requestShowScores
+                ? 'Search songs or use /d22 or /s21'
+                : 'Search songs to request'
         }
         disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
       />
       {live?.status === 'live' ? (
         <p className="mt-2 text-[11px] text-gray-400">
           Host is taking {requestPolicySummary}.
-          {requestShowScores ? ' Host grades are shown on chart buttons.' : ' Host grades are hidden.'}
+          {requestShowScores
+            ? ' Host grades are shown on chart buttons. Use /d22 or /s21 to browse one level like the tiers page.'
+            : ' Host grades are hidden.'}
+        </p>
+      ) : null}
+      {requestShortcutSearch && (!requestShowScores || !live?.host_user_id) ? (
+        <p className="mt-2 text-[11px] text-amber-200">
+          Slash chart search is only available when the host shares their best scores.
         </p>
       ) : null}
       {!isHost && !requestsEnabled && live?.status === 'live' ? (
@@ -3723,18 +4166,63 @@ export default function LivePage() {
       ) : null}
       {searchingSongs ? <p className="text-[11px] text-gray-500 mt-2">Searching...</p> : null}
       <div className="space-y-2 mt-3">
-        {songResults.map((song) => (
+        {requestShortcutSearch && shortcutChartSummary?.total > 0 ? (
+          <div className="rounded-xl border border-piu-border/60 bg-piu-dark/45 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-display font-semibold text-gray-300">
+                  {modeShort(requestShortcutSearch.mode)}{requestShortcutSearch.level} chart search
+                </p>
+                <p className="mt-1 text-[11px] text-gray-400">
+                  {shortcutChartSummary.total} chart{shortcutChartSummary.total === 1 ? '' : 's'} matched
+                  {shortcutChartSummary.played ? ` • ${shortcutChartSummary.played} played live` : ''}
+                  {shortcutChartSummary.unpassed ? ` • ${shortcutChartSummary.unpassed} not yet passed` : ''}
+                  {shortcutChartSummary.unsynced ? ` • ${shortcutChartSummary.unsynced} without synced scores` : ''}
+                </p>
+              </div>
+              <span className="rounded-md border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold text-cyan-100">
+                Tier view
+              </span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
+              {shortcutChartResults.map((chart) => {
+                const chartKey = buildRequestKey(chart.song_title, chart.mode, chart.level);
+                return (
+                  <SongRequestTierShortcutResult
+                    key={`${chart.song_group_key}-${chart.chart_id}-${chart.mode}-${chart.level}`}
+                    chart={chart}
+                    disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
+                    onSelectChart={handleLiveRequest}
+                    showHostScores={requestShowScores}
+                    requestInfo={requestLookup.get(chartKey) || null}
+                    livePlayInfo={livePlayLookup.get(chartKey) || null}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+        {!requestShortcutSearch ? songResults.map((song) => (
           <SongRequestSearchResult
             key={song.song_group_key}
             song={song}
             disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
             onSelectChart={handleLiveRequest}
             showHostScores={requestShowScores}
+            requestLookup={requestLookup}
+            livePlayLookup={livePlayLookup}
           />
-        ))}
-        {!searchingSongs && deferredSongSearch.trim().length >= 2 && songResults.length === 0 ? (
+        )) : null}
+        {!searchingSongs && (
+          (requestShortcutSearch && (!requestShowScores || !live?.host_user_id))
+            ? null
+            : ((requestShortcutSearch && shortcutChartResults.length === 0)
+              || (!requestShortcutSearch && deferredSongSearch.trim().length >= 2 && songResults.length === 0))
+        ) ? (
           <p className="rounded-xl border border-piu-border/60 bg-black/10 px-3 py-4 text-center text-sm text-gray-500">
-            No songs matched that search within the host&apos;s request settings.
+            {requestShortcutSearch
+              ? 'No charts matched that mode and level within the host\'s request settings.'
+              : 'No songs matched that search within the host\'s request settings.'}
           </p>
         ) : null}
       </div>
@@ -3923,6 +4411,18 @@ export default function LivePage() {
     </div>
   ) : null;
 
+  const youtubeTimestampsSection = isHost && youtubeId ? (
+    <YoutubeTimestampsCard
+      data={youtubeTimestampPreview}
+      loading={youtubeTimestampLoading}
+      publishing={youtubeTimestampPublishing}
+      copiedLabel={youtubeTimestampCopiedLabel}
+      onRefresh={() => loadYoutubeTimestampPreview(activeSessionId)}
+      onCopy={handleCopyYoutubeTimestamps}
+      onPublish={handlePublishYoutubeTimestamps}
+    />
+  ) : null;
+
   const chatSection = (
     <div
       className={`relative flex min-h-0 flex-col overflow-hidden rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${
@@ -3938,7 +4438,7 @@ export default function LivePage() {
           : useDesktopSidebarLayout
             ? { height: 'calc(100dvh - 7rem)', maxHeight: 'calc(100dvh - 7rem)' }
             : isMobileChatLayout
-              ? undefined
+              ? { maxHeight: 'min(68dvh, calc(100dvh - 10rem))' }
               : {
                   height: desktopChatFallbackHeight,
                   maxHeight: desktopChatFallbackHeight,
@@ -4090,12 +4590,12 @@ export default function LivePage() {
 
       <div
         ref={chatScrollRef}
-        className={`mt-3 min-h-0 overflow-x-hidden ${
-          isMobileChatLayout
-            ? 'overflow-y-visible pr-0'
-            : 'flex-1 overflow-y-auto pr-1'
+        className={`mt-3 min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain ${
+          isMobileChatLayout ? 'pr-0.5' : 'pr-1'
         } ${isDesktopViewport ? 'space-y-1.5' : 'space-y-2'}`}
-        style={isMobileChatLayout ? undefined : { scrollbarGutter: 'stable' }}
+        style={isMobileChatLayout
+          ? { WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }
+          : { scrollbarGutter: 'stable' }}
       >
         {chatMessages.map((msg) => {
           const tone = getMessageTone(msg);
@@ -4501,6 +5001,7 @@ export default function LivePage() {
             onSubmit={handleUpdateStreamUrl}
           />
         ) : null}
+        {youtubeTimestampsSection}
       </div>
 
       {!youtubeId && isHost ? (
