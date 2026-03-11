@@ -1618,6 +1618,11 @@ function YoutubeTimestampsCard({
                 {data.skipped_negative_offset_count} early play{data.skipped_negative_offset_count === 1 ? '' : 's'} landed before the detected stream start and were nudged forward.
               </p>
             ) : null}
+            {data.skipped_non_clear_count > 0 ? (
+              <p className="mt-2 rounded-lg border border-piu-border/50 bg-piu-dark/50 px-3 py-2 text-xs text-gray-400">
+                {data.skipped_non_clear_count} non-clear attempt{data.skipped_non_clear_count === 1 ? '' : 's'} ignored because chapter timing only uses passed songs.
+              </p>
+            ) : null}
 
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(19rem,0.82fr)]">
               <div className="overflow-hidden rounded-lg border border-piu-border/60 bg-piu-dark/45">
@@ -4781,61 +4786,61 @@ export default function LivePage() {
                   {msg.created_at ? new Date(`${msg.created_at}Z`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                 </p>
               </div>
-              <MessageBody entry={msg} tone={tone} compact={isMobileChatLayout} dense={isDesktopViewport} />
-              {canPump || (isHost && live?.status === 'live' && !msg.is_system && !msg.is_host) ? (
+              <div className={`min-w-0 ${canPump ? 'mt-2 flex items-start gap-2' : ''}`}>
+                <div className="min-w-0 flex-1">
+                  <MessageBody entry={msg} tone={tone} compact={isMobileChatLayout} dense={isDesktopViewport} />
+                </div>
+                {canPump ? (
+                  <button
+                    type="button"
+                    onClick={() => handlePumpChatMessage(msg)}
+                    disabled={isPumpingMessage}
+                    className={`mt-1 inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-display font-bold transition-colors disabled:opacity-60 ${pumpButtonClasses}`}
+                    title={msg.user_pumped ? 'Un-pump' : 'Pump it up!'}
+                  >
+                    <img
+                      src={msg.user_pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+                      alt=""
+                      className={`h-4 w-4 ${isPumpingMessage ? 'animate-bounce' : ''}`}
+                    />
+                    {msg.pump_count > 0 ? <span>{msg.pump_count}</span> : null}
+                  </button>
+                ) : null}
+              </div>
+              {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {canPump ? (
-                    <button
-                      type="button"
-                      onClick={() => handlePumpChatMessage(msg)}
-                      disabled={isPumpingMessage}
-                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors disabled:opacity-60 ${pumpButtonClasses}`}
-                      title={msg.user_pumped ? 'Un-pump' : 'Pump it up!'}
-                    >
-                      <img
-                        src={msg.user_pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
-                        alt=""
-                        className={`h-4 w-4 ${isPumpingMessage ? 'animate-bounce' : ''}`}
-                      />
-                      {msg.pump_count > 0 ? <span>{msg.pump_count}</span> : null}
-                    </button>
-                  ) : null}
-                  {isHost && live?.status === 'live' && !msg.is_system && !msg.is_host ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMessage(msg.id)}
-                        disabled={deletingMessageId === msg.id}
-                        className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-3 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/35 hover:text-white disabled:opacity-60"
-                      >
-                        {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleModeration(msg, 'chat_muted')}
-                        disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
-                        className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-amber-200 transition-colors hover:border-amber-300/30 hover:text-white disabled:opacity-60"
-                      >
-                        {moderationActionKey === `chat_muted:${msg.user_id}`
-                          ? 'Updating...'
-                          : msg.chat_muted
-                            ? 'Unmute chat'
-                            : 'Mute chat'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleModeration(msg, 'requests_blocked')}
-                        disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
-                        className="rounded-md border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-fuchsia-200 transition-colors hover:border-fuchsia-300/30 hover:text-white disabled:opacity-60"
-                      >
-                        {moderationActionKey === `requests_blocked:${msg.user_id}`
-                          ? 'Updating...'
-                          : msg.requests_blocked
-                            ? 'Allow requests'
-                            : 'Block requests'}
-                      </button>
-                    </>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMessage(msg.id)}
+                    disabled={deletingMessageId === msg.id}
+                    className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-3 py-1.5 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/35 hover:text-white disabled:opacity-60"
+                  >
+                    {deletingMessageId === msg.id ? 'Removing...' : 'Delete'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleModeration(msg, 'chat_muted')}
+                    disabled={moderationActionKey === `chat_muted:${msg.user_id}`}
+                    className="rounded-md border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-amber-200 transition-colors hover:border-amber-300/30 hover:text-white disabled:opacity-60"
+                  >
+                    {moderationActionKey === `chat_muted:${msg.user_id}`
+                      ? 'Updating...'
+                      : msg.chat_muted
+                        ? 'Unmute chat'
+                        : 'Mute chat'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleModeration(msg, 'requests_blocked')}
+                    disabled={moderationActionKey === `requests_blocked:${msg.user_id}`}
+                    className="rounded-md border border-fuchsia-400/25 bg-fuchsia-500/10 px-3 py-1.5 text-[10px] font-display font-semibold text-fuchsia-200 transition-colors hover:border-fuchsia-300/30 hover:text-white disabled:opacity-60"
+                  >
+                    {moderationActionKey === `requests_blocked:${msg.user_id}`
+                      ? 'Updating...'
+                      : msg.requests_blocked
+                        ? 'Allow requests'
+                        : 'Block requests'}
+                  </button>
                 </div>
               ) : null}
             </div>

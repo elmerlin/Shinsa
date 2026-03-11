@@ -60,6 +60,12 @@ function formatChapterResult(play) {
   return `${grade} ${scoreLabel}`;
 }
 
+function isPassingPlay(play) {
+  const score = toInt(play?.score);
+  if (score <= 0) return false;
+  return resolvePlayGrade(play) !== 'F';
+}
+
 function formatChapterLabel(play) {
   const title = String(play?.song_title || '').trim() || 'Unknown song';
   const mode = String(play?.mode || '').trim();
@@ -183,6 +189,7 @@ function buildYoutubeTimestampPayload(session, plays = [], video = null) {
   let previousOffset = 0;
   let matchedCount = 0;
   let skippedNegativeOffsetCount = 0;
+  let skippedNonClearCount = 0;
 
   for (const item of enriched) {
     if (item.missingDuration) {
@@ -194,6 +201,10 @@ function buildYoutubeTimestampPayload(session, plays = [], video = null) {
       continue;
     }
     if (item.skipped || !item.startedAt) continue;
+    if (!isPassingPlay(item.play)) {
+      skippedNonClearCount += 1;
+      continue;
+    }
 
     let nextOffset = Math.max(0, toInt(item.rawOffsetSeconds));
     if (item.rawOffsetSeconds < 0) skippedNegativeOffsetCount += 1;
@@ -230,6 +241,7 @@ function buildYoutubeTimestampPayload(session, plays = [], video = null) {
     missing_duration_count: missingDurations.length,
     missing_durations: missingDurations,
     skipped_negative_offset_count: skippedNegativeOffsetCount,
+    skipped_non_clear_count: skippedNonClearCount,
   };
 }
 
