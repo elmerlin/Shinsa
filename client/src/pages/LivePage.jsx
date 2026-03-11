@@ -3032,7 +3032,8 @@ export default function LivePage() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') return undefined;
-    if (!useDesktopViewerLayout || !showLiveRoomWorkspace) {
+    const liveRoomWorkspaceVisible = hostWorkspaceTab !== 'overlay' && hostWorkspaceTab !== 'chapters';
+    if (!useDesktopViewerLayout || !liveRoomWorkspaceVisible) {
       setDesktopMediaHeight(0);
       return undefined;
     }
@@ -3054,7 +3055,7 @@ export default function LivePage() {
       observer.disconnect();
       window.removeEventListener('resize', updateHeight);
     };
-  }, [showLiveRoomWorkspace, useDesktopViewerLayout, youtubeId]);
+  }, [hostWorkspaceTab, useDesktopViewerLayout, youtubeId]);
 
   useEffect(() => {
     setVotePinCollapsed(!!currentVote && currentVote.status !== 'active');
