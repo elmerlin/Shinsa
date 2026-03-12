@@ -17,6 +17,7 @@ import {
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
+import { buildReplayModalTitle } from '../utils/replayTitle';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -684,7 +685,7 @@ export function SingleUpscorePage() {
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                       title="Open session replay clip"
-                      onClick={() => setSelectedReplay({ url: u.replay_embed_url, title: `${u.song_title} replay clip` })}
+                      onClick={() => setSelectedReplay({ url: u.replay_embed_url, title: buildReplayModalTitle(u) })}
                     >
                       <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                     </button>
@@ -859,7 +860,7 @@ export function SingleClearPage() {
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                       title="Open session replay clip"
-                      onClick={() => setSelectedReplay({ url: clear.replay_embed_url, title: `${clear.song_title} replay clip` })}
+                      onClick={() => setSelectedReplay({ url: clear.replay_embed_url, title: buildReplayModalTitle(clear) })}
                     >
                       <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                     </button>

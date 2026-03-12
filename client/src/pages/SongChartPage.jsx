@@ -14,6 +14,7 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import Over20Top100Modal from '../components/Over20Top100Modal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import { getSongChartDetail, getUserLists, addListItem, createList, setChartYoutubeLink, removeChartYoutubeLink, getOver20ChartTop100 } from '../utils/api';
+import { buildReplayModalTitle } from '../utils/replayTitle';
 
 const GRADE_THRESHOLDS = [
   { min: 0,      grade: 'F' },
@@ -754,7 +755,16 @@ export default function SongChartPage() {
                 {sessionYoutubeUrl && (
                   <button
                     type="button"
-                    onClick={() => setActiveReplay({ url: sessionYoutubeUrl, title: `${chart.title} replay clip` })}
+                    onClick={() => setActiveReplay({
+                      url: sessionYoutubeUrl,
+                      title: buildReplayModalTitle({
+                        song_title: chart.title,
+                        mode: chart.mode,
+                        level: chart.level,
+                        grade: personalBestGrade,
+                        score: personalBest?.score || 0,
+                      }),
+                    })}
                     className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-sky-400/40 bg-sky-500/15 hover:bg-sky-500/30 transition-colors"
                     title="Open session replay clip"
                   >
@@ -945,7 +955,16 @@ export default function SongChartPage() {
                     {entry.session_youtube_url && (
                       <button
                         type="button"
-                        onClick={() => setActiveReplay({ url: entry.session_youtube_url, title: `${entry.user.username} replay clip` })}
+                        onClick={() => setActiveReplay({
+                          url: entry.session_youtube_url,
+                          title: buildReplayModalTitle({
+                            song_title: chart.title,
+                            mode: chart.mode,
+                            level: chart.level,
+                            grade,
+                            score: entry.best.score,
+                          }),
+                        })}
                         className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-sky-400/30 bg-sky-500/10 hover:bg-sky-500/25 transition-colors"
                         title="Open session replay clip"
                       >
