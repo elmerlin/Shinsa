@@ -3913,14 +3913,28 @@ export default function LivePage() {
     }
   };
 
-  const handleCopyLink = async () => {
+  const handleShareViewerLink = async () => {
     if (!live?.id) return;
     const url = `${window.location.origin}/live/${live.id}`;
+
     try {
+      if (navigator.share) {
+        await navigator.share({
+          title: live?.title || 'Shinsa Live Session',
+          text: live?.host?.username ? `Watch ${live.host.username}'s live session` : 'Watch this live session',
+          url,
+        });
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1600);
+        return;
+      }
+
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
-    } catch {}
+    } catch (err) {
+      if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+    }
   };
 
   const flashOverlayCopyLabel = (label) => {
@@ -5054,8 +5068,8 @@ export default function LivePage() {
                   {lockVideo ? 'Video locked' : 'Lock video'}
                 </button>
               ) : null}
-              <button type="button" onClick={handleCopyLink} className="btn-secondary px-3 py-1.5 text-xs">
-                {copied ? 'Copied' : 'Copy viewer link'}
+              <button type="button" onClick={handleShareViewerLink} className="btn-secondary px-3 py-1.5 text-xs">
+                {copied ? 'Shared' : 'Share viewer link'}
               </button>
               {live?.is_host && live?.status === 'live' && (
                 <>
