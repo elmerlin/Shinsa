@@ -469,6 +469,7 @@ async function getYoutubeVideoById(db, userId, videoId) {
     default_language: String(item?.snippet?.defaultLanguage || '').trim(),
     default_audio_language: String(item?.snippet?.defaultAudioLanguage || '').trim(),
     privacy_status: String(item?.status?.privacyStatus || '').trim(),
+    embeddable: item?.status?.embeddable !== false,
     actual_start_time: String(item?.liveStreamingDetails?.actualStartTime || '').trim(),
     actual_end_time: String(item?.liveStreamingDetails?.actualEndTime || '').trim(),
     scheduled_start_time: String(item?.liveStreamingDetails?.scheduledStartTime || '').trim(),

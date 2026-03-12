@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import Over20Top100Modal from '../components/Over20Top100Modal';
+import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import { getSongChartDetail, getUserLists, addListItem, createList, setChartYoutubeLink, removeChartYoutubeLink, getOver20ChartTop100 } from '../utils/api';
 
 const GRADE_THRESHOLDS = [
@@ -39,6 +40,14 @@ function gradeFromScore(score) {
     if (s >= GRADE_THRESHOLDS[i].min) return GRADE_THRESHOLDS[i].grade;
   }
   return 'F';
+}
+
+function YouTubeBadgeIcon({ className = '' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
 }
 
 function formatNumber(value) {
@@ -290,9 +299,11 @@ export default function SongChartPage() {
 
   // ── YouTube link state ──
   const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [sessionYoutubeUrl, setSessionYoutubeUrl] = useState('');
   const [showYoutubeInput, setShowYoutubeInput] = useState(false);
   const [youtubeInputValue, setYoutubeInputValue] = useState('');
   const [youtubeSaving, setYoutubeSaving] = useState(false);
+  const [activeReplay, setActiveReplay] = useState(null);
 
   // ── Add-to-list state ──
   const [showListMenu, setShowListMenu] = useState(false);
@@ -400,6 +411,7 @@ export default function SongChartPage() {
         if (cancelled) return;
         setDetail(payload);
         setYoutubeUrl(payload.user_youtube_url || '');
+        setSessionYoutubeUrl(payload.user_session_youtube_url || '');
       } catch (err) {
         if (cancelled) return;
         setError(err.message || 'Failed to load chart data');
@@ -726,30 +738,51 @@ export default function SongChartPage() {
             </span>
           </button>
           {user && (
-            youtubeUrl ? (
+            youtubeUrl || sessionYoutubeUrl ? (
               <div className="flex items-center gap-1">
-                <a
-                  href={youtubeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-red-400/40 bg-red-500/15 hover:bg-red-500/30 transition-colors"
-                  title="Watch on YouTube"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                  </svg>
-                </a>
-                <button
-                  type="button"
-                  onClick={handleRemoveYoutube}
-                  disabled={youtubeSaving}
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-piu-border/50 bg-piu-dark/60 hover:border-red-400/40 hover:text-red-400 text-gray-500 transition-colors"
-                  title="Remove YouTube link"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                {youtubeUrl && (
+                  <a
+                    href={youtubeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-red-400/40 bg-red-500/15 hover:bg-red-500/30 transition-colors"
+                    title="Open manual YouTube link"
+                  >
+                    <YouTubeBadgeIcon className="w-4 h-4 text-red-400" />
+                  </a>
+                )}
+                {sessionYoutubeUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveReplay({ url: sessionYoutubeUrl, title: `${chart.title} replay clip` })}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-sky-400/40 bg-sky-500/15 hover:bg-sky-500/30 transition-colors"
+                    title="Open session replay clip"
+                  >
+                    <YouTubeBadgeIcon className="w-4 h-4 text-sky-300" />
+                  </button>
+                )}
+                {youtubeUrl ? (
+                  <button
+                    type="button"
+                    onClick={handleRemoveYoutube}
+                    disabled={youtubeSaving}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-piu-border/50 bg-piu-dark/60 hover:border-red-400/40 hover:text-red-400 text-gray-500 transition-colors"
+                    title="Remove manual YouTube link"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setShowYoutubeInput(true); setYoutubeInputValue(''); }}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-piu-border/50 bg-piu-dark/60 hover:border-red-400/40 hover:text-red-400 text-gray-500 transition-colors"
+                    title="Add manual YouTube link"
+                  >
+                    <YouTubeBadgeIcon className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ) : (
               <button
@@ -758,9 +791,7 @@ export default function SongChartPage() {
                 className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-piu-border/50 bg-piu-dark/60 hover:border-red-400/40 hover:text-red-400 text-gray-500 transition-colors"
                 title="Add YouTube link"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                </svg>
+                <YouTubeBadgeIcon className="w-4 h-4" />
               </button>
             )
           )}
@@ -908,10 +939,18 @@ export default function SongChartPage() {
                         className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-red-400/30 bg-red-500/10 hover:bg-red-500/25 transition-colors"
                         title="Watch on YouTube"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-red-400" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                        </svg>
+                        <YouTubeBadgeIcon className="w-3.5 h-3.5 text-red-400" />
                       </a>
+                    )}
+                    {entry.session_youtube_url && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveReplay({ url: entry.session_youtube_url, title: `${entry.user.username} replay clip` })}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-sky-400/30 bg-sky-500/10 hover:bg-sky-500/25 transition-colors"
+                        title="Open session replay clip"
+                      >
+                        <YouTubeBadgeIcon className="w-3.5 h-3.5 text-sky-300" />
+                      </button>
                     )}
                   </div>
                 </div>
@@ -929,6 +968,13 @@ export default function SongChartPage() {
         rows={historyByScore}
         onClose={() => setShowHistoryModal(false)}
       />
+      {activeReplay && (
+        <YouTubeReplayModal
+          url={activeReplay.url}
+          title={activeReplay.title}
+          onClose={() => setActiveReplay(null)}
+        />
+      )}
       <Over20Top100Modal
         open={showOverTop100Modal}
         chart={overTop100ModalChart}

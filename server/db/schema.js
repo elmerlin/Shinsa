@@ -1547,6 +1547,7 @@ function initializeDb() {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       chart_id INTEGER NOT NULL,
       youtube_url TEXT NOT NULL DEFAULT '',
+      session_youtube_url TEXT NOT NULL DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, chart_id)
@@ -1557,6 +1558,11 @@ function initializeDb() {
   const playerColumns = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);
   if (!playerColumns.includes('user_id')) {
     db.exec("ALTER TABLE players ADD COLUMN user_id TEXT DEFAULT ''");
+  }
+
+  const chartYoutubeLinkColumns = db.prepare("PRAGMA table_info(user_chart_youtube_links)").all().map(c => c.name);
+  if (!chartYoutubeLinkColumns.includes('session_youtube_url')) {
+    db.exec("ALTER TABLE user_chart_youtube_links ADD COLUMN session_youtube_url TEXT NOT NULL DEFAULT ''");
   }
 
   // Migrations for duels table - add user_id columns

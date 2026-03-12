@@ -8,6 +8,7 @@ import PostCard, { ShareButton } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
+import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
@@ -61,6 +62,14 @@ function parsePumbilityGain(value) {
   return numeric > 0 ? numeric : 0;
 }
 
+function YouTubeBadgeIcon({ className = '' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
 function getGradeColor(grade, score = 0) {
   const normalized = parseGrade(grade).normalized;
   if (normalized) {
@@ -106,6 +115,10 @@ function getClearItems(item) {
     pumbility_gain: parsePumbilityGain(item.pumbility_gain),
     singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
     over_top100_rank: parseInt(item.over_top100_rank, 10) || 0,
+    replay_embed_url: item.replay_embed_url || '',
+    replay_video_id: item.replay_video_id || '',
+    replay_start_seconds: parseInt(item.replay_start_seconds, 10) || 0,
+    replay_end_seconds: parseInt(item.replay_end_seconds, 10) || 0,
   }];
 
   try {
@@ -134,6 +147,10 @@ function getClearItems(item) {
       pumbility_gain: parsePumbilityGain(c.pumbility_gain),
       singles_pumbility_gain: parsePumbilityGain(c.singles_pumbility_gain),
       over_top100_rank: parseInt(c.over_top100_rank, 10) || 0,
+      replay_embed_url: c.replay_embed_url || '',
+      replay_video_id: c.replay_video_id || '',
+      replay_start_seconds: parseInt(c.replay_start_seconds, 10) || 0,
+      replay_end_seconds: parseInt(c.replay_end_seconds, 10) || 0,
     }));
   } catch {
     return fallback;
@@ -561,6 +578,7 @@ export function SingleUpscorePage() {
   const [jacketLookup, setJacketLookup] = useState({});
   const [chartKeyMap, setChartKeyMap] = useState({});
   const [selectedScore, setSelectedScore] = useState(null);
+  const [selectedReplay, setSelectedReplay] = useState(null);
   const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
@@ -660,30 +678,42 @@ export function SingleUpscorePage() {
                     )}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                  onClick={() => setSelectedScore({ ...u, _jacketUrl: jacketUrl, _chartLink: chartLink })}
-                >
-                  <div className="flex items-center gap-1 justify-end">
-                    <span className={`text-[10px] font-mono ${oldRank.color}`}>{u.old_score.toLocaleString()}</span>
-                    <span
-                      className={`text-[10px] font-display ${getGradeColor(oldGrade.display, u.old_score)} ${oldGrade.isBroken ? 'grade-broken' : ''}`}
-                      data-grade={oldGrade.display}
+                <div className="flex items-center gap-2 shrink-0">
+                  {u.replay_embed_url && (
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                      title="Open session replay clip"
+                      onClick={() => setSelectedReplay({ url: u.replay_embed_url, title: `${u.song_title} replay clip` })}
                     >
-                      {oldGrade.display}
-                    </span>
-                    <span className="text-gray-500 text-[10px]">&#8594;</span>
-                    <span className={`text-xs font-mono font-bold ${newRank.color}`}>{u.new_score.toLocaleString()}</span>
-                    <span
-                      className={`text-xs font-display font-bold ${getGradeColor(newGrade.display, u.new_score)} ${newGrade.isBroken ? 'grade-broken' : ''}`}
-                      data-grade={newGrade.display}
-                    >
-                      {newGrade.display}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-piu-green font-mono">+{improvement.toLocaleString()}</p>
-                </button>
+                      <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                    onClick={() => setSelectedScore({ ...u, _jacketUrl: jacketUrl, _chartLink: chartLink })}
+                  >
+                    <div className="flex items-center gap-1 justify-end">
+                      <span className={`text-[10px] font-mono ${oldRank.color}`}>{u.old_score.toLocaleString()}</span>
+                      <span
+                        className={`text-[10px] font-display ${getGradeColor(oldGrade.display, u.old_score)} ${oldGrade.isBroken ? 'grade-broken' : ''}`}
+                        data-grade={oldGrade.display}
+                      >
+                        {oldGrade.display}
+                      </span>
+                      <span className="text-gray-500 text-[10px]">&#8594;</span>
+                      <span className={`text-xs font-mono font-bold ${newRank.color}`}>{u.new_score.toLocaleString()}</span>
+                      <span
+                        className={`text-xs font-display font-bold ${getGradeColor(newGrade.display, u.new_score)} ${newGrade.isBroken ? 'grade-broken' : ''}`}
+                        data-grade={newGrade.display}
+                      >
+                        {newGrade.display}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-piu-green font-mono">+{improvement.toLocaleString()}</p>
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -704,6 +734,13 @@ export function SingleUpscorePage() {
         chartLink={selectedScore?._chartLink || ''}
         onClose={() => setSelectedScore(null)}
       />
+      {selectedReplay && (
+        <YouTubeReplayModal
+          url={selectedReplay.url}
+          title={selectedReplay.title}
+          onClose={() => setSelectedReplay(null)}
+        />
+      )}
     </div>
   );
 }
@@ -716,6 +753,7 @@ export function SingleClearPage() {
   const [jacketLookup, setJacketLookup] = useState({});
   const [chartKeyMap, setChartKeyMap] = useState({});
   const [selectedScore, setSelectedScore] = useState(null);
+  const [selectedReplay, setSelectedReplay] = useState(null);
   const focusCommentId = new URLSearchParams(location.search).get('comment');
 
   useEffect(() => {
@@ -815,19 +853,31 @@ export function SingleClearPage() {
                     )}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                  onClick={() => setSelectedScore({ ...clear, _jacketUrl: jacketUrl, _chartLink: chartLink })}
-                >
-                  <span
-                    className={`text-xs font-display font-bold ${getGradeColor(parsedGrade.display, clear.score)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
-                    data-grade={parsedGrade.display}
+                <div className="flex items-center gap-2 shrink-0">
+                  {clear.replay_embed_url && (
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                      title="Open session replay clip"
+                      onClick={() => setSelectedReplay({ url: clear.replay_embed_url, title: `${clear.song_title} replay clip` })}
+                    >
+                      <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                    onClick={() => setSelectedScore({ ...clear, _jacketUrl: jacketUrl, _chartLink: chartLink })}
                   >
-                    {parsedGrade.display}
-                  </span>
-                  <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
-                </button>
+                    <span
+                      className={`text-xs font-display font-bold ${getGradeColor(parsedGrade.display, clear.score)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                      data-grade={parsedGrade.display}
+                    >
+                      {parsedGrade.display}
+                    </span>
+                    <p className="font-mono text-xs font-bold">{clear.score.toLocaleString()}</p>
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -848,6 +898,13 @@ export function SingleClearPage() {
         chartLink={selectedScore?._chartLink || ''}
         onClose={() => setSelectedScore(null)}
       />
+      {selectedReplay && (
+        <YouTubeReplayModal
+          url={selectedReplay.url}
+          title={selectedReplay.title}
+          onClose={() => setSelectedReplay(null)}
+        />
+      )}
     </div>
   );
 }

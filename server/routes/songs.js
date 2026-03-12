@@ -2091,8 +2091,20 @@ router.delete('/chart/:chartId/youtube', requireAuth, (req, res) => {
   const chartId = parseInt(req.params.chartId, 10);
   if (!chartId) return res.status(400).json({ error: 'Invalid chart ID' });
 
-  db.prepare('DELETE FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ?')
-    .run(req.user.id, chartId);
+  const existing = db.prepare(
+    'SELECT session_youtube_url FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ?'
+  ).get(req.user.id, chartId);
+
+  if (String(existing?.session_youtube_url || '').trim()) {
+    db.prepare(`
+      UPDATE user_chart_youtube_links
+      SET youtube_url = '', updated_at = datetime('now')
+      WHERE user_id = ? AND chart_id = ?
+    `).run(req.user.id, chartId);
+  } else {
+    db.prepare('DELETE FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ?')
+      .run(req.user.id, chartId);
+  }
 
   res.json({ ok: true });
 });
@@ -2316,11 +2328,15 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
 
   // Look up YouTube links for this chart
   let userYoutubeUrl = '';
+  let userSessionYoutubeUrl = '';
   if (targetUserId) {
     const ytRow = db.prepare(
-      'SELECT youtube_url FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ?'
+      'SELECT youtube_url, session_youtube_url FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ?'
     ).get(targetUserId, chart.chart_id);
-    if (ytRow) userYoutubeUrl = ytRow.youtube_url;
+    if (ytRow) {
+      userYoutubeUrl = ytRow.youtube_url || '';
+      userSessionYoutubeUrl = ytRow.session_youtube_url || '';
+    }
   }
 
   // Attach YouTube links to friend records
@@ -2328,12 +2344,14 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
     const friendIds = friendRecords.map((r) => r.user.id);
     const ytPlaceholders = friendIds.map(() => '?').join(', ');
     const friendYtRows = db.prepare(`
-      SELECT user_id, youtube_url FROM user_chart_youtube_links
+      SELECT user_id, youtube_url, session_youtube_url FROM user_chart_youtube_links
       WHERE user_id IN (${ytPlaceholders}) AND chart_id = ?
     `).all(...friendIds, chart.chart_id);
-    const ytByUser = new Map(friendYtRows.map((r) => [r.user_id, r.youtube_url]));
+    const ytByUser = new Map(friendYtRows.map((r) => [r.user_id, r]));
     for (const record of friendRecords) {
-      record.youtube_url = ytByUser.get(record.user.id) || '';
+      const linkRow = ytByUser.get(record.user.id) || null;
+      record.youtube_url = linkRow?.youtube_url || '';
+      record.session_youtube_url = linkRow?.session_youtube_url || '';
     }
   }
 
@@ -2341,6 +2359,7 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
     chart,
     user_summary: userSummary,
     user_youtube_url: userYoutubeUrl,
+    user_session_youtube_url: userSessionYoutubeUrl,
     progression,
     history: history.sort((a, b) => {
       const dt = parseDateMs(b.date_played) - parseDateMs(a.date_played);

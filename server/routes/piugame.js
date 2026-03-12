@@ -2259,6 +2259,10 @@ function insertGroupedNewClearPost(db, userId, clears, options = {}) {
     pumbility_gain: Math.max(0, parseInt(c.pumbility_gain, 10) || 0),
     singles_pumbility_gain: Math.max(0, parseInt(c.singles_pumbility_gain, 10) || 0),
     over_top100_rank: Math.max(0, parseInt(c.over_top100_rank, 10) || 0),
+    replay_embed_url: c.replay_embed_url || '',
+    replay_video_id: c.replay_video_id || '',
+    replay_start_seconds: Math.max(0, parseInt(c.replay_start_seconds, 10) || 0),
+    replay_end_seconds: Math.max(0, parseInt(c.replay_end_seconds, 10) || 0),
   }));
   const first = normalized[0];
   const explicitGain = options?.pumbilityGain;

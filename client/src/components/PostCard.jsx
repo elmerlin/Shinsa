@@ -16,6 +16,7 @@ import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../ut
 import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
 import { mergeLiveSessionSummary, splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
+import { buildYouTubeEmbedSrc } from '../utils/youtube';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -44,29 +45,15 @@ function getActiveMentionQuery(text, cursor) {
   };
 }
 
-// Extract YouTube video ID from various URL formats
-function getYouTubeId(url) {
-  if (!url) return null;
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /^([a-zA-Z0-9_-]{11})$/,
-  ];
-  for (const p of patterns) {
-    const match = url.match(p);
-    if (match) return match[1];
-  }
-  return null;
-}
-
 // YouTube Embed
 function YouTubeEmbed({ url }) {
-  const videoId = getYouTubeId(url);
-  if (!videoId) return null;
+  const embedSrc = buildYouTubeEmbedSrc(url);
+  if (!embedSrc) return null;
   return (
     <div className="relative w-full mb-3 rounded-lg overflow-hidden" style={{ paddingBottom: '56.25%' }}>
       <iframe
         className="absolute inset-0 w-full h-full"
-        src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+        src={embedSrc}
         title="YouTube video"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen

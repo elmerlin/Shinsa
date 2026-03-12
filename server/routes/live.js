@@ -1077,6 +1077,312 @@ function getLiveSessionYoutubeVideoId(session) {
   return extractYoutubeVideoId(session?.stream_url || '');
 }
 
+function buildReplayOutcomeKey(row) {
+  if (!row || String(row?.entry_type || 'song_clear') === 'title_unlock') return '';
+  const score = Object.prototype.hasOwnProperty.call(row, 'new_score')
+    ? toInt(row?.new_score)
+    : toInt(row?.score);
+  return buildPlayOutcomeKey(row.song_title, row.mode, row.level, score);
+}
+
+function buildYoutubeReplayEmbedUrl(videoId, startSeconds, endSeconds) {
+  const normalizedVideoId = String(videoId || '').trim();
+  if (!normalizedVideoId) return '';
+  const start = Math.max(0, toInt(startSeconds));
+  const end = Math.max(start + 1, toInt(endSeconds));
+  const params = new URLSearchParams({
+    start: String(start),
+    end: String(end),
+  });
+  return `https://www.youtube.com/embed/${encodeURIComponent(normalizedVideoId)}?${params.toString()}`;
+}
+
+function isReplayEligibleYoutubeVideo(video) {
+  const privacyStatus = String(video?.privacy_status || '').trim().toLowerCase();
+  return (privacyStatus === 'public' || privacyStatus === 'unlisted') && video?.embeddable !== false;
+}
+
+function buildSessionReplayLookup(session, plays, video, videoId) {
+  const timestamps = buildYoutubeTimestampPayload(session, plays, video);
+  const replayLookup = new Map();
+
+  for (const chapter of Array.isArray(timestamps?.chapters) ? timestamps.chapters : []) {
+    const score = toInt(chapter?.score);
+    const durationSeconds = toInt(chapter?.duration_seconds);
+    const startSeconds = Math.max(0, toInt(chapter?.offset_seconds));
+    const endSeconds = startSeconds + durationSeconds;
+    const key = buildPlayOutcomeKey(chapter?.song_title, chapter?.mode, chapter?.level, score);
+    if (!key || durationSeconds <= 0 || endSeconds <= startSeconds) continue;
+    replayLookup.set(key, {
+      replay_embed_url: buildYoutubeReplayEmbedUrl(videoId, startSeconds, endSeconds),
+      replay_video_id: String(videoId || '').trim(),
+      replay_start_seconds: startSeconds,
+      replay_end_seconds: endSeconds,
+    });
+  }
+
+  return replayLookup;
+}
+
+function attachReplayMetadataToRows(rows, replayLookup) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const replay = replayLookup.get(buildReplayOutcomeKey(row)) || null;
+    if (!replay) {
+      return {
+        ...row,
+        replay_embed_url: '',
+        replay_video_id: '',
+        replay_start_seconds: 0,
+        replay_end_seconds: 0,
+      };
+    }
+    return {
+      ...row,
+      ...replay,
+    };
+  });
+}
+
+function resolveReplayChartId(db, aliases, cache, row) {
+  const mode = String(row?.mode || '').trim();
+  const level = toInt(row?.level);
+  const canonicalTitle = toCanonicalSongTitle(row?.song_title, aliases);
+  if (!mode || level <= 0 || !canonicalTitle) return 0;
+
+  const cacheKey = `${mode}|${level}`;
+  let candidates = cache.get(cacheKey);
+  if (!candidates) {
+    candidates = db.prepare(`
+      SELECT id, title
+      FROM songs
+      WHERE mode = ? AND level = ?
+      ORDER BY id ASC
+    `).all(mode, level);
+    cache.set(cacheKey, candidates);
+  }
+
+  for (const candidate of candidates) {
+    if (toCanonicalSongTitle(candidate?.title, aliases) === canonicalTitle) {
+      return toInt(candidate?.id);
+    }
+  }
+  return 0;
+}
+
+function syncSessionReplayLinks(db, userId, rows, replayLookup) {
+  const aliases = loadSongAliases();
+  const cache = new Map();
+  const upsertReplay = db.prepare(`
+    INSERT INTO user_chart_youtube_links (user_id, chart_id, session_youtube_url, updated_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id, chart_id)
+    DO UPDATE SET session_youtube_url = excluded.session_youtube_url, updated_at = datetime('now')
+  `);
+  const clearReplay = db.prepare(`
+    UPDATE user_chart_youtube_links
+    SET session_youtube_url = '', updated_at = datetime('now')
+    WHERE user_id = ? AND chart_id = ?
+  `);
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const chartId = resolveReplayChartId(db, aliases, cache, row);
+    if (!chartId) continue;
+    const replay = replayLookup.get(buildReplayOutcomeKey(row)) || null;
+    if (String(replay?.replay_embed_url || '').trim()) {
+      upsertReplay.run(userId, chartId, replay.replay_embed_url);
+    } else {
+      clearReplay.run(userId, chartId);
+    }
+  }
+}
+
+function updateBufferedReplayRows(db, liveSessionId, tableName, rows) {
+  const existingRows = db.prepare(`
+    SELECT id
+    FROM ${tableName}
+    WHERE live_session_id = ?
+    ORDER BY id ASC
+  `).all(liveSessionId);
+  const updateRow = db.prepare(`
+    UPDATE ${tableName}
+    SET payload_json = ?
+    WHERE id = ?
+  `);
+
+  for (let index = 0; index < existingRows.length; index += 1) {
+    const rowId = toInt(existingRows[index]?.id);
+    if (!rowId || !rows[index]) continue;
+    updateRow.run(JSON.stringify(rows[index]), rowId);
+  }
+}
+
+function scoreArrayMatchScore(rowItem, targetItem) {
+  const rowSong = normalizeSongName(rowItem?.song_title);
+  const targetSong = normalizeSongName(targetItem?.song_title);
+  if (!rowSong || rowSong !== targetSong) return false;
+  if (String(rowItem?.mode || '').trim() !== String(targetItem?.mode || '').trim()) return false;
+  if (toInt(rowItem?.level) !== toInt(targetItem?.level)) return false;
+  const rowScore = Object.prototype.hasOwnProperty.call(rowItem || {}, 'new_score')
+    ? toInt(rowItem?.new_score)
+    : toInt(rowItem?.score);
+  const targetScore = Object.prototype.hasOwnProperty.call(targetItem || {}, 'new_score')
+    ? toInt(targetItem?.new_score)
+    : toInt(targetItem?.score);
+  return rowScore > 0 && rowScore === targetScore;
+}
+
+function findGeneratedReplayPostId(db, tableName, jsonColumn, userId, createdAt, targetRows) {
+  const normalizedRows = Array.isArray(targetRows) ? targetRows : [];
+  if (!userId || !createdAt || normalizedRows.length === 0) return null;
+  const candidates = db.prepare(`
+    SELECT id, ${jsonColumn} AS payload_json
+    FROM ${tableName}
+    WHERE user_id = ?
+      AND created_at = ?
+    ORDER BY id DESC
+  `).all(userId, createdAt);
+
+  for (const candidate of candidates) {
+    const payload = safeParseJson(candidate?.payload_json || '[]', []);
+    if (!Array.isArray(payload) || payload.length !== normalizedRows.length) continue;
+    let matches = true;
+    for (let index = 0; index < normalizedRows.length; index += 1) {
+      if (!scoreArrayMatchScore(payload[index], normalizedRows[index])) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return toInt(candidate?.id);
+  }
+  return null;
+}
+
+function updateGeneratedReplayPosts(db, session, upscoreRows, clearRows) {
+  const result = {
+    upscore_post_id: null,
+    clear_post_id: null,
+  };
+  const endedAt = String(session?.ended_at || '').trim();
+  const userId = String(session?.host_user_id || '').trim();
+
+  if (Array.isArray(upscoreRows) && upscoreRows.length > 0) {
+    const upscorePostId = findGeneratedReplayPostId(
+      db,
+      'user_upscores',
+      'upscores_json',
+      userId,
+      endedAt,
+      upscoreRows
+    );
+    if (upscorePostId) {
+      db.prepare('UPDATE user_upscores SET upscores_json = ? WHERE id = ?')
+        .run(JSON.stringify(upscoreRows), upscorePostId);
+      result.upscore_post_id = upscorePostId;
+    }
+  }
+
+  const clearEntries = (Array.isArray(clearRows) ? clearRows : [])
+    .filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock');
+  if (clearEntries.length > 0) {
+    const clearPostId = findGeneratedReplayPostId(
+      db,
+      'user_new_clears',
+      'clears_json',
+      userId,
+      endedAt,
+      clearRows
+    );
+    if (clearPostId) {
+      db.prepare('UPDATE user_new_clears SET clears_json = ? WHERE id = ?')
+        .run(JSON.stringify(clearRows), clearPostId);
+      result.clear_post_id = clearPostId;
+    }
+  }
+
+  return result;
+}
+
+async function backfillLiveSessionReplayData(db, liveSessionId) {
+  const session = db.prepare(`
+    SELECT *
+    FROM live_sessions
+    WHERE id = ?
+    LIMIT 1
+  `).get(liveSessionId);
+  if (!session) {
+    const err = new Error(`Live session not found: ${liveSessionId}`);
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const videoId = getLiveSessionYoutubeVideoId(session);
+  if (!videoId) {
+    return {
+      session_id: String(liveSessionId),
+      skipped: true,
+      reason: 'missing_video_id',
+    };
+  }
+
+  const plays = getSessionPlaysWithDurations(db, liveSessionId);
+  if (!plays.length) {
+    return {
+      session_id: String(liveSessionId),
+      skipped: true,
+      reason: 'missing_session_plays',
+    };
+  }
+
+  const video = await getYoutubeVideoById(db, session.host_user_id, videoId);
+  if (!video) {
+    return {
+      session_id: String(liveSessionId),
+      skipped: true,
+      reason: 'video_not_found',
+    };
+  }
+  if (!isReplayEligibleYoutubeVideo(video)) {
+    return {
+      session_id: String(liveSessionId),
+      skipped: true,
+      reason: 'video_not_embeddable',
+      privacy_status: String(video.privacy_status || '').trim(),
+      embeddable: video.embeddable !== false,
+    };
+  }
+
+  const replayLookup = buildSessionReplayLookup(session, plays, video, videoId);
+  const bufferedUpscores = attachReplayMetadataToRows(
+    parseBufferedRows(db, liveSessionId, 'live_session_buffered_upscores'),
+    replayLookup
+  );
+  const bufferedClears = attachReplayMetadataToRows(
+    parseBufferedRows(db, liveSessionId, 'live_session_buffered_clears'),
+    replayLookup
+  );
+  const replayRows = [
+    ...bufferedUpscores,
+    ...bufferedClears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock'),
+  ];
+
+  const txn = db.transaction(() => {
+    updateBufferedReplayRows(db, liveSessionId, 'live_session_buffered_upscores', bufferedUpscores);
+    updateBufferedReplayRows(db, liveSessionId, 'live_session_buffered_clears', bufferedClears);
+    syncSessionReplayLinks(db, session.host_user_id, replayRows, replayLookup);
+    return updateGeneratedReplayPosts(db, session, bufferedUpscores, bufferedClears);
+  });
+  const updatedPosts = txn();
+
+  return {
+    session_id: String(liveSessionId),
+    skipped: false,
+    replay_count: replayLookup.size,
+    buffered_upscores: bufferedUpscores.length,
+    buffered_clears: bufferedClears.length,
+    ...updatedPosts,
+  };
+}
+
 function getSessionPlaysWithDurations(db, liveSessionId) {
   const aliases = loadSongAliases();
   const durationRows = db.prepare(`
@@ -3238,8 +3544,34 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       hostUsername: host?.username || '',
     });
 
-    const bufferedUpscores = parseBufferedRows(db, session.id, 'live_session_buffered_upscores');
-    const bufferedClears = parseBufferedRows(db, session.id, 'live_session_buffered_clears');
+    let bufferedUpscores = parseBufferedRows(db, session.id, 'live_session_buffered_upscores');
+    let bufferedClears = parseBufferedRows(db, session.id, 'live_session_buffered_clears');
+    const replayOutcomeRows = [
+      ...bufferedUpscores,
+      ...bufferedClears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock'),
+    ];
+    let replayLookup = new Map();
+
+    if (replayOutcomeRows.length > 0) {
+      try {
+        const replayVideoId = getLiveSessionYoutubeVideoId(session);
+        if (replayVideoId) {
+          const replayVideo = await getYoutubeVideoById(db, req.user.id, replayVideoId);
+          if (replayVideo && isReplayEligibleYoutubeVideo(replayVideo)) {
+            const replayPlays = getSessionPlaysWithDurations(db, session.id);
+            if (replayPlays.length > 0) {
+              replayLookup = buildSessionReplayLookup(session, replayPlays, replayVideo, replayVideoId);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Live session replay links skipped for ${session.id}: ${err.message}`);
+      }
+
+      bufferedUpscores = attachReplayMetadataToRows(bufferedUpscores, replayLookup);
+      bufferedClears = attachReplayMetadataToRows(bufferedClears, replayLookup);
+    }
+
     const upscoreGain = bufferedUpscores.reduce((sum, row) => sum + toInt(row?.pumbility_gain), 0);
     const singlesUpscoreGain = bufferedUpscores.reduce((sum, row) => sum + toInt(row?.singles_pumbility_gain), 0);
     const clearGain = bufferedClears.reduce((sum, row) => sum + toInt(row?.pumbility_gain), 0);
@@ -3265,6 +3597,10 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
           pumbilityGain: clearGain,
           singlesPumbilityGain: singlesClearGain,
         });
+      }
+
+      if (replayOutcomeRows.length > 0) {
+        syncSessionReplayLinks(db, session.host_user_id, replayOutcomeRows, replayLookup);
       }
 
       if (summary) {
@@ -3396,5 +3732,7 @@ try {
 } catch (err) {
   console.error('Live sync timer initialization error:', err.message);
 }
+
+router.backfillLiveSessionReplayData = backfillLiveSessionReplayData;
 
 module.exports = router;
