@@ -538,9 +538,20 @@ router.get('/counts/:userId', (req, res) => {
         (SELECT COUNT(*) FROM comment_pumps cp JOIN upscore_comments uc ON cp.comment_type = 'upscore' AND cp.comment_id = uc.id WHERE uc.user_id = ?) +
         (SELECT COUNT(*) FROM comment_pumps cp JOIN new_clear_comments ncc ON cp.comment_type = 'clear' AND cp.comment_id = ncc.id WHERE ncc.user_id = ?) +
         (SELECT COUNT(*) FROM community_post_pumps cpp JOIN community_posts cpo ON cpp.post_id = cpo.id WHERE cpo.user_id = ?) +
-        (SELECT COUNT(*) FROM community_comment_pumps ccp JOIN community_post_comments cpc ON ccp.comment_id = cpc.id WHERE cpc.user_id = ?)
+        (SELECT COUNT(*) FROM community_comment_pumps ccp JOIN community_post_comments cpc ON ccp.comment_id = cpc.id WHERE cpc.user_id = ?) +
+        (
+          SELECT COUNT(*)
+          FROM live_message_pumps lmp
+          JOIN live_session_messages lsm ON lmp.message_id = lsm.id
+          LEFT JOIN live_sessions ls ON ls.id = lsm.live_session_id
+          WHERE CASE
+            WHEN COALESCE(lsm.user_id, '') != '' THEN lsm.user_id
+            WHEN lsm.message_type IN ('play', 'request_fulfilled') THEN COALESCE(ls.host_user_id, '')
+            ELSE ''
+          END = ?
+        )
         as total
-    `).get(userId, userId, userId, userId, userId, userId, userId, userId);
+    `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId);
     totalPumps = pumpResult.total || 0;
   } catch {}
 
