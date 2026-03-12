@@ -4681,53 +4681,70 @@ export default function LivePage() {
             </button>
           </div>
 
-          <div
-            className={`mt-3 overflow-y-auto overscroll-contain pr-1 ${
-              isMobileChatLayout
-                ? 'max-h-[min(42dvh,22rem)]'
-                : 'max-h-[52vh] lg:max-h-64 xl:max-h-72'
-            }`}
-            style={isMobileChatLayout ? { WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : undefined}
-          >
-            {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
-              <div key={group.label} className="mt-3 first:mt-0">
-                <div className="px-1">
-                  <p className="text-[11px] font-display font-semibold text-gray-300">{group.label}</p>
-                  {group.description ? <p className="mt-1 text-[11px] text-gray-400">{group.description}</p> : null}
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-2 xl:grid-cols-4">
-                  {group.emotes.map((emote) => (
-                    <LiveEmoteTrayTile
-                      key={emote.token}
-                      emote={emote}
-                      disabled={viewerState.chat_muted || live?.status !== 'live'}
-                      onReact={() => handleQuickReaction(emote.token)}
-                      onAdd={() => handleInsertChatToken(emote.token)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {LIVE_EMOJI_GROUPS.map((group) => (
-                <div key={group.label} className="rounded-lg border border-piu-border/60 bg-piu-card/95 p-3">
-                  <p className="text-[11px] font-display font-semibold text-gray-400">{group.label}</p>
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    {group.emojis.map((emoji) => (
-                      <button
-                        key={`${group.label}-${emoji}`}
-                        type="button"
-                        onClick={() => handleQuickReaction(emoji)}
+          <div className={`mt-3 grid gap-3 ${isMobileChatLayout ? '' : 'lg:grid-cols-[minmax(0,1fr)_15rem]'}`}>
+            <div
+              className={`min-h-0 overflow-y-auto overscroll-contain pr-1 ${
+                isMobileChatLayout
+                  ? 'max-h-[min(32dvh,18rem)]'
+                  : 'max-h-[52vh] lg:max-h-64 xl:max-h-72'
+              }`}
+              style={isMobileChatLayout ? { WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : undefined}
+            >
+              {LIVE_EMOTE_TRAY_GROUPS.map((group) => (
+                <div key={group.label} className="mt-3 first:mt-0">
+                  <div className="px-1">
+                    <p className="text-[11px] font-display font-semibold text-gray-300">{group.label}</p>
+                    {group.description ? <p className="mt-1 text-[11px] text-gray-400">{group.description}</p> : null}
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 xl:grid-cols-4">
+                    {group.emotes.map((emote) => (
+                      <LiveEmoteTrayTile
+                        key={emote.token}
+                        emote={emote}
                         disabled={viewerState.chat_muted || live?.status !== 'live'}
-                        className="flex h-10 items-center justify-center rounded-xl bg-piu-dark/70 text-[22px] leading-none transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
-                      >
-                        {emoji}
-                      </button>
+                        onReact={() => handleQuickReaction(emote.token)}
+                        onAdd={() => handleInsertChatToken(emote.token)}
+                      />
                     ))}
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="rounded-lg border border-piu-border/60 bg-piu-card/95 p-3">
+              <div className="px-1">
+                <p className="text-[11px] font-display font-semibold text-gray-300">Emoji tray</p>
+                <p className="mt-1 text-[11px] text-gray-400">Quick reactions right next to the live emotes.</p>
+              </div>
+              <div
+                className={`mt-3 overflow-y-auto overscroll-contain pr-1 ${
+                  isMobileChatLayout
+                    ? 'max-h-[min(20dvh,12rem)]'
+                    : 'max-h-[52vh] lg:max-h-64 xl:max-h-72'
+                }`}
+                style={isMobileChatLayout ? { WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : undefined}
+              >
+                <div className="grid gap-2">
+                  {LIVE_EMOJI_GROUPS.map((group) => (
+                    <div key={group.label} className="rounded-lg border border-piu-border/60 bg-piu-dark/70 p-3">
+                      <p className="text-[11px] font-display font-semibold text-gray-400">{group.label}</p>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        {group.emojis.map((emoji) => (
+                          <button
+                            key={`${group.label}-${emoji}`}
+                            type="button"
+                            onClick={() => handleQuickReaction(emoji)}
+                            disabled={viewerState.chat_muted || live?.status !== 'live'}
+                            className="flex h-10 items-center justify-center rounded-xl bg-piu-dark/70 text-[22px] leading-none transition-colors hover:bg-piu-dark hover:text-white disabled:opacity-40"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

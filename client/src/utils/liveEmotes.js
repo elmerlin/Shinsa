@@ -1,4 +1,4 @@
-import { DEVIT_EMOJIS, DOJO_CAT_EMOJIS, HEAVYBREATHING_EMOJIS } from './stickers';
+import { DEVIT_EMOJIS, DOJO_CAT_EMOJIS, HEAVYBREATHING_CHICKEN_EMOJIS, HEAVYBREATHING_EMOJIS } from './stickers';
 
 const FEATURED_DOJO_CAT_CONFIG = [
   {
@@ -126,6 +126,40 @@ const FEATURED_HEAVYBREATHING_EMOTES = FEATURED_HEAVYBREATHING_CONFIG
   })
   .filter(Boolean);
 
+const FEATURED_HEAVYBREATHING_CHICKEN_CONFIG = [
+  {
+    token: ':heavybreathing_chicken_0:',
+    label: 'HB Chicken Calm',
+    colors: ['rgba(34, 197, 94, 0.9)', 'rgba(22, 163, 74, 0.82)', 'rgba(134, 239, 172, 0.85)', '#f0fdf4'],
+    motion: 'drift',
+  },
+  {
+    token: ':heavybreathing_chicken_3:',
+    label: 'HB Chicken Grin',
+    colors: ['rgba(250, 204, 21, 0.92)', 'rgba(249, 115, 22, 0.82)', 'rgba(253, 224, 71, 0.85)', '#fffbeb'],
+    motion: 'pulse',
+  },
+  {
+    token: ':heavybreathing_chicken_6:',
+    label: 'HB Chicken Panic',
+    colors: ['rgba(248, 113, 113, 0.92)', 'rgba(239, 68, 68, 0.82)', 'rgba(252, 165, 165, 0.85)', '#fff5f5'],
+    motion: 'spark',
+  },
+];
+
+const FEATURED_HEAVYBREATHING_CHICKEN_EMOTES = FEATURED_HEAVYBREATHING_CHICKEN_CONFIG
+  .map((entry) => {
+    const match = HEAVYBREATHING_CHICKEN_EMOJIS.find((emoji) => emoji.token === entry.token);
+    if (!match) return null;
+    return {
+      ...entry,
+      image: match.image,
+      variant: 'sticker',
+      trayGroup: 'Featured HB Chicken',
+    };
+  })
+  .filter(Boolean);
+
 export const LIVE_EMOTES = [
   {
     token: ':shinsa_hype:',
@@ -171,6 +205,7 @@ export const LIVE_EMOTES = [
   },
   ...FEATURED_DOJO_CAT_EMOTES,
   ...FEATURED_DEVIT_EMOTES,
+  ...FEATURED_HEAVYBREATHING_CHICKEN_EMOTES,
   ...FEATURED_HEAVYBREATHING_EMOTES,
 ];
 
@@ -194,6 +229,11 @@ export const LIVE_EMOTE_TRAY_GROUPS = [
     label: 'Featured Devit',
     description: '',
     emotes: LIVE_EMOTES.filter((emote) => emote.trayGroup === 'Featured Devit'),
+  },
+  {
+    label: 'Featured HB Chicken',
+    description: '',
+    emotes: LIVE_EMOTES.filter((emote) => emote.trayGroup === 'Featured HB Chicken'),
   },
   {
     label: 'Featured Heavy Breathing',
