@@ -16,6 +16,10 @@ const BUU_FILE_NAMES = [
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 ];
 
+const BUUU_FILE_NAMES = [
+  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11',
+];
+
 const DEVIT_STICKER_CONFIG = [
   { key: 'idle', label: 'Devit Idle', image: '/emojis/devit/idle.png', animated: true },
   { key: 'scamper', label: 'Devit Scamper', image: '/emojis/devit/scamper.png', animated: true },
@@ -62,6 +66,16 @@ export const BUU_EMOJIS = BUU_FILE_NAMES.map((fileName) => ({
   animated: false,
 }));
 
+export const BUUU_EMOJIS = BUUU_FILE_NAMES.map((fileName) => ({
+  id: `buuu-${fileName}`,
+  pack: 'buuu',
+  token: `:buuu_${fileName}:`,
+  fileName,
+  label: `Buuu ${fileName}`,
+  image: `/emojis/buu/buuu-${fileName}.${Number.parseInt(fileName, 10) >= 10 ? 'PNG' : 'png'}`,
+  animated: false,
+}));
+
 export const DEVIT_EMOJIS = DEVIT_STICKER_CONFIG.map((entry) => ({
   id: `devit-${entry.key}`,
   pack: 'devit',
@@ -102,6 +116,11 @@ export const BUU_EMOJI_GROUP = {
   emojis: BUU_EMOJIS,
 };
 
+export const BUUU_EMOJI_GROUP = {
+  label: 'Buuu',
+  emojis: BUUU_EMOJIS,
+};
+
 export const HEAVYBREATHING_EMOJI_GROUP = {
   label: 'Heavy Breathing',
   emojis: HEAVYBREATHING_EMOJIS,
@@ -112,14 +131,15 @@ export const STICKER_GROUPS = [
   DEVIT_EMOJI_GROUP,
   HEAVYBREATHING_CHICKEN_EMOJI_GROUP,
   BUU_EMOJI_GROUP,
+  BUUU_EMOJI_GROUP,
   HEAVYBREATHING_EMOJI_GROUP,
 ];
 
-export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|heavybreathing):';
-export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|heavybreathing):/gi;
+export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|heavybreathing):';
+export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|heavybreathing):/gi;
 export const DOJO_CAT_TOKEN_REGEX = /:dojocat_[0-9]+_[0-9]+:/gi;
 
-const STICKER_MAP = [...DOJO_CAT_EMOJIS, ...DEVIT_EMOJIS, ...HEAVYBREATHING_CHICKEN_EMOJIS, ...BUU_EMOJIS, ...HEAVYBREATHING_EMOJIS].reduce((acc, emoji) => {
+const STICKER_MAP = [...DOJO_CAT_EMOJIS, ...DEVIT_EMOJIS, ...HEAVYBREATHING_CHICKEN_EMOJIS, ...BUU_EMOJIS, ...BUUU_EMOJIS, ...HEAVYBREATHING_EMOJIS].reduce((acc, emoji) => {
   acc[emoji.token] = emoji;
   return acc;
 }, {});
