@@ -45,7 +45,7 @@ const LIVE_SYNC_IDLE_INTERVAL_MS = 45000;
 const LIVE_SYNC_IDLE_AFTER_MS = 3 * 60 * 1000;
 const DEFAULT_REQUEST_MAX_LEVEL = 30;
 const SONG_ALIAS_PATH = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
-const REPLAY_POST_SONG_BUFFER_SECONDS = 12;
+const REPLAY_POST_SONG_BUFFER_SECONDS = 20;
 const FAILURE_MESSAGES = [
   'Stage break. Run it back.',
   'Close miss. Reset and clear it.',
