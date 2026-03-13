@@ -140,13 +140,18 @@ function parseSongFlags(flags) {
 function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
   const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
   if (!title) return '';
+  const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
 
   // PIU metadata has both Yog variants named "Yog-Sothoth"; disambiguate the short cut entry.
   if (
     normalizeSongName(title) === 'yog-sothoth'
-    && (String(songKey || '').trim() === '313' || parseSongFlags(flags).some((flag) => flag.toLowerCase() === 'cut:1'))
+    && (String(songKey || '').trim() === '313' || normalizedFlags.includes('cut:1'))
   ) {
     return 'Yog-Sothoth - SHORT CUT -';
+  }
+
+  if (normalizeSongName(title) === 'nyarlathotep' && normalizedFlags.includes('cut:1')) {
+    return 'Nyarlathotep - SHORT CUT -';
   }
 
   return title;

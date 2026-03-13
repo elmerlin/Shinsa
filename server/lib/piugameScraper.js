@@ -287,6 +287,10 @@ function normalizeKnownSongTitle(title) {
     return 'Yog-Sothoth - SHORT CUT -';
   }
 
+  if (compact === 'nyarlathotep - short cut -' || compact === 'nyarlathotep- short cut -') {
+    return 'Nyarlathotep - SHORT CUT -';
+  }
+
   return normalized;
 }
 

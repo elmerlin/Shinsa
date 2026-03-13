@@ -137,6 +137,9 @@ function normalizeOverRankingSongTitle(songTitle) {
   if (compact === 'yog-sothoth - short cut -' || compact === 'yog-sothoth- short cut -') {
     return 'Yog-Sothoth - SHORT CUT -';
   }
+  if (compact === 'nyarlathotep - short cut -' || compact === 'nyarlathotep- short cut -') {
+    return 'Nyarlathotep - SHORT CUT -';
+  }
   return normalized;
 }
 
@@ -341,6 +344,10 @@ function buildOverRankingLookup(db) {
     if (title === 'Yog-Sothoth - SHORT CUT -') {
       aliasLookup.set(`Yog-Sothoth - SHORT CUT -|${mode}|${level}`, value);
       aliasLookup.set(`Yog-Sothoth- SHORT CUT -|${mode}|${level}`, value);
+    }
+    if (title === 'Nyarlathotep - SHORT CUT -') {
+      aliasLookup.set(`Nyarlathotep - SHORT CUT -|${mode}|${level}`, value);
+      aliasLookup.set(`Nyarlathotep- SHORT CUT -|${mode}|${level}`, value);
     }
   }
 

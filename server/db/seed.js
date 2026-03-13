@@ -21,14 +21,18 @@ function parseSongFlags(flags) {
 function resolveSongTitleForStorage(title, songKey, flags) {
   const normalizedTitle = normalizeSongTitle(title);
   if (!normalizedTitle) return '';
+  const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
   if (
     normalizedTitle.toLowerCase() === 'yog-sothoth'
     && (
       String(songKey || '').trim() === '313'
-      || parseSongFlags(flags).some((flag) => flag.toLowerCase() === 'cut:1')
+      || normalizedFlags.includes('cut:1')
     )
   ) {
     return 'Yog-Sothoth - SHORT CUT -';
+  }
+  if (normalizedTitle.toLowerCase() === 'nyarlathotep' && normalizedFlags.includes('cut:1')) {
+    return 'Nyarlathotep - SHORT CUT -';
   }
   return normalizedTitle;
 }

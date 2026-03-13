@@ -5,6 +5,14 @@ const fs = require('fs');
 const path = require('path');
 
 const SOURCE_BASE = 'https://www.piucenter.com';
+const SONG_DURATION_OVERRIDES = new Map([
+  ['nyarlathotep|nato', {
+    title: 'Nyarlathotep',
+    artist: 'Nato',
+    duration_seconds: 120,
+    duration_hint_seconds: 120,
+  }],
+]);
 
 function parseArgs(argv) {
   const opts = {
@@ -194,14 +202,18 @@ async function main() {
           return null;
         }
 
+        const override = SONG_DURATION_OVERRIDES.get(`${song.compact_title}|${song.compact_artist}`) || null;
+        const durationSeconds = override?.duration_seconds || Math.round(rawHint);
+        const durationHintSeconds = override?.duration_hint_seconds || rawHint;
+
         return {
-          title: song.title,
-          artist: song.artist,
+          title: override?.title || song.title,
+          artist: override?.artist || song.artist,
           compact_title: song.compact_title,
           compact_artist: song.compact_artist,
           pack: song.pack,
-          duration_seconds: Math.round(rawHint),
-          duration_hint_seconds: rawHint,
+          duration_seconds: durationSeconds,
+          duration_hint_seconds: durationHintSeconds,
           source_chart_slug: song.shortname,
           source_chart_url: `${SOURCE_BASE}/chart/${song.shortname}`,
         };

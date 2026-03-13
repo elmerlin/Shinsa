@@ -42,6 +42,13 @@ function compactSongLookupKey(value) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+const SONG_DURATION_OVERRIDE_MAP = new Map([
+  [`${compactSongLookupKey('Nyarlathotep')}|${compactSongLookupKey('Nato')}`, {
+    duration_seconds: 120,
+    duration_source: 'manual',
+  }],
+]);
+
 function parseSongFlags(flags) {
   if (Array.isArray(flags)) {
     return flags
@@ -57,16 +64,21 @@ function parseSongFlags(flags) {
 function resolveSongTitleForStorage(title, songKey, flags) {
   const normalizedTitle = normalizeSongTitle(title);
   if (!normalizedTitle) return '';
+  const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
 
   // PIU metadata currently uses the same base title for both Yog variants.
   if (
     normalizedTitle.toLowerCase() === 'yog-sothoth'
     && (
       String(songKey || '').trim() === '313'
-      || parseSongFlags(flags).some((flag) => flag.toLowerCase() === 'cut:1')
+      || normalizedFlags.includes('cut:1')
     )
   ) {
     return 'Yog-Sothoth - SHORT CUT -';
+  }
+
+  if (normalizedTitle.toLowerCase() === 'nyarlathotep' && normalizedFlags.includes('cut:1')) {
+    return 'Nyarlathotep - SHORT CUT -';
   }
 
   return normalizedTitle;
@@ -220,13 +232,19 @@ function backfillSongDurationsFromSnapshot() {
 
   const apply = db.transaction(() => {
     let seededGroups = 0;
+    let overriddenGroups = 0;
     let syncedRows = 0;
 
     for (const group of groups.values()) {
       let durationSeconds = group.existingDuration;
       let durationSource = group.existingSource || 'manual';
+      const overrideRow = SONG_DURATION_OVERRIDE_MAP.get(`${group.titleKey}|${group.artistKey}`) || null;
 
-      if (durationSeconds <= 0) {
+      if (overrideRow) {
+        durationSeconds = overrideRow.duration_seconds;
+        durationSource = overrideRow.duration_source || 'manual';
+        overriddenGroups++;
+      } else if (durationSeconds <= 0) {
         const snapshotRow = exactMatches.get(`${group.titleKey}|${group.artistKey}`)
           || uniqueTitleMatches.get(group.titleKey);
         if (!snapshotRow) continue;
@@ -241,13 +259,16 @@ function backfillSongDurationsFromSnapshot() {
       }
     }
 
-    return { seededGroups, syncedRows };
+    return { seededGroups, overriddenGroups, syncedRows };
   });
 
   try {
     const result = apply();
-    if (result.seededGroups > 0 || result.syncedRows > 0) {
-      console.log(`Backfilled song durations for ${result.seededGroups} groups (${result.syncedRows} chart rows synced)`);
+    if (result.seededGroups > 0 || result.overriddenGroups > 0 || result.syncedRows > 0) {
+      console.log(
+        `Backfilled song durations for ${result.seededGroups} groups with ${result.overriddenGroups} manual overrides `
+        + `(${result.syncedRows} chart rows synced)`
+      );
     }
   } catch (err) {
     console.error('Failed to backfill song durations:', err.message);
@@ -2554,6 +2575,21 @@ function initializeDb() {
     }
   } catch (err) {
     console.error('Failed to normalize Yog-Sothoth short cut rows:', err.message);
+  }
+
+  // Migration: split Nyarlathotep short cut rows into their own title bucket.
+  try {
+    const result = db.prepare(`
+      UPDATE songs
+      SET title = 'Nyarlathotep - SHORT CUT -'
+      WHERE LOWER(TRIM(COALESCE(title, ''))) = 'nyarlathotep'
+        AND LOWER(COALESCE(flags, '')) LIKE '%cut:1%'
+    `).run();
+    if ((result?.changes || 0) > 0) {
+      console.log(`Renamed ${result.changes} Nyarlathotep short cut chart rows`);
+    }
+  } catch (err) {
+    console.error('Failed to normalize Nyarlathotep short cut rows:', err.message);
   }
 
   backfillSongDurationsFromSnapshot();
