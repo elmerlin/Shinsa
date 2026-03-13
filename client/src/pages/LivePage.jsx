@@ -2976,10 +2976,8 @@ export default function LivePage() {
     const nextMessages = Array.isArray(data?.messages) ? data.messages : [];
     reconcileSeenMessages(nextMessages, options);
 
-    startTransition(() => {
-      setSnapshot(data);
-      setMessages(nextMessages);
-    });
+    setSnapshot(data);
+    setMessages(nextMessages);
   };
 
   const applyEndedSessionResult = (payload = {}) => {
@@ -3462,7 +3460,11 @@ export default function LivePage() {
   }, [wakeLockActive]);
 
   useEffect(() => {
-    if (!user || !activeSessionId) {
+    if (!user || !activeSessionId || !live?.id || live?.status !== 'live') {
+      if (liveStreamRef.current) {
+        liveStreamRef.current.close();
+        liveStreamRef.current = null;
+      }
       setStreamState('idle');
       return undefined;
     }
@@ -3616,7 +3618,7 @@ export default function LivePage() {
         source.close();
       }
     };
-  }, [activeSessionId, user]);
+  }, [activeSessionId, live?.id, live?.status, user]);
 
   useEffect(() => {
     if (!user || !activeSessionId || !isDocumentVisible || loading || streamState === 'live') return undefined;
@@ -5327,6 +5329,10 @@ export default function LivePage() {
 
   if (loading) {
     return <div className="py-12 text-center text-gray-400 font-display">Loading Shinsa Live...</div>;
+  }
+
+  if (!live && sessionId && !error) {
+    return <div className="py-12 text-center text-gray-400 font-display">Loading live session...</div>;
   }
 
   if (!live && !sessionId) {
