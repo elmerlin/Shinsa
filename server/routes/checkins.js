@@ -8,6 +8,8 @@ const { createUserNotification } = require('../lib/notifications');
 const { checkUserVenueAccess } = require('./venueAccess');
 
 const AUTO_CHECKOUT_AWAY_MS = 60 * 60 * 1000;
+const ACTIVE_CHECKIN_EXIT_BUFFER_METERS = 25;
+const ACTIVE_CHECKIN_MAX_ACCURACY_BUFFER_METERS = 30;
 
 function normalizeCheckinUser(row, size = 48) {
   if (!row) return null;
@@ -56,6 +58,14 @@ function normalizeVenueRadiusMeters(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return 180;
   return numeric;
+}
+
+function getActiveCheckinExitRadiusMeters(radiusMeters, accuracyMeters) {
+  const baseRadius = normalizeVenueRadiusMeters(radiusMeters);
+  const accuracyBuffer = Number.isFinite(accuracyMeters)
+    ? Math.max(0, Math.min(accuracyMeters, ACTIVE_CHECKIN_MAX_ACCURACY_BUFFER_METERS))
+    : 0;
+  return baseRadius + ACTIVE_CHECKIN_EXIT_BUFFER_METERS + accuracyBuffer;
 }
 
 function autoCheckoutThresholdDate(lastNearVenueAt) {
@@ -443,7 +453,12 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
   const existing = db.prepare('SELECT id FROM checkins WHERE user_id = ? AND checked_out_at IS NULL').get(userId);
   if (existing) {
     // Auto-checkout from previous
-    db.prepare("UPDATE checkins SET checked_out_at = datetime('now') WHERE id = ?").run(existing.id);
+    db.prepare(`
+      UPDATE checkins
+      SET checked_out_at = datetime('now'),
+          checkout_reason = 'replaced_by_new_checkin'
+      WHERE id = ?
+    `).run(existing.id);
   }
 
   const id = uuidv4();
@@ -489,7 +504,12 @@ router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
   `).get(userId);
   if (!active) return res.status(400).json({ error: 'Not currently checked in' });
 
-  db.prepare("UPDATE checkins SET checked_out_at = datetime('now') WHERE id = ?").run(active.id);
+  db.prepare(`
+    UPDATE checkins
+    SET checked_out_at = datetime('now'),
+        checkout_reason = 'manual'
+    WHERE id = ?
+  `).run(active.id);
   db.prepare("UPDATE users SET playing_status = '' WHERE id = ?").run(userId);
 
   const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
@@ -567,7 +587,8 @@ router.post('/proximity', requireAuth, requireCheckinFeature, (req, res) => {
 
   const distanceMeters = haversineDistanceMeters(latitude, longitude, venueLat, venueLng);
   const radiusMeters = normalizeVenueRadiusMeters(active.proximity_radius_m);
-  const isNear = distanceMeters <= radiusMeters;
+  const effectiveExitRadiusMeters = getActiveCheckinExitRadiusMeters(radiusMeters, accuracy);
+  const isNear = distanceMeters <= effectiveExitRadiusMeters;
   const now = new Date();
   const nowSql = formatSqlDateTime(now);
   const roundedDistance = Math.round(distanceMeters);
@@ -678,10 +699,11 @@ router.post('/proximity', requireAuth, requireCheckinFeature, (req, res) => {
     is_near: isNear,
     distance_m: roundedDistance,
     radius_m: radiusMeters,
+    effective_radius_m: Math.round(effectiveExitRadiusMeters),
     last_near_venue_at: updated?.last_near_venue_at || null,
     auto_checkout_at: autoCheckoutAt ? formatSqlDateTime(autoCheckoutAt) : null,
   });
-});
+  });
 
 // GET /api/checkins/my-status — get current user's checkin status
 router.get('/my-status', requireAuth, requireCheckinFeature, (req, res) => {
