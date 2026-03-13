@@ -7,7 +7,7 @@
     "server": "node server/index.js",
     "client": "cd client && npx vite --host",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "build": "cd client && npx vite build",
+    "build": "cd client && node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
     "seed": "node server/db/seed.js",
     "piu:aliases": "node server/scripts/generatePiugameSongAliases.js --date=202602 --mode=total",
     "piu:jackets:sync": "node server/scripts/syncPiugameJackets.js --date=202602 --mode=total",

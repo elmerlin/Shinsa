@@ -1334,7 +1334,9 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
     };
   }
 
-  const video = await getYoutubeVideoById(db, session.host_user_id, videoId);
+  const video = await getYoutubeVideoById(db, session.host_user_id, videoId, {
+    enforceChannelOwnership: false,
+  });
   if (!video) {
     return {
       session_id: String(liveSessionId),
@@ -3557,7 +3559,9 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       try {
         const replayVideoId = getLiveSessionYoutubeVideoId(session);
         if (replayVideoId) {
-          const replayVideo = await getYoutubeVideoById(db, req.user.id, replayVideoId);
+          const replayVideo = await getYoutubeVideoById(db, req.user.id, replayVideoId, {
+            enforceChannelOwnership: false,
+          });
           if (replayVideo && isReplayEligibleYoutubeVideo(replayVideo)) {
             const replayPlays = getSessionPlaysWithDurations(db, session.id);
             if (replayPlays.length > 0) {

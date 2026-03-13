@@ -443,9 +443,10 @@ async function getYoutubeBroadcastById(db, userId, broadcastId) {
   return broadcast;
 }
 
-async function getYoutubeVideoById(db, userId, videoId) {
+async function getYoutubeVideoById(db, userId, videoId, options = {}) {
   const normalizedId = String(videoId || '').trim();
   if (!normalizedId) return null;
+  const enforceChannelOwnership = options?.enforceChannelOwnership !== false;
   const { accessToken, row } = await getAuthorizedYoutubeConnection(db, userId);
   const payload = await youtubeApiGet(accessToken, YOUTUBE_VIDEOS_URL, {
     part: 'snippet,status,liveStreamingDetails',
@@ -454,7 +455,7 @@ async function getYoutubeVideoById(db, userId, videoId) {
   const item = Array.isArray(payload?.items) ? payload.items[0] : null;
   if (!item?.id) return null;
   const channelId = String(item?.snippet?.channelId || '').trim();
-  if (row?.channel_id && channelId && String(row.channel_id) !== channelId) {
+  if (enforceChannelOwnership && row?.channel_id && channelId && String(row.channel_id) !== channelId) {
     const err = new Error('That YouTube video does not belong to the linked channel');
     err.statusCode = 403;
     throw err;
