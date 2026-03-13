@@ -460,6 +460,7 @@ export const getGlobalPumbilityPlayerSheet = (params = {}) => {
   const query = new URLSearchParams();
   if (params.player_name) query.set('player_name', String(params.player_name));
   if (params.user_id) query.set('user_id', String(params.user_id));
+  if (params.metric) query.set('metric', String(params.metric));
   const qs = query.toString();
   return request(`/piugame/leaderboards/pumbility/player-sheet${qs ? `?${qs}` : ''}`);
 };

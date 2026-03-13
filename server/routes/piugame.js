@@ -1444,6 +1444,138 @@ function buildGlobalPumbilityLeaderboardRows(db) {
   return leaderboardRows;
 }
 
+function buildLocalPumbilityLeaderboardAliasMap(rows = []) {
+  const map = new Map();
+  for (const row of (Array.isArray(rows) ? rows : [])) {
+    const userId = String(row?.user_id || '').trim();
+    let linkedUsername = '';
+    if (userId) {
+      try {
+        linkedUsername = getLinkedPiugameUsername(userId);
+      } catch (err) {
+        linkedUsername = '';
+      }
+    }
+    const aliases = [
+      String(row?.username || '').trim(),
+      linkedUsername,
+    ];
+    for (const alias of aliases) {
+      const key = normalizeLeaderboardNameKey(alias);
+      if (!key || map.has(key)) continue;
+      map.set(key, row);
+    }
+  }
+  return map;
+}
+
+function buildSyntheticOver20PumbilityLeaderboardRows(db) {
+  const overRows = db.prepare(`
+    SELECT r.chart_key, r.rank, r.score, r.grade, r.played_at, r.player_name, r.player_avatar_url,
+           c.song_title, c.mode, c.level
+    FROM over_level_ranking_scores r
+    JOIN over_level_rankings c ON c.chart_key = r.chart_key
+    WHERE c.level >= 20
+      AND r.score > 0
+      AND c.mode IN ('Single', 'Double')
+    ORDER BY LOWER(TRIM(r.player_name)) ASC, c.chart_key ASC, r.row_order ASC
+  `).all();
+  if (!overRows.length) return [];
+
+  const playersByName = new Map();
+  for (const overRow of overRows) {
+    const name = String(overRow?.player_name || '').replace(/\s+/g, ' ').trim();
+    const nameKey = normalizeLeaderboardNameKey(name);
+    if (!nameKey) continue;
+
+    let player = playersByName.get(nameKey);
+    if (!player) {
+      player = {
+        username: name || 'Unknown',
+        piugame_avatar_url: String(overRow?.player_avatar_url || '').trim(),
+        best_by_chart: new Map(),
+      };
+      playersByName.set(nameKey, player);
+    } else if (!player.piugame_avatar_url) {
+      player.piugame_avatar_url = String(overRow?.player_avatar_url || '').trim();
+    }
+
+    const chartKey = String(overRow?.chart_key || '').trim();
+    if (!chartKey) continue;
+
+    const candidate = {
+      chart_key: chartKey,
+      rank: parseInt(overRow?.rank, 10) || 0,
+      score: parseInt(overRow?.score, 10) || 0,
+      grade: String(overRow?.grade || '').trim(),
+      player_name: name,
+      played_at: String(overRow?.played_at || '').trim(),
+      title: String(overRow?.song_title || '').trim(),
+      mode: String(overRow?.mode || '').trim(),
+      level: parseInt(overRow?.level, 10) || 0,
+    };
+    const existing = player.best_by_chart.get(chartKey);
+    if (!existing || compareOverRankingRows(candidate, existing) < 0) {
+      player.best_by_chart.set(chartKey, candidate);
+    }
+  }
+
+  const rows = [];
+  for (const player of playersByName.values()) {
+    const overallEntries = [];
+    const singlesEntries = [];
+
+    for (const row of player.best_by_chart.values()) {
+      const score = parseInt(row?.score, 10) || 0;
+      const level = parseInt(row?.level, 10) || 0;
+      const mode = String(row?.mode || '').trim();
+      if ((mode !== 'Single' && mode !== 'Double') || level <= 0 || score <= 0) continue;
+      if (!isPassingScore(score, row?.grade)) continue;
+
+      const grade = normalizeGrade(row?.grade || gradeFromScore(score));
+      const rating = getChartRatingPoints(score, grade, level);
+      if (rating <= 0) continue;
+
+      const ratedEntry = { level, score, grade, rating };
+      overallEntries.push(ratedEntry);
+      if (mode === 'Single') singlesEntries.push(ratedEntry);
+    }
+
+    const overall = computeLeaderboardMetricSummary(overallEntries);
+    const singles = computeLeaderboardMetricSummary(singlesEntries);
+    if (overall.pumbility <= 0 && singles.pumbility <= 0) continue;
+
+    const piugameAvatar = mapPiugameAvatarToLocal(player.piugame_avatar_url);
+    rows.push({
+      user_id: '',
+      username: player.username,
+      avatar: piugameAvatar || '',
+      local_avatar: '',
+      piugame_avatar: piugameAvatar || '',
+      piugame_avatar_url: player.piugame_avatar_url || '',
+      nationality: '',
+      is_local_user: false,
+      global_rank: 0,
+      global_prev_rank: 0,
+      global_rank_delta: 0,
+      overall_pumbility: overall.pumbility,
+      singles_pumbility: singles.pumbility,
+      overall_average_grade: overall.average_grade,
+      overall_average_level: overall.average_level,
+      singles_average_grade: singles.average_grade,
+      singles_average_level: singles.average_level,
+      singles_competitive_level: 0,
+      doubles_competitive_level: 0,
+      competitive_level: 0,
+      competitive_mode: '',
+      overall_breakdown_count: overall.breakdown_count,
+      singles_breakdown_count: singles.breakdown_count,
+    });
+  }
+
+  return rows;
+}
+
 async function refreshPumbilityLeaderboardCache(db, options = {}) {
   const force = !!options.force;
   const maxAgeMinutes = Number.isFinite(parseInt(options.maxAgeMinutes, 10))
@@ -4294,54 +4426,106 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
   const offset = (page - 1) * limit;
 
-  const globalRows = db.prepare(`
-    SELECT rank, player_name, pumbility, avatar_url, prev_rank, rank_delta
-    FROM pumbility_leaderboard
-    WHERE rank BETWEEN 1 AND 1000
-    ORDER BY rank ASC
-  `).all();
-
   const localRows = buildGlobalPumbilityLeaderboardRows(db);
-  const localByName = new Map();
-  for (const row of localRows) {
-    const nameKey = normalizeLeaderboardNameKey(row?.username);
-    if (!nameKey || localByName.has(nameKey)) continue;
-    localByName.set(nameKey, row);
-  }
+  const localByName = buildLocalPumbilityLeaderboardAliasMap(localRows);
 
-  const rows = globalRows.map((row) => {
-    const globalRank = parseInt(row.rank, 10) || 0;
-    const username = String(row.player_name || '').replace(/\s+/g, ' ').trim() || 'Unknown';
-    const nameKey = normalizeLeaderboardNameKey(username);
-    const local = localByName.get(nameKey) || null;
-    const piugameAvatar = mapPiugameAvatarToLocal(row.avatar_url);
-    const localAvatar = String(local?.avatar || '').trim();
-    return {
-      user_id: local?.user_id || '',
-      username,
-      avatar: localAvatar || piugameAvatar || '',
-      local_avatar: localAvatar,
-      piugame_avatar: piugameAvatar,
-      piugame_avatar_url: String(row.avatar_url || '').trim(),
-      nationality: local?.nationality || '',
-      is_local_user: !!(local?.user_id),
-      global_rank: globalRank,
-      global_prev_rank: parseInt(row.prev_rank, 10) || 0,
-      global_rank_delta: parseInt(row.rank_delta, 10) || 0,
-      overall_pumbility: parseInt(row.pumbility, 10) || 0,
-      singles_pumbility: parseInt(local?.singles_pumbility, 10) || 0,
-      overall_average_grade: local?.overall_average_grade || '--',
-      overall_average_level: Number(local?.overall_average_level) || 0,
-      singles_average_grade: local?.singles_average_grade || '--',
-      singles_average_level: Number(local?.singles_average_level) || 0,
-      singles_competitive_level: parseInt(local?.singles_competitive_level, 10) || 0,
-      doubles_competitive_level: parseInt(local?.doubles_competitive_level, 10) || 0,
-      competitive_level: parseInt(local?.competitive_level, 10) || 0,
-      competitive_mode: String(local?.competitive_mode || ''),
-      overall_breakdown_count: parseInt(local?.overall_breakdown_count, 10) || 0,
-      singles_breakdown_count: parseInt(local?.singles_breakdown_count, 10) || 0,
-    };
-  });
+  let rows = [];
+  let responseSource = 'piugame_global';
+
+  if (metric === 'singles') {
+    responseSource = 'over20_singles_synthetic';
+    const syntheticRows = buildSyntheticOver20PumbilityLeaderboardRows(db);
+    const mergedUserIds = new Set();
+
+    rows = syntheticRows.map((row) => {
+      const nameKey = normalizeLeaderboardNameKey(row?.username);
+      const local = localByName.get(nameKey) || null;
+      const localAvatar = String(local?.avatar || '').trim();
+      const syntheticAvatar = String(row?.avatar || '').trim();
+      const merged = {
+        ...row,
+        user_id: local?.user_id || '',
+        username: String(local?.username || row?.username || '').trim() || 'Unknown',
+        avatar: localAvatar || syntheticAvatar || '',
+        local_avatar: localAvatar,
+        piugame_avatar: String(row?.piugame_avatar || '').trim(),
+        piugame_avatar_url: String(row?.piugame_avatar_url || '').trim(),
+        nationality: String(local?.nationality || '').trim(),
+        is_local_user: !!(local?.user_id),
+        overall_pumbility: parseInt(local?.overall_pumbility, 10) || parseInt(row?.overall_pumbility, 10) || 0,
+        singles_pumbility: parseInt(local?.singles_pumbility, 10) || parseInt(row?.singles_pumbility, 10) || 0,
+        overall_average_grade: String(local?.overall_average_grade || '').trim() || row?.overall_average_grade || '--',
+        overall_average_level: Number(local?.overall_average_level) || Number(row?.overall_average_level) || 0,
+        singles_average_grade: String(local?.singles_average_grade || '').trim() || row?.singles_average_grade || '--',
+        singles_average_level: Number(local?.singles_average_level) || Number(row?.singles_average_level) || 0,
+        singles_competitive_level: parseInt(local?.singles_competitive_level, 10) || 0,
+        doubles_competitive_level: parseInt(local?.doubles_competitive_level, 10) || 0,
+        competitive_level: parseInt(local?.competitive_level, 10) || 0,
+        competitive_mode: String(local?.competitive_mode || ''),
+        overall_breakdown_count: parseInt(local?.overall_breakdown_count, 10) || parseInt(row?.overall_breakdown_count, 10) || 0,
+        singles_breakdown_count: parseInt(local?.singles_breakdown_count, 10) || parseInt(row?.singles_breakdown_count, 10) || 0,
+      };
+      if (merged.user_id) mergedUserIds.add(merged.user_id);
+      return merged;
+    });
+
+    for (const local of localRows) {
+      const localUserId = String(local?.user_id || '').trim();
+      if (localUserId && mergedUserIds.has(localUserId)) continue;
+      if ((parseInt(local?.singles_pumbility, 10) || 0) <= 0) continue;
+      rows.push({
+        ...local,
+        local_avatar: String(local?.avatar || '').trim(),
+        piugame_avatar: '',
+        piugame_avatar_url: '',
+        is_local_user: !!localUserId,
+        global_rank: 0,
+        global_prev_rank: 0,
+        global_rank_delta: 0,
+      });
+    }
+  } else {
+    const globalRows = db.prepare(`
+      SELECT rank, player_name, pumbility, avatar_url, prev_rank, rank_delta
+      FROM pumbility_leaderboard
+      WHERE rank BETWEEN 1 AND 1000
+      ORDER BY rank ASC
+    `).all();
+
+    rows = globalRows.map((row) => {
+      const globalRank = parseInt(row.rank, 10) || 0;
+      const username = String(row.player_name || '').replace(/\s+/g, ' ').trim() || 'Unknown';
+      const nameKey = normalizeLeaderboardNameKey(username);
+      const local = localByName.get(nameKey) || null;
+      const piugameAvatar = mapPiugameAvatarToLocal(row.avatar_url);
+      const localAvatar = String(local?.avatar || '').trim();
+      return {
+        user_id: local?.user_id || '',
+        username,
+        avatar: localAvatar || piugameAvatar || '',
+        local_avatar: localAvatar,
+        piugame_avatar: piugameAvatar,
+        piugame_avatar_url: String(row.avatar_url || '').trim(),
+        nationality: local?.nationality || '',
+        is_local_user: !!(local?.user_id),
+        global_rank: globalRank,
+        global_prev_rank: parseInt(row.prev_rank, 10) || 0,
+        global_rank_delta: parseInt(row.rank_delta, 10) || 0,
+        overall_pumbility: parseInt(row.pumbility, 10) || 0,
+        singles_pumbility: parseInt(local?.singles_pumbility, 10) || 0,
+        overall_average_grade: local?.overall_average_grade || '--',
+        overall_average_level: Number(local?.overall_average_level) || 0,
+        singles_average_grade: local?.singles_average_grade || '--',
+        singles_average_level: Number(local?.singles_average_level) || 0,
+        singles_competitive_level: parseInt(local?.singles_competitive_level, 10) || 0,
+        doubles_competitive_level: parseInt(local?.doubles_competitive_level, 10) || 0,
+        competitive_level: parseInt(local?.competitive_level, 10) || 0,
+        competitive_mode: String(local?.competitive_mode || ''),
+        overall_breakdown_count: parseInt(local?.overall_breakdown_count, 10) || 0,
+        singles_breakdown_count: parseInt(local?.singles_breakdown_count, 10) || 0,
+      };
+    });
+  }
 
   const sorted = [...rows].sort((a, b) => {
     const metricA = metric === 'singles'
@@ -4374,7 +4558,15 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
     } else if (sortBy === 'avg_level') {
       comparison = metricA.average_level - metricB.average_level;
     } else if (sortBy === 'competitive_level') {
-      comparison = (parseInt(a?.competitive_level, 10) || 0) - (parseInt(b?.competitive_level, 10) || 0);
+      comparison = (
+        metric === 'singles'
+          ? (parseInt(a?.singles_competitive_level, 10) || 0)
+          : (parseInt(a?.competitive_level, 10) || 0)
+      ) - (
+        metric === 'singles'
+          ? (parseInt(b?.singles_competitive_level, 10) || 0)
+          : (parseInt(b?.competitive_level, 10) || 0)
+      );
     } else {
       comparison = metricA.pumbility - metricB.pumbility;
     }
@@ -4427,8 +4619,9 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
       global_prev_rank: Math.max(0, parseInt(currentUserRow.global_prev_rank, 10) || 0),
       global_rank_delta: parseInt(currentUserRow.global_rank_delta, 10) || 0,
       overall_pumbility: Math.max(0, parseInt(currentUserRow.overall_pumbility, 10) || 0),
+      singles_pumbility: Math.max(0, parseInt(currentUserRow.singles_pumbility, 10) || 0),
     } : null,
-    source: 'piugame_global',
+    source: responseSource,
   });
 });
 
@@ -4437,6 +4630,8 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
 // non-local users get inferred partial data from OVER Lv.20+ cached top 100 rows.
 router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   const db = getDb();
+  const metricRaw = String(req.query?.metric || 'overall').trim().toLowerCase();
+  const metric = metricRaw === 'singles' ? 'singles' : 'overall';
   const requestedName = String(req.query?.player_name || '').replace(/\s+/g, ' ').trim();
   const requestedUserId = String(req.query?.user_id || '').trim();
   if (!requestedName && !requestedUserId) {
@@ -4457,8 +4652,8 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   if (!resolvedName) {
     return res.status(404).json({ error: 'Player not found' });
   }
-  const nameCacheKey = `name:${normalizeLeaderboardNameKey(resolvedName)}`;
-  const userCacheKey = resolvedUserId ? `uid:${resolvedUserId}` : '';
+  const nameCacheKey = `name:${metric}:${normalizeLeaderboardNameKey(resolvedName)}`;
+  const userCacheKey = resolvedUserId ? `uid:${metric}:${resolvedUserId}` : '';
   const cacheKey = userCacheKey || nameCacheKey;
   const cachedSheet = playerSheetCache.get(cacheKey);
   if (cachedSheet && cachedSheet.expires_at > Date.now()) {
@@ -4505,6 +4700,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       const level = parseInt(scoreRow?.level, 10) || 0;
       const mode = String(scoreRow?.mode || '').trim();
       if (mode !== 'Single' && mode !== 'Double') continue;
+      if (metric === 'singles' && mode !== 'Single') continue;
       if (!isPassingScore(score, scoreRow?.grade)) continue;
       const grade = normalizeGrade(scoreRow?.grade || gradeFromScore(score));
       const rating = getChartRatingPoints(score, grade, level);
@@ -4534,6 +4730,9 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   }
 
   if (!rows.length) {
+    const modeSqlFilter = metric === 'singles'
+      ? `AND c.mode = 'Single'`
+      : `AND c.mode IN ('Single', 'Double')`;
     let overRows = db.prepare(`
       SELECT r.chart_key, r.rank, r.score, r.grade, r.played_at, r.player_name, r.player_avatar_url,
              c.song_title, c.mode, c.level, c.jacket_url,
@@ -4542,6 +4741,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       JOIN over_level_rankings c ON c.chart_key = r.chart_key
       LEFT JOIN songs s ON s.title = c.song_title AND s.mode = c.mode AND s.level = c.level
       WHERE c.level >= 20
+        ${modeSqlFilter}
         AND r.score > 0
         AND r.player_name = ? COLLATE NOCASE
       ORDER BY c.chart_key ASC, r.row_order ASC
@@ -4556,6 +4756,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
         JOIN over_level_rankings c ON c.chart_key = r.chart_key
         LEFT JOIN songs s ON s.title = c.song_title AND s.mode = c.mode AND s.level = c.level
         WHERE c.level >= 20
+          ${modeSqlFilter}
           AND r.score > 0
           AND LOWER(TRIM(r.player_name)) = ?
         ORDER BY c.chart_key ASC, r.row_order ASC
@@ -4590,6 +4791,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       const level = parseInt(row?.level, 10) || 0;
       const mode = String(row?.mode || '').trim();
       if (mode !== 'Single' && mode !== 'Double') continue;
+      if (metric === 'singles' && mode !== 'Single') continue;
       if (!isPassingScore(score, row?.grade)) continue;
       const grade = normalizeGrade(row?.grade || gradeFromScore(score));
       const rating = getChartRatingPoints(score, grade, level);
@@ -4664,6 +4866,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
     : null;
 
   const payload = {
+    metric,
     player_name: String(globalRow?.player_name || resolvedName).trim(),
     user_id: resolvedUserId,
     is_local_user: !!resolvedUserId,

@@ -170,6 +170,13 @@ This project does not currently load `.env` automatically with `dotenv`; set env
 | `NODE_ENV` | unset | Yes | Runtime mode |
 | `JWT_SECRET` | hardcoded fallback | **Yes** | JWT signing secret |
 | `PIU_ENCRYPT_KEY` | hardcoded fallback | **Yes** | Encrypt/decrypt PIUGame credentials |
+| `APP_URL` | `http://localhost:5173` | **Yes** | Public app origin used for OAuth callback redirects |
+| `YOUTUBE_CLIENT_ID` | empty | If YouTube sync used | Google OAuth client ID for YouTube linking |
+| `YOUTUBE_CLIENT_SECRET` | empty | If YouTube sync used | Google OAuth client secret for YouTube linking |
+| `YOUTUBE_REDIRECT_URI` | `${APP_URL}/api/youtube/oauth/callback` | If YouTube sync used | Must match the Google OAuth redirect URI exactly |
+| `YOUTUBE_OAUTH_SCOPES` | `https://www.googleapis.com/auth/youtube.force-ssl` | No | Space/comma separated scopes to request from Google |
+| `YOUTUBE_OAUTH_STATE_SECRET` | `JWT_SECRET` fallback | Yes (recommended) | Signs the temporary OAuth state payload |
+| `YOUTUBE_ENCRYPT_KEY` | `PIU_ENCRYPT_KEY` fallback | Yes (recommended) | Encrypts stored YouTube access/refresh tokens |
 | `VAPID_SUBJECT` | `mailto:support@pumpshinsa.com` | If push used | Web push VAPID subject |
 | `VAPID_PUBLIC_KEY` | empty | If push used | Web push public key |
 | `VAPID_PRIVATE_KEY` | empty | If push used | Web push private key |
@@ -219,7 +226,7 @@ cd client && npm install && cd ..
 ## 2) Build frontend assets
 
 ```bash
-npm run build
+NODE_OPTIONS=--max-old-space-size=4096 npm run build
 ```
 
 ## 3) Prepare persistent DB path
@@ -234,11 +241,20 @@ sudo chown -R "$USER" /var/data/shinsa
 ## 4) Export production env
 
 ```bash
+export NODE_OPTIONS=--max-old-space-size=4096
 export NODE_ENV=production
 export PORT=3001
 export DB_PATH=/var/data/shinsa/shinsa.db
+export APP_URL='https://pumpshinsa.com'
 export JWT_SECRET='replace-with-strong-secret'
 export PIU_ENCRYPT_KEY='replace-with-strong-secret'
+export YOUTUBE_CLIENT_ID='replace-with-google-client-id'
+export YOUTUBE_CLIENT_SECRET='replace-with-google-client-secret'
+# Optional overrides:
+# export YOUTUBE_REDIRECT_URI='https://pumpshinsa.com/api/youtube/oauth/callback'
+# export YOUTUBE_OAUTH_SCOPES='https://www.googleapis.com/auth/youtube.force-ssl'
+# export YOUTUBE_OAUTH_STATE_SECRET='replace-with-strong-secret'
+# export YOUTUBE_ENCRYPT_KEY='replace-with-strong-secret'
 # Optional push:
 # export VAPID_SUBJECT='mailto:you@example.com'
 # export VAPID_PUBLIC_KEY='...'
@@ -268,6 +284,7 @@ pm2 status
 - Put the app behind a reverse proxy (Nginx/Caddy) for TLS.
 - Example Nginx config with gzip+brotli: `deploy/nginx/shinsa.conf.example`.
 - Web Push requires HTTPS in real browsers (except localhost).
+- Google OAuth for YouTube linking also requires HTTPS in production, a verified domain, and a redirect URI that exactly matches `APP_URL` + `/api/youtube/oauth/callback` unless `YOUTUBE_REDIRECT_URI` is overridden.
 - Ensure outbound network access for PIUGame scraping endpoints.
 - Persist and back up your SQLite database file.
 

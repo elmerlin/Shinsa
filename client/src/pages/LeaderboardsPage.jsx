@@ -249,6 +249,7 @@ function OverChartJacket({ chart, size = 'md' }) {
 function PumbilityLeaderboardTab() {
   const { user } = useAuth();
   const pageSize = 100;
+  const [metric, setMetric] = useState('overall');
   const [page, setPage] = useState(1);
   const [rows, setRows] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
@@ -257,6 +258,7 @@ function PumbilityLeaderboardTab() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [myGlobalRanking, setMyGlobalRanking] = useState(null);
+  const [leaderboardSource, setLeaderboardSource] = useState('piugame_global');
   const [showPumbilityBreakdownModal, setShowPumbilityBreakdownModal] = useState(false);
   const [breakdownTitle, setBreakdownTitle] = useState('Pumbility Top Songs');
   const [breakdownRows, setBreakdownRows] = useState([]);
@@ -268,10 +270,13 @@ function PumbilityLeaderboardTab() {
   const [jumpingToRank, setJumpingToRank] = useState(false);
   const [jacketLookup, setJacketLookup] = useState({});
   const loadMoreRef = useRef(null);
+  const isSinglesMetric = metric === 'singles';
+  const metricLabel = isSinglesMetric ? 'S. Pumbility' : 'Pumbility';
+  const leaderboardTitle = isSinglesMetric ? 'Global Singles Pumbility' : 'Global PIUGAME Pumbility Top 1000';
+  const breakdownTitleLabel = isSinglesMetric ? 'S. Pumbility Top Songs' : 'Pumbility Top Songs';
 
   const loadRows = async (nextPage, { append = false } = {}) => {
     if (append && (loadingMore || initialLoading)) return;
-    if (!append && initialLoading) return;
 
     if (append) {
       setLoadingMore(true);
@@ -282,7 +287,7 @@ function PumbilityLeaderboardTab() {
 
     try {
       const payload = await getGlobalPumbilityLeaderboard({
-        metric: 'overall',
+        metric,
         sort_by: 'pumbility',
         sort_order: 'desc',
         page: nextPage,
@@ -297,15 +302,18 @@ function PumbilityLeaderboardTab() {
       } else if (!append && nextPage === 1) {
         setMyGlobalRanking(null);
       }
+      if (!append && nextPage === 1) {
+        setLeaderboardSource(String(payload?.source || (isSinglesMetric ? 'over20_singles_synthetic' : 'piugame_global')));
+      }
       setTotalPages(nextTotalPages);
       setTotalRows(nextTotalRows);
       setPage(nextPage);
       if (append) {
         setRows((prev) => {
-          const seen = new Set(prev.map((row) => `${parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0}|${normalizeNameKey(row?.username)}`));
+          const seen = new Set(prev.map((row) => `${parseInt(row?.rank, 10) || parseInt(row?.global_rank, 10) || 0}|${normalizeNameKey(row?.username)}`));
           const merged = [...prev];
           for (const row of incomingRows) {
-            const key = `${parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0}|${normalizeNameKey(row?.username)}`;
+            const key = `${parseInt(row?.rank, 10) || parseInt(row?.global_rank, 10) || 0}|${normalizeNameKey(row?.username)}`;
             if (seen.has(key)) continue;
             seen.add(key);
             merged.push(row);
@@ -329,8 +337,19 @@ function PumbilityLeaderboardTab() {
   };
 
   useEffect(() => {
+    setRows([]);
+    setPage(1);
+    setTotalPages(1);
+    setTotalRows(0);
+    setError('');
+    setMyGlobalRanking(null);
+    setShowPumbilityBreakdownModal(false);
+    setBreakdownRows([]);
+    setBreakdownSummary(null);
+    setBreakdownHeaderMeta(null);
+    setBreakdownError('');
     loadRows(1, { append: false });
-  }, []);
+  }, [metric]);
 
   useEffect(() => {
     let cancelled = false;
@@ -377,9 +396,14 @@ function PumbilityLeaderboardTab() {
 
   const myRow = useMemo(() => rows.find((row) => isCurrentUserRow(row)) || null, [rows, user?.id, user?.username]);
   const myRankingSource = myRow || myGlobalRanking || null;
-  const myRank = parseInt(myRankingSource?.global_rank, 10) || parseInt(myRankingSource?.rank, 10) || 0;
-  const myRankDelta = parseInt(myRankingSource?.global_rank_delta, 10) || 0;
-  const myPumbility = parseInt(myRankingSource?.overall_pumbility, 10) || 0;
+  const myRank = parseInt(myRankingSource?.sort_rank, 10)
+    || parseInt(myRankingSource?.rank, 10)
+    || parseInt(myRankingSource?.global_rank, 10)
+    || 0;
+  const myRankDelta = isSinglesMetric ? 0 : (parseInt(myRankingSource?.global_rank_delta, 10) || 0);
+  const myPumbility = isSinglesMetric
+    ? (parseInt(myRankingSource?.singles_pumbility, 10) || 0)
+    : (parseInt(myRankingSource?.overall_pumbility, 10) || 0);
   const getBreakdownKey = (row) => `${String(row?.user_id || '').trim()}|${normalizeNameKey(row?.username)}`;
 
   const openPlayerPumbilityBreakdown = async (row) => {
@@ -399,15 +423,23 @@ function PumbilityLeaderboardTab() {
       const payload = await getGlobalPumbilityPlayerSheet({
         player_name: targetName,
         user_id: targetUserId,
+        metric,
       });
       const payloadRows = Array.isArray(payload?.rows) ? payload.rows : [];
       const resolvedName = String(payload?.player_name || targetName).replace(/\s+/g, ' ').trim() || targetName;
-      setBreakdownTitle(`${resolvedName} • Pumbility Top Songs`);
+      const rowRank = parseInt(row?.rank, 10)
+        || parseInt(row?.sort_rank, 10)
+        || parseInt(row?.global_rank, 10)
+        || 0;
+      const rowPumbility = isSinglesMetric
+        ? (parseInt(row?.singles_pumbility, 10) || 0)
+        : (parseInt(row?.overall_pumbility, 10) || parseInt(payload?.global_pumbility, 10) || 0);
+      setBreakdownTitle(`${resolvedName} • ${breakdownTitleLabel}`);
       setBreakdownRows(payloadRows);
       setBreakdownSummary(payload?.summary || null);
       setBreakdownHeaderMeta({
-        pumbility: parseInt(payload?.global_pumbility, 10) || 0,
-        rank: parseInt(payload?.global_rank, 10) || 0,
+        pumbility: rowPumbility,
+        rank: rowRank,
       });
       setBreakdownIncomplete(!!payload?.incomplete);
       setShowPumbilityBreakdownModal(true);
@@ -448,20 +480,56 @@ function PumbilityLeaderboardTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-gray-400 font-display font-bold">Global PIUGAME Pumbility Top 1000</p>
-        <button
-          type="button"
-          onClick={refreshRows}
-          disabled={initialLoading || loadingMore || jumpingToRank}
-          className="btn-secondary text-xs px-3 py-1.5"
-        >
-          {initialLoading || loadingMore ? 'Refreshing...' : jumpingToRank ? 'Jumping...' : 'Refresh'}
-        </button>
+        <div className="space-y-1">
+          <p className="text-xs text-gray-400 font-display font-bold">{leaderboardTitle}</p>
+          <p className="text-[11px] text-gray-500">
+            {isSinglesMetric
+              ? 'Synthetic from OVER Lv.20+ Singles Top 100 rows plus local synced score data.'
+              : 'Official PIUGAME global leaderboard with local singles overlays and score-sheet drilldown.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center rounded-lg border border-piu-border/60 bg-piu-dark p-0.5">
+            <button
+              type="button"
+              onClick={() => setMetric('overall')}
+              className={`px-2.5 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                !isSinglesMetric ? 'bg-piu-accent text-white' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Overall
+            </button>
+            <button
+              type="button"
+              onClick={() => setMetric('singles')}
+              className={`px-2.5 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                isSinglesMetric ? 'bg-red-500/85 text-white' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Singles
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={refreshRows}
+            disabled={initialLoading || loadingMore || jumpingToRank}
+            className="btn-secondary text-xs px-3 py-1.5"
+          >
+            {initialLoading || loadingMore ? 'Refreshing...' : jumpingToRank ? 'Jumping...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       <div className="card">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-[11px] text-gray-500 font-display">Your Global Ranking</p>
+          <p className="text-[11px] text-gray-500 font-display">
+            {isSinglesMetric ? 'Your Singles Ranking' : 'Your Global Ranking'}
+          </p>
+          {leaderboardSource?.startsWith('over20') ? (
+            <span className="rounded-full border border-red-400/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide text-red-200">
+              Synthetic
+            </span>
+          ) : null}
           {myRank > 0 ? (
             <div className="ml-auto flex items-center gap-2">
               <button
@@ -471,10 +539,12 @@ function PumbilityLeaderboardTab() {
                 className="rounded-lg border border-piu-border/60 bg-piu-dark/40 px-2 py-1 text-left hover:border-piu-accent/50 hover:bg-piu-dark/70 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 title="Jump to your leaderboard row"
               >
-                <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">Global Rank</p>
+                <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">
+                  {isSinglesMetric ? 'Singles Rank' : 'Global Rank'}
+                </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <p className="font-mono font-bold text-sm text-piu-accent leading-tight">#{myRank}</p>
-                  <RankDeltaIndicator delta={myRankDelta} compact />
+                  {!isSinglesMetric ? <RankDeltaIndicator delta={myRankDelta} compact /> : null}
                 </div>
               </button>
               <button
@@ -482,19 +552,26 @@ function PumbilityLeaderboardTab() {
                 onClick={() => openPlayerPumbilityBreakdown({
                   user_id: myRow?.user_id || myGlobalRanking?.user_id || user?.id || '',
                   username: myRow?.username || myGlobalRanking?.username || user?.username || '',
+                  rank: myRank,
+                  overall_pumbility: parseInt(myRankingSource?.overall_pumbility, 10) || 0,
+                  singles_pumbility: parseInt(myRankingSource?.singles_pumbility, 10) || 0,
                 })}
                 disabled={!!breakdownLoadingKey}
                 className="rounded-lg border border-piu-border/60 bg-piu-dark/40 px-2 py-1 text-left hover:border-piu-gold/50 hover:bg-piu-dark/70 transition-colors"
-                title="Show your pumbility top songs"
+                title={`Show your ${metricLabel.toLowerCase()} top songs`}
               >
-                <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">Pumbility</p>
+                <p className="text-[9px] text-gray-500 font-display uppercase tracking-wide leading-none">{metricLabel}</p>
                 <p className="font-mono font-bold text-sm text-piu-gold leading-tight">{formatNumber(myPumbility)}</p>
               </button>
             </div>
           ) : null}
         </div>
         {myRank <= 0 ? (
-          <p className="mt-1 text-sm text-gray-400">No Top 1000 rank found for your username yet.</p>
+          <p className="mt-1 text-sm text-gray-400">
+            {isSinglesMetric
+              ? 'No synthetic singles rank found for your profile yet.'
+              : 'No Top 1000 rank found for your username yet.'}
+          </p>
         ) : null}
       </div>
       {breakdownError ? (
@@ -519,12 +596,14 @@ function PumbilityLeaderboardTab() {
             <div className="grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2 px-3 py-2 border-b border-piu-border/40 text-[11px] font-display font-bold uppercase tracking-wide text-gray-500">
               <span>#</span>
               <span>Player</span>
-              <span>Pumbility</span>
+              <span>{metricLabel}</span>
             </div>
             {rows.map((row) => {
-              const rowRank = parseInt(row?.global_rank, 10) || parseInt(row?.rank, 10) || 0;
-              const rankDelta = parseInt(row?.global_rank_delta, 10) || 0;
-              const pumbility = parseInt(row?.overall_pumbility, 10) || 0;
+              const rowRank = parseInt(row?.rank, 10) || parseInt(row?.global_rank, 10) || 0;
+              const rankDelta = isSinglesMetric ? 0 : (parseInt(row?.global_rank_delta, 10) || 0);
+              const pumbility = isSinglesMetric
+                ? (parseInt(row?.singles_pumbility, 10) || 0)
+                : (parseInt(row?.overall_pumbility, 10) || 0);
               const isCurrent = isCurrentUserRow(row);
               const avatar = String(row?.avatar || '').trim();
               const avatarSrc = avatar
@@ -543,7 +622,7 @@ function PumbilityLeaderboardTab() {
                 >
                   <div className="flex flex-col items-start gap-0.5">
                     <span className={`text-sm font-mono ${isCurrent ? 'text-piu-accent' : 'text-gray-500'}`}>#{rowRank}</span>
-                    <RankDeltaIndicator delta={rankDelta} compact />
+                    {!isSinglesMetric ? <RankDeltaIndicator delta={rankDelta} compact /> : null}
                   </div>
                   <div className="min-w-0 flex items-center gap-2">
                     {avatarSrc ? (
@@ -576,7 +655,7 @@ function PumbilityLeaderboardTab() {
                         ? 'text-yellow-200/80'
                         : 'text-piu-gold hover:text-yellow-200'
                     }`}
-                    title="Show this player's pumbility top songs"
+                    title={`Show this player's ${metricLabel.toLowerCase()} top songs`}
                   >
                     {pumbility > 0 ? formatNumber(pumbility) : '--'}
                   </button>
@@ -594,7 +673,7 @@ function PumbilityLeaderboardTab() {
             <div className="flex items-center justify-center py-2 text-xs text-gray-500">Loading more ranks...</div>
           ) : null}
           {!hasMore && rows.length > 0 ? (
-            <div className="text-center text-xs text-gray-500 pb-1">Reached rank #1000.</div>
+            <div className="text-center text-xs text-gray-500 pb-1">Reached the end of the leaderboard.</div>
           ) : null}
         </>
       )}
@@ -607,7 +686,11 @@ function PumbilityLeaderboardTab() {
         headerMeta={breakdownHeaderMeta}
         jacketLookup={jacketLookup}
         showIncompleteCta={breakdownIncomplete}
-        ctaMessage="This pumbility sheet is partial from public OVER Lv.20 Top 100 data. Sign up and sync PIUGAME for complete Top 50 scores."
+        ctaMessage={
+          isSinglesMetric
+            ? 'This Singles pumbility sheet is partial from public OVER Lv.20 Singles Top 100 data. Sign up and sync PIUGAME for a fuller personal score breakdown.'
+            : 'This pumbility sheet is partial from public OVER Lv.20 Top 100 data. Sign up and sync PIUGAME for complete Top 50 scores.'
+        }
         onClose={() => {
           setShowPumbilityBreakdownModal(false);
           setBreakdownSummary(null);
