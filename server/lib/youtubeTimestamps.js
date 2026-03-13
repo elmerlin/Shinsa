@@ -66,7 +66,11 @@ function isPassingPlay(play) {
   return resolvePlayGrade(play) !== 'F';
 }
 
-function formatChapterLabel(play) {
+function getPlayPerformerLabel(play) {
+  return String(play?.username || play?.performer_username || '').trim();
+}
+
+function formatChapterLabel(play, options = {}) {
   const title = String(play?.song_title || '').trim() || 'Unknown song';
   const mode = String(play?.mode || '').trim();
   const level = toInt(play?.level);
@@ -74,7 +78,10 @@ function formatChapterLabel(play) {
     ? ` (${mode === 'Single' ? 'S' : mode === 'Double' ? 'D' : mode.slice(0, 1).toUpperCase()}${level})`
     : '';
   const result = formatChapterResult(play);
-  return `${title}${suffix}${result ? ` ${result}` : ''}`;
+  const performerPrefix = options.showPerformer && getPlayPerformerLabel(play)
+    ? `${getPlayPerformerLabel(play)} - `
+    : '';
+  return `${performerPrefix}${title}${suffix}${result ? ` ${result}` : ''}`;
 }
 
 function sanitizeChapterTitle(title, fallbackIndex) {
@@ -139,6 +146,12 @@ function buildYoutubeTimestampPayload(session, plays = [], video = null) {
   }
 
   const rows = Array.isArray(plays) ? plays : [];
+  const performerKeys = new Set(
+    rows
+      .map((play) => String(play?.user_id || play?.performer_user_id || getPlayPerformerLabel(play) || '').trim())
+      .filter(Boolean)
+  );
+  const showPerformer = performerKeys.size > 1;
   const enriched = rows
     .map((play) => {
       const endedAt = parsePlayEndedAt(play);
@@ -217,7 +230,9 @@ function buildYoutubeTimestampPayload(session, plays = [], video = null) {
     chapters.push({
       offset_seconds: nextOffset,
       offset_label: formatChapterOffset(nextOffset),
-      title: sanitizeChapterTitle(formatChapterLabel(item.play), chapters.length),
+      title: sanitizeChapterTitle(formatChapterLabel(item.play, { showPerformer }), chapters.length),
+      user_id: String(item.play?.user_id || item.play?.performer_user_id || '').trim(),
+      username: getPlayPerformerLabel(item.play),
       song_title: String(item.play?.song_title || '').trim(),
       mode: String(item.play?.mode || '').trim(),
       level: toInt(item.play?.level),

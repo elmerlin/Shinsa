@@ -969,6 +969,20 @@ export const updateLiveSession = (sessionId, data) => request(`/live/sessions/${
   method: 'PATCH',
   body: JSON.stringify(data),
 });
+export const addLiveSessionCohost = (sessionId, userId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/cohosts`, {
+  method: 'POST',
+  body: JSON.stringify({ user_id: userId }),
+});
+export const removeLiveSessionCohost = (sessionId, userId) => request(
+  `/live/sessions/${encodeURIComponent(sessionId)}/cohosts/${encodeURIComponent(userId)}`,
+  {
+    method: 'DELETE',
+  }
+);
+export const leaveLiveSession = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/leave`, {
+  method: 'POST',
+  body: '{}',
+});
 export const createLiveOverlayToken = (sessionId) => request(`/live/sessions/${encodeURIComponent(sessionId)}/overlay-token`, {
   method: 'POST',
   body: '{}',

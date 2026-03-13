@@ -2105,6 +2105,31 @@ function initializeDb() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS live_session_participants (
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'cohost',
+      status TEXT NOT NULL DEFAULT 'active',
+      added_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TEXT DEFAULT (datetime('now')),
+      left_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (live_session_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS live_session_participant_sync (
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recent_anchor_id INTEGER NOT NULL DEFAULT 0,
+      last_recent_row_id INTEGER NOT NULL DEFAULT 0,
+      last_sync_at TEXT DEFAULT '',
+      last_sync_status TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (live_session_id, user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS live_session_presence (
       live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
       session_id TEXT NOT NULL,
@@ -2142,6 +2167,8 @@ function initializeDb() {
       song_title TEXT NOT NULL DEFAULT '',
       mode TEXT NOT NULL DEFAULT '',
       level INTEGER NOT NULL DEFAULT 0,
+      target_user_id TEXT DEFAULT '',
+      target_username TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'open',
       fulfilled INTEGER NOT NULL DEFAULT 0,
       handled_at TEXT DEFAULT '',
@@ -2230,27 +2257,37 @@ function initializeDb() {
     CREATE TABLE IF NOT EXISTS live_session_buffered_upscores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      performer_user_id TEXT NOT NULL DEFAULT '',
       payload_json TEXT NOT NULL DEFAULT '{}',
       pumbility_gain INTEGER NOT NULL DEFAULT 0,
       singles_pumbility_gain INTEGER NOT NULL DEFAULT 0,
+      finalized_at TEXT DEFAULT '',
+      finalized_post_id INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS live_session_buffered_clears (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      performer_user_id TEXT NOT NULL DEFAULT '',
       payload_json TEXT NOT NULL DEFAULT '{}',
       pumbility_gain INTEGER NOT NULL DEFAULT 0,
       singles_pumbility_gain INTEGER NOT NULL DEFAULT 0,
+      finalized_at TEXT DEFAULT '',
+      finalized_post_id INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_live_sessions_host_status ON live_sessions(host_user_id, status);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_live_sessions_single_active_host ON live_sessions(host_user_id) WHERE status = 'live';
+    CREATE INDEX IF NOT EXISTS idx_live_session_participants_session ON live_session_participants(live_session_id, status, role, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_participants_user ON live_session_participants(user_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_participant_sync_session ON live_session_participant_sync(live_session_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_presence_session ON live_session_presence(live_session_id, last_seen);
     CREATE INDEX IF NOT EXISTS idx_live_session_messages_session_time ON live_session_messages(live_session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_message_pumps_message ON live_message_pumps(message_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_time ON live_session_requests(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_target ON live_session_requests(live_session_id, target_user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_votes_session_status ON live_session_votes(live_session_id, status, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_vote_options_vote ON live_session_vote_options(vote_id, position);
@@ -2259,6 +2296,8 @@ function initializeDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_live_session_plays_unique_recent ON live_session_plays(live_session_id, recently_played_id) WHERE recently_played_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_live_session_buffered_upscores_session ON live_session_buffered_upscores(live_session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_buffered_clears_session ON live_session_buffered_clears(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_buffered_upscores_session_user ON live_session_buffered_upscores(live_session_id, performer_user_id, finalized_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_buffered_clears_session_user ON live_session_buffered_clears(live_session_id, performer_user_id, finalized_at, created_at);
 
     -- Community custom emojis (from sprite sheet uploads)
     CREATE TABLE IF NOT EXISTS community_emojis (
@@ -2880,6 +2919,8 @@ function initializeDb() {
     ['handled_at', "TEXT DEFAULT ''"],
     ['handled_by_user_id', "TEXT DEFAULT ''"],
     ['updated_at', "TEXT DEFAULT (datetime('now'))"],
+    ['target_user_id', "TEXT DEFAULT ''"],
+    ['target_username', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of liveRequestMigrations) {
     if (!liveRequestCols.includes(col)) {
@@ -2898,8 +2939,41 @@ function initializeDb() {
     UPDATE live_session_requests
     SET updated_at = COALESCE(NULLIF(updated_at, ''), created_at, datetime('now'))
     WHERE COALESCE(updated_at, '') = '';
+
+    UPDATE live_session_requests
+    SET target_username = COALESCE((
+      SELECT u.username
+      FROM users u
+      WHERE u.id = live_session_requests.target_user_id
+      LIMIT 1
+    ), '')
+    WHERE COALESCE(target_user_id, '') <> ''
+      AND COALESCE(target_username, '') = '';
   `);
   db.exec(`
+    CREATE TABLE IF NOT EXISTS live_session_participants (
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'cohost',
+      status TEXT NOT NULL DEFAULT 'active',
+      added_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TEXT DEFAULT (datetime('now')),
+      left_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (live_session_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS live_session_participant_sync (
+      live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recent_anchor_id INTEGER NOT NULL DEFAULT 0,
+      last_recent_row_id INTEGER NOT NULL DEFAULT 0,
+      last_sync_at TEXT DEFAULT '',
+      last_sync_status TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (live_session_id, user_id)
+    );
     CREATE TABLE IF NOT EXISTS live_session_moderation (
       live_session_id TEXT NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -2911,7 +2985,113 @@ function initializeDb() {
       PRIMARY KEY (live_session_id, user_id)
     );
     CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_status ON live_session_requests(live_session_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_requests_session_target ON live_session_requests(live_session_id, target_user_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_participants_session ON live_session_participants(live_session_id, status, role, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_participants_user ON live_session_participants(user_id, status, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_participant_sync_session ON live_session_participant_sync(live_session_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_moderation_session ON live_session_moderation(live_session_id, updated_at);
+  `);
+
+  const liveBufferedUpscoreCols = db.prepare("PRAGMA table_info(live_session_buffered_upscores)").all().map((c) => c.name);
+  const liveBufferedUpscoreMigrations = [
+    ['performer_user_id', "TEXT NOT NULL DEFAULT ''"],
+    ['finalized_at', "TEXT DEFAULT ''"],
+    ['finalized_post_id', 'INTEGER NOT NULL DEFAULT 0'],
+  ];
+  for (const [col, type] of liveBufferedUpscoreMigrations) {
+    if (!liveBufferedUpscoreCols.includes(col)) {
+      db.exec(`ALTER TABLE live_session_buffered_upscores ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  const liveBufferedClearCols = db.prepare("PRAGMA table_info(live_session_buffered_clears)").all().map((c) => c.name);
+  const liveBufferedClearMigrations = [
+    ['performer_user_id', "TEXT NOT NULL DEFAULT ''"],
+    ['finalized_at', "TEXT DEFAULT ''"],
+    ['finalized_post_id', 'INTEGER NOT NULL DEFAULT 0'],
+  ];
+  for (const [col, type] of liveBufferedClearMigrations) {
+    if (!liveBufferedClearCols.includes(col)) {
+      db.exec(`ALTER TABLE live_session_buffered_clears ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  db.exec(`
+    UPDATE live_session_buffered_upscores
+    SET performer_user_id = COALESCE(NULLIF(json_extract(payload_json, '$.performer_user_id'), ''), performer_user_id, '')
+    WHERE COALESCE(performer_user_id, '') = ''
+      AND json_valid(payload_json) = 1;
+
+    UPDATE live_session_buffered_upscores
+    SET performer_user_id = COALESCE((
+      SELECT s.host_user_id
+      FROM live_sessions s
+      WHERE s.id = live_session_buffered_upscores.live_session_id
+      LIMIT 1
+    ), '')
+    WHERE COALESCE(performer_user_id, '') = '';
+
+    UPDATE live_session_buffered_clears
+    SET performer_user_id = COALESCE(NULLIF(json_extract(payload_json, '$.performer_user_id'), ''), performer_user_id, '')
+    WHERE COALESCE(performer_user_id, '') = ''
+      AND json_valid(payload_json) = 1;
+
+    UPDATE live_session_buffered_clears
+    SET performer_user_id = COALESCE((
+      SELECT s.host_user_id
+      FROM live_sessions s
+      WHERE s.id = live_session_buffered_clears.live_session_id
+      LIMIT 1
+    ), '')
+    WHERE COALESCE(performer_user_id, '') = '';
+
+    CREATE INDEX IF NOT EXISTS idx_live_session_buffered_upscores_session_user
+      ON live_session_buffered_upscores(live_session_id, performer_user_id, finalized_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_session_buffered_clears_session_user
+      ON live_session_buffered_clears(live_session_id, performer_user_id, finalized_at, created_at);
+  `);
+
+  db.exec(`
+    INSERT INTO live_session_participants (
+      live_session_id, user_id, role, status, added_by_user_id, joined_at, left_at, created_at, updated_at
+    )
+    SELECT
+      s.id,
+      s.host_user_id,
+      'owner',
+      'active',
+      s.host_user_id,
+      COALESCE(NULLIF(s.started_at, ''), s.created_at, datetime('now')),
+      '',
+      COALESCE(NULLIF(s.created_at, ''), datetime('now')),
+      datetime('now')
+    FROM live_sessions s
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM live_session_participants p
+      WHERE p.live_session_id = s.id
+        AND p.user_id = s.host_user_id
+    );
+
+    INSERT INTO live_session_participant_sync (
+      live_session_id, user_id, recent_anchor_id, last_recent_row_id, last_sync_at, last_sync_status, created_at, updated_at
+    )
+    SELECT
+      s.id,
+      s.host_user_id,
+      COALESCE(s.recent_anchor_id, 0),
+      COALESCE(s.last_recent_row_id, 0),
+      COALESCE(s.last_sync_at, ''),
+      COALESCE(s.last_sync_status, ''),
+      COALESCE(NULLIF(s.created_at, ''), datetime('now')),
+      datetime('now')
+    FROM live_sessions s
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM live_session_participant_sync ps
+      WHERE ps.live_session_id = s.id
+        AND ps.user_id = s.host_user_id
+    );
   `);
 
   db.exec(`

@@ -46,6 +46,10 @@ const LIVE_SYNC_IDLE_AFTER_MS = 3 * 60 * 1000;
 const DEFAULT_REQUEST_MAX_LEVEL = 30;
 const SONG_ALIAS_PATH = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
 const REPLAY_POST_SONG_BUFFER_SECONDS = 20;
+const LIVE_PARTICIPANT_ROLE_OWNER = 'owner';
+const LIVE_PARTICIPANT_ROLE_COHOST = 'cohost';
+const LIVE_PARTICIPANT_STATUS_ACTIVE = 'active';
+const LIVE_PARTICIPANT_STATUS_LEFT = 'left';
 const FAILURE_MESSAGES = [
   'Stage break. Run it back.',
   'Close miss. Reset and clear it.',
@@ -352,12 +356,13 @@ function safeParseJson(raw, fallback) {
   }
 }
 
-function buildPlayOutcomeKey(songTitle, mode, level, score) {
+function buildPlayOutcomeKey(songTitle, mode, level, score, userId = '') {
   return [
     normalizeText(songTitle, 160).toLowerCase(),
     normalizeText(mode, 40).toLowerCase(),
     toInt(level),
     toInt(score),
+    normalizeText(userId, 80).toLowerCase(),
   ].join('|');
 }
 
@@ -422,6 +427,16 @@ function formatPlayLabel(play) {
   return `${normalizeText(play?.song_title || 'Unknown chart', 160)} (${modeShort}${toInt(play?.level) || '?'})`;
 }
 
+function getPlayPerformerLabel(play, fallback = '') {
+  return normalizeText(
+    play?.username
+      || play?.performer_username
+      || fallback
+      || '',
+    60
+  );
+}
+
 function getSongJacketUrl(db, chartId) {
   const normalizedChartId = toInt(chartId);
   if (normalizedChartId <= 0) return '';
@@ -441,10 +456,12 @@ function buildRequestFulfillmentMessage(play, requesters = []) {
       .filter(Boolean)
   ));
   const label = formatPlayLabel(play);
-  if (names.length === 0) return `Request hit: ${label}.`;
-  if (names.length === 1) return `Request hit: ${label} for ${names[0]}.`;
+  const performer = getPlayPerformerLabel(play);
+  const baseLabel = performer ? `${performer} hit ${label}` : label;
+  if (names.length === 0) return `Request hit: ${baseLabel}.`;
+  if (names.length === 1) return `Request hit: ${baseLabel} for ${names[0]}.`;
   const lead = names.slice(0, 2).join(', ');
-  return `Request hit: ${label} for ${lead}${names.length > 2 ? ` +${names.length - 2} more` : ''}.`;
+  return `Request hit: ${baseLabel} for ${lead}${names.length > 2 ? ` +${names.length - 2} more` : ''}.`;
 }
 
 function addSystemMessage(db, liveSessionId, message, messageType = 'system', metadata = {}) {
@@ -472,8 +489,14 @@ function getViewerCount(db, session, options = {}) {
     SELECT COUNT(DISTINCT user_id) AS count
     FROM live_session_presence
     WHERE live_session_id = ?
-      AND user_id != ?
-  `).get(session.id, session.host_user_id);
+      AND NOT EXISTS (
+        SELECT 1
+        FROM live_session_participants p
+        WHERE p.live_session_id = live_session_presence.live_session_id
+          AND p.user_id = live_session_presence.user_id
+          AND p.status = ?
+      )
+  `).get(session.id, LIVE_PARTICIPANT_STATUS_ACTIVE);
   return Math.max(0, toInt(row?.count));
 }
 
@@ -573,6 +596,172 @@ function getLiveSession(db, sessionId) {
   `).get(sessionId);
 }
 
+function normalizeLiveParticipantRole(role) {
+  return String(role || '').trim().toLowerCase() === LIVE_PARTICIPANT_ROLE_OWNER
+    ? LIVE_PARTICIPANT_ROLE_OWNER
+    : LIVE_PARTICIPANT_ROLE_COHOST;
+}
+
+function normalizeLiveParticipantStatus(status) {
+  return String(status || '').trim().toLowerCase() === LIVE_PARTICIPANT_STATUS_LEFT
+    ? LIVE_PARTICIPANT_STATUS_LEFT
+    : LIVE_PARTICIPANT_STATUS_ACTIVE;
+}
+
+function ensureSessionOwnerParticipant(db, sessionOrId) {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  if (!session?.id || !session?.host_user_id) return;
+
+  db.prepare(`
+    INSERT INTO live_session_participants (
+      live_session_id, user_id, role, status, added_by_user_id, joined_at, left_at, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, COALESCE(NULLIF(?, ''), datetime('now')), '', COALESCE(NULLIF(?, ''), datetime('now')), datetime('now'))
+    ON CONFLICT(live_session_id, user_id) DO UPDATE SET
+      role = excluded.role,
+      status = excluded.status,
+      added_by_user_id = excluded.added_by_user_id,
+      joined_at = COALESCE(NULLIF(live_session_participants.joined_at, ''), excluded.joined_at),
+      left_at = CASE
+        WHEN live_session_participants.status = ? THEN ''
+        ELSE live_session_participants.left_at
+      END,
+      updated_at = datetime('now')
+  `).run(
+    session.id,
+    session.host_user_id,
+    LIVE_PARTICIPANT_ROLE_OWNER,
+    LIVE_PARTICIPANT_STATUS_ACTIVE,
+    session.host_user_id,
+    session.started_at || session.created_at || '',
+    session.created_at || session.started_at || '',
+    LIVE_PARTICIPANT_STATUS_LEFT
+  );
+
+  db.prepare(`
+    INSERT INTO live_session_participant_sync (
+      live_session_id, user_id, recent_anchor_id, last_recent_row_id, last_sync_at, last_sync_status, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, COALESCE(NULLIF(?, ''), datetime('now')), datetime('now'))
+    ON CONFLICT(live_session_id, user_id) DO NOTHING
+  `).run(
+    session.id,
+    session.host_user_id,
+    toInt(session.recent_anchor_id),
+    toInt(session.last_recent_row_id),
+    session.last_sync_at || '',
+    session.last_sync_status || '',
+    session.created_at || session.started_at || ''
+  );
+}
+
+function normalizeLiveParticipantRow(row, hostUserId, currentUserId = '') {
+  if (!row) return null;
+  const role = normalizeLiveParticipantRole(row.role);
+  const status = normalizeLiveParticipantStatus(row.status);
+  return {
+    live_session_id: row.live_session_id || '',
+    user_id: row.user_id || '',
+    username: row.username || '',
+    avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 56, row.avatar_v),
+    nationality: row.nationality || '',
+    skill_title: row.skill_title || '',
+    pumbility: toInt(row.pumbility),
+    weight_kg: Number.isFinite(Number(row.weight_kg)) ? Number(row.weight_kg) : 0,
+    role,
+    status,
+    added_by_user_id: row.added_by_user_id || '',
+    joined_at: row.joined_at || '',
+    left_at: row.left_at || '',
+    created_at: row.created_at || '',
+    updated_at: row.updated_at || '',
+    is_host: String(hostUserId || '') === String(row.user_id || ''),
+    is_current_user: String(currentUserId || '') === String(row.user_id || ''),
+  };
+}
+
+function getSessionParticipants(db, sessionOrId, options = {}) {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  if (!session?.id) return [];
+  ensureSessionOwnerParticipant(db, session);
+
+  const includeLeft = !!options.includeLeft;
+  const rows = db.prepare(`
+    SELECT
+      p.*,
+      u.username,
+      COALESCE(u.avatar, '') AS avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v,
+      COALESCE(u.nationality, '') AS nationality,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.pumbility, 0) AS pumbility,
+      COALESCE(u.weight_kg, 0) AS weight_kg
+    FROM live_session_participants p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.live_session_id = ?
+      AND (? = 1 OR p.status = ?)
+    ORDER BY
+      CASE p.role
+        WHEN ? THEN 0
+        ELSE 1
+      END ASC,
+      CASE p.status
+        WHEN ? THEN 0
+        ELSE 1
+      END ASC,
+      datetime(COALESCE(NULLIF(p.joined_at, ''), p.created_at)) ASC,
+      LOWER(u.username) ASC
+  `).all(
+    session.id,
+    includeLeft ? 1 : 0,
+    LIVE_PARTICIPANT_STATUS_ACTIVE,
+    LIVE_PARTICIPANT_ROLE_OWNER,
+    LIVE_PARTICIPANT_STATUS_ACTIVE
+  );
+
+  return rows
+    .map((row) => normalizeLiveParticipantRow(row, session.host_user_id, options.currentUserId || ''))
+    .filter(Boolean);
+}
+
+function getSessionParticipantRecord(db, sessionOrId, userId, options = {}) {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  const normalizedUserId = String(userId || '').trim();
+  if (!session?.id || !normalizedUserId) return null;
+  ensureSessionOwnerParticipant(db, session);
+
+  const row = db.prepare(`
+    SELECT
+      p.*,
+      u.username,
+      COALESCE(u.avatar, '') AS avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v,
+      COALESCE(u.nationality, '') AS nationality,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.pumbility, 0) AS pumbility,
+      COALESCE(u.weight_kg, 0) AS weight_kg
+    FROM live_session_participants p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.live_session_id = ?
+      AND p.user_id = ?
+      AND (? = 1 OR p.status = ?)
+    LIMIT 1
+  `).get(
+    session.id,
+    normalizedUserId,
+    options.includeLeft ? 1 : 0,
+    LIVE_PARTICIPANT_STATUS_ACTIVE
+  );
+
+  return normalizeLiveParticipantRow(row, session.host_user_id, options.currentUserId || '');
+}
+
 function getActiveSessionForHost(db, hostUserId) {
   return db.prepare(`
     SELECT *
@@ -585,19 +774,76 @@ function getActiveSessionForHost(db, hostUserId) {
   `).get(hostUserId);
 }
 
-function getLiveSyncActor(db, session) {
-  if (!session?.host_user_id) return null;
-  const user = db.prepare(`
-    SELECT id, username
-    FROM users
-    WHERE id = ?
+function getActiveSessionForParticipant(db, userId) {
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) return null;
+  return db.prepare(`
+    SELECT s.*
+    FROM live_session_participants p
+    JOIN live_sessions s ON s.id = p.live_session_id
+    WHERE p.user_id = ?
+      AND p.status = ?
+      AND s.status = 'live'
+      AND COALESCE(s.deleted_at, '') = ''
+    ORDER BY
+      CASE p.role
+        WHEN ? THEN 0
+        ELSE 1
+      END ASC,
+      datetime(COALESCE(NULLIF(s.started_at, ''), s.created_at)) DESC,
+      s.id DESC
     LIMIT 1
-  `).get(session.host_user_id);
-  if (!user) return null;
-  return {
-    id: user.id,
-    username: user.username || '',
-  };
+  `).get(
+    normalizedUserId,
+    LIVE_PARTICIPANT_STATUS_ACTIVE,
+    LIVE_PARTICIPANT_ROLE_OWNER
+  );
+}
+
+function getSessionSyncActors(db, session) {
+  return getSessionParticipants(db, session, { currentUserId: session?.host_user_id || '' })
+    .filter((participant) => participant.status === LIVE_PARTICIPANT_STATUS_ACTIVE)
+    .map((participant) => ({
+      id: participant.user_id,
+      username: participant.username || '',
+      avatar: participant.avatar || '',
+      skill_title: participant.skill_title || '',
+      nationality: participant.nationality || '',
+      pumbility: toInt(participant.pumbility),
+      role: participant.role,
+      status: participant.status,
+    }));
+}
+
+function ensureParticipantSyncCursor(db, sessionOrId, userId, defaults = {}) {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  const normalizedUserId = String(userId || '').trim();
+  if (!session?.id || !normalizedUserId) return null;
+
+  db.prepare(`
+    INSERT INTO live_session_participant_sync (
+      live_session_id, user_id, recent_anchor_id, last_recent_row_id, last_sync_at, last_sync_status, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(live_session_id, user_id) DO NOTHING
+  `).run(
+    session.id,
+    normalizedUserId,
+    toInt(defaults.recent_anchor_id),
+    toInt(defaults.last_recent_row_id),
+    defaults.last_sync_at || '',
+    defaults.last_sync_status || ''
+  );
+
+  return db.prepare(`
+    SELECT *
+    FROM live_session_participant_sync
+    WHERE live_session_id = ?
+      AND user_id = ?
+    LIMIT 1
+  `).get(session.id, normalizedUserId);
 }
 
 function markLiveSessionSyncError(db, liveSessionId) {
@@ -637,29 +883,61 @@ async function performLiveSessionSync(db, sessionOrId, options = {}) {
     throw new Error('Live sync dependency unavailable');
   }
 
-  const actor = getLiveSyncActor(db, session);
-  if (!actor?.id) {
-    throw new Error('Live session host not found');
+  const actors = getSessionSyncActors(db, session);
+  if (!actors.length) {
+    throw new Error('Live session has no active performers');
   }
 
+  const aggregate = {
+    delta: {
+      recent_rows_seen: 0,
+      new_plays_added: 0,
+      requests_fulfilled: 0,
+      buffered_upscores: 0,
+      buffered_clears: 0,
+      title_unlocks: 0,
+    },
+    plays_changed: false,
+    requests_changed: false,
+    message_ids: [],
+  };
+
+  for (const actor of actors) {
+    const syncUpdate = await performLiveSessionSyncForActor(db, session, actor);
+    aggregate.delta.recent_rows_seen += toInt(syncUpdate?.delta?.recent_rows_seen);
+    aggregate.delta.new_plays_added += toInt(syncUpdate?.delta?.new_plays_added);
+    aggregate.delta.requests_fulfilled += toInt(syncUpdate?.delta?.requests_fulfilled);
+    aggregate.delta.buffered_upscores += toInt(syncUpdate?.delta?.buffered_upscores);
+    aggregate.delta.buffered_clears += toInt(syncUpdate?.delta?.buffered_clears);
+    aggregate.delta.title_unlocks += toInt(syncUpdate?.delta?.title_unlocks);
+    aggregate.plays_changed = aggregate.plays_changed || !!syncUpdate?.plays_changed;
+    aggregate.requests_changed = aggregate.requests_changed || !!syncUpdate?.requests_changed;
+    if (Array.isArray(syncUpdate?.message_ids) && syncUpdate.message_ids.length > 0) {
+      aggregate.message_ids.push(...syncUpdate.message_ids);
+    }
+  }
+
+  if (aggregate.plays_changed) {
+    markLiveSyncPlayActivity(session.id);
+  }
+  const nextSession = getLiveSession(db, session.id);
+  if (options.broadcast !== false && nextSession) {
+    broadcastLiveSyncUpdates(db, nextSession, aggregate, options.reason || 'sync');
+  }
+  return {
+    delta: aggregate.delta,
+    session: nextSession || session,
+  };
+}
+
+async function performLiveSessionSyncForActor(db, session, actor) {
   const syncResult = await syncRecentlyPlayedForUser(actor, {
     db,
     userId: actor.id,
     username: actor.username,
     persistActivityPosts: false,
   });
-  const syncUpdate = applyLiveSyncResult(db, session, syncResult);
-  if (syncUpdate?.plays_changed) {
-    markLiveSyncPlayActivity(session.id);
-  }
-  const nextSession = getLiveSession(db, session.id);
-  if (options.broadcast !== false && nextSession) {
-    broadcastLiveSyncUpdates(db, nextSession, syncUpdate, options.reason || 'sync');
-  }
-  return {
-    delta: syncUpdate?.delta || null,
-    session: nextSession || session,
-  };
+  return applyLiveSyncResult(db, session, syncResult, actor);
 }
 
 function clearLiveSyncTimer(liveSessionId) {
@@ -769,7 +1047,11 @@ function getLiveModerationState(db, liveSessionId, userId = '') {
 
 function getSessionViewerState(db, session, currentUserId = '') {
   const normalizedUserId = String(currentUserId || '').trim();
-  if (!normalizedUserId || normalizedUserId === String(session?.host_user_id || '')) {
+  if (!normalizedUserId) {
+    return normalizeModerationRow(null, session?.id || '', normalizedUserId);
+  }
+  const participant = getSessionParticipantRecord(db, session, normalizedUserId, { includeLeft: false });
+  if (participant?.user_id) {
     return normalizeModerationRow(null, session?.id || '', normalizedUserId);
   }
   return getLiveModerationState(db, session.id, normalizedUserId);
@@ -790,6 +1072,8 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
         jacket_url: requestRow.jacket_url || '',
+        target_user_id: requestRow.target_user_id || '',
+        target_username: requestRow.target_username || '',
         manual: true,
         request_status: nextStatus,
       },
@@ -807,6 +1091,8 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
         jacket_url: requestRow.jacket_url || '',
+        target_user_id: requestRow.target_user_id || '',
+        target_username: requestRow.target_username || '',
         request_status: nextStatus,
       },
     };
@@ -823,6 +1109,8 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
         jacket_url: requestRow.jacket_url || '',
+        target_user_id: requestRow.target_user_id || '',
+        target_username: requestRow.target_username || '',
         request_status: nextStatus,
       },
     };
@@ -839,6 +1127,8 @@ function buildRequestStatusAnnouncement(requestRow, nextStatus, previousStatus =
         mode: requestRow.mode || '',
         level: toInt(requestRow.level),
         jacket_url: requestRow.jacket_url || '',
+        target_user_id: requestRow.target_user_id || '',
+        target_username: requestRow.target_username || '',
         request_status: nextStatus,
       },
     };
@@ -939,6 +1229,7 @@ function getLiveMessageRow(db, messageId, currentUserId = '') {
       COALESCE(u.skill_title, '') AS skill_title,
       COALESCE(u.pumbility, 0) AS pumbility,
       COALESCE(u.nationality, '') AS nationality,
+      COALESCE(part.role, '') AS participant_role,
       COALESCE(mod.chat_muted, 0) AS chat_muted,
       COALESCE(mod.requests_blocked, 0) AS requests_blocked,
       (
@@ -958,6 +1249,9 @@ function getLiveMessageRow(db, messageId, currentUserId = '') {
     FROM live_session_messages m
     JOIN live_sessions s ON s.id = m.live_session_id
     LEFT JOIN users u ON u.id = m.user_id
+    LEFT JOIN live_session_participants part
+      ON part.live_session_id = m.live_session_id
+     AND part.user_id = m.user_id
     LEFT JOIN live_session_moderation mod
       ON mod.live_session_id = m.live_session_id
      AND mod.user_id = m.user_id
@@ -976,14 +1270,15 @@ function getPlayOutcomeMap(db, liveSessionId) {
   const map = new Map();
 
   const upscoreRows = db.prepare(`
-    SELECT payload_json
+    SELECT payload_json, performer_user_id
     FROM live_session_buffered_upscores
     WHERE live_session_id = ?
     ORDER BY id ASC
   `).all(liveSessionId);
   for (const row of upscoreRows) {
     const payload = safeParseJson(row?.payload_json || '{}', {});
-    const key = buildPlayOutcomeKey(payload.song_title, payload.mode, payload.level, payload.new_score);
+    const performerUserId = String(payload?.performer_user_id || row?.performer_user_id || '').trim();
+    const key = buildPlayOutcomeKey(payload.song_title, payload.mode, payload.level, payload.new_score, performerUserId);
     if (!key) continue;
     map.set(key, {
       type: 'upscore',
@@ -994,7 +1289,7 @@ function getPlayOutcomeMap(db, liveSessionId) {
   }
 
   const clearRows = db.prepare(`
-    SELECT payload_json
+    SELECT payload_json, performer_user_id
     FROM live_session_buffered_clears
     WHERE live_session_id = ?
     ORDER BY id ASC
@@ -1002,7 +1297,8 @@ function getPlayOutcomeMap(db, liveSessionId) {
   for (const row of clearRows) {
     const payload = safeParseJson(row?.payload_json || '{}', {});
     if (String(payload?.entry_type || 'song_clear') === 'title_unlock') continue;
-    const key = buildPlayOutcomeKey(payload.song_title, payload.mode, payload.level, payload.score);
+    const performerUserId = String(payload?.performer_user_id || row?.performer_user_id || '').trim();
+    const key = buildPlayOutcomeKey(payload.song_title, payload.mode, payload.level, payload.score, performerUserId);
     if (!key || map.has(key)) continue;
     map.set(key, {
       type: 'clear',
@@ -1021,10 +1317,21 @@ function getSessionPlays(db, liveSessionId) {
   const rows = db.prepare(`
     SELECT
       p.*,
+      COALESCE(u.username, '') AS username,
+      COALESCE(u.avatar, '') AS avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.nationality, '') AS nationality,
+      COALESCE(part.role, '') AS participant_role,
+      COALESCE(part.status, '') AS participant_status,
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
       COALESCE(s.colorway, '') AS shoe_colorway
     FROM live_session_plays p
+    LEFT JOIN users u ON u.id = p.user_id
+    LEFT JOIN live_session_participants part
+      ON part.live_session_id = p.live_session_id
+     AND part.user_id = p.user_id
     LEFT JOIN user_shoes s ON s.id = p.shoe_id
     WHERE p.live_session_id = ?
     ORDER BY p.id DESC
@@ -1032,10 +1339,13 @@ function getSessionPlays(db, liveSessionId) {
   `).all(liveSessionId, PLAY_LIMIT);
 
   return rows.map((row) => {
-    const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score);
+    const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score, row.user_id);
     const outcome = outcomeMap.get(key) || null;
     return {
       ...row,
+      avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 56, row.avatar_v),
+      participant_role: normalizeLiveParticipantRole(row.participant_role),
+      participant_status: normalizeLiveParticipantStatus(row.participant_status),
       pumbility_gain: outcome ? outcome.pumbility_gain : 0,
       singles_pumbility_gain: outcome ? outcome.singles_pumbility_gain : 0,
       session_result_type: outcome ? outcome.type : '',
@@ -1049,10 +1359,21 @@ function getLatestSessionPlay(db, liveSessionId) {
   const row = db.prepare(`
     SELECT
       p.*,
+      COALESCE(u.username, '') AS username,
+      COALESCE(u.avatar, '') AS avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v,
+      COALESCE(u.skill_title, '') AS skill_title,
+      COALESCE(u.nationality, '') AS nationality,
+      COALESCE(part.role, '') AS participant_role,
+      COALESCE(part.status, '') AS participant_status,
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
       COALESCE(s.colorway, '') AS shoe_colorway
     FROM live_session_plays p
+    LEFT JOIN users u ON u.id = p.user_id
+    LEFT JOIN live_session_participants part
+      ON part.live_session_id = p.live_session_id
+     AND part.user_id = p.user_id
     LEFT JOIN user_shoes s ON s.id = p.shoe_id
     WHERE p.live_session_id = ?
     ORDER BY p.id DESC
@@ -1061,10 +1382,13 @@ function getLatestSessionPlay(db, liveSessionId) {
 
   if (!row) return null;
 
-  const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score);
+  const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score, row.user_id);
   const outcome = outcomeMap.get(key) || null;
   return {
     ...row,
+    avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 56, row.avatar_v),
+    participant_role: normalizeLiveParticipantRole(row.participant_role),
+    participant_status: normalizeLiveParticipantStatus(row.participant_status),
     pumbility_gain: outcome ? outcome.pumbility_gain : 0,
     singles_pumbility_gain: outcome ? outcome.singles_pumbility_gain : 0,
     session_result_type: outcome ? outcome.type : '',
@@ -1083,7 +1407,8 @@ function buildReplayOutcomeKey(row) {
   const score = Object.prototype.hasOwnProperty.call(row, 'new_score')
     ? toInt(row?.new_score)
     : toInt(row?.score);
-  return buildPlayOutcomeKey(row.song_title, row.mode, row.level, score);
+  const performerUserId = String(row?.performer_user_id || row?.user_id || '').trim();
+  return buildPlayOutcomeKey(row.song_title, row.mode, row.level, score, performerUserId);
 }
 
 function buildYoutubeReplayEmbedUrl(videoId, startSeconds, endSeconds) {
@@ -1112,7 +1437,7 @@ function buildSessionReplayLookup(session, plays, video, videoId) {
     const durationSeconds = toInt(chapter?.duration_seconds);
     const startSeconds = Math.max(0, toInt(chapter?.offset_seconds));
     const endSeconds = startSeconds + durationSeconds + REPLAY_POST_SONG_BUFFER_SECONDS;
-    const key = buildPlayOutcomeKey(chapter?.song_title, chapter?.mode, chapter?.level, score);
+    const key = buildPlayOutcomeKey(chapter?.song_title, chapter?.mode, chapter?.level, score, chapter?.user_id || '');
     if (!key || durationSeconds <= 0 || endSeconds <= startSeconds) continue;
     replayLookup.set(key, {
       replay_embed_url: buildYoutubeReplayEmbedUrl(videoId, startSeconds, endSeconds),
@@ -1198,22 +1523,16 @@ function syncSessionReplayLinks(db, userId, rows, replayLookup) {
 }
 
 function updateBufferedReplayRows(db, liveSessionId, tableName, rows) {
-  const existingRows = db.prepare(`
-    SELECT id
-    FROM ${tableName}
-    WHERE live_session_id = ?
-    ORDER BY id ASC
-  `).all(liveSessionId);
   const updateRow = db.prepare(`
     UPDATE ${tableName}
     SET payload_json = ?
     WHERE id = ?
   `);
 
-  for (let index = 0; index < existingRows.length; index += 1) {
-    const rowId = toInt(existingRows[index]?.id);
-    if (!rowId || !rows[index]) continue;
-    updateRow.run(JSON.stringify(rows[index]), rowId);
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const rowId = toInt(row?.buffered_row_id);
+    if (!rowId) continue;
+    updateRow.run(JSON.stringify(stripBufferedRowMetadata(row)), rowId);
   }
 }
 
@@ -1258,44 +1577,44 @@ function findGeneratedReplayPostId(db, tableName, jsonColumn, userId, createdAt,
   return null;
 }
 
-function updateGeneratedReplayPosts(db, session, upscoreRows, clearRows) {
+function updateGeneratedReplayPosts(db, session, userId, upscoreRows, clearRows) {
   const result = {
     upscore_post_id: null,
     clear_post_id: null,
   };
   const endedAt = String(session?.ended_at || '').trim();
-  const userId = String(session?.host_user_id || '').trim();
+  const normalizedUserId = String(userId || '').trim();
 
-  if (Array.isArray(upscoreRows) && upscoreRows.length > 0) {
+  if (normalizedUserId && Array.isArray(upscoreRows) && upscoreRows.length > 0) {
     const upscorePostId = findGeneratedReplayPostId(
       db,
       'user_upscores',
       'upscores_json',
-      userId,
+      normalizedUserId,
       endedAt,
       upscoreRows
     );
     if (upscorePostId) {
       db.prepare('UPDATE user_upscores SET upscores_json = ? WHERE id = ?')
-        .run(JSON.stringify(upscoreRows), upscorePostId);
+        .run(JSON.stringify(upscoreRows.map(stripBufferedRowMetadata)), upscorePostId);
       result.upscore_post_id = upscorePostId;
     }
   }
 
   const clearEntries = (Array.isArray(clearRows) ? clearRows : [])
     .filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock');
-  if (clearEntries.length > 0) {
+  if (normalizedUserId && clearEntries.length > 0) {
     const clearPostId = findGeneratedReplayPostId(
       db,
       'user_new_clears',
       'clears_json',
-      userId,
+      normalizedUserId,
       endedAt,
       clearRows
     );
     if (clearPostId) {
       db.prepare('UPDATE user_new_clears SET clears_json = ? WHERE id = ?')
-        .run(JSON.stringify(clearRows), clearPostId);
+        .run(JSON.stringify(clearRows.map(stripBufferedRowMetadata)), clearPostId);
       result.clear_post_id = clearPostId;
     }
   }
@@ -1356,23 +1675,45 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
 
   const replayLookup = buildSessionReplayLookup(session, plays, video, videoId);
   const bufferedUpscores = attachReplayMetadataToRows(
-    parseBufferedRows(db, liveSessionId, 'live_session_buffered_upscores'),
+    parseBufferedRows(db, liveSessionId, 'live_session_buffered_upscores', { includeFinalized: true }),
     replayLookup
   );
   const bufferedClears = attachReplayMetadataToRows(
-    parseBufferedRows(db, liveSessionId, 'live_session_buffered_clears'),
+    parseBufferedRows(db, liveSessionId, 'live_session_buffered_clears', { includeFinalized: true }),
     replayLookup
   );
-  const replayRows = [
-    ...bufferedUpscores,
-    ...bufferedClears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock'),
-  ];
+  const participantRows = new Map();
+  for (const row of bufferedUpscores) {
+    const key = String(row?.performer_user_id || '').trim();
+    if (!key) continue;
+    if (!participantRows.has(key)) participantRows.set(key, { upscores: [], clears: [] });
+    participantRows.get(key).upscores.push(row);
+  }
+  for (const row of bufferedClears) {
+    const key = String(row?.performer_user_id || '').trim();
+    if (!key) continue;
+    if (!participantRows.has(key)) participantRows.set(key, { upscores: [], clears: [] });
+    participantRows.get(key).clears.push(row);
+  }
 
   const txn = db.transaction(() => {
     updateBufferedReplayRows(db, liveSessionId, 'live_session_buffered_upscores', bufferedUpscores);
     updateBufferedReplayRows(db, liveSessionId, 'live_session_buffered_clears', bufferedClears);
-    syncSessionReplayLinks(db, session.host_user_id, replayRows, replayLookup);
-    return updateGeneratedReplayPosts(db, session, bufferedUpscores, bufferedClears);
+    const updatedPosts = [];
+    for (const [performerUserId, groupedRows] of participantRows.entries()) {
+      const replayRows = [
+        ...groupedRows.upscores,
+        ...groupedRows.clears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock'),
+      ];
+      if (replayRows.length > 0) {
+        syncSessionReplayLinks(db, performerUserId, replayRows, replayLookup);
+      }
+      updatedPosts.push({
+        user_id: performerUserId,
+        ...updateGeneratedReplayPosts(db, session, performerUserId, groupedRows.upscores, groupedRows.clears),
+      });
+    }
+    return updatedPosts;
   });
   const updatedPosts = txn();
 
@@ -1382,7 +1723,7 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
     replay_count: replayLookup.size,
     buffered_upscores: bufferedUpscores.length,
     buffered_clears: bufferedClears.length,
-    ...updatedPosts,
+    updated_posts: updatedPosts,
   };
 }
 
@@ -1413,8 +1754,13 @@ function getSessionPlaysWithDurations(db, liveSessionId) {
   }
 
   const plays = db.prepare(`
-    SELECT p.*
+    SELECT
+      p.*,
+      COALESCE(u.username, '') AS username,
+      COALESCE(u.avatar, '') AS avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v
     FROM live_session_plays p
+    LEFT JOIN users u ON u.id = p.user_id
     WHERE p.live_session_id = ?
     ORDER BY COALESCE(NULLIF(p.played_at_utc, ''), p.date_played) ASC, p.id ASC
   `).all(liveSessionId);
@@ -1424,6 +1770,7 @@ function getSessionPlaysWithDurations(db, liveSessionId) {
     const durationMatch = durationLookup.get(lookupKey) || null;
     return {
       ...play,
+      avatar: normalizeUserAvatarForList(play.avatar, play.user_id, 56, play.avatar_v),
       duration_seconds: durationMatch ? toInt(durationMatch.duration_seconds) : 0,
       duration_source: durationMatch?.duration_source || '',
     };
@@ -1465,6 +1812,8 @@ async function buildLiveSessionYoutubeTimestampPreview(db, session, userId) {
 
 function normalizeMessageRow(row) {
   if (!row) return null;
+  const participantRole = normalizeLiveParticipantRole(row.participant_role);
+  const isParticipant = !!row.user_id && !!String(row.participant_role || '').trim();
   return {
     id: row.id,
     live_session_id: row.live_session_id,
@@ -1482,6 +1831,8 @@ function normalizeMessageRow(row) {
     pumbility: toInt(row.pumbility),
     nationality: row.nationality || '',
     is_host: !!row.user_id && String(row.host_user_id || '') === String(row.user_id || ''),
+    is_participant: isParticipant,
+    participant_role: isParticipant ? participantRole : '',
     chat_muted: toInt(row.chat_muted) === 1,
     requests_blocked: toInt(row.requests_blocked) === 1,
     pump_count: Math.max(0, toInt(row.pump_count)),
@@ -1499,6 +1850,7 @@ function getSessionMessages(db, liveSessionId, currentUserId = '') {
       COALESCE(u.skill_title, '') AS skill_title,
       COALESCE(u.pumbility, 0) AS pumbility,
       COALESCE(u.nationality, '') AS nationality,
+      COALESCE(part.role, '') AS participant_role,
       COALESCE(mod.chat_muted, 0) AS chat_muted,
       COALESCE(mod.requests_blocked, 0) AS requests_blocked,
       (
@@ -1518,6 +1870,9 @@ function getSessionMessages(db, liveSessionId, currentUserId = '') {
     FROM live_session_messages m
     JOIN live_sessions s ON s.id = m.live_session_id
     LEFT JOIN users u ON u.id = m.user_id
+    LEFT JOIN live_session_participants part
+      ON part.live_session_id = m.live_session_id
+     AND part.user_id = m.user_id
     LEFT JOIN live_session_moderation mod
       ON mod.live_session_id = m.live_session_id
      AND mod.user_id = m.user_id
@@ -1539,11 +1894,17 @@ function getSessionRequests(db, liveSessionId) {
       COALESCE(u.skill_title, '') AS skill_title,
       COALESCE(u.pumbility, 0) AS pumbility,
       COALESCE(u.nationality, '') AS nationality,
+      COALESCE(part.role, '') AS participant_role,
+      COALESCE(target.username, '') AS resolved_target_username,
       COALESCE(mod.chat_muted, 0) AS chat_muted,
       COALESCE(mod.requests_blocked, 0) AS requests_blocked
     FROM live_session_requests r
     JOIN live_sessions s ON s.id = r.live_session_id
     JOIN users u ON u.id = r.user_id
+    LEFT JOIN live_session_participants part
+      ON part.live_session_id = r.live_session_id
+     AND part.user_id = r.user_id
+    LEFT JOIN users target ON target.id = r.target_user_id
     LEFT JOIN live_session_moderation mod
       ON mod.live_session_id = r.live_session_id
      AND mod.user_id = r.user_id
@@ -1576,6 +1937,8 @@ function getSessionRequests(db, liveSessionId) {
       song_title: row.song_title || '',
       mode: row.mode || '',
       level: toInt(row.level),
+      target_user_id: row.target_user_id || '',
+      target_username: row.resolved_target_username || row.target_username || '',
       status,
       fulfilled: status === 'played',
       handled_at: row.handled_at || '',
@@ -1585,6 +1948,7 @@ function getSessionRequests(db, liveSessionId) {
       skill_title: row.skill_title || '',
       pumbility: toInt(row.pumbility),
       nationality: row.nationality || '',
+      participant_role: row.participant_role || '',
       is_host: String(row.host_user_id || '') === String(row.user_id || ''),
       chat_muted: toInt(row.chat_muted) === 1,
       requests_blocked: toInt(row.requests_blocked) === 1,
@@ -1715,7 +2079,13 @@ function getLatestVoteSnapshot(db, liveSessionId, currentUserId = '') {
   return getVoteSnapshot(db, vote.id, currentUserId);
 }
 
-function normalizeSessionPayload(session, host, viewerCount, currentUserId) {
+function normalizeSessionPayload(session, host, viewerCount, currentUserId, participants = []) {
+  const normalizedParticipants = Array.isArray(participants) ? participants : [];
+  const activeParticipants = normalizedParticipants.filter((participant) => participant?.status === LIVE_PARTICIPANT_STATUS_ACTIVE);
+  const visibleParticipants = String(session?.status || '').trim() === 'live'
+    ? activeParticipants
+    : normalizedParticipants;
+  const currentParticipant = activeParticipants.find((participant) => String(participant.user_id || '') === String(currentUserId || '')) || null;
   return {
     id: session.id,
     title: session.title || '',
@@ -1746,6 +2116,10 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId) {
     ended_at: session.ended_at || '',
     updated_at: session.updated_at || '',
     is_host: String(currentUserId || '') === String(session.host_user_id || ''),
+    is_participant: !!currentParticipant,
+    participant_role: currentParticipant?.role || '',
+    cohost_count: Math.max(0, visibleParticipants.filter((participant) => participant.role === LIVE_PARTICIPANT_ROLE_COHOST).length),
+    participants: visibleParticipants,
     live_url: `/live/${session.id}`,
     host: host ? {
       id: host.id,
@@ -1765,6 +2139,7 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   const viewerCount = getViewerCount(db, freshSession);
   const viewerPeak = getViewerPeak(freshSession, viewerCount);
   const host = getHostProfile(db, freshSession.host_user_id);
+  const participants = getSessionParticipants(db, freshSession, { currentUserId });
   const plays = getSessionPlays(db, freshSession.id);
   const messages = getSessionMessages(db, freshSession.id, currentUserId);
   const requests = getSessionRequests(db, freshSession.id);
@@ -1777,7 +2152,7 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   });
 
   return {
-    session: normalizeSessionPayload({ ...freshSession, viewer_peak: viewerPeak }, host, viewerCount, currentUserId),
+    session: normalizeSessionPayload({ ...freshSession, viewer_peak: viewerPeak }, host, viewerCount, currentUserId, participants),
     viewer_state: getSessionViewerState(db, freshSession, currentUserId),
     summary,
     plays,
@@ -1824,11 +2199,12 @@ function buildDirectorySessionPayload(db, session, currentUserId = '') {
   };
   const viewerCount = getViewerCount(db, session);
   const viewerPeak = getViewerPeak(session, viewerCount);
+  const participants = getSessionParticipants(db, session, { currentUserId });
   const lastPlay = getLatestSessionPlay(db, session.id);
   const activeVote = getLatestVoteSnapshot(db, session.id, currentUserId);
 
   return {
-    session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId),
+    session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId, participants),
     last_play: lastPlay,
     request_counts: getSessionRequestCounts(db, session.id),
     active_vote: summarizeVoteForDirectory(activeVote),
@@ -1842,6 +2218,7 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
   const host = getHostProfile(db, session.host_user_id);
   const viewerCount = getViewerCount(db, session);
   const viewerPeak = getViewerPeak(session, viewerCount);
+  const participants = getSessionParticipants(db, session, { currentUserId });
   const plays = getSessionPlays(db, session.id);
   const messageCount = getSessionMessageCount(db, session.id);
   const interactionCounts = getSessionInteractionCounts(db, session.id);
@@ -1860,7 +2237,7 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
     : null;
 
   return {
-    session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId),
+    session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId, participants),
     summary,
     last_play: plays[0] || null,
     message_count: messageCount,
@@ -1872,6 +2249,7 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
 function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
   if (!session) return null;
   const host = getHostProfile(db, session.host_user_id);
+  const participants = getSessionParticipants(db, session, { currentUserId, includeLeft: true });
   const plays = getSessionPlays(db, session.id);
   const messageCount = getSessionMessageCount(db, session.id);
   const interactionCounts = getSessionInteractionCounts(db, session.id);
@@ -1890,7 +2268,7 @@ function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
     : null;
 
   return {
-    session: normalizeSessionPayload(session, host, 0, currentUserId),
+    session: normalizeSessionPayload(session, host, 0, currentUserId, participants),
     summary,
     last_play: plays[0] || null,
     message_count: messageCount,
@@ -1911,6 +2289,120 @@ function getProfileEndedSessions(db, hostUserId, currentUserId = '', limit = 12)
   `).all(hostUserId, String(currentUserId || ''), Math.max(1, Math.min(24, toInt(limit) || 12)));
 
   return rows.map((row) => buildProfileEndedSessionPayload(db, row, currentUserId)).filter(Boolean);
+}
+
+function ensureUserCanJoinLiveSession(db, userId, currentSessionId = '') {
+  const existing = getActiveSessionForParticipant(db, userId);
+  if (existing && String(existing.id || '') !== String(currentSessionId || '')) {
+    const err = new Error('That user is already in another active live session');
+    err.statusCode = 409;
+    throw err;
+  }
+}
+
+function setLiveSessionParticipantState(db, session, user, options = {}) {
+  const userId = String(user?.id || user?.user_id || '').trim();
+  const role = normalizeLiveParticipantRole(options.role);
+  const status = normalizeLiveParticipantStatus(options.status);
+  const joinedAt = String(options.joinedAt || '').trim();
+  const leftAt = String(options.leftAt || '').trim();
+  const addedByUserId = String(options.addedByUserId || session.host_user_id || '').trim() || session.host_user_id;
+  const recentAnchorId = toInt(options.recent_anchor_id);
+  const lastRecentRowId = toInt(options.last_recent_row_id);
+  const lastSyncAt = String(options.last_sync_at || '').trim();
+  const lastSyncStatus = String(options.last_sync_status || '').trim();
+
+  if (!session?.id || !userId) return null;
+
+  db.prepare(`
+    INSERT INTO live_session_participants (
+      live_session_id, user_id, role, status, added_by_user_id, joined_at, left_at, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, COALESCE(NULLIF(?, ''), datetime('now')), ?, datetime('now'), datetime('now'))
+    ON CONFLICT(live_session_id, user_id) DO UPDATE SET
+      role = excluded.role,
+      status = excluded.status,
+      added_by_user_id = excluded.added_by_user_id,
+      joined_at = CASE
+        WHEN excluded.status = ? THEN excluded.joined_at
+        ELSE live_session_participants.joined_at
+      END,
+      left_at = CASE
+        WHEN excluded.status = ? THEN excluded.left_at
+        ELSE ''
+      END,
+      updated_at = datetime('now')
+  `).run(
+    session.id,
+    userId,
+    role,
+    status,
+    addedByUserId,
+    joinedAt,
+    leftAt,
+    LIVE_PARTICIPANT_STATUS_ACTIVE,
+    LIVE_PARTICIPANT_STATUS_LEFT
+  );
+
+  db.prepare(`
+    INSERT INTO live_session_participant_sync (
+      live_session_id, user_id, recent_anchor_id, last_recent_row_id, last_sync_at, last_sync_status, created_at, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(live_session_id, user_id) DO UPDATE SET
+      recent_anchor_id = excluded.recent_anchor_id,
+      last_recent_row_id = excluded.last_recent_row_id,
+      last_sync_at = excluded.last_sync_at,
+      last_sync_status = excluded.last_sync_status,
+      updated_at = datetime('now')
+  `).run(
+    session.id,
+    userId,
+    recentAnchorId,
+    lastRecentRowId,
+    lastSyncAt,
+    lastSyncStatus
+  );
+
+  return getSessionParticipantRecord(db, session, userId, {
+    includeLeft: true,
+    currentUserId: options.currentUserId || '',
+  });
+}
+
+function skipTargetedRequestsForDepartedParticipant(db, session, targetUserId, actorUserId = '') {
+  const normalizedTargetUserId = String(targetUserId || '').trim();
+  if (!session?.id || !normalizedTargetUserId) {
+    return {
+      requests: getSessionRequests(db, session?.id || ''),
+      message_ids: [],
+    };
+  }
+
+  const rows = db.prepare(`
+    SELECT *
+    FROM live_session_requests
+    WHERE live_session_id = ?
+      AND target_user_id = ?
+      AND COALESCE(NULLIF(status, ''), CASE WHEN fulfilled = 1 THEN 'played' ELSE 'open' END) IN ('open', 'queued')
+    ORDER BY created_at ASC, id ASC
+  `).all(session.id, normalizedTargetUserId);
+
+  const messageIds = [];
+  for (const row of rows) {
+    const result = updateLiveRequestStatus(db, row, 'skipped', {
+      actorUserId,
+      emitMessage: true,
+    });
+    if (result?.announcement_message_id) {
+      messageIds.push(result.announcement_message_id);
+    }
+  }
+
+  return {
+    requests: getSessionRequests(db, session.id),
+    message_ids: messageIds,
+  };
 }
 
 function getDirectorySessions(db, currentUserId = '', limit = 18) {
@@ -2006,13 +2498,14 @@ function fulfillMatchingRequests(db, liveSessionId, plays = [], actorUserId = ''
   const playByKey = new Map();
   for (const play of Array.isArray(plays) ? plays : []) {
     const key = buildRequestKey(play?.song_title, play?.mode, play?.level);
-    if (!key || playByKey.has(key)) continue;
-    playByKey.set(key, play);
+    if (!key) continue;
+    if (!playByKey.has(key)) playByKey.set(key, []);
+    playByKey.get(key).push(play);
   }
   if (playByKey.size === 0) return [];
 
   const requests = db.prepare(`
-    SELECT id, live_session_id, username, song_title, mode, level, status, fulfilled
+    SELECT id, live_session_id, username, song_title, mode, level, status, fulfilled, target_user_id, target_username
     FROM live_session_requests
     WHERE live_session_id = ?
       AND COALESCE(NULLIF(status, ''), CASE WHEN fulfilled = 1 THEN 'played' ELSE 'open' END) IN ('open', 'queued')
@@ -2023,7 +2516,13 @@ function fulfillMatchingRequests(db, liveSessionId, plays = [], actorUserId = ''
   const matched = [];
   for (const request of requests) {
     const key = buildRequestKey(request.song_title, request.mode, request.level);
-    const play = playByKey.get(key);
+    const possiblePlays = playByKey.get(key) || [];
+    const play = possiblePlays.find((candidate) => {
+      if (!candidate) return false;
+      const targetUserId = String(request.target_user_id || '').trim();
+      if (targetUserId && String(candidate.user_id || '') !== targetUserId) return false;
+      return true;
+    }) || null;
     if (!play) continue;
     updateLiveRequestStatus(db, request, 'played', {
       actorUserId,
@@ -2067,6 +2566,7 @@ function getChartsForVote(db, modeFilter, minLevel, maxLevel) {
 
 function buildPlayAnnouncement(play, outcome) {
   const label = formatPlayLabel(play);
+  const performer = getPlayPerformerLabel(play);
   const score = toInt(play?.score);
   const grade = String(play?.grade || '').trim() || (score > 0 ? score.toLocaleString() : 'FAIL');
   const normalizedGrade = normalizeGradeKey(play?.grade);
@@ -2076,26 +2576,41 @@ function buildPlayAnnouncement(play, outcome) {
     `${label}|${normalizedGrade}|${score}|${commentary.key}`
   );
 
-  return `Last played: ${label} • ${grade} ${score > 0 ? score.toLocaleString() : ''}`.trim() + `. ${base}`;
+  const prefix = performer ? `${performer} played ${label}` : `Last played: ${label}`;
+  return `${prefix} • ${grade} ${score > 0 ? score.toLocaleString() : ''}`.trim() + `. ${base}`;
 }
 
-function bufferSyncResults(db, liveSessionId, syncResult) {
+function annotateLiveSyncOutcomeRow(row, actor) {
+  return {
+    ...(row || {}),
+    performer_user_id: String(actor?.id || '').trim(),
+    performer_username: String(actor?.username || '').trim(),
+  };
+}
+
+function bufferSyncResults(db, liveSessionId, syncResult, actor) {
   const insertBufferedUpscore = db.prepare(`
-    INSERT INTO live_session_buffered_upscores (live_session_id, payload_json, pumbility_gain, singles_pumbility_gain)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO live_session_buffered_upscores (
+      live_session_id, performer_user_id, payload_json, pumbility_gain, singles_pumbility_gain, finalized_at, finalized_post_id
+    )
+    VALUES (?, ?, ?, ?, ?, '', 0)
   `);
   const insertBufferedClear = db.prepare(`
-    INSERT INTO live_session_buffered_clears (live_session_id, payload_json, pumbility_gain, singles_pumbility_gain)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO live_session_buffered_clears (
+      live_session_id, performer_user_id, payload_json, pumbility_gain, singles_pumbility_gain, finalized_at, finalized_post_id
+    )
+    VALUES (?, ?, ?, ?, ?, '', 0)
   `);
   let bufferedRowsAdded = false;
 
   for (const row of Array.isArray(syncResult?.upscores) ? syncResult.upscores : []) {
+    const payload = annotateLiveSyncOutcomeRow(row, actor);
     insertBufferedUpscore.run(
       liveSessionId,
-      JSON.stringify(row),
-      toInt(row?.pumbility_gain),
-      toInt(row?.singles_pumbility_gain)
+      payload.performer_user_id,
+      JSON.stringify(payload),
+      toInt(payload?.pumbility_gain),
+      toInt(payload?.singles_pumbility_gain)
     );
     bufferedRowsAdded = true;
   }
@@ -2105,11 +2620,13 @@ function bufferSyncResults(db, liveSessionId, syncResult) {
     ...(Array.isArray(syncResult?.title_unlock_rows) ? syncResult.title_unlock_rows : []),
   ];
   for (const row of clearRows) {
+    const payload = annotateLiveSyncOutcomeRow(row, actor);
     insertBufferedClear.run(
       liveSessionId,
-      JSON.stringify(row),
-      toInt(row?.pumbility_gain),
-      toInt(row?.singles_pumbility_gain)
+      payload.performer_user_id,
+      JSON.stringify(payload),
+      toInt(payload?.pumbility_gain),
+      toInt(payload?.singles_pumbility_gain)
     );
     bufferedRowsAdded = true;
   }
@@ -2119,7 +2636,7 @@ function bufferSyncResults(db, liveSessionId, syncResult) {
   }
 }
 
-function appendRecentRowsToSession(db, session, recentRows) {
+function appendRecentRowsToSession(db, session, recentRows, actor) {
   const insertPlay = db.prepare(`
     INSERT OR IGNORE INTO live_session_plays (
       live_session_id, user_id, recently_played_id, song_title, mode, level, score, grade,
@@ -2132,7 +2649,7 @@ function appendRecentRowsToSession(db, session, recentRows) {
   for (const row of recentRows) {
     const result = insertPlay.run(
       session.id,
-      session.host_user_id,
+      actor.id,
       row.id,
       row.song_title,
       row.mode,
@@ -2154,12 +2671,36 @@ function appendRecentRowsToSession(db, session, recentRows) {
       toInt(row.over_top100_rank),
       row.shoe_id ? toInt(row.shoe_id) : null
     );
-    if (result.changes > 0) inserted.push(row);
+    if (result.changes > 0) inserted.push({
+      ...row,
+      user_id: actor.id,
+      username: actor.username || '',
+      avatar: actor.avatar || '',
+      skill_title: actor.skill_title || '',
+      nationality: actor.nationality || '',
+      participant_role: actor.role || LIVE_PARTICIPANT_ROLE_COHOST,
+      participant_status: actor.status || LIVE_PARTICIPANT_STATUS_ACTIVE,
+    });
   }
   return inserted;
 }
 
-function applyLiveSyncResult(db, session, syncResult) {
+function applyLiveSyncResult(db, session, syncResult, actor) {
+  const syncActor = actor?.id ? actor : {
+    id: session.host_user_id,
+    username: session.host_username || '',
+    avatar: '',
+    skill_title: '',
+    nationality: '',
+    role: LIVE_PARTICIPANT_ROLE_OWNER,
+    status: LIVE_PARTICIPANT_STATUS_ACTIVE,
+  };
+  const syncState = ensureParticipantSyncCursor(db, session, syncActor.id, {
+    recent_anchor_id: toInt(session.recent_anchor_id),
+    last_recent_row_id: toInt(session.last_recent_row_id),
+    last_sync_at: session.last_sync_at || '',
+    last_sync_status: session.last_sync_status || '',
+  });
   const recentRows = db.prepare(`
     SELECT
       p.*,
@@ -2171,23 +2712,26 @@ function applyLiveSyncResult(db, session, syncResult) {
     WHERE p.user_id = ?
       AND p.id > ?
     ORDER BY p.id ASC
-  `).all(session.host_user_id, toInt(session.last_recent_row_id));
+  `).all(syncActor.id, toInt(syncState?.last_recent_row_id));
 
-  const insertedRows = appendRecentRowsToSession(db, session, recentRows);
-  bufferSyncResults(db, session.id, syncResult);
+  const insertedRows = appendRecentRowsToSession(db, session, recentRows, syncActor);
+  bufferSyncResults(db, session.id, syncResult, syncActor);
   const syncMessageIds = [];
 
   const outcomeMap = new Map();
   for (const row of Array.isArray(syncResult?.upscores) ? syncResult.upscores : []) {
-    outcomeMap.set(buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.new_score), { ...row, type: 'upscore' });
+    outcomeMap.set(
+      buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.new_score, syncActor.id),
+      { ...row, type: 'upscore', performer_user_id: syncActor.id, performer_username: syncActor.username || '' }
+    );
   }
   for (const row of Array.isArray(syncResult?.new_clears) ? syncResult.new_clears : []) {
-    const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score);
+    const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score, syncActor.id);
     if (!outcomeMap.has(key)) outcomeMap.set(key, { ...row, type: 'clear' });
   }
 
   for (const row of insertedRows) {
-    const outcome = outcomeMap.get(buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score)) || null;
+    const outcome = outcomeMap.get(buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score, syncActor.id)) || null;
     syncMessageIds.push(addSystemMessage(
       db,
       session.id,
@@ -2201,6 +2745,8 @@ function applyLiveSyncResult(db, session, syncResult) {
         jacket_url: row.background_url || '',
         score: toInt(row.score),
         grade: row.grade || '',
+        performed_by_user_id: syncActor.id,
+        performed_by_username: syncActor.username || '',
         pumbility_gain: toInt(outcome?.pumbility_gain),
         session_result_type: outcome?.type || '',
         over_top100_rank: Math.max(toInt(row.over_top100_rank), toInt(outcome?.over_top100_rank)),
@@ -2208,7 +2754,7 @@ function applyLiveSyncResult(db, session, syncResult) {
     ));
   }
 
-  const fulfilledRequests = fulfillMatchingRequests(db, session.id, insertedRows, session.host_user_id);
+  const fulfilledRequests = fulfillMatchingRequests(db, session.id, insertedRows, syncActor.id);
   if (fulfilledRequests.length > 0) {
     const groups = new Map();
     for (const match of fulfilledRequests) {
@@ -2239,6 +2785,8 @@ function applyLiveSyncResult(db, session, syncResult) {
           recently_played_id: toInt(group.play?.id),
           score: toInt(group.play?.score),
           grade: group.play?.grade || '',
+          performed_by_user_id: group.play?.user_id || syncActor.id,
+          performed_by_username: group.play?.username || syncActor.username || '',
         }
       ));
     }
@@ -2259,15 +2807,27 @@ function applyLiveSyncResult(db, session, syncResult) {
 
   const lastRecentRowId = recentRows.length > 0
     ? Math.max(...recentRows.map((row) => toInt(row.id)))
-    : toInt(session.last_recent_row_id);
+    : toInt(syncState?.last_recent_row_id);
   db.prepare(`
-    UPDATE live_sessions
+    UPDATE live_session_participant_sync
     SET last_recent_row_id = ?,
         last_sync_at = datetime('now'),
         last_sync_status = 'ok',
         updated_at = datetime('now')
+    WHERE live_session_id = ?
+      AND user_id = ?
+  `).run(lastRecentRowId, session.id, syncActor.id);
+  db.prepare(`
+    UPDATE live_sessions
+    SET last_recent_row_id = CASE
+          WHEN last_recent_row_id < ? THEN ?
+          ELSE last_recent_row_id
+        END,
+        last_sync_at = datetime('now'),
+        last_sync_status = 'ok',
+        updated_at = datetime('now')
     WHERE id = ?
-  `).run(lastRecentRowId, session.id);
+  `).run(lastRecentRowId, lastRecentRowId, session.id);
 
   return {
     delta: {
@@ -2285,16 +2845,24 @@ function applyLiveSyncResult(db, session, syncResult) {
   };
 }
 
-function parseBufferedRows(db, liveSessionId, tableName) {
+function parseBufferedRows(db, liveSessionId, tableName, options = {}) {
+  const normalizedPerformerUserId = String(options.performerUserId || '').trim();
+  const includeFinalized = !!options.includeFinalized;
   return db.prepare(`
-    SELECT payload_json, pumbility_gain, singles_pumbility_gain
+    SELECT id, performer_user_id, payload_json, pumbility_gain, singles_pumbility_gain, finalized_at, finalized_post_id
     FROM ${tableName}
     WHERE live_session_id = ?
+      AND (? = '' OR performer_user_id = ?)
+      AND (? = 1 OR COALESCE(finalized_at, '') = '')
     ORDER BY id ASC
-  `).all(liveSessionId).map((row) => {
+  `).all(liveSessionId, normalizedPerformerUserId, normalizedPerformerUserId, includeFinalized ? 1 : 0).map((row) => {
     const payload = safeParseJson(row.payload_json || '{}', {});
+    payload.buffered_row_id = toInt(row.id);
+    payload.performer_user_id = String(payload.performer_user_id || row.performer_user_id || '').trim();
     payload.pumbility_gain = toInt(row.pumbility_gain || payload.pumbility_gain);
     payload.singles_pumbility_gain = toInt(row.singles_pumbility_gain || payload.singles_pumbility_gain);
+    payload.finalized_at = row.finalized_at || '';
+    payload.finalized_post_id = toInt(row.finalized_post_id || payload.finalized_post_id);
     return payload;
   });
 }
@@ -2303,6 +2871,102 @@ function buildSummaryPostContent(summary) {
   if (!summary) return '';
   const marker = serializeLiveSessionMarker(summary);
   return marker;
+}
+
+function groupRowsByPerformer(rows) {
+  const grouped = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const performerUserId = String(row?.performer_user_id || row?.user_id || '').trim();
+    if (!performerUserId) continue;
+    if (!grouped.has(performerUserId)) grouped.set(performerUserId, []);
+    grouped.get(performerUserId).push(row);
+  }
+  return grouped;
+}
+
+function buildParticipantLiveSummary(participant, plays, session, sharedContext = {}) {
+  const participantRows = Array.isArray(plays) ? plays : [];
+  if (participantRows.length === 0) return null;
+  return buildLiveSessionSummary(participantRows, participant || {}, {
+    sessionId: session.id,
+    viewerCount: sharedContext.viewerCount,
+    viewerPeak: sharedContext.viewerPeak,
+    messageCount: sharedContext.messageCount,
+    requestPlayCount: sharedContext.requestPlayCount,
+    votedSongPlayCount: sharedContext.votedSongPlayCount,
+    interactions: sharedContext.interactions,
+    streamUrl: session.stream_url,
+    hostUsername: participant?.username || '',
+  });
+}
+
+function stripBufferedRowMetadata(row) {
+  if (!row || typeof row !== 'object') return row;
+  const next = { ...row };
+  delete next.buffered_row_id;
+  delete next.finalized_at;
+  delete next.finalized_post_id;
+  return next;
+}
+
+function createParticipantLiveSessionArtifacts(db, session, participant, participantPlays, upscoreRows, clearRows, replayLookup, sharedContext = {}) {
+  const summary = buildParticipantLiveSummary(participant, participantPlays, session, sharedContext);
+  const filteredUpscores = (Array.isArray(upscoreRows) ? upscoreRows : []).map(stripBufferedRowMetadata);
+  const filteredClears = (Array.isArray(clearRows) ? clearRows : []).map(stripBufferedRowMetadata);
+  const replayRows = [
+    ...filteredUpscores,
+    ...filteredClears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock'),
+  ];
+  const upscoreGain = filteredUpscores.reduce((sum, row) => sum + toInt(row?.pumbility_gain), 0);
+  const singlesUpscoreGain = filteredUpscores.reduce((sum, row) => sum + toInt(row?.singles_pumbility_gain), 0);
+  const clearGain = filteredClears.reduce((sum, row) => sum + toInt(row?.pumbility_gain), 0);
+  const singlesClearGain = filteredClears.reduce((sum, row) => sum + toInt(row?.singles_pumbility_gain), 0);
+  const clearCount = filteredClears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock').length;
+  const titleCount = filteredClears.length - clearCount;
+
+  let upscorePostId = null;
+  let clearPostId = null;
+  let summaryPostId = null;
+
+  if (filteredUpscores.length > 0) {
+    const result = db.prepare(`
+      INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `).run(participant.user_id, JSON.stringify(filteredUpscores), upscoreGain, singlesUpscoreGain);
+    upscorePostId = result.lastInsertRowid;
+  }
+
+  if (filteredClears.length > 0) {
+    clearPostId = insertGroupedNewClearPost(db, participant.user_id, filteredClears, {
+      pumbilityGain: clearGain,
+      singlesPumbilityGain: singlesClearGain,
+    });
+  }
+
+  if (replayRows.length > 0) {
+    syncSessionReplayLinks(db, participant.user_id, replayRows, replayLookup);
+  }
+
+  if (summary) {
+    const result = db.prepare(`
+      INSERT INTO user_posts (user_id, content, images, youtube_url, comments_disabled, created_at)
+      VALUES (?, ?, '[]', ?, 0, datetime('now'))
+    `).run(participant.user_id, buildSummaryPostContent(summary), session.stream_url || '');
+    summaryPostId = result.lastInsertRowid;
+  }
+
+  return {
+    user_id: participant.user_id,
+    actorUsername: participant.username || 'Someone',
+    summary,
+    upscore_post_id: upscorePostId,
+    clear_post_id: clearPostId,
+    summary_post_id: summaryPostId,
+    upscore_rows: filteredUpscores,
+    clear_rows: filteredClears,
+    clear_count: clearCount,
+    title_count: titleCount,
+  };
 }
 
 function createLiveOverlayAccessToken(sessionId) {
@@ -2375,9 +3039,11 @@ function buildLiveSessionUpdateBase(db, sessionOrId) {
   const viewerCount = getViewerCount(db, freshSession);
   const viewerPeak = getViewerPeak(freshSession, viewerCount);
   const host = getHostProfile(db, freshSession.host_user_id);
+  const participants = getSessionParticipants(db, freshSession, { currentUserId: freshSession.host_user_id });
   return {
     freshSession,
     host,
+    participants,
     viewerCount,
     viewerPeak,
   };
@@ -2393,7 +3059,8 @@ function broadcastLiveSessionUpdated(db, liveSessionId, reason = 'session_update
       { ...base.freshSession, viewer_peak: base.viewerPeak },
       base.host,
       base.viewerCount,
-      userId
+      userId,
+      getSessionParticipants(db, base.freshSession, { currentUserId: userId })
     ),
     emitted_at: new Date().toISOString(),
   }));
@@ -2417,7 +3084,8 @@ function broadcastLivePlaysUpdated(db, liveSessionId, reason = 'plays_updated') 
       { ...base.freshSession, viewer_peak: base.viewerPeak },
       base.host,
       base.viewerCount,
-      userId
+      userId,
+      getSessionParticipants(db, base.freshSession, { currentUserId: userId })
     ),
     plays,
     last_play: plays[0] || null,
@@ -2569,7 +3237,7 @@ function scheduleVoteClose(db, voteId) {
 
 router.get('/sessions/mine/active', requireAuth, (req, res) => {
   const db = getDb();
-  const session = getActiveSessionForHost(db, req.user.id);
+  const session = getActiveSessionForParticipant(db, req.user.id);
   if (!session) return res.json({ session: null });
   ensureLiveSyncTimer(db, session);
   return res.json(buildSessionSnapshot(db, session, req.user.id));
@@ -2609,9 +3277,9 @@ router.get('/profile/:userId', (req, res) => {
 router.post('/sessions', requireAuth, async (req, res) => {
   try {
     const db = getDb();
-    const existing = getActiveSessionForHost(db, req.user.id);
+    const existing = getActiveSessionForParticipant(db, req.user.id);
     if (existing) {
-      return res.status(409).json({ error: 'You already have an active live session', existing_session_id: existing.id });
+      return res.status(409).json({ error: 'You are already in an active live session', existing_session_id: existing.id });
     }
     if (typeof syncRecentlyPlayedForUser !== 'function') {
       throw new Error('Live sync dependency unavailable');
@@ -2657,6 +3325,17 @@ router.post('/sessions', requireAuth, async (req, res) => {
       toInt(anchor?.max_id),
       defaultRequestMaxLevel
     );
+
+    ensureSessionOwnerParticipant(db, {
+      id,
+      host_user_id: req.user.id,
+      started_at: '',
+      created_at: '',
+      recent_anchor_id: toInt(anchor?.max_id),
+      last_recent_row_id: toInt(anchor?.max_id),
+      last_sync_at: '',
+      last_sync_status: 'ready',
+    });
 
     addSystemMessage(db, id, `${req.user.username || 'Player'} started a Shinsa Live session.`, 'session_start', {
       stream_url: streamUrl,
@@ -2791,6 +3470,231 @@ router.patch('/sessions/:id', requireAuth, async (req, res) => {
 
     broadcastLiveSessionSnapshot(db, session.id, 'stream_updated');
     return res.json(buildSessionSnapshot(db, session.id, req.user.id));
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/cohosts', requireAuth, async (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+    if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+
+    const targetUserId = normalizeText(req.body?.user_id, 80);
+    if (!targetUserId) return res.status(400).json({ error: 'user_id is required' });
+    if (String(targetUserId) === String(session.host_user_id || '')) {
+      return res.status(400).json({ error: 'The room owner is already part of this session' });
+    }
+    const existingParticipant = getSessionParticipantRecord(db, session, targetUserId, { includeLeft: true });
+    if (existingParticipant?.status === LIVE_PARTICIPANT_STATUS_ACTIVE) {
+      return res.status(409).json({ error: 'That user is already a co-host in this room' });
+    }
+
+    const user = db.prepare(`
+      SELECT id, username, avatar, avatar_v, nationality, skill_title, pumbility, weight_kg
+      FROM users
+      WHERE id = ?
+      LIMIT 1
+    `).get(targetUserId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    ensureUserCanJoinLiveSession(db, user.id, session.id);
+    await syncRecentlyPlayedForUser(user, {
+      db,
+      userId: user.id,
+      username: user.username,
+      persistActivityPosts: false,
+    });
+    const anchor = db.prepare(`
+      SELECT COALESCE(MAX(id), 0) AS max_id
+      FROM user_recently_played
+      WHERE user_id = ?
+    `).get(user.id);
+
+    const participant = setLiveSessionParticipantState(db, session, user, {
+      role: LIVE_PARTICIPANT_ROLE_COHOST,
+      status: LIVE_PARTICIPANT_STATUS_ACTIVE,
+      addedByUserId: req.user.id,
+      joinedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      recent_anchor_id: toInt(anchor?.max_id),
+      last_recent_row_id: toInt(anchor?.max_id),
+      last_sync_status: 'ready',
+      currentUserId: req.user.id,
+    });
+
+    const messageId = addSystemMessage(
+      db,
+      session.id,
+      `${user.username || 'A player'} joined the room as a co-host.`,
+      'participant_join',
+      {
+        participant_user_id: user.id,
+        participant_username: user.username || '',
+      }
+    );
+    const message = getNormalizedLiveMessage(db, messageId);
+    const snapshot = buildSessionSnapshot(db, session.id, req.user.id);
+    broadcastLiveSessionSnapshot(db, session.id, 'participants_updated');
+    if (message) {
+      broadcastLiveMessageAdded(session.id, message, 'participants_updated');
+    }
+    return res.status(201).json({
+      participant,
+      message,
+      snapshot,
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.delete('/sessions/:id/cohosts/:userId', requireAuth, async (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    requireSessionHost(session, req.user.id);
+    if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+
+    const participant = getSessionParticipantRecord(db, session, req.params.userId, {
+      includeLeft: true,
+      currentUserId: req.user.id,
+    });
+    if (!participant || participant.role !== LIVE_PARTICIPANT_ROLE_COHOST) {
+      return res.status(404).json({ error: 'Co-host not found' });
+    }
+    if (participant.status === LIVE_PARTICIPANT_STATUS_LEFT) {
+      return res.status(400).json({ error: 'That co-host has already left the session' });
+    }
+
+    const syncUpdate = await performLiveSessionSyncForActor(db, session, {
+      id: participant.user_id,
+      username: participant.username || '',
+      avatar: participant.avatar || '',
+      skill_title: participant.skill_title || '',
+      nationality: participant.nationality || '',
+      role: participant.role,
+      status: participant.status,
+    });
+    setLiveSessionParticipantState(db, session, participant, {
+      role: LIVE_PARTICIPANT_ROLE_COHOST,
+      status: LIVE_PARTICIPANT_STATUS_LEFT,
+      addedByUserId: req.user.id,
+      joinedAt: participant.joined_at || '',
+      leftAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      recent_anchor_id: 0,
+      last_recent_row_id: ensureParticipantSyncCursor(db, session, participant.user_id)?.last_recent_row_id || 0,
+      last_sync_at: '',
+      last_sync_status: 'left',
+      currentUserId: req.user.id,
+    });
+    const requestUpdate = skipTargetedRequestsForDepartedParticipant(db, session, participant.user_id, req.user.id);
+    const messageId = addSystemMessage(
+      db,
+      session.id,
+      `${participant.username || 'A co-host'} left the room.`,
+      'participant_leave',
+      {
+        participant_user_id: participant.user_id,
+        participant_username: participant.username || '',
+      }
+    );
+    broadcastLiveSyncUpdates(db, session, syncUpdate, 'participant_left');
+    broadcastLiveRequestsUpdated(session.id, requestUpdate.requests, 'participant_left');
+    for (const messageIdToBroadcast of requestUpdate.message_ids) {
+      const requestMessage = getNormalizedLiveMessage(db, messageIdToBroadcast);
+      if (requestMessage) broadcastLiveMessageAdded(session.id, requestMessage, 'participant_left');
+    }
+    const message = getNormalizedLiveMessage(db, messageId);
+    if (message) {
+      broadcastLiveMessageAdded(session.id, message, 'participant_left');
+    }
+    return res.json({
+      success: true,
+      participant: getSessionParticipantRecord(db, session, participant.user_id, {
+        includeLeft: true,
+        currentUserId: req.user.id,
+      }),
+      message,
+      snapshot: buildSessionSnapshot(db, session.id, req.user.id),
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.post('/sessions/:id/leave', requireAuth, async (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
+    if (String(req.user.id || '') === String(session.host_user_id || '')) {
+      return res.status(400).json({ error: 'The room owner must end the live session instead of leaving it' });
+    }
+
+    const participant = getSessionParticipantRecord(db, session, req.user.id, {
+      includeLeft: true,
+      currentUserId: req.user.id,
+    });
+    if (!participant || participant.role !== LIVE_PARTICIPANT_ROLE_COHOST) {
+      return res.status(403).json({ error: 'You are not an active co-host in this room' });
+    }
+    if (participant.status === LIVE_PARTICIPANT_STATUS_LEFT) {
+      return res.status(400).json({ error: 'You have already left this session' });
+    }
+
+    const syncUpdate = await performLiveSessionSyncForActor(db, session, {
+      id: participant.user_id,
+      username: participant.username || '',
+      avatar: participant.avatar || '',
+      skill_title: participant.skill_title || '',
+      nationality: participant.nationality || '',
+      role: participant.role,
+      status: participant.status,
+    });
+    setLiveSessionParticipantState(db, session, participant, {
+      role: LIVE_PARTICIPANT_ROLE_COHOST,
+      status: LIVE_PARTICIPANT_STATUS_LEFT,
+      addedByUserId: req.user.id,
+      joinedAt: participant.joined_at || '',
+      leftAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+      recent_anchor_id: 0,
+      last_recent_row_id: ensureParticipantSyncCursor(db, session, participant.user_id)?.last_recent_row_id || 0,
+      last_sync_at: '',
+      last_sync_status: 'left',
+      currentUserId: req.user.id,
+    });
+    const requestUpdate = skipTargetedRequestsForDepartedParticipant(db, session, participant.user_id, req.user.id);
+    const messageId = addSystemMessage(
+      db,
+      session.id,
+      `${participant.username || 'A co-host'} left the room.`,
+      'participant_leave',
+      {
+        participant_user_id: participant.user_id,
+        participant_username: participant.username || '',
+      }
+    );
+    broadcastLiveSyncUpdates(db, session, syncUpdate, 'participant_left');
+    broadcastLiveRequestsUpdated(session.id, requestUpdate.requests, 'participant_left');
+    for (const messageIdToBroadcast of requestUpdate.message_ids) {
+      const requestMessage = getNormalizedLiveMessage(db, messageIdToBroadcast);
+      if (requestMessage) broadcastLiveMessageAdded(session.id, requestMessage, 'participant_left');
+    }
+    const message = getNormalizedLiveMessage(db, messageId);
+    if (message) {
+      broadcastLiveMessageAdded(session.id, message, 'participant_left');
+    }
+    return res.json({
+      success: true,
+      participant: getSessionParticipantRecord(db, session, participant.user_id, {
+        includeLeft: true,
+        currentUserId: req.user.id,
+      }),
+      message,
+      snapshot: buildSessionSnapshot(db, session.id, req.user.id),
+    });
   } catch (err) {
     return res.status(err.statusCode || 500).json({ error: err.message });
   }
@@ -3143,6 +4047,15 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
       return res.status(403).json({ error: `The host is currently taking ${buildRequestPolicyDescription(session)}.` });
     }
 
+    const targetUserId = normalizeText(req.body?.target_user_id, 80);
+    let targetParticipant = null;
+    if (targetUserId) {
+      targetParticipant = getSessionParticipantRecord(db, session, targetUserId, { includeLeft: false });
+      if (!targetParticipant) {
+        return res.status(404).json({ error: 'Target co-host not found' });
+      }
+    }
+
     const user = db.prepare(`
       SELECT id, username, avatar, avatar_v
       FROM users
@@ -3154,11 +4067,23 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
 
     db.prepare(`
       INSERT INTO live_session_requests (
-        id, live_session_id, user_id, username, chart_id, chart_key, song_title, mode, level,
+        id, live_session_id, user_id, username, chart_id, chart_key, song_title, mode, level, target_user_id, target_username,
         status, fulfilled, handled_at, handled_by_user_id, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, '', '', datetime('now'), datetime('now'))
-    `).run(requestId, session.id, req.user.id, user?.username || req.user.username || 'User', toInt(chart.id), chartKey, chart.title, chart.mode, toInt(chart.level));
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', 0, '', '', datetime('now'), datetime('now'))
+    `).run(
+      requestId,
+      session.id,
+      req.user.id,
+      user?.username || req.user.username || 'User',
+      toInt(chart.id),
+      chartKey,
+      chart.title,
+      chart.mode,
+      toInt(chart.level),
+      targetParticipant?.user_id || '',
+      targetParticipant?.username || ''
+    );
 
     const messageId = uuidv4();
     db.prepare(`
@@ -3170,7 +4095,7 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
       req.user.id,
       user?.username || req.user.username || 'User',
       avatar,
-      `/request ${chart.title} (${chart.mode === 'Single' ? 'S' : chart.mode === 'Double' ? 'D' : chart.mode}${toInt(chart.level)})`,
+      `/request ${chart.title} (${chart.mode === 'Single' ? 'S' : chart.mode === 'Double' ? 'D' : chart.mode}${toInt(chart.level)})${targetParticipant?.username ? ` for ${targetParticipant.username}` : ''}`,
       JSON.stringify({
         request_id: requestId,
         chart_id: toInt(chart.id),
@@ -3178,6 +4103,8 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
         mode: chart.mode,
         level: toInt(chart.level),
         jacket_url: chart.jacket_url || '',
+        target_user_id: targetParticipant?.user_id || '',
+        target_username: targetParticipant?.username || '',
       })
     );
 
@@ -3521,8 +4448,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       throw new Error('Live session dependencies unavailable');
     }
 
-    const syncResult = await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: false });
-    applyLiveSyncResult(db, session, syncResult);
+    await performLiveSessionSync(db, session, { broadcast: false, reason: 'end' });
 
     const latestVote = getLatestVoteSnapshot(db, session.id, req.user.id);
     if (latestVote && latestVote.status === 'active') {
@@ -3530,6 +4456,8 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     }
 
     const host = getHostProfile(db, session.host_user_id);
+    const participants = getSessionParticipants(db, session, { currentUserId: req.user.id, includeLeft: true });
+    const participantByUserId = new Map(participants.map((participant) => [participant.user_id, participant]));
     const plays = getSessionPlays(db, session.id);
     const viewerCount = getViewerCount(db, session, { cleanup: true });
     const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
@@ -3577,43 +4505,46 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       bufferedClears = attachReplayMetadataToRows(bufferedClears, replayLookup);
     }
 
-    const upscoreGain = bufferedUpscores.reduce((sum, row) => sum + toInt(row?.pumbility_gain), 0);
-    const singlesUpscoreGain = bufferedUpscores.reduce((sum, row) => sum + toInt(row?.singles_pumbility_gain), 0);
-    const clearGain = bufferedClears.reduce((sum, row) => sum + toInt(row?.pumbility_gain), 0);
-    const singlesClearGain = bufferedClears.reduce((sum, row) => sum + toInt(row?.singles_pumbility_gain), 0);
-    const clearCount = bufferedClears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock').length;
-    const titleCount = bufferedClears.length - clearCount;
+    const playGroups = new Map();
+    for (const play of plays) {
+      const performerUserId = String(play?.user_id || '').trim();
+      if (!performerUserId) continue;
+      if (!playGroups.has(performerUserId)) playGroups.set(performerUserId, []);
+      playGroups.get(performerUserId).push(play);
+    }
+    const upscoreGroups = groupRowsByPerformer(bufferedUpscores);
+    const clearGroups = groupRowsByPerformer(bufferedClears);
+    const performerIds = new Set([
+      ...playGroups.keys(),
+      ...upscoreGroups.keys(),
+      ...clearGroups.keys(),
+    ]);
 
-    let upscorePostId = null;
-    let clearPostId = null;
-    let summaryPostId = null;
+    const sharedContext = {
+      viewerCount,
+      viewerPeak,
+      messageCount,
+      requestPlayCount: interactionCounts.requestPlayCount,
+      votedSongPlayCount: interactionCounts.votedSongPlayCount,
+      interactions: interactionCounts.interactions,
+    };
+    const participantResults = [];
 
     const txn = db.transaction(() => {
-      if (bufferedUpscores.length > 0) {
-        const result = db.prepare(`
-          INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
-          VALUES (?, ?, ?, ?, datetime('now'))
-        `).run(session.host_user_id, JSON.stringify(bufferedUpscores), upscoreGain, singlesUpscoreGain);
-        upscorePostId = result.lastInsertRowid;
-      }
-
-      if (bufferedClears.length > 0) {
-        clearPostId = insertGroupedNewClearPost(db, session.host_user_id, bufferedClears, {
-          pumbilityGain: clearGain,
-          singlesPumbilityGain: singlesClearGain,
-        });
-      }
-
-      if (replayOutcomeRows.length > 0) {
-        syncSessionReplayLinks(db, session.host_user_id, replayOutcomeRows, replayLookup);
-      }
-
-      if (summary) {
-        const result = db.prepare(`
-          INSERT INTO user_posts (user_id, content, images, youtube_url, comments_disabled, created_at)
-          VALUES (?, ?, '[]', ?, 0, datetime('now'))
-        `).run(session.host_user_id, buildSummaryPostContent(summary), session.stream_url || '');
-        summaryPostId = result.lastInsertRowid;
+      for (const performerUserId of performerIds) {
+        const participant = participantByUserId.get(performerUserId);
+        if (!participant) continue;
+        const result = createParticipantLiveSessionArtifacts(
+          db,
+          session,
+          participant,
+          playGroups.get(performerUserId) || [],
+          upscoreGroups.get(performerUserId) || [],
+          clearGroups.get(performerUserId) || [],
+          replayLookup,
+          sharedContext
+        );
+        participantResults.push(result);
       }
 
       db.prepare(`
@@ -3630,70 +4561,81 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     txn();
     clearLiveSessionRuntimeState(db, session.id);
 
-    if (typeof invalidateRecentActivityCache === 'function' && (upscorePostId || clearPostId || summaryPostId)) {
+    const anyPostCreated = participantResults.some((result) => result.upscore_post_id || result.clear_post_id || result.summary_post_id);
+    if (typeof invalidateRecentActivityCache === 'function' && anyPostCreated) {
       invalidateRecentActivityCache();
     }
 
-    const actorUsername = host?.username || req.user.username || 'Someone';
-    const profileLink = buildProfilePath(actorUsername) || `/profile/${session.host_user_id}`;
+    for (const result of participantResults) {
+      const actorUsername = result.actorUsername || 'Someone';
+      const profileLink = buildProfilePath(actorUsername) || `/profile/${result.user_id}`;
 
-    if (bufferedUpscores.length > 0) {
-      notifyActivitySubscribers(db, {
-        actorUserId: session.host_user_id,
-        actorUsername,
-        activityType: 'upscores',
-        notificationType: 'followed_user_upscore',
-        title: 'New Upscores',
-        message: `${actorUsername} posted ${bufferedUpscores.length} new upscore${bufferedUpscores.length === 1 ? '' : 's'}`,
-        link: upscorePostId ? `/upscore/${upscorePostId}` : profileLink,
-      });
-    }
+      if (result.upscore_rows.length > 0) {
+        notifyActivitySubscribers(db, {
+          actorUserId: result.user_id,
+          actorUsername,
+          activityType: 'upscores',
+          notificationType: 'followed_user_upscore',
+          title: 'New Upscores',
+          message: `${actorUsername} posted ${result.upscore_rows.length} new upscore${result.upscore_rows.length === 1 ? '' : 's'}`,
+          link: result.upscore_post_id ? `/upscore/${result.upscore_post_id}` : profileLink,
+        });
+      }
 
-    if (clearCount > 0) {
-      notifyActivitySubscribers(db, {
-        actorUserId: session.host_user_id,
-        actorUsername,
-        activityType: 'new_clears',
-        notificationType: 'followed_user_new_clear',
-        title: 'New Clears',
-        message: `${actorUsername} posted ${clearCount} new clear${clearCount === 1 ? '' : 's'}`,
-        link: clearPostId ? `/clear/${clearPostId}` : profileLink,
-      });
-    }
+      if (result.clear_count > 0) {
+        notifyActivitySubscribers(db, {
+          actorUserId: result.user_id,
+          actorUsername,
+          activityType: 'new_clears',
+          notificationType: 'followed_user_new_clear',
+          title: 'New Clears',
+          message: `${actorUsername} posted ${result.clear_count} new clear${result.clear_count === 1 ? '' : 's'}`,
+          link: result.clear_post_id ? `/clear/${result.clear_post_id}` : profileLink,
+        });
+      }
 
-    if (titleCount > 0) {
-      notifyActivitySubscribers(db, {
-        actorUserId: session.host_user_id,
-        actorUsername,
-        activityType: 'new_clears',
-        notificationType: 'followed_user_new_title',
-        title: 'Title Earned',
-        message: `${actorUsername} earned ${titleCount} new title${titleCount === 1 ? '' : 's'}`,
-        link: clearPostId ? `/clear/${clearPostId}` : profileLink,
-      });
-    }
+      if (result.title_count > 0) {
+        notifyActivitySubscribers(db, {
+          actorUserId: result.user_id,
+          actorUsername,
+          activityType: 'new_clears',
+          notificationType: 'followed_user_new_title',
+          title: 'Title Earned',
+          message: `${actorUsername} earned ${result.title_count} new title${result.title_count === 1 ? '' : 's'}`,
+          link: result.clear_post_id ? `/clear/${result.clear_post_id}` : profileLink,
+        });
+      }
 
-    if (summaryPostId) {
-      notifyActivitySubscribers(db, {
-        actorUserId: session.host_user_id,
-        actorUsername,
-        activityType: 'posts',
-        notificationType: 'followed_user_post',
-        title: 'Shinsa Live Recap',
-        message: `${actorUsername} wrapped up a live session`,
-        link: `/post/${summaryPostId}`,
-      });
+      if (result.summary_post_id) {
+        notifyActivitySubscribers(db, {
+          actorUserId: result.user_id,
+          actorUsername,
+          activityType: 'posts',
+          notificationType: 'followed_user_post',
+          title: 'Shinsa Live Recap',
+          message: `${actorUsername} wrapped up a live session`,
+          link: `/post/${result.summary_post_id}`,
+        });
+      }
     }
 
     session = requireLiveSession(db, req.params.id);
     broadcastLiveSessionSnapshot(db, session.id, 'session_ended');
+    const hostResult = participantResults.find((result) => String(result.user_id || '') === String(session.host_user_id || '')) || null;
     res.json({
       success: true,
-      upscore_post_id: upscorePostId,
-      clear_post_id: clearPostId,
-      summary_post_id: summaryPostId,
+      upscore_post_id: hostResult?.upscore_post_id || null,
+      clear_post_id: hostResult?.clear_post_id || null,
+      summary_post_id: hostResult?.summary_post_id || null,
       summary,
-      session: normalizeSessionPayload(session, host, 0, req.user.id),
+      participant_posts: participantResults,
+      session: normalizeSessionPayload(
+        session,
+        host,
+        0,
+        req.user.id,
+        getSessionParticipants(db, session, { currentUserId: req.user.id, includeLeft: true })
+      ),
     });
   } catch (err) {
     console.error('End live session error:', err.message);

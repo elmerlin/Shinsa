@@ -2,6 +2,7 @@ import React, { startTransition, useDeferredValue, useEffect, useMemo, useRef, u
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  addLiveSessionCohost,
   castLiveVote,
   createLiveOverlayToken,
   createLiveSession,
@@ -16,8 +17,11 @@ import {
   publishLiveYoutubeTimestamps,
   getYoutubeBroadcasts,
   getYoutubeConnectionStatus,
+  leaveLiveSession,
   openLiveSessionStream,
   pumpLiveMessage,
+  removeLiveSessionCohost,
+  searchUsers,
   sendLiveMessage,
   sendLivePresence,
   sendLiveRequest,
@@ -191,7 +195,9 @@ function formatYoutubeChapterSourceLabel(kind) {
 function formatYoutubeChapterTitle(chapter) {
   const songTitle = String(chapter?.song_title || '').trim();
   if (!songTitle) return String(chapter?.title || '').trim() || 'Stream start';
-  return `${songTitle} (${modeShort(chapter?.mode)}${parseInt(chapter?.level, 10) || '?'})`;
+  const performer = String(chapter?.username || '').trim();
+  const base = `${songTitle} (${modeShort(chapter?.mode)}${parseInt(chapter?.level, 10) || '?'})`;
+  return performer ? `${performer} - ${base}` : base;
 }
 
 function getYouTubeId(url) {
@@ -531,12 +537,17 @@ function buildStructuredSongMessage(entry, lookups = {}) {
   const displayGrade = parsedGrade.display || '';
   const requesterLabel = getLiveChatRequesterLabel(entry?.message);
   const requestStatus = String(metadata.request_status || '').trim().toLowerCase();
+  const performerLabel = String(metadata.performed_by_username || resolvedPlay?.username || '').trim();
+  const targetUsername = String(metadata.target_username || '').trim();
   let detail = '';
 
   if (messageType === 'play') {
-    detail = getLiveChatPlayDetail(entry?.message);
+    const baseDetail = getLiveChatPlayDetail(entry?.message);
+    detail = performerLabel ? `${performerLabel}${baseDetail ? ` • ${baseDetail}` : ''}` : baseDetail;
   } else if (messageType === 'request_fulfilled') {
-    detail = requesterLabel ? `Request hit for ${requesterLabel}.` : 'Request hit.';
+    detail = performerLabel
+      ? `${performerLabel}${requesterLabel ? ` for ${requesterLabel}` : ''}.`
+      : requesterLabel ? `Request hit for ${requesterLabel}.` : 'Request hit.';
   } else if (messageType === 'request_queue') {
     if (requestStatus === 'skipped') {
       detail = requesterLabel ? `Skipped from ${requesterLabel}.` : 'Request skipped.';
@@ -561,6 +572,7 @@ function buildStructuredSongMessage(entry, lookups = {}) {
   else if (resultType === 'clear') tags.push({ label: 'First clear', tone: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100' });
   if (pumbilityGain > 0) tags.push({ label: `+${pumbilityGain} p`, tone: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100' });
   if (overTop100Rank > 0) tags.push({ label: `OVER #${overTop100Rank}`, tone: 'border-yellow-400/25 bg-yellow-500/10 text-yellow-100' });
+  if (targetUsername) tags.push({ label: `Target ${targetUsername}`, tone: 'border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100' });
 
   return {
     messageType,
@@ -693,6 +705,84 @@ function normalizeSongResults(payload, options = {}) {
   return grouped;
 }
 
+function buildParticipantScoreSnapshot(participant, chart) {
+  return {
+    user_id: participant?.user_id || participant?.id || '',
+    username: participant?.username || '',
+    avatar: participant?.avatar || '',
+    role: participant?.role || '',
+    best_score: chart?.best_score ?? null,
+    best_grade: chart?.best_grade || '',
+    is_pass: !!chart?.is_pass,
+  };
+}
+
+function pickBestParticipantScoreSnapshot(snapshots = []) {
+  const list = Array.isArray(snapshots) ? snapshots : [];
+  return list.slice().sort((a, b) => {
+    const aScore = parseInt(a?.best_score, 10) || 0;
+    const bScore = parseInt(b?.best_score, 10) || 0;
+    if (bScore !== aScore) return bScore - aScore;
+    if (Number(!!b?.is_pass) !== Number(!!a?.is_pass)) return Number(!!b?.is_pass) - Number(!!a?.is_pass);
+    return String(a?.username || '').localeCompare(String(b?.username || ''));
+  })[0] || null;
+}
+
+function mergeParticipantSongResults(payloads, participants, options = {}) {
+  const songMap = new Map();
+  const orderedSongKeys = [];
+
+  (Array.isArray(payloads) ? payloads : []).forEach((payload, index) => {
+    const participant = participants[index] || {};
+    const normalizedSongs = normalizeSongResults(payload, options);
+    for (const song of normalizedSongs) {
+      const songKey = song.song_group_key || song.title || `song-${orderedSongKeys.length}`;
+      if (!songMap.has(songKey)) {
+        songMap.set(songKey, {
+          song_group_key: songKey,
+          title: song.title || 'Unknown song',
+          artist: song.artist || '',
+          jacket_url: song.jacket_url || '',
+          chartMap: new Map(),
+          chartOrder: [],
+        });
+        orderedSongKeys.push(songKey);
+      }
+      const targetSong = songMap.get(songKey);
+      for (const chart of Array.isArray(song?.charts) ? song.charts : []) {
+        const chartKey = `${chart.chart_id || ''}|${chart.mode || ''}|${chart.level || ''}|${chart.song_title || song.title || ''}`;
+        if (!targetSong.chartMap.has(chartKey)) {
+          targetSong.chartMap.set(chartKey, {
+            ...chart,
+            performer_scores: [],
+          });
+          targetSong.chartOrder.push(chartKey);
+        }
+        const targetChart = targetSong.chartMap.get(chartKey);
+        targetChart.performer_scores = [
+          ...(Array.isArray(targetChart.performer_scores) ? targetChart.performer_scores.filter((snapshot) => snapshot.user_id !== (participant?.user_id || participant?.id || '')) : []),
+          buildParticipantScoreSnapshot(participant, chart),
+        ];
+        const bestSnapshot = pickBestParticipantScoreSnapshot(targetChart.performer_scores);
+        targetChart.best_score = bestSnapshot?.best_score ?? null;
+        targetChart.best_grade = bestSnapshot?.best_grade || '';
+        targetChart.is_pass = targetChart.performer_scores.some((snapshot) => !!snapshot.is_pass);
+      }
+    }
+  });
+
+  return orderedSongKeys.map((songKey) => {
+    const entry = songMap.get(songKey);
+    return {
+      song_group_key: entry.song_group_key,
+      title: entry.title,
+      artist: entry.artist,
+      jacket_url: entry.jacket_url,
+      charts: entry.chartOrder.map((chartKey) => entry.chartMap.get(chartKey)).filter(Boolean),
+    };
+  });
+}
+
 function parseRequestShortcutSearch(value) {
   const raw = String(value || '').trim();
   if (!raw.startsWith('/')) return null;
@@ -733,6 +823,43 @@ function getRequestChartBadgeTone(mode) {
     return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-100';
   }
   return 'border-piu-border/60 bg-piu-dark/70 text-slate-100';
+}
+
+function getParticipantRoleLabel(role) {
+  return role === 'owner' ? 'Host' : role === 'cohost' ? 'Co-host' : '';
+}
+
+function ParticipantScorePills({ performerScores, compact = false }) {
+  const rows = Array.isArray(performerScores) ? performerScores : [];
+  if (rows.length === 0) return null;
+
+  return (
+    <div className={`flex min-h-[1.4rem] flex-wrap gap-1 ${compact ? '' : 'mt-0.5'}`}>
+      {rows.map((scoreRow) => {
+        const bestScore = parseInt(scoreRow?.best_score, 10) || 0;
+        const parsedBestGrade = parseGrade(
+          scoreRow?.best_grade || '',
+          bestScore > 0 ? getRank(bestScore).label : ''
+        );
+        const displayBestGrade = parsedBestGrade.display || '';
+        return (
+          <span
+            key={`${scoreRow?.user_id || scoreRow?.username || 'player'}:${scoreRow?.best_score || 'na'}`}
+            className={`rounded-full border px-2 py-0.5 font-display font-bold ${
+              compact ? 'text-[9px]' : 'text-[10px]'
+            } ${
+              bestScore > 0 || scoreRow?.is_pass
+                ? 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100'
+                : 'border-piu-border/60 bg-piu-dark/70 text-gray-300'
+            }`}
+          >
+            {scoreRow?.username || 'Player'}: {displayBestGrade || (scoreRow?.is_pass ? 'Clear' : 'No clear')}
+            {bestScore > 0 ? ` ${formatNumber(bestScore)}` : ''}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function SongRequestTierShortcutResult({ chart, disabled, onSelectChart, showHostScores = false, requestInfo = null, livePlayInfo = null }) {
@@ -803,7 +930,9 @@ function SongRequestTierShortcutResult({ chart, disabled, onSelectChart, showHos
         <div className="space-y-2 p-2.5">
           <div className="flex min-h-[1.5rem] flex-wrap gap-1.5">
             {showHostScores ? (
-              hasHostScoreSnapshot ? (
+              Array.isArray(chart?.performer_scores) && chart.performer_scores.length > 0 ? (
+                <ParticipantScorePills performerScores={chart.performer_scores} />
+              ) : hasHostScoreSnapshot ? (
                 displayBestGrade ? (
                   <span className="rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-cyan-100">
                     {displayBestGrade} {bestScore > 0 ? `• ${formatNumber(bestScore)}` : ''}
@@ -937,6 +1066,9 @@ function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores
                   {requestInfo?.queuedCount ? 'Queued' : 'Req'}
                 </span>
               ) : null}
+              {showHostScores && Array.isArray(chart?.performer_scores) && chart.performer_scores.length > 0 ? (
+                <ParticipantScorePills performerScores={chart.performer_scores} compact />
+              ) : null}
             </div>
           );
         })}
@@ -1066,6 +1198,16 @@ function PlayDetailModal({ play, onClose }) {
           </button>
 
           <p className="font-display font-bold text-lg leading-tight pr-6 break-words">{play.song_title || 'Song'}</p>
+          {play?.username ? (
+            <UserIdentity
+              avatar={play.avatar}
+              username={play.username}
+              skillTitle={play.skill_title}
+              isHost={play.participant_role === 'owner'}
+              participantRole={play.participant_role}
+              className="mt-3"
+            />
+          ) : null}
 
           <div className="flex items-center gap-3 mt-4">
             <div className={`flex items-center gap-1 rounded-md border px-2.5 py-1 ${
@@ -1783,7 +1925,11 @@ function MobilePanelSheet({ open, title, subtitle = '', onClose, children, allow
   );
 }
 
-function UserIdentity({ avatar, username, skillTitle, isHost, className = '', compact = false, dense = false }) {
+function UserIdentity({ avatar, username, skillTitle, isHost, participantRole = '', className = '', compact = false, dense = false }) {
+  const roleLabel = isHost ? 'Host' : getParticipantRoleLabel(participantRole);
+  const roleTone = roleLabel === 'Host'
+    ? 'border-rose-400/25 bg-rose-500/10 text-rose-200'
+    : 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100';
   return (
     <div className={`flex min-w-0 items-center ${compact || dense ? 'gap-1.5' : 'gap-2'} ${className}`.trim()}>
       <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark font-display font-bold text-white ${
@@ -1798,11 +1944,11 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
       <div className="min-w-0">
         <div className={`flex flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'}`}>
           <p className={`truncate font-display font-bold text-white ${compact ? 'text-[10px]' : dense ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
-          {isHost ? (
-            <span className={`rounded-md border border-rose-400/25 bg-rose-500/10 font-display font-semibold text-rose-200 ${
+          {roleLabel ? (
+            <span className={`rounded-md border font-display font-semibold ${roleTone} ${
               compact ? 'px-1.5 py-0.5 text-[8px]' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
             }`}>
-              Host
+              {roleLabel}
             </span>
           ) : null}
           {skillTitle ? (
@@ -1818,7 +1964,7 @@ function UserIdentity({ avatar, username, skillTitle, isHost, className = '', co
   );
 }
 
-function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
+function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, showPerformer = false }) {
   const requestStatus = requestInfo
     ? (requestInfo.queuedCount > 0
       ? 'queued'
@@ -1852,6 +1998,17 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false }) {
       {play ? (
         <div className={`${compact ? 'mt-2 flex flex-1 flex-col' : 'mt-4 flex flex-col'}`}>
           <p className={`truncate font-display font-black text-white ${compact ? 'text-base leading-tight' : 'text-lg'}`}>{play.song_title}</p>
+          {showPerformer && play?.username ? (
+            <UserIdentity
+              avatar={play.avatar}
+              username={play.username}
+              skillTitle={play.skill_title}
+              isHost={play.participant_role === 'owner'}
+              participantRole={play.participant_role}
+              className="mt-2"
+              compact={compact}
+            />
+          ) : null}
           {compact ? (
             <div className="mt-2 flex flex-1 flex-col">
               <div className="flex items-start gap-2">
@@ -2386,11 +2543,18 @@ export default function LivePage() {
   const [activeEmoteTrayTab, setActiveEmoteTrayTab] = useState('emotes');
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [playModeFilter, setPlayModeFilter] = useState('All');
+  const [playUserFilter, setPlayUserFilter] = useState('all');
   const [playPassOnly, setPlayPassOnly] = useState(true);
   const [songSearch, setSongSearch] = useState('');
   const deferredSongSearch = useDeferredValue(songSearch);
+  const [requestTargetUserId, setRequestTargetUserId] = useState('');
   const [songResults, setSongResults] = useState([]);
   const [searchingSongs, setSearchingSongs] = useState(false);
+  const [cohostSearch, setCohostSearch] = useState('');
+  const deferredCohostSearch = useDeferredValue(cohostSearch);
+  const [cohostResults, setCohostResults] = useState([]);
+  const [searchingCohosts, setSearchingCohosts] = useState(false);
+  const [cohostActionUserId, setCohostActionUserId] = useState('');
   const [voteModeFilter, setVoteModeFilter] = useState('All');
   const [voteMinLevel, setVoteMinLevel] = useState('16');
   const [voteMaxLevel, setVoteMaxLevel] = useState('19');
@@ -2444,6 +2608,16 @@ export default function LivePage() {
   const currentVote = snapshot?.active_vote || null;
   const lastPlay = snapshot?.last_play || null;
   const youtubeId = String(live?.youtube_video_id || '').trim() || getYouTubeId(live?.stream_url || '');
+  const participants = Array.isArray(live?.participants) ? live.participants : [];
+  const activeParticipants = useMemo(
+    () => participants.filter((participant) => String(participant?.status || 'active').trim() !== 'left'),
+    [participants]
+  );
+  const performerParticipants = useMemo(
+    () => activeParticipants.filter((participant) => participant?.role === 'owner' || participant?.role === 'cohost'),
+    [activeParticipants]
+  );
+  const showPerformerLabels = performerParticipants.length > 1;
   const requestsEnabled = live?.requests_enabled !== false;
   const requestModeFilter = normalizeRequestModeFilterValue(live?.request_mode_filter);
   const requestMaxLevel = normalizeRequestMaxLevelValue(live?.request_max_level);
@@ -2456,6 +2630,11 @@ export default function LivePage() {
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
   const isHost = !!live?.is_host;
+  const isParticipant = !!live?.is_participant;
+  const requestTargetParticipant = useMemo(
+    () => performerParticipants.find((participant) => participant.user_id === requestTargetUserId) || null,
+    [performerParticipants, requestTargetUserId]
+  );
   const followedDirectorySessions = useMemo(
     () => directorySessions.filter((item) => !!item?.is_following),
     [directorySessions]
@@ -2507,6 +2686,56 @@ export default function LivePage() {
     setShowEmoteTray(false);
     setActiveEmoteTrayTab('emotes');
   }, [activeSessionId, live?.status]);
+
+  useEffect(() => {
+    if (!requestTargetUserId) return;
+    if (!performerParticipants.some((participant) => participant.user_id === requestTargetUserId)) {
+      setRequestTargetUserId('');
+    }
+  }, [performerParticipants, requestTargetUserId]);
+
+  useEffect(() => {
+    if (playUserFilter === 'all') return;
+    if (!performerParticipants.some((participant) => participant.user_id === playUserFilter)) {
+      setPlayUserFilter('all');
+    }
+  }, [performerParticipants, playUserFilter]);
+
+  useEffect(() => {
+    if (!isHost || !activeSessionId) {
+      setCohostResults([]);
+      setSearchingCohosts(false);
+      return undefined;
+    }
+
+    const query = deferredCohostSearch.trim();
+    if (query.length < 1) {
+      setCohostResults([]);
+      setSearchingCohosts(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setSearchingCohosts(true);
+    searchUsers(query)
+      .then((rows) => {
+        if (cancelled) return;
+        const blockedIds = new Set(performerParticipants.map((participant) => participant.user_id));
+        startTransition(() => setCohostResults(
+          (Array.isArray(rows) ? rows : []).filter((row) => row?.id && !blockedIds.has(row.id))
+        ));
+      })
+      .catch(() => {
+        if (!cancelled) setCohostResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSearchingCohosts(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, deferredCohostSearch, isHost, performerParticipants]);
 
   const loadYoutubeStatus = async () => {
     if (!user) return null;
@@ -3426,39 +3655,44 @@ export default function LivePage() {
     const trimmedSearch = deferredSongSearch.trim();
     const shortcut = parseRequestShortcutSearch(trimmedSearch);
     const hasShortcutModeSearch = !!shortcut;
-    const shortcutNeedsHostScores = hasShortcutModeSearch && (!requestShowScores || !live?.host_user_id);
+    const scoreParticipants = performerParticipants;
+    const shortcutNeedsParticipantScores = hasShortcutModeSearch && (!requestShowScores || scoreParticipants.length === 0);
     const shortcutTextSearch = shortcut?.search || '';
     if (!trimmedSearch || (!hasShortcutModeSearch && trimmedSearch.length < 2)) {
       setSongResults([]);
       setSearchingSongs(false);
       return undefined;
     }
-    if (shortcutNeedsHostScores) {
+    if (shortcutNeedsParticipantScores) {
       setSongResults([]);
       setSearchingSongs(false);
       return undefined;
     }
     let cancelled = false;
     setSearchingSongs(true);
-    const params = {};
-    if (hasShortcutModeSearch) {
-      params.mode = shortcut.mode;
-      params.level = shortcut.level;
-      if (shortcutTextSearch) {
-        params.search = shortcutTextSearch;
-      }
-      params.user_id = live.host_user_id;
-    } else {
-      params.search = trimmedSearch;
-    }
-    if (!hasShortcutModeSearch && requestShowScores && live?.host_user_id) {
-      params.user_id = live.host_user_id;
-    }
-    getSongLibrary(params)
-      .then((data) => {
+    const params = hasShortcutModeSearch
+      ? {
+          mode: shortcut.mode,
+          level: shortcut.level,
+          ...(shortcutTextSearch ? { search: shortcutTextSearch } : {}),
+        }
+      : {
+          search: trimmedSearch,
+        };
+    const baseOptions = hasShortcutModeSearch ? { unlimited: true } : undefined;
+
+    const requestPromise = requestShowScores && scoreParticipants.length > 0
+      ? Promise.all(scoreParticipants.map((participant) => getSongLibrary({
+          ...params,
+          user_id: participant.user_id,
+        }))).then((payloads) => mergeParticipantSongResults(payloads, scoreParticipants, baseOptions))
+      : getSongLibrary(params).then((data) => normalizeSongResults(data, baseOptions));
+
+    requestPromise
+      .then((results) => {
         if (cancelled) return;
         const filteredResults = filterSongResultsForRequests(
-          normalizeSongResults(data, hasShortcutModeSearch ? { unlimited: true } : undefined),
+          results,
           requestModeFilter,
           requestMaxLevel
         );
@@ -3471,7 +3705,7 @@ export default function LivePage() {
         if (!cancelled) setSearchingSongs(false);
       });
     return () => { cancelled = true; };
-  }, [deferredSongSearch, live?.host_user_id, requestMaxLevel, requestModeFilter, requestShowScores]);
+  }, [deferredSongSearch, performerParticipants, requestMaxLevel, requestModeFilter, requestShowScores]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -3485,13 +3719,17 @@ export default function LivePage() {
       ? rows
       : rows.filter((play) => play.mode === playModeFilter);
 
+    if (playUserFilter !== 'all') {
+      filtered = filtered.filter((play) => play.user_id === playUserFilter);
+    }
+
     if (playPassOnly) {
       filtered = filtered.filter((play) => (parseInt(play.score, 10) || 0) > 0);
     }
 
     filtered.sort((a, b) => (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0));
     return filtered;
-  }, [snapshot?.plays, playModeFilter, playPassOnly]);
+  }, [playModeFilter, playPassOnly, playUserFilter, snapshot?.plays]);
 
   const requestLookup = useMemo(() => {
     const map = new Map();
@@ -3729,18 +3967,74 @@ export default function LivePage() {
   const handleLiveRequest = async (chart) => {
     if (!activeSessionId || viewerState.requests_blocked) return;
     try {
-      const data = await sendLiveRequest(activeSessionId, { chart_id: chart.chart_id });
+      const data = await sendLiveRequest(activeSessionId, {
+        chart_id: chart.chart_id,
+        target_user_id: requestTargetUserId || '',
+      });
       if (Array.isArray(data?.requests)) {
         replaceLiveRequests(data.requests);
       }
       if (data?.message) {
         appendLiveMessage(data.message, { markMessagesSeen: true });
       }
-      setStatusNote(`Requested ${chart.song_title} (${modeShort(chart.mode)}${chart.level}).`);
+      const targetParticipant = performerParticipants.find((participant) => participant.user_id === requestTargetUserId) || null;
+      setStatusNote(
+        `Requested ${chart.song_title} (${modeShort(chart.mode)}${chart.level})${targetParticipant?.username ? ` for ${targetParticipant.username}` : ''}.`
+      );
       setSongSearch('');
       setSongResults([]);
     } catch (err) {
       setError(err.message || 'Failed to send request');
+    }
+  };
+
+  const handleAddCohost = async (targetUser) => {
+    if (!activeSessionId || !targetUser?.id) return;
+    setCohostActionUserId(targetUser.id);
+    setError('');
+    try {
+      const data = await addLiveSessionCohost(activeSessionId, targetUser.id);
+      if (data?.snapshot) applySnapshot(data.snapshot, { markMessagesSeen: false });
+      if (data?.message) appendLiveMessage(data.message, { markMessagesSeen: true });
+      setCohostSearch('');
+      setCohostResults([]);
+      setStatusNote(`${targetUser.username || 'Player'} joined as a co-host.`);
+    } catch (err) {
+      setError(err.message || 'Failed to add co-host');
+    } finally {
+      setCohostActionUserId('');
+    }
+  };
+
+  const handleRemoveCohost = async (participant) => {
+    if (!activeSessionId || !participant?.user_id) return;
+    setCohostActionUserId(participant.user_id);
+    setError('');
+    try {
+      const data = await removeLiveSessionCohost(activeSessionId, participant.user_id);
+      if (data?.snapshot) applySnapshot(data.snapshot, { markMessagesSeen: false });
+      if (data?.message) appendLiveMessage(data.message, { markMessagesSeen: true });
+      setStatusNote(`${participant.username || 'Co-host'} left the room.`);
+    } catch (err) {
+      setError(err.message || 'Failed to remove co-host');
+    } finally {
+      setCohostActionUserId('');
+    }
+  };
+
+  const handleLeaveRoom = async () => {
+    if (!activeSessionId) return;
+    setCohostActionUserId(user?.id || 'leave');
+    setError('');
+    try {
+      const data = await leaveLiveSession(activeSessionId);
+      if (data?.snapshot) applySnapshot(data.snapshot, { markMessagesSeen: false });
+      if (data?.message) appendLiveMessage(data.message, { markMessagesSeen: true });
+      setStatusNote('You left the co-host lineup.');
+    } catch (err) {
+      setError(err.message || 'Failed to leave live session');
+    } finally {
+      setCohostActionUserId('');
     }
   };
 
@@ -4141,12 +4435,20 @@ export default function LivePage() {
           <p className="text-[11px] font-display font-semibold text-gray-400">Songs this session</p>
           <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[320px]">
+        <div className={`grid w-full gap-2 sm:w-auto ${showPerformerLabels ? 'grid-cols-1 sm:min-w-[500px] sm:grid-cols-3' : 'grid-cols-2 sm:min-w-[320px]'}`}>
           <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field rounded-lg border border-piu-border/60 bg-piu-dark/60 ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
             <option>All</option>
             <option>Single</option>
             <option>Double</option>
           </select>
+          {showPerformerLabels ? (
+            <select value={playUserFilter} onChange={(e) => setPlayUserFilter(e.target.value)} className={`input-field rounded-lg border border-piu-border/60 bg-piu-dark/60 ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
+              <option value="all">All players</option>
+              {performerParticipants.map((participant) => (
+                <option key={participant.user_id} value={participant.user_id}>{participant.username}</option>
+              ))}
+            </select>
+          ) : null}
           <button
             type="button"
             onClick={() => setPlayPassOnly((prev) => !prev)}
@@ -4195,6 +4497,17 @@ export default function LivePage() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} truncate font-display font-bold leading-tight text-white`}>{play.song_title}</p>
+                  {showPerformerLabels && play?.username ? (
+                    <UserIdentity
+                      avatar={play.avatar}
+                      username={play.username}
+                      skillTitle={play.skill_title}
+                      isHost={play.participant_role === 'owner'}
+                      participantRole={play.participant_role}
+                      className="mt-1.5"
+                      compact={isCompactSongCardLayout}
+                    />
+                  ) : null}
                   <div className={`${isCompactSongCardLayout ? 'mt-2' : 'mt-3'}`}>
                     <div className={`flex items-baseline ${isCompactSongCardLayout ? 'gap-2' : 'gap-2.5'}`}>
                       <p
@@ -4264,7 +4577,7 @@ export default function LivePage() {
               type="button"
               onClick={() => handleUpdateRequestSettings(
                 { request_show_scores: !requestShowScores },
-                !requestShowScores ? 'Host grades are now visible in request search.' : 'Host grades are now hidden in request search.'
+                !requestShowScores ? 'Player scores are now visible in request search.' : 'Player scores are now hidden in request search.'
               )}
               disabled={savingRequestPolicy || live?.status !== 'live'}
               className={`rounded-md border px-3 py-1.5 text-[10px] font-display font-semibold ${
@@ -4317,6 +4630,41 @@ export default function LivePage() {
           </div>
         </div>
       ) : null}
+      {performerParticipants.length > 1 ? (
+        <div className="mt-3 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+          <p className="text-[11px] font-display font-semibold text-gray-300">Request target</p>
+          <p className="mt-1 text-xs text-gray-400">Leave it on any player, or aim the request at one co-host.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setRequestTargetUserId('')}
+              disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
+              className={`rounded-md border px-3 py-1.5 text-[10px] font-display font-semibold ${
+                !requestTargetUserId
+                  ? 'border-cyan-400/35 bg-cyan-500/12 text-cyan-100'
+                  : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+              } disabled:opacity-60`}
+            >
+              Any player
+            </button>
+            {performerParticipants.map((participant) => (
+              <button
+                key={participant.user_id}
+                type="button"
+                onClick={() => setRequestTargetUserId(participant.user_id)}
+                disabled={live?.status !== 'live' || viewerState.requests_blocked || (!requestsEnabled && !isHost)}
+                className={`rounded-md border px-3 py-1.5 text-[10px] font-display font-semibold ${
+                  requestTargetUserId === participant.user_id
+                    ? 'border-fuchsia-400/35 bg-fuchsia-500/12 text-fuchsia-100'
+                    : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+                } disabled:opacity-60`}
+              >
+                {participant.username}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <input
         value={songSearch}
         onChange={(e) => setSongSearch(e.target.value)}
@@ -4336,15 +4684,16 @@ export default function LivePage() {
       />
       {live?.status === 'live' ? (
         <p className="mt-2 text-[11px] text-gray-400">
-          Host is taking {requestPolicySummary}.
+          Room is taking {requestPolicySummary}.
           {requestShowScores
-            ? ' Host grades are shown on chart buttons. Use /d22 or /s21 to browse one level like the tiers page.'
-            : ' Host grades are hidden.'}
+            ? ' Player scores are shown on chart buttons. Use /d22 or /s21 to browse one level like the tiers page.'
+            : ' Player scores are hidden.'}
+          {requestTargetParticipant?.username ? ` Requests will target ${requestTargetParticipant.username}.` : ''}
         </p>
       ) : null}
-      {requestShortcutSearch && (!requestShowScores || !live?.host_user_id) ? (
+      {requestShortcutSearch && (!requestShowScores || performerParticipants.length === 0) ? (
         <p className="mt-2 text-[11px] text-amber-200">
-          Slash chart search is only available when the host shares their best scores.
+          Slash chart search is only available when player scores are visible in this room.
         </p>
       ) : null}
       {!isHost && !requestsEnabled && live?.status === 'live' ? (
@@ -4403,15 +4752,15 @@ export default function LivePage() {
           />
         )) : null}
         {!searchingSongs && (
-          (requestShortcutSearch && (!requestShowScores || !live?.host_user_id))
+          (requestShortcutSearch && (!requestShowScores || performerParticipants.length === 0))
             ? null
             : ((requestShortcutSearch && shortcutChartResults.length === 0)
               || (!requestShortcutSearch && deferredSongSearch.trim().length >= 2 && songResults.length === 0))
         ) ? (
           <p className="rounded-xl border border-piu-border/60 bg-black/10 px-3 py-4 text-center text-sm text-gray-500">
             {requestShortcutSearch
-              ? 'No charts matched that mode and level within the host\'s request settings.'
-              : 'No songs matched that search within the host\'s request settings.'}
+              ? 'No charts matched that mode and level within this room\'s request settings.'
+              : 'No songs matched that search within this room\'s request settings.'}
           </p>
         ) : null}
       </div>
@@ -4428,12 +4777,14 @@ export default function LivePage() {
                     username={request.username}
                     skillTitle={request.skill_title}
                     isHost={request.is_host}
+                    participantRole={request.participant_role}
                     className="mb-2"
                   />
                   <p className="text-xs font-display font-bold text-white">{request.song_title}</p>
                   <p className="text-[11px] text-gray-400">
                     {modeShort(request.mode)}{request.level}
                     {request.queue_position ? ` • Queue #${request.queue_position}` : ''}
+                    {request.target_username ? ` • Target ${request.target_username}` : ''}
                   </p>
                 </div>
                 <span className={`shrink-0 rounded-md px-2.5 py-1 text-[10px] font-display font-semibold ${requestMeta.pill}`}>
@@ -4595,6 +4946,7 @@ export default function LivePage() {
         live={live}
         requestInfo={nowPlayingRequestInfo}
         onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+        showPerformer={showPerformerLabels}
       />
       {desktopInteractionsSection}
     </div>
@@ -4839,6 +5191,7 @@ export default function LivePage() {
                       username={msg.username}
                       skillTitle={msg.skill_title}
                       isHost={msg.is_host}
+                      participantRole={msg.participant_role}
                       compact={isMobileChatLayout}
                       dense={isDesktopViewport}
                     />
@@ -5083,14 +5436,34 @@ export default function LivePage() {
               ) : null}
             </div>
             <p className={`text-sm text-gray-400 mt-1 ${isDesktopViewport ? '' : 'hidden'}`}>
-              {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
+              {live?.host?.username
+                ? `Hosted by ${live.host.username}${performerParticipants.length > 1 ? ` + ${performerParticipants.length - 1} co-host${performerParticipants.length - 1 === 1 ? '' : 's'}` : ''}`
+                : 'Live session'}
               {live?.status === 'ended' ? ' • ended' : ' • live'}
             </p>
+            {performerParticipants.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {performerParticipants.map((participant) => (
+                  <div key={participant.user_id} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2.5 py-2">
+                    <UserIdentity
+                      avatar={participant.avatar}
+                      username={participant.username}
+                      skillTitle={participant.skill_title}
+                      isHost={participant.role === 'owner'}
+                      participantRole={participant.role}
+                      compact
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="flex w-full flex-col items-start gap-1.5 md:w-auto md:max-w-[30rem] md:shrink-0 md:items-end">
             {!isDesktopViewport ? (
               <p className="text-xs text-left text-gray-400">
-                {live?.host?.username ? `Hosted by ${live.host.username}` : 'Live session'}
+                {live?.host?.username
+                  ? `Hosted by ${live.host.username}${performerParticipants.length > 1 ? ` + ${performerParticipants.length - 1} co-host${performerParticipants.length - 1 === 1 ? '' : 's'}` : ''}`
+                  : 'Live session'}
                 {syncLabel ? ` • ${syncLabel}` : ''}
               </p>
             ) : null}
@@ -5121,6 +5494,16 @@ export default function LivePage() {
                   </button>
                 </>
               )}
+              {!isHost && isParticipant && live?.status === 'live' ? (
+                <button
+                  type="button"
+                  onClick={handleLeaveRoom}
+                  disabled={cohostActionUserId === (user?.id || 'leave')}
+                  className="btn-secondary px-3 py-1.5 text-xs"
+                >
+                  {cohostActionUserId === (user?.id || 'leave') ? 'Leaving...' : 'Leave room'}
+                </button>
+              ) : null}
             </div>
             {liveStatusText || isHost ? (
               <div className="hidden w-full md:block md:max-w-[28rem]">
@@ -5242,6 +5625,79 @@ export default function LivePage() {
 
         {statusNote ? <p className="mt-3 text-sm text-cyan-200">{statusNote}</p> : null}
         {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
+        {isHost && live?.status === 'live' ? (
+          <div className="mt-3 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-display font-semibold text-gray-300">Co-hosts</p>
+                <p className="mt-1 text-xs text-gray-400">
+                  Add other Shinsa players who are sharing the machine and stream so their plays sync into this same room.
+                </p>
+              </div>
+              <span className="rounded-md border border-piu-border/60 bg-piu-card/70 px-3 py-1 text-[10px] font-display font-semibold text-gray-300">
+                {Math.max(0, performerParticipants.length - 1)} co-host{performerParticipants.length - 1 === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {performerParticipants.filter((participant) => participant.role === 'cohost').map((participant) => (
+                <div key={participant.user_id} className="flex items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-card/70 px-2.5 py-2">
+                  <UserIdentity
+                    avatar={participant.avatar}
+                    username={participant.username}
+                    skillTitle={participant.skill_title}
+                    isHost={false}
+                    participantRole={participant.role}
+                    compact
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCohost(participant)}
+                    disabled={cohostActionUserId === participant.user_id}
+                    className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-2 py-1 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/50 hover:text-white disabled:opacity-60"
+                  >
+                    {cohostActionUserId === participant.user_id ? 'Removing...' : 'Remove'}
+                  </button>
+                </div>
+              ))}
+              {performerParticipants.filter((participant) => participant.role === 'cohost').length === 0 ? (
+                <p className="text-xs text-gray-500">No co-hosts added yet.</p>
+              ) : null}
+            </div>
+            <div className="mt-3">
+              <input
+                value={cohostSearch}
+                onChange={(e) => setCohostSearch(e.target.value)}
+                className="input-field w-full"
+                placeholder="Search Shinsa users to add as co-hosts"
+                maxLength={80}
+              />
+              {searchingCohosts ? <p className="mt-2 text-[11px] text-gray-500">Searching players...</p> : null}
+              {!searchingCohosts && cohostSearch.trim().length > 0 && cohostResults.length === 0 ? (
+                <p className="mt-2 text-[11px] text-gray-500">No available players matched that search.</p>
+              ) : null}
+              <div className="mt-3 space-y-2">
+                {cohostResults.slice(0, 6).map((targetUser) => (
+                  <div key={targetUser.id} className="flex items-center justify-between gap-3 rounded-lg border border-piu-border/60 bg-piu-card/70 px-3 py-2">
+                    <UserIdentity
+                      avatar={targetUser.avatar}
+                      username={targetUser.username}
+                      skillTitle={targetUser.skill_title}
+                      isHost={false}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddCohost(targetUser)}
+                      disabled={cohostActionUserId === targetUser.id}
+                      className="btn-secondary px-3 py-1.5 text-[11px]"
+                    >
+                      {cohostActionUserId === targetUser.id ? 'Adding...' : 'Add co-host'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
         {showCompactStreamEditor ? (
           <StreamUrlEditorCard
             streamUrl={editStreamUrl}
@@ -5375,6 +5831,7 @@ export default function LivePage() {
                 requestInfo={nowPlayingRequestInfo}
                 onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
                 compact
+                showPerformer={showPerformerLabels}
               />
               {desktopInteractionsSection}
             </div>
