@@ -5590,7 +5590,7 @@ export default function LivePage() {
                     </div>
                   ))}
                   {showCohostControl ? (
-                    <div className="ml-auto flex min-w-[7.25rem] shrink-0">
+                    <div className="flex min-w-[7.25rem] shrink-0">
                       {showCohostManager ? (
                         <div className="flex w-[11.5rem] items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-2 text-cyan-100 shadow-[0_2px_8px_rgba(34,211,238,0.14)] sm:w-[13rem] lg:w-[16rem] xl:w-[18rem]">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
