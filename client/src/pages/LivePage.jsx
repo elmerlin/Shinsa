@@ -1985,6 +1985,76 @@ function UserIdentity({ avatar, username, skillTitle, isHost, participantRole = 
   );
 }
 
+function CohostParticipantList({ participants, actionUserId, onRemove, compact = false }) {
+  const rows = Array.isArray(participants) ? participants : [];
+  if (rows.length === 0) return null;
+
+  return (
+    <div className={compact ? 'space-y-2' : 'flex flex-wrap gap-2'}>
+      {rows.map((participant) => (
+        <div
+          key={participant.user_id}
+          className={`flex items-center justify-between gap-2 rounded-lg border border-piu-border/60 bg-piu-card/70 ${
+            compact ? 'px-3 py-2' : 'px-2.5 py-2'
+          }`}
+        >
+          <UserIdentity
+            avatar={participant.avatar}
+            username={participant.username}
+            skillTitle={participant.skill_title}
+            isHost={false}
+            participantRole={participant.role}
+            compact
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(participant)}
+            disabled={actionUserId === participant.user_id}
+            className={`rounded-md border border-piu-border/60 bg-piu-dark/80 font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/50 hover:text-white disabled:opacity-60 ${
+              compact ? 'px-2.5 py-1 text-[10px]' : 'px-2 py-1 text-[10px]'
+            }`}
+          >
+            {actionUserId === participant.user_id ? 'Removing...' : 'Remove'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CohostSearchResults({ results, actionUserId, onAdd, compact = false }) {
+  const rows = Array.isArray(results) ? results.slice(0, 6) : [];
+  if (rows.length === 0) return null;
+
+  return (
+    <div className={compact ? 'space-y-2' : 'mt-3 space-y-2'}>
+      {rows.map((targetUser) => (
+        <div
+          key={targetUser.id}
+          className={`flex items-center justify-between gap-3 rounded-lg border border-piu-border/60 bg-piu-card/70 ${
+            compact ? 'px-2.5 py-2' : 'px-3 py-2'
+          }`}
+        >
+          <UserIdentity
+            avatar={targetUser.avatar}
+            username={targetUser.username}
+            skillTitle={targetUser.skill_title}
+            isHost={false}
+          />
+          <button
+            type="button"
+            onClick={() => onAdd(targetUser)}
+            disabled={actionUserId === targetUser.id}
+            className={`btn-secondary ${compact ? 'px-2.5 py-1.5 text-[10px]' : 'px-3 py-1.5 text-[11px]'}`}
+          >
+            {actionUserId === targetUser.id ? 'Adding...' : 'Add co-host'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, showPerformer = false }) {
   const requestStatus = requestInfo
     ? (requestInfo.queuedCount > 0
@@ -2616,6 +2686,7 @@ export default function LivePage() {
   const chatInputRef = useRef(null);
   const desktopVideoFrameRef = useRef(null);
   const mobileVideoShellRef = useRef(null);
+  const cohostSearchInputRef = useRef(null);
   const reactionIdRef = useRef(0);
   const seenMessageIdsRef = useRef(new Set());
   const presenceIdRef = useRef('');
@@ -2657,6 +2728,7 @@ export default function LivePage() {
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
   const isHost = !!live?.is_host;
   const isParticipant = !!live?.is_participant;
+  const showCohostControl = isHost && live?.status === 'live';
   const requestTargetParticipant = useMemo(
     () => performerParticipants.find((participant) => participant.user_id === requestTargetUserId) || null,
     [performerParticipants, requestTargetUserId]
@@ -2762,6 +2834,15 @@ export default function LivePage() {
       cancelled = true;
     };
   }, [activeSessionId, deferredCohostSearch, isHost, performerParticipants, showCohostManager]);
+
+  useEffect(() => {
+    if (!showCohostManager || !cohostSearchInputRef.current) return;
+    try {
+      cohostSearchInputRef.current.focus({ preventScroll: true });
+    } catch {
+      cohostSearchInputRef.current.focus();
+    }
+  }, [showCohostManager]);
 
   useEffect(() => {
     if (isHost && live?.status === 'live') return;
@@ -5494,19 +5575,98 @@ export default function LivePage() {
               {live?.status === 'ended' ? ' • ended' : ' • live'}
             </p>
             {performerParticipants.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {performerParticipants.map((participant) => (
-                  <div key={participant.user_id} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2.5 py-2">
-                    <UserIdentity
-                      avatar={participant.avatar}
-                      username={participant.username}
-                      skillTitle={participant.skill_title}
-                      isHost={participant.role === 'owner'}
-                      participantRole={participant.role}
-                      compact
-                    />
+              <div className="mt-3">
+                <div className="flex flex-wrap items-start gap-2">
+                  {performerParticipants.map((participant) => (
+                    <div key={participant.user_id} className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2.5 py-2">
+                      <UserIdentity
+                        avatar={participant.avatar}
+                        username={participant.username}
+                        skillTitle={participant.skill_title}
+                        isHost={participant.role === 'owner'}
+                        participantRole={participant.role}
+                        compact
+                      />
+                    </div>
+                  ))}
+                  {showCohostControl ? (
+                    <div className="ml-auto flex min-w-[7.25rem] shrink-0">
+                      {showCohostManager ? (
+                        <div className="flex w-[11.5rem] items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-2 text-cyan-100 shadow-[0_2px_8px_rgba(34,211,238,0.14)] sm:w-[13rem] lg:w-[16rem] xl:w-[18rem]">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="m20 20-3.5-3.5" />
+                          </svg>
+                          <input
+                            ref={cohostSearchInputRef}
+                            value={cohostSearch}
+                            onChange={(e) => setCohostSearch(e.target.value)}
+                            className="min-w-0 flex-1 bg-transparent text-[11px] font-medium text-white placeholder:text-cyan-100/55 focus:outline-none"
+                            placeholder="Search player"
+                            maxLength={80}
+                            aria-label="Search player for co-host"
+                          />
+                          <button
+                            type="button"
+                            onClick={toggleCohostManager}
+                            className="rounded-md border border-white/10 bg-black/15 p-1 text-cyan-100/80 transition-colors hover:text-white"
+                            aria-label="Close co-host search"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M6 6 18 18" />
+                              <path d="M18 6 6 18" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={toggleCohostManager}
+                          className="inline-flex w-full items-center justify-between gap-2 rounded-lg border border-piu-border/60 bg-piu-card/70 px-2.5 py-2 text-left transition-colors hover:border-cyan-400/35 hover:text-white"
+                        >
+                          <span className="text-[11px] font-display font-semibold text-gray-200">Co-host</span>
+                          <span className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-1.5 py-0.5 text-[10px] font-display font-semibold text-gray-300">
+                            {cohostParticipants.length}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                {showCohostControl && showCohostManager ? (
+                  <div className="mt-2 w-full max-w-[32rem] rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[11px] font-display font-semibold text-gray-300">Co-hosts</p>
+                      <span className="rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold text-gray-300">
+                        {cohostParticipants.length} active
+                      </span>
+                    </div>
+                    {cohostParticipants.length > 0 ? (
+                      <div className="mt-2">
+                        <CohostParticipantList
+                          participants={cohostParticipants}
+                          actionUserId={cohostActionUserId}
+                          onRemove={handleRemoveCohost}
+                          compact
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-gray-500">No co-hosts yet. Search for a player above to add one.</p>
+                    )}
+                    {searchingCohosts ? <p className="mt-2 text-[11px] text-gray-500">Searching players...</p> : null}
+                    {!searchingCohosts && cohostSearch.trim().length > 0 && cohostResults.length === 0 ? (
+                      <p className="mt-2 text-[11px] text-gray-500">No available players matched that search.</p>
+                    ) : null}
+                    <div className="mt-2">
+                      <CohostSearchResults
+                        results={cohostResults}
+                        actionUserId={cohostActionUserId}
+                        onAdd={handleAddCohost}
+                        compact
+                      />
+                    </div>
                   </div>
-                ))}
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -5677,94 +5837,6 @@ export default function LivePage() {
 
         {statusNote ? <p className="mt-3 text-sm text-cyan-200">{statusNote}</p> : null}
         {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
-        {isHost && live?.status === 'live' ? (
-          <div className="mt-3 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] font-display font-semibold text-gray-300">Co-hosts</p>
-                  <span className="rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold text-gray-300">
-                    {cohostParticipants.length} active
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-gray-400">
-                  Add another player sharing this machine and stream when you need them.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={toggleCohostManager}
-                className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
-                  showCohostManager
-                    ? 'border-piu-accent/50 bg-piu-accent/15 text-piu-accent'
-                    : 'border-piu-border/60 bg-piu-card/70 text-gray-200 hover:border-piu-accent/50 hover:text-white'
-                }`}
-              >
-                {showCohostManager ? 'Close' : 'Add co-host'}
-              </button>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {cohostParticipants.map((participant) => (
-                <div key={participant.user_id} className="flex items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-card/70 px-2.5 py-2">
-                  <UserIdentity
-                    avatar={participant.avatar}
-                    username={participant.username}
-                    skillTitle={participant.skill_title}
-                    isHost={false}
-                    participantRole={participant.role}
-                    compact
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCohost(participant)}
-                    disabled={cohostActionUserId === participant.user_id}
-                    className="rounded-md border border-piu-border/60 bg-piu-dark/80 px-2 py-1 text-[10px] font-display font-semibold text-gray-300 transition-colors hover:border-piu-accent/50 hover:text-white disabled:opacity-60"
-                  >
-                    {cohostActionUserId === participant.user_id ? 'Removing...' : 'Remove'}
-                  </button>
-                </div>
-              ))}
-              {cohostParticipants.length === 0 ? (
-                <p className="text-xs text-gray-500">No co-hosts added yet.</p>
-              ) : null}
-            </div>
-            {showCohostManager ? (
-              <div className="mt-3 border-t border-piu-border/50 pt-3">
-                <input
-                  value={cohostSearch}
-                  onChange={(e) => setCohostSearch(e.target.value)}
-                  className="input-field w-full sm:max-w-sm"
-                  placeholder="Search a Shinsa user"
-                  maxLength={80}
-                />
-                {searchingCohosts ? <p className="mt-2 text-[11px] text-gray-500">Searching players...</p> : null}
-                {!searchingCohosts && cohostSearch.trim().length > 0 && cohostResults.length === 0 ? (
-                  <p className="mt-2 text-[11px] text-gray-500">No available players matched that search.</p>
-                ) : null}
-                <div className="mt-3 space-y-2">
-                  {cohostResults.slice(0, 6).map((targetUser) => (
-                    <div key={targetUser.id} className="flex items-center justify-between gap-3 rounded-lg border border-piu-border/60 bg-piu-card/70 px-3 py-2">
-                      <UserIdentity
-                        avatar={targetUser.avatar}
-                        username={targetUser.username}
-                        skillTitle={targetUser.skill_title}
-                        isHost={false}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleAddCohost(targetUser)}
-                        disabled={cohostActionUserId === targetUser.id}
-                        className="btn-secondary px-3 py-1.5 text-[11px]"
-                      >
-                        {cohostActionUserId === targetUser.id ? 'Adding...' : 'Add co-host'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
         {showCompactStreamEditor ? (
           <StreamUrlEditorCard
             streamUrl={editStreamUrl}
