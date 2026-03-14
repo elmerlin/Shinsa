@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import PiuChartJacket from './PiuChartJacket';
 import { getCountryFlag } from './PlayerRegistration';
+import { parseGrade } from '../utils/grades';
 
 function modeShort(mode) {
   if (mode === 'Single') return 'S';
@@ -30,6 +31,39 @@ function getStreamHost(url) {
   }
 }
 
+function getRank(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
+  return { label: 'F', color: 'text-gray-600' };
+}
+
+function getGradeColor(grade, score = 0) {
+  const normalized = parseGrade(grade).normalized;
+  if (normalized) {
+    if (normalized.includes('SSS')) return 'text-sky-300';
+    if (normalized.includes('SS')) return 'text-piu-gold';
+    if (normalized.includes('S')) return 'text-amber-400';
+    if (normalized.includes('AAA')) return 'text-piu-silver';
+    if (normalized.includes('AA')) return 'text-piu-bronze';
+    if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
+  }
+  return getRank(score).color;
+}
+
 export default function LiveDirectoryCard({ item, className = '', compact = false }) {
   if (!item?.session) return null;
 
@@ -39,6 +73,9 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
   const requestCounts = item.request_counts || { open: 0, queued: 0, played: 0, skipped: 0 };
   const activeVote = item.active_vote || null;
   const streamHost = getStreamHost(session.stream_url);
+  const lastPlayScore = parseInt(lastPlay?.score, 10) || 0;
+  const parsedLastPlayGrade = parseGrade(lastPlay?.grade, lastPlayScore > 0 ? getRank(lastPlayScore).label : '');
+  const displayLastPlayGrade = parsedLastPlayGrade.display || (lastPlayScore > 0 ? getRank(lastPlayScore).label : '-');
   const cardClass = compact
     ? 'border-piu-border/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.05),transparent_34%),linear-gradient(180deg,rgba(20,20,40,0.98),rgba(13,13,32,0.97))] shadow-[0_14px_32px_rgba(3,7,18,0.24)] hover:border-piu-border hover:shadow-[0_18px_38px_rgba(3,7,18,0.28)]'
     : 'border-piu-border/70 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.10),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(255,215,0,0.08),transparent_32%),linear-gradient(180deg,rgba(20,20,40,0.98),rgba(13,13,32,0.96))] shadow-[0_18px_44px_rgba(3,7,18,0.34)] hover:border-piu-accent/35 hover:shadow-[0_24px_52px_rgba(255,51,102,0.14)]';
@@ -55,7 +92,7 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
   const skillBadgeClass = compact
     ? 'border-piu-border/60 bg-piu-dark/70 text-gray-200'
     : 'border-piu-gold/20 bg-piu-gold/10 text-amber-100';
-  const gradeClass = compact ? 'text-white' : 'text-amber-100';
+  const gradeClass = `${getGradeColor(displayLastPlayGrade, lastPlayScore)} ${parsedLastPlayGrade.isBroken ? 'grade-broken' : ''}`.trim();
   const outerRadiusClass = compact ? 'rounded-xl' : 'rounded-[28px]';
   const avatarRadiusClass = compact ? 'rounded-xl' : 'rounded-2xl';
   const panelRadiusClass = compact ? 'rounded-xl' : 'rounded-2xl';
@@ -127,8 +164,10 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
                 <p className="truncate text-sm font-display font-bold text-white">{lastPlay.song_title}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
                   <span>{modeShort(lastPlay.mode)}{lastPlay.level}</span>
-                  <span className={`font-display font-bold ${gradeClass}`}>{lastPlay.grade || '-'}</span>
-                  <span>{(parseInt(lastPlay.score, 10) || 0).toLocaleString()}</span>
+                  <span className={`font-display font-bold ${gradeClass}`} data-grade={displayLastPlayGrade}>
+                    {displayLastPlayGrade}
+                  </span>
+                  <span>{lastPlayScore.toLocaleString()}</span>
                   {lastPlay.pumbility_gain > 0 ? (
                     <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-display font-bold text-emerald-200">
                       +{lastPlay.pumbility_gain} p
