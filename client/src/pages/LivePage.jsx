@@ -43,7 +43,8 @@ import {
   getReactionBurstColors,
   tokenizeLiveMessage,
 } from '../utils/liveEmotes';
-import { STICKER_GROUPS } from '../utils/stickers';
+import { renderFormattedText } from '../utils/formatText';
+import { isStickerOnlyMessage, STICKER_GROUPS } from '../utils/stickers';
 import {
   getLiveOverlaySceneOptions,
   getLiveOverlayOutputSpec,
@@ -663,18 +664,38 @@ function MessageBody({ entry, tone, compact = false, dense = false }) {
   const segments = tokenizeLiveMessage(message);
   const textSizeClass = compact ? 'text-[12px]' : dense ? 'text-[13px]' : 'text-sm';
   const marginTopClass = compact || dense ? 'mt-0.5' : 'mt-1';
+  const messageContent = renderFormattedText(message);
   if (segments.length === 0) {
-    return <p className={`${marginTopClass} w-full max-w-full overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>{message}</p>;
+    if (isStickerOnlyMessage(message)) {
+      return (
+        <div className={`${marginTopClass} w-full max-w-full overflow-hidden ${tone.bodyClass}`}>
+          {messageContent}
+        </div>
+      );
+    }
+    return (
+      <p className={`${marginTopClass} w-full max-w-full overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>
+        {messageContent}
+      </p>
+    );
   }
 
   return (
-    <p className={`${marginTopClass} flex w-full max-w-full min-w-0 flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'} overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>
+    <div className={`${marginTopClass} flex w-full max-w-full min-w-0 flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'} overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${textSizeClass} ${tone.bodyClass}`}>
       {segments.map((segment, idx) => (
-        segment.type === 'emote'
-          ? <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
-          : <span key={`text-${idx}`} className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{segment.text}</span>
+        segment.type === 'emote' ? (
+          <LiveEmote key={`${segment.emote.token}-${idx}`} emote={segment.emote} size="inline" />
+        ) : isStickerOnlyMessage(segment.text) ? (
+          <div key={`text-${idx}`} className="min-w-0 max-w-full overflow-hidden">
+            {renderFormattedText(segment.text)}
+          </div>
+        ) : (
+          <span key={`text-${idx}`} className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {renderFormattedText(segment.text)}
+          </span>
+        )
       ))}
-    </p>
+    </div>
   );
 }
 
@@ -2552,6 +2573,7 @@ export default function LivePage() {
   const [searchingSongs, setSearchingSongs] = useState(false);
   const [cohostSearch, setCohostSearch] = useState('');
   const deferredCohostSearch = useDeferredValue(cohostSearch);
+  const [showCohostManager, setShowCohostManager] = useState(false);
   const [cohostResults, setCohostResults] = useState([]);
   const [searchingCohosts, setSearchingCohosts] = useState(false);
   const [cohostActionUserId, setCohostActionUserId] = useState('');
@@ -2616,6 +2638,10 @@ export default function LivePage() {
   const performerParticipants = useMemo(
     () => activeParticipants.filter((participant) => participant?.role === 'owner' || participant?.role === 'cohost'),
     [activeParticipants]
+  );
+  const cohostParticipants = useMemo(
+    () => performerParticipants.filter((participant) => participant?.role === 'cohost'),
+    [performerParticipants]
   );
   const showPerformerLabels = performerParticipants.length > 1;
   const requestsEnabled = live?.requests_enabled !== false;
@@ -2702,7 +2728,7 @@ export default function LivePage() {
   }, [performerParticipants, playUserFilter]);
 
   useEffect(() => {
-    if (!isHost || !activeSessionId) {
+    if (!isHost || !activeSessionId || !showCohostManager) {
       setCohostResults([]);
       setSearchingCohosts(false);
       return undefined;
@@ -2735,7 +2761,15 @@ export default function LivePage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionId, deferredCohostSearch, isHost, performerParticipants]);
+  }, [activeSessionId, deferredCohostSearch, isHost, performerParticipants, showCohostManager]);
+
+  useEffect(() => {
+    if (isHost && live?.status === 'live') return;
+    setShowCohostManager(false);
+    setCohostSearch('');
+    setCohostResults([]);
+    setSearchingCohosts(false);
+  }, [isHost, live?.status]);
 
   const loadYoutubeStatus = async () => {
     if (!user) return null;
@@ -3998,6 +4032,7 @@ export default function LivePage() {
       const data = await addLiveSessionCohost(activeSessionId, targetUser.id);
       if (data?.snapshot) applySnapshot(data.snapshot, { markMessagesSeen: false });
       if (data?.message) appendLiveMessage(data.message, { markMessagesSeen: true });
+      setShowCohostManager(false);
       setCohostSearch('');
       setCohostResults([]);
       setStatusNote(`${targetUser.username || 'Player'} joined as a co-host.`);
@@ -4038,6 +4073,17 @@ export default function LivePage() {
     } finally {
       setCohostActionUserId('');
     }
+  };
+
+  const toggleCohostManager = () => {
+    setShowCohostManager((current) => {
+      if (current) {
+        setCohostSearch('');
+        setCohostResults([]);
+        setSearchingCohosts(false);
+      }
+      return !current;
+    });
   };
 
   const handleCreateVote = async () => {
@@ -5634,18 +5680,31 @@ export default function LivePage() {
         {isHost && live?.status === 'live' ? (
           <div className="mt-3 rounded-lg border border-piu-border/60 bg-piu-dark/60 p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-display font-semibold text-gray-300">Co-hosts</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-display font-semibold text-gray-300">Co-hosts</p>
+                  <span className="rounded-md border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-semibold text-gray-300">
+                    {cohostParticipants.length} active
+                  </span>
+                </div>
                 <p className="mt-1 text-xs text-gray-400">
-                  Add other Shinsa players who are sharing the machine and stream so their plays sync into this same room.
+                  Add another player sharing this machine and stream when you need them.
                 </p>
               </div>
-              <span className="rounded-md border border-piu-border/60 bg-piu-card/70 px-3 py-1 text-[10px] font-display font-semibold text-gray-300">
-                {Math.max(0, performerParticipants.length - 1)} co-host{performerParticipants.length - 1 === 1 ? '' : 's'}
-              </span>
+              <button
+                type="button"
+                onClick={toggleCohostManager}
+                className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-semibold transition-colors ${
+                  showCohostManager
+                    ? 'border-piu-accent/50 bg-piu-accent/15 text-piu-accent'
+                    : 'border-piu-border/60 bg-piu-card/70 text-gray-200 hover:border-piu-accent/50 hover:text-white'
+                }`}
+              >
+                {showCohostManager ? 'Close' : 'Add co-host'}
+              </button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {performerParticipants.filter((participant) => participant.role === 'cohost').map((participant) => (
+              {cohostParticipants.map((participant) => (
                 <div key={participant.user_id} className="flex items-center gap-2 rounded-lg border border-piu-border/60 bg-piu-card/70 px-2.5 py-2">
                   <UserIdentity
                     avatar={participant.avatar}
@@ -5665,43 +5724,45 @@ export default function LivePage() {
                   </button>
                 </div>
               ))}
-              {performerParticipants.filter((participant) => participant.role === 'cohost').length === 0 ? (
+              {cohostParticipants.length === 0 ? (
                 <p className="text-xs text-gray-500">No co-hosts added yet.</p>
               ) : null}
             </div>
-            <div className="mt-3">
-              <input
-                value={cohostSearch}
-                onChange={(e) => setCohostSearch(e.target.value)}
-                className="input-field w-full"
-                placeholder="Search Shinsa users to add as co-hosts"
-                maxLength={80}
-              />
-              {searchingCohosts ? <p className="mt-2 text-[11px] text-gray-500">Searching players...</p> : null}
-              {!searchingCohosts && cohostSearch.trim().length > 0 && cohostResults.length === 0 ? (
-                <p className="mt-2 text-[11px] text-gray-500">No available players matched that search.</p>
-              ) : null}
-              <div className="mt-3 space-y-2">
-                {cohostResults.slice(0, 6).map((targetUser) => (
-                  <div key={targetUser.id} className="flex items-center justify-between gap-3 rounded-lg border border-piu-border/60 bg-piu-card/70 px-3 py-2">
-                    <UserIdentity
-                      avatar={targetUser.avatar}
-                      username={targetUser.username}
-                      skillTitle={targetUser.skill_title}
-                      isHost={false}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleAddCohost(targetUser)}
-                      disabled={cohostActionUserId === targetUser.id}
-                      className="btn-secondary px-3 py-1.5 text-[11px]"
-                    >
-                      {cohostActionUserId === targetUser.id ? 'Adding...' : 'Add co-host'}
-                    </button>
-                  </div>
-                ))}
+            {showCohostManager ? (
+              <div className="mt-3 border-t border-piu-border/50 pt-3">
+                <input
+                  value={cohostSearch}
+                  onChange={(e) => setCohostSearch(e.target.value)}
+                  className="input-field w-full sm:max-w-sm"
+                  placeholder="Search a Shinsa user"
+                  maxLength={80}
+                />
+                {searchingCohosts ? <p className="mt-2 text-[11px] text-gray-500">Searching players...</p> : null}
+                {!searchingCohosts && cohostSearch.trim().length > 0 && cohostResults.length === 0 ? (
+                  <p className="mt-2 text-[11px] text-gray-500">No available players matched that search.</p>
+                ) : null}
+                <div className="mt-3 space-y-2">
+                  {cohostResults.slice(0, 6).map((targetUser) => (
+                    <div key={targetUser.id} className="flex items-center justify-between gap-3 rounded-lg border border-piu-border/60 bg-piu-card/70 px-3 py-2">
+                      <UserIdentity
+                        avatar={targetUser.avatar}
+                        username={targetUser.username}
+                        skillTitle={targetUser.skill_title}
+                        isHost={false}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddCohost(targetUser)}
+                        disabled={cohostActionUserId === targetUser.id}
+                        className="btn-secondary px-3 py-1.5 text-[11px]"
+                      >
+                        {cohostActionUserId === targetUser.id ? 'Adding...' : 'Add co-host'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
         ) : null}
         {showCompactStreamEditor ? (
