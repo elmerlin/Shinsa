@@ -1122,8 +1122,8 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-t border-piu-border/30 pt-2">
-        <div className="flex items-center gap-1">
+      <div className="flex flex-col gap-2 border-t border-piu-border/30 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
           {/* Bold */}
           <button
             onClick={() => applyFormat('**', '**')}
@@ -1235,7 +1235,7 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
         <button
           onClick={handleSubmit}
           disabled={posting || !canSubmit}
-          className="btn-primary px-4 py-1.5 text-xs disabled:opacity-50"
+          className="btn-primary w-full shrink-0 px-4 py-1.5 text-xs disabled:opacity-50 sm:w-auto"
         >
           {posting ? 'Posting...' : 'Post'}
         </button>
