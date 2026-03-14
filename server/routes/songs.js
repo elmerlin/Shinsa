@@ -141,17 +141,18 @@ function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
   const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
   if (!title) return '';
   const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
-
-  // PIU metadata has both Yog variants named "Yog-Sothoth"; disambiguate the short cut entry.
-  if (
-    normalizeSongName(title) === 'yog-sothoth'
-    && (String(songKey || '').trim() === '313' || normalizedFlags.includes('cut:1'))
-  ) {
-    return 'Yog-Sothoth - SHORT CUT -';
+  const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
+  if (shortCutSuffixPattern.test(title)) {
+    return title.replace(shortCutSuffixPattern, ' - SHORT CUT -');
   }
 
-  if (normalizeSongName(title) === 'nyarlathotep' && normalizedFlags.includes('cut:1')) {
-    return 'Nyarlathotep - SHORT CUT -';
+  const isShortCut = normalizedFlags.includes('cut:1')
+    || (
+      normalizeSongName(title) === 'yog-sothoth'
+      && String(songKey || '').trim() === '313'
+    );
+  if (isShortCut) {
+    return `${title} - SHORT CUT -`;
   }
 
   return title;

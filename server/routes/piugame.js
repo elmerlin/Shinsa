@@ -133,12 +133,9 @@ function normalizePiugameMode(mode) {
 function normalizeOverRankingSongTitle(songTitle) {
   const normalized = String(songTitle || '').replace(/\s+/g, ' ').trim();
   if (!normalized) return '';
-  const compact = normalized.toLowerCase();
-  if (compact === 'yog-sothoth - short cut -' || compact === 'yog-sothoth- short cut -') {
-    return 'Yog-Sothoth - SHORT CUT -';
-  }
-  if (compact === 'nyarlathotep - short cut -' || compact === 'nyarlathotep- short cut -') {
-    return 'Nyarlathotep - SHORT CUT -';
+  const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
+  if (shortCutSuffixPattern.test(normalized)) {
+    return normalized.replace(shortCutSuffixPattern, ' - SHORT CUT -');
   }
   return normalized;
 }

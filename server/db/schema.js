@@ -65,20 +65,19 @@ function resolveSongTitleForStorage(title, songKey, flags) {
   const normalizedTitle = normalizeSongTitle(title);
   if (!normalizedTitle) return '';
   const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
-
-  // PIU metadata currently uses the same base title for both Yog variants.
-  if (
-    normalizedTitle.toLowerCase() === 'yog-sothoth'
-    && (
-      String(songKey || '').trim() === '313'
-      || normalizedFlags.includes('cut:1')
-    )
-  ) {
-    return 'Yog-Sothoth - SHORT CUT -';
+  const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
+  if (shortCutSuffixPattern.test(normalizedTitle)) {
+    return normalizedTitle.replace(shortCutSuffixPattern, ' - SHORT CUT -');
   }
 
-  if (normalizedTitle.toLowerCase() === 'nyarlathotep' && normalizedFlags.includes('cut:1')) {
-    return 'Nyarlathotep - SHORT CUT -';
+  const isShortCut = normalizedFlags.includes('cut:1')
+    || (
+      normalizedTitle.toLowerCase() === 'yog-sothoth'
+      && String(songKey || '').trim() === '313'
+    );
+
+  if (isShortCut) {
+    return `${normalizedTitle} - SHORT CUT -`;
   }
 
   return normalizedTitle;
@@ -2559,37 +2558,36 @@ function initializeDb() {
     }
   }
 
-  // Migration: split Yog-Sothoth short cut rows into their own title bucket.
+  // Migration: normalize all short cut chart titles into their own title bucket.
   try {
-    const result = db.prepare(`
-      UPDATE songs
-      SET title = 'Yog-Sothoth - SHORT CUT -'
-      WHERE LOWER(TRIM(COALESCE(title, ''))) = 'yog-sothoth'
-        AND (
-          TRIM(COALESCE(song_key, '')) = '313'
-          OR LOWER(COALESCE(flags, '')) LIKE '%cut:1%'
-        )
-    `).run();
-    if ((result?.changes || 0) > 0) {
-      console.log(`Renamed ${result.changes} Yog-Sothoth short cut chart rows`);
+    const shortCutRows = db.prepare(`
+      SELECT id, title, song_key, flags
+      FROM songs
+      WHERE LOWER(COALESCE(flags, '')) LIKE '%cut:1%'
+         OR (
+           LOWER(TRIM(COALESCE(title, ''))) = 'yog-sothoth'
+           AND TRIM(COALESCE(song_key, '')) = '313'
+         )
+    `).all();
+    if (shortCutRows.length > 0) {
+      const updateShortCutTitle = db.prepare('UPDATE songs SET title = ? WHERE id = ?');
+      const normalizeShortCutTitles = db.transaction((rows) => {
+        let updated = 0;
+        for (const row of rows) {
+          const normalizedTitle = resolveSongTitleForStorage(row.title || '', row.song_key || '', row.flags || '');
+          if (!normalizedTitle || normalizedTitle === String(row.title || '')) continue;
+          updateShortCutTitle.run(normalizedTitle, row.id);
+          updated += 1;
+        }
+        return updated;
+      });
+      const updated = normalizeShortCutTitles(shortCutRows);
+      if (updated > 0) {
+        console.log(`Normalized ${updated} short cut chart titles`);
+      }
     }
   } catch (err) {
-    console.error('Failed to normalize Yog-Sothoth short cut rows:', err.message);
-  }
-
-  // Migration: split Nyarlathotep short cut rows into their own title bucket.
-  try {
-    const result = db.prepare(`
-      UPDATE songs
-      SET title = 'Nyarlathotep - SHORT CUT -'
-      WHERE LOWER(TRIM(COALESCE(title, ''))) = 'nyarlathotep'
-        AND LOWER(COALESCE(flags, '')) LIKE '%cut:1%'
-    `).run();
-    if ((result?.changes || 0) > 0) {
-      console.log(`Renamed ${result.changes} Nyarlathotep short cut chart rows`);
-    }
-  } catch (err) {
-    console.error('Failed to normalize Nyarlathotep short cut rows:', err.message);
+    console.error('Failed to normalize short cut chart rows:', err.message);
   }
 
   backfillSongDurationsFromSnapshot();

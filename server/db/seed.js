@@ -22,17 +22,18 @@ function resolveSongTitleForStorage(title, songKey, flags) {
   const normalizedTitle = normalizeSongTitle(title);
   if (!normalizedTitle) return '';
   const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
-  if (
-    normalizedTitle.toLowerCase() === 'yog-sothoth'
-    && (
-      String(songKey || '').trim() === '313'
-      || normalizedFlags.includes('cut:1')
-    )
-  ) {
-    return 'Yog-Sothoth - SHORT CUT -';
+  const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
+  if (shortCutSuffixPattern.test(normalizedTitle)) {
+    return normalizedTitle.replace(shortCutSuffixPattern, ' - SHORT CUT -');
   }
-  if (normalizedTitle.toLowerCase() === 'nyarlathotep' && normalizedFlags.includes('cut:1')) {
-    return 'Nyarlathotep - SHORT CUT -';
+
+  const isShortCut = normalizedFlags.includes('cut:1')
+    || (
+      normalizedTitle.toLowerCase() === 'yog-sothoth'
+      && String(songKey || '').trim() === '313'
+    );
+  if (isShortCut) {
+    return `${normalizedTitle} - SHORT CUT -`;
   }
   return normalizedTitle;
 }
