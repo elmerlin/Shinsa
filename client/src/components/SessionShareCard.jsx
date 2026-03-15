@@ -272,8 +272,8 @@ export default function SessionShareCard({
                 <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
                   <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
                   <th className="text-left px-2 py-1 font-display font-bold">Song</th>
-                  <th className="w-[92px] px-0.5 py-1 text-right font-display font-bold sm:w-[108px] sm:px-2">Score</th>
-                  <th className="w-[38px] px-0 py-1 text-right font-display font-bold sm:w-[52px] sm:px-1">Grade</th>
+                  <th className="w-[88px] px-0.5 py-1 text-right font-display font-bold sm:w-[104px] sm:px-2">Score</th>
+                  <th className="w-[44px] px-0 py-1 text-right font-display font-bold sm:w-[56px] sm:px-1">Grade</th>
                 </tr>
               </thead>
               <tbody>
@@ -304,16 +304,16 @@ export default function SessionShareCard({
                           </div>
                         </div>
                       </td>
-                      <td className="px-0.5 py-1.5 text-right whitespace-nowrap sm:px-2">
-                        <div className="flex items-center justify-end gap-1">
+                      <td className="px-0 py-1.5 text-right whitespace-nowrap sm:px-2">
+                        <div className="flex items-center justify-end gap-0.5">
                           {row.replay_embed_url ? (
                             <button
                               type="button"
-                              className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                               title="Open replay clip"
                               onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
                             >
-                              <YouTubeBadgeIcon className="h-3.5 w-3.5 text-sky-300" />
+                              <YouTubeBadgeIcon className="h-3 w-3 text-sky-300" />
                             </button>
                           ) : null}
                           <span className="font-mono text-[11px] text-gray-200 sm:text-xs">{formatNumber(row.score)}</span>
@@ -323,7 +323,7 @@ export default function SessionShareCard({
                         <button
                           type="button"
                           onClick={() => setActiveRow(row)}
-                          className={`text-[10px] font-display font-bold hover:underline sm:text-xs ${getGradeColorClass(row.grade)}`}
+                          className={`text-[11px] font-display font-bold hover:underline sm:text-xs ${getGradeColorClass(row.grade)}`}
                           title="View judgments"
                         >
                           {row.grade || '-'}
