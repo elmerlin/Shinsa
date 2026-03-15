@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PiuChartJacket from './PiuChartJacket';
+import YouTubeReplayModal from './YouTubeReplayModal';
 import { parseGrade } from '../utils/grades';
+import { buildReplayModalTitle } from '../utils/replayTitle';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -64,6 +66,14 @@ function Stat({ label, value }) {
       <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{label}</p>
       <p className="text-sm font-display font-bold text-gray-100">{value}</p>
     </div>
+  );
+}
+
+function YouTubeBadgeIcon({ className = '' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
   );
 }
 
@@ -196,6 +206,7 @@ export default function SessionShareCard({
   const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(1);
   const [activeRow, setActiveRow] = useState(null);
+  const [selectedReplay, setSelectedReplay] = useState(null);
 
   const rows = Array.isArray(share?.rows) ? share.rows : [];
   const totalPages = Math.max(1, Math.ceil(rows.length / 10));
@@ -276,13 +287,23 @@ export default function SessionShareCard({
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0">
                             <p className="text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">{row.song_title}</p>
-                            {getOverTop100Rank(row.over_top100_rank) > 0 && (
-                              <p className="mt-1">
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {getOverTop100Rank(row.over_top100_rank) > 0 && (
                                 <span className="inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
                                   TOP #{getOverTop100Rank(row.over_top100_rank)}
                                 </span>
-                              </p>
-                            )}
+                              )}
+                              {row.replay_embed_url ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                                  title="Open replay clip"
+                                  onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
+                                >
+                                  <YouTubeBadgeIcon className="h-3.5 w-3.5 text-sky-300" />
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -344,6 +365,13 @@ export default function SessionShareCard({
       </div>
 
       <JudgmentModal row={activeRow} onClose={() => setActiveRow(null)} />
+      {selectedReplay ? (
+        <YouTubeReplayModal
+          url={selectedReplay.url}
+          title={selectedReplay.title}
+          onClose={() => setSelectedReplay(null)}
+        />
+      ) : null}
     </>
   );
 }
