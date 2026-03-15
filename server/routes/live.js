@@ -2188,7 +2188,9 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   const requests = getSessionRequests(db, freshSession.id);
   const activeVote = getLatestVoteSnapshot(db, freshSession.id, currentUserId);
   const summary = buildLiveSessionSummary(plays, host || {}, {
+    sessionId: freshSession.id,
     sessionTitle: freshSession.title,
+    participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
     viewerCount,
     viewerPeak,
     streamUrl: freshSession.stream_url,
@@ -2267,9 +2269,10 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
   const messageCount = getSessionMessageCount(db, session.id);
   const interactionCounts = getSessionInteractionCounts(db, session.id);
   const summary = plays.length > 0
-    ? buildLiveSessionSummary(plays, host || {}, {
+      ? buildLiveSessionSummary(plays, host || {}, {
         sessionId: session.id,
         sessionTitle: session.title,
+        participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
         viewerCount,
         viewerPeak,
         messageCount,
@@ -2299,9 +2302,10 @@ function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
   const messageCount = getSessionMessageCount(db, session.id);
   const interactionCounts = getSessionInteractionCounts(db, session.id);
   const summary = plays.length > 0
-    ? buildLiveSessionSummary(plays, host || {}, {
+      ? buildLiveSessionSummary(plays, host || {}, {
         sessionId: session.id,
         sessionTitle: session.title,
+        participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
         viewerCount: 0,
         viewerPeak: Math.max(0, toInt(session.viewer_peak)),
         messageCount,
@@ -2935,6 +2939,8 @@ function buildParticipantLiveSummary(participant, plays, session, sharedContext 
   if (participantRows.length === 0) return null;
   return buildLiveSessionSummary(participantRows, participant || {}, {
     sessionId: session.id,
+    sessionTitle: session.title,
+    participantRole: participant?.role || (String(participant?.user_id || '') === String(session?.host_user_id || '') ? LIVE_PARTICIPANT_ROLE_OWNER : ''),
     viewerCount: sharedContext.viewerCount,
     viewerPeak: sharedContext.viewerPeak,
     messageCount: sharedContext.messageCount,
@@ -3118,7 +3124,9 @@ function broadcastLivePlaysUpdated(db, liveSessionId, reason = 'plays_updated') 
 
   const plays = getSessionPlays(db, base.freshSession.id);
   const summary = buildLiveSessionSummary(plays, base.host || {}, {
+    sessionId: base.freshSession.id,
     sessionTitle: base.freshSession.title,
+    participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
     viewerCount: base.viewerCount,
     viewerPeak: base.viewerPeak,
     streamUrl: base.freshSession.stream_url,
@@ -4513,6 +4521,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     const summary = buildLiveSessionSummary(plays, host || {}, {
       sessionId: session.id,
       sessionTitle: session.title,
+      participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
       viewerCount,
       viewerPeak,
       messageCount,

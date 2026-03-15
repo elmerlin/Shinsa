@@ -171,23 +171,41 @@ function findMatchingEndedLiveSession(db, post, liveSummary) {
   const directSessionId = String(liveSummary?.sessionId || '').trim();
   if (directSessionId) {
     const session = db.prepare(`
-      SELECT id, host_user_id, title, stream_url, ended_at, updated_at, created_at
-      FROM live_sessions
-      WHERE id = ?
-        AND host_user_id = ?
+      SELECT ls.id, ls.host_user_id, ls.title, ls.stream_url, ls.ended_at, ls.updated_at, ls.created_at
+      FROM live_sessions ls
+      WHERE ls.id = ?
+        AND (
+          ls.host_user_id = ?
+          OR EXISTS (
+            SELECT 1
+            FROM live_session_participants part
+            WHERE part.live_session_id = ls.id
+              AND part.user_id = ?
+              AND part.role = 'cohost'
+          )
+        )
       LIMIT 1
-    `).get(directSessionId, post.user_id);
+    `).get(directSessionId, post.user_id, post.user_id);
     if (session) return session;
   }
 
   const candidates = db.prepare(`
-    SELECT id, host_user_id, title, stream_url, ended_at, updated_at, created_at
-    FROM live_sessions
-    WHERE host_user_id = ?
-      AND status = 'ended'
-    ORDER BY datetime(COALESCE(NULLIF(ended_at, ''), updated_at, created_at)) DESC, id DESC
+    SELECT ls.id, ls.host_user_id, ls.title, ls.stream_url, ls.ended_at, ls.updated_at, ls.created_at
+    FROM live_sessions ls
+    WHERE ls.status = 'ended'
+      AND (
+        ls.host_user_id = ?
+        OR EXISTS (
+          SELECT 1
+          FROM live_session_participants part
+          WHERE part.live_session_id = ls.id
+            AND part.user_id = ?
+            AND part.role = 'cohost'
+        )
+      )
+    ORDER BY datetime(COALESCE(NULLIF(ls.ended_at, ''), ls.updated_at, ls.created_at)) DESC, ls.id DESC
     LIMIT 24
-  `).all(post.user_id);
+  `).all(post.user_id, post.user_id);
   if (candidates.length === 0) return null;
 
   const targetUrl = normalizeComparableUrl(liveSummary?.streamUrl || post.youtube_url || '');
@@ -219,6 +237,38 @@ function findMatchingEndedLiveSession(db, post, liveSummary) {
   if (!best) return null;
   if (best.streamMatch) return best.session;
   return best.diff <= 12 * 60 * 60 * 1000 ? best.session : null;
+}
+
+function getLiveSummaryPostMeta(db, session, post) {
+  const fallbackUsername = String(post?.username || '').trim();
+  const postUserId = String(post?.user_id || '').trim();
+  if (!session?.id || !postUserId) {
+    return {
+      hostUsername: fallbackUsername,
+      participantRole: '',
+    };
+  }
+
+  if (String(session.host_user_id || '') === postUserId) {
+    return {
+      hostUsername: fallbackUsername,
+      participantRole: 'owner',
+    };
+  }
+
+  const participant = db.prepare(`
+    SELECT COALESCE(role, '') AS role
+    FROM live_session_participants
+    WHERE live_session_id = ?
+      AND user_id = ?
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(session.id, postUserId);
+
+  return {
+    hostUsername: fallbackUsername,
+    participantRole: String(participant?.role || '').trim(),
+  };
 }
 
 function enrichPostWithSessionShareData(db, post) {
@@ -254,6 +304,7 @@ function enrichPostWithLiveSummaryMetrics(db, post) {
   if (!session) return post;
 
   const interactionCounts = getSessionInteractionCounts(db, session.id);
+  const postMeta = getLiveSummaryPostMeta(db, session, post);
   post.live_summary_metrics = {
     sessionId: session.id,
     sessionTitle: String(session.title || '').trim(),
@@ -262,6 +313,8 @@ function enrichPostWithLiveSummaryMetrics(db, post) {
     requestPlayCount: interactionCounts.requestPlayCount,
     votedSongPlayCount: interactionCounts.votedSongPlayCount,
     interactions: interactionCounts.interactions,
+    hostUsername: postMeta.hostUsername || String(liveSummary.hostUsername || '').trim(),
+    participantRole: postMeta.participantRole || String(liveSummary.participantRole || '').trim(),
   };
   return post;
 }

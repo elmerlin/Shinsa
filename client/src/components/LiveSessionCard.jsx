@@ -24,6 +24,10 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
       })()
     : '';
   const sessionTitleLabel = String(summary.sessionTitle || '').trim() || 'Shinsa Live';
+  const participantRole = String(summary.participantRole || '').trim().toLowerCase();
+  const hostLabel = summary.hostUsername
+    ? (participantRole === 'cohost' ? `Co-Hosted by ${summary.hostUsername}` : `Hosted by ${summary.hostUsername}`)
+    : 'Live session recap';
 
   return (
     <div className={`rounded-2xl border border-rose-400/35 bg-gradient-to-br from-rose-500/18 via-orange-500/10 to-cyan-500/8 p-3 ${className}`.trim()}>
@@ -40,7 +44,7 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
               </Link>
             ) : null}
             <span>
-              {summary.hostUsername ? `Hosted by ${summary.hostUsername}` : 'Live session recap'}
+              {hostLabel}
             </span>
           </p>
           {summary.streamUrl ? (

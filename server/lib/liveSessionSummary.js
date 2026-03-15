@@ -273,6 +273,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     version: 1,
     sessionId: String(extras?.sessionId || ''),
     sessionTitle: String(extras?.sessionTitle || '').trim(),
+    participantRole: String(extras?.participantRole || '').trim(),
     sessionDateLabel,
     sessionTimeRange,
     sessionDurationMinutes,

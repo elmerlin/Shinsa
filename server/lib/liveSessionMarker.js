@@ -35,6 +35,7 @@ function sanitizeLiveSummary(summary) {
     version: 1,
     sessionId: String(src.sessionId || src.session_id || ''),
     sessionTitle: String(src.sessionTitle || src.title || ''),
+    participantRole: String(src.participantRole || ''),
     sessionDateLabel: String(src.sessionDateLabel || ''),
     sessionTimeRange: String(src.sessionTimeRange || ''),
     sessionDurationMinutes: toInt(src.sessionDurationMinutes),
