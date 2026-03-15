@@ -1946,22 +1946,24 @@ function MobilePanelSheet({ open, title, subtitle = '', onClose, children, allow
   );
 }
 
-function UserIdentity({ avatar, username, skillTitle, isHost, participantRole = '', className = '', compact = false, dense = false }) {
+function UserIdentity({ avatar, username, skillTitle, isHost, participantRole = '', className = '', compact = false, dense = false, hideAvatar = false }) {
   const roleLabel = isHost ? 'Host' : getParticipantRoleLabel(participantRole);
   const roleTone = roleLabel === 'Host'
     ? 'border-rose-400/25 bg-rose-500/10 text-rose-200'
     : 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100';
   return (
     <div className={`flex min-w-0 items-center ${compact || dense ? 'gap-1.5' : 'gap-2'} ${className}`.trim()}>
-      <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark font-display font-bold text-white ${
-        compact ? 'h-7 w-7 text-[10px]' : dense ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
-      }`}>
-        {avatar ? (
-          <img src={avatar} alt={username || 'User'} className="h-full w-full object-cover" />
-        ) : (
-          <span>{getInitial(username)}</span>
-        )}
-      </div>
+      {hideAvatar ? null : (
+        <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark font-display font-bold text-white ${
+          compact ? 'h-7 w-7 text-[10px]' : dense ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
+        }`}>
+          {avatar ? (
+            <img src={avatar} alt={username || 'User'} className="h-full w-full object-cover" />
+          ) : (
+            <span>{getInitial(username)}</span>
+          )}
+        </div>
+      )}
       <div className="min-w-0">
         <div className={`flex flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'}`}>
           <p className={`truncate font-display font-bold text-white ${compact ? 'text-[10px]' : dense ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
@@ -1982,6 +1984,25 @@ function UserIdentity({ avatar, username, skillTitle, isHost, participantRole = 
         </div>
       </div>
     </div>
+  );
+}
+
+function CohostPlayMarker({ avatar, username, compact = false, className = '' }) {
+  const label = `${username || 'Co-host'} played this`;
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-cyan-400/35 bg-cyan-500/10 text-cyan-50 ${
+        compact ? 'h-5 w-5 text-[9px]' : 'h-6 w-6 text-[10px]'
+      } ${className}`.trim()}
+      title={label}
+      aria-label={label}
+    >
+      {avatar ? (
+        <img src={avatar} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span className="font-display font-bold">{getInitial(username)}</span>
+      )}
+    </span>
   );
 }
 
@@ -4607,6 +4628,7 @@ export default function LivePage() {
           const parsedGrade = parseGrade(play.grade, getRank(play.score ?? 0).label);
           const displayGrade = parsedGrade.display || '-';
           const displayScore = parseInt(play.score, 10) || 0;
+          const showCohostMarker = play.participant_role === 'cohost' && !!(play.avatar || play.username);
           return (
             <button
               type="button"
@@ -4625,7 +4647,17 @@ export default function LivePage() {
                   size={isCompactSongCardLayout ? 'sm' : 'md'}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} truncate font-display font-bold leading-tight text-white`}>{play.song_title}</p>
+                  <div className="flex min-w-0 items-start gap-1.5">
+                    <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} min-w-0 flex-1 truncate font-display font-bold leading-tight text-white`}>{play.song_title}</p>
+                    {showCohostMarker ? (
+                      <CohostPlayMarker
+                        avatar={play.avatar}
+                        username={play.username}
+                        compact={isCompactSongCardLayout}
+                        className="mt-0.5"
+                      />
+                    ) : null}
+                  </div>
                   {showPerformerLabels && play?.username ? (
                     <UserIdentity
                       avatar={play.avatar}
@@ -4635,6 +4667,7 @@ export default function LivePage() {
                       participantRole={play.participant_role}
                       className="mt-1.5"
                       compact={isCompactSongCardLayout}
+                      hideAvatar={showCohostMarker}
                     />
                   ) : null}
                   <div className={`${isCompactSongCardLayout ? 'mt-2' : 'mt-3'}`}>

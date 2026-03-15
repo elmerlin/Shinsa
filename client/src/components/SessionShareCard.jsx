@@ -227,6 +227,15 @@ export default function SessionShareCard({
 
   if (!share) return null;
 
+  const rankHeaderClass = 'text-left py-1 pl-2 pr-1 font-display font-bold w-6 sm:px-2';
+  const songHeaderClass = 'text-left py-1 pl-1.5 pr-1 font-display font-bold sm:px-2';
+  const scoreHeaderClass = 'w-[88px] py-1 pl-0.5 pr-2.5 text-right font-display font-bold sm:w-[104px] sm:px-2';
+  const gradeHeaderClass = 'w-[44px] py-1 pl-0.5 pr-3 text-right font-display font-bold sm:w-[56px] sm:px-1';
+  const rankCellClass = 'py-1.5 pl-2 pr-1 text-gray-400 font-mono align-top sm:px-2';
+  const songCellClass = 'min-w-0 py-1.5 pl-1.5 pr-1 sm:px-2';
+  const scoreCellClass = 'py-1.5 pl-0 pr-2.5 text-right whitespace-nowrap sm:px-2';
+  const gradeCellClass = 'py-1.5 pl-0 pr-3 text-right whitespace-nowrap sm:px-1';
+
   return (
     <>
       <div className={`rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/15 via-emerald-500/10 to-transparent p-3 ${className}`.trim()}>
@@ -270,10 +279,10 @@ export default function SessionShareCard({
             <table className="w-full table-fixed text-xs">
               <thead>
                 <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
-                  <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
-                  <th className="text-left px-2 py-1 font-display font-bold">Song</th>
-                  <th className="w-[88px] px-0.5 py-1 text-right font-display font-bold sm:w-[104px] sm:px-2">Score</th>
-                  <th className="w-[44px] px-0 py-1 text-right font-display font-bold sm:w-[56px] sm:px-1">Grade</th>
+                  <th className={rankHeaderClass}>#</th>
+                  <th className={songHeaderClass}>Song</th>
+                  <th className={scoreHeaderClass}>Score</th>
+                  <th className={gradeHeaderClass}>Grade</th>
                 </tr>
               </thead>
               <tbody>
@@ -281,8 +290,8 @@ export default function SessionShareCard({
                   const number = expanded ? (startIndex + idx + 1) : (idx + 1);
                   return (
                     <tr key={`${row.song_title}-${row.mode}-${row.level}-${row.score}-${idx}`} className="border-b border-piu-border/20 last:border-0">
-                      <td className="px-2 py-1.5 text-gray-400 font-mono align-top">{number}</td>
-                      <td className="min-w-0 px-2 py-1.5">
+                      <td className={rankCellClass}>{number}</td>
+                      <td className={songCellClass}>
                         <div className="flex items-start gap-2">
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0 flex-1">
@@ -304,7 +313,7 @@ export default function SessionShareCard({
                           </div>
                         </div>
                       </td>
-                      <td className="px-0 py-1.5 text-right whitespace-nowrap sm:px-2">
+                      <td className={scoreCellClass}>
                         <div className="flex items-center justify-end gap-0.5">
                           {row.replay_embed_url ? (
                             <button
@@ -319,7 +328,7 @@ export default function SessionShareCard({
                           <span className="font-mono text-[11px] text-gray-200 sm:text-xs">{formatNumber(row.score)}</span>
                         </div>
                       </td>
-                      <td className="px-0 py-1.5 text-right whitespace-nowrap sm:px-1">
+                      <td className={gradeCellClass}>
                         <button
                           type="button"
                           onClick={() => setActiveRow(row)}

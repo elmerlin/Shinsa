@@ -53,6 +53,14 @@ function SongTable({ title, rows, type }) {
   const emptyLabel = type === 'score'
     ? 'No scored songs in this session.'
     : 'No rated songs in this session.';
+  const rankHeaderClass = 'text-left py-1 pl-2 pr-1 font-display font-bold w-6 sm:px-2';
+  const songHeaderClass = 'text-left py-1 pl-1.5 pr-1 font-display font-bold sm:px-2';
+  const valueHeaderClass = 'text-right py-1 pl-1 pr-2.5 font-display font-bold sm:px-2';
+  const gradeHeaderClass = 'text-right py-1 pl-1 pr-4 font-display font-bold sm:px-2';
+  const rankCellClass = 'py-1.5 pl-2 pr-1 text-gray-400 font-mono align-top sm:px-2';
+  const songCellClass = 'py-1.5 pl-1.5 pr-1 sm:px-2';
+  const valueCellClass = 'py-1.5 pl-1 pr-2.5 text-right font-mono whitespace-nowrap sm:px-2';
+  const gradeCellClass = 'py-1.5 pl-1 pr-4 text-right font-display font-bold whitespace-nowrap sm:px-2';
 
   return (
     <div className="rounded-lg border border-piu-border/40 bg-piu-dark/35 overflow-hidden">
@@ -65,17 +73,17 @@ function SongTable({ title, rows, type }) {
         <table className="w-full text-xs table-auto">
           <thead>
             <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
-              <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
-              <th className="text-left px-2 py-1 font-display font-bold">Song</th>
+              <th className={rankHeaderClass}>#</th>
+              <th className={songHeaderClass}>Song</th>
               {type === 'score' ? (
                 <>
-                  <th className="text-right px-2 py-1 font-display font-bold">Score</th>
-                  <th className="text-right px-2 py-1 font-display font-bold">Grade</th>
+                  <th className={valueHeaderClass}>Score</th>
+                  <th className={gradeHeaderClass}>Grade</th>
                 </>
               ) : (
                 <>
-                  <th className="text-right px-2 py-1 font-display font-bold">Rating</th>
-                  <th className="text-right px-2 py-1 font-display font-bold">Grade</th>
+                  <th className={valueHeaderClass}>Rating</th>
+                  <th className={gradeHeaderClass}>Grade</th>
                 </>
               )}
             </tr>
@@ -88,8 +96,8 @@ function SongTable({ title, rows, type }) {
               const overRank = getOverTop100Rank(row?._over_top100_rank ?? row?.over_top100_rank);
               return (
                 <tr key={`${type}-${idx}-${row.song_title}-${row.mode}-${row.level}`} className="border-b border-piu-border/20 last:border-0">
-                  <td className="px-2 py-1.5 text-gray-400 font-mono align-top">{idx + 1}</td>
-                  <td className="px-2 py-1.5">
+                  <td className={rankCellClass}>{idx + 1}</td>
+                  <td className={songCellClass}>
                     <div className="flex items-start gap-2">
                       <SongJacket row={row} />
                       <div className="min-w-0">
@@ -106,13 +114,13 @@ function SongTable({ title, rows, type }) {
                   </td>
                   {type === 'score' ? (
                     <>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-200 whitespace-nowrap">{formatNumber(rowScore)}</td>
-                      <td className={`px-2 py-1.5 text-right font-display font-bold whitespace-nowrap ${getGradeColorClass(rowGrade)}`}>{rowGrade}</td>
+                      <td className={`${valueCellClass} text-gray-200`}>{formatNumber(rowScore)}</td>
+                      <td className={`${gradeCellClass} ${getGradeColorClass(rowGrade)}`}>{rowGrade}</td>
                     </>
                   ) : (
                     <>
-                      <td className="px-2 py-1.5 text-right font-mono text-cyan-300 whitespace-nowrap">{formatNumber(rowRating)}</td>
-                      <td className={`px-2 py-1.5 text-right font-display font-bold whitespace-nowrap ${getGradeColorClass(rowGrade)}`}>
+                      <td className={`${valueCellClass} text-cyan-300`}>{formatNumber(rowRating)}</td>
+                      <td className={`${gradeCellClass} ${getGradeColorClass(rowGrade)}`}>
                         {rowGrade || '-'}
                       </td>
                     </>
