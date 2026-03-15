@@ -2145,6 +2145,7 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   const requests = getSessionRequests(db, freshSession.id);
   const activeVote = getLatestVoteSnapshot(db, freshSession.id, currentUserId);
   const summary = buildLiveSessionSummary(plays, host || {}, {
+    sessionTitle: freshSession.title,
     viewerCount,
     viewerPeak,
     streamUrl: freshSession.stream_url,
@@ -2225,6 +2226,7 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
   const summary = plays.length > 0
     ? buildLiveSessionSummary(plays, host || {}, {
         sessionId: session.id,
+        sessionTitle: session.title,
         viewerCount,
         viewerPeak,
         messageCount,
@@ -2256,6 +2258,7 @@ function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
   const summary = plays.length > 0
     ? buildLiveSessionSummary(plays, host || {}, {
         sessionId: session.id,
+        sessionTitle: session.title,
         viewerCount: 0,
         viewerPeak: Math.max(0, toInt(session.viewer_peak)),
         messageCount,
@@ -3072,6 +3075,7 @@ function broadcastLivePlaysUpdated(db, liveSessionId, reason = 'plays_updated') 
 
   const plays = getSessionPlays(db, base.freshSession.id);
   const summary = buildLiveSessionSummary(plays, base.host || {}, {
+    sessionTitle: base.freshSession.title,
     viewerCount: base.viewerCount,
     viewerPeak: base.viewerPeak,
     streamUrl: base.freshSession.stream_url,
@@ -4465,6 +4469,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     const interactionCounts = getSessionInteractionCounts(db, session.id);
     const summary = buildLiveSessionSummary(plays, host || {}, {
       sessionId: session.id,
+      sessionTitle: session.title,
       viewerCount,
       viewerPeak,
       messageCount,

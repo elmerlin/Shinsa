@@ -272,6 +272,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
   const summary = {
     version: 1,
     sessionId: String(extras?.sessionId || ''),
+    sessionTitle: String(extras?.sessionTitle || '').trim(),
     sessionDateLabel,
     sessionTimeRange,
     sessionDurationMinutes,

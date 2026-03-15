@@ -161,7 +161,7 @@ function findMatchingEndedLiveSession(db, post, liveSummary) {
   const directSessionId = String(liveSummary?.sessionId || '').trim();
   if (directSessionId) {
     const session = db.prepare(`
-      SELECT id, host_user_id, stream_url, ended_at, updated_at, created_at
+      SELECT id, host_user_id, title, stream_url, ended_at, updated_at, created_at
       FROM live_sessions
       WHERE id = ?
         AND host_user_id = ?
@@ -171,7 +171,7 @@ function findMatchingEndedLiveSession(db, post, liveSummary) {
   }
 
   const candidates = db.prepare(`
-    SELECT id, host_user_id, stream_url, ended_at, updated_at, created_at
+    SELECT id, host_user_id, title, stream_url, ended_at, updated_at, created_at
     FROM live_sessions
     WHERE host_user_id = ?
       AND status = 'ended'
@@ -246,6 +246,7 @@ function enrichPostWithLiveSummaryMetrics(db, post) {
   const interactionCounts = getSessionInteractionCounts(db, session.id);
   post.live_summary_metrics = {
     sessionId: session.id,
+    sessionTitle: String(session.title || '').trim(),
     sessionShoeLabel: getSessionShoeLabel(db, session.id),
     messageCount: getSessionMessageCount(db, session.id),
     requestPlayCount: interactionCounts.requestPlayCount,

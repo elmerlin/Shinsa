@@ -23,7 +23,7 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
         }
       })()
     : '';
-  const sessionTitleLabel = title.replace(/\s+Recap$/i, '').trim() || 'Shinsa Live';
+  const sessionTitleLabel = String(summary.sessionTitle || '').trim() || 'Shinsa Live';
 
   return (
     <div className={`rounded-2xl border border-rose-400/35 bg-gradient-to-br from-rose-500/18 via-orange-500/10 to-cyan-500/8 p-3 ${className}`.trim()}>
@@ -31,7 +31,6 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
         <div>
           <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-rose-300">{title}</p>
           <p className="text-xs text-rose-100/90 flex flex-wrap items-center gap-x-2 gap-y-1">
-            {summary.hostUsername ? `Hosted by ${summary.hostUsername}` : 'Live session recap'}
             {summary.sessionId ? (
               <Link
                 to={`/live/${encodeURIComponent(summary.sessionId)}`}
@@ -40,6 +39,9 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
                 {sessionTitleLabel}
               </Link>
             ) : null}
+            <span>
+              {summary.hostUsername ? `Hosted by ${summary.hostUsername}` : 'Live session recap'}
+            </span>
           </p>
           {summary.streamUrl ? (
             <a
