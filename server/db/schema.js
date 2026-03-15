@@ -1310,7 +1310,11 @@ function initializeDb() {
       max_combo INTEGER DEFAULT 0,
       kcal REAL DEFAULT 0,
       plate TEXT DEFAULT '',
-      over_top100_rank INTEGER DEFAULT 0
+      over_top100_rank INTEGER DEFAULT 0,
+      replay_embed_url TEXT DEFAULT '',
+      replay_video_id TEXT DEFAULT '',
+      replay_start_seconds INTEGER DEFAULT 0,
+      replay_end_seconds INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS user_piugame_sync (
@@ -2914,6 +2918,20 @@ function initializeDb() {
     if (updatedCount > 0) {
       console.log(`Backfilled played_at_utc for ${updatedCount} recently played rows`);
     }
+  }
+
+  const recentPlayCols = db.prepare("PRAGMA table_info(user_recently_played)").all().map((c) => c.name);
+  if (!recentPlayCols.includes('replay_embed_url')) {
+    db.exec("ALTER TABLE user_recently_played ADD COLUMN replay_embed_url TEXT DEFAULT ''");
+  }
+  if (!recentPlayCols.includes('replay_video_id')) {
+    db.exec("ALTER TABLE user_recently_played ADD COLUMN replay_video_id TEXT DEFAULT ''");
+  }
+  if (!recentPlayCols.includes('replay_start_seconds')) {
+    db.exec("ALTER TABLE user_recently_played ADD COLUMN replay_start_seconds INTEGER DEFAULT 0");
+  }
+  if (!recentPlayCols.includes('replay_end_seconds')) {
+    db.exec("ALTER TABLE user_recently_played ADD COLUMN replay_end_seconds INTEGER DEFAULT 0");
   }
 
   const liveMissingUtcRows = db.prepare(`

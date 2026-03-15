@@ -355,7 +355,9 @@ function getRecentPlayJudgmentsAnyStmt(db) {
 function getRecentPlayMetadataBeforeStmt(db) {
   if (!recentPlayMetadataBeforeStmt) {
     recentPlayMetadataBeforeStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank
+      SELECT
+        perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
+        replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -375,7 +377,9 @@ function getRecentPlayMetadataBeforeStmt(db) {
 function getRecentPlayMetadataAnyStmt(db) {
   if (!recentPlayMetadataAnyStmt) {
     recentPlayMetadataAnyStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank
+      SELECT
+        perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
+        replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -536,8 +540,16 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup?.over_top100_rank),
     jacket_url: row.jacket_url || lookup?.background_url || '',
     date_played: row.date_played || lookup?.date_played || '',
-    replay_embed_url: replay?.replay_embed_url || String(row.replay_embed_url || '').trim(),
-    replay_video_id: replay?.replay_video_id || String(row.replay_video_id || '').trim(),
+    replay_embed_url: String(row.replay_embed_url || '').trim()
+      || String(lookup?.replay_embed_url || '').trim()
+      || replay?.replay_embed_url
+      || '',
+    replay_video_id: String(row.replay_video_id || '').trim()
+      || String(lookup?.replay_video_id || '').trim()
+      || replay?.replay_video_id
+      || '',
+    replay_start_seconds: toInt(row.replay_start_seconds) || toInt(lookup?.replay_start_seconds),
+    replay_end_seconds: toInt(row.replay_end_seconds) || toInt(lookup?.replay_end_seconds),
   };
 }
 

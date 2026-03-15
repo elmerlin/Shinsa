@@ -4211,17 +4211,9 @@ router.get('/recently-played/:userId', (req, res) => {
       p.*,
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
-      COALESCE(s.colorway, '') AS shoe_colorway,
-      COALESCE(NULLIF(yt.session_youtube_url, ''), '') AS replay_embed_url
+      COALESCE(s.colorway, '') AS shoe_colorway
     FROM user_recently_played p
     LEFT JOIN user_shoes s ON s.id = p.shoe_id
-    LEFT JOIN songs chart
-      ON chart.title = p.song_title
-     AND chart.mode = p.mode
-     AND chart.level = p.level
-    LEFT JOIN user_chart_youtube_links yt
-      ON yt.user_id = p.user_id
-     AND yt.chart_id = chart.id
     WHERE p.user_id = ?
     ORDER BY p.id ASC`
   ).all(req.params.userId);
@@ -4229,7 +4221,9 @@ router.get('/recently-played/:userId', (req, res) => {
   const normalizedPlays = plays.map((play) => ({
     ...play,
     replay_embed_url: String(play?.replay_embed_url || ''),
-    replay_video_id: extractYoutubeVideoId(play?.replay_embed_url || ''),
+    replay_video_id: String(play?.replay_video_id || '').trim() || extractYoutubeVideoId(play?.replay_embed_url || ''),
+    replay_start_seconds: Math.max(0, parseInt(play?.replay_start_seconds, 10) || 0),
+    replay_end_seconds: Math.max(0, parseInt(play?.replay_end_seconds, 10) || 0),
   }));
   res.json({
     last_sync: sync?.last_recently_played_sync || null,

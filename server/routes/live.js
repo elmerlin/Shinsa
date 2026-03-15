@@ -1522,6 +1522,47 @@ function syncSessionReplayLinks(db, userId, rows, replayLookup) {
   }
 }
 
+function syncRecentPlayReplayRows(db, liveSessionId, replayLookup) {
+  const rows = db.prepare(`
+    SELECT id, user_id, recently_played_id, song_title, mode, level, score
+    FROM live_session_plays
+    WHERE live_session_id = ?
+      AND recently_played_id IS NOT NULL
+  `).all(liveSessionId);
+  if (!rows.length) return 0;
+
+  const updateRecentReplay = db.prepare(`
+    UPDATE user_recently_played
+    SET
+      replay_embed_url = ?,
+      replay_video_id = ?,
+      replay_start_seconds = ?,
+      replay_end_seconds = ?
+    WHERE id = ?
+  `);
+
+  let updatedCount = 0;
+  for (const row of rows) {
+    const replay = replayLookup.get(buildPlayOutcomeKey(
+      row.song_title,
+      row.mode,
+      row.level,
+      row.score,
+      row.user_id
+    )) || null;
+    if (!replay) continue;
+    updateRecentReplay.run(
+      String(replay.replay_embed_url || '').trim(),
+      String(replay.replay_video_id || '').trim(),
+      Math.max(0, toInt(replay.replay_start_seconds)),
+      Math.max(0, toInt(replay.replay_end_seconds)),
+      toInt(row.recently_played_id)
+    );
+    updatedCount += 1;
+  }
+  return updatedCount;
+}
+
 function updateBufferedReplayRows(db, liveSessionId, tableName, rows) {
   const updateRow = db.prepare(`
     UPDATE ${tableName}
@@ -1697,6 +1738,7 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
   }
 
   const txn = db.transaction(() => {
+    const updatedRecentRows = syncRecentPlayReplayRows(db, liveSessionId, replayLookup);
     updateBufferedReplayRows(db, liveSessionId, 'live_session_buffered_upscores', bufferedUpscores);
     updateBufferedReplayRows(db, liveSessionId, 'live_session_buffered_clears', bufferedClears);
     const updatedPosts = [];
@@ -1713,9 +1755,9 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
         ...updateGeneratedReplayPosts(db, session, performerUserId, groupedRows.upscores, groupedRows.clears),
       });
     }
-    return updatedPosts;
+    return { updatedPosts, updatedRecentRows };
   });
-  const updatedPosts = txn();
+  const { updatedPosts, updatedRecentRows } = txn();
 
   return {
     session_id: String(liveSessionId),
@@ -1723,6 +1765,7 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
     replay_count: replayLookup.size,
     buffered_upscores: bufferedUpscores.length,
     buffered_clears: bufferedClears.length,
+    updated_recent_rows: updatedRecentRows,
     updated_posts: updatedPosts,
   };
 }
@@ -4536,6 +4579,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     const participantResults = [];
 
     const txn = db.transaction(() => {
+      syncRecentPlayReplayRows(db, session.id, replayLookup);
       for (const performerUserId of performerIds) {
         const participant = participantByUserId.get(performerUserId);
         if (!participant) continue;
