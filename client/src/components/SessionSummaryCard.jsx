@@ -5,12 +5,6 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
-function modeShort(mode) {
-  if (mode === 'Single') return 'S';
-  if (mode === 'Double') return 'D';
-  return 'X';
-}
-
 function getOverTop100Rank(value) {
   const rank = parseInt(value, 10) || 0;
   return rank > 0 && rank <= 100 ? rank : 0;
@@ -91,7 +85,6 @@ function SongTable({ title, rows, type }) {
               const rowScore = row?._score ?? row?.score;
               const rowGrade = row?._grade ?? row?.grade;
               const rowRating = row?._rating ?? row?.rating;
-              const rowLevel = row?._level ?? row?.level;
               const overRank = getOverTop100Rank(row?._over_top100_rank ?? row?.over_top100_rank);
               return (
                 <tr key={`${type}-${idx}-${row.song_title}-${row.mode}-${row.level}`} className="border-b border-piu-border/20 last:border-0">
@@ -101,14 +94,13 @@ function SongTable({ title, rows, type }) {
                       <SongJacket row={row} />
                       <div className="min-w-0">
                         <p className="text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">{row.song_title}</p>
-                        <p className="text-[10px] text-gray-500">
-                          {modeShort(row.mode)}{rowLevel || '?'}
-                          {overRank > 0 && (
-                            <span className="ml-1 inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
+                        {overRank > 0 && (
+                          <p className="mt-1">
+                            <span className="inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
                               TOP #{overRank}
                             </span>
-                          )}
-                        </p>
+                          </p>
+                        )}
                       </div>
                     </div>
                   </td>

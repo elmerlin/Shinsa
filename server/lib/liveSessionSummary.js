@@ -62,6 +62,16 @@ function formatDurationLabel(totalMinutes) {
   return `${remainder}m`;
 }
 
+function buildShoeLabel(row) {
+  const make = String(row?.shoe_make || '').trim();
+  const model = String(row?.shoe_model || '').trim();
+  const colorway = String(row?.shoe_colorway || '').trim();
+  const normalizedLabel = `${make} ${model}`.replace(/\s+/g, ' ').trim();
+  const fallbackLabel = row?.shoe_id ? `Shoe #${toInt(row.shoe_id) || row.shoe_id}` : '';
+  if (!normalizedLabel) return fallbackLabel;
+  return colorway ? `${normalizedLabel} (${colorway})` : normalizedLabel;
+}
+
 function buildSessionCalorieEstimate(songCount, weightKgInput) {
   const songs = Math.max(0, toInt(songCount));
   const parsedWeight = toPositiveNumber(weightKgInput);
@@ -107,6 +117,7 @@ function buildLiveSessionPostText(summary) {
     `🗓️ ${summary.sessionDateLabel}${summary.sessionTimeRange ? ` • ${summary.sessionTimeRange}` : ''}${summary.sessionDurationLabel ? ` • ${summary.sessionDurationLabel}` : ''}`,
     summary.streamUrl ? `📺 Stream: ${summary.streamUrl}` : '',
     summary.sessionMachineName ? `🕹️ Machine: **${summary.sessionMachineName}**` : '',
+    summary.sessionShoeLabel ? `👟 Shoe: **${summary.sessionShoeLabel}**` : '',
     `👀 Viewers: **${summary.viewerPeak || summary.viewerCount || 0} peak**${summary.messageCount ? ` • 💬 ${summary.messageCount} messages` : ''}${summary.interactions ? ` • 🤝 ${summary.interactions} interactions` : ''}`,
     `🎵 **${summary.songCount} songs** | 🏁 Clears: **${summary.clearCount}/${summary.songCount}** (${summary.clearRate}%)`,
     `📈 Avg level: **Lv.${summary.averageLevel.toFixed(1)}**`,
@@ -159,6 +170,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
   let ratingTotal = 0;
   let totalSteps = 0;
   const judgmentTotals = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
+  const shoeCounts = new Map();
 
   for (const row of normalizedRows) {
     if (row.mode === 'Single') singleCount += 1;
@@ -192,6 +204,11 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     judgmentTotals.good += good;
     judgmentTotals.bad += bad;
     judgmentTotals.miss += miss;
+
+    const shoeLabel = buildShoeLabel(row);
+    if (shoeLabel) {
+      shoeCounts.set(shoeLabel, (shoeCounts.get(shoeLabel) || 0) + 1);
+    }
   }
 
   const songCount = normalizedRows.length;
@@ -247,6 +264,10 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
   const sessionMachineName = normalizedRows
     .map((row) => String(row?.machine_name || '').trim())
     .find(Boolean) || '';
+  const topShoe = Array.from(shoeCounts.entries()).sort((a, b) => b[1] - a[1])[0] || null;
+  const sessionShoeLabel = topShoe
+    ? (shoeCounts.size > 1 ? `${topShoe[0]} (+${shoeCounts.size - 1} more)` : topShoe[0])
+    : '';
 
   const summary = {
     version: 1,
@@ -256,7 +277,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     sessionDurationMinutes,
     sessionDurationLabel,
     sessionMachineName,
-    sessionShoeLabel: '',
+    sessionShoeLabel,
     songCount,
     clearCount,
     clearRate,

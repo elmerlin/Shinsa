@@ -39,12 +39,6 @@ function getGradeColor(grade, score = 0) {
   return getRank(score).color;
 }
 
-function modeShort(mode) {
-  if (mode === 'Single') return 'S';
-  if (mode === 'Double') return 'D';
-  return 'X';
-}
-
 function getOverTop100Rank(value) {
   const rank = parseInt(value, 10) || 0;
   return rank > 0 && rank <= 100 ? rank : 0;
@@ -282,14 +276,13 @@ export default function SessionShareCard({
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0">
                             <p className="text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">{row.song_title}</p>
-                            <p className="text-[10px] text-gray-500">
-                              {modeShort(row.mode)}{row.level || '?'}
-                              {getOverTop100Rank(row.over_top100_rank) > 0 && (
-                                <span className="ml-1 inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
+                            {getOverTop100Rank(row.over_top100_rank) > 0 && (
+                              <p className="mt-1">
+                                <span className="inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
                                   TOP #{getOverTop100Rank(row.over_top100_rank)}
                                 </span>
-                              )}
-                            </p>
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>

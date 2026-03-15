@@ -34,6 +34,7 @@ function sanitizeRows(rows) {
     level: toInt(row?.level),
     score: toInt(row?.score),
     grade: String(row?.grade || ''),
+    over_top100_rank: toInt(row?.over_top100_rank),
     jacket_url: String(row?.jacket_url || ''),
     perfect: toInt(row?.perfect),
     great: toInt(row?.great),

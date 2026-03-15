@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import SessionSummaryCard from './SessionSummaryCard';
 
 function StatPill({ label, value }) {
@@ -41,6 +42,17 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
               <span className="inline-flex w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               {streamHost || 'Open stream'}
             </a>
+          ) : null}
+          {summary.sessionId ? (
+            <div className="mt-1">
+              <Link
+                to={`/live/${encodeURIComponent(summary.sessionId)}`}
+                className="inline-flex items-center gap-1.5 text-[11px] text-cyan-200 hover:text-white transition-colors"
+              >
+                <span className="inline-flex w-2 h-2 rounded-full bg-cyan-400" />
+                Open session page
+              </Link>
+            </div>
           ) : null}
         </div>
         <div className="grid grid-cols-3 gap-2 min-w-[320px] max-sm:min-w-full">

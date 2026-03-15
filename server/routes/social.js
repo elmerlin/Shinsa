@@ -21,6 +21,10 @@ const {
   parseSqliteDateTime,
 } = require('../lib/liveSessionMetrics');
 
+const SHARE_MARKER_PREFIX = '[[SHINSA_SHARE_V1:';
+const SHARE_MARKER_SUFFIX = ']]';
+const SHARE_MARKER_REGEX = /\[\[SHINSA_SHARE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
+
 // Helper: create notification (don't notify yourself)
 function createNotification(db, userId, type, title, message, link) {
   if (!userId) return null;
@@ -97,6 +101,57 @@ function normalizeComparableUrl(value) {
   }
 }
 
+function parseSessionShareMarker(content) {
+  const raw = String(content || '');
+  const match = raw.match(SHARE_MARKER_REGEX);
+  if (!match) return null;
+
+  try {
+    const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+function serializeSessionShareMarker(share) {
+  const encoded = Buffer.from(JSON.stringify(share || {}), 'utf8').toString('base64');
+  return `${SHARE_MARKER_PREFIX}${encoded}${SHARE_MARKER_SUFFIX}`;
+}
+
+function buildShoeLabel(row) {
+  const make = String(row?.shoe_make || '').trim();
+  const model = String(row?.shoe_model || '').trim();
+  const colorway = String(row?.shoe_colorway || '').trim();
+  const normalizedLabel = `${make} ${model}`.replace(/\s+/g, ' ').trim();
+  const fallbackLabel = row?.shoe_id ? `Shoe #${toInt(row.shoe_id) || row.shoe_id}` : '';
+  if (!normalizedLabel) return fallbackLabel;
+  return colorway ? `${normalizedLabel} (${colorway})` : normalizedLabel;
+}
+
+function getSessionShoeLabel(db, sessionId) {
+  if (!sessionId) return '';
+  const rows = db.prepare(`
+    SELECT shoe_id, shoe_make, shoe_model, shoe_colorway
+    FROM live_session_plays
+    WHERE live_session_id = ?
+  `).all(sessionId);
+  if (rows.length === 0) return '';
+
+  const shoeCounts = new Map();
+  for (const row of rows) {
+    const shoeLabel = buildShoeLabel(row);
+    if (!shoeLabel) continue;
+    shoeCounts.set(shoeLabel, (shoeCounts.get(shoeLabel) || 0) + 1);
+  }
+  if (shoeCounts.size === 0) return '';
+
+  const topShoe = Array.from(shoeCounts.entries())
+    .sort((a, b) => b[1] - a[1])[0];
+  if (!topShoe) return '';
+  return shoeCounts.size > 1 ? `${topShoe[0]} (+${shoeCounts.size - 1} more)` : topShoe[0];
+}
+
 function findMatchingEndedLiveSession(db, post, liveSummary) {
   const directSessionId = String(liveSummary?.sessionId || '').trim();
   if (directSessionId) {
@@ -151,7 +206,31 @@ function findMatchingEndedLiveSession(db, post, liveSummary) {
   return best.diff <= 12 * 60 * 60 * 1000 ? best.session : null;
 }
 
+function enrichPostWithSessionShareData(db, post) {
+  if (!post?.content) return post;
+  const share = parseSessionShareMarker(post.content);
+  if (!share || !Array.isArray(share.rows) || share.rows.length === 0) return post;
+
+  let changed = false;
+  const rows = share.rows.map((row) => {
+    const enriched = enrichSessionShareRow(db, post.user_id, post.created_at, row);
+    if (!changed && JSON.stringify(enriched) !== JSON.stringify(row)) {
+      changed = true;
+    }
+    return enriched;
+  });
+
+  if (changed) {
+    post.content = String(post.content).replace(
+      SHARE_MARKER_REGEX,
+      serializeSessionShareMarker({ ...share, rows })
+    );
+  }
+  return post;
+}
+
 function enrichPostWithLiveSummaryMetrics(db, post) {
+  enrichPostWithSessionShareData(db, post);
   if (!post?.content) return post;
   const liveSummary = parseLiveSessionMarker(post.content);
   if (!liveSummary) return post;
@@ -162,6 +241,7 @@ function enrichPostWithLiveSummaryMetrics(db, post) {
   const interactionCounts = getSessionInteractionCounts(db, session.id);
   post.live_summary_metrics = {
     sessionId: session.id,
+    sessionShoeLabel: getSessionShoeLabel(db, session.id),
     messageCount: getSessionMessageCount(db, session.id),
     requestPlayCount: interactionCounts.requestPlayCount,
     votedSongPlayCount: interactionCounts.votedSongPlayCount,
@@ -201,6 +281,8 @@ function hasJudgmentData(entry) {
 
 let recentPlayJudgmentsBeforeStmt = null;
 let recentPlayJudgmentsAnyStmt = null;
+let recentPlayMetadataBeforeStmt = null;
+let recentPlayMetadataAnyStmt = null;
 
 function getRecentPlayJudgmentsBeforeStmt(db) {
   if (!recentPlayJudgmentsBeforeStmt) {
@@ -253,6 +335,45 @@ function getRecentPlayJudgmentsAnyStmt(db) {
   return recentPlayJudgmentsAnyStmt;
 }
 
+function getRecentPlayMetadataBeforeStmt(db) {
+  if (!recentPlayMetadataBeforeStmt) {
+    recentPlayMetadataBeforeStmt = db.prepare(`
+      SELECT perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank
+      FROM user_recently_played
+      WHERE user_id = ?
+        AND song_title = ?
+        AND mode = ?
+        AND level = ?
+        AND score = ?
+        AND datetime(COALESCE(date_played, '')) <= datetime(?)
+      ORDER BY
+        datetime(COALESCE(date_played, '1970-01-01')) DESC,
+        id DESC
+      LIMIT 1
+    `);
+  }
+  return recentPlayMetadataBeforeStmt;
+}
+
+function getRecentPlayMetadataAnyStmt(db) {
+  if (!recentPlayMetadataAnyStmt) {
+    recentPlayMetadataAnyStmt = db.prepare(`
+      SELECT perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank
+      FROM user_recently_played
+      WHERE user_id = ?
+        AND song_title = ?
+        AND mode = ?
+        AND level = ?
+        AND score = ?
+      ORDER BY
+        datetime(COALESCE(date_played, '1970-01-01')) DESC,
+        id DESC
+      LIMIT 1
+    `);
+  }
+  return recentPlayMetadataAnyStmt;
+}
+
 function findRecentPlayJudgments(db, { userId, createdAt, songTitle, mode, level, score }) {
   if (!userId || !songTitle || !mode) return null;
   const numericLevel = toInt(level);
@@ -272,6 +393,27 @@ function findRecentPlayJudgments(db, { userId, createdAt, songTitle, mode, level
   }
 
   return getRecentPlayJudgmentsAnyStmt(db).get(userId, songTitle, mode, numericLevel, numericScore) || null;
+}
+
+function findRecentPlayMetadata(db, { userId, createdAt, songTitle, mode, level, score }) {
+  if (!userId || !songTitle || !mode) return null;
+  const numericLevel = toInt(level);
+  const numericScore = toInt(score);
+  if (numericLevel <= 0 || numericScore <= 0) return null;
+
+  if (createdAt) {
+    const datedMatch = getRecentPlayMetadataBeforeStmt(db).get(
+      userId,
+      songTitle,
+      mode,
+      numericLevel,
+      numericScore,
+      createdAt
+    );
+    if (datedMatch) return datedMatch;
+  }
+
+  return getRecentPlayMetadataAnyStmt(db).get(userId, songTitle, mode, numericLevel, numericScore) || null;
 }
 
 function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'score') {
@@ -298,6 +440,40 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
     plate: entry.plate || lookup.plate || '',
     background_url: entry.background_url || lookup.background_url || '',
     over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
+  };
+}
+
+function enrichSessionShareRow(db, userId, createdAt, row) {
+  if (!row) return row;
+  const needsLookup = (
+    !hasJudgmentData(row) ||
+    toInt(row.over_top100_rank) <= 0 ||
+    !String(row.jacket_url || '').trim() ||
+    !String(row.date_played || '').trim()
+  );
+  if (!needsLookup) return row;
+
+  const lookup = findRecentPlayMetadata(db, {
+    userId,
+    createdAt,
+    songTitle: row.song_title,
+    mode: row.mode,
+    level: row.level,
+    score: row.score,
+  });
+  if (!lookup) return row;
+
+  return {
+    ...row,
+    perfect: toInt(row.perfect) || toInt(lookup.perfect),
+    great: toInt(row.great) || toInt(lookup.great),
+    good: toInt(row.good) || toInt(lookup.good),
+    bad: toInt(row.bad) || toInt(lookup.bad),
+    miss: toInt(row.miss) || toInt(lookup.miss),
+    max_combo: Math.max(toInt(row.max_combo), toInt(lookup.max_combo)),
+    over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup.over_top100_rank),
+    jacket_url: row.jacket_url || lookup.background_url || '',
+    date_played: row.date_played || lookup.date_played || '',
   };
 }
 
