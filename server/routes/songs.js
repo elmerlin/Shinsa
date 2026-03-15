@@ -158,6 +158,14 @@ function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
   return title;
 }
 
+function hasShortCutSuffix(title) {
+  return /\s*-\s*short cut\s*-\s*$/i.test(String(title || ''));
+}
+
+function normalizeShortCutSuffix(title) {
+  return String(title || '').replace(/\s*-\s*short cut\s*-\s*$/i, ' - short cut -');
+}
+
 function normalizeMode(mode) {
   const m = String(mode || '').trim().toLowerCase();
   if (m === 'single' || m === 'singles' || m === 's') return 'Single';
@@ -479,11 +487,18 @@ function compareRecords(a, b) {
 function toCanonicalTitle(title, aliases) {
   let normalized = normalizeSongName(title);
   if (!normalized) return '';
+  const wantsShortCut = hasShortCutSuffix(normalized);
 
   const seen = new Set();
   while (aliases[normalized] && !seen.has(normalized)) {
     seen.add(normalized);
     normalized = aliases[normalized];
+  }
+  normalized = normalizeSongName(normalized);
+  if (hasShortCutSuffix(normalized)) {
+    normalized = normalizeShortCutSuffix(normalized);
+  } else if (wantsShortCut) {
+    normalized = `${normalized} - short cut -`;
   }
   return normalized;
 }
