@@ -119,6 +119,16 @@ function serializeSessionShareMarker(share) {
   return `${SHARE_MARKER_PREFIX}${encoded}${SHARE_MARKER_SUFFIX}`;
 }
 
+function extractYoutubeVideoId(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const match = raw.match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/live\/)([a-zA-Z0-9_-]{11})/
+  );
+  if (match?.[1]) return match[1];
+  return /^[a-zA-Z0-9_-]{11}$/.test(raw) ? raw : '';
+}
+
 function buildShoeLabel(row) {
   const make = String(row?.shoe_make || '').trim();
   const model = String(row?.shoe_model || '').trim();
@@ -289,6 +299,7 @@ let recentPlayJudgmentsBeforeStmt = null;
 let recentPlayJudgmentsAnyStmt = null;
 let recentPlayMetadataBeforeStmt = null;
 let recentPlayMetadataAnyStmt = null;
+let sessionReplayLinkStmt = null;
 
 function getRecentPlayJudgmentsBeforeStmt(db) {
   if (!recentPlayJudgmentsBeforeStmt) {
@@ -380,6 +391,24 @@ function getRecentPlayMetadataAnyStmt(db) {
   return recentPlayMetadataAnyStmt;
 }
 
+function getSessionReplayLinkStmt(db) {
+  if (!sessionReplayLinkStmt) {
+    sessionReplayLinkStmt = db.prepare(`
+      SELECT COALESCE(NULLIF(yt.session_youtube_url, ''), '') AS replay_embed_url
+      FROM songs chart
+      LEFT JOIN user_chart_youtube_links yt
+        ON yt.user_id = ?
+       AND yt.chart_id = chart.id
+      WHERE chart.title = ?
+        AND chart.mode = ?
+        AND chart.level = ?
+      ORDER BY chart.id ASC
+      LIMIT 1
+    `);
+  }
+  return sessionReplayLinkStmt;
+}
+
 function findRecentPlayJudgments(db, { userId, createdAt, songTitle, mode, level, score }) {
   if (!userId || !songTitle || !mode) return null;
   const numericLevel = toInt(level);
@@ -422,6 +451,19 @@ function findRecentPlayMetadata(db, { userId, createdAt, songTitle, mode, level,
   return getRecentPlayMetadataAnyStmt(db).get(userId, songTitle, mode, numericLevel, numericScore) || null;
 }
 
+function findSessionReplayLink(db, { userId, songTitle, mode, level }) {
+  if (!userId || !songTitle || !mode) return null;
+  const numericLevel = toInt(level);
+  if (numericLevel <= 0) return null;
+  const row = getSessionReplayLinkStmt(db).get(userId, songTitle, mode, numericLevel) || null;
+  const replayEmbedUrl = String(row?.replay_embed_url || '').trim();
+  if (!replayEmbedUrl) return null;
+  return {
+    replay_embed_url: replayEmbedUrl,
+    replay_video_id: extractYoutubeVideoId(replayEmbedUrl),
+  };
+}
+
 function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'score') {
   if (!entry || hasJudgmentData(entry)) return entry;
 
@@ -455,7 +497,8 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     !hasJudgmentData(row) ||
     toInt(row.over_top100_rank) <= 0 ||
     !String(row.jacket_url || '').trim() ||
-    !String(row.date_played || '').trim()
+    !String(row.date_played || '').trim() ||
+    !String(row.replay_embed_url || '').trim()
   );
   if (!needsLookup) return row;
 
@@ -467,19 +510,34 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     level: row.level,
     score: row.score,
   });
-  if (!lookup) return row;
+
+  const replay = String(row.replay_embed_url || '').trim()
+    ? {
+        replay_embed_url: String(row.replay_embed_url || '').trim(),
+        replay_video_id: String(row.replay_video_id || '').trim() || extractYoutubeVideoId(row.replay_embed_url),
+      }
+    : findSessionReplayLink(db, {
+        userId,
+        songTitle: row.song_title,
+        mode: row.mode,
+        level: row.level,
+      });
+
+  if (!lookup && !replay) return row;
 
   return {
     ...row,
-    perfect: toInt(row.perfect) || toInt(lookup.perfect),
-    great: toInt(row.great) || toInt(lookup.great),
-    good: toInt(row.good) || toInt(lookup.good),
-    bad: toInt(row.bad) || toInt(lookup.bad),
-    miss: toInt(row.miss) || toInt(lookup.miss),
-    max_combo: Math.max(toInt(row.max_combo), toInt(lookup.max_combo)),
-    over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup.over_top100_rank),
-    jacket_url: row.jacket_url || lookup.background_url || '',
-    date_played: row.date_played || lookup.date_played || '',
+    perfect: toInt(row.perfect) || toInt(lookup?.perfect),
+    great: toInt(row.great) || toInt(lookup?.great),
+    good: toInt(row.good) || toInt(lookup?.good),
+    bad: toInt(row.bad) || toInt(lookup?.bad),
+    miss: toInt(row.miss) || toInt(lookup?.miss),
+    max_combo: Math.max(toInt(row.max_combo), toInt(lookup?.max_combo)),
+    over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup?.over_top100_rank),
+    jacket_url: row.jacket_url || lookup?.background_url || '',
+    date_played: row.date_played || lookup?.date_played || '',
+    replay_embed_url: replay?.replay_embed_url || String(row.replay_embed_url || '').trim(),
+    replay_video_id: replay?.replay_video_id || String(row.replay_video_id || '').trim(),
   };
 }
 
