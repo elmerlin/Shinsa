@@ -285,24 +285,28 @@ export default function SessionShareCard({
                       <td className="px-2 py-1.5">
                         <div className="flex items-start gap-2">
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
-                          <div className="min-w-0">
-                            <p className="text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">{row.song_title}</p>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              {getOverTop100Rank(row.over_top100_rank) > 0 && (
-                                <span className="inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
-                                  TOP #{getOverTop100Rank(row.over_top100_rank)}
-                                </span>
-                              )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-1.5">
+                              <p className="min-w-0 flex-1 text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">
+                                {row.song_title}
+                              </p>
                               {row.replay_embed_url ? (
                                 <button
                                   type="button"
-                                  className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                                   title="Open replay clip"
                                   onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
                                 >
                                   <YouTubeBadgeIcon className="h-3.5 w-3.5 text-sky-300" />
                                 </button>
                               ) : null}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {getOverTop100Rank(row.over_top100_rank) > 0 && (
+                                <span className="inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
+                                  TOP #{getOverTop100Rank(row.over_top100_rank)}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
