@@ -272,8 +272,8 @@ export default function SessionShareCard({
                 <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
                   <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
                   <th className="text-left px-2 py-1 font-display font-bold">Song</th>
-                  <th className="w-[82px] px-1.5 py-1 text-right font-display font-bold sm:w-[102px] sm:px-2">Score</th>
-                  <th className="w-[48px] px-1 py-1 text-right font-display font-bold sm:w-[64px] sm:px-2">Grade</th>
+                  <th className="w-[92px] px-0.5 py-1 text-right font-display font-bold sm:w-[108px] sm:px-2">Score</th>
+                  <th className="w-[38px] px-0 py-1 text-right font-display font-bold sm:w-[52px] sm:px-1">Grade</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,23 +286,13 @@ export default function SessionShareCard({
                         <div className="flex items-start gap-2">
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-1.5">
+                            <div className="flex items-start">
                               <p
                                 className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-200 font-display font-bold leading-tight"
                                 title={row.song_title}
                               >
                                 {row.song_title}
                               </p>
-                              {row.replay_embed_url ? (
-                                <button
-                                  type="button"
-                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
-                                  title="Open replay clip"
-                                  onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
-                                >
-                                  <YouTubeBadgeIcon className="h-3.5 w-3.5 text-sky-300" />
-                                </button>
-                              ) : null}
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-1.5">
                               {getOverTop100Rank(row.over_top100_rank) > 0 && (
@@ -314,12 +304,26 @@ export default function SessionShareCard({
                           </div>
                         </div>
                       </td>
-                      <td className="px-1.5 py-1.5 text-right font-mono text-[11px] text-gray-200 whitespace-nowrap sm:px-2 sm:text-xs">{formatNumber(row.score)}</td>
-                      <td className="px-1 py-1.5 text-right whitespace-nowrap sm:px-2">
+                      <td className="px-0.5 py-1.5 text-right whitespace-nowrap sm:px-2">
+                        <div className="flex items-center justify-end gap-1">
+                          {row.replay_embed_url ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                              title="Open replay clip"
+                              onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
+                            >
+                              <YouTubeBadgeIcon className="h-3.5 w-3.5 text-sky-300" />
+                            </button>
+                          ) : null}
+                          <span className="font-mono text-[11px] text-gray-200 sm:text-xs">{formatNumber(row.score)}</span>
+                        </div>
+                      </td>
+                      <td className="px-0 py-1.5 text-right whitespace-nowrap sm:px-1">
                         <button
                           type="button"
                           onClick={() => setActiveRow(row)}
-                          className={`text-[11px] font-display font-bold hover:underline sm:text-xs ${getGradeColorClass(row.grade)}`}
+                          className={`text-[10px] font-display font-bold hover:underline sm:text-xs ${getGradeColorClass(row.grade)}`}
                           title="View judgments"
                         >
                           {row.grade || '-'}
