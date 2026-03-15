@@ -272,8 +272,8 @@ export default function SessionShareCard({
                 <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
                   <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
                   <th className="text-left px-2 py-1 font-display font-bold">Song</th>
-                  <th className="w-[92px] px-2 py-1 text-right font-display font-bold sm:w-[110px]">Score</th>
-                  <th className="w-[56px] px-2 py-1 text-right font-display font-bold sm:w-[72px]">Grade</th>
+                  <th className="w-[82px] px-1.5 py-1 text-right font-display font-bold sm:w-[102px] sm:px-2">Score</th>
+                  <th className="w-[48px] px-1 py-1 text-right font-display font-bold sm:w-[64px] sm:px-2">Grade</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,12 +314,12 @@ export default function SessionShareCard({
                           </div>
                         </div>
                       </td>
-                      <td className="px-2 py-1.5 text-right font-mono text-gray-200 whitespace-nowrap">{formatNumber(row.score)}</td>
-                      <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                      <td className="px-1.5 py-1.5 text-right font-mono text-[11px] text-gray-200 whitespace-nowrap sm:px-2 sm:text-xs">{formatNumber(row.score)}</td>
+                      <td className="px-1 py-1.5 text-right whitespace-nowrap sm:px-2">
                         <button
                           type="button"
                           onClick={() => setActiveRow(row)}
-                          className={`font-display font-bold hover:underline ${getGradeColorClass(row.grade)}`}
+                          className={`text-[11px] font-display font-bold hover:underline sm:text-xs ${getGradeColorClass(row.grade)}`}
                           title="View judgments"
                         >
                           {row.grade || '-'}
