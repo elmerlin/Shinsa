@@ -287,7 +287,7 @@ export default function SessionShareCard({
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start gap-1.5">
-                              <p className="min-w-0 flex-1 text-gray-200 font-display font-bold whitespace-normal break-words leading-tight">
+                              <p className="min-w-0 flex-1 truncate text-gray-200 font-display font-bold leading-tight">
                                 {row.song_title}
                               </p>
                               {row.replay_embed_url ? (
