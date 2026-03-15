@@ -132,8 +132,13 @@ function buildShoeLabel(row) {
 function getSessionShoeLabel(db, sessionId) {
   if (!sessionId) return '';
   const rows = db.prepare(`
-    SELECT shoe_id, shoe_make, shoe_model, shoe_colorway
-    FROM live_session_plays
+    SELECT
+      p.shoe_id,
+      COALESCE(NULLIF(p.shoe_make, ''), COALESCE(s.make, '')) AS shoe_make,
+      COALESCE(NULLIF(p.shoe_model, ''), COALESCE(s.model, '')) AS shoe_model,
+      COALESCE(NULLIF(p.shoe_colorway, ''), COALESCE(s.colorway, '')) AS shoe_colorway
+    FROM live_session_plays p
+    LEFT JOIN user_shoes s ON s.id = p.shoe_id
     WHERE live_session_id = ?
   `).all(sessionId);
   if (rows.length === 0) return '';

@@ -23,14 +23,23 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
         }
       })()
     : '';
+  const sessionTitleLabel = title.replace(/\s+Recap$/i, '').trim() || 'Shinsa Live';
 
   return (
     <div className={`rounded-2xl border border-rose-400/35 bg-gradient-to-br from-rose-500/18 via-orange-500/10 to-cyan-500/8 p-3 ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-rose-300">{title}</p>
-          <p className="text-xs text-rose-100/90">
+          <p className="text-xs text-rose-100/90 flex flex-wrap items-center gap-x-2 gap-y-1">
             {summary.hostUsername ? `Hosted by ${summary.hostUsername}` : 'Live session recap'}
+            {summary.sessionId ? (
+              <Link
+                to={`/live/${encodeURIComponent(summary.sessionId)}`}
+                className="text-cyan-200 hover:text-white transition-colors font-display font-bold"
+              >
+                {sessionTitleLabel}
+              </Link>
+            ) : null}
           </p>
           {summary.streamUrl ? (
             <a
@@ -42,17 +51,6 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
               <span className="inline-flex w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               {streamHost || 'Open stream'}
             </a>
-          ) : null}
-          {summary.sessionId ? (
-            <div className="mt-1">
-              <Link
-                to={`/live/${encodeURIComponent(summary.sessionId)}`}
-                className="inline-flex items-center gap-1.5 text-[11px] text-cyan-200 hover:text-white transition-colors"
-              >
-                <span className="inline-flex w-2 h-2 rounded-full bg-cyan-400" />
-                Open session page
-              </Link>
-            </div>
           ) : null}
         </div>
         <div className="grid grid-cols-3 gap-2 min-w-[320px] max-sm:min-w-full">
