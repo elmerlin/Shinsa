@@ -1213,46 +1213,25 @@ export default function App() {
                 Live
               </Link>
             )}
-            <Link to="/world-max" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
-              </svg>
-              <span>World Max</span>
+            <Link to="/world-max" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+              World Max
             </Link>
-            <Link to="/songs" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
-              </svg>
-              <span>Songs</span>
+            <Link to="/songs" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+              Songs
             </Link>
-            <Link to="/lists" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-              <span>Lists</span>
+            <Link to="/lists" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+              Lists
             </Link>
-            <Link to="/tiers" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h14M3 18h10" />
-              </svg>
-              <span>Tiers</span>
+            <Link to="/tiers" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+              Tiers
             </Link>
             {canAccessDojo && (
-              <Link to="/dojoadmin" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
-                </svg>
-                <span>Dojo Admin</span>
+              <Link to="/dojoadmin" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+                Dojo Admin
               </Link>
             )}
-            <Link to="/head-to-head" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors font-display">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
-              </svg>
-              <span>Rivals</span>
+            <Link to="/head-to-head" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+              Rivals
             </Link>
             <Link to="/communities" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
               Communities
