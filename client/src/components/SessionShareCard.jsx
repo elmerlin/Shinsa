@@ -267,13 +267,13 @@ export default function SessionShareCard({
           {visibleRows.length === 0 ? (
             <p className="px-3 py-3 text-xs text-gray-500">No songs matched this filter.</p>
           ) : (
-            <table className="w-full text-xs table-auto">
+            <table className="w-full table-fixed text-xs">
               <thead>
                 <tr className="text-[10px] text-gray-500 border-b border-piu-border/25">
                   <th className="text-left px-2 py-1 font-display font-bold w-6">#</th>
                   <th className="text-left px-2 py-1 font-display font-bold">Song</th>
-                  <th className="text-right px-2 py-1 font-display font-bold">Score</th>
-                  <th className="text-right px-2 py-1 font-display font-bold">Grade</th>
+                  <th className="w-[92px] px-2 py-1 text-right font-display font-bold sm:w-[110px]">Score</th>
+                  <th className="w-[56px] px-2 py-1 text-right font-display font-bold sm:w-[72px]">Grade</th>
                 </tr>
               </thead>
               <tbody>
@@ -282,12 +282,15 @@ export default function SessionShareCard({
                   return (
                     <tr key={`${row.song_title}-${row.mode}-${row.level}-${row.score}-${idx}`} className="border-b border-piu-border/20 last:border-0">
                       <td className="px-2 py-1.5 text-gray-400 font-mono align-top">{number}</td>
-                      <td className="px-2 py-1.5">
+                      <td className="min-w-0 px-2 py-1.5">
                         <div className="flex items-start gap-2">
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start gap-1.5">
-                              <p className="min-w-0 flex-1 truncate text-gray-200 font-display font-bold leading-tight">
+                              <p
+                                className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-gray-200 font-display font-bold leading-tight"
+                                title={row.song_title}
+                              >
                                 {row.song_title}
                               </p>
                               {row.replay_embed_url ? (
