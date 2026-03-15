@@ -261,7 +261,6 @@ function getLiveSummaryPostMeta(db, session, post) {
     FROM live_session_participants
     WHERE live_session_id = ?
       AND user_id = ?
-    ORDER BY id DESC
     LIMIT 1
   `).get(session.id, postUserId);
 
