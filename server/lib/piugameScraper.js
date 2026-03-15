@@ -532,6 +532,67 @@ async function scrapePumbility(client) {
   return { pumbilityValue, scores };
 }
 
+function normalizePlayDataLevelKey(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === '27over' || normalized === '10over' || normalized === 'coop') return normalized;
+  const numeric = parseInt(normalized, 10);
+  return Number.isInteger(numeric) && numeric > 0 ? String(numeric) : '';
+}
+
+function parsePlayDataLevelSummary(html, levelKey) {
+  const $ = cheerio.load(typeof html === 'string' ? html : '');
+
+  const ratingTotal = parseScore($('.play_data_wrap .my_w .num').first().text());
+  const clearText = collapseWhitespace($('.play_data_wrap .clear_w .l_con .t1').first().text());
+  const clearMatch = clearText.match(/(\d+)\s*\/\s*(\d+)/);
+  const clearedCharts = clearMatch ? parseInt(clearMatch[1], 10) || 0 : 0;
+  const totalCharts = clearMatch ? parseInt(clearMatch[2], 10) || 0 : 0;
+  const progressText = collapseWhitespace($('.play_data_wrap .graph .num').first().text());
+  const clearPercentage = progressText
+    ? Number(progressText.replace(/[^0-9.]/g, '')) || 0
+    : (totalCharts > 0 ? Number(((clearedCharts / totalCharts) * 100).toFixed(2)) : 0);
+
+  return {
+    level_key: normalizePlayDataLevelKey(levelKey),
+    rating_total: ratingTotal,
+    cleared_charts: clearedCharts,
+    total_charts: totalCharts,
+    clear_percentage: clearPercentage,
+  };
+}
+
+async function scrapePlayDataLevelSummaries(client, levelKeys = []) {
+  const requested = Array.isArray(levelKeys) ? levelKeys : [];
+  const normalizedKeys = [];
+  const seen = new Set();
+
+  for (const levelKey of requested) {
+    const normalized = normalizePlayDataLevelKey(levelKey);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    normalizedKeys.push(normalized);
+  }
+
+  const summaries = [];
+  for (const levelKey of normalizedKeys) {
+    const res = await client.get(`${PIU_BASE}/my_page/play_data.php?lv=${encodeURIComponent(levelKey)}`);
+    const summary = parsePlayDataLevelSummary(res.data, levelKey);
+    if (
+      summary.level_key
+      && (
+        summary.rating_total > 0
+        || summary.cleared_charts > 0
+        || summary.total_charts > 0
+      )
+    ) {
+      summaries.push(summary);
+    }
+  }
+
+  return summaries;
+}
+
 /**
  * Small delay helper to avoid hammering piugame.com
  */
@@ -1269,6 +1330,7 @@ module.exports = {
   createClient,
   setLanguage,
   scrapePumbility,
+  scrapePlayDataLevelSummaries,
   scrapeBestScores,
   scrapeTopSongs,
   scrapeRecentlyPlayed,

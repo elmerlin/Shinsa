@@ -10,6 +10,7 @@ const { getDb } = require('../db/schema');
 const {
   login,
   scrapePumbility,
+  scrapePlayDataLevelSummaries,
   scrapeBestScores,
   scrapeRecentlyPlayed,
   scrapePumbilityRanking,
@@ -66,9 +67,84 @@ const LEADERBOARD_GRADE_INDEX = Object.fromEntries(LEADERBOARD_GRADE_ORDER.map((
 const PLAYER_SHEET_CACHE_TTL_MS = Math.max(30 * 1000, (parseInt(process.env.PLAYER_SHEET_CACHE_TTL_SECONDS, 10) || 300) * 1000);
 const playerSheetCache = new Map();
 let cachedPiugameSongAliases = null;
+const DEFAULT_PLAY_DATA_LEVEL_KEYS = [
+  ...Array.from({ length: 17 }, (_, index) => String(index + 10)),
+  '27over',
+];
 
 function clearPlayerSheetCache() {
   playerSheetCache.clear();
+}
+
+function normalizePlayDataLevelKey(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === '27over' || normalized === '10over' || normalized === 'coop') return normalized;
+  const numeric = parseInt(normalized, 10);
+  return Number.isInteger(numeric) && numeric > 0 ? String(numeric) : '';
+}
+
+function parsePlayDataLevelsJson(raw) {
+  if (!raw) return new Map();
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return new Map();
+  }
+
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.levels)
+      ? payload.levels
+      : [];
+  const map = new Map();
+
+  for (const row of rows) {
+    const levelKey = normalizePlayDataLevelKey(row?.level_key || row?.level);
+    if (!levelKey) continue;
+    map.set(levelKey, {
+      level_key: levelKey,
+      rating_total: Math.max(0, parseInt(row?.rating_total, 10) || 0),
+      cleared_charts: Math.max(0, parseInt(row?.cleared_charts, 10) || 0),
+      total_charts: Math.max(0, parseInt(row?.total_charts, 10) || 0),
+      clear_percentage: Number(row?.clear_percentage) || 0,
+    });
+  }
+
+  return map;
+}
+
+function serializePlayDataLevels(levelsMap) {
+  if (!(levelsMap instanceof Map)) return '[]';
+
+  const rows = Array.from(levelsMap.values()).sort((a, b) => {
+    const aKey = normalizePlayDataLevelKey(a?.level_key);
+    const bKey = normalizePlayDataLevelKey(b?.level_key);
+    const aNumeric = /^\d+$/.test(aKey) ? parseInt(aKey, 10) : Number.POSITIVE_INFINITY;
+    const bNumeric = /^\d+$/.test(bKey) ? parseInt(bKey, 10) : Number.POSITIVE_INFINITY;
+    if (aNumeric !== bNumeric) return aNumeric - bNumeric;
+    return aKey.localeCompare(bKey);
+  });
+
+  return JSON.stringify(rows);
+}
+
+function mergePlayDataLevels(existingRaw, incomingRows = []) {
+  const merged = parsePlayDataLevelsJson(existingRaw);
+  for (const row of incomingRows) {
+    const levelKey = normalizePlayDataLevelKey(row?.level_key || row?.level);
+    if (!levelKey) continue;
+    merged.set(levelKey, {
+      level_key: levelKey,
+      rating_total: Math.max(0, parseInt(row?.rating_total, 10) || 0),
+      cleared_charts: Math.max(0, parseInt(row?.cleared_charts, 10) || 0),
+      total_charts: Math.max(0, parseInt(row?.total_charts, 10) || 0),
+      clear_percentage: Number(row?.clear_percentage) || 0,
+    });
+  }
+  return serializePlayDataLevels(merged);
 }
 
 function getNextGradeThreshold(score) {
@@ -2594,6 +2670,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   let titleUnlockPostId = null;
   let upscoreRowsWithGains = [];
   let clearRowsWithGains = [];
+  const touchedPlayDataLevels = new Set();
   let pumbilityGains = {
     upscores: [],
     clears: [],
@@ -2737,6 +2814,9 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           } else {
             replaceBest.run(score, grade, activeShoeId, overTop100Rank, userId, songTitle, mode, level);
           }
+          if (level >= 10) {
+            touchedPlayDataLevels.add(String(level));
+          }
           updatedCount += 1;
         }
       }
@@ -2766,6 +2846,19 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     }
   });
   txn();
+
+  if (touchedPlayDataLevels.size > 0) {
+    try {
+      const summaries = await scrapePlayDataLevelSummaries(client, Array.from(touchedPlayDataLevels));
+      if (summaries.length > 0) {
+        const existingSync = db.prepare('SELECT play_data_levels_json FROM user_piugame_sync WHERE user_id = ?').get(userId);
+        const nextPlayDataJson = mergePlayDataLevels(existingSync?.play_data_levels_json || '', summaries);
+        db.prepare('UPDATE user_piugame_sync SET play_data_levels_json = ? WHERE user_id = ?').run(nextPlayDataJson, userId);
+      }
+    } catch (err) {
+      console.warn(`Play data summary refresh failed for ${userId}: ${err.message}`);
+    }
+  }
 
   checkStreakAchievements(db, userId);
   const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
@@ -2946,6 +3039,12 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       });
       const passScores = scores.filter((row) => isPassingScore(row.score, row.grade));
       const ignoredFailCount = scores.length - passScores.length;
+      let playDataLevels = [];
+      try {
+        playDataLevels = await scrapePlayDataLevelSummaries(client, DEFAULT_PLAY_DATA_LEVEL_KEYS);
+      } catch (err) {
+        console.warn(`Play data summary scrape failed for ${userId}: ${err.message}`);
+      }
       const overRankingLookup = await ensureOverRankingLookupForScoring(db, { maxAgeMinutes: 1440 });
       const scoredPassScores = passScores.map((row) => ({
         ...row,
@@ -2978,6 +3077,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       // Capture old scores for upscore tracking before replacing
       const oldScores = {};
       const existingScores = db.prepare('SELECT song_title, mode, level, score, grade, shoe_id FROM user_best_scores WHERE user_id = ?').all(userId);
+      const existingSyncRow = db.prepare('SELECT play_data_levels_json FROM user_piugame_sync WHERE user_id = ?').get(userId);
       const baselineBestScores = existingScores.filter((row) => isPassingScore(row.score, row.grade));
       for (const s of existingScores) {
         if (!isPassingScore(s.score, s.grade)) continue;
@@ -3044,8 +3144,13 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         });
         db.prepare(`
           UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
-          sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
-        `).run(userId);
+          play_data_levels_json = ?, sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
+        `).run(
+          playDataLevels.length > 0
+            ? mergePlayDataLevels('', playDataLevels)
+            : (existingSyncRow?.play_data_levels_json || '[]'),
+          userId
+        );
       });
       txn();
       const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);

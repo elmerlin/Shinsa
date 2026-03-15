@@ -1323,7 +1323,8 @@ function initializeDb() {
       last_pumbility_sync TEXT DEFAULT '',
       last_recently_played_sync TEXT DEFAULT '',
       best_scores_imported INTEGER DEFAULT 0,
-      pumbility_value INTEGER DEFAULT 0
+      pumbility_value INTEGER DEFAULT 0,
+      play_data_levels_json TEXT DEFAULT '[]'
     );
 
     CREATE TABLE IF NOT EXISTS pumbility_leaderboard (
@@ -2804,6 +2805,7 @@ function initializeDb() {
     ['sync_in_progress', "TEXT DEFAULT ''"],
     ['sync_progress', 'INT DEFAULT 0'],
     ['sync_total', 'INT DEFAULT 0'],
+    ['play_data_levels_json', "TEXT DEFAULT '[]'"],
   ];
   for (const [col, type] of syncMigrations) {
     if (!syncCols.includes(col)) {

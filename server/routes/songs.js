@@ -876,6 +876,38 @@ function finalizeLevelEntries(levelMap, totalChartsByLevel) {
   }
 }
 
+function parseOfficialPlayDataLevels(raw) {
+  if (!raw) return new Map();
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return new Map();
+  }
+
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.levels)
+      ? payload.levels
+      : [];
+  const map = new Map();
+
+  for (const row of rows) {
+    const level = parseInt(row?.level_key ?? row?.level, 10) || 0;
+    if (level <= 0) continue;
+    map.set(level, {
+      level,
+      rating_total: Math.max(0, parseInt(row?.rating_total, 10) || 0),
+      cleared_charts: Math.max(0, parseInt(row?.cleared_charts, 10) || 0),
+      total_charts: Math.max(0, parseInt(row?.total_charts, 10) || 0),
+      clear_percentage: Number(row?.clear_percentage) || 0,
+    });
+  }
+
+  return map;
+}
+
 function getCompetitiveLevel(entries) {
   let best = null;
   for (const entry of entries) {
@@ -982,6 +1014,21 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
   const singleEntries = Array.from(singleLevels.values()).sort((a, b) => a.level - b.level);
   const doubleEntries = Array.from(doubleLevels.values()).sort((a, b) => a.level - b.level);
   const bothEntries = Array.from(allLevels.values()).sort((a, b) => a.level - b.level);
+  const officialCombinedLevels = parseOfficialPlayDataLevels(syncRow?.play_data_levels_json);
+
+  if (officialCombinedLevels.size > 0) {
+    for (const row of bothEntries) {
+      const official = officialCombinedLevels.get(parseInt(row.level, 10) || 0);
+      if (!official) continue;
+
+      row.rating_total = official.rating_total;
+      if (official.total_charts > 0) row.total_charts = official.total_charts;
+      row.cleared_charts = official.cleared_charts;
+      row.clear_percentage = row.total_charts > 0
+        ? Number(((row.cleared_charts / row.total_charts) * 100).toFixed(2))
+        : 0;
+    }
+  }
 
   const singleTotals = singleEntries.reduce((acc, row) => {
     acc.total_charts += row.total_charts;
@@ -1086,7 +1133,7 @@ function getUserAnalytics(db, userId, aliases, songCatalog) {
   });
 
   const profile = db.prepare('SELECT id, username, avatar, pumbility FROM users WHERE id = ?').get(userId) || null;
-  const syncRow = db.prepare('SELECT best_scores_imported, last_best_scores_sync, pumbility_value FROM user_piugame_sync WHERE user_id = ?').get(userId) || null;
+  const syncRow = db.prepare('SELECT best_scores_imported, last_best_scores_sync, pumbility_value, play_data_levels_json FROM user_piugame_sync WHERE user_id = ?').get(userId) || null;
 
   return {
     bestByChart,
