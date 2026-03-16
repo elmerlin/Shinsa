@@ -548,7 +548,7 @@ function HourOfPowerLeaderboardTab() {
               <span className="inline-flex rounded-md border border-yellow-400/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">
                 Hour of Power
               </span>
-              <h2 className="mt-2 whitespace-nowrap text-[1.9rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
+              <h2 className="mt-2 whitespace-nowrap text-[1.68rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
             </div>
             {currentUserBest ? (
               <div className="w-[5.6rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-1.5 text-right">
@@ -593,10 +593,10 @@ function HourOfPowerLeaderboardTab() {
                 <thead>
                   <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[9px] uppercase tracking-[0.12em] text-gray-500">
                     <th className="w-[1.8rem] px-0.5 py-2 text-left font-display font-bold">Rank</th>
-                    <th className="w-[7.2rem] px-0.5 py-2 pl-2 text-left font-display font-bold">Player</th>
-                    <th className="w-[3.5rem] px-0 py-2 text-right font-display font-bold">Avg</th>
-                    <th className="w-[2.45rem] px-0 py-2 text-right font-display font-bold">Lv</th>
-                    <th className="w-[3.65rem] px-0.5 py-2 text-right font-display font-bold">Total</th>
+                    <th className="w-[6.7rem] px-0.5 py-2 pl-3 text-left font-display font-bold">Player</th>
+                    <th className="w-[3.35rem] px-0 py-2 text-right font-display font-bold">Avg</th>
+                    <th className="w-[2.3rem] px-0 py-2 text-right font-display font-bold">Lv</th>
+                    <th className="w-[3.5rem] px-0.5 py-2 text-right font-display font-bold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -620,7 +620,7 @@ function HourOfPowerLeaderboardTab() {
                         }`}
                       >
                         <td className="px-0.5 py-2.5 font-display font-black text-white">#{row.rank}</td>
-                        <td className="px-0.5 py-2.5 pl-1">
+                        <td className="px-0.5 py-2.5 pl-2">
                           <div className="flex min-w-0 items-center gap-1">
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border/60 bg-piu-dark text-[9px] font-display font-bold text-white">
                               {row.avatar ? (
