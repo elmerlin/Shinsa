@@ -3451,6 +3451,7 @@ export default function LivePage() {
           plays: Array.isArray(payload?.plays) ? payload.plays : prev.plays,
           last_play: Object.prototype.hasOwnProperty.call(payload, 'last_play') ? payload.last_play : prev.last_play,
           summary: payload?.summary || prev.summary,
+          hop: Object.prototype.hasOwnProperty.call(payload, 'hop') ? (payload.hop || null) : prev.hop,
         };
       });
     });

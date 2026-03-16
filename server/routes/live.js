@@ -3509,8 +3509,10 @@ function broadcastLivePlaysUpdated(db, liveSessionId, reason = 'plays_updated') 
   const base = buildLiveSessionUpdateBase(db, liveSessionId);
   if (!base) return 0;
 
-  const plays = getSessionPlays(db, base.freshSession.id);
-  const summary = buildLiveSessionSummary(plays, base.host || {}, {
+  const playRows = getSessionPlays(db, base.freshSession.id);
+  const displayState = buildSessionDisplayState(db, base.freshSession, playRows);
+  const plays = displayState.plays;
+  const summary = buildLiveSessionSummary(playRows, base.host || {}, {
     sessionId: base.freshSession.id,
     sessionTitle: base.freshSession.title,
     participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
@@ -3532,6 +3534,7 @@ function broadcastLivePlaysUpdated(db, liveSessionId, reason = 'plays_updated') 
     plays,
     last_play: plays[0] || null,
     summary,
+    hop: displayState.hop,
     emitted_at: new Date().toISOString(),
   }));
 }
