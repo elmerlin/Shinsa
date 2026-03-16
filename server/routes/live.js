@@ -3790,7 +3790,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
         status_text, requests_enabled, session_type, hop_warmup_started_at, hop_started_at, hop_ends_at,
         hop_warmup_seconds, hop_window_seconds, status, recent_anchor_id, last_recent_row_id,
         request_max_level, last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
     `).run(
       id,
       req.user.id,
