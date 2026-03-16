@@ -2335,7 +2335,6 @@ function initializeDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_live_session_plays_unique_recent ON live_session_plays(live_session_id, recently_played_id) WHERE recently_played_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_live_session_buffered_upscores_session ON live_session_buffered_upscores(live_session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_buffered_clears_session ON live_session_buffered_clears(live_session_id, created_at);
-    CREATE INDEX IF NOT EXISTS idx_live_sessions_type_status ON live_sessions(session_type, status, hop_completed, ended_at);
 
     -- Community custom emojis (from sprite sheet uploads)
     CREATE TABLE IF NOT EXISTS community_emojis (
