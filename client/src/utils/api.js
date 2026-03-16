@@ -960,6 +960,19 @@ export const deleteLiveSession = (sessionId) => request(`/live/sessions/${encode
   method: 'DELETE',
 });
 export const getMyLiveSession = () => request('/live/sessions/mine/active');
+export const getHourOfPowerLeaderboard = (options = {}) => {
+  const params = new URLSearchParams();
+  if (options.limit) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return request(`/live/hop/leaderboard${query ? `?${query}` : ''}`);
+};
+export const getHourOfPowerAttempts = (options = {}) => {
+  const params = new URLSearchParams();
+  if (options.limit) params.set('limit', String(options.limit));
+  if (options.user_id) params.set('user_id', String(options.user_id));
+  const query = params.toString();
+  return request(`/live/hop/attempts${query ? `?${query}` : ''}`);
+};
 export const createLiveSession = (data) => request('/live/sessions', {
   method: 'POST',
   body: JSON.stringify(data),

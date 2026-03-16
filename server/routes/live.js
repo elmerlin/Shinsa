@@ -10,6 +10,18 @@ const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activity
 const { addLiveSessionClient, emitLiveSessionEvent } = require('../lib/liveSessionHub');
 const { buildLiveSessionSummary } = require('../lib/liveSessionSummary');
 const {
+  DEFAULT_HOP_WARMUP_SECONDS,
+  DEFAULT_HOP_WINDOW_SECONDS,
+  HOP_SESSION_TYPE,
+  LIVE_SESSION_TYPE,
+  buildHourOfPowerShare,
+  formatSqliteDateTime,
+  isHourOfPowerSession,
+  normalizeSessionType,
+  resolveHourOfPowerConfig,
+  summarizeHourOfPower,
+} = require('../lib/hourOfPower');
+const {
   getSessionInteractionCounts,
   getSessionMessageCount,
   getSessionRequestCounts,
@@ -142,6 +154,7 @@ const liveSyncInFlight = new Set();
 const livePresenceBroadcastState = new Map();
 const livePlayOutcomeCache = new Map();
 let cachedSongAliases = null;
+let cachedSongDurations = null;
 
 function getOptionalAuthUserId(req) {
   const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
@@ -201,6 +214,38 @@ function loadSongAliases() {
   return cachedSongAliases;
 }
 
+function loadSongDurationLookup(db) {
+  if (cachedSongDurations) return cachedSongDurations;
+
+  const aliases = loadSongAliases();
+  const rows = db.prepare(`
+    SELECT title, mode, level, duration_seconds, duration_source
+    FROM songs
+    WHERE COALESCE(duration_seconds, 0) > 0
+  `).all();
+  const lookup = new Map();
+
+  for (const row of rows) {
+    const titleKey = toCanonicalSongTitle(row.title, aliases);
+    const modeKey = normalizeSongName(row.mode);
+    const level = toInt(row.level);
+    const durationSeconds = toInt(row.duration_seconds);
+    if (!titleKey || !modeKey || level <= 0 || durationSeconds <= 0) continue;
+
+    const lookupKey = `${titleKey}|${modeKey}|${level}`;
+    const existing = lookup.get(lookupKey);
+    if (!existing || durationSeconds > toInt(existing.duration_seconds)) {
+      lookup.set(lookupKey, {
+        duration_seconds: durationSeconds,
+        duration_source: String(row.duration_source || '').trim(),
+      });
+    }
+  }
+
+  cachedSongDurations = lookup;
+  return cachedSongDurations;
+}
+
 function toCanonicalSongTitle(title, aliases) {
   let normalized = normalizeSongName(title);
   if (!normalized) return '';
@@ -211,6 +256,13 @@ function toCanonicalSongTitle(title, aliases) {
     normalized = aliases[normalized];
   }
   return normalized;
+}
+
+function getSongDurationForChart(db, title, mode, level) {
+  const aliases = loadSongAliases();
+  const durationLookup = loadSongDurationLookup(db);
+  const lookupKey = `${toCanonicalSongTitle(title, aliases)}|${normalizeSongName(mode)}|${toInt(level)}`;
+  return durationLookup.get(lookupKey) || null;
 }
 
 function getEmptyYoutubeSessionFields() {
@@ -920,7 +972,11 @@ async function performLiveSessionSync(db, sessionOrId, options = {}) {
   if (aggregate.plays_changed) {
     markLiveSyncPlayActivity(session.id);
   }
-  const nextSession = getLiveSession(db, session.id);
+  const hopEventResult = processHourOfPowerScheduledEvents(db, session);
+  if (Array.isArray(hopEventResult?.message_ids) && hopEventResult.message_ids.length > 0) {
+    aggregate.message_ids.push(...hopEventResult.message_ids);
+  }
+  const nextSession = getLiveSession(db, hopEventResult?.session?.id || session.id);
   if (options.broadcast !== false && nextSession) {
     broadcastLiveSyncUpdates(db, nextSession, aggregate, options.reason || 'sync');
   }
@@ -1820,6 +1876,159 @@ function getSessionPlaysWithDurations(db, liveSessionId) {
   });
 }
 
+function stripHourOfPowerInternalFields(row) {
+  if (!row || typeof row !== 'object') return row;
+  const next = { ...row };
+  delete next._hop_playedAtMs;
+  delete next._hop_startedAtMs;
+  return next;
+}
+
+function buildSessionDisplayState(db, session, plays) {
+  const sourceRows = Array.isArray(plays) ? plays : [];
+  if (!isHourOfPowerSession(session)) {
+    return {
+      plays: sourceRows,
+      hop: null,
+    };
+  }
+
+  const hopSummary = summarizeHourOfPower(session, sourceRows, {
+    getDurationSeconds: (row) => toInt(getSongDurationForChart(db, row?.song_title, row?.mode, row?.level)?.duration_seconds),
+  });
+  if (!hopSummary) {
+    return {
+      plays: sourceRows,
+      hop: null,
+    };
+  }
+
+  const {
+    plays: hopPlays,
+    counted_rows: countedRows,
+    highest_play: highestPlay,
+    lowest_play: lowestPlay,
+    ...hopMeta
+  } = hopSummary;
+
+  return {
+    plays: hopPlays.map(stripHourOfPowerInternalFields),
+    hop: {
+      ...hopMeta,
+      counted_rows: countedRows.map(stripHourOfPowerInternalFields),
+      highest_play: highestPlay ? stripHourOfPowerInternalFields(highestPlay) : null,
+      lowest_play: lowestPlay ? stripHourOfPowerInternalFields(lowestPlay) : null,
+    },
+  };
+}
+
+function attachReplayMetadataToPlayRows(rows, replayLookup) {
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const replay = replayLookup.get(buildPlayOutcomeKey(
+      row?.song_title,
+      row?.mode,
+      row?.level,
+      row?.score,
+      row?.user_id
+    )) || null;
+    return replay
+      ? {
+          ...row,
+          replay_embed_url: String(replay.replay_embed_url || '').trim(),
+          replay_video_id: String(replay.replay_video_id || '').trim(),
+          replay_start_seconds: Math.max(0, toInt(replay.replay_start_seconds)),
+          replay_end_seconds: Math.max(0, toInt(replay.replay_end_seconds)),
+        }
+      : {
+          ...row,
+          replay_embed_url: '',
+          replay_video_id: '',
+          replay_start_seconds: 0,
+          replay_end_seconds: 0,
+        };
+  });
+}
+
+function buildHourOfPowerWarmupFinishedMessage() {
+  return 'Warmup over. Hour of Power starts now. New clears will count toward your total.';
+}
+
+function buildHourOfPowerFinishedMessage(hopSummary) {
+  const total = toInt(hopSummary?.total_rating_points);
+  const clears = toInt(hopSummary?.counted_clear_count);
+  return `Hour of Power complete. Current total: ${total.toLocaleString()} rating points across ${clears} clear${clears === 1 ? '' : 's'}. Songs started before the buzzer still count once they resolve.`;
+}
+
+function processHourOfPowerScheduledEvents(db, session) {
+  if (!isHourOfPowerSession(session) || String(session?.status || '').trim() !== 'live') {
+    return {
+      session,
+      changed: false,
+      message_ids: [],
+    };
+  }
+
+  const config = resolveHourOfPowerConfig(session);
+  const nowMs = Date.now();
+  const messageIds = [];
+  let changed = false;
+
+  if (!String(session?.hop_warmup_finished_announced_at || '').trim() && nowMs >= config.startedAtMs) {
+    const messageId = addSystemMessage(
+      db,
+      session.id,
+      buildHourOfPowerWarmupFinishedMessage(),
+      'hop_warmup_end',
+      {
+        session_type: HOP_SESSION_TYPE,
+        hop_phase: 'power',
+      }
+    );
+    db.prepare(`
+      UPDATE live_sessions
+      SET hop_warmup_finished_announced_at = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(formatSqliteDateTime(new Date(nowMs)), session.id);
+    messageIds.push(messageId);
+    changed = true;
+  }
+
+  let latestSession = changed ? getLiveSession(db, session.id) : session;
+
+  if (!String(latestSession?.hop_finished_announced_at || '').trim() && nowMs >= config.endsAtMs) {
+    const plays = getSessionPlays(db, latestSession.id);
+    const displayState = buildSessionDisplayState(db, latestSession, plays);
+    const messageId = addSystemMessage(
+      db,
+      latestSession.id,
+      buildHourOfPowerFinishedMessage(displayState.hop),
+      'hop_finished',
+      {
+        session_type: HOP_SESSION_TYPE,
+        hop_phase: 'finished',
+        total_rating_points: toInt(displayState?.hop?.total_rating_points),
+        counted_clear_count: toInt(displayState?.hop?.counted_clear_count),
+      }
+    );
+    db.prepare(`
+      UPDATE live_sessions
+      SET hop_finished_announced_at = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(formatSqliteDateTime(new Date(nowMs)), latestSession.id);
+    messageIds.push(messageId);
+    changed = true;
+    latestSession = getLiveSession(db, latestSession.id);
+  }
+
+  return {
+    session: latestSession,
+    changed,
+    message_ids: messageIds,
+  };
+}
+
 async function buildLiveSessionYoutubeTimestampPreview(db, session, userId) {
   const videoId = getLiveSessionYoutubeVideoId(session);
   if (!videoId) {
@@ -2129,6 +2338,7 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId, part
     ? activeParticipants
     : normalizedParticipants;
   const currentParticipant = activeParticipants.find((participant) => String(participant.user_id || '') === String(currentUserId || '')) || null;
+  const hopConfig = resolveHourOfPowerConfig(session);
   return {
     id: session.id,
     title: session.title || '',
@@ -2146,12 +2356,27 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId, part
     request_max_level: normalizeRequestMaxLevel(session.request_max_level),
     request_show_scores: toInt(session.request_show_scores) !== 0,
     is_hidden_from_profile: toInt(session.is_hidden_from_profile) !== 0,
+    session_type: normalizeSessionType(session.session_type),
     status: session.status || 'live',
     host_user_id: session.host_user_id,
     recent_anchor_id: toInt(session.recent_anchor_id),
     last_recent_row_id: toInt(session.last_recent_row_id),
     last_sync_at: session.last_sync_at || '',
     last_sync_status: session.last_sync_status || '',
+    hop_warmup_started_at: session.hop_warmup_started_at || '',
+    hop_started_at: session.hop_started_at || '',
+    hop_ends_at: session.hop_ends_at || '',
+    hop_warmup_seconds: hopConfig.warmupSeconds,
+    hop_window_seconds: hopConfig.windowSeconds,
+    hop_warmup_finished_announced_at: session.hop_warmup_finished_announced_at || '',
+    hop_finished_announced_at: session.hop_finished_announced_at || '',
+    hop_total_rating_points: toInt(session.hop_total_rating_points),
+    hop_counted_clear_count: toInt(session.hop_counted_clear_count),
+    hop_average_level: Number(session.hop_average_level || 0),
+    hop_average_rating_points: Number(session.hop_average_rating_points || 0),
+    hop_highest_rating_points: toInt(session.hop_highest_rating_points),
+    hop_lowest_rating_points: toInt(session.hop_lowest_rating_points),
+    hop_completed: toInt(session.hop_completed) === 1,
     viewer_count: Math.max(0, toInt(viewerCount)),
     viewer_peak: Math.max(0, toInt(session.viewer_peak)),
     created_at: session.created_at || '',
@@ -2183,11 +2408,13 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
   const viewerPeak = getViewerPeak(freshSession, viewerCount);
   const host = getHostProfile(db, freshSession.host_user_id);
   const participants = getSessionParticipants(db, freshSession, { currentUserId });
-  const plays = getSessionPlays(db, freshSession.id);
+  const playRows = getSessionPlays(db, freshSession.id);
+  const displayState = buildSessionDisplayState(db, freshSession, playRows);
+  const plays = displayState.plays;
   const messages = getSessionMessages(db, freshSession.id, currentUserId);
   const requests = getSessionRequests(db, freshSession.id);
   const activeVote = getLatestVoteSnapshot(db, freshSession.id, currentUserId);
-  const summary = buildLiveSessionSummary(plays, host || {}, {
+  const summary = buildLiveSessionSummary(playRows, host || {}, {
     sessionId: freshSession.id,
     sessionTitle: freshSession.title,
     participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
@@ -2201,6 +2428,7 @@ function buildSessionSnapshot(db, session, currentUserId = '') {
     session: normalizeSessionPayload({ ...freshSession, viewer_peak: viewerPeak }, host, viewerCount, currentUserId, participants),
     viewer_state: getSessionViewerState(db, freshSession, currentUserId),
     summary,
+    hop: displayState.hop,
     plays,
     messages,
     requests,
@@ -2246,12 +2474,15 @@ function buildDirectorySessionPayload(db, session, currentUserId = '') {
   const viewerCount = getViewerCount(db, session);
   const viewerPeak = getViewerPeak(session, viewerCount);
   const participants = getSessionParticipants(db, session, { currentUserId });
-  const lastPlay = getLatestSessionPlay(db, session.id);
+  const playRows = getSessionPlays(db, session.id);
+  const displayState = buildSessionDisplayState(db, session, playRows);
+  const lastPlay = displayState.plays[0] || null;
   const activeVote = getLatestVoteSnapshot(db, session.id, currentUserId);
 
   return {
     session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId, participants),
     last_play: lastPlay,
+    hop: displayState.hop,
     request_counts: getSessionRequestCounts(db, session.id),
     active_vote: summarizeVoteForDirectory(activeVote),
     is_following: toInt(session.is_following) === 1,
@@ -2265,11 +2496,13 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
   const viewerCount = getViewerCount(db, session);
   const viewerPeak = getViewerPeak(session, viewerCount);
   const participants = getSessionParticipants(db, session, { currentUserId });
-  const plays = getSessionPlays(db, session.id);
+  const playRows = getSessionPlays(db, session.id);
+  const displayState = buildSessionDisplayState(db, session, playRows);
+  const plays = displayState.plays;
   const messageCount = getSessionMessageCount(db, session.id);
   const interactionCounts = getSessionInteractionCounts(db, session.id);
-  const summary = plays.length > 0
-      ? buildLiveSessionSummary(plays, host || {}, {
+  const summary = playRows.length > 0
+      ? buildLiveSessionSummary(playRows, host || {}, {
         sessionId: session.id,
         sessionTitle: session.title,
         participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
@@ -2287,6 +2520,7 @@ function buildProfileActiveSessionPayload(db, session, currentUserId = '') {
   return {
     session: normalizeSessionPayload({ ...session, viewer_peak: viewerPeak }, host, viewerCount, currentUserId, participants),
     summary,
+    hop: displayState.hop,
     last_play: plays[0] || null,
     message_count: messageCount,
     request_counts: getSessionRequestCounts(db, session.id),
@@ -2298,11 +2532,13 @@ function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
   if (!session) return null;
   const host = getHostProfile(db, session.host_user_id);
   const participants = getSessionParticipants(db, session, { currentUserId, includeLeft: true });
-  const plays = getSessionPlays(db, session.id);
+  const playRows = getSessionPlays(db, session.id);
+  const displayState = buildSessionDisplayState(db, session, playRows);
+  const plays = displayState.plays;
   const messageCount = getSessionMessageCount(db, session.id);
   const interactionCounts = getSessionInteractionCounts(db, session.id);
-  const summary = plays.length > 0
-      ? buildLiveSessionSummary(plays, host || {}, {
+  const summary = playRows.length > 0
+      ? buildLiveSessionSummary(playRows, host || {}, {
         sessionId: session.id,
         sessionTitle: session.title,
         participantRole: LIVE_PARTICIPANT_ROLE_OWNER,
@@ -2320,6 +2556,7 @@ function buildProfileEndedSessionPayload(db, session, currentUserId = '') {
   return {
     session: normalizeSessionPayload(session, host, 0, currentUserId, participants),
     summary,
+    hop: displayState.hop,
     last_play: plays[0] || null,
     message_count: messageCount,
     play_count: plays.length,
@@ -2339,6 +2576,116 @@ function getProfileEndedSessions(db, hostUserId, currentUserId = '', limit = 12)
   `).all(hostUserId, String(currentUserId || ''), Math.max(1, Math.min(24, toInt(limit) || 12)));
 
   return rows.map((row) => buildProfileEndedSessionPayload(db, row, currentUserId)).filter(Boolean);
+}
+
+function buildHourOfPowerAttemptEntry(row) {
+  return {
+    session_id: String(row?.id || ''),
+    title: String(row?.title || ''),
+    user_id: String(row?.host_user_id || ''),
+    username: String(row?.username || '').trim() || 'Player',
+    avatar: normalizeUserAvatarForList(row?.avatar, row?.host_user_id, 56, row?.avatar_v),
+    nationality: String(row?.nationality || '').trim(),
+    skill_title: String(row?.skill_title || '').trim(),
+    stream_url: String(row?.stream_url || '').trim(),
+    started_at: String(row?.started_at || '').trim(),
+    ended_at: String(row?.ended_at || '').trim(),
+    live_url: `/live/${encodeURIComponent(String(row?.id || '').trim())}`,
+    total_rating_points: toInt(row?.hop_total_rating_points),
+    counted_clear_count: toInt(row?.hop_counted_clear_count),
+    average_level: Number(row?.hop_average_level || 0),
+    average_rating_points: Number(row?.hop_average_rating_points || 0),
+    highest_rating_points: toInt(row?.hop_highest_rating_points),
+    lowest_rating_points: toInt(row?.hop_lowest_rating_points),
+    completed: toInt(row?.hop_completed) === 1,
+  };
+}
+
+function getHourOfPowerAttempts(db, userId = '', limit = 20) {
+  const normalizedUserId = String(userId || '').trim();
+  const rows = db.prepare(`
+    SELECT
+      s.*,
+      u.username,
+      u.avatar,
+      u.avatar_v,
+      u.nationality,
+      u.skill_title
+    FROM live_sessions s
+    JOIN users u ON u.id = s.host_user_id
+    WHERE s.session_type = ?
+      AND s.status = 'ended'
+      AND COALESCE(s.deleted_at, '') = ''
+      AND (? = '' OR s.host_user_id = ?)
+    ORDER BY datetime(COALESCE(NULLIF(s.ended_at, ''), s.updated_at, s.created_at)) DESC, s.id DESC
+    LIMIT ?
+  `).all(
+    HOP_SESSION_TYPE,
+    normalizedUserId,
+    normalizedUserId,
+    Math.max(1, Math.min(100, toInt(limit) || 20))
+  );
+
+  return rows.map(buildHourOfPowerAttemptEntry);
+}
+
+function getHourOfPowerLeaderboard(db, currentUserId = '', limit = 100) {
+  const attempts = getHourOfPowerAttempts(db, '', 1000).filter((row) => row.completed);
+  const bestByUserId = new Map();
+
+  for (const attempt of attempts) {
+    const key = String(attempt?.user_id || '').trim();
+    if (!key) continue;
+    const existing = bestByUserId.get(key);
+    if (!existing) {
+      bestByUserId.set(key, attempt);
+      continue;
+    }
+
+    if (attempt.total_rating_points > existing.total_rating_points) {
+      bestByUserId.set(key, attempt);
+      continue;
+    }
+    if (attempt.total_rating_points === existing.total_rating_points) {
+      if (attempt.average_rating_points > existing.average_rating_points) {
+        bestByUserId.set(key, attempt);
+        continue;
+      }
+      const attemptEndedAt = Date.parse(`${attempt.ended_at || ''}Z`) || 0;
+      const existingEndedAt = Date.parse(`${existing.ended_at || ''}Z`) || 0;
+      if (attemptEndedAt > existingEndedAt) {
+        bestByUserId.set(key, attempt);
+      }
+    }
+  }
+
+  const rankedRows = Array.from(bestByUserId.values())
+    .sort((a, b) => {
+      if (b.total_rating_points !== a.total_rating_points) {
+        return b.total_rating_points - a.total_rating_points;
+      }
+      if (b.average_rating_points !== a.average_rating_points) {
+        return b.average_rating_points - a.average_rating_points;
+      }
+      if (b.average_level !== a.average_level) {
+        return b.average_level - a.average_level;
+      }
+      return String(a.username || '').localeCompare(String(b.username || ''));
+    })
+    .map((row, index) => ({
+      ...row,
+      rank: index + 1,
+      is_current_user: String(row?.user_id || '') === String(currentUserId || ''),
+    }));
+
+  const rows = rankedRows.slice(0, Math.max(1, Math.min(500, toInt(limit) || 100)));
+  const currentUserBest = rankedRows.find((row) => row.is_current_user)
+    || null;
+
+  return {
+    rows,
+    current_user_best: currentUserBest,
+  };
 }
 
 function ensureUserCanJoinLiveSession(db, userId, currentSessionId = '') {
@@ -2614,7 +2961,7 @@ function getChartsForVote(db, modeFilter, minLevel, maxLevel) {
   }));
 }
 
-function buildPlayAnnouncement(play, outcome) {
+function buildPlayAnnouncement(play, outcome, hopPlay = null) {
   const label = formatPlayLabel(play);
   const performer = getPlayPerformerLabel(play);
   const score = toInt(play?.score);
@@ -2627,7 +2974,19 @@ function buildPlayAnnouncement(play, outcome) {
   );
 
   const prefix = performer ? `${performer} played ${label}` : `Last played: ${label}`;
-  return `${prefix} • ${grade} ${score > 0 ? score.toLocaleString() : ''}`.trim() + `. ${base}`;
+  return `${prefix} • ${grade} ${score > 0 ? score.toLocaleString() : ''}`.trim()
+    + `. ${base}${buildHourOfPowerAnnouncementSuffix(hopPlay)}`;
+}
+
+function buildHourOfPowerAnnouncementSuffix(hopPlay) {
+  if (!hopPlay) return '';
+  if (hopPlay.hop_counts_towards_total) {
+    return ` +${toInt(hopPlay.hop_rating_points_earned)} HoP • ${toInt(hopPlay.hop_running_total)} total.`;
+  }
+  if (hopPlay.hop_not_counted_reason === 'warmup') return ' Warmup play. Not counted.';
+  if (hopPlay.hop_not_counted_reason === 'after_window') return ' Started after time. Not counted.';
+  if (hopPlay.hop_not_counted_reason === 'fail') return ' No clear. Not counted.';
+  return '';
 }
 
 function annotateLiveSyncOutcomeRow(row, actor) {
@@ -2767,6 +3126,13 @@ function applyLiveSyncResult(db, session, syncResult, actor) {
   const insertedRows = appendRecentRowsToSession(db, session, recentRows, syncActor);
   bufferSyncResults(db, session.id, syncResult, syncActor);
   const syncMessageIds = [];
+  const hopDisplayState = isHourOfPowerSession(session)
+    ? buildSessionDisplayState(db, session, getSessionPlays(db, session.id))
+    : null;
+  const hopPlayByRecentId = new Map(
+    (Array.isArray(hopDisplayState?.plays) ? hopDisplayState.plays : [])
+      .map((row) => [String(row?.recently_played_id || ''), row])
+  );
 
   const outcomeMap = new Map();
   for (const row of Array.isArray(syncResult?.upscores) ? syncResult.upscores : []) {
@@ -2782,10 +3148,11 @@ function applyLiveSyncResult(db, session, syncResult, actor) {
 
   for (const row of insertedRows) {
     const outcome = outcomeMap.get(buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score, syncActor.id)) || null;
+    const hopPlay = hopPlayByRecentId.get(String(row.id)) || null;
     syncMessageIds.push(addSystemMessage(
       db,
       session.id,
-      buildPlayAnnouncement(row, outcome),
+      buildPlayAnnouncement(row, outcome, hopPlay),
       'play',
       {
         recently_played_id: toInt(row.id),
@@ -2800,6 +3167,12 @@ function applyLiveSyncResult(db, session, syncResult, actor) {
         pumbility_gain: toInt(outcome?.pumbility_gain),
         session_result_type: outcome?.type || '',
         over_top100_rank: Math.max(toInt(row.over_top100_rank), toInt(outcome?.over_top100_rank)),
+        hop_rating_points_earned: toInt(hopPlay?.hop_rating_points_earned),
+        hop_running_total: toInt(hopPlay?.hop_running_total),
+        hop_counts_towards_total: !!hopPlay?.hop_counts_towards_total,
+        hop_status_label: hopPlay?.hop_status_label || '',
+        hop_not_counted_reason: hopPlay?.hop_not_counted_reason || '',
+        session_type: normalizeSessionType(session?.session_type),
       }
     ));
   }
@@ -2917,10 +3290,17 @@ function parseBufferedRows(db, liveSessionId, tableName, options = {}) {
   });
 }
 
-function buildSummaryPostContent(summary) {
+function serializeSessionShareMarker(share) {
+  const encoded = Buffer.from(JSON.stringify(share || {}), 'utf8').toString('base64');
+  return `[[SHINSA_SHARE_V1:${encoded}]]`;
+}
+
+function buildSummaryPostContent(summary, session = null, hopShare = null) {
+  if (isHourOfPowerSession(session)) {
+    return hopShare ? serializeSessionShareMarker(hopShare) : '';
+  }
   if (!summary) return '';
-  const marker = serializeLiveSessionMarker(summary);
-  return marker;
+  return serializeLiveSessionMarker(summary);
 }
 
 function groupRowsByPerformer(rows) {
@@ -2963,6 +3343,11 @@ function stripBufferedRowMetadata(row) {
 
 function createParticipantLiveSessionArtifacts(db, session, participant, participantPlays, upscoreRows, clearRows, replayLookup, sharedContext = {}) {
   const summary = buildParticipantLiveSummary(participant, participantPlays, session, sharedContext);
+  const replayEnhancedPlays = attachReplayMetadataToPlayRows(participantPlays, replayLookup);
+  const participantDisplayState = buildSessionDisplayState(db, session, replayEnhancedPlays);
+  const hopShare = isHourOfPowerSession(session)
+    ? buildHourOfPowerShare(session, participantDisplayState.hop)
+    : null;
   const filteredUpscores = (Array.isArray(upscoreRows) ? upscoreRows : []).map(stripBufferedRowMetadata);
   const filteredClears = (Array.isArray(clearRows) ? clearRows : []).map(stripBufferedRowMetadata);
   const replayRows = [
@@ -2999,11 +3384,11 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
     syncSessionReplayLinks(db, participant.user_id, replayRows, replayLookup);
   }
 
-  if (summary) {
+  if (summary || hopShare) {
     const result = db.prepare(`
       INSERT INTO user_posts (user_id, content, images, youtube_url, comments_disabled, created_at)
       VALUES (?, ?, '[]', ?, 0, datetime('now'))
-    `).run(participant.user_id, buildSummaryPostContent(summary), session.stream_url || '');
+    `).run(participant.user_id, buildSummaryPostContent(summary, session, hopShare), session.stream_url || '');
     summaryPostId = result.lastInsertRowid;
   }
 
@@ -3011,6 +3396,8 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
     user_id: participant.user_id,
     actorUsername: participant.username || 'Someone',
     summary,
+    hop: participantDisplayState.hop,
+    hop_share: hopShare,
     upscore_post_id: upscorePostId,
     clear_post_id: clearPostId,
     summary_post_id: summaryPostId,
@@ -3309,6 +3696,31 @@ router.get('/sessions', requireAuth, (req, res) => {
   }
 });
 
+router.get('/hop/leaderboard', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const limit = Math.max(1, Math.min(500, toInt(req.query?.limit) || 100));
+    const payload = getHourOfPowerLeaderboard(db, req.user.id, limit);
+    res.json(payload);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.get('/hop/attempts', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const targetUserId = normalizeText(req.query?.user_id, 80) || req.user.id;
+    const limit = Math.max(1, Math.min(100, toInt(req.query?.limit) || 20));
+    res.json({
+      user_id: targetUserId,
+      attempts: getHourOfPowerAttempts(db, targetUserId, limit),
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 router.get('/profile/:userId', (req, res) => {
   try {
     const db = getDb();
@@ -3340,12 +3752,27 @@ router.post('/sessions', requireAuth, async (req, res) => {
       throw new Error('Live sync dependency unavailable');
     }
 
-    const title = normalizeText(req.body?.title, 120) || `${req.user.username || 'Player'} live session`;
-    const statusText = normalizeText(req.body?.status_text, 160);
+    const sessionType = normalizeSessionType(req.body?.session_type);
+    const title = normalizeText(req.body?.title, 120)
+      || (sessionType === HOP_SESSION_TYPE
+        ? `${req.user.username || 'Player'} Hour of Power`
+        : `${req.user.username || 'Player'} live session`);
+    const statusText = sessionType === HOP_SESSION_TYPE
+      ? ''
+      : normalizeText(req.body?.status_text, 160);
     const defaultRequestMaxLevel = getDefaultRequestMaxLevelForUser(db, req.user.id);
     const streamSelection = await resolveLiveStreamSelection(db, req.user.id, req.body || {}, null);
     const streamUrl = streamSelection.streamUrl;
     const youtubeFields = streamSelection.youtubeFields;
+    const now = new Date();
+    const hopWarmupStartedAt = sessionType === HOP_SESSION_TYPE ? formatSqliteDateTime(now) : '';
+    const hopStartedAt = sessionType === HOP_SESSION_TYPE
+      ? formatSqliteDateTime(new Date(now.getTime() + (DEFAULT_HOP_WARMUP_SECONDS * 1000)))
+      : '';
+    const hopEndsAt = sessionType === HOP_SESSION_TYPE
+      ? formatSqliteDateTime(new Date(now.getTime() + ((DEFAULT_HOP_WARMUP_SECONDS + DEFAULT_HOP_WINDOW_SECONDS) * 1000)))
+      : '';
+    const requestsEnabled = sessionType === HOP_SESSION_TYPE ? 0 : 1;
 
     await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: true });
 
@@ -3360,9 +3787,10 @@ router.post('/sessions', requireAuth, async (req, res) => {
       INSERT INTO live_sessions (
         id, host_user_id, title, stream_url, youtube_broadcast_id, youtube_video_id, youtube_channel_id,
         youtube_stream_title, youtube_lifecycle_status, youtube_scheduled_start_time, youtube_actual_start_time,
-        status_text, status, recent_anchor_id, last_recent_row_id,
+        status_text, requests_enabled, session_type, hop_warmup_started_at, hop_started_at, hop_ends_at,
+        hop_warmup_seconds, hop_window_seconds, status, recent_anchor_id, last_recent_row_id,
         request_max_level, last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
     `).run(
       id,
       req.user.id,
@@ -3376,6 +3804,13 @@ router.post('/sessions', requireAuth, async (req, res) => {
       youtubeFields.youtube_scheduled_start_time,
       youtubeFields.youtube_actual_start_time,
       statusText,
+      requestsEnabled,
+      sessionType,
+      hopWarmupStartedAt,
+      hopStartedAt,
+      hopEndsAt,
+      DEFAULT_HOP_WARMUP_SECONDS,
+      DEFAULT_HOP_WINDOW_SECONDS,
       toInt(anchor?.max_id),
       toInt(anchor?.max_id),
       defaultRequestMaxLevel
@@ -3392,9 +3827,19 @@ router.post('/sessions', requireAuth, async (req, res) => {
       last_sync_status: 'ready',
     });
 
-    addSystemMessage(db, id, `${req.user.username || 'Player'} started a Shinsa Live session.`, 'session_start', {
-      stream_url: streamUrl,
-    });
+    addSystemMessage(
+      db,
+      id,
+      sessionType === HOP_SESSION_TYPE
+        ? `${req.user.username || 'Player'} started Hour of Power. Warmup is live for 15 minutes.`
+        : `${req.user.username || 'Player'} started a Shinsa Live session.`,
+      sessionType === HOP_SESSION_TYPE ? 'hop_start' : 'session_start',
+      {
+        session_type: sessionType,
+        hop_phase: sessionType === HOP_SESSION_TYPE ? 'warmup' : '',
+        stream_url: streamUrl,
+      }
+    );
     const host = getHostProfile(db, req.user.id) || { id: req.user.id, username: req.user.username || 'Player' };
     const notifiedFollowers = notifyFollowersLive(db, id, host, title);
     ensureLiveSyncTimer(db, id);
@@ -3474,10 +3919,14 @@ router.patch('/sessions/:id', requireAuth, async (req, res) => {
     const streamSelection = await resolveLiveStreamSelection(db, req.user.id, req.body || {}, session);
     const nextStreamUrl = streamSelection.streamUrl;
     const nextYoutubeFields = streamSelection.youtubeFields;
-    const nextStatusText = req.body?.status_text === undefined
+    const nextStatusText = isHourOfPowerSession(session)
+      ? normalizeText(session.status_text, 160)
+      : req.body?.status_text === undefined
       ? normalizeText(session.status_text, 160)
       : normalizeText(req.body.status_text, 160);
-    const nextRequestsEnabled = req.body?.requests_enabled === undefined
+    const nextRequestsEnabled = isHourOfPowerSession(session)
+      ? false
+      : req.body?.requests_enabled === undefined
       ? (toInt(session.requests_enabled) !== 0)
       : !!req.body.requests_enabled;
     const nextRequestModeFilter = req.body?.request_mode_filter === undefined
@@ -3535,6 +3984,9 @@ router.post('/sessions/:id/cohosts', requireAuth, async (req, res) => {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
     requireSessionHost(session, req.user.id);
+    if (isHourOfPowerSession(session)) {
+      return res.status(400).json({ error: 'Hour of Power is strictly solo and does not allow co-hosts' });
+    }
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
 
     const targetUserId = normalizeText(req.body?.user_id, 80);
@@ -3610,6 +4062,9 @@ router.delete('/sessions/:id/cohosts/:userId', requireAuth, async (req, res) => 
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
     requireSessionHost(session, req.user.id);
+    if (isHourOfPowerSession(session)) {
+      return res.status(400).json({ error: 'Hour of Power is strictly solo and does not allow co-hosts' });
+    }
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
 
     const participant = getSessionParticipantRecord(db, session, req.params.userId, {
@@ -3683,6 +4138,9 @@ router.post('/sessions/:id/leave', requireAuth, async (req, res) => {
   try {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
+    if (isHourOfPowerSession(session)) {
+      return res.status(400).json({ error: 'Hour of Power is strictly solo and cannot be left as a co-host' });
+    }
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
     if (String(req.user.id || '') === String(session.host_user_id || '')) {
       return res.status(400).json({ error: 'The room owner must end the live session instead of leaving it' });
@@ -4064,6 +4522,9 @@ router.post('/sessions/:id/requests', requireAuth, (req, res) => {
   try {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
+    if (isHourOfPowerSession(session)) {
+      return res.status(400).json({ error: 'Hour of Power does not accept song requests' });
+    }
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
     const isHost = String(req.user.id || '') === String(session.host_user_id || '');
     if (!isHost && toInt(session.requests_enabled) === 0) {
@@ -4387,6 +4848,9 @@ router.post('/sessions/:id/votes', requireAuth, (req, res) => {
   try {
     const db = getDb();
     const session = requireLiveSession(db, req.params.id);
+    if (isHourOfPowerSession(session)) {
+      return res.status(400).json({ error: 'Hour of Power does not support song votes' });
+    }
     requireSessionHost(session, req.user.id);
     if (session.status !== 'live') return res.status(400).json({ error: 'Live session has ended' });
 
@@ -4514,6 +4978,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     const participants = getSessionParticipants(db, session, { currentUserId: req.user.id, includeLeft: true });
     const participantByUserId = new Map(participants.map((participant) => [participant.user_id, participant]));
     const plays = getSessionPlays(db, session.id);
+    const displayState = buildSessionDisplayState(db, session, plays);
     const viewerCount = getViewerCount(db, session, { cleanup: true });
     const viewerPeak = updateViewerPeak(db, session.id, viewerCount);
     const messageCount = getSessionMessageCount(db, session.id);
@@ -4531,6 +4996,25 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       streamUrl: session.stream_url,
       hostUsername: host?.username || '',
     });
+    const hopSummary = displayState.hop;
+    const hopCompleted = isHourOfPowerSession(session)
+      ? Date.now() >= resolveHourOfPowerConfig(session).endsAtMs
+      : false;
+    const endedAtValue = formatSqliteDateTime(new Date());
+    const finalizedSession = {
+      ...session,
+      status: 'ended',
+      ended_at: endedAtValue,
+      updated_at: endedAtValue,
+      viewer_peak: Math.max(viewerPeak, toInt(session.viewer_peak)),
+      hop_completed: hopCompleted ? 1 : 0,
+      hop_total_rating_points: toInt(hopSummary?.total_rating_points),
+      hop_counted_clear_count: toInt(hopSummary?.counted_clear_count),
+      hop_average_level: Number(hopSummary?.average_level || 0),
+      hop_average_rating_points: Number(hopSummary?.average_rating_points || 0),
+      hop_highest_rating_points: toInt(hopSummary?.highest_rating_points),
+      hop_lowest_rating_points: toInt(hopSummary?.lowest_rating_points),
+    };
 
     let bufferedUpscores = parseBufferedRows(db, session.id, 'live_session_buffered_upscores');
     let bufferedClears = parseBufferedRows(db, session.id, 'live_session_buffered_clears');
@@ -4594,7 +5078,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
         if (!participant) continue;
         const result = createParticipantLiveSessionArtifacts(
           db,
-          session,
+          finalizedSession,
           participant,
           playGroups.get(performerUserId) || [],
           upscoreGroups.get(performerUserId) || [],
@@ -4608,11 +5092,30 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       db.prepare(`
         UPDATE live_sessions
         SET status = 'ended',
-            ended_at = datetime('now'),
+            ended_at = ?,
             viewer_peak = CASE WHEN viewer_peak < ? THEN ? ELSE viewer_peak END,
+            hop_total_rating_points = ?,
+            hop_counted_clear_count = ?,
+            hop_average_level = ?,
+            hop_average_rating_points = ?,
+            hop_highest_rating_points = ?,
+            hop_lowest_rating_points = ?,
+            hop_completed = ?,
             updated_at = datetime('now')
         WHERE id = ?
-      `).run(viewerPeak, viewerPeak, session.id);
+      `).run(
+        endedAtValue,
+        viewerPeak,
+        viewerPeak,
+        toInt(hopSummary?.total_rating_points),
+        toInt(hopSummary?.counted_clear_count),
+        Number(hopSummary?.average_level || 0),
+        Number(hopSummary?.average_rating_points || 0),
+        toInt(hopSummary?.highest_rating_points),
+        toInt(hopSummary?.lowest_rating_points),
+        hopCompleted ? 1 : 0,
+        session.id
+      );
 
       db.prepare('DELETE FROM live_session_presence WHERE live_session_id = ?').run(session.id);
     });
@@ -4670,8 +5173,10 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
           actorUsername,
           activityType: 'posts',
           notificationType: 'followed_user_post',
-          title: 'Shinsa Live Recap',
-          message: `${actorUsername} wrapped up a live session`,
+          title: isHourOfPowerSession(session) ? 'Hour of Power Recap' : 'Shinsa Live Recap',
+          message: isHourOfPowerSession(session)
+            ? `${actorUsername} wrapped up Hour of Power`
+            : `${actorUsername} wrapped up a live session`,
           link: `/post/${result.summary_post_id}`,
         });
       }
@@ -4686,6 +5191,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       clear_post_id: hostResult?.clear_post_id || null,
       summary_post_id: hostResult?.summary_post_id || null,
       summary,
+      hop: hopSummary,
       participant_posts: participantResults,
       session: normalizeSessionPayload(
         session,

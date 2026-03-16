@@ -8,6 +8,11 @@ function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
 
+function formatDecimal(value, digits = 1) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(digits) : '0.0';
+}
+
 function getRank(score) {
   const s = parseInt(score, 10) || 0;
   if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
@@ -210,6 +215,8 @@ export default function SessionShareCard({
 
   const rows = Array.isArray(share?.rows) ? share.rows : [];
   const totalPages = Math.max(1, Math.ceil(rows.length / 10));
+  const isHopShare = share?.shareType === 'hour_of_power';
+  const displayTitle = title === 'Session Share' && isHopShare ? 'Hour of Power Recap' : title;
 
   useEffect(() => {
     if (!expanded) setPage(1);
@@ -230,10 +237,12 @@ export default function SessionShareCard({
   const rankHeaderClass = 'text-left py-1 pl-2 pr-1 font-display font-bold w-6 sm:px-2';
   const songHeaderClass = 'text-left py-1 pl-1.5 pr-1 font-display font-bold sm:px-2';
   const scoreHeaderClass = 'w-[88px] py-1 pl-0.5 pr-2.5 text-right font-display font-bold sm:w-[104px] sm:px-2';
+  const ratingHeaderClass = 'w-[54px] py-1 pl-0.5 pr-2 text-right font-display font-bold sm:w-[68px] sm:px-2';
   const gradeHeaderClass = 'w-[44px] py-1 pl-0.5 pr-3 text-right font-display font-bold sm:w-[56px] sm:px-1';
   const rankCellClass = 'py-1.5 pl-2 pr-1 text-gray-400 font-mono align-top sm:px-2';
   const songCellClass = 'min-w-0 py-1.5 pl-1.5 pr-1 sm:px-2';
   const scoreCellClass = 'py-1.5 pl-0 pr-2.5 text-right whitespace-nowrap sm:px-2';
+  const ratingCellClass = 'py-1.5 pl-0 pr-2 text-right whitespace-nowrap sm:px-2';
   const gradeCellClass = 'py-1.5 pl-0 pr-3 text-right whitespace-nowrap sm:px-1';
 
   return (
@@ -241,7 +250,7 @@ export default function SessionShareCard({
       <div className={`rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/15 via-emerald-500/10 to-transparent p-3 ${className}`.trim()}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <p className="text-[10px] font-display font-bold uppercase tracking-wider text-cyan-300">{title}</p>
+            <p className="text-[10px] font-display font-bold uppercase tracking-wider text-cyan-300">{displayTitle}</p>
             <p className="text-xs text-gray-300">
               {share.sessionDateLabel}
               {share.sessionTimeRange ? ` • ${share.sessionTimeRange}` : ''}
@@ -250,31 +259,51 @@ export default function SessionShareCard({
             {share.sessionMachineName ? (
               <p className="text-[11px] text-cyan-300/90 mt-0.5">Machine: {share.sessionMachineName}</p>
             ) : null}
+            {isHopShare && share.completed === false ? (
+              <p className="mt-1 text-[11px] text-amber-200">Attempt ended early and is not leaderboard eligible.</p>
+            ) : null}
           </div>
           {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-          <Stat label="Songs" value={share.songCount || rows.length} />
-          <Stat label="Clears" value={`${share.clearCount || 0} (${share.clearRate || 0}%)`} />
-          <Stat label="Avg Score" value={formatNumber(share.averageScore)} />
-          <Stat label="Perfects" value={`${share.perfectRate || 0}%`} />
-        </div>
+        {isHopShare ? (
+          <div className="grid grid-cols-2 gap-2 mt-3 sm:grid-cols-3">
+            <Stat label="Total Points" value={formatNumber(share.totalRatingPoints)} />
+            <Stat label="Clears" value={share.countedClearCount || rows.length} />
+            <Stat label="Avg Pts/Clear" value={formatDecimal(share.averageRatingPoints)} />
+            <Stat label="Avg Level" value={formatDecimal(share.averageLevel)} />
+            <Stat label="Highest" value={formatNumber(share.highestRatingPoints)} />
+            <Stat label="Lowest" value={formatNumber(share.lowestRatingPoints)} />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+              <Stat label="Songs" value={share.songCount || rows.length} />
+              <Stat label="Clears" value={`${share.clearCount || 0} (${share.clearRate || 0}%)`} />
+              <Stat label="Avg Score" value={formatNumber(share.averageScore)} />
+              <Stat label="Perfects" value={`${share.perfectRate || 0}%`} />
+            </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
-          <span className="px-2 py-1 rounded border border-cyan-400/35 bg-cyan-500/15 text-cyan-200 font-display font-bold">Mode: {share.filterMode || 'Both'}</span>
-          <span className="px-2 py-1 rounded border border-emerald-400/35 bg-emerald-500/15 text-emerald-200 font-display font-bold">Min grade: {share.minGradeLabel || 'Pass'}</span>
-          <span className="px-2 py-1 rounded border border-piu-border/50 bg-piu-dark/50 text-gray-300 font-display font-bold">{share.levelRangeLabel || 'Any level'}</span>
-        </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
+              <span className="px-2 py-1 rounded border border-cyan-400/35 bg-cyan-500/15 text-cyan-200 font-display font-bold">Mode: {share.filterMode || 'Both'}</span>
+              <span className="px-2 py-1 rounded border border-emerald-400/35 bg-emerald-500/15 text-emerald-200 font-display font-bold">Min grade: {share.minGradeLabel || 'Pass'}</span>
+              <span className="px-2 py-1 rounded border border-piu-border/50 bg-piu-dark/50 text-gray-300 font-display font-bold">{share.levelRangeLabel || 'Any level'}</span>
+            </div>
+          </>
+        )}
 
         <div className="mt-3 rounded-lg border border-piu-border/40 bg-piu-dark/35 overflow-hidden">
           <div className="px-3 py-2 border-b border-piu-border/30 bg-piu-dark/40 flex items-center justify-between">
-            <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">Selected Results</p>
+            <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">
+              {isHopShare ? 'Hour of Power Results' : 'Selected Results'}
+            </p>
             <p className="text-[10px] text-gray-500">{expanded ? `Page ${page}/${totalPages}` : `${Math.min(5, rows.length)} of ${rows.length}`}</p>
           </div>
 
           {visibleRows.length === 0 ? (
-            <p className="px-3 py-3 text-xs text-gray-500">No songs matched this filter.</p>
+            <p className="px-3 py-3 text-xs text-gray-500">
+              {isHopShare ? 'No counted clears were recorded for this attempt.' : 'No songs matched this filter.'}
+            </p>
           ) : (
             <table className="w-full table-fixed text-xs">
               <thead>
@@ -282,12 +311,13 @@ export default function SessionShareCard({
                   <th className={rankHeaderClass}>#</th>
                   <th className={songHeaderClass}>Song</th>
                   <th className={scoreHeaderClass}>Score</th>
+                  {isHopShare ? <th className={ratingHeaderClass}>Pts</th> : null}
                   <th className={gradeHeaderClass}>Grade</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleRows.map((row, idx) => {
-                  const number = expanded ? (startIndex + idx + 1) : (idx + 1);
+                  const number = expanded ? (startIndex + idx + 1) : idx + 1;
                   return (
                     <tr key={`${row.song_title}-${row.mode}-${row.level}-${row.score}-${idx}`} className="border-b border-piu-border/20 last:border-0">
                       <td className={rankCellClass}>{number}</td>
@@ -304,11 +334,11 @@ export default function SessionShareCard({
                               </p>
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              {getOverTop100Rank(row.over_top100_rank) > 0 && (
+                              {getOverTop100Rank(row.over_top100_rank) > 0 ? (
                                 <span className="inline-flex items-center rounded border border-yellow-300/60 bg-yellow-500/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-100 font-display font-black tracking-wide">
                                   TOP #{getOverTop100Rank(row.over_top100_rank)}
                                 </span>
-                              )}
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -328,6 +358,11 @@ export default function SessionShareCard({
                           <span className="font-mono text-[11px] text-gray-200 sm:text-xs">{formatNumber(row.score)}</span>
                         </div>
                       </td>
+                      {isHopShare ? (
+                        <td className={ratingCellClass}>
+                          <span className="font-display font-bold text-emerald-200">{formatNumber(row.rating_points)}</span>
+                        </td>
+                      ) : null}
                       <td className={gradeCellClass}>
                         <button
                           type="button"
@@ -353,7 +388,7 @@ export default function SessionShareCard({
               onClick={() => setExpanded((prev) => !prev)}
               className="px-2.5 py-1 rounded border border-cyan-400/35 text-cyan-300 hover:bg-cyan-400/10 text-[10px] font-display font-bold"
             >
-              {expanded ? 'Show Top 5' : 'Show More'}
+              {expanded ? 'Show Top 5' : isHopShare ? 'Show All Clears' : 'Show More'}
             </button>
             {expanded && totalPages > 1 ? (
               <div className="flex items-center gap-1.5">

@@ -5,11 +5,15 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import Over20Top100Modal from '../components/Over20Top100Modal';
+import SessionShareCard from '../components/SessionShareCard';
 import { getProfilePath } from '../utils/profile';
 import {
   getJacketMap,
   getGlobalPumbilityLeaderboard,
   getGlobalPumbilityPlayerSheet,
+  getHourOfPowerAttempts,
+  getHourOfPowerLeaderboard,
+  getLiveSession,
   getMyTop100Scores,
   getOver20ChartTop100,
   getOver20ChartsByLevel,
@@ -21,6 +25,11 @@ const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, idx) => [grade, i
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function formatDecimal(value, digits = 1) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(digits) : (0).toFixed(digits);
 }
 
 function normalizeNameKey(value) {
@@ -243,6 +252,511 @@ function OverChartJacket({ chart, size = 'md' }) {
         {levelText}
       </span>
     </div>
+  );
+}
+
+function parseUtcDateTime(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const iso = /z$/i.test(normalized) ? normalized : `${normalized}Z`;
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatHopDateLabel(value) {
+  const parsed = parseUtcDateTime(value);
+  if (!parsed) return '--';
+  return parsed.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatHopTimeLabel(value) {
+  const parsed = parseUtcDateTime(value);
+  if (!parsed) return '--';
+  return parsed.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatHopDurationLabel(minutesValue) {
+  const minutes = Math.max(0, parseInt(minutesValue, 10) || 0);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
+}
+
+function buildHourOfPowerShareFromSnapshot(snapshot) {
+  const session = snapshot?.session || null;
+  const hop = snapshot?.hop || null;
+  if (!session || !hop) return null;
+
+  const startedAt = hop?.warmup_started_at || session?.started_at || '';
+  const endedAt = session?.ended_at || hop?.ends_at || '';
+  const countedRows = Array.isArray(hop?.counted_rows)
+    ? hop.counted_rows
+    : (Array.isArray(hop?.plays) ? hop.plays.filter((row) => row?.hop_counts_towards_total) : []);
+  const sessionDurationMinutes = Math.max(
+    0,
+    parseInt(hop?.session_duration_minutes, 10)
+      || Math.round(
+        ((parseUtcDateTime(endedAt)?.getTime() || 0) - (parseUtcDateTime(startedAt)?.getTime() || 0)) / 60000
+      )
+  );
+
+  return {
+    shareType: 'hour_of_power',
+    sessionId: String(session?.id || ''),
+    sessionTitle: String(session?.title || ''),
+    streamUrl: String(session?.stream_url || ''),
+    sessionDateLabel: formatHopDateLabel(startedAt),
+    sessionTimeRange: `${formatHopTimeLabel(startedAt)} - ${formatHopTimeLabel(endedAt)}`,
+    sessionDurationMinutes,
+    sessionDurationLabel: formatHopDurationLabel(sessionDurationMinutes),
+    sessionMachineName: countedRows
+      .map((row) => String(row?.machine_name || '').trim())
+      .find(Boolean) || '',
+    totalRatingPoints: parseInt(hop?.total_rating_points, 10) || 0,
+    averageRatingPoints: Number(hop?.average_rating_points || 0),
+    averageLevel: Number(hop?.average_level || 0),
+    highestRatingPoints: parseInt(hop?.highest_rating_points, 10) || 0,
+    lowestRatingPoints: parseInt(hop?.lowest_rating_points, 10) || 0,
+    countedClearCount: parseInt(hop?.counted_clear_count, 10) || countedRows.length,
+    completed: !!hop?.completed,
+    leaderboardEligible: !!hop?.leaderboard_eligible,
+    rows: countedRows.map((row) => ({
+      song_title: String(row?.song_title || ''),
+      mode: String(row?.mode || ''),
+      level: parseInt(row?.level, 10) || 0,
+      score: parseInt(row?.score, 10) || 0,
+      grade: String(row?.hop_resolved_grade || row?.grade || ''),
+      rating_points: parseInt(row?.hop_rating_points_earned, 10) || 0,
+      jacket_url: String(row?.background_url || row?.jacket_url || ''),
+      replay_embed_url: String(row?.replay_embed_url || ''),
+      replay_video_id: String(row?.replay_video_id || ''),
+      replay_start_seconds: parseInt(row?.replay_start_seconds, 10) || 0,
+      replay_end_seconds: parseInt(row?.replay_end_seconds, 10) || 0,
+      perfect: parseInt(row?.perfect, 10) || 0,
+      great: parseInt(row?.great, 10) || 0,
+      good: parseInt(row?.good, 10) || 0,
+      bad: parseInt(row?.bad, 10) || 0,
+      miss: parseInt(row?.miss, 10) || 0,
+      over_top100_rank: parseInt(row?.over_top100_rank, 10) || 0,
+      date_played: String(row?.date_played || row?.played_at_utc || ''),
+    })),
+  };
+}
+
+function HourOfPowerSummaryStat({ label, value, accentClass = 'text-white' }) {
+  return (
+    <div className="rounded-xl border border-piu-border/50 bg-piu-dark/50 px-3 py-2.5">
+      <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className={`mt-1 text-lg font-display font-black ${accentClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function HourOfPowerDetailModal({ attempt, share, loading, error, onRetry, onClose }) {
+  if (!attempt) return null;
+
+  const avatar = getAvatarUrl(attempt.avatar);
+  const playerName = String(attempt.username || 'Player').trim() || 'Player';
+  const modalTitle = String(attempt.title || '').trim() || `${playerName} Hour of Power`;
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-5xl overflow-hidden rounded-2xl border border-piu-border bg-[#08111d] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-piu-border/60 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-piu-border/70 bg-piu-dark text-sm font-display font-bold text-white">
+              {avatar ? (
+                <img src={avatar} alt={playerName} className="h-full w-full object-cover" />
+              ) : (
+                <span>{playerName.charAt(0).toUpperCase() || 'P'}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Hour of Power Attempt</p>
+              <h3 className="truncate text-lg font-display font-black text-white">{modalTitle}</h3>
+              <p className="mt-0.5 text-xs text-gray-400">
+                {attempt.nationality ? `${getCountryFlag(attempt.nationality)} ` : ''}
+                {playerName}
+                {attempt.skill_title ? ` • ${attempt.skill_title}` : ''}
+                {attempt.started_at ? ` • ${formatHopDateLabel(attempt.started_at)}` : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-piu-border/60 bg-piu-dark/70 px-3 py-1 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-4">
+          {loading ? (
+            <div className="rounded-xl border border-piu-border/50 bg-piu-card/60 px-4 py-8 text-center text-sm text-gray-400">
+              Loading Hour of Power recap...
+            </div>
+          ) : error ? (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-6 text-center">
+              <p className="text-sm text-red-200">{error}</p>
+              <button
+                type="button"
+                onClick={onRetry}
+                className="mt-4 rounded-lg bg-piu-accent px-4 py-2 text-xs font-display font-bold text-white transition-colors hover:brightness-110"
+              >
+                Retry
+              </button>
+            </div>
+          ) : share ? (
+            <SessionShareCard
+              share={share}
+              title="Hour of Power Recap"
+              actions={attempt.live_url ? (
+                <Link
+                  to={attempt.live_url}
+                  className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+                >
+                  Open Session
+                </Link>
+              ) : null}
+            />
+          ) : (
+            <div className="rounded-xl border border-piu-border/50 bg-piu-card/60 px-4 py-8 text-center text-sm text-gray-500">
+              No recap data was available for this attempt.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HourOfPowerLeaderboardTab() {
+  const { user } = useAuth();
+  const [rows, setRows] = useState([]);
+  const [attempts, setAttempts] = useState([]);
+  const [currentUserBest, setCurrentUserBest] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [selectedAttempt, setSelectedAttempt] = useState(null);
+  const [selectedShare, setSelectedShare] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const detailRequestRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadData() {
+      setLoading(true);
+      setError('');
+      try {
+        const [leaderboardPayload, attemptsPayload] = await Promise.all([
+          getHourOfPowerLeaderboard({ limit: 100 }),
+          getHourOfPowerAttempts({ user_id: user?.id, limit: 20 }),
+        ]);
+        if (cancelled) return;
+        setRows(Array.isArray(leaderboardPayload?.rows) ? leaderboardPayload.rows : []);
+        setCurrentUserBest(leaderboardPayload?.current_user_best || null);
+        setAttempts(Array.isArray(attemptsPayload?.attempts) ? attemptsPayload.attempts : []);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err?.message || 'Failed to load Hour of Power leaderboard.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    if (user?.id) loadData();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const openAttemptDetail = async (attempt) => {
+    if (!attempt?.session_id) return;
+    const requestId = detailRequestRef.current + 1;
+    detailRequestRef.current = requestId;
+    setSelectedAttempt(attempt);
+    setSelectedShare(null);
+    setDetailError('');
+    setDetailLoading(true);
+
+    try {
+      const snapshot = await getLiveSession(attempt.session_id);
+      if (detailRequestRef.current !== requestId) return;
+      const share = buildHourOfPowerShareFromSnapshot(snapshot);
+      if (!share) throw new Error('This Hour of Power recap is unavailable.');
+      setSelectedShare(share);
+    } catch (err) {
+      if (detailRequestRef.current !== requestId) return;
+      setDetailError(err?.message || 'Failed to load Hour of Power recap.');
+    } finally {
+      if (detailRequestRef.current === requestId) {
+        setDetailLoading(false);
+      }
+    }
+  };
+
+  const closeAttemptDetail = () => {
+    detailRequestRef.current += 1;
+    setSelectedAttempt(null);
+    setSelectedShare(null);
+    setDetailError('');
+    setDetailLoading(false);
+  };
+
+  const retrySelectedAttempt = () => {
+    if (selectedAttempt) openAttemptDetail(selectedAttempt);
+  };
+
+  const bestSessionId = String(currentUserBest?.session_id || '').trim();
+
+  return (
+    <>
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-yellow-400/20 bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.12),transparent_36%),linear-gradient(180deg,rgba(16,24,40,0.96),rgba(10,14,24,0.98))] p-4 shadow-[0_18px_44px_rgba(4,8,20,0.34)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">Hour of Power</p>
+              <h2 className="mt-2 text-xl font-display font-black text-white sm:text-2xl">Best completed 60-minute rating sprint</h2>
+              <p className="mt-2 text-sm text-gray-300">
+                One leaderboard row per player, based on their best fully completed HoP attempt. Warmup plays still appear in recaps, but only counted clears add rating points.
+              </p>
+            </div>
+            {currentUserBest ? (
+              <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-3">
+                <p className="text-[10px] font-display font-bold uppercase tracking-wide text-cyan-200">Your Best HoP</p>
+                <p className="mt-1 text-2xl font-display font-black text-white">#{currentUserBest.rank}</p>
+                <p className="text-xs text-cyan-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-piu-border/50 bg-piu-dark/60 px-4 py-3 text-sm text-gray-400">
+                Complete an Hour of Power to place on the board.
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <HourOfPowerSummaryStat label="Ranked Players" value={formatNumber(rows.length)} accentClass="text-yellow-100" />
+            <HourOfPowerSummaryStat label="Your Rank" value={currentUserBest ? `#${currentUserBest.rank}` : '--'} accentClass="text-cyan-100" />
+            <HourOfPowerSummaryStat label="Your Best Pts" value={currentUserBest ? formatNumber(currentUserBest.total_rating_points) : '--'} accentClass="text-white" />
+            <HourOfPowerSummaryStat label="Your Avg Pts" value={currentUserBest ? formatDecimal(currentUserBest.average_rating_points) : '--'} accentClass="text-emerald-100" />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-display font-black text-white">Global HoP Leaderboard</h3>
+              <p className="mt-1 text-sm text-gray-400">Click any row to open that player&apos;s best Hour of Power recap.</p>
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="py-8 text-center text-sm text-gray-500">Loading Hour of Power leaderboard...</p>
+          ) : error ? (
+            <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-6 text-center">
+              <p className="text-sm text-red-200">{error}</p>
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">No completed Hour of Power attempts have been posted yet.</p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-piu-border/30 text-[11px] uppercase tracking-wide text-gray-500">
+                    <th className="px-2 py-2 text-left font-display font-bold">Rank</th>
+                    <th className="px-2 py-2 text-left font-display font-bold">Player</th>
+                    <th className="px-2 py-2 text-right font-display font-bold">Total</th>
+                    <th className="px-2 py-2 text-right font-display font-bold">Avg Pts</th>
+                    <th className="px-2 py-2 text-right font-display font-bold">Avg Lv</th>
+                    <th className="px-2 py-2 text-right font-display font-bold">Clears</th>
+                    <th className="px-2 py-2 text-right font-display font-bold">Date</th>
+                    <th className="px-2 py-2 text-right font-display font-bold">View</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const isCurrent = !!row?.is_current_user;
+                    const playerName = String(row?.username || 'Player').trim() || 'Player';
+                    return (
+                      <tr
+                        key={`${row.session_id}:${row.user_id}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openAttemptDetail(row)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openAttemptDetail(row);
+                          }
+                        }}
+                        className={`cursor-pointer border-b border-piu-border/20 transition-colors hover:bg-white/5 ${
+                          isCurrent ? 'bg-cyan-500/6' : ''
+                        }`}
+                      >
+                        <td className="px-2 py-2.5 font-display font-black text-white">#{row.rank}</td>
+                        <td className="px-2 py-2.5">
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-piu-border/60 bg-piu-dark text-xs font-display font-bold text-white">
+                              {row.avatar ? (
+                                <img src={row.avatar} alt={playerName} className="h-full w-full object-cover" />
+                              ) : (
+                                <span>{playerName.charAt(0).toUpperCase() || 'P'}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <Link
+                                to={getProfilePath(row.user_id, playerName)}
+                                onClick={(event) => event.stopPropagation()}
+                                className="truncate font-display font-bold text-white transition-colors hover:text-piu-accent"
+                              >
+                                {row.nationality ? <span className="mr-1">{getCountryFlag(row.nationality)}</span> : null}
+                                {playerName}
+                              </Link>
+                              <p className="truncate text-[11px] text-gray-500">{row.skill_title || 'No skill title'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2.5 text-right font-mono font-bold text-yellow-200">{formatNumber(row.total_rating_points)}</td>
+                        <td className="px-2 py-2.5 text-right font-mono text-gray-200">{formatDecimal(row.average_rating_points)}</td>
+                        <td className="px-2 py-2.5 text-right font-mono text-gray-200">{formatDecimal(row.average_level)}</td>
+                        <td className="px-2 py-2.5 text-right font-mono text-gray-200">{formatNumber(row.counted_clear_count)}</td>
+                        <td className="px-2 py-2.5 text-right text-gray-400">{formatHopDateLabel(row.ended_at || row.started_at)}</td>
+                        <td className="px-2 py-2.5 text-right">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openAttemptDetail(row);
+                            }}
+                            className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-display font-black text-white">Your HoP Attempts</h3>
+              <p className="mt-1 text-sm text-gray-400">All of your recent Hour of Power attempts, including incomplete ones that do not count toward the leaderboard.</p>
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="py-8 text-center text-sm text-gray-500">Loading your attempts...</p>
+          ) : attempts.length === 0 ? (
+            <p className="py-8 text-center text-sm text-gray-500">You haven&apos;t logged an Hour of Power attempt yet.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {attempts.map((attempt) => {
+                const isBestAttempt = bestSessionId && String(attempt.session_id || '') === bestSessionId;
+                const statusClass = attempt.completed
+                  ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                  : 'border-amber-400/30 bg-amber-500/10 text-amber-200';
+                return (
+                  <div
+                    key={attempt.session_id}
+                    className={`rounded-xl border p-4 ${
+                      isBestAttempt
+                        ? 'border-cyan-400/30 bg-cyan-500/8'
+                        : 'border-piu-border/50 bg-piu-dark/45'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${statusClass}`}>
+                            {attempt.completed ? 'Completed' : 'Ended Early'}
+                          </span>
+                          {isBestAttempt ? (
+                            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-cyan-100">
+                              Personal Best
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-3 text-base font-display font-black text-white">
+                          {attempt.title || `${user?.username || 'Your'} Hour of Power`}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-400">
+                          {formatHopDateLabel(attempt.started_at)} • {formatHopTimeLabel(attempt.started_at)}
+                          {attempt.ended_at ? ` - ${formatHopTimeLabel(attempt.ended_at)}` : ''}
+                        </p>
+                        {!attempt.completed ? (
+                          <p className="mt-2 text-[11px] text-amber-200">
+                            This attempt ended before completion and is not leaderboard eligible.
+                          </p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openAttemptDetail(attempt)}
+                        className="rounded-lg bg-piu-accent px-3 py-2 text-xs font-display font-bold text-white transition-colors hover:brightness-110"
+                      >
+                        View Recap
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                      <HourOfPowerSummaryStat label="Total" value={formatNumber(attempt.total_rating_points)} accentClass="text-yellow-100" />
+                      <HourOfPowerSummaryStat label="Clears" value={formatNumber(attempt.counted_clear_count)} accentClass="text-white" />
+                      <HourOfPowerSummaryStat label="Avg Pts" value={formatDecimal(attempt.average_rating_points)} accentClass="text-emerald-100" />
+                      <HourOfPowerSummaryStat label="Avg Lv" value={formatDecimal(attempt.average_level)} accentClass="text-cyan-100" />
+                      <HourOfPowerSummaryStat
+                        label="Duration"
+                        value={attempt.started_at && attempt.ended_at
+                          ? formatHopDurationLabel(
+                            Math.max(
+                              0,
+                              Math.round(
+                                ((parseUtcDateTime(attempt.ended_at)?.getTime() || 0) - (parseUtcDateTime(attempt.started_at)?.getTime() || 0)) / 60000
+                              )
+                            )
+                          )
+                          : '--'}
+                        accentClass="text-gray-100"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <HourOfPowerDetailModal
+        attempt={selectedAttempt}
+        share={selectedShare}
+        loading={detailLoading}
+        error={detailError}
+        onRetry={retrySelectedAttempt}
+        onClose={closeAttemptDetail}
+      />
+    </>
   );
 }
 
@@ -1213,7 +1727,7 @@ export default function LeaderboardsPage() {
   }), [searchParams]);
 
   useEffect(() => {
-    if (queryTab === 'pumbility' || queryTab === 'over20' || queryTab === 'my-top100') {
+    if (queryTab === 'pumbility' || queryTab === 'over20' || queryTab === 'my-top100' || queryTab === 'hop') {
       setTab(queryTab);
     }
   }, [queryTab]);
@@ -1257,6 +1771,15 @@ export default function LeaderboardsPage() {
         </button>
         <button
           type="button"
+          onClick={() => setTab('hop')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+            tab === 'hop' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+          }`}
+        >
+          Hour of Power
+        </button>
+        <button
+          type="button"
           onClick={() => setTab('my-top100')}
           className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
             tab === 'my-top100' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
@@ -1273,6 +1796,7 @@ export default function LeaderboardsPage() {
           initialSelection={over20InitialSelection}
         />
       )}
+      {tab === 'hop' && <HourOfPowerLeaderboardTab />}
       {tab === 'my-top100' && <MyTop100Tab />}
     </div>
   );

@@ -2118,6 +2118,21 @@ function initializeDb() {
       request_show_scores INTEGER NOT NULL DEFAULT 1,
       is_hidden_from_profile INTEGER NOT NULL DEFAULT 0,
       deleted_at TEXT DEFAULT '',
+      session_type TEXT NOT NULL DEFAULT 'live',
+      hop_warmup_started_at TEXT DEFAULT '',
+      hop_started_at TEXT DEFAULT '',
+      hop_ends_at TEXT DEFAULT '',
+      hop_warmup_seconds INTEGER NOT NULL DEFAULT 900,
+      hop_window_seconds INTEGER NOT NULL DEFAULT 3600,
+      hop_warmup_finished_announced_at TEXT DEFAULT '',
+      hop_finished_announced_at TEXT DEFAULT '',
+      hop_total_rating_points INTEGER NOT NULL DEFAULT 0,
+      hop_counted_clear_count INTEGER NOT NULL DEFAULT 0,
+      hop_average_level REAL NOT NULL DEFAULT 0,
+      hop_average_rating_points REAL NOT NULL DEFAULT 0,
+      hop_highest_rating_points INTEGER NOT NULL DEFAULT 0,
+      hop_lowest_rating_points INTEGER NOT NULL DEFAULT 0,
+      hop_completed INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'live',
       recent_anchor_id INTEGER NOT NULL DEFAULT 0,
       last_recent_row_id INTEGER NOT NULL DEFAULT 0,
@@ -2320,6 +2335,7 @@ function initializeDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_live_session_plays_unique_recent ON live_session_plays(live_session_id, recently_played_id) WHERE recently_played_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_live_session_buffered_upscores_session ON live_session_buffered_upscores(live_session_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_live_session_buffered_clears_session ON live_session_buffered_clears(live_session_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_live_sessions_type_status ON live_sessions(session_type, status, hop_completed, ended_at);
 
     -- Community custom emojis (from sprite sheet uploads)
     CREATE TABLE IF NOT EXISTS community_emojis (
@@ -2884,6 +2900,52 @@ function initializeDb() {
   if (!liveSessionCols.includes('deleted_at')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN deleted_at TEXT DEFAULT ''");
   }
+  if (!liveSessionCols.includes('session_type')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'live'");
+  }
+  if (!liveSessionCols.includes('hop_warmup_started_at')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_warmup_started_at TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('hop_started_at')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_started_at TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('hop_ends_at')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_ends_at TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('hop_warmup_seconds')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_warmup_seconds INTEGER NOT NULL DEFAULT 900");
+  }
+  if (!liveSessionCols.includes('hop_window_seconds')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_window_seconds INTEGER NOT NULL DEFAULT 3600");
+  }
+  if (!liveSessionCols.includes('hop_warmup_finished_announced_at')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_warmup_finished_announced_at TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('hop_finished_announced_at')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_finished_announced_at TEXT DEFAULT ''");
+  }
+  if (!liveSessionCols.includes('hop_total_rating_points')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_total_rating_points INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!liveSessionCols.includes('hop_counted_clear_count')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_counted_clear_count INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!liveSessionCols.includes('hop_average_level')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_average_level REAL NOT NULL DEFAULT 0");
+  }
+  if (!liveSessionCols.includes('hop_average_rating_points')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_average_rating_points REAL NOT NULL DEFAULT 0");
+  }
+  if (!liveSessionCols.includes('hop_highest_rating_points')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_highest_rating_points INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!liveSessionCols.includes('hop_lowest_rating_points')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_lowest_rating_points INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!liveSessionCols.includes('hop_completed')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_completed INTEGER NOT NULL DEFAULT 0");
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_live_sessions_type_status ON live_sessions(session_type, status, hop_completed, ended_at)');
 
   const livePlayCols = db.prepare("PRAGMA table_info(live_session_plays)").all().map((c) => c.name);
   if (!livePlayCols.includes('played_at_utc')) {

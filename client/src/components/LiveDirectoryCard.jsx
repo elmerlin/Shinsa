@@ -64,11 +64,21 @@ function getGradeColor(grade, score = 0) {
   return getRank(score).color;
 }
 
+function getHopPhaseLabel(hop) {
+  const phase = String(hop?.phase || '').trim().toLowerCase();
+  if (phase === 'warmup') return 'Warmup';
+  if (phase === 'power') return 'Hour Live';
+  if (phase === 'finished') return 'Time Up';
+  return 'HoP';
+}
+
 export default function LiveDirectoryCard({ item, className = '', compact = false }) {
   if (!item?.session) return null;
 
   const session = item.session;
   const host = session.host || {};
+  const hop = item.hop || null;
+  const isHopSession = session.session_type === 'hop';
   const lastPlay = item.last_play || null;
   const requestCounts = item.request_counts || { open: 0, queued: 0, played: 0, skipped: 0 };
   const activeVote = item.active_vote || null;
@@ -108,6 +118,11 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
             <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-emerald-200">
               Live now
             </span>
+            {isHopSession ? (
+              <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-100">
+                Hour of Power
+              </span>
+            ) : null}
             {item.is_following ? (
               <span className={`rounded-full border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${followingBadgeClass}`}>
                 Following
@@ -168,6 +183,16 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
                     {displayLastPlayGrade}
                   </span>
                   <span>{lastPlayScore.toLocaleString()}</span>
+                  {isHopSession && lastPlay?.hop_rating_points_earned > 0 ? (
+                    <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-display font-bold text-emerald-200">
+                      +{lastPlay.hop_rating_points_earned} HoP
+                    </span>
+                  ) : null}
+                  {isHopSession && lastPlay?.hop_status_label ? (
+                    <span className="rounded-full border border-yellow-400/25 bg-yellow-500/10 px-2 py-0.5 font-display font-bold text-yellow-100">
+                      {lastPlay.hop_status_label}
+                    </span>
+                  ) : null}
                   {lastPlay.pumbility_gain > 0 ? (
                     <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-display font-bold text-emerald-200">
                       +{lastPlay.pumbility_gain} p
@@ -183,29 +208,48 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
 
         {!compact ? (
           <div className="grid grid-cols-2 gap-3">
-            <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
-              <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Requests</p>
-              <p className="mt-2 text-lg font-display font-black text-white">{requestCounts.open || 0}</p>
-              <p className="text-[11px] text-gray-400">open • {requestCounts.queued || 0} queued</p>
-            </div>
-            <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
-              <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Vote</p>
-              {activeVote ? (
-                <>
-                  <p className="mt-2 text-sm font-display font-black text-white">
-                    {activeVote.mode_filter} Lv.{activeVote.min_level}{activeVote.max_level !== activeVote.min_level ? `-${activeVote.max_level}` : ''}
-                  </p>
+            {isHopSession ? (
+              <>
+                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">HoP Total</p>
+                  <p className="mt-2 text-lg font-display font-black text-white">{hop?.total_rating_points || 0}</p>
+                  <p className="text-[11px] text-gray-400">{hop?.counted_clear_count || 0} clears</p>
+                </div>
+                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Status</p>
+                  <p className="mt-2 text-sm font-display font-black text-white">{getHopPhaseLabel(hop)}</p>
                   <p className="text-[11px] text-gray-400">
-                    {activeVote.status === 'active' ? `${activeVote.total_votes || 0} ballots live` : 'Vote locked'}
+                    Avg {Number(hop?.average_rating_points || 0).toFixed(1)} pts • Lv.{Number(hop?.average_level || 0).toFixed(1)}
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="mt-2 text-lg font-display font-black text-white">Idle</p>
-                  <p className="text-[11px] text-gray-400">No vote running</p>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Requests</p>
+                  <p className="mt-2 text-lg font-display font-black text-white">{requestCounts.open || 0}</p>
+                  <p className="text-[11px] text-gray-400">open • {requestCounts.queued || 0} queued</p>
+                </div>
+                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Vote</p>
+                  {activeVote ? (
+                    <>
+                      <p className="mt-2 text-sm font-display font-black text-white">
+                        {activeVote.mode_filter} Lv.{activeVote.min_level}{activeVote.max_level !== activeVote.min_level ? `-${activeVote.max_level}` : ''}
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        {activeVote.status === 'active' ? `${activeVote.total_votes || 0} ballots live` : 'Vote locked'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-2 text-lg font-display font-black text-white">Idle</p>
+                      <p className="text-[11px] text-gray-400">No vote running</p>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         ) : null}
       </div>

@@ -295,6 +295,74 @@ function formatCountdownLabel(remainingMs) {
   return `${seconds}s`;
 }
 
+function formatSingleDecimal(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(1) : '0.0';
+}
+
+function parseUtcTimestamp(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return NaN;
+  return Date.parse(`${raw}Z`);
+}
+
+function resolveHourOfPowerClientState(hop, nowMs = Date.now()) {
+  if (!hop || typeof hop !== 'object') {
+    return {
+      phase: 'idle',
+      label: 'Hour of Power',
+      message: 'Waiting for HoP status.',
+      remainingLabel: '--',
+      tone: 'border-piu-border/60 bg-piu-dark/60 text-gray-300',
+    };
+  }
+
+  const startedAtMs = parseUtcTimestamp(hop.started_at);
+  const endsAtMs = parseUtcTimestamp(hop.ends_at);
+  let phase = String(hop.phase || '').trim().toLowerCase();
+  if (Number.isFinite(startedAtMs) && nowMs < startedAtMs) {
+    phase = 'warmup';
+  } else if (Number.isFinite(endsAtMs) && nowMs < endsAtMs) {
+    phase = 'power';
+  } else if (Number.isFinite(endsAtMs)) {
+    phase = 'finished';
+  }
+
+  if (phase === 'warmup') {
+    const remainingMs = Number.isFinite(startedAtMs)
+      ? Math.max(0, startedAtMs - nowMs)
+      : Math.max(0, Number(hop.remaining_warmup_ms) || 0);
+    return {
+      phase,
+      label: 'Warmup',
+      message: 'Warmup is live. Songs played here show up but do not count.',
+      remainingLabel: formatCountdownLabel(remainingMs),
+      tone: 'border-amber-400/30 bg-amber-500/10 text-amber-100',
+    };
+  }
+
+  if (phase === 'power') {
+    const remainingMs = Number.isFinite(endsAtMs)
+      ? Math.max(0, endsAtMs - nowMs)
+      : Math.max(0, Number(hop.remaining_window_ms) || 0);
+    return {
+      phase,
+      label: 'Hour Live',
+      message: 'Counted clears started before the buzzer keep scoring even if they finish after it.',
+      remainingLabel: formatCountdownLabel(remainingMs),
+      tone: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100',
+    };
+  }
+
+  return {
+    phase: 'finished',
+    label: 'Time Up',
+    message: 'Scoring is frozen. End the session whenever you are ready for the recap.',
+    remainingLabel: 'Complete',
+    tone: 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100',
+  };
+}
+
 function formatRelativeSyncTime(timestamp) {
   if (!timestamp) return 'No sync yet';
   const parsed = Date.parse(`${timestamp}Z`);
@@ -574,6 +642,14 @@ function buildStructuredSongMessage(entry, lookups = {}) {
   if (pumbilityGain > 0) tags.push({ label: `+${pumbilityGain} p`, tone: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100' });
   if (overTop100Rank > 0) tags.push({ label: `OVER #${overTop100Rank}`, tone: 'border-yellow-400/25 bg-yellow-500/10 text-yellow-100' });
   if (targetUsername) tags.push({ label: `Target ${targetUsername}`, tone: 'border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-100' });
+  if ((parseInt(metadata.hop_rating_points_earned, 10) || 0) > 0) {
+    tags.push({ label: `+${parseInt(metadata.hop_rating_points_earned, 10)} HoP`, tone: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100' });
+  } else if (metadata.hop_status_label) {
+    tags.push({ label: String(metadata.hop_status_label), tone: 'border-yellow-400/25 bg-yellow-500/10 text-yellow-100' });
+  }
+  if ((parseInt(metadata.hop_running_total, 10) || 0) > 0) {
+    tags.push({ label: `${parseInt(metadata.hop_running_total, 10)} total`, tone: 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100' });
+  }
 
   return {
     messageType,
@@ -1618,29 +1694,60 @@ function CreateSessionCard({
   youtubeBroadcasts,
   youtubeLoading,
   selectedBroadcastId,
+  sessionType,
   statusText,
   creating,
   onConnectYoutube,
   onRefreshYoutube,
   onSelectBroadcast,
+  onSessionTypeChange,
   onTitleChange,
   onStreamUrlChange,
   onStatusTextChange,
   onSubmit,
 }) {
+  const isHopMode = sessionType === 'hop';
   return (
     <div className="max-w-xl rounded-xl border border-piu-border bg-piu-card p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
-      <p className="text-sm font-display font-semibold text-gray-300">Live session</p>
-      <h1 className="text-2xl font-display font-black text-white mt-1">Start a live session</h1>
+      <p className="text-sm font-display font-semibold text-gray-300">{isHopMode ? 'Hour of Power' : 'Live session'}</p>
+      <h1 className="text-2xl font-display font-black text-white mt-1">
+        {isHopMode ? 'Start Hour of Power' : 'Start a live session'}
+      </h1>
       <p className="text-sm text-gray-400 mt-2">
-        This opens a session lobby with live score polling, viewer chat, requests, votes, and an automatic recap post when you end it.
+        {isHopMode
+          ? 'This opens a solo HoP run with a 15 minute warmup, a 60 minute scoring window, live chat, and an automatic recap when you end it.'
+          : 'This opens a session lobby with live score polling, viewer chat, requests, votes, and an automatic recap post when you end it.'}
       </p>
       <div className="space-y-3 mt-4">
+        <div className="grid grid-cols-2 gap-2 rounded-lg border border-piu-border/60 bg-piu-dark/40 p-2">
+          <button
+            type="button"
+            onClick={() => onSessionTypeChange('live')}
+            className={`rounded-md px-3 py-2 text-left text-sm font-display font-bold transition-colors ${
+              !isHopMode
+                ? 'bg-cyan-500/15 text-white border border-cyan-400/30'
+                : 'bg-piu-dark/60 text-gray-300 border border-piu-border/50 hover:text-white'
+            }`}
+          >
+            Shinsa Live
+          </button>
+          <button
+            type="button"
+            onClick={() => onSessionTypeChange('hop')}
+            className={`rounded-md px-3 py-2 text-left text-sm font-display font-bold transition-colors ${
+              isHopMode
+                ? 'bg-yellow-500/15 text-white border border-yellow-400/30'
+                : 'bg-piu-dark/60 text-gray-300 border border-piu-border/50 hover:text-white'
+            }`}
+          >
+            Hour of Power
+          </button>
+        </div>
         <input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
           className="input-field w-full"
-          placeholder="Session title"
+          placeholder={isHopMode ? 'Session title (optional)' : 'Session title'}
           maxLength={120}
         />
         <YoutubeBroadcastSelector
@@ -1661,16 +1768,22 @@ function CreateSessionCard({
           placeholder="YouTube stream URL fallback (optional)"
           maxLength={400}
         />
-        <input
-          value={statusText}
-          onChange={(e) => onStatusTextChange(e.target.value)}
-          className="input-field w-full"
-          placeholder="Current status (optional)"
-          maxLength={160}
-        />
+        {!isHopMode ? (
+          <input
+            value={statusText}
+            onChange={(e) => onStatusTextChange(e.target.value)}
+            className="input-field w-full"
+            placeholder="Current status (optional)"
+            maxLength={160}
+          />
+        ) : (
+          <div className="rounded-lg border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-[11px] text-yellow-100">
+            Warmup and countdown status are controlled automatically for HoP.
+          </div>
+        )}
       </div>
       <button type="button" onClick={onSubmit} disabled={creating} className="btn-primary mt-4 w-full py-2.5">
-        {creating ? 'Starting...' : 'Launch Shinsa Live'}
+        {creating ? 'Starting...' : isHopMode ? 'Launch Hour of Power' : 'Launch Shinsa Live'}
       </button>
     </div>
   );
@@ -2076,7 +2189,54 @@ function CohostSearchResults({ results, actionUserId, onAdd, compact = false }) 
   );
 }
 
+function HourOfPowerStatusCard({ hop, status, compact = false }) {
+  const phaseStatus = status || resolveHourOfPowerClientState(hop);
+  return (
+    <div className={`rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Hour of Power</p>
+          <p className={`mt-2 inline-flex rounded-md border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${phaseStatus.tone}`}>
+            {phaseStatus.label}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Countdown</p>
+          <p className={`mt-1 font-display font-black ${compact ? 'text-xl' : 'text-2xl'} text-white`}>{phaseStatus.remainingLabel}</p>
+        </div>
+      </div>
+      <p className={`mt-3 text-gray-300 ${compact ? 'text-[11px]' : 'text-xs'}`}>{phaseStatus.message}</p>
+    </div>
+  );
+}
+
+function HourOfPowerStatsCard({ hop, compact = false }) {
+  return (
+    <div className={`rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
+      <p className="text-[11px] font-display font-semibold text-gray-400">Scoring so far</p>
+      <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-1' : 'grid-cols-3'}`}>
+        <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2">
+          <p className="text-[10px] font-display uppercase tracking-wide text-emerald-100/80">Total Points</p>
+          <p className="mt-1 text-lg font-display font-black text-white">{formatNumber(hop?.total_rating_points)}</p>
+        </div>
+        <div className="rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2">
+          <p className="text-[10px] font-display uppercase tracking-wide text-cyan-100/80">Avg Level</p>
+          <p className="mt-1 text-lg font-display font-black text-white">{formatSingleDecimal(hop?.average_level)}</p>
+        </div>
+        <div className="rounded-lg border border-yellow-400/20 bg-yellow-500/10 px-3 py-2">
+          <p className="text-[10px] font-display uppercase tracking-wide text-yellow-100/80">Avg Pts/Song</p>
+          <p className="mt-1 text-lg font-display font-black text-white">{formatSingleDecimal(hop?.average_rating_points)}</p>
+        </div>
+      </div>
+      <p className={`mt-3 text-gray-400 ${compact ? 'text-[11px]' : 'text-xs'}`}>
+        {formatNumber(hop?.counted_clear_count)} clears counted.
+      </p>
+    </div>
+  );
+}
+
 function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, showPerformer = false }) {
+  const isHopSession = live?.session_type === 'hop';
   const requestStatus = requestInfo
     ? (requestInfo.queuedCount > 0
       ? 'queued'
@@ -2148,6 +2308,16 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, sho
                 </div>
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {isHopSession && play?.hop_status_label ? (
+                  <span className="rounded-md border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-0.5 text-[10px] font-display font-semibold text-yellow-100">
+                    {play.hop_status_label}
+                  </span>
+                ) : null}
+                {isHopSession && play?.hop_rating_points_earned > 0 ? (
+                  <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-display font-semibold text-emerald-200">
+                    +{play.hop_rating_points_earned} HoP
+                  </span>
+                ) : null}
                 {play.pumbility_gain > 0 ? (
                   <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-display font-semibold text-emerald-200">
                     +{play.pumbility_gain} pumbility
@@ -2189,6 +2359,16 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, sho
                   ) : null}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  {isHopSession && play?.hop_status_label ? (
+                    <span className="rounded-md border border-yellow-400/30 bg-yellow-500/10 px-3 py-1 text-[11px] font-display font-semibold text-yellow-100">
+                      {play.hop_status_label}
+                    </span>
+                  ) : null}
+                  {isHopSession && play?.hop_rating_points_earned > 0 ? (
+                    <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-semibold text-emerald-200">
+                      +{play.hop_rating_points_earned} HoP
+                    </span>
+                  ) : null}
                   {play.pumbility_gain > 0 ? (
                     <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-semibold text-emerald-200">
                       +{play.pumbility_gain} pumbility
@@ -2610,6 +2790,7 @@ export default function LivePage() {
   const [createTitle, setCreateTitle] = useState('');
   const [createStreamUrl, setCreateStreamUrl] = useState('');
   const [createYoutubeBroadcastId, setCreateYoutubeBroadcastId] = useState('');
+  const [createSessionType, setCreateSessionType] = useState('live');
   const [createStatusText, setCreateStatusText] = useState('');
   const [editStreamUrl, setEditStreamUrl] = useState('');
   const [editYoutubeBroadcastId, setEditYoutubeBroadcastId] = useState('');
@@ -2634,6 +2815,7 @@ export default function LivePage() {
   const [mobileVideoDockHeight, setMobileVideoDockHeight] = useState(0);
   const [mobileVideoDockStyle, setMobileVideoDockStyle] = useState(null);
   const [mobilePanel, setMobilePanel] = useState('');
+  const [hopClockMs, setHopClockMs] = useState(() => Date.now());
   const [hostWorkspaceTab, setHostWorkspaceTab] = useState('room');
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [wakeLockSupported, setWakeLockSupported] = useState(false);
@@ -2719,9 +2901,11 @@ export default function LivePage() {
 
   const activeSessionId = sessionId || snapshot?.session?.id || '';
   const live = snapshot?.session || null;
+  const hopSummary = snapshot?.hop || null;
   const currentVote = snapshot?.active_vote || null;
   const lastPlay = snapshot?.last_play || null;
   const youtubeId = String(live?.youtube_video_id || '').trim() || getYouTubeId(live?.stream_url || '');
+  const isHopSession = live?.session_type === 'hop';
   const participants = Array.isArray(live?.participants) ? live.participants : [];
   const activeParticipants = useMemo(
     () => participants.filter((participant) => String(participant?.status || 'active').trim() !== 'left'),
@@ -2749,7 +2933,11 @@ export default function LivePage() {
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
   const isHost = !!live?.is_host;
   const isParticipant = !!live?.is_participant;
-  const showCohostControl = isHost && live?.status === 'live';
+  const showCohostControl = isHost && live?.status === 'live' && !isHopSession;
+  const hopStatus = useMemo(
+    () => resolveHourOfPowerClientState(hopSummary, hopClockMs),
+    [hopSummary, hopClockMs]
+  );
   const requestTargetParticipant = useMemo(
     () => performerParticipants.find((participant) => participant.user_id === requestTargetUserId) || null,
     [performerParticipants, requestTargetUserId]
@@ -2805,6 +2993,15 @@ export default function LivePage() {
     setShowEmoteTray(false);
     setActiveEmoteTrayTab('emotes');
   }, [activeSessionId, live?.status]);
+
+  useEffect(() => {
+    if (!isHopSession || live?.status !== 'live') {
+      setHopClockMs(Date.now());
+      return undefined;
+    }
+    const timer = window.setInterval(() => setHopClockMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [activeSessionId, isHopSession, live?.status]);
 
   useEffect(() => {
     if (!requestTargetUserId) return;
@@ -3559,10 +3756,14 @@ export default function LivePage() {
   }, [isHost, overlayAnchor, overlayAutoHide, overlayBrandMotion, overlayFit, overlayGuides, overlayMotion, overlayOpacity, overlayPreset, overlayTheme, overlayWidgets]);
 
   useEffect(() => {
+    if (isHopSession && mobilePanel) {
+      setMobilePanel('');
+      return;
+    }
     if (live?.status !== 'live' && mobilePanel === 'vote') {
       setMobilePanel('');
     }
-  }, [live?.status, mobilePanel]);
+  }, [isHopSession, live?.status, mobilePanel]);
 
   useEffect(() => {
     if (hostWorkspaceTab === 'chapters' && !youtubeId) {
@@ -3972,6 +4173,7 @@ export default function LivePage() {
         title: createTitle,
         stream_url: createStreamUrl,
         youtube_broadcast_id: createYoutubeBroadcastId,
+        session_type: createSessionType,
         status_text: createStatusText,
       });
       seenMessageIdsRef.current = new Set((data?.messages || []).map((msg) => msg.id));
@@ -4517,7 +4719,7 @@ export default function LivePage() {
     }
   };
 
-  const hostCanCreateVote = isHost && (!currentVote || currentVote.status !== 'active') && live?.status === 'live';
+  const hostCanCreateVote = !isHopSession && isHost && (!currentVote || currentVote.status !== 'active') && live?.status === 'live';
   const liveStatusText = String(live?.status_text || '').trim();
   const streamStatusLabel = streamState === 'live'
     ? 'Channel live'
@@ -4534,12 +4736,12 @@ export default function LivePage() {
   const showLiveRoomWorkspace = hostWorkspaceTab !== 'overlay' && hostWorkspaceTab !== 'chapters';
   const viewerNowCount = live?.viewer_count || 0;
   const songCount = Array.isArray(snapshot?.plays) ? snapshot.plays.length : 0;
-  const requestTabDisabled = !isHost && (!requestsEnabled || live?.status !== 'live');
-  const voteTabDisabled = !isHost && !currentVote;
-  const mobileRequestModalDisabled = false;
-  const mobileVoteModalDisabled = false;
+  const requestTabDisabled = isHopSession || (!isHost && (!requestsEnabled || live?.status !== 'live'));
+  const voteTabDisabled = isHopSession || (!isHost && !currentVote);
+  const mobileRequestModalDisabled = isHopSession;
+  const mobileVoteModalDisabled = isHopSession;
   const showOverlayStudioTab = isHost && activeSessionId;
-  const voteSection = (
+  const voteSection = isHopSession ? null : (
     <div className="space-y-4">
       {hostCanCreateVote ? (
         <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
@@ -4584,6 +4786,9 @@ export default function LivePage() {
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Songs this session</p>
           <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
+          {isHopSession ? (
+            <p className="mt-1 text-[11px] text-gray-400">Warmup clears stay visible and are marked as not counted.</p>
+          ) : null}
         </div>
         <div className={`grid w-full gap-2 sm:w-auto ${showPerformerLabels ? 'grid-cols-1 sm:min-w-[500px] sm:grid-cols-3' : 'grid-cols-2 sm:min-w-[320px]'}`}>
           <select value={playModeFilter} onChange={(e) => setPlayModeFilter(e.target.value)} className={`input-field rounded-lg border border-piu-border/60 bg-piu-dark/60 ${isCompactSongCardLayout ? 'text-[11px] py-2 px-3' : 'text-xs py-2.5 px-3'}`}>
@@ -4682,6 +4887,16 @@ export default function LivePage() {
                     </div>
                   </div>
                   <div className={`flex flex-wrap ${isCompactSongCardLayout ? 'mt-1.5 gap-1' : 'mt-2 gap-1.5'}`}>
+                    {isHopSession && play?.hop_status_label ? (
+                      <span className={`rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-100 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                        {play.hop_status_label}
+                      </span>
+                    ) : null}
+                    {isHopSession && play?.hop_rating_points_earned > 0 ? (
+                      <span className={`rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                        +{play.hop_rating_points_earned} HoP
+                      </span>
+                    ) : null}
                     {play.pumbility_gain > 0 ? (
                       <span className={`rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
                         +{play.pumbility_gain} p
@@ -4708,7 +4923,7 @@ export default function LivePage() {
     </div>
   );
 
-  const requestsSection = (
+  const requestsSection = isHopSession ? null : (
     <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -5027,7 +5242,12 @@ export default function LivePage() {
     </div>
   );
 
-  const desktopInteractionsSection = (
+  const desktopInteractionsSection = isHopSession ? (
+    <div className="space-y-3">
+      <HourOfPowerStatusCard hop={hopSummary} status={hopStatus} compact={!isDesktopViewport} />
+      <HourOfPowerStatsCard hop={hopSummary} compact={!isDesktopViewport} />
+    </div>
+  ) : (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className={`gap-2 ${isDesktopViewport ? 'flex flex-wrap items-start justify-between' : 'flex flex-col items-start'}`}>
         <div className="min-w-0">
@@ -5507,11 +5727,13 @@ export default function LivePage() {
             youtubeBroadcasts={youtubeBroadcasts}
             youtubeLoading={youtubeStatusLoading || youtubeBroadcastsLoading}
             selectedBroadcastId={createYoutubeBroadcastId}
+            sessionType={createSessionType}
             statusText={createStatusText}
             creating={creating}
             onConnectYoutube={handleConnectYoutube}
             onRefreshYoutube={loadYoutubeBroadcastOptions}
             onSelectBroadcast={setCreateYoutubeBroadcastId}
+            onSessionTypeChange={setCreateSessionType}
             onTitleChange={setCreateTitle}
             onStreamUrlChange={setCreateStreamUrl}
             onStatusTextChange={setCreateStatusText}
@@ -5587,7 +5809,7 @@ export default function LivePage() {
                   {live?.title || 'Live session'}
                 </h1>
               </div>
-              {liveStatusText || isHost ? (
+              {!isHopSession && (liveStatusText || isHost) ? (
                 <div className="w-[10rem] shrink-0 md:hidden">
                   <LiveHeaderStatusStrip
                     isHost={isHost}
@@ -5750,7 +5972,7 @@ export default function LivePage() {
                 </button>
               ) : null}
             </div>
-            {liveStatusText || isHost ? (
+            {!isHopSession && (liveStatusText || isHost) ? (
               <div className="hidden w-full md:block md:max-w-[28rem]">
                 <LiveHeaderStatusStrip
                   isHost={isHost}
@@ -5817,6 +6039,11 @@ export default function LivePage() {
         ) : null}
 
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5 lg:gap-2">
+          {isHopSession ? (
+            <span className={`rounded-md border px-3 py-1 text-[11px] font-display font-semibold ${hopStatus.tone}`}>
+              {hopStatus.label} • {hopStatus.remainingLabel}
+            </span>
+          ) : null}
           <span className="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[11px] font-display font-semibold text-emerald-200">
             {live?.viewer_count || 0} viewers
           </span>
@@ -6029,25 +6256,29 @@ export default function LivePage() {
         )
       ) : null}
 
-      <MobilePanelSheet
-        open={mobilePanel === 'requests'}
-        title="Song Requests"
-        subtitle="Viewer requests, queue management, and quick search."
-        onClose={() => setMobilePanel('')}
-        allowDesktop
-      >
-        {requestsSection}
-      </MobilePanelSheet>
+      {!isHopSession ? (
+        <>
+          <MobilePanelSheet
+            open={mobilePanel === 'requests'}
+            title="Song Requests"
+            subtitle="Viewer requests, queue management, and quick search."
+            onClose={() => setMobilePanel('')}
+            allowDesktop
+          >
+            {requestsSection}
+          </MobilePanelSheet>
 
-      <MobilePanelSheet
-        open={mobilePanel === 'vote'}
-        title="Vote Control"
-        subtitle="Run the next-chart vote without leaving the live room."
-        onClose={() => setMobilePanel('')}
-        allowDesktop
-      >
-        {voteSection}
-      </MobilePanelSheet>
+          <MobilePanelSheet
+            open={mobilePanel === 'vote'}
+            title="Vote Control"
+            subtitle="Run the next-chart vote without leaving the live room."
+            onClose={() => setMobilePanel('')}
+            allowDesktop
+          >
+            {voteSection}
+          </MobilePanelSheet>
+        </>
+      ) : null}
 
       <EndSessionConfirmModal
         open={showEndConfirm}

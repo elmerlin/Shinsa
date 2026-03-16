@@ -1018,7 +1018,11 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
             <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
           )}
           {currentShare && (
-            <SessionShareCard share={currentShare} title="Session Share" className="mb-3" />
+            <SessionShareCard
+              share={currentShare}
+              title={currentShare?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'}
+              className="mb-3"
+            />
           )}
           {currentLive && (
             <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" />

@@ -34,6 +34,7 @@ function sanitizeRows(rows) {
     level: toInt(row?.level),
     score: toInt(row?.score),
     grade: String(row?.grade || ''),
+    rating_points: toInt(row?.rating_points),
     over_top100_rank: toInt(row?.over_top100_rank),
     jacket_url: String(row?.jacket_url || ''),
     replay_embed_url: String(row?.replay_embed_url || ''),
@@ -52,8 +53,15 @@ function sanitizeRows(rows) {
 
 function sanitizeShare(share) {
   const src = share || {};
+  const shareType = String(src.shareType || '').trim().toLowerCase() === 'hour_of_power'
+    ? 'hour_of_power'
+    : 'session_share';
   return {
     version: 1,
+    shareType,
+    sessionId: String(src.sessionId || ''),
+    sessionTitle: String(src.sessionTitle || ''),
+    streamUrl: String(src.streamUrl || ''),
     generatedAt: String(src.generatedAt || ''),
     sessionDateLabel: String(src.sessionDateLabel || ''),
     sessionTimeRange: String(src.sessionTimeRange || ''),
@@ -74,6 +82,14 @@ function sanitizeShare(share) {
     singleCount: toInt(src.singleCount),
     doubleCount: toInt(src.doubleCount),
     otherCount: toInt(src.otherCount),
+    totalRatingPoints: toInt(src.totalRatingPoints),
+    averageRatingPoints: Number(src.averageRatingPoints) || 0,
+    averageLevel: Number(src.averageLevel) || 0,
+    highestRatingPoints: toInt(src.highestRatingPoints),
+    lowestRatingPoints: toInt(src.lowestRatingPoints),
+    countedClearCount: toInt(src.countedClearCount),
+    completed: toBoolean(src.completed),
+    leaderboardEligible: toBoolean(src.leaderboardEligible),
     judgmentTotals: {
       perfect: toInt(src?.judgmentTotals?.perfect),
       great: toInt(src?.judgmentTotals?.great),
