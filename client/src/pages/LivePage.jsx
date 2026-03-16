@@ -2197,13 +2197,10 @@ function CohostSearchResults({ results, actionUserId, onAdd, compact = false }) 
 function HourOfPowerStatusCard({ hop, status, compact = false }) {
   const phaseStatus = status || resolveHourOfPowerClientState(hop);
   return (
-    <div className={`rounded-xl border border-yellow-300/20 bg-[linear-gradient(135deg,rgba(21,28,59,0.98),rgba(17,56,64,0.92)_52%,rgba(17,18,40,0.98))] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.24)] ${compact ? 'min-h-0' : ''}`}>
+    <div className={`rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <HourOfPowerLogo className={`${compact ? 'h-10 w-8 rounded-lg' : 'h-12 w-9 rounded-xl'} shrink-0`} imageClassName="p-0.5" />
-            <p className="text-[11px] font-display font-semibold text-yellow-100">Hour of Power</p>
-          </div>
+        <div>
+          <p className="text-[11px] font-display font-semibold text-gray-400">Hour of Power</p>
           <p className={`mt-2 inline-flex whitespace-nowrap rounded-md border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${phaseStatus.tone}`}>
             {phaseStatus.label}
           </p>
@@ -2220,15 +2217,12 @@ function HourOfPowerStatusCard({ hop, status, compact = false }) {
 
 function HourOfPowerStatsCard({ hop, compact = false }) {
   return (
-    <div className={`rounded-xl border border-yellow-300/20 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(12,44,63,0.94)_48%,rgba(28,22,45,0.98))] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.24)] ${compact ? 'min-h-0' : ''}`}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-display font-semibold text-yellow-100">Scoring so far</p>
-        {!compact ? <HourOfPowerLogo className="h-12 w-10 shrink-0 rounded-xl" imageClassName="p-0.5" /> : null}
-      </div>
+    <div className={`rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
+      <p className="text-[11px] font-display font-semibold text-gray-400">Scoring so far</p>
       <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-3' : 'grid-cols-3'}`}>
-        <div className={`rounded-lg border border-yellow-300/30 bg-[linear-gradient(135deg,rgba(255,219,94,0.16),rgba(125,88,28,0.18))] ${compact ? 'px-2 py-2' : 'px-3 py-2'}`}>
-          <p className={`font-display uppercase tracking-wide text-yellow-100/80 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>Total Points</p>
-          <p className={`mt-1 font-display font-black text-yellow-50 ${compact ? 'text-base' : 'text-lg'}`}>{formatNumber(hop?.total_rating_points)}</p>
+        <div className={`rounded-lg border border-emerald-400/20 bg-emerald-500/10 ${compact ? 'px-2 py-2' : 'px-3 py-2'}`}>
+          <p className={`font-display uppercase tracking-wide text-emerald-100/80 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>Total Points</p>
+          <p className={`mt-1 font-display font-black text-white ${compact ? 'text-base' : 'text-lg'}`}>{formatNumber(hop?.total_rating_points)}</p>
         </div>
         <div className={`rounded-lg border border-cyan-400/20 bg-cyan-500/10 ${compact ? 'px-2 py-2' : 'px-3 py-2'}`}>
           <p className={`font-display uppercase tracking-wide text-cyan-100/80 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>Avg Level</p>
@@ -5872,6 +5866,9 @@ export default function LivePage() {
                   {live?.title || 'Live session'}
                 </h1>
               </div>
+              {isHopSession ? (
+                <HourOfPowerLogo className="h-16 w-12 shrink-0 rounded-xl border-yellow-300/20 bg-[linear-gradient(180deg,rgba(255,224,125,0.1),rgba(16,22,47,0.94))]" imageClassName="p-1" />
+              ) : null}
               {!isHopSession && (liveStatusText || isHost) ? (
                 <div className="w-[10rem] shrink-0 md:hidden">
                   <LiveHeaderStatusStrip

@@ -282,16 +282,18 @@ export default function SessionShareCard({
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Stat
                 label="Total Points"
-                value={formatNumber(share.totalRatingPoints)}
-                className="col-span-2 border-yellow-300/35 bg-[linear-gradient(135deg,rgba(255,219,94,0.16),rgba(125,88,28,0.18))] shadow-[inset_0_1px_0_rgba(255,244,191,0.12)] sm:col-span-1"
+                value={(
+                  <span className="inline-flex items-center rounded-md border border-yellow-200/25 bg-black/20 px-2.5 py-1 font-display font-black text-yellow-50 shadow-[inset_0_1px_0_rgba(255,244,191,0.08)]">
+                    {formatNumber(share.totalRatingPoints)}
+                  </span>
+                )}
+                className="border-yellow-300/35 bg-[linear-gradient(135deg,rgba(255,219,94,0.16),rgba(125,88,28,0.18))] shadow-[inset_0_1px_0_rgba(255,244,191,0.12)]"
                 labelClassName="text-yellow-100/80"
                 valueClassName="text-yellow-50"
               />
               <Stat label="Clears" value={share.countedClearCount || rows.length} className="border-cyan-300/20 bg-cyan-500/10" labelClassName="text-cyan-100/75" valueClassName="text-white" />
               <Stat label="Avg Pts/Clear" value={formatDecimal(share.averageRatingPoints)} className="border-emerald-300/20 bg-emerald-500/10" labelClassName="text-emerald-100/75" valueClassName="text-emerald-50" />
               <Stat label="Avg Level" value={formatDecimal(share.averageLevel)} className="border-sky-300/20 bg-sky-500/10" labelClassName="text-sky-100/75" valueClassName="text-sky-50" />
-              <Stat label="Highest" value={formatNumber(share.highestRatingPoints)} className="border-purple-300/20 bg-purple-500/10" labelClassName="text-purple-100/75" valueClassName="text-purple-50" />
-              <Stat label="Lowest" value={formatNumber(share.lowestRatingPoints)} className="border-piu-border/35 bg-black/20" labelClassName="text-gray-400" valueClassName="text-gray-100" />
             </div>
           </>
         ) : (
