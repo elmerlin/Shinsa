@@ -543,28 +543,28 @@ function HourOfPowerLeaderboardTab() {
     <>
       <div className="space-y-4">
         <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-          <div className="flex items-start justify-between gap-3">
+          <div className="relative min-h-[7.5rem] pr-[9.5rem]">
             <span className="inline-flex rounded-md border border-yellow-400/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">
               Hour of Power
             </span>
             {currentUserBest ? (
-              <div className="min-w-[10.5rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5 text-right">
-                <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">Your Best HoP</p>
-                <p className="mt-1 text-2xl font-display font-black text-white">#{currentUserBest.rank}</p>
-                <p className="text-xs text-cyan-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
+              <div className="absolute right-0 top-0 w-[8.75rem] rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2 text-right">
+                <p className="text-[9px] font-display font-bold uppercase tracking-wide text-gray-500">Your Best HoP</p>
+                <p className="mt-1 text-[2rem] leading-none font-display font-black text-white">#{currentUserBest.rank}</p>
+                <p className="mt-1 text-[11px] text-cyan-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
               </div>
             ) : (
-              <div className="max-w-[11.5rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5 text-right text-xs text-gray-400">
+              <div className="absolute right-0 top-0 w-[8.75rem] rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2 text-right text-[11px] text-gray-400">
                 Complete a HoP to place on the board.
               </div>
             )}
-          </div>
 
-          <div className="mt-3 max-w-2xl">
-            <h2 className="text-xl font-display font-black text-white sm:text-2xl">Best Completed HoP</h2>
-            <p className="mt-2 text-sm text-gray-400">
-              Best completed HoP attempts globally.
-            </p>
+            <div className="mt-3 max-w-2xl">
+              <h2 className="text-xl font-display font-black text-white sm:text-2xl">Best Completed HoP</h2>
+              <p className="mt-2 text-sm text-gray-400">
+                Best completed HoP attempts globally.
+              </p>
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -595,12 +595,12 @@ function HourOfPowerLeaderboardTab() {
             <div className="mt-4 overflow-hidden rounded-xl border border-piu-border/50 bg-piu-dark/40">
               <table className="w-full table-fixed text-xs">
                 <thead>
-                  <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[11px] uppercase tracking-wide text-gray-500">
-                    <th className="w-[3.1rem] px-1.5 py-2 text-left font-display font-bold">Rank</th>
+                  <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[10px] uppercase tracking-wide text-gray-500">
+                    <th className="w-[2.5rem] px-1 py-2 text-left font-display font-bold">Rank</th>
                     <th className="px-1 py-2 text-left font-display font-bold">Player</th>
-                    <th className="w-[4.25rem] px-1 py-2 text-right font-display font-bold">Avg Pts</th>
-                    <th className="w-[3.8rem] px-1 py-2 text-right font-display font-bold">Avg Lv</th>
-                    <th className="w-[4.8rem] px-1.5 py-2 text-right font-display font-bold">Total</th>
+                    <th className="w-[4rem] px-0.5 py-2 text-right font-display font-bold">Avg Pts</th>
+                    <th className="w-[3.35rem] px-0.5 py-2 text-right font-display font-bold">Avg Lv</th>
+                    <th className="w-[4.45rem] px-1 py-2 text-right font-display font-bold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -623,10 +623,10 @@ function HourOfPowerLeaderboardTab() {
                           isCurrent ? 'bg-piu-accent/[0.08]' : ''
                         }`}
                       >
-                        <td className="px-1.5 py-2.5 font-display font-black text-white">#{row.rank}</td>
+                        <td className="px-1 py-2.5 font-display font-black text-white">#{row.rank}</td>
                         <td className="px-1 py-2.5">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-piu-border/60 bg-piu-dark text-[10px] font-display font-bold text-white">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border/60 bg-piu-dark text-[10px] font-display font-bold text-white">
                               {row.avatar ? (
                                 <img src={row.avatar} alt={playerName} className="h-full w-full object-cover" />
                               ) : (
@@ -638,17 +638,17 @@ function HourOfPowerLeaderboardTab() {
                                 to={getProfilePath(row.user_id, playerName)}
                                 onClick={(event) => event.stopPropagation()}
                                 className="block truncate font-display font-bold text-white transition-colors hover:text-piu-accent"
+                                title={playerName}
                               >
                                 {row.nationality ? <span className="mr-1">{getCountryFlag(row.nationality)}</span> : null}
                                 {playerName}
                               </Link>
-                              <p className="truncate text-[10px] text-gray-500">{row.skill_title || 'No skill title'}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-1 py-2.5 text-right font-mono text-gray-200">{formatDecimal(row.average_rating_points)}</td>
-                        <td className="px-1 py-2.5 text-right font-mono text-gray-200">{formatDecimal(row.average_level)}</td>
-                        <td className="px-1.5 py-2.5 text-right font-mono font-bold text-yellow-200">{formatNumber(row.total_rating_points)}</td>
+                        <td className="px-0.5 py-2.5 text-right font-mono text-[11px] text-gray-200">{formatDecimal(row.average_rating_points)}</td>
+                        <td className="px-0.5 py-2.5 text-right font-mono text-[11px] text-gray-200">{formatDecimal(row.average_level)}</td>
+                        <td className="px-1 py-2.5 text-right font-mono text-[11px] font-bold text-yellow-200">{formatNumber(row.total_rating_points)}</td>
                       </tr>
                     );
                   })}
