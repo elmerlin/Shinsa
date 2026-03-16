@@ -2214,18 +2214,18 @@ function HourOfPowerStatsCard({ hop, compact = false }) {
   return (
     <div className={`rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)] ${compact ? 'min-h-0' : ''}`}>
       <p className="text-[11px] font-display font-semibold text-gray-400">Scoring so far</p>
-      <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-1' : 'grid-cols-3'}`}>
-        <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2">
-          <p className="text-[10px] font-display uppercase tracking-wide text-emerald-100/80">Total Points</p>
-          <p className="mt-1 text-lg font-display font-black text-white">{formatNumber(hop?.total_rating_points)}</p>
+      <div className={`mt-3 grid gap-2 ${compact ? 'grid-cols-3' : 'grid-cols-3'}`}>
+        <div className={`rounded-lg border border-emerald-400/20 bg-emerald-500/10 ${compact ? 'px-2 py-2' : 'px-3 py-2'}`}>
+          <p className={`font-display uppercase tracking-wide text-emerald-100/80 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>Total Points</p>
+          <p className={`mt-1 font-display font-black text-white ${compact ? 'text-base' : 'text-lg'}`}>{formatNumber(hop?.total_rating_points)}</p>
         </div>
-        <div className="rounded-lg border border-cyan-400/20 bg-cyan-500/10 px-3 py-2">
-          <p className="text-[10px] font-display uppercase tracking-wide text-cyan-100/80">Avg Level</p>
-          <p className="mt-1 text-lg font-display font-black text-white">{formatSingleDecimal(hop?.average_level)}</p>
+        <div className={`rounded-lg border border-cyan-400/20 bg-cyan-500/10 ${compact ? 'px-2 py-2' : 'px-3 py-2'}`}>
+          <p className={`font-display uppercase tracking-wide text-cyan-100/80 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>Avg Level</p>
+          <p className={`mt-1 font-display font-black text-white ${compact ? 'text-base' : 'text-lg'}`}>{formatSingleDecimal(hop?.average_level)}</p>
         </div>
-        <div className="rounded-lg border border-yellow-400/20 bg-yellow-500/10 px-3 py-2">
-          <p className="text-[10px] font-display uppercase tracking-wide text-yellow-100/80">Avg Pts/Song</p>
-          <p className="mt-1 text-lg font-display font-black text-white">{formatSingleDecimal(hop?.average_rating_points)}</p>
+        <div className={`rounded-lg border border-yellow-400/20 bg-yellow-500/10 ${compact ? 'px-2 py-2' : 'px-3 py-2'}`}>
+          <p className={`font-display uppercase tracking-wide text-yellow-100/80 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>Avg Pts/Song</p>
+          <p className={`mt-1 font-display font-black text-white ${compact ? 'text-base' : 'text-lg'}`}>{formatSingleDecimal(hop?.average_rating_points)}</p>
         </div>
       </div>
       <p className={`mt-3 text-gray-400 ${compact ? 'text-[11px]' : 'text-xs'}`}>
