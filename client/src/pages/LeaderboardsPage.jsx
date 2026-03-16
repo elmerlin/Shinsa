@@ -352,11 +352,25 @@ function buildHourOfPowerShareFromSnapshot(snapshot) {
   };
 }
 
-function HourOfPowerSummaryStat({ label, value, accentClass = 'text-white' }) {
+function HourOfPowerSummaryStat({
+  label,
+  value,
+  accentClass = 'text-white',
+  className = '',
+  labelClass = 'text-gray-500',
+}) {
   return (
-    <div className="rounded-xl border border-piu-border/50 bg-piu-dark/50 px-3 py-2.5">
-      <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">{label}</p>
+    <div className={`rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5 ${className}`.trim()}>
+      <p className={`text-[10px] font-display font-bold uppercase tracking-wide ${labelClass}`}>{label}</p>
       <p className={`mt-1 text-lg font-display font-black ${accentClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function HourOfPowerEmptyState({ children }) {
+  return (
+    <div className="mt-4 rounded-xl border border-dashed border-piu-border/50 bg-piu-dark/35 px-4 py-10 text-center text-sm text-gray-500">
+      {children}
     </div>
   );
 }
@@ -528,37 +542,39 @@ function HourOfPowerLeaderboardTab() {
   return (
     <>
       <div className="space-y-4">
-        <div className="rounded-2xl border border-yellow-400/20 bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.14),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.12),transparent_36%),linear-gradient(180deg,rgba(16,24,40,0.96),rgba(10,14,24,0.98))] p-4 shadow-[0_18px_44px_rgba(4,8,20,0.34)]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">Hour of Power</p>
-              <h2 className="mt-2 text-xl font-display font-black text-white sm:text-2xl">Best completed 60-minute rating sprint</h2>
-              <p className="mt-2 text-sm text-gray-300">
-                One leaderboard row per player, based on their best fully completed HoP attempt. Warmup plays still appear in recaps, but only counted clears add rating points.
+              <span className="inline-flex rounded-md border border-yellow-400/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">
+                Hour of Power
+              </span>
+              <h2 className="mt-3 text-xl font-display font-black text-white sm:text-2xl">Best completed 60-minute rating sprint</h2>
+              <p className="mt-2 text-sm text-gray-400">
+                One leaderboard row per player, based on their best fully completed HoP attempt.
               </p>
             </div>
             {currentUserBest ? (
-              <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-3">
-                <p className="text-[10px] font-display font-bold uppercase tracking-wide text-cyan-200">Your Best HoP</p>
+              <div className="min-w-[13rem] rounded-lg border border-piu-border/60 bg-piu-dark/60 px-4 py-3">
+                <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">Your Best HoP</p>
                 <p className="mt-1 text-2xl font-display font-black text-white">#{currentUserBest.rank}</p>
                 <p className="text-xs text-cyan-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
               </div>
             ) : (
-              <div className="rounded-xl border border-piu-border/50 bg-piu-dark/60 px-4 py-3 text-sm text-gray-400">
+              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-4 py-3 text-sm text-gray-400">
                 Complete an Hour of Power to place on the board.
               </div>
             )}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <HourOfPowerSummaryStat label="Ranked Players" value={formatNumber(rows.length)} accentClass="text-yellow-100" />
+            <HourOfPowerSummaryStat label="Ranked Players" value={formatNumber(rows.length)} accentClass="text-white" />
             <HourOfPowerSummaryStat label="Your Rank" value={currentUserBest ? `#${currentUserBest.rank}` : '--'} accentClass="text-cyan-100" />
-            <HourOfPowerSummaryStat label="Your Best Pts" value={currentUserBest ? formatNumber(currentUserBest.total_rating_points) : '--'} accentClass="text-white" />
+            <HourOfPowerSummaryStat label="Your Best Pts" value={currentUserBest ? formatNumber(currentUserBest.total_rating_points) : '--'} accentClass="text-amber-100" />
             <HourOfPowerSummaryStat label="Your Avg Pts" value={currentUserBest ? formatDecimal(currentUserBest.average_rating_points) : '--'} accentClass="text-emerald-100" />
           </div>
         </div>
 
-        <div className="rounded-2xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-lg font-display font-black text-white">Global HoP Leaderboard</h3>
@@ -567,18 +583,19 @@ function HourOfPowerLeaderboardTab() {
           </div>
 
           {loading ? (
-            <p className="py-8 text-center text-sm text-gray-500">Loading Hour of Power leaderboard...</p>
+            <HourOfPowerEmptyState>Loading Hour of Power leaderboard...</HourOfPowerEmptyState>
           ) : error ? (
-            <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-6 text-center">
+            <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/8 px-4 py-6 text-center">
               <p className="text-sm text-red-200">{error}</p>
             </div>
           ) : rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500">No completed Hour of Power attempts have been posted yet.</p>
+            <HourOfPowerEmptyState>No completed Hour of Power attempts have been posted yet.</HourOfPowerEmptyState>
           ) : (
-            <div className="mt-4 overflow-x-auto">
+            <div className="mt-4 overflow-hidden rounded-xl border border-piu-border/50 bg-piu-dark/40">
+              <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-piu-border/30 text-[11px] uppercase tracking-wide text-gray-500">
+                  <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[11px] uppercase tracking-wide text-gray-500">
                     <th className="px-2 py-2 text-left font-display font-bold">Rank</th>
                     <th className="px-2 py-2 text-left font-display font-bold">Player</th>
                     <th className="px-2 py-2 text-right font-display font-bold">Total</th>
@@ -605,8 +622,8 @@ function HourOfPowerLeaderboardTab() {
                             openAttemptDetail(row);
                           }
                         }}
-                        className={`cursor-pointer border-b border-piu-border/20 transition-colors hover:bg-white/5 ${
-                          isCurrent ? 'bg-cyan-500/6' : ''
+                        className={`cursor-pointer border-b border-piu-border/15 transition-colors hover:bg-white/[0.04] ${
+                          isCurrent ? 'bg-piu-accent/[0.08]' : ''
                         }`}
                       >
                         <td className="px-2 py-2.5 font-display font-black text-white">#{row.rank}</td>
@@ -644,7 +661,7 @@ function HourOfPowerLeaderboardTab() {
                               event.stopPropagation();
                               openAttemptDetail(row);
                             }}
-                            className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+                            className="rounded-md border border-piu-border/60 bg-piu-dark/70 px-2.5 py-1 text-[11px] font-display font-bold text-gray-200 transition-colors hover:border-piu-accent/40 hover:text-white"
                           >
                             View
                           </button>
@@ -654,11 +671,12 @@ function HourOfPowerLeaderboardTab() {
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="rounded-2xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-lg font-display font-black text-white">Your HoP Attempts</h3>
@@ -667,22 +685,22 @@ function HourOfPowerLeaderboardTab() {
           </div>
 
           {loading ? (
-            <p className="py-8 text-center text-sm text-gray-500">Loading your attempts...</p>
+            <HourOfPowerEmptyState>Loading your attempts...</HourOfPowerEmptyState>
           ) : attempts.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500">You haven&apos;t logged an Hour of Power attempt yet.</p>
+            <HourOfPowerEmptyState>You haven&apos;t logged an Hour of Power attempt yet.</HourOfPowerEmptyState>
           ) : (
             <div className="mt-4 space-y-3">
               {attempts.map((attempt) => {
                 const isBestAttempt = bestSessionId && String(attempt.session_id || '') === bestSessionId;
                 const statusClass = attempt.completed
-                  ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                  : 'border-amber-400/30 bg-amber-500/10 text-amber-200';
+                  ? 'border-emerald-400/20 bg-emerald-500/8 text-emerald-200'
+                  : 'border-amber-400/20 bg-amber-500/8 text-amber-200';
                 return (
                   <div
                     key={attempt.session_id}
                     className={`rounded-xl border p-4 ${
                       isBestAttempt
-                        ? 'border-cyan-400/30 bg-cyan-500/8'
+                        ? 'border-piu-accent/30 bg-piu-accent/[0.06]'
                         : 'border-piu-border/50 bg-piu-dark/45'
                     }`}
                   >
@@ -693,7 +711,7 @@ function HourOfPowerLeaderboardTab() {
                             {attempt.completed ? 'Completed' : 'Ended Early'}
                           </span>
                           {isBestAttempt ? (
-                            <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-cyan-100">
+                            <span className="rounded-full border border-piu-accent/30 bg-piu-accent/[0.08] px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100">
                               Personal Best
                             </span>
                           ) : null}
@@ -714,14 +732,14 @@ function HourOfPowerLeaderboardTab() {
                       <button
                         type="button"
                         onClick={() => openAttemptDetail(attempt)}
-                        className="rounded-lg bg-piu-accent px-3 py-2 text-xs font-display font-bold text-white transition-colors hover:brightness-110"
+                        className="rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-2 text-xs font-display font-bold text-gray-200 transition-colors hover:border-piu-accent/40 hover:text-white"
                       >
                         View Recap
                       </button>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                      <HourOfPowerSummaryStat label="Total" value={formatNumber(attempt.total_rating_points)} accentClass="text-yellow-100" />
+                      <HourOfPowerSummaryStat label="Total" value={formatNumber(attempt.total_rating_points)} accentClass="text-amber-100" />
                       <HourOfPowerSummaryStat label="Clears" value={formatNumber(attempt.counted_clear_count)} accentClass="text-white" />
                       <HourOfPowerSummaryStat label="Avg Pts" value={formatDecimal(attempt.average_rating_points)} accentClass="text-emerald-100" />
                       <HourOfPowerSummaryStat label="Avg Lv" value={formatDecimal(attempt.average_level)} accentClass="text-cyan-100" />
