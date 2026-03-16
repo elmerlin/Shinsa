@@ -2196,13 +2196,13 @@ function HourOfPowerStatusCard({ hop, status, compact = false }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Hour of Power</p>
-          <p className={`mt-2 inline-flex rounded-md border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${phaseStatus.tone}`}>
+          <p className={`mt-2 inline-flex whitespace-nowrap rounded-md border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${phaseStatus.tone}`}>
             {phaseStatus.label}
           </p>
         </div>
         <div className="text-right">
           <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Countdown</p>
-          <p className={`mt-1 font-display font-black ${compact ? 'text-xl' : 'text-2xl'} text-white`}>{phaseStatus.remainingLabel}</p>
+          <p className={`mt-1 whitespace-nowrap font-display font-black ${compact ? 'text-xl' : 'text-2xl'} text-white`}>{phaseStatus.remainingLabel}</p>
         </div>
       </div>
       <p className={`mt-3 text-gray-300 ${compact ? 'text-[11px]' : 'text-xs'}`}>{phaseStatus.message}</p>
@@ -2231,6 +2231,47 @@ function HourOfPowerStatsCard({ hop, compact = false }) {
       <p className={`mt-3 text-gray-400 ${compact ? 'text-[11px]' : 'text-xs'}`}>
         {formatNumber(hop?.counted_clear_count)} clears counted.
       </p>
+    </div>
+  );
+}
+
+function HourOfPowerTopSection({
+  hop,
+  status,
+  play,
+  requestInfo,
+  live,
+  onOpenPlay,
+  showPerformer = false,
+  isDesktopViewport = false,
+}) {
+  const latestAndStatus = (
+    <div className="grid min-h-0 grid-cols-2 items-stretch gap-3">
+      <NowPlayingPanel
+        play={play}
+        live={live}
+        requestInfo={requestInfo}
+        onOpen={onOpenPlay}
+        compact
+        showPerformer={showPerformer}
+      />
+      <HourOfPowerStatusCard hop={hop} status={status} compact />
+    </div>
+  );
+
+  if (isDesktopViewport) {
+    return (
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 lg:gap-5">
+        {latestAndStatus}
+        <HourOfPowerStatsCard hop={hop} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {latestAndStatus}
+      <HourOfPowerStatsCard hop={hop} compact />
     </div>
   );
 }
@@ -5243,12 +5284,7 @@ export default function LivePage() {
     </div>
   );
 
-  const desktopInteractionsSection = isHopSession ? (
-    <div className="space-y-3">
-      <HourOfPowerStatusCard hop={hopSummary} status={hopStatus} compact={!isDesktopViewport} />
-      <HourOfPowerStatsCard hop={hopSummary} compact={!isDesktopViewport} />
-    </div>
-  ) : (
+  const desktopInteractionsSection = isHopSession ? null : (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-piu-border/60 bg-piu-card/95 p-3 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
       <div className={`gap-2 ${isDesktopViewport ? 'flex flex-wrap items-start justify-between' : 'flex flex-col items-start'}`}>
         <div className="min-w-0">
@@ -5322,18 +5358,33 @@ export default function LivePage() {
     </div>
   );
 
-  const desktopTopCardsSection = isDesktopViewport ? (
-    <div className="grid items-stretch gap-4 lg:grid-cols-2 lg:gap-5">
-      <NowPlayingPanel
-        play={lastPlay}
-        live={live}
-        requestInfo={nowPlayingRequestInfo}
-        onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
-        showPerformer={showPerformerLabels}
-      />
-      {desktopInteractionsSection}
-    </div>
-  ) : null;
+  const desktopTopCardsSection = isDesktopViewport
+    ? isHopSession
+      ? (
+        <HourOfPowerTopSection
+          hop={hopSummary}
+          status={hopStatus}
+          play={lastPlay}
+          requestInfo={nowPlayingRequestInfo}
+          live={live}
+          onOpenPlay={() => lastPlay && setSelectedPlay(lastPlay)}
+          showPerformer={showPerformerLabels}
+          isDesktopViewport
+        />
+      )
+      : (
+        <div className="grid items-stretch gap-4 lg:grid-cols-2 lg:gap-5">
+          <NowPlayingPanel
+            play={lastPlay}
+            live={live}
+            requestInfo={nowPlayingRequestInfo}
+            onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+            showPerformer={showPerformerLabels}
+          />
+          {desktopInteractionsSection}
+        </div>
+      )
+    : null;
 
   const youtubeTimestampsSection = isHost && youtubeId ? (
     <YoutubeTimestampsCard
@@ -6224,17 +6275,29 @@ export default function LivePage() {
       {showLiveRoomWorkspace ? (
         !isDesktopViewport ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 items-stretch gap-3">
-              <NowPlayingPanel
+            {isHopSession ? (
+              <HourOfPowerTopSection
+                hop={hopSummary}
+                status={hopStatus}
                 play={lastPlay}
-                live={live}
                 requestInfo={nowPlayingRequestInfo}
-                onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
-                compact
+                live={live}
+                onOpenPlay={() => lastPlay && setSelectedPlay(lastPlay)}
                 showPerformer={showPerformerLabels}
               />
-              {desktopInteractionsSection}
-            </div>
+            ) : (
+              <div className="grid grid-cols-2 items-stretch gap-3">
+                <NowPlayingPanel
+                  play={lastPlay}
+                  live={live}
+                  requestInfo={nowPlayingRequestInfo}
+                  onOpen={() => lastPlay && setSelectedPlay(lastPlay)}
+                  compact
+                  showPerformer={showPerformerLabels}
+                />
+                {desktopInteractionsSection}
+              </div>
+            )}
             {chatSection}
             {songsSection}
           </div>

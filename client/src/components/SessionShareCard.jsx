@@ -234,16 +234,16 @@ export default function SessionShareCard({
 
   if (!share) return null;
 
-  const rankHeaderClass = 'text-left py-1 pl-2 pr-1 font-display font-bold w-6 sm:px-2';
-  const songHeaderClass = 'text-left py-1 pl-1.5 pr-1 font-display font-bold sm:px-2';
-  const scoreHeaderClass = 'w-[88px] py-1 pl-0.5 pr-2.5 text-right font-display font-bold sm:w-[104px] sm:px-2';
-  const ratingHeaderClass = 'w-[54px] py-1 pl-0.5 pr-2 text-right font-display font-bold sm:w-[68px] sm:px-2';
-  const gradeHeaderClass = 'w-[44px] py-1 pl-0.5 pr-3 text-right font-display font-bold sm:w-[56px] sm:px-1';
-  const rankCellClass = 'py-1.5 pl-2 pr-1 text-gray-400 font-mono align-top sm:px-2';
-  const songCellClass = 'min-w-0 py-1.5 pl-1.5 pr-1 sm:px-2';
-  const scoreCellClass = 'py-1.5 pl-0 pr-2.5 text-right whitespace-nowrap sm:px-2';
-  const ratingCellClass = 'py-1.5 pl-0 pr-2 text-right whitespace-nowrap sm:px-2';
-  const gradeCellClass = 'py-1.5 pl-0 pr-3 text-right whitespace-nowrap sm:px-1';
+  const rankHeaderClass = 'text-left py-1 pl-1.5 pr-0.5 font-display font-bold w-5 sm:px-2';
+  const songHeaderClass = 'text-left py-1 pl-1 pr-0.5 font-display font-bold sm:px-2';
+  const scoreHeaderClass = 'w-[82px] py-1 pl-0.5 pr-1.5 text-right font-display font-bold sm:w-[104px] sm:px-2';
+  const ratingHeaderClass = 'w-[50px] py-1 pl-0.5 pr-1.5 text-right font-display font-bold sm:w-[68px] sm:px-2';
+  const gradeHeaderClass = 'w-[42px] py-1 pl-0.5 pr-2.5 text-right font-display font-bold sm:w-[56px] sm:px-1';
+  const rankCellClass = 'py-1.5 pl-1.5 pr-0.5 text-gray-400 font-mono align-top sm:px-2';
+  const songCellClass = 'min-w-0 py-1.5 pl-1 pr-0.5 sm:px-2';
+  const scoreCellClass = 'py-1.5 pl-0 pr-1.5 text-right whitespace-nowrap sm:px-2';
+  const ratingCellClass = 'py-1.5 pl-0 pr-1.5 text-right whitespace-nowrap sm:px-2';
+  const gradeCellClass = 'py-1.5 pl-0 pr-2.5 text-right whitespace-nowrap sm:px-1';
 
   return (
     <>
@@ -322,7 +322,7 @@ export default function SessionShareCard({
                     <tr key={`${row.song_title}-${row.mode}-${row.level}-${row.score}-${idx}`} className="border-b border-piu-border/20 last:border-0">
                       <td className={rankCellClass}>{number}</td>
                       <td className={songCellClass}>
-                        <div className="flex items-start gap-2">
+                        <div className="flex items-start gap-1.5">
                           <SongJacketButton row={row} onClick={() => setActiveRow(row)} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start">
@@ -344,15 +344,15 @@ export default function SessionShareCard({
                         </div>
                       </td>
                       <td className={scoreCellClass}>
-                        <div className="flex items-center justify-end gap-0.5">
+                        <div className="flex items-center justify-end gap-px">
                           {row.replay_embed_url ? (
                             <button
                               type="button"
-                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                              className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                               title="Open replay clip"
                               onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
                             >
-                              <YouTubeBadgeIcon className="h-3 w-3 text-sky-300" />
+                              <YouTubeBadgeIcon className="h-2.5 w-2.5 text-sky-300" />
                             </button>
                           ) : null}
                           <span className="font-mono text-[11px] text-gray-200 sm:text-xs">{formatNumber(row.score)}</span>
