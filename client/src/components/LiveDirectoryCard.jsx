@@ -87,25 +87,19 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
   const parsedLastPlayGrade = parseGrade(lastPlay?.grade, lastPlayScore > 0 ? getRank(lastPlayScore).label : '');
   const displayLastPlayGrade = parsedLastPlayGrade.display || (lastPlayScore > 0 ? getRank(lastPlayScore).label : '-');
   const cardClass = compact
-    ? 'border-piu-border/70 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.05),transparent_34%),linear-gradient(180deg,rgba(20,20,40,0.98),rgba(13,13,32,0.97))] shadow-[0_14px_32px_rgba(3,7,18,0.24)] hover:border-piu-border hover:shadow-[0_18px_38px_rgba(3,7,18,0.28)]'
-    : 'border-piu-border/70 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.10),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(255,215,0,0.08),transparent_32%),linear-gradient(180deg,rgba(20,20,40,0.98),rgba(13,13,32,0.96))] shadow-[0_18px_44px_rgba(3,7,18,0.34)] hover:border-piu-accent/35 hover:shadow-[0_24px_52px_rgba(255,51,102,0.14)]';
-  const followingBadgeClass = compact
-    ? 'border-piu-border/60 bg-piu-dark/70 text-gray-200'
-    : 'border-piu-accent/25 bg-piu-accent/10 text-rose-100';
-  const streamHostBadgeClass = compact
-    ? 'border-piu-border/60 bg-piu-dark/70 text-gray-300'
-    : 'border-piu-gold/20 bg-piu-gold/10 text-amber-100';
-  const hoverTitleClass = compact ? 'group-hover:text-white' : 'group-hover:text-rose-100';
-  const viewerPanelClass = compact ? 'bg-piu-card/80' : 'bg-piu-dark/60';
-  const viewerValueClass = compact ? 'text-white' : 'text-rose-100';
-  const surfaceClass = compact ? 'bg-piu-card/80' : 'bg-piu-dark/60';
-  const skillBadgeClass = compact
-    ? 'border-piu-border/60 bg-piu-dark/70 text-gray-200'
-    : 'border-piu-gold/20 bg-piu-gold/10 text-amber-100';
+    ? 'border-piu-border/60 bg-piu-card/95 shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:border-piu-accent/25 hover:shadow-[0_8px_20px_rgba(0,0,0,0.22)]'
+    : 'border-piu-border/60 bg-piu-card/95 shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:border-piu-accent/25 hover:shadow-[0_8px_20px_rgba(0,0,0,0.22)]';
+  const followingBadgeClass = 'border-piu-border/60 bg-piu-dark/70 text-gray-200';
+  const streamHostBadgeClass = 'border-yellow-400/20 bg-yellow-500/8 text-yellow-100';
+  const hoverTitleClass = 'group-hover:text-white';
+  const viewerPanelClass = 'bg-piu-dark/60';
+  const viewerValueClass = 'text-white';
+  const surfaceClass = 'bg-piu-dark/60';
+  const skillBadgeClass = 'border-yellow-400/20 bg-yellow-500/8 text-yellow-100';
   const gradeClass = `${getGradeColor(displayLastPlayGrade, lastPlayScore)} ${parsedLastPlayGrade.isBroken ? 'grade-broken' : ''}`.trim();
-  const outerRadiusClass = compact ? 'rounded-xl' : 'rounded-[28px]';
-  const avatarRadiusClass = compact ? 'rounded-xl' : 'rounded-2xl';
-  const panelRadiusClass = compact ? 'rounded-xl' : 'rounded-2xl';
+  const outerRadiusClass = 'rounded-xl';
+  const avatarRadiusClass = 'rounded-xl';
+  const panelRadiusClass = 'rounded-xl';
 
   return (
     <Link
