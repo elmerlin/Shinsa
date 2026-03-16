@@ -415,7 +415,14 @@ export const syncBestScores = () => longRequest('/piugame/sync/best-scores', { m
 export const syncRecentlyPlayed = () => longRequest('/piugame/sync/recently-played', { method: 'POST' });
 export const getPiugamePumbility = (userId) => request(`/piugame/pumbility/${userId}`);
 export const getPiugameBestScores = (userId, mode) => request(`/piugame/best-scores/${userId}${mode ? `?mode=${mode}` : ''}`);
-export const getPiugameRecentlyPlayed = (userId) => request(`/piugame/recently-played/${userId}`);
+export const getPiugameRecentlyPlayed = (userId, options = {}) => {
+  const params = new URLSearchParams();
+  if (options.year) params.set('year', String(options.year));
+  if (options.sort) params.set('sort', String(options.sort));
+  if (options.limit) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return request(`/piugame/recently-played/${userId}${query ? `?${query}` : ''}`);
+};
 export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
 export const getPumbilityRecommendations = (userId, options = {}) => {

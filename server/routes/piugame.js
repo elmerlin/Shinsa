@@ -4311,17 +4311,39 @@ router.get('/best-scores/:userId', (req, res) => {
 // GET /api/piugame/recently-played/:userId
 router.get('/recently-played/:userId', (req, res) => {
   const db = getDb();
-  const plays = db.prepare(
-    `SELECT
+  const sort = String(req.query.sort || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  const year = parseInt(req.query.year, 10);
+  const hasYearFilter = Number.isInteger(year) && year >= 2000 && year <= 2100;
+  const limitValue = parseInt(req.query.limit, 10);
+  const hasLimit = Number.isInteger(limitValue) && limitValue > 0;
+  const params = [req.params.userId];
+  let whereClause = 'WHERE p.user_id = ?';
+
+  if (hasYearFilter) {
+    params.push(`${year}-01-01`, `${year + 1}-01-01`);
+    whereClause += ' AND p.played_at_utc >= ? AND p.played_at_utc < ?';
+  }
+
+  let query = `SELECT
       p.*,
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
       COALESCE(s.colorway, '') AS shoe_colorway
     FROM user_recently_played p
     LEFT JOIN user_shoes s ON s.id = p.shoe_id
-    WHERE p.user_id = ?
-    ORDER BY p.id ASC`
-  ).all(req.params.userId);
+    ${whereClause}
+    ORDER BY ${
+      hasYearFilter
+        ? `p.played_at_utc ${sort}, p.id ${sort}`
+        : `CASE WHEN TRIM(COALESCE(p.played_at_utc, '')) <> '' THEN p.played_at_utc ELSE p.date_played END ${sort}, p.id ${sort}`
+    }`;
+
+  if (hasLimit) {
+    query += ' LIMIT ?';
+    params.push(limitValue);
+  }
+
+  const plays = db.prepare(query).all(...params);
   const sync = db.prepare('SELECT last_recently_played_sync FROM user_piugame_sync WHERE user_id = ?').get(req.params.userId);
   const normalizedPlays = plays.map((play) => ({
     ...play,

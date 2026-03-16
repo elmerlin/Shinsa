@@ -1013,6 +1013,7 @@ export default function ProfilePage() {
   const [piuPumbility, setPiuPumbility] = useState(null);
   const [piuBestScores, setPiuBestScores] = useState(null);
   const [piuRecentlyPlayed, setPiuRecentlyPlayed] = useState(null);
+  const [overviewRecentlyPlayed, setOverviewRecentlyPlayed] = useState(null);
   const [piuTitles, setPiuTitles] = useState(null);
   const [piuScoreMode, setPiuScoreMode] = useState('');  // '' = All
   const [piuAllSubMode, setPiuAllSubMode] = useState(''); // '', 'Single', 'Double' when piuScoreMode is ''
@@ -1067,13 +1068,14 @@ export default function ProfilePage() {
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
   const [songAnalytics, setSongAnalytics] = useState(null);
-const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
-const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
-const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
+  const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
+  const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
+  const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
   const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
+  const overviewHeatmapYear = new Date().getFullYear();
 
   useEffect(() => {
     let cancelled = false;
@@ -1085,6 +1087,7 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
     setPiuPumbility(null);
     setPiuBestScores(null);
     setPiuRecentlyPlayed(null);
+    setOverviewRecentlyPlayed(null);
     setPiuTitles(null);
     setPiuSyncing('');
     setRecentlyPlayedSyncing(false);
@@ -1384,7 +1387,6 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
       setPiuDataLoaded(true);
       getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
       getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
-      getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
       getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
       getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
@@ -1394,8 +1396,10 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
   const hasChartKeyMap = Object.keys(chartKeyMap).length > 0;
   useEffect(() => {
     if (tab !== 'overview' || !profileId || !hasPiuData) return;
-    if (!piuRecentlyPlayed) {
-      getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
+    if (!overviewRecentlyPlayed) {
+      getPiugameRecentlyPlayed(profileId, { year: overviewHeatmapYear, sort: 'desc' })
+        .then(setOverviewRecentlyPlayed)
+        .catch(() => {});
     }
     if (!hasJacketLookup) {
       getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
@@ -1403,7 +1407,12 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
     if (!hasChartKeyMap) {
       getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
     }
-  }, [tab, profileId, hasPiuData, piuRecentlyPlayed, hasJacketLookup, hasChartKeyMap]);
+  }, [tab, profileId, hasPiuData, overviewRecentlyPlayed, hasJacketLookup, hasChartKeyMap, overviewHeatmapYear]);
+
+  useEffect(() => {
+    if (tab !== 'recently-played' || !profileId || piuRecentlyPlayed) return;
+    getPiugameRecentlyPlayed(profileId, { sort: 'desc' }).then(setPiuRecentlyPlayed).catch(() => {});
+  }, [tab, profileId, piuRecentlyPlayed]);
 
   // Auto-sync pumbility + recently played (NOT best scores) for profile owner
   useEffect(() => {
@@ -1414,13 +1423,20 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
         syncRecentlyPlayed().catch(() => null),
       ]).then(() => {
         getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
-        getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {});
         getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
         getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
         getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
+        if (overviewRecentlyPlayed) {
+          getPiugameRecentlyPlayed(profileId, { year: overviewHeatmapYear, sort: 'desc' })
+            .then(setOverviewRecentlyPlayed)
+            .catch(() => {});
+        }
+        if (piuRecentlyPlayed || tab === 'recently-played') {
+          getPiugameRecentlyPlayed(profileId, { sort: 'desc' }).then(setPiuRecentlyPlayed).catch(() => {});
+        }
       }).finally(() => setPiuSyncing(''));
     }
-  }, [isPiuTab, profileId, isOwner, piuStatus?.linked]);
+  }, [isPiuTab, profileId, isOwner, piuStatus?.linked, overviewRecentlyPlayed, piuRecentlyPlayed, tab, overviewHeatmapYear]);
 
   // Poll sync progress when a background sync is running
   useEffect(() => {
@@ -1554,7 +1570,14 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
     try {
       await syncRecentlyPlayed();
       await Promise.all([
-        getPiugameRecentlyPlayed(profileId).then(setPiuRecentlyPlayed).catch(() => {}),
+        (tab === 'recently-played' || piuRecentlyPlayed
+          ? getPiugameRecentlyPlayed(profileId, { sort: 'desc' }).then(setPiuRecentlyPlayed).catch(() => {})
+          : Promise.resolve()),
+        (tab === 'overview' || overviewRecentlyPlayed
+          ? getPiugameRecentlyPlayed(profileId, { year: overviewHeatmapYear, sort: 'desc' })
+            .then(setOverviewRecentlyPlayed)
+            .catch(() => {})
+          : Promise.resolve()),
         getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {}),
       ]);
       setRecentlyPlayedSyncFeedback('Recently Played synced');
@@ -1670,28 +1693,18 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
     return { tournamentCount, duelCount, totalWins, totalLosses, duelWins, duelLosses, totalSongs, avgScore, bestScore, byLevel };
   }, [stats, songScores, profileId]);
 
-  const recentlyPlayedRows = useMemo(() => {
-    const rows = Array.isArray(piuRecentlyPlayed?.plays) ? piuRecentlyPlayed.plays : [];
-    return rows
-      .map((play, idx) => {
-        const parsed = parsePlayedAt(play?.date_played);
-        return {
-          play,
-          idx,
-          ts: parsed ? parsed.getTime() : null,
-        };
-      })
-      .sort((a, b) => {
-        if (a.ts !== null && b.ts !== null && a.ts !== b.ts) return b.ts - a.ts;
-        if (a.ts !== null) return -1;
-        if (b.ts !== null) return 1;
-        return b.idx - a.idx;
-      })
-      .map(({ play }) => play);
-  }, [piuRecentlyPlayed]);
+  const recentlyPlayedRows = useMemo(
+    () => (Array.isArray(piuRecentlyPlayed?.plays) ? piuRecentlyPlayed.plays : []),
+    [piuRecentlyPlayed]
+  );
+
+  const overviewHeatmapRows = useMemo(
+    () => (Array.isArray(overviewRecentlyPlayed?.plays) ? overviewRecentlyPlayed.plays : []),
+    [overviewRecentlyPlayed]
+  );
 
   const overviewPlayHeatmap = useMemo(() => {
-    const plays = recentlyPlayedRows;
+    const plays = overviewHeatmapRows;
     const dayMap = {};
     let singleMin = Infinity;
     let singleMax = 0;
@@ -1701,8 +1714,9 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
 
     for (let i = 0; i < plays.length; i++) {
       const play = plays[i];
-      const dayKey = parsePlayDayKey(play?.date_played);
-      const dayDate = parseDayKey(dayKey);
+      const parsedAt = parsePlayedAt(play?.played_at_utc || play?.date_played);
+      const dayKey = parsedAt ? toDayKey(parsedAt) : parsePlayDayKey(play?.played_at_utc || play?.date_played);
+      const dayDate = parsedAt ? startOfDay(parsedAt) : parseDayKey(dayKey);
       if (!dayKey || !dayDate) continue;
 
       if (!dayMap[dayKey]) {
@@ -1718,7 +1732,6 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
 
       const mode = play?.mode === 'Single' || play?.mode === 'Double' ? play.mode : '';
       const level = parseInt(play?.level, 10) || 0;
-      const parsedAt = parsePlayedAt(play?.date_played);
 
       if (mode === 'Single') {
         dayMap[dayKey].singles += 1;
@@ -1843,7 +1856,7 @@ const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
         }
         : null,
     };
-  }, [recentlyPlayedRows]);
+  }, [overviewHeatmapRows]);
 
   useEffect(() => {
     if (!overviewPlayHeatmap.latestDayKey) {
