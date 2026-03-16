@@ -543,25 +543,24 @@ function HourOfPowerLeaderboardTab() {
     <>
       <div className="space-y-4">
         <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-          <div className="flex items-start justify-between gap-3">
-            <span className="inline-flex rounded-md border border-yellow-400/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">
-              Hour of Power
-            </span>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
+            <div className="min-w-0">
+              <span className="inline-flex rounded-md border border-yellow-400/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">
+                Hour of Power
+              </span>
+              <h2 className="mt-2 whitespace-nowrap text-[1.9rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
+            </div>
             {currentUserBest ? (
-              <div className="w-[6.4rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-1.5 text-right">
+              <div className="w-[5.6rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-1.5 text-right">
                 <p className="text-[8px] font-display font-bold uppercase tracking-wide text-gray-500">Your Best HoP</p>
-                <p className="mt-1 text-[1.45rem] leading-none font-display font-black text-white">#{currentUserBest.rank}</p>
+                <p className="mt-1 text-[1.35rem] leading-none font-display font-black text-white">#{currentUserBest.rank}</p>
                 <p className="mt-1 text-[9px] text-cyan-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
               </div>
             ) : (
-              <div className="w-[6.4rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-1.5 text-right text-[9px] text-gray-400">
+              <div className="w-[5.6rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-1.5 text-right text-[9px] text-gray-400">
                 Complete a HoP to place.
               </div>
             )}
-          </div>
-
-          <div className="mt-1.5">
-            <h2 className="whitespace-nowrap text-[1.9rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -594,8 +593,8 @@ function HourOfPowerLeaderboardTab() {
                 <thead>
                   <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[9px] uppercase tracking-[0.12em] text-gray-500">
                     <th className="w-[1.8rem] px-0.5 py-2 text-left font-display font-bold">Rank</th>
-                    <th className="px-0.5 py-2 text-left font-display font-bold">Player</th>
-                    <th className="w-[3.25rem] px-0 py-2 text-right font-display font-bold">Avg</th>
+                    <th className="w-[7.2rem] px-0.5 py-2 pl-2 text-left font-display font-bold">Player</th>
+                    <th className="w-[3.5rem] px-0 py-2 text-right font-display font-bold">Avg</th>
                     <th className="w-[2.45rem] px-0 py-2 text-right font-display font-bold">Lv</th>
                     <th className="w-[3.65rem] px-0.5 py-2 text-right font-display font-bold">Total</th>
                   </tr>
@@ -621,7 +620,7 @@ function HourOfPowerLeaderboardTab() {
                         }`}
                       >
                         <td className="px-0.5 py-2.5 font-display font-black text-white">#{row.rank}</td>
-                        <td className="px-0.5 py-2.5">
+                        <td className="px-0.5 py-2.5 pl-1">
                           <div className="flex min-w-0 items-center gap-1">
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border/60 bg-piu-dark text-[9px] font-display font-bold text-white">
                               {row.avatar ? (
