@@ -403,12 +403,16 @@ function HourOfPowerDetailModal({ attempt, share, loading, error, onRetry, onClo
             <div className="min-w-0">
               <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Hour of Power Attempt</p>
               <h3 className="truncate text-lg font-display font-black text-white">{modalTitle}</h3>
-              <p className="mt-0.5 text-xs text-gray-400">
-                {attempt.nationality ? `${getCountryFlag(attempt.nationality)} ` : ''}
-                {playerName}
-                {attempt.skill_title ? ` • ${attempt.skill_title}` : ''}
-                {attempt.started_at ? ` • ${formatHopDateLabel(attempt.started_at)}` : ''}
-              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-gray-400">
+                {attempt.nationality ? (
+                  <span className="shrink-0 leading-none">
+                    {getCountryFlag(attempt.nationality, 'inline-block h-3.5 align-middle')}
+                  </span>
+                ) : null}
+                <span>{playerName}</span>
+                {attempt.skill_title ? <span>• {attempt.skill_title}</span> : null}
+                {attempt.started_at ? <span>• {formatHopDateLabel(attempt.started_at)}</span> : null}
+              </div>
             </div>
           </div>
           <button
@@ -548,16 +552,16 @@ function HourOfPowerLeaderboardTab() {
               <span className="inline-flex rounded-md border border-yellow-400/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">
                 Hour of Power
               </span>
-              <h2 className="mt-2 whitespace-nowrap text-[1.68rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
+              <h2 className="mt-2 whitespace-nowrap text-[1.56rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
             </div>
             {currentUserBest ? (
-              <div className="w-[5.6rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-1.5 text-right">
+              <div className="w-[5.15rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-1.5 py-1.25 text-right">
                 <p className="text-[8px] font-display font-bold uppercase tracking-wide text-gray-500">Your Best HoP</p>
-                <p className="mt-1 text-[1.35rem] leading-none font-display font-black text-white">#{currentUserBest.rank}</p>
+                <p className="mt-1 text-[1.28rem] leading-none font-display font-black text-white">#{currentUserBest.rank}</p>
                 <p className="mt-1 text-[9px] text-cyan-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
               </div>
             ) : (
-              <div className="w-[5.6rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-2 py-1.5 text-right text-[9px] text-gray-400">
+              <div className="w-[5.15rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-1.5 py-1.25 text-right text-[9px] text-gray-400">
                 Complete a HoP to place.
               </div>
             )}
@@ -592,11 +596,11 @@ function HourOfPowerLeaderboardTab() {
               <table className="w-full table-fixed text-xs">
                 <thead>
                   <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[9px] uppercase tracking-[0.12em] text-gray-500">
-                    <th className="w-[1.8rem] px-0.5 py-2 text-left font-display font-bold">Rank</th>
+                    <th className="w-[1.9rem] px-1 py-2 text-left font-display font-bold">Rank</th>
                     <th className="w-[6.7rem] px-0.5 py-2 pl-3 text-left font-display font-bold">Player</th>
                     <th className="w-[3.35rem] px-0 py-2 text-right font-display font-bold">Avg</th>
                     <th className="w-[2.3rem] px-0 py-2 text-right font-display font-bold">Lv</th>
-                    <th className="w-[3.5rem] px-0.5 py-2 text-right font-display font-bold">Total</th>
+                    <th className="w-[3.5rem] px-1 py-2 text-right font-display font-bold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -619,7 +623,7 @@ function HourOfPowerLeaderboardTab() {
                           isCurrent ? 'bg-piu-accent/[0.08]' : ''
                         }`}
                       >
-                        <td className="px-0.5 py-2.5 font-display font-black text-white">#{row.rank}</td>
+                        <td className="px-1 py-2.5 font-display font-black text-white">#{row.rank}</td>
                         <td className="px-0.5 py-2.5 pl-2">
                           <div className="flex min-w-0 items-center gap-1">
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border/60 bg-piu-dark text-[9px] font-display font-bold text-white">
@@ -644,7 +648,7 @@ function HourOfPowerLeaderboardTab() {
                         </td>
                         <td className="px-0 py-2.5 text-right font-mono text-[10px] text-gray-200">{formatDecimal(row.average_rating_points)}</td>
                         <td className="px-0 py-2.5 text-right font-mono text-[10px] text-gray-200">{formatDecimal(row.average_level)}</td>
-                        <td className="px-0.5 py-2.5 text-right font-mono text-[10px] font-bold text-yellow-200">{formatNumber(row.total_rating_points)}</td>
+                        <td className="px-1 py-2.5 text-right font-mono text-[10px] font-bold text-yellow-200">{formatNumber(row.total_rating_points)}</td>
                       </tr>
                     );
                   })}
