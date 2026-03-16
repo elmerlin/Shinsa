@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PiuChartJacket from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
+import { HourOfPowerLogo } from './HourOfPowerBrand';
 import { parseGrade } from '../utils/grades';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 
@@ -65,11 +66,11 @@ function getGradeColorClass(grade) {
   return 'text-gray-300';
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, className = '', labelClassName = 'text-gray-500', valueClassName = 'text-gray-100' }) {
   return (
-    <div className="rounded-lg border border-piu-border/30 bg-piu-dark/45 px-2.5 py-2">
-      <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{label}</p>
-      <p className="text-sm font-display font-bold text-gray-100">{value}</p>
+    <div className={`rounded-lg border border-piu-border/30 bg-piu-dark/45 px-2.5 py-2 ${className}`.trim()}>
+      <p className={`text-[10px] font-display uppercase tracking-wide ${labelClassName}`}>{label}</p>
+      <p className={`text-sm font-display font-bold ${valueClassName}`}>{value}</p>
     </div>
   );
 }
@@ -244,37 +245,55 @@ export default function SessionShareCard({
   const scoreCellClass = 'py-1.5 pl-0 pr-1.5 text-right whitespace-nowrap sm:px-2';
   const ratingCellClass = 'py-1.5 pl-0 pr-1.5 text-right whitespace-nowrap sm:px-2';
   const gradeCellClass = 'py-1.5 pl-0 pr-2.5 text-right whitespace-nowrap sm:px-1';
+  const wrapperClass = isHopShare
+    ? 'rounded-xl border border-yellow-300/30 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(11,57,73,0.92)_48%,rgba(24,18,42,0.98))] p-3 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'
+    : 'rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/15 via-emerald-500/10 to-transparent p-3';
 
   return (
     <>
-      <div className={`rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/15 via-emerald-500/10 to-transparent p-3 ${className}`.trim()}>
+      <div className={`${wrapperClass} ${className}`.trim()}>
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-display font-bold uppercase tracking-wider text-cyan-300">{displayTitle}</p>
-            <p className="text-xs text-gray-300">
-              {share.sessionDateLabel}
-              {share.sessionTimeRange ? ` • ${share.sessionTimeRange}` : ''}
-              {share.sessionDurationLabel ? ` • ${share.sessionDurationLabel}` : ''}
-            </p>
-            {share.sessionMachineName ? (
-              <p className="text-[11px] text-cyan-300/90 mt-0.5">Machine: {share.sessionMachineName}</p>
-            ) : null}
-            {isHopShare && share.completed === false ? (
-              <p className="mt-1 text-[11px] text-amber-200">Attempt ended early and is not leaderboard eligible.</p>
-            ) : null}
+          <div className="min-w-0">
+            <div className="flex items-start gap-3">
+              {isHopShare ? (
+                <HourOfPowerLogo className="h-16 w-12 shrink-0 rounded-xl" imageClassName="p-1" />
+              ) : null}
+              <div className="min-w-0">
+                <p className={`text-[10px] font-display font-bold uppercase tracking-wider ${isHopShare ? 'text-yellow-200' : 'text-cyan-300'}`}>{displayTitle}</p>
+                <p className="text-xs text-gray-200">
+                  {share.sessionDateLabel}
+                  {share.sessionTimeRange ? ` • ${share.sessionTimeRange}` : ''}
+                  {share.sessionDurationLabel ? ` • ${share.sessionDurationLabel}` : ''}
+                </p>
+                {share.sessionMachineName ? (
+                  <p className={`mt-0.5 text-[11px] ${isHopShare ? 'text-cyan-100/90' : 'text-cyan-300/90'}`}>Machine: {share.sessionMachineName}</p>
+                ) : null}
+                {isHopShare && share.completed === false ? (
+                  <p className="mt-1 text-[11px] text-amber-200">Attempt ended early and is not leaderboard eligible.</p>
+                ) : null}
+              </div>
+            </div>
           </div>
           {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
         </div>
 
         {isHopShare ? (
-          <div className="grid grid-cols-2 gap-2 mt-3 sm:grid-cols-3">
-            <Stat label="Total Points" value={formatNumber(share.totalRatingPoints)} />
-            <Stat label="Clears" value={share.countedClearCount || rows.length} />
-            <Stat label="Avg Pts/Clear" value={formatDecimal(share.averageRatingPoints)} />
-            <Stat label="Avg Level" value={formatDecimal(share.averageLevel)} />
-            <Stat label="Highest" value={formatNumber(share.highestRatingPoints)} />
-            <Stat label="Lowest" value={formatNumber(share.lowestRatingPoints)} />
-          </div>
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Stat
+                label="Total Points"
+                value={formatNumber(share.totalRatingPoints)}
+                className="col-span-2 border-yellow-300/35 bg-[linear-gradient(135deg,rgba(255,219,94,0.16),rgba(125,88,28,0.18))] shadow-[inset_0_1px_0_rgba(255,244,191,0.12)] sm:col-span-1"
+                labelClassName="text-yellow-100/80"
+                valueClassName="text-yellow-50"
+              />
+              <Stat label="Clears" value={share.countedClearCount || rows.length} className="border-cyan-300/20 bg-cyan-500/10" labelClassName="text-cyan-100/75" valueClassName="text-white" />
+              <Stat label="Avg Pts/Clear" value={formatDecimal(share.averageRatingPoints)} className="border-emerald-300/20 bg-emerald-500/10" labelClassName="text-emerald-100/75" valueClassName="text-emerald-50" />
+              <Stat label="Avg Level" value={formatDecimal(share.averageLevel)} className="border-sky-300/20 bg-sky-500/10" labelClassName="text-sky-100/75" valueClassName="text-sky-50" />
+              <Stat label="Highest" value={formatNumber(share.highestRatingPoints)} className="border-purple-300/20 bg-purple-500/10" labelClassName="text-purple-100/75" valueClassName="text-purple-50" />
+              <Stat label="Lowest" value={formatNumber(share.lowestRatingPoints)} className="border-piu-border/35 bg-black/20" labelClassName="text-gray-400" valueClassName="text-gray-100" />
+            </div>
+          </>
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">

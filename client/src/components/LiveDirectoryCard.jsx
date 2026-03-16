@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { HourOfPowerLogo } from './HourOfPowerBrand';
 import PiuChartJacket from './PiuChartJacket';
 import { getCountryFlag } from './PlayerRegistration';
 import { parseGrade } from '../utils/grades';
@@ -113,7 +114,8 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
               Live now
             </span>
             {isHopSession ? (
-              <span className="rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-100">
+              <span className="inline-flex items-center gap-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-100">
+                <HourOfPowerLogo className="h-5 w-4 rounded-md" imageClassName="p-0" />
                 Hour of Power
               </span>
             ) : null}

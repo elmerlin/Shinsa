@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import { HourOfPowerLogo, HourOfPowerWordmark } from '../components/HourOfPowerBrand';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import Over20Top100Modal from '../components/Over20Top100Modal';
@@ -393,12 +394,15 @@ function HourOfPowerDetailModal({ attempt, share, loading, error, onRetry, onClo
       >
         <div className="flex items-start justify-between gap-3 border-b border-piu-border/60 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-piu-border/70 bg-piu-dark text-sm font-display font-bold text-white">
-              {avatar ? (
-                <img src={avatar} alt={playerName} className="h-full w-full object-cover" />
-              ) : (
-                <span>{playerName.charAt(0).toUpperCase() || 'P'}</span>
-              )}
+            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+              <HourOfPowerLogo className="absolute -left-1 -top-1 h-8 w-6 rounded-lg" imageClassName="p-0.5" />
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border border-piu-border/70 bg-piu-dark text-sm font-display font-bold text-white">
+                {avatar ? (
+                  <img src={avatar} alt={playerName} className="h-full w-full object-cover" />
+                ) : (
+                  <span>{playerName.charAt(0).toUpperCase() || 'P'}</span>
+                )}
+              </div>
             </div>
             <div className="min-w-0">
               <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Hour of Power Attempt</p>
@@ -546,22 +550,20 @@ function HourOfPowerLeaderboardTab() {
   return (
     <>
       <div className="space-y-4">
-        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+        <div className="rounded-xl border border-yellow-300/20 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(13,54,73,0.92)_46%,rgba(24,18,42,0.98))] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
           <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
             <div className="min-w-0">
-              <span className="inline-flex rounded-md border border-yellow-400/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-200">
-                Hour of Power
-              </span>
-              <h2 className="mt-2 whitespace-nowrap text-[1.56rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
+              <HourOfPowerWordmark compact className="mb-2" />
+              <h2 className="mt-1 whitespace-nowrap text-[1.56rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
             </div>
             {currentUserBest ? (
-              <div className="w-[5.15rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-1.5 py-1.25 text-right">
-                <p className="text-[8px] font-display font-bold uppercase tracking-wide text-gray-500">Your Best HoP</p>
+              <div className="w-[5.15rem] shrink-0 rounded-lg border border-yellow-300/20 bg-black/20 px-1.5 py-1.25 text-right">
+                <p className="text-[8px] font-display font-bold uppercase tracking-wide text-yellow-100/70">Your Best HoP</p>
                 <p className="mt-1 text-[1.28rem] leading-none font-display font-black text-white">#{currentUserBest.rank}</p>
-                <p className="mt-1 text-[9px] text-cyan-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
+                <p className="mt-1 text-[9px] text-yellow-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
               </div>
             ) : (
-              <div className="w-[5.15rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-1.5 py-1.25 text-right text-[9px] text-gray-400">
+              <div className="w-[5.15rem] shrink-0 rounded-lg border border-yellow-300/20 bg-black/20 px-1.5 py-1.25 text-right text-[9px] text-gray-300">
                 Complete a HoP to place.
               </div>
             )}
