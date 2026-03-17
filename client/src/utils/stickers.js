@@ -188,13 +188,7 @@ export const MOPE_FLOWER_EMOJIS = MOPE_FLOWER_STICKER_CONFIG.map((entry) => ({
   token: `:mope_flower_${entry.key}:`,
   fileName: entry.key,
   label: entry.label,
-  image: '/hour-of-power/mope_labubu.png',
-  spriteSheet: '/hour-of-power/mope_labubu.png',
-  spriteColumns: 4,
-  spriteRows: 4,
-  spriteFrames: 4,
-  spriteFps: 8,
-  spriteRow: entry.spriteRow,
+  image: `/emojis/mope_flower/mope-flower-${entry.key}.gif`,
   animated: true,
 }));
 
