@@ -3,7 +3,7 @@ const { formatDurationLabel } = require('./liveSessionSummary');
 
 const LIVE_SESSION_TYPE = 'live';
 const HOP_SESSION_TYPE = 'hop';
-const DEFAULT_HOP_WARMUP_SECONDS = 15 * 60;
+const DEFAULT_HOP_WARMUP_SECONDS = 20 * 60;
 const DEFAULT_HOP_WINDOW_SECONDS = 60 * 60;
 
 function toInt(value) {

@@ -4058,7 +4058,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
       db,
       id,
       sessionType === HOP_SESSION_TYPE
-        ? `${req.user.username || 'Player'} started Hour of Power. Warmup is live for 15 minutes.`
+        ? `${req.user.username || 'Player'} started Hour of Power. Warmup is live for 20 minutes.`
         : `${req.user.username || 'Player'} started a Shinsa Live session.`,
       sessionType === HOP_SESSION_TYPE ? 'hop_start' : 'session_start',
       {

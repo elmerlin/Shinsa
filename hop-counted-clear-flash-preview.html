@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HoP Counted Clear Flash Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #05070d;
+      --panel: rgba(13, 18, 31, 0.92);
+      --panel-border: rgba(104, 118, 143, 0.28);
+      --text: #e5eef7;
+      --muted: #8c97ab;
+      --grade-glow: #7dd3fc;
+      --score-glow: #d9f7ff;
+      --hop-glow: #86efac;
+      --grade-color: #7dd3fc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top, rgba(26, 39, 76, 0.52), transparent 42%),
+        radial-gradient(circle at bottom right, rgba(20, 74, 62, 0.28), transparent 34%),
+        #05070d;
+      color: var(--text);
+      font-family: Inter, system-ui, sans-serif;
+    }
+
+    .panel {
+      position: relative;
+      width: min(820px, 100%);
+      border-radius: 28px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+        repeating-linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.02) 0,
+          rgba(255, 255, 255, 0.02) 1px,
+          transparent 1px,
+          transparent 6px
+        );
+      pointer-events: none;
+    }
+
+    .panel-inner {
+      position: relative;
+      padding: 28px 28px 24px;
+    }
+
+    .eyebrow {
+      margin: 0;
+      font: 900 12px/1 Orbitron, sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #facc15;
+    }
+
+    h1 {
+      margin: 10px 0 0;
+      font: 900 clamp(2rem, 5vw, 3.6rem)/0.98 Orbitron, sans-serif;
+      letter-spacing: 0.02em;
+    }
+
+    .copy {
+      margin: 14px 0 0;
+      max-width: 58ch;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    .controls {
+      margin-top: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    select {
+      border: 1px solid rgba(112, 126, 152, 0.34);
+      background: rgba(9, 14, 24, 0.9);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font: 700 13px/1 Orbitron, sans-serif;
+      letter-spacing: 0.04em;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover,
+    select:hover {
+      border-color: rgba(125, 211, 252, 0.45);
+    }
+
+    .example-note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .flash {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.92);
+      animation: flash-cycle 3s ease forwards;
+      z-index: 20;
+    }
+
+    .flash.active {
+      display: flex;
+    }
+
+    .flash::before {
+      content: "";
+      position: absolute;
+      inset: -10% 0;
+      background: linear-gradient(180deg, rgba(0, 255, 153, 0), rgba(0, 255, 153, 0.12), rgba(0, 255, 153, 0));
+      mix-blend-mode: screen;
+      animation: scanline 1.6s linear forwards;
+    }
+
+    .flash-content {
+      position: relative;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .flash-line {
+      margin: 0;
+      font-family: 'Share Tech Mono', monospace;
+      font-weight: 400;
+      line-height: 0.95;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .flash-line span {
+      display: inline-block;
+      min-width: 0.5ch;
+    }
+
+    .flash-grade {
+      color: var(--grade-color);
+      font-size: clamp(3.75rem, 17vw, 11rem);
+      text-shadow: 0 0 5px var(--grade-glow), 0 0 15px var(--grade-glow), 0 0 30px var(--grade-glow);
+    }
+
+    .flash-score {
+      margin-top: 0.35em;
+      color: #d9f7ff;
+      font-size: clamp(2.7rem, 11vw, 7rem);
+      text-shadow: 0 0 5px var(--score-glow), 0 0 15px var(--score-glow), 0 0 30px var(--score-glow);
+    }
+
+    .flash-hop {
+      margin-top: 0.7em;
+      color: #86efac;
+      font-size: clamp(1rem, 3.2vw, 2rem);
+      letter-spacing: 0.14em;
+      text-shadow: 0 0 5px var(--hop-glow), 0 0 15px var(--hop-glow), 0 0 30px var(--hop-glow);
+    }
+
+    .flash-song {
+      margin: 1.2rem auto 0;
+      width: min(78vw, 680px);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 16px 20px;
+      border: 1px solid rgba(134, 239, 172, 0.22);
+      border-radius: 24px;
+      background:
+        linear-gradient(180deg, rgba(13, 22, 25, 0.96), rgba(6, 12, 16, 0.92)),
+        radial-gradient(circle at top left, rgba(0, 255, 153, 0.16), transparent 42%);
+      box-shadow:
+        0 0 0 1px rgba(125, 211, 252, 0.08),
+        0 18px 48px rgba(0, 0, 0, 0.42),
+        0 0 28px rgba(0, 255, 153, 0.1);
+      animation: song-panel-in 3s ease forwards;
+    }
+
+    .flash-song-art {
+      position: relative;
+      width: clamp(84px, 11vw, 118px);
+      height: clamp(84px, 11vw, 118px);
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid rgba(122, 140, 168, 0.42);
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
+      flex: 0 0 auto;
+      background: #0b1018;
+    }
+
+    .flash-song-art img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .flash-song-art::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 30%, rgba(0, 0, 0, 0.22));
+      pointer-events: none;
+    }
+
+    .flash-song-badge {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      min-width: 38px;
+      height: 38px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(167, 243, 208, 0.52);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font: 900 1rem/1 Orbitron, sans-serif;
+      letter-spacing: 0.02em;
+      color: #f3fffa;
+      background: linear-gradient(135deg, #39d98a, #12835e);
+      box-shadow: 0 8px 24px rgba(20, 166, 112, 0.34);
+    }
+
+    .flash-song-copy {
+      min-width: 0;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .flash-song-label {
+      margin: 0;
+      font: 900 0.78rem/1 Orbitron, sans-serif;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(168, 247, 213, 0.82);
+    }
+
+    .flash-song-name {
+      margin: 0;
+      font: 900 clamp(1.4rem, 4vw, 2.6rem)/1.02 Orbitron, sans-serif;
+      letter-spacing: 0.01em;
+      color: #f5fbff;
+      text-shadow: 0 0 18px rgba(125, 211, 252, 0.18);
+      word-break: break-word;
+    }
+
+    .flash-song-detail {
+      margin: 0;
+      color: rgba(175, 198, 224, 0.88);
+      font: 400 clamp(0.92rem, 1.8vw, 1.08rem)/1.3 'Share Tech Mono', monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    @keyframes flash-cycle {
+      0% {
+        opacity: 0;
+        transform: scale(0.985);
+      }
+
+      12% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      82% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: scale(1.01);
+      }
+    }
+
+    @keyframes scanline {
+      0% {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+
+      18% {
+        opacity: 0.45;
+      }
+
+      100% {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+    }
+
+    @keyframes song-panel-in {
+      0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.985);
+      }
+
+      18% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      82% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(-4px) scale(1.01);
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 16px;
+      }
+
+      .panel-inner {
+        padding: 22px 18px 18px;
+      }
+
+      .controls {
+        align-items: stretch;
+      }
+
+      button,
+      select {
+        width: 100%;
+      }
+
+      .flash-song {
+        width: min(92vw, 520px);
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 20px;
+      }
+
+      .flash-song-badge {
+        right: 6px;
+        bottom: 6px;
+        min-width: 34px;
+        height: 34px;
+        font-size: 0.92rem;
+      }
+
+      .flash-song-copy {
+        gap: 5px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="panel-inner">
+      <p class="eyebrow">Hour of Power</p>
+      <h1>Counted Clear Flash Preview</h1>
+      <p class="copy">
+        This local preview mocks the 3 second full-screen HoP counted-clear flash that will trigger when a new
+        counted <code>last_play</code> arrives. It uses the same scramble-style reveal, full-screen sizing,
+        and grade / score / HoP-total structure.
+      </p>
+
+      <div class="controls">
+        <select id="gradeSelect">
+          <option value="SSS+|#7dd3fc">SSS+</option>
+          <option value="SSS|#60a5fa">SSS</option>
+          <option value="SS+|#facc15">SS+</option>
+          <option value="SS|#fbbf24">SS</option>
+          <option value="AAA+|#d1d5db">AAA+</option>
+        </select>
+        <button id="replayButton" type="button">Replay 3s Flash</button>
+      </div>
+
+      <p class="example-note">
+        Mock payload: <strong>Start On Red D19</strong>, score <strong>996,432</strong>, HoP gain <strong>+150</strong>,
+        running total <strong>2,845</strong>.
+      </p>
+    </div>
+  </div>
+
+  <div class="flash" id="flash">
+    <div class="flash-content">
+      <p class="flash-line flash-grade" id="flashGrade"></p>
+      <p class="flash-line flash-score" id="flashScore"></p>
+      <p class="flash-line flash-hop" id="flashHop"></p>
+      <div class="flash-song" aria-label="Song played">
+        <div class="flash-song-art">
+          <img src="./client/public/jackets/pump/15A2.jpg" alt="Start On Red jacket" />
+          <span class="flash-song-badge">D19</span>
+        </div>
+        <div class="flash-song-copy">
+          <p class="flash-song-label">Song Played</p>
+          <p class="flash-song-name">Start On Red</p>
+          <p class="flash-song-detail">Nato • 1:56 • Counted Clear</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const gradeSelect = document.getElementById('gradeSelect');
+    const replayButton = document.getElementById('replayButton');
+    const flash = document.getElementById('flash');
+    const flashGrade = document.getElementById('flashGrade');
+    const flashScore = document.getElementById('flashScore');
+    const flashHop = document.getElementById('flashHop');
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[]{}|;:,.<>?';
+    let activeTimers = [];
+
+    function splitValue(value) {
+      return String(value || '').split('').map((character) => (
+        `<span>${character === ' ' ? '&nbsp;' : character}</span>`
+      )).join('');
+    }
+
+    function scrambleText(target, progress) {
+      const value = String(target || '');
+      if (!value) return '';
+      if (progress >= 1) return value;
+      const revealProgress = progress * (value.length + 6);
+      return value.split('').map((character, index) => {
+        if (character === ' ') return ' ';
+        if (revealProgress >= index + 1) return character;
+        return chars[Math.floor(Math.random() * chars.length)];
+      }).join('');
+    }
+
+    function renderLine(element, text) {
+      element.innerHTML = splitValue(text);
+    }
+
+    function clearTimers() {
+      activeTimers.forEach((timer) => window.clearTimeout(timer));
+      activeTimers = [];
+    }
+
+    function replayFlash() {
+      clearTimers();
+
+      const [grade, gradeColor] = gradeSelect.value.split('|');
+      const scoreLabel = '996,432';
+      const hopLabel = '+150 HOP • 2,845 TOTAL';
+      flash.style.setProperty('--grade-color', gradeColor || '#7dd3fc');
+      flash.style.setProperty('--grade-glow', gradeColor || '#7dd3fc');
+
+      renderLine(flashGrade, grade);
+      renderLine(flashScore, scoreLabel);
+      renderLine(flashHop, hopLabel);
+
+      flash.classList.remove('active');
+      void flash.offsetWidth;
+      flash.classList.add('active');
+
+      const startedAt = Date.now();
+      const interval = window.setInterval(() => {
+        const elapsed = Date.now() - startedAt;
+        renderLine(flashGrade, scrambleText(grade, Math.min(1, elapsed / 1450)));
+        renderLine(flashScore, scrambleText(scoreLabel, Math.min(1, elapsed / 1450)));
+        renderLine(flashHop, scrambleText(hopLabel, Math.min(1, elapsed / 1650)));
+      }, 48);
+
+      activeTimers.push(interval);
+      activeTimers.push(window.setTimeout(() => {
+        window.clearInterval(interval);
+        renderLine(flashGrade, grade);
+        renderLine(flashScore, scoreLabel);
+        renderLine(flashHop, hopLabel);
+      }, 3000));
+
+      activeTimers.push(window.setTimeout(() => {
+        flash.classList.remove('active');
+      }, 3020));
+    }
+
+    replayButton.addEventListener('click', replayFlash);
+    window.addEventListener('load', () => {
+      window.setTimeout(replayFlash, 300);
+    });
+  </script>
+</body>
+</html>

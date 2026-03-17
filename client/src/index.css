@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -121,6 +123,92 @@
     opacity: 0;
     transform: translate3d(0, -132px, 0) scale(1.08);
   }
+}
+
+@keyframes hop-pass-flash-cycle {
+  0% {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+
+  12% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  82% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.01);
+  }
+}
+
+@keyframes hop-pass-flash-scanline {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 0.45;
+  }
+
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.hop-pass-flash {
+  animation: hop-pass-flash-cycle 3s ease forwards;
+}
+
+.hop-pass-flash__scanline {
+  position: absolute;
+  inset: -10% 0;
+  background: linear-gradient(180deg, rgba(0, 255, 153, 0), rgba(0, 255, 153, 0.12), rgba(0, 255, 153, 0));
+  mix-blend-mode: screen;
+  animation: hop-pass-flash-scanline 1.6s linear forwards;
+}
+
+.hop-pass-flash__content {
+  position: relative;
+  padding: 1.5rem;
+}
+
+.hop-pass-flash__line {
+  margin: 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: 400;
+  line-height: 0.95;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.hop-pass-flash__line span {
+  display: inline-block;
+  position: relative;
+  min-width: 0.5ch;
+  will-change: contents;
+}
+
+.hop-pass-flash__line--grade {
+  font-size: clamp(3.75rem, 17vw, 11rem);
+}
+
+.hop-pass-flash__line--score {
+  margin-top: 0.35em;
+  font-size: clamp(2.7rem, 11vw, 7rem);
+}
+
+.hop-pass-flash__line--hop {
+  margin-top: 0.7em;
+  font-size: clamp(1rem, 3.2vw, 2rem);
+  letter-spacing: 0.14em;
 }
 
 @keyframes live-reaction-burst {

@@ -2126,7 +2126,7 @@ function initializeDb() {
       hop_warmup_started_at TEXT DEFAULT '',
       hop_started_at TEXT DEFAULT '',
       hop_ends_at TEXT DEFAULT '',
-      hop_warmup_seconds INTEGER NOT NULL DEFAULT 900,
+      hop_warmup_seconds INTEGER NOT NULL DEFAULT 1200,
       hop_window_seconds INTEGER NOT NULL DEFAULT 3600,
       hop_warmup_finished_announced_at TEXT DEFAULT '',
       hop_finished_announced_at TEXT DEFAULT '',
@@ -2916,7 +2916,7 @@ function initializeDb() {
     db.exec("ALTER TABLE live_sessions ADD COLUMN hop_ends_at TEXT DEFAULT ''");
   }
   if (!liveSessionCols.includes('hop_warmup_seconds')) {
-    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_warmup_seconds INTEGER NOT NULL DEFAULT 900");
+    db.exec("ALTER TABLE live_sessions ADD COLUMN hop_warmup_seconds INTEGER NOT NULL DEFAULT 1200");
   }
   if (!liveSessionCols.includes('hop_window_seconds')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN hop_window_seconds INTEGER NOT NULL DEFAULT 3600");

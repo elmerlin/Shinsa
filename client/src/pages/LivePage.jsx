@@ -174,6 +174,33 @@ function getGradeColor(grade, score = 0) {
   return getRank(score).color;
 }
 
+function getGradeGlowColor(grade, score = 0) {
+  const normalized = parseGrade(grade, score > 0 ? getRank(score).label : '').normalized;
+  if (normalized) {
+    if (normalized.includes('SSS')) return '#7dd3fc';
+    if (normalized.includes('SS')) return '#facc15';
+    if (normalized.includes('S')) return '#fbbf24';
+    if (normalized.includes('AAA')) return '#d1d5db';
+    if (normalized.includes('AA')) return '#d6a160';
+    if (normalized === 'A+' || normalized === 'A') return '#b45309';
+  }
+  return '#6b7280';
+}
+
+const HOP_FLASH_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[]{}|;:,.<>?';
+
+function buildHopScrambleText(text, progress) {
+  const target = String(text || '');
+  if (!target) return '';
+  if (progress >= 1) return target;
+  const revealProgress = progress * (target.length + 6);
+  return target.split('').map((character, index) => {
+    if (character === ' ') return ' ';
+    if (revealProgress >= index + 1) return character;
+    return HOP_FLASH_CHARACTERS[Math.floor(Math.random() * HOP_FLASH_CHARACTERS.length)];
+  }).join('');
+}
+
 function getOverTop100Rank(value) {
   const rank = parseInt(value, 10) || 0;
   return rank > 0 && rank <= 100 ? rank : 0;
@@ -1389,6 +1416,82 @@ function EndSessionConfirmModal({ open, ending, onClose, onConfirm }) {
   );
 }
 
+function HourOfPowerResultFlash({ flash, onDone }) {
+  const [displayGrade, setDisplayGrade] = useState(flash?.grade || '');
+  const [displayScore, setDisplayScore] = useState(flash?.scoreLabel || '');
+  const [displayHoP, setDisplayHoP] = useState(flash?.hopLabel || '');
+
+  useEffect(() => {
+    if (!flash) return undefined;
+
+    const startedAt = Date.now();
+    const interval = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      setDisplayGrade(buildHopScrambleText(flash.grade, Math.min(1, elapsed / 1450)));
+      setDisplayScore(buildHopScrambleText(flash.scoreLabel, Math.min(1, elapsed / 1450)));
+      setDisplayHoP(buildHopScrambleText(flash.hopLabel, Math.min(1, elapsed / 1650)));
+    }, 48);
+
+    const timeout = window.setTimeout(() => {
+      window.clearInterval(interval);
+      setDisplayGrade(flash.grade);
+      setDisplayScore(flash.scoreLabel);
+      setDisplayHoP(flash.hopLabel);
+      onDone?.();
+    }, 3000);
+
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [flash, onDone]);
+
+  if (!flash) return null;
+
+  const gradeGlow = getGradeGlowColor(flash.grade, flash.score);
+  const scoreGlow = '#d9f7ff';
+  const hopGlow = '#86efac';
+
+  return (
+    <div className="hop-pass-flash pointer-events-none fixed inset-0 z-[120] flex items-center justify-center bg-black/92">
+      <div className="hop-pass-flash__scanline" />
+      <div className="hop-pass-flash__content text-center">
+        <p
+          className={`hop-pass-flash__line hop-pass-flash__line--grade ${flash.gradeClass} ${flash.gradeBroken ? 'grade-broken' : ''}`.trim()}
+          data-grade={flash.grade}
+          style={{
+            textShadow: `0 0 5px ${gradeGlow}, 0 0 15px ${gradeGlow}, 0 0 30px ${gradeGlow}`,
+          }}
+        >
+          {displayGrade.split('').map((character, index) => (
+            <span key={`hop-grade-${index}`}>{character === ' ' ? '\u00A0' : character}</span>
+          ))}
+        </p>
+        <p
+          className="hop-pass-flash__line hop-pass-flash__line--score text-cyan-100"
+          style={{
+            textShadow: `0 0 5px ${scoreGlow}, 0 0 15px ${scoreGlow}, 0 0 30px ${scoreGlow}`,
+          }}
+        >
+          {displayScore.split('').map((character, index) => (
+            <span key={`hop-score-${index}`}>{character === ' ' ? '\u00A0' : character}</span>
+          ))}
+        </p>
+        <p
+          className="hop-pass-flash__line hop-pass-flash__line--hop text-emerald-300"
+          style={{
+            textShadow: `0 0 5px ${hopGlow}, 0 0 15px ${hopGlow}, 0 0 30px ${hopGlow}`,
+          }}
+        >
+          {displayHoP.split('').map((character, index) => (
+            <span key={`hop-label-${index}`}>{character === ' ' ? '\u00A0' : character}</span>
+          ))}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function VotePanel({ vote, canVote, onVote }) {
   if (!vote) return null;
 
@@ -1720,7 +1823,7 @@ function CreateSessionCard({
       </h1>
       <p className="text-sm text-gray-400 mt-2">
         {isHopMode
-          ? 'This opens a solo HoP run with a 15 minute warmup, a 60 minute scoring window, live chat, and an automatic recap when you end it.'
+          ? 'This opens a solo HoP run with a 20 minute warmup, a 60 minute scoring window, live chat, and an automatic recap when you end it.'
           : 'This opens a session lobby with live score polling, viewer chat, requests, votes, and an automatic recap post when you end it.'}
       </p>
       <div className="space-y-3 mt-4">
@@ -2931,6 +3034,7 @@ export default function LivePage() {
   const [youtubeTimestampPublishing, setYoutubeTimestampPublishing] = useState(false);
   const [youtubeTimestampCopiedLabel, setYoutubeTimestampCopiedLabel] = useState('');
   const [desktopMediaHeight, setDesktopMediaHeight] = useState(0);
+  const [hopPassFlash, setHopPassFlash] = useState(null);
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
   const desktopVideoFrameRef = useRef(null);
@@ -2944,6 +3048,7 @@ export default function LivePage() {
   const overlayPrefsKeyRef = useRef('');
   const overlayCopyTimerRef = useRef(null);
   const youtubeTimestampCopyTimerRef = useRef(null);
+  const hopFlashLastPlayIdRef = useRef('');
 
   const activeSessionId = sessionId || snapshot?.session?.id || '';
   const live = snapshot?.session || null;
@@ -3048,6 +3153,52 @@ export default function LivePage() {
     const timer = window.setInterval(() => setHopClockMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [activeSessionId, isHopSession, live?.status]);
+
+  useEffect(() => {
+    hopFlashLastPlayIdRef.current = '';
+    setHopPassFlash(null);
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    const nextPlayId = String(lastPlay?.id || '').trim();
+    const previousPlayId = hopFlashLastPlayIdRef.current;
+
+    if (!nextPlayId) {
+      hopFlashLastPlayIdRef.current = '';
+      return;
+    }
+
+    hopFlashLastPlayIdRef.current = nextPlayId;
+    if (!previousPlayId || previousPlayId === nextPlayId) return;
+    if (!isHopSession || live?.status !== 'live') return;
+    if (!lastPlay?.hop_counts_towards_total) return;
+
+    const score = parseInt(lastPlay?.score, 10) || 0;
+    const parsedGrade = parseGrade(lastPlay?.grade || '', score > 0 ? getRank(score).label : '');
+    const displayGrade = parsedGrade.display || getRank(score).label;
+    const hopPoints = parseInt(lastPlay?.hop_rating_points_earned, 10) || 0;
+    if (!displayGrade || score <= 0 || hopPoints <= 0) return;
+
+    setHopPassFlash({
+      id: nextPlayId,
+      grade: displayGrade,
+      gradeClass: getGradeColor(displayGrade, score),
+      gradeBroken: !!parsedGrade.isBroken,
+      score,
+      scoreLabel: formatNumber(score),
+      hopLabel: `+${hopPoints} HOP • ${formatNumber(lastPlay?.hop_running_total)} TOTAL`,
+    });
+  }, [
+    activeSessionId,
+    isHopSession,
+    live?.status,
+    lastPlay?.id,
+    lastPlay?.grade,
+    lastPlay?.score,
+    lastPlay?.hop_counts_towards_total,
+    lastPlay?.hop_rating_points_earned,
+    lastPlay?.hop_running_total,
+  ]);
 
   useEffect(() => {
     if (!requestTargetUserId) return;
@@ -6358,6 +6509,12 @@ export default function LivePage() {
         onClose={() => !ending && setShowEndConfirm(false)}
         onConfirm={handleConfirmEndSession}
       />
+      {hopPassFlash ? (
+        <HourOfPowerResultFlash
+          flash={hopPassFlash}
+          onDone={() => setHopPassFlash(null)}
+        />
+      ) : null}
       <PlayDetailModal play={selectedPlay} onClose={() => setSelectedPlay(null)} />
     </div>
   );
