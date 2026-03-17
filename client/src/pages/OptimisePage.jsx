@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import {
   getFollowing,
+  getHourOfPowerOptimize,
   getJacketMap,
   getPiugamePumbility,
   getPumbilityRecommendations,
@@ -47,6 +48,18 @@ function getGradeColor(grade) {
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function formatDecimal(value, digits = 1) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(digits) : (0).toFixed(digits);
+}
+
+function formatSecondsClock(value) {
+  const totalSeconds = Math.max(0, parseInt(value, 10) || 0);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function getLevelOptionsFromLibrary(payload) {
@@ -136,6 +149,107 @@ function SongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'sm' }) {
       <span className={`absolute -bottom-1 -right-1 min-w-[16px] h-[14px] px-1 rounded text-[8px] flex items-center justify-center font-display font-bold text-white leading-none ${badgeColor}`}>
         {level}
       </span>
+    </div>
+  );
+}
+
+function compareHopOptimizeByEfficiency(a, b) {
+  if ((Number(b?.rating_points_per_second) || 0) !== (Number(a?.rating_points_per_second) || 0)) {
+    return (Number(b?.rating_points_per_second) || 0) - (Number(a?.rating_points_per_second) || 0);
+  }
+  if ((parseInt(b?.rating_points, 10) || 0) !== (parseInt(a?.rating_points, 10) || 0)) {
+    return (parseInt(b?.rating_points, 10) || 0) - (parseInt(a?.rating_points, 10) || 0);
+  }
+  if ((parseInt(a?.duration_seconds, 10) || 0) !== (parseInt(b?.duration_seconds, 10) || 0)) {
+    return (parseInt(a?.duration_seconds, 10) || 0) - (parseInt(b?.duration_seconds, 10) || 0);
+  }
+  if ((parseInt(a?.level, 10) || 0) !== (parseInt(b?.level, 10) || 0)) {
+    return (parseInt(a?.level, 10) || 0) - (parseInt(b?.level, 10) || 0);
+  }
+  return String(a?.song_title || '').localeCompare(String(b?.song_title || ''));
+}
+
+function compareHopOptimizeByLevel(a, b) {
+  if ((parseInt(a?.level, 10) || 0) !== (parseInt(b?.level, 10) || 0)) {
+    return (parseInt(a?.level, 10) || 0) - (parseInt(b?.level, 10) || 0);
+  }
+  return compareHopOptimizeByEfficiency(a, b);
+}
+
+function getHopModeLabel(mode) {
+  if (mode === 'Single') return 'Singles';
+  if (mode === 'Double') return 'Doubles';
+  return 'Both';
+}
+
+function HourOfPowerOptimizeList({ title, subtitle, rows, jacketLookup, showRank = false }) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return (
+      <div className="card">
+        <h3 className="font-display font-bold text-sm text-piu-accent">{title}</h3>
+        {subtitle ? <p className="text-[11px] text-gray-500 mt-1">{subtitle}</p> : null}
+        <p className="text-xs text-gray-500 mt-3">No recommendations available for the current filters.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <h3 className="font-display font-bold text-sm text-piu-accent">{title}</h3>
+      {subtitle ? <p className="text-[11px] text-gray-500 mt-1">{subtitle}</p> : null}
+      <div className="overflow-x-auto mt-3 rounded-lg border border-piu-border/40">
+        <table className="w-full text-xs sm:text-sm">
+          <thead className="bg-[#0f172a] text-gray-400">
+            <tr>
+              {showRank ? <th className="px-3 py-2 text-left">Rank</th> : null}
+              <th className="px-3 py-2 text-left">Song</th>
+              <th className="px-3 py-2 text-right">Best</th>
+              <th className="px-3 py-2 text-right">Time</th>
+              <th className="px-3 py-2 text-right">Pts</th>
+              <th className="px-3 py-2 text-right">Pts/Sec</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr key={`${title}-${row.chart_key || `${row.song_title}-${row.mode}-${row.level}`}-${idx}`} className="border-t border-piu-border/30">
+                {showRank ? (
+                  <td className="px-3 py-2 align-top font-display font-black text-white">
+                    #{idx + 1}
+                  </td>
+                ) : null}
+                <td className="px-3 py-2 align-top min-w-0">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <SongJacket
+                      title={row.song_title}
+                      mode={row.mode}
+                      level={row.level}
+                      bgUrl={row.jacket_url}
+                      jacketLookup={jacketLookup}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-display font-bold text-white truncate" title={row.song_title}>
+                        {row.song_title}
+                      </p>
+                      {parseInt(row.over_top100_rank, 10) > 0 ? (
+                        <span className="mt-1 inline-flex rounded-full border border-yellow-300/25 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-yellow-100">
+                          #{row.over_top100_rank}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right align-top">
+                  <p className={`font-display font-black ${getGradeColor(row.grade)}`}>{row.grade || '--'}</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-gray-300">{formatNumber(row.score)}</p>
+                </td>
+                <td className="px-3 py-2 text-right align-top font-mono text-gray-200">{formatSecondsClock(row.duration_seconds)}</td>
+                <td className="px-3 py-2 text-right align-top font-mono text-yellow-100">{formatNumber(row.rating_points)}</td>
+                <td className="px-3 py-2 text-right align-top font-mono font-bold text-emerald-300">{formatDecimal(row.rating_points_per_second, 3)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -333,6 +447,11 @@ export default function OptimisePage() {
   const [trainingRangeA, setTrainingRangeA] = useState(null);
   const [trainingRangeB, setTrainingRangeB] = useState(null);
 
+  const [hopLoading, setHopLoading] = useState(false);
+  const [hopData, setHopData] = useState(null);
+  const [hopMode, setHopMode] = useState('Both');
+  const [hopMinLevel, setHopMinLevel] = useState('');
+
   const [snipingInitLoading, setSnipingInitLoading] = useState(false);
   const [snipingLoading, setSnipingLoading] = useState(false);
   const [snipingFollowing, setSnipingFollowing] = useState([]);
@@ -438,6 +557,35 @@ export default function OptimisePage() {
     if (!user?.id || activeTab !== 'training' || trainingData) return;
     fetchTrainingRecommendations({ chartMode: trainingChartMode }).catch(() => {});
   }, [activeTab, trainingData, trainingChartMode, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || activeTab !== 'hop' || hopData) return;
+
+    let cancelled = false;
+    setHopLoading(true);
+    setError('');
+
+    Promise.all([
+      getHourOfPowerOptimize({ limit: 50 }),
+      pumbilityData ? Promise.resolve(pumbilityData) : getPiugamePumbility(user.id).catch(() => null),
+    ])
+      .then(([optimizePayload, pumbilityPayload]) => {
+        if (cancelled) return;
+        setHopData(optimizePayload || null);
+        if (!pumbilityData && pumbilityPayload) {
+          setPumbilityData(pumbilityPayload);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err?.message || 'Failed to load Hour of Power recommendations');
+      })
+      .finally(() => {
+        if (!cancelled) setHopLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeTab, hopData, pumbilityData, user?.id]);
 
   useEffect(() => {
     if (!user?.id || activeTab !== 'sniping' || snipingInitialized) return;
@@ -570,6 +718,53 @@ export default function OptimisePage() {
   const selectedTrainingMax = Number.isFinite(trainingRangeA) && Number.isFinite(trainingRangeB)
     ? Math.max(trainingRangeA, trainingRangeB)
     : null;
+  const hopRecommendationPool = useMemo(() => (
+    Array.isArray(hopData?.level_order_recommendations) ? hopData.level_order_recommendations : []
+  ), [hopData]);
+  const hopAvailableLevels = useMemo(() => {
+    const levelSet = new Set();
+    for (const row of hopRecommendationPool) {
+      const normalizedMode = String(row?.mode || '').trim();
+      if (hopMode === 'Singles' && normalizedMode !== 'Single') continue;
+      if (hopMode === 'Doubles' && normalizedMode !== 'Double') continue;
+      const level = parseInt(row?.level, 10);
+      if (Number.isFinite(level) && level > 0) levelSet.add(level);
+    }
+    return Array.from(levelSet).sort((a, b) => a - b);
+  }, [hopRecommendationPool, hopMode]);
+  const getDefaultHopMinLevel = (modeLabel, levels = hopAvailableLevels) => {
+    const modeKey = String(modeLabel || 'Both');
+    const available = Array.isArray(levels) ? levels : [];
+    if (available.length === 0) return '';
+
+    const competitiveLevel = modeKey === 'Singles'
+      ? (parseInt(pumbilityData?.singles_competitive_level, 10) || 0)
+      : modeKey === 'Doubles'
+        ? (parseInt(pumbilityData?.doubles_competitive_level, 10) || 0)
+        : (parseInt(pumbilityData?.competitive_level, 10) || 0);
+    const desiredMin = Math.max(1, competitiveLevel > 0 ? competitiveLevel - 5 : available[0]);
+    const fallback = available.find((level) => level >= desiredMin);
+    return String(fallback || available[0] || '');
+  };
+  const hopEffectiveMinLevel = parseInt(hopMinLevel, 10) || 0;
+  const filteredHopRows = useMemo(() => {
+    return hopRecommendationPool.filter((row) => {
+      const normalizedMode = String(row?.mode || '').trim();
+      if (hopMode === 'Singles' && normalizedMode !== 'Single') return false;
+      if (hopMode === 'Doubles' && normalizedMode !== 'Double') return false;
+      if (hopEffectiveMinLevel > 0 && (parseInt(row?.level, 10) || 0) < hopEffectiveMinLevel) return false;
+      return true;
+    });
+  }, [hopRecommendationPool, hopMode, hopEffectiveMinLevel]);
+  const hopTopRows = useMemo(
+    () => filteredHopRows.slice().sort(compareHopOptimizeByEfficiency).slice(0, 20),
+    [filteredHopRows]
+  );
+  const hopLevelRows = useMemo(
+    () => filteredHopRows.slice().sort(compareHopOptimizeByLevel),
+    [filteredHopRows]
+  );
+  const hopBestRecommendation = hopTopRows[0] || null;
   const snipingRows = Array.isArray(snipingResult?.top_song_diffs) ? snipingResult.top_song_diffs : [];
   const snipingComparison = snipingResult?.comparison || null;
   const snipingPagination = snipingResult?.pagination || {};
@@ -594,6 +789,16 @@ export default function OptimisePage() {
       return (parseInt(b?.score_b, 10) || 0) - (parseInt(a?.score_b, 10) || 0);
     });
   }, [snipingRows]);
+
+  useEffect(() => {
+    if (activeTab !== 'hop') return;
+    if (hopAvailableLevels.length === 0) {
+      if (hopMinLevel) setHopMinLevel('');
+      return;
+    }
+    if (hopMinLevel && hopAvailableLevels.includes(parseInt(hopMinLevel, 10))) return;
+    setHopMinLevel(getDefaultHopMinLevel(hopMode, hopAvailableLevels));
+  }, [activeTab, hopAvailableLevels, hopMinLevel, hopMode, pumbilityData]);
 
   const handleOpenSkillInfo = async (slug) => {
     const normalized = String(slug || '').trim().toLowerCase();
@@ -674,6 +879,15 @@ export default function OptimisePage() {
             }`}
           >
             Training
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('hop')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+              activeTab === 'hop' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+            }`}
+          >
+            HoP
           </button>
           <button
             type="button"
@@ -916,6 +1130,116 @@ export default function OptimisePage() {
                   <p className="text-xs text-gray-500 mt-2">No recommendations found in your current scoring/passing range.</p>
                 )}
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'hop' && (
+        <div className="space-y-4">
+          {hopLoading ? (
+            <div className="card text-sm text-gray-500">Loading Hour of Power recommendations...</div>
+          ) : (
+            <>
+              <div className="card">
+                <h3 className="font-display font-bold text-sm text-piu-accent">HOUR OF POWER OPTIMISER</h3>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Uses your stored best clears, the exact HoP rating formula, and song durations to prioritize rating points per second.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-display uppercase mb-1">Mode</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {['Both', 'Singles', 'Doubles'].map((modeLabel) => (
+                        <button
+                          key={`hop-mode-${modeLabel}`}
+                          type="button"
+                          onClick={() => {
+                            if (hopMode === modeLabel) return;
+                            const nextLevels = hopRecommendationPool
+                              .filter((row) => (
+                                modeLabel === 'Both'
+                                  || (modeLabel === 'Singles' && row.mode === 'Single')
+                                  || (modeLabel === 'Doubles' && row.mode === 'Double')
+                              ))
+                              .map((row) => parseInt(row?.level, 10))
+                              .filter((level) => Number.isFinite(level) && level > 0);
+                            const uniqueLevels = Array.from(new Set(nextLevels)).sort((a, b) => a - b);
+                            setHopMode(modeLabel);
+                            setHopMinLevel(getDefaultHopMinLevel(modeLabel, uniqueLevels));
+                          }}
+                          className={`px-3 py-1.5 rounded text-xs font-display font-bold transition-colors ${
+                            hopMode === modeLabel ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {modeLabel}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-display uppercase mb-1 block">Minimum Level</label>
+                    <select
+                      value={hopMinLevel}
+                      onChange={(event) => setHopMinLevel(event.target.value)}
+                      className="input-field w-full"
+                    >
+                      {hopAvailableLevels.map((level) => (
+                        <option key={`hop-level-${hopMode}-${level}`} value={String(level)}>Lv.{level}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Default start: competitive level minus 5 for {getHopModeLabel(hopMode).toLowerCase()}.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">Filtered Charts</p>
+                    <p className="mt-1 text-lg font-display font-black text-white">{formatNumber(filteredHopRows.length)}</p>
+                  </div>
+                  <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">Min Level</p>
+                    <p className="mt-1 text-lg font-display font-black text-cyan-100">{hopMinLevel ? `Lv.${hopMinLevel}` : '--'}</p>
+                  </div>
+                  <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">Best Pace</p>
+                    <p className="mt-1 text-lg font-display font-black text-emerald-200">
+                      {hopBestRecommendation ? formatDecimal(hopBestRecommendation.rating_points_per_second, 3) : '--'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-piu-border/60 bg-piu-dark/60 px-3 py-2.5">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">Competitive Lv</p>
+                    <p className="mt-1 text-lg font-display font-black text-amber-100">
+                      {hopMode === 'Singles'
+                        ? (pumbilityData?.singles_competitive_level ? `S${pumbilityData.singles_competitive_level}` : '--')
+                        : hopMode === 'Doubles'
+                          ? (pumbilityData?.doubles_competitive_level ? `D${pumbilityData.doubles_competitive_level}` : '--')
+                          : (pumbilityData?.competitive_level
+                            ? `${pumbilityData?.competitive_mode === 'Double' ? 'D' : 'S'}${pumbilityData.competitive_level}`
+                            : '--')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <HourOfPowerOptimizeList
+                title="TOP 20 HOUR OF POWER RECOMMENDATIONS"
+                subtitle="Highest rating points per second in your current filtered pool."
+                rows={hopTopRows}
+                jacketLookup={jacketLookup}
+                showRank
+              />
+
+              <HourOfPowerOptimizeList
+                title="EASIEST TO HARDEST"
+                subtitle="The same recommendation pool ordered by chart level, with the strongest points-per-second options first inside each level."
+                rows={hopLevelRows}
+                jacketLookup={jacketLookup}
+              />
             </>
           )}
         </div>

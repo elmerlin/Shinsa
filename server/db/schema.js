@@ -47,6 +47,10 @@ const SONG_DURATION_OVERRIDE_MAP = new Map([
     duration_seconds: 120,
     duration_source: 'manual',
   }],
+  [`${compactSongLookupKey('Start On Red')}|${compactSongLookupKey('Nato')}`, {
+    duration_seconds: 116,
+    duration_source: 'manual',
+  }],
 ]);
 
 function parseSongFlags(flags) {

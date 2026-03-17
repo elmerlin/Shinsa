@@ -4266,6 +4266,14 @@ router.get('/pumbility/:userId', async (req, res) => {
       }
     }
 
+    let localCompetitiveRow = null;
+    try {
+      localCompetitiveRow = buildGlobalPumbilityLeaderboardRows(db)
+        .find((row) => String(row?.user_id || '') === String(userId || '')) || null;
+    } catch (err) {
+      localCompetitiveRow = null;
+    }
+
     res.json({
       pumbility_value: pumbilityValue,
       official_pumbility: officialPumbility,
@@ -4278,6 +4286,10 @@ router.get('/pumbility/:userId', async (req, res) => {
       min_entry_details: minEntryDetails,
       ranking,
       threshold,
+      singles_competitive_level: parseInt(localCompetitiveRow?.singles_competitive_level, 10) || 0,
+      doubles_competitive_level: parseInt(localCompetitiveRow?.doubles_competitive_level, 10) || 0,
+      competitive_level: parseInt(localCompetitiveRow?.competitive_level, 10) || 0,
+      competitive_mode: String(localCompetitiveRow?.competitive_mode || '').trim(),
     });
   } catch (err) {
     console.error('Pumbility data retrieval error:', err.message);

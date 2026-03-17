@@ -14,7 +14,6 @@ import {
   getGlobalPumbilityPlayerSheet,
   getHourOfPowerAttempts,
   getHourOfPowerLeaderboard,
-  getHourOfPowerOptimize,
   getLiveSession,
   getMyTop100Scores,
   getOver20ChartTop100,
@@ -293,13 +292,6 @@ function formatHopDurationLabel(minutesValue) {
   return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
 }
 
-function formatSecondsClock(value) {
-  const totalSeconds = Math.max(0, parseInt(value, 10) || 0);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
 function buildHourOfPowerShareFromSnapshot(snapshot) {
   const session = snapshot?.session || null;
   const hop = snapshot?.hop || null;
@@ -380,192 +372,6 @@ function HourOfPowerEmptyState({ children }) {
   return (
     <div className="mt-4 rounded-xl border border-dashed border-piu-border/50 bg-piu-dark/35 px-4 py-10 text-center text-sm text-gray-500">
       {children}
-    </div>
-  );
-}
-
-function HourOfPowerModeChip({ mode }) {
-  const normalized = String(mode || '').trim();
-  const className = normalized === 'Single'
-    ? 'border-red-400/30 bg-red-500/10 text-red-200'
-    : normalized === 'Double'
-      ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-      : 'border-piu-border/40 bg-piu-dark/50 text-gray-300';
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${className}`}>
-      {normalized || '--'}
-    </span>
-  );
-}
-
-function HourOfPowerOptimizeTable({ rows, variant = 'top' }) {
-  const list = Array.isArray(rows) ? rows : [];
-  const isTopTable = variant === 'top';
-
-  if (list.length === 0) {
-    return <HourOfPowerEmptyState>No optimizer recommendations are available yet.</HourOfPowerEmptyState>;
-  }
-
-  return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-piu-border/50 bg-piu-dark/40">
-      <table className="w-full table-fixed text-xs">
-        <thead>
-          <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[9px] uppercase tracking-[0.12em] text-gray-500">
-            <th className="w-[2.5rem] px-2 py-2 text-left font-display font-bold">{isTopTable ? 'Rank' : 'Lv'}</th>
-            <th className="px-1 py-2 text-left font-display font-bold">Song</th>
-            <th className="w-[4.35rem] px-1 py-2 text-right font-display font-bold">Best</th>
-            <th className="w-[3.2rem] px-1 py-2 text-right font-display font-bold">Time</th>
-            <th className="w-[3.1rem] px-1 py-2 text-right font-display font-bold">Pts</th>
-            <th className="w-[4.2rem] px-2 py-2 text-right font-display font-bold">Pts/Sec</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((row, index) => (
-            <tr
-              key={`${variant}:${row.chart_key || `${row.song_title}|${row.mode}|${row.level}`}`}
-              className="border-b border-piu-border/15 last:border-b-0"
-            >
-              <td className="px-2 py-2.5 align-top">
-                {isTopTable ? (
-                  <span className="font-display font-black text-white">#{index + 1}</span>
-                ) : (
-                  <span className="font-display font-black text-cyan-100">{`${row.mode === 'Double' ? 'D' : 'S'}${row.level}`}</span>
-                )}
-              </td>
-              <td className="min-w-0 px-1 py-2">
-                <div className="flex min-w-0 items-start gap-2">
-                  <OverChartJacket chart={row} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-display font-bold text-white" title={row.song_title}>
-                      {row.song_title}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <HourOfPowerModeChip mode={row.mode} />
-                      {!isTopTable ? null : (
-                        <span className="text-[10px] text-gray-500">{`Lv ${row.level}`}</span>
-                      )}
-                      {parseInt(row.over_top100_rank, 10) > 0 ? (
-                        <span className="rounded-full border border-yellow-300/25 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] font-display font-bold text-yellow-100">
-                          #{row.over_top100_rank}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td className="px-1 py-2.5 text-right align-top">
-                <p className={`font-display font-black ${getGradeColorClass(row.grade)}`}>{row.grade || '--'}</p>
-                <p className="mt-0.5 font-mono text-[10px] text-gray-300">{formatNumber(row.score)}</p>
-              </td>
-              <td className="px-1 py-2.5 text-right font-mono text-[11px] text-gray-200 align-top">
-                {formatSecondsClock(row.duration_seconds)}
-              </td>
-              <td className="px-1 py-2.5 text-right font-mono text-[11px] text-yellow-100 align-top">
-                {formatNumber(row.rating_points)}
-              </td>
-              <td className="px-2 py-2.5 text-right font-mono text-[11px] font-bold text-emerald-200 align-top">
-                {formatDecimal(row.rating_points_per_second, 3)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function HourOfPowerOptimizePanel({ payload, loading, error, onRetry }) {
-  const topRows = Array.isArray(payload?.top_recommendations) ? payload.top_recommendations : [];
-  const levelRows = Array.isArray(payload?.level_order_recommendations) ? payload.level_order_recommendations : [];
-  const bestRecommendation = payload?.best_recommendation || null;
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-yellow-300/20 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(13,54,73,0.92)_46%,rgba(24,18,42,0.98))] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
-          <div className="min-w-0">
-            <HourOfPowerWordmark compact className="mb-2" />
-            <h2 className="mt-1 text-[1.56rem] font-display font-black leading-none text-white sm:text-2xl">Optimize Your HoP</h2>
-            <p className="mt-2 max-w-2xl text-sm text-cyan-100/85">
-              Uses your stored best passing scores, the exact HoP rating formula, and song durations to surface the highest rating points per second.
-            </p>
-          </div>
-          <div className="w-[6.35rem] shrink-0 rounded-lg border border-yellow-300/20 bg-black/20 px-2 py-1.5 text-right">
-            <p className="text-[8px] font-display font-bold uppercase tracking-wide text-yellow-100/70">Best Pace</p>
-            <p className="mt-1 text-[1.28rem] leading-none font-display font-black text-white">
-              {bestRecommendation ? formatDecimal(bestRecommendation.rating_points_per_second, 3) : '--'}
-            </p>
-            <p className="mt-1 text-[9px] text-yellow-100">pts/sec</p>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <HourOfPowerSummaryStat label="Eligible Charts" value={formatNumber(payload?.eligible_chart_count)} accentClass="text-white" />
-          <HourOfPowerSummaryStat label="Singles" value={formatNumber(payload?.single_chart_count)} accentClass="text-cyan-100" />
-          <HourOfPowerSummaryStat label="Doubles" value={formatNumber(payload?.double_chart_count)} accentClass="text-emerald-100" />
-          <HourOfPowerSummaryStat label="Best Pts/Sec" value={bestRecommendation ? formatDecimal(bestRecommendation.rating_points_per_second, 3) : '--'} accentClass="text-amber-100" />
-        </div>
-
-        {bestRecommendation ? (
-          <div className="mt-4 rounded-xl border border-piu-border/40 bg-black/20 p-3">
-            <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">Top Recommendation</p>
-            <div className="mt-2 flex items-center gap-3">
-              <OverChartJacket chart={bestRecommendation} size="sm" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-display font-black text-white">{bestRecommendation.song_title}</p>
-                <p className="mt-0.5 text-xs text-gray-300">
-                  {bestRecommendation.mode} {bestRecommendation.level} • {formatNumber(bestRecommendation.rating_points)} pts in {formatSecondsClock(bestRecommendation.duration_seconds)}
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {loading ? (
-        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-          <HourOfPowerEmptyState>Loading optimizer recommendations...</HourOfPowerEmptyState>
-        </div>
-      ) : error ? (
-        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-          <div className="mt-4 rounded-xl border border-red-500/25 bg-red-500/8 px-4 py-6 text-center">
-            <p className="text-sm text-red-200">{error}</p>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="mt-4 rounded-lg border border-piu-border/60 bg-piu-dark/70 px-4 py-2 text-xs font-display font-bold text-gray-200 transition-colors hover:border-piu-accent/40 hover:text-white"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      ) : !payload?.imported ? (
-        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-          <HourOfPowerEmptyState>Import your PIUGAME best scores to unlock HoP optimizer recommendations.</HourOfPowerEmptyState>
-        </div>
-      ) : topRows.length === 0 ? (
-        <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-          <HourOfPowerEmptyState>No eligible Single or Double passing scores were found for optimization.</HourOfPowerEmptyState>
-        </div>
-      ) : (
-        <>
-          <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-            <div>
-              <h3 className="text-lg font-display font-black text-white">Top 20 Recommendations</h3>
-              <p className="mt-1 text-sm text-gray-400">Highest current HoP rating points per second from your stored best clears.</p>
-            </div>
-            <HourOfPowerOptimizeTable rows={topRows} variant="top" />
-          </div>
-
-          <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
-            <div>
-              <h3 className="text-lg font-display font-black text-white">Easiest To Hardest</h3>
-              <p className="mt-1 text-sm text-gray-400">The same recommendation pool ordered by chart level, with the strongest points-per-second options first inside each level.</p>
-            </div>
-            <HourOfPowerOptimizeTable rows={levelRows} variant="level" />
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -664,16 +470,11 @@ function HourOfPowerDetailModal({ attempt, share, loading, error, onRetry, onClo
 
 function HourOfPowerLeaderboardTab() {
   const { user } = useAuth();
-  const [view, setView] = useState('leaderboard');
   const [rows, setRows] = useState([]);
   const [attempts, setAttempts] = useState([]);
   const [currentUserBest, setCurrentUserBest] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [optimizePayload, setOptimizePayload] = useState(null);
-  const [optimizeLoading, setOptimizeLoading] = useState(false);
-  const [optimizeError, setOptimizeError] = useState('');
-  const [optimizeLoaded, setOptimizeLoaded] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState(null);
   const [selectedShare, setSelectedShare] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -706,32 +507,6 @@ function HourOfPowerLeaderboardTab() {
     if (user?.id) loadData();
     return () => { cancelled = true; };
   }, [user?.id]);
-
-  useEffect(() => {
-    setOptimizePayload(null);
-    setOptimizeError('');
-    setOptimizeLoaded(false);
-    setOptimizeLoading(false);
-  }, [user?.id]);
-
-  const loadOptimize = async () => {
-    setOptimizeLoading(true);
-    setOptimizeError('');
-    try {
-      const payload = await getHourOfPowerOptimize({ limit: 20 });
-      setOptimizePayload(payload || null);
-    } catch (err) {
-      setOptimizeError(err?.message || 'Failed to load HoP optimizer recommendations.');
-    } finally {
-      setOptimizeLoaded(true);
-      setOptimizeLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!user?.id || view !== 'optimize' || optimizeLoaded || optimizeLoading) return;
-    loadOptimize();
-  }, [user?.id, view, optimizeLoaded, optimizeLoading]);
 
   const openAttemptDetail = async (attempt) => {
     if (!attempt?.session_id) return;
@@ -775,33 +550,7 @@ function HourOfPowerLeaderboardTab() {
   return (
     <>
       <div className="space-y-4">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setView('leaderboard')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-display font-bold transition-colors ${
-              view === 'leaderboard'
-                ? 'bg-piu-accent text-white'
-                : 'bg-piu-dark text-gray-400 hover:text-white'
-            }`}
-          >
-            Leaderboard
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('optimize')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-display font-bold transition-colors ${
-              view === 'optimize'
-                ? 'bg-piu-accent text-white'
-                : 'bg-piu-dark text-gray-400 hover:text-white'
-            }`}
-          >
-            Optimize
-          </button>
-        </div>
-
-        {view === 'leaderboard' ? (
-          <>
+        <>
             <div className="rounded-xl border border-yellow-300/20 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(13,54,73,0.92)_46%,rgba(24,18,42,0.98))] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
                 <div className="min-w-0">
@@ -986,15 +735,7 @@ function HourOfPowerLeaderboardTab() {
                 </div>
               )}
             </div>
-          </>
-        ) : (
-          <HourOfPowerOptimizePanel
-            payload={optimizePayload}
-            loading={optimizeLoading}
-            error={optimizeError}
-            onRetry={loadOptimize}
-          />
-        )}
+        </>
       </div>
 
       <HourOfPowerDetailModal
