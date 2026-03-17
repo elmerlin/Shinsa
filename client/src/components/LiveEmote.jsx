@@ -1,5 +1,6 @@
 import React from 'react';
 import { getLiveEmote } from '../utils/liveEmotes';
+import StickerAsset from './StickerAsset';
 
 const CHIP_SIZE_CLASS = {
   inline: 'live-emote-chip--inline',
@@ -37,12 +38,11 @@ export default function LiveEmote({ token, emote, size = 'inline', showLabel = t
       >
         <span className="live-emote-sticker__halo" />
         <span className="live-emote-sticker__frame">
-          <img
-            src={resolved.image}
+          <StickerAsset
+            sticker={resolved}
             alt={resolved.label}
+            title={resolved.label}
             className="live-emote-sticker__image"
-            loading="lazy"
-            decoding="async"
           />
         </span>
         <span className="live-emote-sticker__label">{resolved.label}</span>

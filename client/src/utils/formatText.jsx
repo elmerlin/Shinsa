@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { getProfilePathByUsername } from './profile';
 import { getStickerEmoji, isStickerOnlyMessage, STICKER_TOKEN_PATTERN, STICKER_TOKEN_REGEX } from './stickers';
+import StickerAsset from '../components/StickerAsset';
 
 const INLINE_TOKEN_REGEX = new RegExp(`(${STICKER_TOKEN_PATTERN}|(^|[^A-Za-z0-9_])@([A-Za-z0-9_]{2,30}))`, 'g');
 
@@ -21,9 +22,9 @@ function renderStickerOnlyMessage(text, keyRef) {
   return (
     <div key={keyRef.value++} className="flex flex-wrap items-end gap-2">
       {stickers.map((sticker, index) => (
-        <img
+        <StickerAsset
           key={`${sticker.id}-${index}`}
-          src={sticker.image}
+          sticker={sticker}
           alt={sticker.label}
           title={sticker.label}
           className={`${largeClass} rounded-xl object-contain`}
@@ -49,9 +50,9 @@ function renderInlineTokens(text, keyRef) {
         parts.push(text.slice(lastIndex, match.index));
       }
       parts.push(
-        <img
+        <StickerAsset
           key={keyRef.value++}
-          src={sticker.image}
+          sticker={sticker}
           alt={sticker.label}
           title={sticker.label}
           className="mx-0.5 inline-block h-8 w-8 rounded-md object-contain align-middle"

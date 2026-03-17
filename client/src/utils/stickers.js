@@ -32,6 +32,13 @@ const BUU_HOP_SANDBAGGING_FILE_NAMES = [
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11',
 ];
 
+const MOPE_FLOWER_STICKER_CONFIG = [
+  { key: '1', label: 'Mope Flower 1', spriteRow: 0 },
+  { key: '2', label: 'Mope Flower 2', spriteRow: 1 },
+  { key: '3', label: 'Mope Flower 3', spriteRow: 2 },
+  { key: '4', label: 'Mope Flower 4', spriteRow: 3 },
+];
+
 const DEVIT_STICKER_CONFIG = [
   { key: 'idle', label: 'Devit Idle', image: '/emojis/devit/idle.png', animated: true },
   { key: 'scamper', label: 'Devit Scamper', image: '/emojis/devit/scamper.png', animated: true },
@@ -175,6 +182,22 @@ export const VEGETACAT_EMOJIS = VEGETACAT_STICKER_CONFIG.map((entry) => ({
   animated: !!entry.animated,
 }));
 
+export const MOPE_FLOWER_EMOJIS = MOPE_FLOWER_STICKER_CONFIG.map((entry) => ({
+  id: `mope-flower-${entry.key}`,
+  pack: 'mope_flower',
+  token: `:mope_flower_${entry.key}:`,
+  fileName: entry.key,
+  label: entry.label,
+  image: '/hour-of-power/mope_labubu.png',
+  spriteSheet: '/hour-of-power/mope_labubu.png',
+  spriteColumns: 4,
+  spriteRows: 4,
+  spriteFrames: 4,
+  spriteFps: 8,
+  spriteRow: entry.spriteRow,
+  animated: true,
+}));
+
 export const DOJO_CAT_EMOJI_GROUP = {
   label: 'DojoCat',
   emojis: DOJO_CAT_EMOJIS,
@@ -225,6 +248,11 @@ export const VEGETACAT_EMOJI_GROUP = {
   emojis: VEGETACAT_EMOJIS,
 };
 
+export const MOPE_FLOWER_EMOJI_GROUP = {
+  label: 'Mope Flower',
+  emojis: MOPE_FLOWER_EMOJIS,
+};
+
 export const STICKER_GROUPS = [
   DOJO_CAT_EMOJI_GROUP,
   DEVIT_EMOJI_GROUP,
@@ -236,10 +264,11 @@ export const STICKER_GROUPS = [
   BUU_HOP_SANDBAGGING_EMOJI_GROUP,
   HEAVYBREATHING_EMOJI_GROUP,
   VEGETACAT_EMOJI_GROUP,
+  MOPE_FLOWER_EMOJI_GROUP,
 ];
 
-export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+):';
-export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+):/gi;
+export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+|mope_flower_[0-9]+):';
+export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+|mope_flower_[0-9]+):/gi;
 export const DOJO_CAT_TOKEN_REGEX = /:dojocat_[0-9]+_[0-9]+:/gi;
 
 const STICKER_MAP = [
@@ -253,6 +282,7 @@ const STICKER_MAP = [
   ...BUU_HOP_SANDBAGGING_EMOJIS,
   ...HEAVYBREATHING_EMOJIS,
   ...VEGETACAT_EMOJIS,
+  ...MOPE_FLOWER_EMOJIS,
 ].reduce((acc, emoji) => {
   acc[emoji.token] = emoji;
   return acc;

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { STICKER_GROUPS } from '../utils/stickers';
+import StickerAsset from './StickerAsset';
 
 export default function DojoCatStickerPicker({
   onSelect,
@@ -82,7 +83,12 @@ export default function DojoCatStickerPicker({
                   className={`flex w-full items-center justify-center rounded-lg border border-white/8 bg-black/20 transition-colors hover:bg-piu-dark/50 ${isMobileSheet ? 'h-14' : 'h-12'}`}
                   title={emoji.label}
                 >
-                  <img src={emoji.image} alt={emoji.label} className={`${isMobileSheet ? 'h-9 w-9' : 'h-8 w-8'} object-contain`} />
+                  <StickerAsset
+                    sticker={emoji}
+                    alt={emoji.label}
+                    title={emoji.label}
+                    className={`${isMobileSheet ? 'h-9 w-9' : 'h-8 w-8'} object-contain`}
+                  />
                 </button>
               ))}
             </div>

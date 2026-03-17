@@ -36,6 +36,7 @@ import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import LiveHeaderStatusStrip from '../components/LiveHeaderStatusStrip';
 import { HourOfPowerLogo, HourOfPowerWordmark } from '../components/HourOfPowerBrand';
 import PiuChartJacket from '../components/PiuChartJacket';
+import StickerAsset from '../components/StickerAsset';
 import { parseGrade } from '../utils/grades';
 import {
   LIVE_EMOTE_TRAY_GROUPS,
@@ -615,6 +616,13 @@ function buildStructuredSongMessage(entry, lookups = {}) {
     ? lookups.playByChartKey?.get(buildRequestKey(songTitle, mode, level)) || null
     : null;
   const resolvedPlay = linkedPlay || fallbackPlay;
+  const hasOwnMetadataScore = Object.prototype.hasOwnProperty.call(metadata, 'score')
+    && metadata.score !== null
+    && metadata.score !== '';
+  const score = hasOwnMetadataScore
+    ? (parseInt(metadata.score, 10) || 0)
+    : (parseInt(linkedPlay?.score, 10) || parseInt(fallbackPlay?.score, 10) || 0);
+  const resolvedGrade = String(metadata.grade || linkedPlay?.grade || fallbackPlay?.grade || '').trim();
   const jacketUrl = String(
     metadata.jacket_url
       || winningOption?.jacket_url
@@ -626,11 +634,7 @@ function buildStructuredSongMessage(entry, lookups = {}) {
     return null;
   }
 
-  const score = parseInt(metadata.score, 10) || parseInt(resolvedPlay?.score, 10) || 0;
-  const parsedGrade = parseGrade(
-    metadata.grade || resolvedPlay?.grade || '',
-    score > 0 ? getRank(score).label : ''
-  );
+  const parsedGrade = parseGrade(resolvedGrade, score > 0 ? getRank(score).label : '');
   const displayGrade = parsedGrade.display || '';
   const requesterLabel = getLiveChatRequesterLabel(entry?.message);
   const requestStatus = String(metadata.request_status || '').trim().toLowerCase();
@@ -1113,11 +1117,10 @@ function LiveStickerTrayTile({ sticker, disabled, onAdd }) {
       title={`Add ${sticker.label}`}
       className="group flex min-h-[5.5rem] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-piu-border/50 bg-piu-card/70 px-2 py-3 transition-colors hover:border-piu-accent/40 hover:bg-piu-dark/70 disabled:opacity-40"
     >
-      <img
-        src={sticker.image}
+      <StickerAsset
+        sticker={sticker}
         alt={sticker.label}
-        loading="lazy"
-        decoding="async"
+        title={sticker.label}
         className="h-11 w-11 object-contain transition-transform group-hover:scale-105"
       />
       <span className="min-h-[2rem] text-center text-[10px] font-display font-semibold leading-tight text-gray-300">
