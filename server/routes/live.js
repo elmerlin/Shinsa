@@ -21,6 +21,7 @@ const {
   resolveHourOfPowerConfig,
   summarizeHourOfPower,
 } = require('../lib/hourOfPower');
+const { calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const {
   getSessionInteractionCounts,
   getSessionMessageCount,
@@ -126,6 +127,7 @@ const PERFORMANCE_MESSAGE_TIERS = [
     ],
   },
 ];
+let cachedHopOptimizeSongAliases = null;
 const FALLBACK_PASS_MESSAGES = [
   'Clear secured.',
   'Nice work. Keep the run going.',
@@ -169,6 +171,218 @@ function getOptionalAuthUserId(req) {
 
 function toInt(value) {
   return parseInt(value, 10) || 0;
+}
+
+function parseSongFlags(flags) {
+  if (Array.isArray(flags)) {
+    return flags
+      .map((flag) => String(flag || '').trim())
+      .filter(Boolean);
+  }
+  return String(flags || '')
+    .split(',')
+    .map((flag) => flag.trim())
+    .filter(Boolean);
+}
+
+function normalizeSongName(name) {
+  return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function normalizeHopSongTitle(songTitle) {
+  const normalized = String(songTitle || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
+  if (shortCutSuffixPattern.test(normalized)) {
+    return normalized.replace(shortCutSuffixPattern, ' - SHORT CUT -');
+  }
+  return normalized;
+}
+
+function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
+  const title = normalizeHopSongTitle(rawTitle);
+  if (!title) return '';
+  const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
+  const isShortCut = normalizedFlags.includes('cut:1')
+    || (normalizeSongName(title) === 'yog-sothoth' && String(songKey || '').trim() === '313');
+  if (isShortCut) {
+    return `${title} - SHORT CUT -`;
+  }
+  return title;
+}
+
+function normalizePiugameSongName(name) {
+  return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function normalizePiugameMode(mode) {
+  const normalized = String(mode || '').trim().toLowerCase();
+  if (normalized === 'single' || normalized === 'singles' || normalized === 's') return 'Single';
+  if (normalized === 'double' || normalized === 'doubles' || normalized === 'd') return 'Double';
+  if (normalized === 'coop' || normalized === 'co-op' || normalized === 'co op' || normalized === 'cooperative' || normalized === 'c') return 'CoOp';
+  return String(mode || '').trim();
+}
+
+function loadHopOptimizeSongAliases() {
+  if (cachedHopOptimizeSongAliases) return cachedHopOptimizeSongAliases;
+
+  const aliases = {};
+  if (!fs.existsSync(SONG_ALIAS_PATH)) {
+    cachedHopOptimizeSongAliases = aliases;
+    return aliases;
+  }
+
+  try {
+    const payload = JSON.parse(fs.readFileSync(SONG_ALIAS_PATH, 'utf-8'));
+    const rawAliases = payload?.aliases && typeof payload.aliases === 'object' ? payload.aliases : {};
+    for (const [alias, canonical] of Object.entries(rawAliases)) {
+      const aliasKey = normalizePiugameSongName(alias);
+      const canonicalKey = normalizePiugameSongName(canonical);
+      if (!aliasKey || !canonicalKey) continue;
+      aliases[aliasKey] = canonicalKey;
+    }
+  } catch (err) {
+    console.warn('Failed to load HoP optimizer song aliases:', err.message);
+  }
+
+  cachedHopOptimizeSongAliases = aliases;
+  return aliases;
+}
+
+function toCanonicalHopSongTitle(songTitle, aliases = null) {
+  const normalized = normalizePiugameSongName(normalizeHopSongTitle(songTitle));
+  if (!normalized) return '';
+  const aliasLookup = aliases || loadHopOptimizeSongAliases();
+  const seen = new Set();
+  let current = normalized;
+  while (aliasLookup[current] && !seen.has(current)) {
+    seen.add(current);
+    current = aliasLookup[current];
+  }
+  return current;
+}
+
+function buildHopOptimizeChartKey(songTitle, mode, level, aliases = null) {
+  const title = toCanonicalHopSongTitle(songTitle, aliases);
+  const chartMode = normalizePiugameMode(mode);
+  const chartLevel = toInt(level);
+  if (!title || !chartMode || chartLevel <= 0) return '';
+  return `${title}|${chartMode}|${chartLevel}`;
+}
+
+function compareHopOptimizeByEfficiency(a, b) {
+  if (b.rating_points_per_second !== a.rating_points_per_second) {
+    return b.rating_points_per_second - a.rating_points_per_second;
+  }
+  if (b.rating_points !== a.rating_points) {
+    return b.rating_points - a.rating_points;
+  }
+  if (a.duration_seconds !== b.duration_seconds) {
+    return a.duration_seconds - b.duration_seconds;
+  }
+  if (a.level !== b.level) {
+    return a.level - b.level;
+  }
+  return String(a.song_title || '').localeCompare(String(b.song_title || ''));
+}
+
+function compareHopOptimizeByLevel(a, b) {
+  if (a.level !== b.level) {
+    return a.level - b.level;
+  }
+  if (a.mode !== b.mode) {
+    return String(a.mode || '').localeCompare(String(b.mode || ''));
+  }
+  return compareHopOptimizeByEfficiency(a, b);
+}
+
+function getHourOfPowerOptimizePayload(db, userId, limit = 20) {
+  const normalizedUserId = String(userId || '').trim();
+  const aliases = loadHopOptimizeSongAliases();
+  const syncRow = db.prepare(`
+    SELECT last_best_scores_sync, best_scores_imported
+    FROM user_piugame_sync
+    WHERE user_id = ?
+  `).get(normalizedUserId);
+  const scoreRows = db.prepare(`
+    SELECT song_title, mode, level, score, grade, background_url, over_top100_rank
+    FROM user_best_scores
+    WHERE user_id = ?
+      AND score > 0
+      AND mode IN ('Single', 'Double')
+  `).all(normalizedUserId);
+  const chartRows = db.prepare(`
+    SELECT title, mode, level, jacket_url, duration_seconds, song_key, flags
+    FROM songs
+    WHERE duration_seconds > 0
+      AND mode IN ('Single', 'Double')
+  `).all();
+
+  const chartByKey = new Map();
+  for (const row of chartRows) {
+    const resolvedTitle = resolveKnownSongVariantTitle(row?.title, row?.song_key, row?.flags);
+    const key = buildHopOptimizeChartKey(resolvedTitle, row?.mode, row?.level, aliases);
+    if (!key) continue;
+
+    const candidate = {
+      jacket_url: String(row?.jacket_url || '').trim(),
+      duration_seconds: toInt(row?.duration_seconds),
+    };
+    const existing = chartByKey.get(key);
+    if (!existing) {
+      chartByKey.set(key, candidate);
+      continue;
+    }
+    if ((existing.duration_seconds <= 0 && candidate.duration_seconds > 0)
+      || (!existing.jacket_url && candidate.jacket_url)) {
+      chartByKey.set(key, candidate);
+    }
+  }
+
+  const recommendations = scoreRows.map((row) => {
+    const resolvedGrade = normalizeGrade(row?.grade || '') || gradeFromScore(row?.score);
+    const ratingPoints = calculateRatingPoints(row?.level, resolvedGrade, row?.score);
+    if (ratingPoints <= 0) return null;
+
+    const chartKey = buildHopOptimizeChartKey(row?.song_title, row?.mode, row?.level, aliases);
+    if (!chartKey) return null;
+    const chart = chartByKey.get(chartKey) || null;
+    const durationSeconds = toInt(chart?.duration_seconds);
+    if (durationSeconds <= 0) return null;
+
+    return {
+      chart_key: chartKey,
+      song_title: String(row?.song_title || '').trim(),
+      mode: normalizePiugameMode(row?.mode),
+      level: toInt(row?.level),
+      score: toInt(row?.score),
+      grade: resolvedGrade,
+      rating_points: ratingPoints,
+      duration_seconds: durationSeconds,
+      rating_points_per_second: Number((ratingPoints / durationSeconds).toFixed(4)),
+      over_top100_rank: toInt(row?.over_top100_rank),
+      jacket_url: String(chart?.jacket_url || row?.background_url || '').trim(),
+    };
+  }).filter(Boolean);
+
+  const rankedRecommendations = recommendations.slice().sort(compareHopOptimizeByEfficiency);
+  const levelOrderedRecommendations = recommendations.slice().sort(compareHopOptimizeByLevel);
+  const singleCount = recommendations.filter((row) => row.mode === 'Single').length;
+  const doubleCount = recommendations.filter((row) => row.mode === 'Double').length;
+  const bestRecommendation = rankedRecommendations[0] || null;
+
+  return {
+    user_id: normalizedUserId,
+    imported: !!syncRow?.best_scores_imported,
+    last_sync: syncRow?.last_best_scores_sync || null,
+    eligible_chart_count: recommendations.length,
+    single_chart_count: singleCount,
+    double_chart_count: doubleCount,
+    best_rating_points_per_second: Number(bestRecommendation?.rating_points_per_second || 0),
+    best_recommendation: bestRecommendation,
+    top_recommendations: rankedRecommendations.slice(0, Math.max(1, Math.min(50, toInt(limit) || 20))),
+    level_order_recommendations: levelOrderedRecommendations,
+  };
 }
 
 function normalizeText(value, max = 500) {
@@ -3719,6 +3933,16 @@ router.get('/hop/attempts', requireAuth, (req, res) => {
       user_id: targetUserId,
       attempts: getHourOfPowerAttempts(db, targetUserId, limit),
     });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
+router.get('/hop/optimize', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const limit = Math.max(1, Math.min(50, toInt(req.query?.limit) || 20));
+    res.json(getHourOfPowerOptimizePayload(db, req.user.id, limit));
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message });
   }

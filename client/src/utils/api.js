@@ -980,6 +980,12 @@ export const getHourOfPowerAttempts = (options = {}) => {
   const query = params.toString();
   return request(`/live/hop/attempts${query ? `?${query}` : ''}`);
 };
+export const getHourOfPowerOptimize = (options = {}) => {
+  const params = new URLSearchParams();
+  if (options.limit) params.set('limit', String(options.limit));
+  const query = params.toString();
+  return request(`/live/hop/optimize${query ? `?${query}` : ''}`);
+};
 export const createLiveSession = (data) => request('/live/sessions', {
   method: 'POST',
   body: JSON.stringify(data),
