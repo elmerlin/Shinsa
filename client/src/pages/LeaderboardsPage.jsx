@@ -551,20 +551,24 @@ function HourOfPowerLeaderboardTab() {
     <>
       <div className="space-y-4">
         <>
-            <div className="rounded-xl border border-yellow-300/20 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(13,54,73,0.92)_46%,rgba(24,18,42,0.98))] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
+            <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-4 shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2">
                 <div className="min-w-0">
-                  <HourOfPowerWordmark compact className="mb-2" />
+                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-yellow-200/80">Hour of Power</p>
+                  <HourOfPowerWordmark compact className="mb-2 mt-2" />
                   <h2 className="mt-1 whitespace-nowrap text-[1.56rem] font-display font-black leading-none text-white sm:text-2xl">Best Completed HoP</h2>
+                  <p className="mt-2 max-w-2xl text-sm text-gray-400">
+                    One leaderboard row per player, based on their best fully completed Hour of Power attempt.
+                  </p>
                 </div>
                 {currentUserBest ? (
-                  <div className="w-[5.15rem] shrink-0 rounded-lg border border-yellow-300/20 bg-black/20 px-1.5 py-1.25 text-right">
-                    <p className="text-[8px] font-display font-bold uppercase tracking-wide text-yellow-100/70">Your Best HoP</p>
+                  <div className="w-[5.15rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-1.5 py-1.25 text-right">
+                    <p className="text-[8px] font-display font-bold uppercase tracking-wide text-gray-500">Your Best HoP</p>
                     <p className="mt-1 text-[1.28rem] leading-none font-display font-black text-white">#{currentUserBest.rank}</p>
-                    <p className="mt-1 text-[9px] text-yellow-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
+                    <p className="mt-1 text-[9px] text-amber-100">{formatNumber(currentUserBest.total_rating_points)} pts</p>
                   </div>
                 ) : (
-                  <div className="w-[5.15rem] shrink-0 rounded-lg border border-yellow-300/20 bg-black/20 px-1.5 py-1.25 text-right text-[9px] text-gray-300">
+                  <div className="w-[5.15rem] shrink-0 rounded-lg border border-piu-border/60 bg-piu-dark/60 px-1.5 py-1.25 text-right text-[9px] text-gray-400">
                     Complete a HoP to place.
                   </div>
                 )}
@@ -595,10 +599,10 @@ function HourOfPowerLeaderboardTab() {
               ) : rows.length === 0 ? (
                 <HourOfPowerEmptyState>No completed Hour of Power attempts have been posted yet.</HourOfPowerEmptyState>
               ) : (
-                <div className="mt-4 overflow-hidden rounded-xl border border-piu-border/50 bg-piu-dark/40">
+                <div className="mt-4 overflow-hidden rounded-xl border border-piu-border/60 bg-piu-dark/60">
                   <table className="w-full table-fixed text-xs">
                     <thead>
-                      <tr className="border-b border-piu-border/35 bg-piu-dark/70 text-[9px] uppercase tracking-[0.12em] text-gray-500">
+                      <tr className="border-b border-piu-border/40 bg-piu-dark/80 text-[9px] uppercase tracking-[0.12em] text-gray-500">
                         <th className="w-[1.9rem] px-1 py-2 text-left font-display font-bold">Rank</th>
                         <th className="w-[6.7rem] px-0.5 py-2 pl-3 text-left font-display font-bold">Player</th>
                         <th className="w-[3.35rem] px-0 py-2 text-right font-display font-bold">Avg</th>
@@ -622,8 +626,8 @@ function HourOfPowerLeaderboardTab() {
                                 openAttemptDetail(row);
                               }
                             }}
-                            className={`cursor-pointer border-b border-piu-border/15 transition-colors hover:bg-white/[0.04] ${
-                              isCurrent ? 'bg-piu-accent/[0.08]' : ''
+                            className={`cursor-pointer border-b border-piu-border/20 transition-colors hover:bg-white/[0.03] ${
+                              isCurrent ? 'bg-piu-dark/80' : ''
                             }`}
                           >
                             <td className="px-1 py-2.5 font-display font-black text-white">#{row.rank}</td>
@@ -685,8 +689,8 @@ function HourOfPowerLeaderboardTab() {
                         key={attempt.session_id}
                         className={`rounded-xl border p-4 ${
                           isBestAttempt
-                            ? 'border-piu-accent/30 bg-piu-accent/[0.06]'
-                            : 'border-piu-border/50 bg-piu-dark/45'
+                            ? 'border-piu-border/60 bg-piu-card/95'
+                            : 'border-piu-border/60 bg-piu-dark/60'
                         }`}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -696,7 +700,7 @@ function HourOfPowerLeaderboardTab() {
                                 {attempt.completed ? 'Completed' : 'Ended Early'}
                               </span>
                               {isBestAttempt ? (
-                                <span className="rounded-full border border-piu-accent/30 bg-piu-accent/[0.08] px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-rose-100">
+                                <span className="rounded-full border border-piu-border/60 bg-piu-dark/60 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide text-amber-100">
                                   Personal Best
                                 </span>
                               ) : null}
