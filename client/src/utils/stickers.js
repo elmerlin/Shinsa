@@ -45,6 +45,33 @@ const HEAVYBREATHING_STICKER_CONFIG = [
   { key: 'heavybreathing', label: 'Heavy Breathing', image: '/emojis/heavybreathing/heavybreathing.png', animated: true },
 ];
 
+const VEGETACAT_STICKER_CONFIG = [
+  {
+    key: 'scouter',
+    label: 'What does the scouter say?',
+    image: '/emojis/vegetacat/scouter.gif',
+    animated: true,
+  },
+  {
+    key: 'over_9000',
+    label: "It's over 9000!",
+    image: '/emojis/vegetacat/over_9000.gif',
+    animated: true,
+  },
+  {
+    key: 'hold_back',
+    label: "Don't you dare hold back!",
+    image: '/emojis/vegetacat/hold_back.gif',
+    animated: true,
+  },
+  {
+    key: 'prince',
+    label: 'Bow before your Prince!',
+    image: '/emojis/vegetacat/prince.gif',
+    animated: true,
+  },
+];
+
 export const DOJO_CAT_EMOJIS = DOJO_CAT_FILE_NAMES.map((fileName) => {
   const token = `:dojocat_${fileName.replace('-', '_')}:`;
   return {
@@ -138,6 +165,16 @@ export const HEAVYBREATHING_EMOJIS = HEAVYBREATHING_STICKER_CONFIG.map((entry) =
   animated: !!entry.animated,
 }));
 
+export const VEGETACAT_EMOJIS = VEGETACAT_STICKER_CONFIG.map((entry) => ({
+  id: `vegetacat-${entry.key}`,
+  pack: 'vegetacat',
+  token: `:vegetacat_${entry.key}:`,
+  fileName: entry.key,
+  label: entry.label,
+  image: entry.image,
+  animated: !!entry.animated,
+}));
+
 export const DOJO_CAT_EMOJI_GROUP = {
   label: 'DojoCat',
   emojis: DOJO_CAT_EMOJIS,
@@ -183,6 +220,11 @@ export const HEAVYBREATHING_EMOJI_GROUP = {
   emojis: HEAVYBREATHING_EMOJIS,
 };
 
+export const VEGETACAT_EMOJI_GROUP = {
+  label: 'VegetaCat',
+  emojis: VEGETACAT_EMOJIS,
+};
+
 export const STICKER_GROUPS = [
   DOJO_CAT_EMOJI_GROUP,
   DEVIT_EMOJI_GROUP,
@@ -193,10 +235,11 @@ export const STICKER_GROUPS = [
   BUU_HOP_POWER_RANGERS_EMOJI_GROUP,
   BUU_HOP_SANDBAGGING_EMOJI_GROUP,
   HEAVYBREATHING_EMOJI_GROUP,
+  VEGETACAT_EMOJI_GROUP,
 ];
 
-export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing):';
-export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing):/gi;
+export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+):';
+export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+):/gi;
 export const DOJO_CAT_TOKEN_REGEX = /:dojocat_[0-9]+_[0-9]+:/gi;
 
 const STICKER_MAP = [
@@ -209,6 +252,7 @@ const STICKER_MAP = [
   ...BUU_HOP_POWER_RANGERS_EMOJIS,
   ...BUU_HOP_SANDBAGGING_EMOJIS,
   ...HEAVYBREATHING_EMOJIS,
+  ...VEGETACAT_EMOJIS,
 ].reduce((acc, emoji) => {
   acc[emoji.token] = emoji;
   return acc;
