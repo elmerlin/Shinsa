@@ -428,7 +428,8 @@ export function NoteComposerModal({
           maxLength={120}
           rows={4}
           placeholder="What are you up to?"
-          className="w-full resize-none rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/30 focus:outline-none"
+          className="w-full resize-none rounded-[1.4rem] border border-cyan-300/18 bg-[#151b29] px-4 py-3 text-sm text-white placeholder:text-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-cyan-300/35 focus:bg-[#182032] focus:outline-none"
+          style={{ color: '#f8fbff', WebkitTextFillColor: '#f8fbff', caretColor: '#67e8f9' }}
         />
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>Notes last 24 hours and start a fresh reply thread when changed.</span>
