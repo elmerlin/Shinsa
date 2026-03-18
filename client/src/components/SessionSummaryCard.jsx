@@ -140,11 +140,12 @@ export default function SessionSummaryCard({
   className = '',
   title = 'Session Summary',
   actions = null,
+  compact = false,
 }) {
   const [topPlaysExpanded, setTopPlaysExpanded] = useState(false);
   if (!summary) return null;
   return (
-    <div className={`rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent p-3 ${className}`.trim()}>
+    <div className={`rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent ${compact ? 'p-2.5' : 'p-3'} ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-display font-bold uppercase tracking-wider text-emerald-300">{title}</p>
@@ -216,35 +217,37 @@ export default function SessionSummaryCard({
         </div>
       </div>
 
-      <div className="mt-3 rounded-xl border border-cyan-400/25 bg-black/15 p-2.5">
-        <button
-          type="button"
-          className="w-full flex items-center justify-between gap-2"
-          onClick={() => setTopPlaysExpanded((prev) => !prev)}
-          aria-expanded={topPlaysExpanded}
-        >
-          <span className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">Top Plays</span>
-          <span className="inline-flex items-center gap-1 text-[10px] font-display font-bold uppercase tracking-wide text-cyan-300/90">
-            {topPlaysExpanded ? 'Hide' : 'Show'}
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className={`w-3 h-3 transition-transform ${topPlaysExpanded ? 'rotate-180' : ''}`}
-            >
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </span>
-        </button>
-        {topPlaysExpanded ? (
-          <div className="space-y-2 mt-2">
-            <SongTable title="Top 3 songs by score" rows={summary?.topSongsByScore || []} type="score" />
-            <SongTable title="Top 3 songs by rating" rows={summary?.topSongsByRating || []} type="rating" />
-          </div>
-        ) : (
-          <p className="text-[10px] text-gray-500 mt-1.5">Tap to expand</p>
-        )}
-      </div>
+      {!compact ? (
+        <div className="mt-3 rounded-xl border border-cyan-400/25 bg-black/15 p-2.5">
+          <button
+            type="button"
+            className="w-full flex items-center justify-between gap-2"
+            onClick={() => setTopPlaysExpanded((prev) => !prev)}
+            aria-expanded={topPlaysExpanded}
+          >
+            <span className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">Top Plays</span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-display font-bold uppercase tracking-wide text-cyan-300/90">
+              {topPlaysExpanded ? 'Hide' : 'Show'}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className={`w-3 h-3 transition-transform ${topPlaysExpanded ? 'rotate-180' : ''}`}
+              >
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </span>
+          </button>
+          {topPlaysExpanded ? (
+            <div className="space-y-2 mt-2">
+              <SongTable title="Top 3 songs by score" rows={summary?.topSongsByScore || []} type="score" />
+              <SongTable title="Top 3 songs by rating" rows={summary?.topSongsByRating || []} type="rating" />
+            </div>
+          ) : (
+            <p className="text-[10px] text-gray-500 mt-1.5">Tap to expand</p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

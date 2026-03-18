@@ -8,6 +8,7 @@ import SessionShareCard from './SessionShareCard';
 import LiveSessionCard from './LiveSessionCard';
 import SessionPlanCard from './SessionPlanCard';
 import StickerAsset from './StickerAsset';
+import { HourOfPowerLogo } from './HourOfPowerBrand';
 import { useAuth } from '../contexts/AuthContext';
 import { renderFormattedText } from '../utils/formatText';
 import { getStickerEmoji } from '../utils/stickers';
@@ -198,6 +199,7 @@ function StoryCard({ story }) {
           score={story.snapshot}
           jacketUrl={story.snapshot.jacketUrl || story.snapshot.jacket_url || ''}
           chartLink={story.link?.path || ''}
+          className="mx-auto"
         />
         {story.caption ? (
           <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-black/35 px-4 py-3 text-sm leading-6 text-gray-100 shadow-[0_14px_32px_rgba(0,0,0,0.24)]">
@@ -227,9 +229,9 @@ function StoryCard({ story }) {
         <div className="space-y-3 px-4 py-4">
           <div>
             <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">{story.title || 'Post'}</p>
-            {summary ? <SessionSummaryCard summary={summary} title="Session Summary" className="mt-3" /> : null}
-            {share ? <SessionShareCard share={share} title={share?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'} className="mt-3" /> : null}
-            {live ? <LiveSessionCard summary={live} title="Shinsa Live Recap" className="mt-3" /> : null}
+            {summary ? <SessionSummaryCard summary={summary} title="Session Summary" className="mt-3" compact /> : null}
+            {share ? <SessionShareCard share={share} title={share?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'} className="mt-3" compact /> : null}
+            {live ? <LiveSessionCard summary={live} title="Shinsa Live Recap" className="mt-3" compact /> : null}
             {plan ? <SessionPlanCard plan={plan} className="mt-3" defaultScoringExpanded={false} defaultPassingExpanded={false} /> : null}
             {visibleCaption ? <div className="mt-2 text-sm leading-6 text-gray-100">{renderFormattedText(visibleCaption)}</div> : null}
           </div>
@@ -254,6 +256,39 @@ function StoryCard({ story }) {
           {story.link ? renderLinkButton(story.link, 'inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white hover:bg-white/12') : null}
           <StickerRow tokens={story.sticker_tokens} />
         </div>
+      </div>
+    );
+  }
+
+  if (story.type === 'live_session' || story.type === 'hour_of_power') {
+    const isHop = story.type === 'hour_of_power';
+    return (
+      <div className="w-full max-w-sm overflow-hidden rounded-[1.8rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_42%),linear-gradient(160deg,#0a101b,#151d2f)] px-5 py-5 text-white shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-200/80">
+              {isHop ? 'Hour of Power' : 'Live'}
+            </p>
+            <h3 className="mt-2 font-display text-[2rem] font-black leading-[1.02]">
+              {story.title || (isHop ? 'Hour of Power' : 'Live session')}
+            </h3>
+            {story.subtitle ? <p className="mt-3 text-sm leading-6 text-gray-200">{story.subtitle}</p> : null}
+            {story.caption ? <div className="mt-3 text-sm leading-6 text-gray-100">{renderFormattedText(story.caption)}</div> : null}
+            <div className="mt-5 flex flex-wrap gap-2">
+              {renderLinkButton(story.link, 'inline-flex rounded-full border border-cyan-300/30 bg-cyan-500/15 px-4 py-2 text-xs font-display font-bold text-cyan-50 hover:bg-cyan-500/22')}
+            </div>
+          </div>
+          {isHop ? (
+            <HourOfPowerLogo className="mt-1 h-24 w-20 shrink-0 rounded-[1.4rem] border-yellow-200/35 bg-[linear-gradient(180deg,rgba(255,224,125,0.16),rgba(16,22,47,0.92))]" imageClassName="p-2" />
+          ) : (
+            <div className="mt-2 flex h-24 w-20 shrink-0 items-center justify-center rounded-[1.4rem] border border-rose-300/20 bg-[radial-gradient(circle_at_center,rgba(251,113,133,0.22),transparent_58%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-rose-300/35 bg-rose-500/16">
+                <span className="inline-flex h-4 w-4 rounded-full bg-red-400 shadow-[0_0_18px_rgba(248,113,113,0.65)]" />
+              </span>
+            </div>
+          )}
+        </div>
+        <StickerRow tokens={story.sticker_tokens} />
       </div>
     );
   }

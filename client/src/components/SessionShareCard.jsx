@@ -118,6 +118,7 @@ export default function SessionShareCard({
   className = '',
   title = 'Session Share',
   actions = null,
+  compact = false,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(1);
@@ -147,11 +148,12 @@ export default function SessionShareCard({
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const startIndex = expanded ? (page - 1) * 10 : 0;
+  const startIndex = compact ? 0 : (expanded ? (page - 1) * 10 : 0);
   const visibleRows = useMemo(() => {
+    if (compact) return rows.slice(0, 3);
     if (expanded) return rows.slice(startIndex, startIndex + 10);
     return rows.slice(0, 5);
-  }, [expanded, rows, startIndex]);
+  }, [compact, expanded, rows, startIndex]);
 
   if (!share) return null;
 
@@ -166,8 +168,8 @@ export default function SessionShareCard({
   const ratingCellClass = 'py-1.5 pl-0 pr-1.5 text-right whitespace-nowrap sm:px-2';
   const gradeCellClass = 'py-1.5 pl-0 pr-2.5 text-right whitespace-nowrap sm:px-1';
   const wrapperClass = isHopShare
-    ? 'rounded-xl border border-yellow-300/30 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(11,57,73,0.92)_48%,rgba(24,18,42,0.98))] p-3 shadow-[0_10px_30px_rgba(0,0,0,0.3)]'
-    : 'rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/15 via-emerald-500/10 to-transparent p-3';
+    ? `rounded-xl border border-yellow-300/30 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(11,57,73,0.92)_48%,rgba(24,18,42,0.98))] ${compact ? 'p-2.5' : 'p-3'} shadow-[0_10px_30px_rgba(0,0,0,0.3)]`
+    : `rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/15 via-emerald-500/10 to-transparent ${compact ? 'p-2.5' : 'p-3'}`;
 
   return (
     <>
@@ -238,7 +240,7 @@ export default function SessionShareCard({
             <p className="text-[11px] font-display font-bold text-cyan-300 uppercase tracking-wide">
               {isHopShare ? 'Hour of Power Results' : 'Selected Results'}
             </p>
-            <p className="text-[10px] text-gray-500">{expanded ? `Page ${page}/${totalPages}` : `${Math.min(5, rows.length)} of ${rows.length}`}</p>
+            <p className="text-[10px] text-gray-500">{compact ? `${Math.min(3, rows.length)} of ${rows.length}` : (expanded ? `Page ${page}/${totalPages}` : `${Math.min(5, rows.length)} of ${rows.length}`)}</p>
           </div>
 
           {visibleRows.length === 0 ? (
@@ -322,7 +324,7 @@ export default function SessionShareCard({
           )}
         </div>
 
-        {rows.length > 5 ? (
+        {!compact && rows.length > 5 ? (
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
@@ -356,7 +358,7 @@ export default function SessionShareCard({
             )}
           </div>
         ) : (
-          <p className="mt-2 text-[10px] text-gray-500">Tap jackets or grades to view judgments.</p>
+          <p className="mt-2 text-[10px] text-gray-500">{compact ? 'Tap jackets or grades for details.' : 'Tap jackets or grades to view judgments.'}</p>
         )}
       </div>
 

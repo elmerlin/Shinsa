@@ -11,7 +11,7 @@ function StatPill({ label, value }) {
   );
 }
 
-export default function LiveSessionCard({ summary, className = '', title = 'Shinsa Live Recap' }) {
+export default function LiveSessionCard({ summary, className = '', title = 'Shinsa Live Recap', compact = false }) {
   if (!summary) return null;
 
   const streamHost = summary.streamUrl
@@ -30,7 +30,7 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
     : 'Live session recap';
 
   return (
-    <div className={`rounded-2xl border border-rose-400/35 bg-gradient-to-br from-rose-500/18 via-orange-500/10 to-cyan-500/8 p-3 ${className}`.trim()}>
+    <div className={`rounded-2xl border border-rose-400/35 bg-gradient-to-br from-rose-500/18 via-orange-500/10 to-cyan-500/8 ${compact ? 'p-2.5' : 'p-3'} ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-rose-300">{title}</p>
@@ -59,7 +59,7 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
             </a>
           ) : null}
         </div>
-        <div className="grid grid-cols-3 gap-2 min-w-[320px] max-sm:min-w-full">
+        <div className={`grid grid-cols-3 gap-2 ${compact ? 'min-w-[0] w-full' : 'min-w-[320px] max-sm:min-w-full'}`}>
           <StatPill label="Peak Viewers" value={summary.viewerPeak || 0} />
           <StatPill label="Messages" value={summary.messageCount || 0} />
           <StatPill label="Interactions" value={summary.interactions || 0} />
@@ -70,6 +70,7 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
         summary={summary}
         title="Live Session Summary"
         className="mt-3 mb-0 border-rose-400/25 from-rose-500/8 via-orange-500/8 to-transparent"
+        compact={compact}
       />
     </div>
   );

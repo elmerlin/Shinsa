@@ -66,6 +66,142 @@ function sanitizeStickerTokens(value) {
     .slice(0, MAX_STICKERS);
 }
 
+function hasJudgmentData(entry) {
+  return (
+    toInt(entry?.perfect) > 0 ||
+    toInt(entry?.great) > 0 ||
+    toInt(entry?.good) > 0 ||
+    toInt(entry?.bad) > 0 ||
+    toInt(entry?.miss) > 0
+  );
+}
+
+let recentPlayMetadataBeforeStmt = null;
+let recentPlayMetadataAnyStmt = null;
+let storyJacketLookupStmt = null;
+
+function getRecentPlayMetadataBeforeStmt(db) {
+  if (!recentPlayMetadataBeforeStmt) {
+    recentPlayMetadataBeforeStmt = db.prepare(`
+      SELECT
+        perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank
+      FROM user_recently_played
+      WHERE user_id = ?
+        AND song_title = ?
+        AND mode = ?
+        AND level = ?
+        AND score = ?
+        AND datetime(COALESCE(date_played, '')) <= datetime(?)
+      ORDER BY
+        datetime(COALESCE(date_played, '1970-01-01')) DESC,
+        id DESC
+      LIMIT 1
+    `);
+  }
+  return recentPlayMetadataBeforeStmt;
+}
+
+function getRecentPlayMetadataAnyStmt(db) {
+  if (!recentPlayMetadataAnyStmt) {
+    recentPlayMetadataAnyStmt = db.prepare(`
+      SELECT
+        perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank
+      FROM user_recently_played
+      WHERE user_id = ?
+        AND song_title = ?
+        AND mode = ?
+        AND level = ?
+        AND score = ?
+      ORDER BY
+        datetime(COALESCE(date_played, '1970-01-01')) DESC,
+        id DESC
+      LIMIT 1
+    `);
+  }
+  return recentPlayMetadataAnyStmt;
+}
+
+function findRecentPlayMetadata(db, { userId, createdAt, songTitle, mode, level, score }) {
+  if (!userId || !songTitle || !mode) return null;
+  const numericLevel = toInt(level);
+  const numericScore = toInt(score);
+  if (numericLevel <= 0 || numericScore <= 0) return null;
+
+  if (createdAt) {
+    const datedMatch = getRecentPlayMetadataBeforeStmt(db).get(
+      userId,
+      songTitle,
+      mode,
+      numericLevel,
+      numericScore,
+      createdAt
+    );
+    if (datedMatch) return datedMatch;
+  }
+
+  return getRecentPlayMetadataAnyStmt(db).get(userId, songTitle, mode, numericLevel, numericScore) || null;
+}
+
+function getStoryJacketLookupStmt(db) {
+  if (!storyJacketLookupStmt) {
+    storyJacketLookupStmt = db.prepare(`
+      SELECT jacket_url
+      FROM songs
+      WHERE title = ?
+        AND mode = ?
+        AND level = ?
+        AND TRIM(COALESCE(jacket_url, '')) <> ''
+      ORDER BY id ASC
+      LIMIT 1
+    `);
+  }
+  return storyJacketLookupStmt;
+}
+
+function resolveStoryJacketUrl(db, entry) {
+  const existingUrl = String(entry?.jacket_url || entry?.jacketUrl || entry?.background_url || '').trim();
+  if (existingUrl) return existingUrl;
+
+  const songTitle = String(entry?.song_title || entry?.songTitle || '').trim();
+  const mode = String(entry?.mode || '').trim();
+  const level = toInt(entry?.level);
+  if (!songTitle || !mode || level <= 0) return '';
+
+  return String(getStoryJacketLookupStmt(db).get(songTitle, mode, level)?.jacket_url || '').trim();
+}
+
+function enrichStorySnapshotEntry(db, userId, createdAt, entry, { scoreKey = 'score' } = {}) {
+  if (!entry) return null;
+
+  const lookup = findRecentPlayMetadata(db, {
+    userId,
+    createdAt,
+    songTitle: entry.song_title,
+    mode: entry.mode,
+    level: entry.level,
+    score: entry?.[scoreKey],
+  });
+  const jacketUrl = resolveStoryJacketUrl(db, {
+    ...entry,
+    background_url: entry?.background_url || lookup?.background_url || '',
+  });
+
+  return {
+    ...entry,
+    jacket_url: String(entry?.jacket_url || '').trim() || jacketUrl,
+    background_url: String(entry?.background_url || '').trim() || String(lookup?.background_url || '').trim() || jacketUrl,
+    plate: String(entry?.plate || '').trim() || String(lookup?.plate || '').trim(),
+    date_played: String(entry?.date_played || '').trim() || String(lookup?.date_played || '').trim() || String(createdAt || '').trim(),
+    perfect: hasJudgmentData(entry) ? toInt(entry?.perfect) : toInt(entry?.perfect) || toInt(lookup?.perfect),
+    great: hasJudgmentData(entry) ? toInt(entry?.great) : toInt(entry?.great) || toInt(lookup?.great),
+    good: hasJudgmentData(entry) ? toInt(entry?.good) : toInt(entry?.good) || toInt(lookup?.good),
+    bad: hasJudgmentData(entry) ? toInt(entry?.bad) : toInt(entry?.bad) || toInt(lookup?.bad),
+    miss: hasJudgmentData(entry) ? toInt(entry?.miss) : toInt(entry?.miss) || toInt(lookup?.miss),
+    max_combo: Math.max(toInt(entry?.max_combo), toInt(lookup?.max_combo)),
+    over_top100_rank: toInt(entry?.over_top100_rank) || toInt(lookup?.over_top100_rank),
+  };
+}
+
 function buildStoryLink({ path = '', url = '', label = '' } = {}) {
   const nextPath = sanitizeRelativePath(path);
   const nextUrl = sanitizeAbsoluteUrl(url);
@@ -259,11 +395,13 @@ function getStoryExpiry(createdAt) {
   return toSqliteDateTime(addHours(parsed, STORY_TTL_HOURS));
 }
 
-function buildUpscoreStoryItem(row, user) {
+function buildUpscoreStoryItem(db, row, user) {
   if (!row || !user) return null;
   const items = parseJsonArray(row.upscores_json, []).filter(Boolean);
-  const primary = items[0] || null;
+  const primary = enrichStorySnapshotEntry(db, user.id, row.created_at, items[0] || null, { scoreKey: 'new_score' });
   if (!primary) return null;
+  const displayScore = toInt(primary.new_score || primary.score);
+  const displayGrade = String(primary.new_grade || primary.grade || '').trim();
   return buildSnapshotStoryItem({
     id: `upscore:${row.id}`,
     user,
@@ -282,13 +420,16 @@ function buildUpscoreStoryItem(row, user) {
       song_title: primary.song_title || '',
       mode: primary.mode || '',
       level: toInt(primary.level),
-      score: toInt(primary.score),
+      new_score: displayScore,
+      score: displayScore,
       old_score: toInt(primary.old_score),
       old_grade: primary.old_grade || '',
-      grade: primary.grade || '',
+      new_grade: displayGrade,
+      grade: displayGrade,
       scoreDelta: toInt(primary.score_delta || primary.scoreDelta),
       over_top100_rank: toInt(primary.over_top100_rank),
       plate: primary.plate || '',
+      jacket_url: primary.jacket_url || primary.background_url || '',
       perfect: toInt(primary.perfect),
       great: toInt(primary.great),
       good: toInt(primary.good),
@@ -301,8 +442,20 @@ function buildUpscoreStoryItem(row, user) {
   });
 }
 
-function buildClearStoryItem(row, user) {
+function buildClearStoryItem(db, row, user) {
   if (!row || !user) return null;
+  const parsedClears = parseJsonArray(row.clears_json, []).filter(Boolean);
+  const fallbackClear = {
+    song_title: row.song_title || '',
+    mode: row.mode || '',
+    level: toInt(row.level),
+    score: toInt(row.score),
+    grade: row.grade || '',
+    plate: row.plate || '',
+    background_url: row.background_url || '',
+  };
+  const primary = enrichStorySnapshotEntry(db, user.id, row.created_at, parsedClears[0] || fallbackClear, { scoreKey: 'score' });
+  if (!primary) return null;
   return buildSnapshotStoryItem({
     id: `clear:${row.id}`,
     user,
@@ -316,17 +469,24 @@ function buildClearStoryItem(row, user) {
     }),
     source: { kind: 'clear', id: String(row.id || '') },
     title: 'New clear',
-    subtitle: `${row.song_title || 'Song'} ${row.mode || ''}${row.level ? ` ${row.level}` : ''}`.trim(),
+    subtitle: `${primary.song_title || 'Song'} ${primary.mode || ''}${primary.level ? ` ${primary.level}` : ''}`.trim(),
     snapshot: {
-      song_title: row.song_title || '',
-      mode: row.mode || '',
-      level: toInt(row.level),
-      score: toInt(row.score),
-      grade: row.grade || '',
-      plate: row.plate || '',
+      song_title: primary.song_title || '',
+      mode: primary.mode || '',
+      level: toInt(primary.level),
+      score: toInt(primary.score),
+      grade: primary.grade || '',
+      plate: primary.plate || '',
+      jacket_url: primary.jacket_url || primary.background_url || '',
+      over_top100_rank: toInt(primary.over_top100_rank),
+      perfect: toInt(primary.perfect),
+      great: toInt(primary.great),
+      good: toInt(primary.good),
+      bad: toInt(primary.bad),
+      miss: toInt(primary.miss),
       playerName: user.username || '',
       playerAvatar: user.avatar || '',
-      date_played: row.created_at || '',
+      date_played: primary.date_played || row.created_at || '',
     },
   });
 }
@@ -478,12 +638,12 @@ function getRecentAutoStoryItems(db, user) {
     LIMIT 10
   `).all(user.id);
   for (const row of upscores) {
-    const item = buildUpscoreStoryItem(row, user);
+    const item = buildUpscoreStoryItem(db, row, user);
     if (item) items.push(item);
   }
 
   const clears = db.prepare(`
-    SELECT id, song_title, mode, level, score, grade, plate, created_at
+    SELECT id, song_title, mode, level, score, grade, plate, background_url, clears_json, created_at
     FROM user_new_clears
     WHERE user_id = ?
       AND datetime(created_at) >= datetime('now', '-24 hours')
@@ -491,7 +651,7 @@ function getRecentAutoStoryItems(db, user) {
     LIMIT 10
   `).all(user.id);
   for (const row of clears) {
-    const item = buildClearStoryItem(row, user);
+    const item = buildClearStoryItem(db, row, user);
     if (item) items.push(item);
   }
 
@@ -524,17 +684,17 @@ function buildResolvedStorySource(db, user, sourceKind, sourceId) {
       WHERE id = ? AND user_id = ?
       LIMIT 1
     `).get(toInt(idValue), user.id);
-    return row ? buildUpscoreStoryItem(row, user) : null;
+    return row ? buildUpscoreStoryItem(db, row, user) : null;
   }
 
   if (kind === 'clear') {
     const row = db.prepare(`
-      SELECT id, user_id, song_title, mode, level, score, grade, plate, created_at
+      SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, clears_json, created_at
       FROM user_new_clears
       WHERE id = ? AND user_id = ?
       LIMIT 1
     `).get(toInt(idValue), user.id);
-    return row ? buildClearStoryItem(row, user) : null;
+    return row ? buildClearStoryItem(db, row, user) : null;
   }
 
   return null;
