@@ -12,6 +12,16 @@ const HEAVYBREATHING_CHICKEN_FILE_NAMES = [
   '0', '1', '2', '3', '4', '5', '6',
 ];
 
+const DOJOCAT_PIXIU_FILE_NAMES = [
+  '0', '1', '2', '3', '4', '5', '6', '7',
+  '8', '9', '10', '11', '12', '13', '14', '15',
+];
+
+const DOJOCAT_PIXIU_TRADITIONAL_FILE_NAMES = [
+  '0', '1', '2', '3', '4', '5', '6', '7',
+  '8', '9', '10', '11', '12', '13', '14', '15',
+];
+
 const BUU_FILE_NAMES = [
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 ];
@@ -99,6 +109,26 @@ export const HEAVYBREATHING_CHICKEN_EMOJIS = HEAVYBREATHING_CHICKEN_FILE_NAMES.m
   fileName,
   label: `Heavy Breathing Chicken ${fileName}`,
   image: `/emojis/heavybreathing_chicken/heavybreathing_chicken-${fileName}.png`,
+  animated: false,
+}));
+
+export const DOJOCAT_PIXIU_EMOJIS = DOJOCAT_PIXIU_FILE_NAMES.map((fileName) => ({
+  id: `dojocat-pixiu-${fileName}`,
+  pack: 'dojocat_pixiu',
+  token: `:dojocat_pixiu_${fileName}:`,
+  fileName,
+  label: `DojoCat Pixiu ${fileName}`,
+  image: `/emojis/dojocat_pixiu/dojocat-pixiu-${fileName}.png`,
+  animated: false,
+}));
+
+export const DOJOCAT_PIXIU_TRADITIONAL_EMOJIS = DOJOCAT_PIXIU_TRADITIONAL_FILE_NAMES.map((fileName) => ({
+  id: `dojocat-pixiu-traditional-${fileName}`,
+  pack: 'dojocat_pixiu_traditional',
+  token: `:dojocat_pixiu_traditional_${fileName}:`,
+  fileName,
+  label: `DojoCat Pixiu Traditional ${fileName}`,
+  image: `/emojis/dojocat_pixiu/dojocat-pixiu-traditional-${fileName}.png`,
   animated: false,
 }));
 
@@ -207,6 +237,16 @@ export const HEAVYBREATHING_CHICKEN_EMOJI_GROUP = {
   emojis: HEAVYBREATHING_CHICKEN_EMOJIS,
 };
 
+export const DOJOCAT_PIXIU_EMOJI_GROUP = {
+  label: 'DojoCat Pixiu',
+  emojis: DOJOCAT_PIXIU_EMOJIS,
+};
+
+export const DOJOCAT_PIXIU_TRADITIONAL_EMOJI_GROUP = {
+  label: 'DojoCat Pixiu Traditional',
+  emojis: DOJOCAT_PIXIU_TRADITIONAL_EMOJIS,
+};
+
 export const BUU_EMOJI_GROUP = {
   label: 'Buu',
   emojis: BUU_EMOJIS,
@@ -249,6 +289,8 @@ export const MOPE_FLOWER_EMOJI_GROUP = {
 
 export const STICKER_GROUPS = [
   DOJO_CAT_EMOJI_GROUP,
+  DOJOCAT_PIXIU_EMOJI_GROUP,
+  DOJOCAT_PIXIU_TRADITIONAL_EMOJI_GROUP,
   DEVIT_EMOJI_GROUP,
   HEAVYBREATHING_CHICKEN_EMOJI_GROUP,
   BUU_EMOJI_GROUP,
@@ -261,12 +303,14 @@ export const STICKER_GROUPS = [
   MOPE_FLOWER_EMOJI_GROUP,
 ];
 
-export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+|mope_flower_[0-9]+):';
-export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+|mope_flower_[0-9]+):/gi;
+export const STICKER_TOKEN_PATTERN = ':(?:dojocat_[0-9]+_[0-9]+|dojocat_pixiu_[0-9]+|dojocat_pixiu_traditional_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+|mope_flower_[0-9]+):';
+export const STICKER_TOKEN_REGEX = /:(?:dojocat_[0-9]+_[0-9]+|dojocat_pixiu_[0-9]+|dojocat_pixiu_traditional_[0-9]+|devit_[a-z0-9_]+|heavybreathing_chicken_[0-9]+|buu_[0-9]+|buuu_[0-9]+|buu_hop_dressup_[0-9]+|buu_hop_power_rangers_[0-9]+|buu_hop_sandbagging_[0-9]+|heavybreathing|vegetacat_[a-z0-9_]+|mope_flower_[0-9]+):/gi;
 export const DOJO_CAT_TOKEN_REGEX = /:dojocat_[0-9]+_[0-9]+:/gi;
 
 const STICKER_MAP = [
   ...DOJO_CAT_EMOJIS,
+  ...DOJOCAT_PIXIU_EMOJIS,
+  ...DOJOCAT_PIXIU_TRADITIONAL_EMOJIS,
   ...DEVIT_EMOJIS,
   ...HEAVYBREATHING_CHICKEN_EMOJIS,
   ...BUU_EMOJIS,
