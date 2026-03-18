@@ -47,6 +47,9 @@ function renderLinkButton(link, className = '') {
   );
 }
 
+const MODAL_INPUT_CLASS = 'w-full rounded-[1.4rem] border border-cyan-300/18 bg-[#151b29] px-4 py-3 text-sm text-white placeholder:text-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-cyan-300/35 focus:bg-[#182032] focus:outline-none';
+const MODAL_INPUT_STYLE = { color: '#f8fbff', WebkitTextFillColor: '#f8fbff', caretColor: '#67e8f9' };
+
 function StickerRow({ tokens = [] }) {
   const stickers = tokens.map((token) => getStickerEmoji(token)).filter(Boolean);
   if (stickers.length === 0) return null;
@@ -428,8 +431,8 @@ export function NoteComposerModal({
           maxLength={120}
           rows={4}
           placeholder="What are you up to?"
-          className="w-full resize-none rounded-[1.4rem] border border-cyan-300/18 bg-[#151b29] px-4 py-3 text-sm text-white placeholder:text-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-cyan-300/35 focus:bg-[#182032] focus:outline-none"
-          style={{ color: '#f8fbff', WebkitTextFillColor: '#f8fbff', caretColor: '#67e8f9' }}
+          className={`resize-none ${MODAL_INPUT_CLASS}`}
+          style={MODAL_INPUT_STYLE}
         />
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>Notes last 24 hours and start a fresh reply thread when changed.</span>
@@ -578,7 +581,8 @@ export function StoryComposerModal({
             value={linkUrl}
             onChange={(event) => setLinkUrl(event.target.value)}
             placeholder="https://..."
-            className="w-full rounded-[1.2rem] border border-white/10 bg-white/6 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/30 focus:outline-none"
+            className={MODAL_INPUT_CLASS}
+            style={MODAL_INPUT_STYLE}
           />
         ) : null}
 
@@ -617,7 +621,8 @@ export function StoryComposerModal({
           maxLength={420}
           rows={4}
           placeholder={storyType === 'score_snapshot' ? 'Add a caption to your score snapshot' : 'Add a caption'}
-          className="w-full resize-none rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/30 focus:outline-none"
+          className={`resize-none ${MODAL_INPUT_CLASS}`}
+          style={MODAL_INPUT_STYLE}
         />
 
         <div className="flex items-center justify-between gap-3">
@@ -740,7 +745,8 @@ export function NoteThreadModal({
             rows={2}
             maxLength={4000}
             placeholder={`Reply to ${note?.user?.username || 'this note'}...`}
-            className="min-h-[3.2rem] flex-1 resize-none rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/30 focus:outline-none"
+            className={`min-h-[3.2rem] flex-1 resize-none ${MODAL_INPUT_CLASS}`}
+            style={MODAL_INPUT_STYLE}
           />
           <button
             type="button"
