@@ -54,6 +54,7 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TranslationEditorDrawer from './components/TranslationEditorDrawer';
 import { useI18n } from './i18n/TranslationContext';
 
+const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
 const DOJO_TARGET_GROUP = 'pump dojo';
 const DOJO_VENUE_SLUG = 'london-pump-dojo';
 const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
@@ -803,6 +804,7 @@ function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
 }
 
 function LocaleSwitchButton() {
+  if (!KOREAN_LOCALE_ENABLED) return null;
   const { isKorean, getLocaleHref, t } = useI18n();
   const nextLocale = isKorean ? 'en' : 'ko';
   const label = isKorean ? t('app.language.switch_to_english') : t('app.language.switch_to_korean');

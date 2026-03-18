@@ -28,6 +28,7 @@ const i18nRoutes = require('./routes/i18n');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const KOREAN_LOCALE_ENABLED = String(process.env.ENABLE_KR_LOCALE || '').trim().toLowerCase() === 'true';
 
 // Initialize database
 initializeDb();
@@ -116,6 +117,20 @@ app.use('/api', (req, res) => {
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+if (!KOREAN_LOCALE_ENABLED) {
+  app.use((req, res, next) => {
+    if ((req.method !== 'GET' && req.method !== 'HEAD') || !req.path) {
+      return next();
+    }
+    if (req.path === '/kr' || req.path.startsWith('/kr/')) {
+      const nextPath = req.path === '/kr' ? '/' : req.path.slice(3);
+      const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+      return res.redirect(302, `${nextPath}${query}`);
+    }
+    return next();
+  });
+}
 
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');

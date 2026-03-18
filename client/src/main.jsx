@@ -7,6 +7,8 @@ import { TranslationProvider } from './i18n/TranslationContext';
 import App from './App';
 import './index.css';
 
+const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
+
 function enableAppleMobileInputZoomGuard() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -55,7 +57,18 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 
 function detectLocaleFromPathname(pathname) {
   const path = String(pathname || '/').toLowerCase();
-  return path === '/kr' || path.startsWith('/kr/') ? 'ko' : 'en';
+  if (KOREAN_LOCALE_ENABLED && (path === '/kr' || path.startsWith('/kr/'))) {
+    return 'ko';
+  }
+  return 'en';
+}
+
+if (typeof window !== 'undefined' && !KOREAN_LOCALE_ENABLED) {
+  const path = String(window.location.pathname || '/');
+  if (path === '/kr' || path.startsWith('/kr/')) {
+    const nextPath = path === '/kr' ? '/' : path.slice(3);
+    window.location.replace(`${nextPath}${window.location.search || ''}${window.location.hash || ''}`);
+  }
 }
 
 const initialLocale = typeof window !== 'undefined'
