@@ -1041,6 +1041,29 @@ export default function MessagesPage() {
   }, [conversationId]);
 
   useEffect(() => {
+    if (!conversationId || typeof window === 'undefined' || window.innerWidth >= 640) {
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+    document.documentElement.style.overscrollBehavior = 'none';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+    };
+  }, [conversationId]);
+
+  useEffect(() => {
     const input = draftInputRef.current;
     if (!input) return;
     input.style.height = '0px';

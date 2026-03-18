@@ -1294,7 +1294,7 @@ export default function App() {
       ) : null}
 
       {/* Main */}
-      <main className={isLiveOverlay ? 'min-h-screen' : `flex-1 ${user && !hideMobileBottomNav ? 'pb-16 sm:pb-0' : ''}`}>
+      <main className={isLiveOverlay ? 'min-h-screen' : `flex-1 ${isMessagesConversationRoute ? 'overflow-hidden' : ''} ${user && !hideMobileBottomNav ? 'pb-16 sm:pb-0' : ''}`}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tournament/new" element={<TournamentSetup />} />
