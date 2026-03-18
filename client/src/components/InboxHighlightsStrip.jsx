@@ -80,7 +80,7 @@ function HighlightAvatar({ user, hasStory = false, onClick = null, isSelf = fals
         </span>
       </span>
       <span className="max-w-[4.8rem] truncate text-[11px] font-display font-bold text-gray-200">
-        {isSelf ? 'Your note' : (user?.username || 'Player')}
+        {isSelf ? 'Your Status' : (user?.username || 'Player')}
       </span>
     </button>
   );
@@ -94,7 +94,7 @@ function HighlightNoteBubble({ note, isSelf = false, onClick = null }) {
     <button
       type="button"
       onClick={onClick}
-      className={`absolute -top-4 left-1/2 z-10 flex min-h-[2.8rem] w-max max-w-[6.9rem] -translate-x-1/2 items-center rounded-[1.3rem] px-3 py-2 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
+      className={`absolute -top-1.5 left-1/2 z-10 flex min-h-[2.7rem] w-max max-w-[6.9rem] -translate-x-1/2 items-center rounded-[1.3rem] px-3 py-2 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
         content
           ? 'bg-[#343945] text-white hover:bg-[#3b4150]'
           : 'border border-dashed border-white/12 bg-[#262b35] text-gray-300 hover:bg-[#2c313c]'
@@ -104,7 +104,7 @@ function HighlightNoteBubble({ note, isSelf = false, onClick = null }) {
       <span className="line-clamp-2 text-[11px] font-medium leading-4">
         {content || 'Share a note'}
       </span>
-      <span className={`absolute -bottom-1 left-[1.05rem] h-3 w-3 rotate-45 rounded-[0.25rem] ${content ? 'bg-[#343945]' : 'border-r border-b border-dashed border-white/12 bg-[#262b35]'}`} />
+      <span className={`absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 rounded-[0.25rem] ${content ? 'bg-[#343945]' : 'border-r border-b border-dashed border-white/12 bg-[#262b35]'}`} />
     </button>
   );
 }
@@ -128,7 +128,7 @@ function HighlightCircle({
 
   return (
     <div className="flex w-[5.8rem] shrink-0 flex-col items-center gap-2.5 pt-3">
-      <div className="relative pt-5">
+      <div className="relative pt-7">
         <HighlightNoteBubble
           note={note}
           isSelf={circle?.is_self}
@@ -711,11 +711,11 @@ export default function InboxHighlightsStrip({
   return (
     <div className="border-b border-piu-border/25 bg-[linear-gradient(180deg,rgba(7,12,21,0.92),rgba(7,12,21,0.58))] px-4 pb-4 pt-3 sm:px-5">
       {loading ? (
-        <div className="flex gap-3 overflow-x-auto pb-1 pt-3">
+        <div className="scrollbar-none flex gap-3 overflow-x-auto pb-1 pt-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[0, 1, 2, 3].map((index) => (
             <div key={index} className="flex w-[5.8rem] shrink-0 flex-col items-center gap-2.5 pt-3">
-              <div className="relative pt-5">
-                <div className="absolute -top-4 left-1/2 h-[2.8rem] w-[6.4rem] -translate-x-1/2 rounded-[1.3rem] bg-white/6" />
+              <div className="relative pt-7">
+                <div className="absolute -top-1.5 left-1/2 h-[2.7rem] w-[6.4rem] -translate-x-1/2 rounded-[1.3rem] bg-white/6" />
                 <div className="h-[4.65rem] w-[4.65rem] animate-pulse rounded-full bg-white/8" />
               </div>
               <div className="h-3 w-14 animate-pulse rounded-full bg-white/8" />
@@ -723,7 +723,7 @@ export default function InboxHighlightsStrip({
           ))}
         </div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-1">
+        <div className="scrollbar-none flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {orderedCircles.map((circle) => (
             <HighlightCircle
               key={circle.user.id}
