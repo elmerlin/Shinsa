@@ -246,17 +246,17 @@ function MessageLinkCard({
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
 
   return (
-    <div className={`w-full rounded-[1.35rem] border px-3.5 py-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] ${frameClass}`}>
-      <p className={`text-[10px] font-display font-bold uppercase tracking-[0.2em] ${badgeClass}`}>{badge}</p>
-      <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
-      {subtitle ? <p className="mt-1 text-xs text-gray-300">{subtitle}</p> : null}
+    <div className={`w-full rounded-[1.2rem] border px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)] ${frameClass}`}>
+      <p className={`text-[9px] font-display font-bold uppercase tracking-[0.18em] ${badgeClass}`}>{badge}</p>
+      <p className="mt-1 text-[15px] font-display font-black leading-tight text-white">{title}</p>
+      {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
       {isCompare && linkShare.statusLabel ? (
-        <div className="mt-3">
+        <div className="mt-2.5">
           <CompareStatusPill statusKind={linkShare.statusKind} statusLabel={linkShare.statusLabel} />
         </div>
       ) : null}
       {!isCompare && responseStatus ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <CompareStatusPill
             statusKind={responseStatus.statusKind}
             statusLabel={responseStatus.statusLabel}
@@ -264,11 +264,11 @@ function MessageLinkCard({
           />
         </div>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
         {linkShare.path ? (
           <Link
             to={linkShare.path}
-            className={`inline-flex rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${buttonClass}`}
+            className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
           >
             {buttonLabel}
           </Link>
@@ -277,7 +277,7 @@ function MessageLinkCard({
             href={linkShare.url}
             target="_blank"
             rel="noreferrer"
-            className={`inline-flex rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${buttonClass}`}
+            className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
           >
             {buttonLabel}
           </a>
@@ -287,7 +287,7 @@ function MessageLinkCard({
             type="button"
             onClick={compareAction}
             disabled={compareLoading}
-            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
@@ -297,7 +297,7 @@ function MessageLinkCard({
             type="button"
             onClick={followUpAction}
             disabled={followUpLoading}
-            className="inline-flex rounded-md border border-amber-300/30 bg-amber-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:border-amber-200/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-amber-300/30 bg-amber-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-amber-100 transition-colors hover:border-amber-200/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {followUpLoading ? 'Sending...' : followUpLabel}
           </button>
@@ -328,23 +328,23 @@ function MessageChallengeCard({
   const hasLifecycleStatus = !!String(challengeCard.statusKind || '').trim();
 
   return (
-    <div className="w-full rounded-[1.35rem] border border-piu-border/65 bg-piu-card/80 px-3.5 py-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.2)]">
-      <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-amber-200/85">{badge}</p>
-      <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
-      {subtitle ? <p className="mt-1 text-xs text-gray-300">{subtitle}</p> : null}
+    <div className="w-full rounded-[1.2rem] border border-piu-border/65 bg-piu-card/80 px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+      <p className="text-[9px] font-display font-bold uppercase tracking-[0.18em] text-amber-200/85">{badge}</p>
+      <p className="mt-1 text-[15px] font-display font-black leading-tight text-white">{title}</p>
+      {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
       {hasLifecycleStatus ? (
-        <div className="mt-3">
+        <div className="mt-2.5">
           <CompareStatusPill statusKind={challengeCard.statusKind} statusLabel={challengeCard.statusLabel} />
         </div>
       ) : null}
       {targetLabel ? (
-        <p className="mt-3 inline-flex rounded-md border border-amber-300/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-display font-bold text-amber-100">
+        <p className="mt-2.5 inline-flex rounded-md border border-amber-300/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold text-amber-100">
           {targetLabel}
         </p>
       ) : null}
-      {detailLabel ? <p className="mt-2 text-xs text-gray-300">{detailLabel}</p> : null}
+      {detailLabel ? <p className="mt-2 text-[12px] leading-5 text-gray-300">{detailLabel}</p> : null}
       {responseStatus ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
           <CompareStatusPill
             statusKind={responseStatus.statusKind}
             statusLabel={responseStatus.statusLabel}
@@ -352,10 +352,10 @@ function MessageChallengeCard({
           />
         </div>
       ) : null}
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
         <Link
           to={challengeCard.path}
-          className="inline-flex rounded-md border border-piu-border/70 bg-piu-dark/45 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:border-amber-300/35 hover:text-white"
+          className="inline-flex rounded-md border border-piu-border/70 bg-piu-dark/45 px-2.5 py-1.5 text-[10px] font-display font-bold text-amber-100 transition-colors hover:border-amber-300/35 hover:text-white"
         >
           {buttonLabel}
         </Link>
@@ -364,7 +364,7 @@ function MessageChallengeCard({
             type="button"
             onClick={compareAction}
             disabled={compareLoading}
-            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
@@ -374,7 +374,7 @@ function MessageChallengeCard({
             type="button"
             onClick={lifecycleAction}
             disabled={lifecycleLoading}
-            className="inline-flex rounded-md border border-sky-300/35 bg-sky-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-sky-100 transition-colors hover:border-sky-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-sky-300/35 bg-sky-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-sky-100 transition-colors hover:border-sky-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {lifecycleLoading ? 'Sending...' : lifecycleLabel}
           </button>
@@ -409,8 +409,8 @@ function MessageBubble({
   const senderName = message?.sender?.username || 'Unknown';
   const shareLabel = getMessageLabel(message);
   const bubbleClass = isAttachmentOnly
-    ? 'w-full max-w-[21.5rem] sm:max-w-[24rem]'
-    : `w-fit max-w-[85%] sm:max-w-[32rem] rounded-[1.4rem] border ${bubbleTone} px-3 py-2.5 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
+    ? 'w-full max-w-[19.25rem] sm:max-w-[22.5rem]'
+    : `w-fit max-w-[81%] sm:max-w-[30rem] rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
 
   return (
     <div className={`flex flex-col ${alignmentClass}`}>
@@ -421,7 +421,7 @@ function MessageBubble({
       ) : null}
       <div className={bubbleClass}>
         {hasContent ? (
-          <div className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-100">
+          <div className="whitespace-pre-wrap break-words text-sm leading-5 text-gray-100">
             {renderFormattedText(message.content)}
           </div>
         ) : null}
@@ -461,7 +461,7 @@ function MessageBubble({
           </div>
         ) : null}
       </div>
-      <p className="mt-1 px-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
+      <p className="mt-0.5 px-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
     </div>
   );
 }
@@ -590,8 +590,8 @@ function ConversationView({
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
         <div
-          className="z-10 shrink-0 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/92 px-4 pb-3 pt-4 backdrop-blur-md sm:px-5 sm:pt-4"
-          style={{ paddingTop: 'max(env(safe-area-inset-top), 0.9rem)' }}
+          className="z-10 shrink-0 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/92 px-4 pb-2.5 pt-3.5 backdrop-blur-md sm:px-5 sm:pt-4"
+          style={{ paddingTop: 'max(env(safe-area-inset-top), 0.75rem)' }}
         >
           <div className="flex min-w-0 items-center gap-3">
             <Link
@@ -625,7 +625,7 @@ function ConversationView({
             ) : null}
         </div>
 
-        <div ref={messagesViewportRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div ref={messagesViewportRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
           {loadingMessages && messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading conversation...</div>
           ) : messageError ? (
@@ -645,7 +645,7 @@ function ConversationView({
           ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet. Say hello.</div>
           ) : (
-            <div className="space-y-4 pb-2">
+            <div className="space-y-3 pb-1">
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}
@@ -670,8 +670,8 @@ function ConversationView({
         </div>
 
         <div
-          className="z-10 shrink-0 border-t border-piu-border/40 bg-piu-card/94 px-4 pb-3 pt-3 backdrop-blur-md sm:px-5"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+          className="z-10 shrink-0 border-t border-piu-border/40 bg-piu-card/94 px-3 pb-2.5 pt-2.5 backdrop-blur-md sm:px-5 sm:pb-3 sm:pt-3"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.6rem)' }}
         >
           {actionError ? <p className="mb-3 text-sm text-red-300">{actionError}</p> : null}
           <div className="flex items-end gap-2.5">
