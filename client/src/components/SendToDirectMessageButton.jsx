@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getOrCreateDirectConversation } from '../utils/api';
+import ActionIconButton from './ActionIconButton';
 import UserPickerDialog from './UserPickerDialog';
 
 export default function SendToDirectMessageButton({
@@ -47,9 +48,6 @@ export default function SendToDirectMessageButton({
     ? 'border-amber-400/30 bg-amber-500/10 text-amber-100'
     : 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100';
   const isIcon = variant === 'icon';
-  const iconToneClassName = tone === 'amber'
-    ? 'text-amber-200 hover:bg-amber-500/10 hover:text-amber-100'
-    : 'text-gray-400 hover:bg-piu-dark/50 hover:text-white';
   const selectLabel = tone === 'amber' ? 'Challenge' : 'Send';
 
   const handleSelect = async (selectedUser) => {
@@ -66,36 +64,41 @@ export default function SendToDirectMessageButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          setPickerOpen(true);
-        }}
-        className={
-          isIcon
-            ? `flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-display font-bold transition-colors ${iconToneClassName} ${className}`.trim()
-            : `rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors hover:text-white ${toneClassName} ${className}`.trim()
-        }
-        aria-label={title}
-        title={title}
-      >
-        {isIcon ? (
-          <>
-            {tone === 'amber' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l1.7 1.7 3.8-4.2" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h6m-9 8l-3-3V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 3z" />
-              </svg>
-            )}
-          </>
-        ) : (
-          label
-        )}
-      </button>
+      {isIcon ? (
+        <ActionIconButton
+          onClick={() => {
+            setPickerOpen(true);
+          }}
+          title={title}
+          ariaLabel={title}
+          tone={tone === 'amber' ? 'amber' : 'neutral'}
+          className={className}
+        >
+          {tone === 'amber' ? (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 16v-2m6-6h2M4 12H2m14.243 4.243 1.414 1.414M6.343 6.343 4.93 4.93m11.313 0-1.414 1.413M6.343 17.657l-1.414 1.414" />
+              <circle cx="12" cy="12" r="4.75" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.7 8.7 0 0 1-3.08-.56L3 21l1.64-5.76A8.46 8.46 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="m9.5 11.5 2 2 4-4" />
+            </svg>
+          )}
+        </ActionIconButton>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setPickerOpen(true);
+          }}
+          className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors hover:text-white ${toneClassName} ${className}`.trim()}
+          aria-label={title}
+          title={title}
+        >
+          {label}
+        </button>
+      )}
 
       <UserPickerDialog
         open={pickerOpen}

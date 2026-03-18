@@ -10,6 +10,7 @@ import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJac
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
+import ActionIconButton from '../components/ActionIconButton';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
@@ -461,14 +462,16 @@ function ItemCommentSection({ itemId, commentCount: initialCount, commentType, g
 
   return (
     <>
-      <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-400 hover:text-white hover:bg-piu-dark/50 transition-colors"
+      <ActionIconButton
+        onClick={() => setOpen(!open)}
+        title={open ? 'Hide comments' : 'Show comments'}
+        ariaLabel={open ? 'Hide comments' : 'Show comments'}
+        count={count}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7 10.5h10M7 14h6m8 4-3.8-1.3a9.2 9.2 0 0 1-3.2.55C7.925 17.25 4 14.22 4 10.5S7.925 3.75 12.75 3.75 21.5 6.78 21.5 10.5c0 1.75-.87 3.34-2.3 4.52L21 18Z" />
         </svg>
-        <span>{count > 0 ? count : ''}</span>
-      </button>
+      </ActionIconButton>
       {open && (
         <div className="w-full order-last mt-2 border-l-2 border-piu-border/30 pl-3 space-y-2">
           {comments.map(c => (
