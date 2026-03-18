@@ -11,6 +11,7 @@ import SessionSummaryCard from './SessionSummaryCard';
 import SessionShareCard from './SessionShareCard';
 import LiveSessionCard from './LiveSessionCard';
 import SessionPlanCard from './SessionPlanCard';
+import SendToDirectMessageButton from './SendToDirectMessageButton';
 import DojoCatStickerPicker from './DojoCatStickerPicker';
 import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
@@ -1022,6 +1023,13 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
               share={currentShare}
               title={currentShare?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'}
               className="mb-3"
+              actions={user ? (
+                <SendToDirectMessageButton
+                  share={currentShare}
+                  title={currentShare?.shareType === 'hour_of_power' ? 'Send Hour of Power recap' : 'Send session share'}
+                  description="Choose a player to send this recap to."
+                />
+              ) : null}
             />
           )}
           {currentLive && (

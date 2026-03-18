@@ -7,6 +7,7 @@ import { getCountryFlag } from '../components/PlayerRegistration';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import Over20Top100Modal from '../components/Over20Top100Modal';
 import SessionShareCard from '../components/SessionShareCard';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { getProfilePath } from '../utils/profile';
 import {
   getJacketMap,
@@ -382,6 +383,30 @@ function HourOfPowerDetailModal({ attempt, share, loading, error, onRetry, onClo
   const avatar = getAvatarUrl(attempt.avatar);
   const playerName = String(attempt.username || 'Player').trim() || 'Player';
   const modalTitle = String(attempt.title || '').trim() || `${playerName} Hour of Power`;
+  const cardActions = share ? (
+    <>
+      {attempt.live_url ? (
+        <Link
+          to={attempt.live_url}
+          className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+        >
+          Open Session
+        </Link>
+      ) : null}
+      <SendToDirectMessageButton
+        share={share}
+        title="Send Hour of Power recap"
+        description="Choose a player to send this Hour of Power recap to."
+      />
+    </>
+  ) : (attempt.live_url ? (
+    <Link
+      to={attempt.live_url}
+      className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+    >
+      Open Session
+    </Link>
+  ) : null);
 
   return (
     <div
@@ -448,14 +473,7 @@ function HourOfPowerDetailModal({ attempt, share, loading, error, onRetry, onClo
             <SessionShareCard
               share={share}
               title="Hour of Power Recap"
-              actions={attempt.live_url ? (
-                <Link
-                  to={attempt.live_url}
-                  className="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
-                >
-                  Open Session
-                </Link>
-              ) : null}
+              actions={cardActions}
             />
           ) : (
             <div className="rounded-xl border border-piu-border/50 bg-piu-card/60 px-4 py-8 text-center text-sm text-gray-500">

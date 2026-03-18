@@ -14,6 +14,7 @@ import {
   getUserPosts, getFollowers, getFollowing,
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
   getProfileLiveSessions, updateLiveSessionProfileVisibility, deleteLiveSession,
+  getOrCreateDirectConversation,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -1481,6 +1482,18 @@ export default function ProfilePage() {
     }
   };
 
+  const handleMessage = async () => {
+    if (!authUser || !profileId || profileId === authUser.id) return;
+    try {
+      const payload = await getOrCreateDirectConversation(profileId);
+      if (payload?.conversation?.id) {
+        navigate(`/messages/${payload.conversation.id}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const updateActivityPrefs = async (nextPrefs) => {
     if (!authUser || !profileId || isOwner || activityNotifyPrefs.saving) return;
 
@@ -2416,6 +2429,12 @@ export default function ProfilePage() {
     <div className="mt-2.5 flex justify-start sm:justify-end" ref={notifyMenuRef}>
       <div className="relative w-fit">
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleMessage}
+            className="px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold border border-cyan-400/35 bg-cyan-500/10 text-cyan-100 transition-colors hover:text-white"
+          >
+            Message
+          </button>
           <button
             onClick={handleFollow}
             disabled={followLoading}

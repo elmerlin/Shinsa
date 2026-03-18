@@ -9,6 +9,7 @@ import CommunityBadge from '../components/CommunityBadge';
 import { CommunityTagList } from '../components/CommunityTag';
 import SessionSummaryCard from '../components/SessionSummaryCard';
 import SessionShareCard from '../components/SessionShareCard';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import { ImageGrid, Lightbox, YouTubeEmbed, ShareButton, timeAgo as postCardTimeAgo } from '../components/PostCard';
 import PumpersModal from '../components/PumpersModal';
@@ -1858,6 +1859,11 @@ function PostsTab({
               className="mt-2"
               actions={(
                 <>
+                  <SendToDirectMessageButton
+                    share={postSharePreview}
+                    title="Send session share"
+                    description="Choose a player to send this session share to."
+                  />
                   <button
                     type="button"
                     onClick={() => onGeneratePostShare({ reloadSession: false })}
@@ -2234,7 +2240,18 @@ function CommunityPostCard({
         <SessionSummaryCard summary={postSummary} title="Session Summary" className="mb-3" />
       )}
       {postShare && (
-        <SessionShareCard share={postShare} title="Session Share" className="mb-3" />
+        <SessionShareCard
+          share={postShare}
+          title="Session Share"
+          className="mb-3"
+          actions={user ? (
+            <SendToDirectMessageButton
+              share={postShare}
+              title="Send session share"
+              description="Choose a player to send this session share to."
+            />
+          ) : null}
+        />
       )}
 
       {/* YouTube */}

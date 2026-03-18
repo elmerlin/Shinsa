@@ -9,6 +9,7 @@ import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import SessionSummaryCard from '../components/SessionSummaryCard';
 import SessionShareCard from '../components/SessionShareCard';
 import SessionPlanCard from '../components/SessionPlanCard';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { calculateClearRating } from '../utils/clearRating';
 import { serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
 import { serializeSessionShareMarker } from '../utils/sessionShareMarker';
@@ -1017,6 +1018,11 @@ function PostComposer({ onPost, initialPlan = null, onPlanCleared }) {
           className="mb-3"
           actions={(
             <>
+              <SendToDirectMessageButton
+                share={sharePreview}
+                title="Send session share"
+                description="Choose a player to send this session share to."
+              />
               <button
                 type="button"
                 onClick={() => handleGenerateShare({ reloadSession: false })}

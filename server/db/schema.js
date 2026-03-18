@@ -1436,6 +1436,41 @@ function initializeDb() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL DEFAULT 'direct',
+      direct_key TEXT NOT NULL UNIQUE,
+      created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      title TEXT DEFAULT '',
+      last_message_id TEXT DEFAULT '',
+      last_message_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_members (
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TEXT DEFAULT (datetime('now')),
+      last_read_at TEXT DEFAULT '',
+      is_hidden INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (conversation_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_messages (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      sender_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      message_type TEXT NOT NULL DEFAULT 'text',
+      content TEXT NOT NULL DEFAULT '',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT '',
+      deleted_at TEXT DEFAULT ''
+    );
+
     CREATE TABLE IF NOT EXISTS auth_qr_login_challenges (
       id TEXT PRIMARY KEY,
       claim_token TEXT NOT NULL UNIQUE,
@@ -1543,6 +1578,10 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_activity_notif_target ON user_activity_notification_subscriptions(target_user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON user_push_subscriptions(user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON user_push_subscriptions(endpoint);
+    CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations(last_message_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_conversation_members_user ON conversation_members(user_id, updated_at);
+    CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation_time ON conversation_messages(conversation_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_conversation_messages_sender ON conversation_messages(sender_user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_status ON auth_qr_login_challenges(status, expires_at);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_approved_user ON auth_qr_login_challenges(approved_user_id, created_at);
 

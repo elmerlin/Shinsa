@@ -41,6 +41,7 @@ import TiersPage from './pages/TiersPage';
 import SkillsPage from './pages/SkillsPage';
 import SkillChartsPage from './pages/SkillChartsPage';
 import ChatPage from './pages/ChatPage';
+import MessagesPage from './pages/MessagesPage';
 import FunPage from './pages/FunPage';
 import OptimisePage from './pages/OptimisePage';
 import ChangeLogPage from './pages/ChangeLogPage';
@@ -1265,6 +1266,16 @@ export default function App() {
             <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
+                <Link
+                  to="/messages"
+                  className="relative p-1.5 text-gray-400 hover:text-white transition-colors"
+                  aria-label="Messages"
+                  title="Messages"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-7 7l-3-3V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 3z" />
+                  </svg>
+                </Link>
                 <NotificationBell />
                 <UserMenu />
               </div>
@@ -1324,6 +1335,8 @@ export default function App() {
           <Route path="/fun" element={<FunPage />} />
           <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
           <Route path="/chat" element={<ChatPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/messages/:conversationId" element={<MessagesPage />} />
           <Route path="/changelog" element={<ChangeLogPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
           <Route path="/membership" element={<MembershipPage />} />

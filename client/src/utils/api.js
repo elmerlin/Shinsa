@@ -607,6 +607,21 @@ export const getPushPublicKey = () => request(`/auth/push/public-key?_=${Date.no
 export const savePushSubscription = (subscription) => request('/auth/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription }) });
 export const removePushSubscription = (endpoint) => request('/auth/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
 
+// Direct Messages
+export const getMessageConversations = () => request('/messages/conversations');
+export const getMessageConversation = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}`);
+export const markMessageConversationRead = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/read`, {
+  method: 'POST',
+});
+export const sendConversationMessage = (conversationId, data) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
+  method: 'POST',
+  body: JSON.stringify(data),
+});
+export const getOrCreateDirectConversation = (userId, data = null) => request(`/messages/direct/${encodeURIComponent(userId)}`, {
+  method: 'POST',
+  body: JSON.stringify(data || {}),
+});
+
 // Social — Follows
 export const followUser = (userId) => request(`/social/follow/${userId}`, { method: 'POST' });
 export const unfollowUser = (userId) => request(`/social/follow/${userId}`, { method: 'DELETE' });
