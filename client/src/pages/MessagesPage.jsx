@@ -144,6 +144,32 @@ function appendStickerToken(value, token) {
   return `${current}${needsSpace ? ' ' : ''}${token} `;
 }
 
+function getMessageSortTime(message) {
+  const raw = String(message?.created_at || message?.updated_at || '').trim();
+  if (!raw) return 0;
+  const normalized = raw.includes('T') || raw.endsWith('Z')
+    ? raw
+    : `${raw.replace(' ', 'T')}Z`;
+  const parsed = Date.parse(normalized);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function normalizeConversationMessages(items) {
+  if (!Array.isArray(items)) return [];
+  return [...items].sort((left, right) => {
+    const timeDiff = getMessageSortTime(left) - getMessageSortTime(right);
+    if (timeDiff !== 0) return timeDiff;
+
+    const leftId = Number.parseInt(left?.id, 10);
+    const rightId = Number.parseInt(right?.id, 10);
+    if (Number.isFinite(leftId) && Number.isFinite(rightId) && leftId !== rightId) {
+      return leftId - rightId;
+    }
+
+    return String(left?.id || '').localeCompare(String(right?.id || ''));
+  });
+}
+
 function buildNoteThreadPayload(note) {
   if (!note?.thread_key) return null;
   return {
@@ -929,6 +955,7 @@ export default function MessagesPage() {
   const messagesViewportRef = useRef(null);
   const draftInputRef = useRef(null);
   const lastAutoScrollKeyRef = useRef('');
+  const initialConversationScrollRef = useRef('');
   const chartKeyMapRef = useRef(null);
   const chartKeyMapPromiseRef = useRef(null);
 
@@ -1249,7 +1276,7 @@ export default function MessagesPage() {
     try {
       const payload = await getMessageConversation(targetConversationId);
       setActiveConversation(payload?.conversation || null);
-      setMessages(Array.isArray(payload?.messages) ? payload.messages : []);
+      setMessages(normalizeConversationMessages(payload?.messages));
       setMessageError('');
       refreshMessageUnread();
     } catch (err) {
@@ -1303,6 +1330,8 @@ export default function MessagesPage() {
     setRematchingMessageId('');
     setAcceptingMessageId('');
     setExpiringMessageId('');
+    lastAutoScrollKeyRef.current = '';
+    initialConversationScrollRef.current = '';
   }, [conversationId]);
 
   useEffect(() => {
@@ -1336,6 +1365,28 @@ export default function MessagesPage() {
     input.style.height = `${nextHeight}px`;
     input.style.overflowY = input.scrollHeight > 160 ? 'auto' : 'hidden';
   }, [draft, conversationId]);
+
+  useEffect(() => {
+    if (!conversationId || loadingMessages || messages.length === 0) return;
+    if (initialConversationScrollRef.current === conversationId) return;
+
+    initialConversationScrollRef.current = conversationId;
+    const lastMessage = messages[messages.length - 1] || null;
+    lastAutoScrollKeyRef.current = `${conversationId}:${messages.length}:${lastMessage?.id || 'empty'}`;
+
+    const scrollToLatest = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+      const viewport = messagesViewportRef.current;
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
+    };
+
+    window.requestAnimationFrame(() => {
+      scrollToLatest();
+      window.requestAnimationFrame(scrollToLatest);
+    });
+  }, [conversationId, loadingMessages, messages]);
 
   useEffect(() => {
     const viewport = messagesViewportRef.current;

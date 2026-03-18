@@ -3,10 +3,18 @@ import { Link } from 'react-router-dom';
 import { getAvatarUrl } from './AvatarPicker';
 import DojoCatStickerPicker from './DojoCatStickerPicker';
 import ScoreSnapshotCard from './ScoreSnapshotCard';
+import SessionSummaryCard from './SessionSummaryCard';
+import SessionShareCard from './SessionShareCard';
+import LiveSessionCard from './LiveSessionCard';
+import SessionPlanCard from './SessionPlanCard';
 import StickerAsset from './StickerAsset';
 import { useAuth } from '../contexts/AuthContext';
 import { renderFormattedText } from '../utils/formatText';
 import { getStickerEmoji } from '../utils/stickers';
+import { splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
+import { splitSessionShareContent } from '../utils/sessionShareMarker';
+import { mergeLiveSessionSummary, splitLiveSessionContent } from '../utils/liveSessionMarker';
+import { splitSessionPlanContent } from '../utils/sessionPlanMarker';
 
 function formatRelativeTime(value) {
   const raw = String(value || '').trim();
@@ -171,6 +179,18 @@ function HighlightCircle({
 function StoryCard({ story }) {
   if (!story) return null;
 
+  const rawStoryContent = String(story.post?.content || story.caption || '').trim();
+  const summarySplit = splitSessionSummaryContent(rawStoryContent);
+  const shareSplit = splitSessionShareContent(summarySplit.text || '');
+  const liveSplit = splitLiveSessionContent(shareSplit.text || '');
+  const planSplit = splitSessionPlanContent(liveSplit.text || '');
+  const summary = summarySplit.summary || null;
+  const share = shareSplit.share || null;
+  const live = mergeLiveSessionSummary(liveSplit.live, story.post?.live_summary_metrics || null);
+  const plan = planSplit.plan || null;
+  const visibleCaption = String(planSplit.text || '').trim();
+  const hasEmbeddedCard = !!(summary || share || live || plan);
+
   if (story.snapshot) {
     return (
       <div className="w-full max-w-sm">
@@ -194,6 +214,11 @@ function StoryCard({ story }) {
       <div className="w-full max-w-sm overflow-hidden rounded-[1.8rem] border border-white/10 bg-black/35 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
         {story.media_url ? (
           <img src={story.media_url} alt="" className="h-[24rem] w-full object-cover" />
+        ) : hasEmbeddedCard ? (
+          <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_45%),linear-gradient(160deg,#0a101b,#13192a)] px-5 py-5 text-white">
+            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">{story.title || 'Post'}</p>
+            <p className="mt-2 font-display text-xl font-black leading-tight">Shared from the feed</p>
+          </div>
         ) : (
           <div className="flex h-[20rem] items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_45%),linear-gradient(160deg,#0a101b,#13192a)] px-8 text-center text-white">
             <p className="font-display text-3xl font-black">New post</p>
@@ -202,7 +227,11 @@ function StoryCard({ story }) {
         <div className="space-y-3 px-4 py-4">
           <div>
             <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">{story.title || 'Post'}</p>
-            {story.caption ? <div className="mt-2 text-sm leading-6 text-gray-100">{renderFormattedText(story.caption)}</div> : null}
+            {summary ? <SessionSummaryCard summary={summary} title="Session Summary" className="mt-3" /> : null}
+            {share ? <SessionShareCard share={share} title={share?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'} className="mt-3" /> : null}
+            {live ? <LiveSessionCard summary={live} title="Shinsa Live Recap" className="mt-3" /> : null}
+            {plan ? <SessionPlanCard plan={plan} className="mt-3" defaultScoringExpanded={false} defaultPassingExpanded={false} /> : null}
+            {visibleCaption ? <div className="mt-2 text-sm leading-6 text-gray-100">{renderFormattedText(visibleCaption)}</div> : null}
           </div>
           {story.post?.youtube_url ? (
             <p className="text-xs text-cyan-100/80">Includes a linked video.</p>
@@ -273,7 +302,7 @@ export function StoryViewerModal({ open, user, stories = [], loading = false, er
     <OverlayShell open={open} onClose={onClose} padded={false}>
       <div className="relative min-h-[75vh] overflow-hidden rounded-t-[1.9rem] sm:rounded-[2rem]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,#070b13,#0d1320_42%,#080b12)]" />
-        <div className="relative z-10 flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
+        <div className="relative z-30 flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
           <div className="min-w-0 flex-1">
             <div className="mb-3 flex gap-1.5">
               {(stories.length > 0 ? stories : [null]).map((entry, entryIndex) => (
@@ -293,7 +322,7 @@ export function StoryViewerModal({ open, user, stories = [], loading = false, er
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/8 text-lg text-white hover:bg-white/12"
+            className="relative z-30 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/8 text-lg text-white hover:bg-white/12"
           >
             x
           </button>
@@ -316,13 +345,13 @@ export function StoryViewerModal({ open, user, stories = [], loading = false, er
             <button
               type="button"
               onClick={() => canGoBack && setIndex((current) => Math.max(0, current - 1))}
-              className="absolute inset-y-0 left-0 z-20 w-1/2"
+              className="absolute bottom-0 left-0 top-24 z-20 w-1/2"
               aria-label="Previous story"
             />
             <button
               type="button"
               onClick={() => canGoForward && setIndex((current) => Math.min(stories.length - 1, current + 1))}
-              className="absolute inset-y-0 right-0 z-20 w-1/2"
+              className="absolute bottom-0 right-0 top-24 z-20 w-1/2"
               aria-label="Next story"
             />
           </>
