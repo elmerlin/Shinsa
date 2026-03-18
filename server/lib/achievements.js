@@ -414,9 +414,10 @@ function getTotalPumpsForUser(db, userId) {
           WHEN lsm.message_type IN ('play', 'request_fulfilled') THEN COALESCE(ls.host_user_id, '')
           ELSE ''
         END = ?
-      )
+      ) +
+      (SELECT COUNT(*) FROM user_story_pumps usp WHERE usp.owner_user_id = ?)
       AS total
-  `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId);
+  `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId, userId);
 
   return parseInt(result?.total, 10) || 0;
 }

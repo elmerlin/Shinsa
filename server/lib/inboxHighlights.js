@@ -817,10 +817,22 @@ function getManualStoryItems(db, user) {
   }).filter(Boolean);
 }
 
+function getHiddenStoryIdSet(db, userId) {
+  if (!userId) return new Set();
+  const rows = db.prepare(`
+    SELECT story_id
+    FROM user_story_hidden_items
+    WHERE owner_user_id = ?
+  `).all(userId);
+  return new Set(rows.map((row) => String(row?.story_id || '').trim()).filter(Boolean));
+}
+
 function getStoryItemsForUser(db, user) {
+  const hiddenIds = getHiddenStoryIdSet(db, user?.id);
   const manualItems = getManualStoryItems(db, user);
   const autoItems = getRecentAutoStoryItems(db, user);
   return [...autoItems, ...manualItems]
+    .filter((item) => item?.id && !hiddenIds.has(String(item.id)))
     .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
 }
 

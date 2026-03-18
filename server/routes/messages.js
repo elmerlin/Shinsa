@@ -22,6 +22,7 @@ const {
   normalizeNotePayload,
   normalizeStoryUser,
   normalizeText,
+  parseJsonObject,
   sanitizeAbsoluteUrl,
   sanitizeRelativePath,
   sanitizeStickerTokens,
@@ -157,6 +158,194 @@ function isFollowingOrSelf(db, viewerUserId, targetUserId) {
     WHERE follower_id = ? AND following_id = ?
     LIMIT 1
   `).get(viewer, target);
+}
+
+function getStoryBundleForUser(db, userId) {
+  const user = getHighlightUserRow(db, userId);
+  if (!user) return null;
+  const normalizedUser = {
+    ...user,
+    avatar: normalizeStoryUser(user, 72)?.avatar || '',
+  };
+  return {
+    user: normalizedUser,
+    stories: getStoryItemsForUser(db, normalizedUser),
+  };
+}
+
+function findStoryForUser(db, userId, storyId) {
+  const bundle = getStoryBundleForUser(db, userId);
+  if (!bundle) return null;
+  const story = bundle.stories.find((entry) => String(entry?.id || '') === String(storyId || '').trim()) || null;
+  return story ? { ...bundle, story } : null;
+}
+
+function hideStoryItem(db, ownerUserId, storyId, hiddenAt, reason = 'hidden') {
+  db.prepare(`
+    INSERT INTO user_story_hidden_items (id, owner_user_id, story_id, hidden_at, reason)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(owner_user_id, story_id) DO UPDATE SET
+      hidden_at = excluded.hidden_at,
+      reason = excluded.reason
+  `).run(uuidv4(), ownerUserId, storyId, hiddenAt, reason);
+}
+
+function listStoryComments(db, ownerUserId, storyId, limit = 0) {
+  const query = `
+    SELECT
+      c.id,
+      c.content,
+      c.created_at,
+      u.id AS user_id,
+      u.username,
+      u.avatar,
+      u.avatar_v
+    FROM user_story_comments c
+    JOIN users u ON u.id = c.comment_user_id
+    WHERE c.owner_user_id = ?
+      AND c.story_id = ?
+    ORDER BY datetime(c.created_at) DESC, c.id DESC
+    ${limit > 0 ? `LIMIT ${Math.max(1, parseInt(limit, 10) || 0)}` : ''}
+  `;
+  const rows = db.prepare(query).all(ownerUserId, storyId);
+  return rows
+    .map((row) => ({
+      id: row.id,
+      content: String(row.content || ''),
+      created_at: row.created_at || '',
+      user: normalizeStoryUser({
+        id: row.user_id,
+        username: row.username,
+        avatar: row.avatar,
+        avatar_v: row.avatar_v,
+      }, 40),
+    }))
+    .reverse();
+}
+
+function getStoryCounts(db, ownerUserId, storyId, viewerUserId = '') {
+  const counts = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM user_story_views WHERE owner_user_id = ? AND story_id = ?) AS view_count,
+      (SELECT COUNT(*) FROM user_story_pumps WHERE owner_user_id = ? AND story_id = ?) AS pump_count,
+      (SELECT COUNT(*) FROM user_story_comments WHERE owner_user_id = ? AND story_id = ?) AS comment_count
+  `).get(ownerUserId, storyId, ownerUserId, storyId, ownerUserId, storyId);
+
+  const userPumped = !!viewerUserId && !!db.prepare(`
+    SELECT 1
+    FROM user_story_pumps
+    WHERE owner_user_id = ? AND story_id = ? AND pumper_user_id = ?
+    LIMIT 1
+  `).get(ownerUserId, storyId, viewerUserId);
+
+  return {
+    view_count: parseInt(counts?.view_count, 10) || 0,
+    pump_count: parseInt(counts?.pump_count, 10) || 0,
+    comment_count: parseInt(counts?.comment_count, 10) || 0,
+    user_pumped: userPumped,
+  };
+}
+
+function buildStoryEngagementPayload(db, ownerUserId, storyId, viewerUserId = '') {
+  return {
+    ...getStoryCounts(db, ownerUserId, storyId, viewerUserId),
+    preview_comments: listStoryComments(db, ownerUserId, storyId, 6).slice(-3),
+  };
+}
+
+function getStoryViewerList(db, ownerUserId, storyId) {
+  return db.prepare(`
+    SELECT
+      v.viewer_user_id,
+      v.viewed_at,
+      u.username,
+      u.avatar,
+      u.avatar_v
+    FROM user_story_views v
+    JOIN users u ON u.id = v.viewer_user_id
+    WHERE v.owner_user_id = ?
+      AND v.story_id = ?
+    ORDER BY datetime(v.viewed_at) DESC, v.id DESC
+  `).all(ownerUserId, storyId).map((row) => ({
+    viewed_at: row.viewed_at || '',
+    user: normalizeStoryUser({
+      id: row.viewer_user_id,
+      username: row.username,
+      avatar: row.avatar,
+      avatar_v: row.avatar_v,
+    }, 44),
+  }));
+}
+
+function createStoryArchive(db, ownerUserId, story, archivedAt) {
+  db.prepare(`
+    INSERT INTO user_story_archives (id, owner_user_id, story_id, story_snapshot_json, archived_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(owner_user_id, story_id) DO UPDATE SET
+      story_snapshot_json = excluded.story_snapshot_json,
+      archived_at = excluded.archived_at
+  `).run(uuidv4(), ownerUserId, story.id, JSON.stringify(story), archivedAt);
+}
+
+function getArchivedStories(db, ownerUserId) {
+  return db.prepare(`
+    SELECT story_id, story_snapshot_json, archived_at
+    FROM user_story_archives
+    WHERE owner_user_id = ?
+    ORDER BY datetime(archived_at) DESC, id DESC
+    LIMIT 100
+  `).all(ownerUserId).map((row) => {
+    const parsed = parseJsonObject(row.story_snapshot_json, {});
+    return {
+      archived_at: row.archived_at || '',
+      story: parsed && typeof parsed === 'object' ? parsed : null,
+    };
+  }).filter((entry) => entry.story?.id);
+}
+
+function deleteManualStoryRowIfPresent(db, ownerUserId, storyId, deletedAt) {
+  const manualId = String(storyId || '').startsWith('story:') ? String(storyId).slice(6) : '';
+  if (!manualId) return false;
+  const result = db.prepare(`
+    UPDATE user_story_items
+    SET deleted_at = ?
+    WHERE id = ?
+      AND user_id = ?
+      AND COALESCE(deleted_at, '') = ''
+  `).run(deletedAt, manualId, ownerUserId);
+  return result.changes > 0;
+}
+
+function buildStorySharePayload(story, ownerUser) {
+  const fallbackPath = sanitizeRelativePath(`/profile/${encodeURIComponent(String(ownerUser?.id || ''))}`);
+  const kind = String(
+    story?.type === 'score_roundup'
+      ? (story?.entry_kind === 'clear' ? 'clear' : 'upscore')
+      : story?.type === 'live_session'
+        ? 'live_session'
+        : story?.type === 'hour_of_power'
+          ? 'hour_of_power'
+          : story?.source?.kind || 'story'
+  ).trim().toLowerCase() || 'story';
+  const linkPath = sanitizeRelativePath(story?.link?.path || fallbackPath);
+  const linkUrl = sanitizeAbsoluteUrl(story?.link?.url || '');
+  return {
+    kind,
+    path: linkPath || fallbackPath || '/messages',
+    url: linkUrl,
+    title: String(story?.title || `${ownerUser?.username || 'Player'} story`).trim().slice(0, 160),
+    subtitle: String(story?.subtitle || story?.caption || '').trim().slice(0, 220),
+    buttonLabel: String(story?.link?.label || 'Open story').trim().slice(0, 48),
+    songTitle: story?.snapshot?.song_title || story?.scores?.[0]?.song_title || '',
+    mode: story?.snapshot?.mode || story?.scores?.[0]?.mode || '',
+    level: parseInt(story?.snapshot?.level ?? story?.scores?.[0]?.level, 10) || 0,
+    score: parseInt(story?.snapshot?.score ?? story?.scores?.[0]?.score, 10) || 0,
+    grade: String(story?.snapshot?.grade || story?.scores?.[0]?.grade || '').trim(),
+    jacketUrl: String(story?.snapshot?.jacket_url || story?.scores?.[0]?.jacket_url || '').trim(),
+    playerName: ownerUser?.username || '',
+    playerAvatar: ownerUser?.avatar || '',
+    contextLabel: 'Story',
+  };
 }
 
 function getConversationMember(db, conversationId, userId) {
@@ -375,7 +564,11 @@ router.get('/highlights/:userId/story', requireAuth, (req, res) => {
     stories: getStoryItemsForUser(db, {
       ...user,
       avatar: normalizeStoryUser(user, 72)?.avatar || '',
-    }),
+    }).map((story) => ({
+      ...story,
+      engagement: buildStoryEngagementPayload(db, targetUserId, story.id, req.user.id),
+    })),
+    is_owner: String(req.user.id || '').trim() === targetUserId,
   });
 });
 
@@ -530,6 +723,207 @@ router.post('/highlights/story', requireAuth, highlightUpload.single('image'), a
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to add story item' });
   }
+});
+
+router.get('/highlights/archive', requireAuth, (req, res) => {
+  const db = getDb();
+  res.json({
+    stories: getArchivedStories(db, req.user.id),
+  });
+});
+
+router.post('/highlights/:userId/story/:storyId/view', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (!isFollowingOrSelf(db, req.user.id, ownerUserId)) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  if (String(req.user.id || '').trim() !== ownerUserId) {
+    db.prepare(`
+      INSERT INTO user_story_views (id, owner_user_id, story_id, viewer_user_id, viewed_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(owner_user_id, story_id, viewer_user_id) DO UPDATE SET
+        viewed_at = excluded.viewed_at
+    `).run(uuidv4(), ownerUserId, storyId, req.user.id, toInboxSqliteDateTime(new Date()));
+  }
+
+  res.json({
+    engagement: buildStoryEngagementPayload(db, ownerUserId, storyId, req.user.id),
+  });
+});
+
+router.get('/highlights/:userId/story/:storyId/engagement', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (!isFollowingOrSelf(db, req.user.id, ownerUserId)) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+  res.json({
+    engagement: buildStoryEngagementPayload(db, ownerUserId, storyId, req.user.id),
+  });
+});
+
+router.post('/highlights/:userId/story/:storyId/pump', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (!isFollowingOrSelf(db, req.user.id, ownerUserId)) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const existing = db.prepare(`
+    SELECT id
+    FROM user_story_pumps
+    WHERE owner_user_id = ? AND story_id = ? AND pumper_user_id = ?
+    LIMIT 1
+  `).get(ownerUserId, storyId, req.user.id);
+
+  if (existing?.id) {
+    db.prepare('DELETE FROM user_story_pumps WHERE id = ?').run(existing.id);
+  } else {
+    db.prepare(`
+      INSERT INTO user_story_pumps (id, owner_user_id, story_id, pumper_user_id, pumped_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(uuidv4(), ownerUserId, storyId, req.user.id, toInboxSqliteDateTime(new Date()));
+  }
+
+  res.json({
+    engagement: buildStoryEngagementPayload(db, ownerUserId, storyId, req.user.id),
+  });
+});
+
+router.get('/highlights/:userId/story/:storyId/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (!isFollowingOrSelf(db, req.user.id, ownerUserId)) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  res.json({
+    comments: listStoryComments(db, ownerUserId, storyId),
+  });
+});
+
+router.post('/highlights/:userId/story/:storyId/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (!isFollowingOrSelf(db, req.user.id, ownerUserId)) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const content = normalizeText(req.body?.content || '', 280);
+  if (!content) {
+    return res.status(400).json({ error: 'Comment is required' });
+  }
+
+  const nowSql = toInboxSqliteDateTime(new Date());
+  const commentId = uuidv4();
+  db.prepare(`
+    INSERT INTO user_story_comments (id, owner_user_id, story_id, comment_user_id, content, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(commentId, ownerUserId, storyId, req.user.id, content, nowSql);
+
+  res.status(201).json({
+    comments: listStoryComments(db, ownerUserId, storyId),
+    engagement: buildStoryEngagementPayload(db, ownerUserId, storyId, req.user.id),
+  });
+});
+
+router.get('/highlights/:userId/story/:storyId/stats', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (String(req.user.id || '').trim() !== ownerUserId) {
+    return res.status(403).json({ error: 'Only the owner can view story stats' });
+  }
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+  res.json({
+    story_id: storyId,
+    ...getStoryCounts(db, ownerUserId, storyId, req.user.id),
+    viewers: getStoryViewerList(db, ownerUserId, storyId),
+  });
+});
+
+router.post('/highlights/:userId/story/:storyId/archive', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (String(req.user.id || '').trim() !== ownerUserId) {
+    return res.status(403).json({ error: 'Only the owner can archive this story' });
+  }
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const nowSql = toInboxSqliteDateTime(new Date());
+  createStoryArchive(db, ownerUserId, match.story, nowSql);
+  hideStoryItem(db, ownerUserId, storyId, nowSql, 'archived');
+
+  res.json({
+    success: true,
+    stories: getStoryBundleForUser(db, ownerUserId)?.stories || [],
+    archived: getArchivedStories(db, ownerUserId),
+  });
+});
+
+router.delete('/highlights/:userId/story/:storyId', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (String(req.user.id || '').trim() !== ownerUserId) {
+    return res.status(403).json({ error: 'Only the owner can delete this story' });
+  }
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const nowSql = toInboxSqliteDateTime(new Date());
+  const deletedManual = deleteManualStoryRowIfPresent(db, ownerUserId, storyId, nowSql);
+  hideStoryItem(db, ownerUserId, storyId, nowSql, deletedManual ? 'deleted_manual' : 'deleted');
+
+  res.json({
+    success: true,
+    stories: getStoryBundleForUser(db, ownerUserId)?.stories || [],
+  });
 });
 
 router.get('/conversations', requireAuth, (req, res) => {

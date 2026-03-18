@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from './AvatarPicker';
 import DojoCatStickerPicker from './DojoCatStickerPicker';
@@ -8,14 +8,28 @@ import SessionShareCard from './SessionShareCard';
 import LiveSessionCard from './LiveSessionCard';
 import SessionPlanCard from './SessionPlanCard';
 import StickerAsset from './StickerAsset';
+import UserPickerDialog from './UserPickerDialog';
 import { HourOfPowerLogo } from './HourOfPowerBrand';
 import { useAuth } from '../contexts/AuthContext';
 import { renderFormattedText } from '../utils/formatText';
 import { getStickerEmoji } from '../utils/stickers';
+import {
+  addMessageStoryComment,
+  archiveMessageStory,
+  deleteMessageStory,
+  getMessageStoryComments,
+  getMessageStoryEngagement,
+  getMessageStoryStats,
+  getOrCreateDirectConversation,
+  markMessageStoryViewed,
+  sendConversationMessage,
+  toggleMessageStoryPump,
+} from '../utils/api';
 import { splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent } from '../utils/sessionShareMarker';
 import { mergeLiveSessionSummary, splitLiveSessionContent } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent } from '../utils/sessionPlanMarker';
+import { getProfilePath } from '../utils/profile';
 
 function formatRelativeTime(value) {
   const raw = String(value || '').trim();
@@ -467,78 +481,671 @@ function OverlayShell({ open, onClose, children, padded = true }) {
   );
 }
 
-export function StoryViewerModal({ open, user, stories = [], loading = false, error = '', onClose }) {
+function stopStoryEvent(event) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+}
+
+function buildStorySharePayload(story, ownerUser) {
+  const profilePath = getProfilePath(ownerUser?.id || '', ownerUser?.username || '');
+  const kind = String(
+    story?.type === 'score_roundup'
+      ? (story?.entry_kind === 'clear' ? 'clear' : 'upscore')
+      : story?.type === 'live_session'
+        ? 'live_session'
+        : story?.type === 'hour_of_power'
+          ? 'hour_of_power'
+          : story?.source?.kind || 'story'
+  ).trim().toLowerCase() || 'story';
+
+  return {
+    kind,
+    path: story?.link?.path || profilePath || '/messages',
+    url: story?.link?.url || '',
+    title: String(story?.title || `${ownerUser?.username || 'Player'} story`).trim().slice(0, 160),
+    subtitle: String(story?.subtitle || story?.caption || '').trim().slice(0, 220),
+    buttonLabel: String(story?.link?.label || 'Open story').trim().slice(0, 48),
+    songTitle: story?.snapshot?.song_title || story?.scores?.[0]?.song_title || '',
+    mode: story?.snapshot?.mode || story?.scores?.[0]?.mode || '',
+    level: parseInt(story?.snapshot?.level ?? story?.scores?.[0]?.level, 10) || 0,
+    score: parseInt(story?.snapshot?.score ?? story?.scores?.[0]?.score, 10) || 0,
+    grade: String(story?.snapshot?.grade || story?.scores?.[0]?.grade || '').trim(),
+    jacketUrl: String(story?.snapshot?.jacket_url || story?.scores?.[0]?.jacket_url || '').trim(),
+    playerName: ownerUser?.username || '',
+    playerAvatar: ownerUser?.avatar || '',
+    contextLabel: 'Story',
+  };
+}
+
+function StoryCommentsModal({
+  open,
+  onClose,
+  ownerUser,
+  comments = [],
+  loading = false,
+  error = '',
+  draft = '',
+  sending = false,
+  onDraftChange,
+  onSend,
+}) {
+  return (
+    <OverlayShell open={open} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Story comments</p>
+            <h2 className="mt-1 font-display text-2xl font-black text-white">{ownerUser?.username || 'Story'}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+        </div>
+
+        <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
+          {loading ? (
+            <p className="text-sm text-gray-400">Loading comments...</p>
+          ) : comments.length === 0 ? (
+            <p className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
+              No comments yet. Start the thread.
+            </p>
+          ) : (
+            comments.map((comment) => (
+              <div key={comment.id} className="flex gap-3 rounded-[1.3rem] border border-white/10 bg-white/6 px-3 py-3">
+                {comment.user?.avatar ? (
+                  <img src={comment.user.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-display font-black text-white">
+                    {(comment.user?.username || 'U').slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-display font-black text-white">{comment.user?.username || 'Player'}</p>
+                    <span className="shrink-0 text-[10px] text-gray-500">{formatRelativeTime(comment.created_at)}</span>
+                  </div>
+                  <div className="mt-1 text-sm leading-6 text-gray-100">{renderFormattedText(comment.content)}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <textarea
+            value={draft}
+            onChange={(event) => onDraftChange?.(event.target.value)}
+            rows={2}
+            maxLength={280}
+            placeholder={`Comment on ${ownerUser?.username || 'this story'}...`}
+            className={`resize-none ${MODAL_INPUT_CLASS}`}
+            style={MODAL_INPUT_STYLE}
+          />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-gray-500">{draft.trim().length}/280</span>
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={sending || !draft.trim()}
+              className="rounded-full bg-cyan-500 px-4 py-2 text-sm font-display font-black text-white hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {sending ? 'Sending...' : 'Send comment'}
+            </button>
+          </div>
+          {error ? <p className="text-sm text-red-300">{error}</p> : null}
+        </div>
+      </div>
+    </OverlayShell>
+  );
+}
+
+function StoryStatsModal({ open, onClose, ownerUser, stats = null, loading = false, error = '' }) {
+  return (
+    <OverlayShell open={open} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Story stats</p>
+            <h2 className="mt-1 font-display text-2xl font-black text-white">{ownerUser?.username || 'Your story'}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+        </div>
+
+        {loading ? (
+          <p className="text-sm text-gray-400">Loading views...</p>
+        ) : error ? (
+          <p className="text-sm text-red-300">{error}</p>
+        ) : (
+          <>
+            <div className="rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-4">
+              <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-gray-400">Views</p>
+              <p className="mt-2 font-display text-3xl font-black text-white">{stats?.view_count || 0}</p>
+            </div>
+
+            <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
+              {Array.isArray(stats?.viewers) && stats.viewers.length > 0 ? (
+                stats.viewers.map((entry, index) => (
+                  <div key={`${entry?.user?.id || 'viewer'}-${index}`} className="flex items-center gap-3 rounded-[1.2rem] border border-white/10 bg-white/6 px-3 py-3">
+                    {entry.user?.avatar ? (
+                      <img src={entry.user.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-display font-black text-white">
+                        {(entry.user?.username || 'U').slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-display font-black text-white">{entry.user?.username || 'Player'}</p>
+                      <p className="text-xs text-gray-500">Seen {formatRelativeTime(entry.viewed_at)} ago</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
+                  No views yet from other players.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </OverlayShell>
+  );
+}
+
+export function StoryArchiveModal({ open, onClose, stories = [], onOpenStory }) {
+  return (
+    <OverlayShell open={open} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Story archive</p>
+            <h2 className="mt-1 font-display text-2xl font-black text-white">Past stories</h2>
+          </div>
+          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+        </div>
+
+        {stories.length === 0 ? (
+          <p className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
+            No archived stories yet.
+          </p>
+        ) : (
+          <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
+            {stories.map((entry) => {
+              const story = entry?.story || null;
+              if (!story) return null;
+              const previewImage = story?.media_url || story?.snapshot?.jacket_url || story?.scores?.[0]?.jacket_url || '';
+              return (
+                <button
+                  key={`${story.id}-${entry.archived_at}`}
+                  type="button"
+                  onClick={() => onOpenStory?.(story)}
+                  className="flex w-full items-center gap-3 rounded-[1.3rem] border border-white/10 bg-white/6 px-3 py-3 text-left transition-colors hover:bg-white/10"
+                >
+                  {previewImage ? (
+                    <img src={previewImage} alt="" className="h-14 w-14 rounded-[1rem] object-cover" />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-[1rem] bg-white/10 text-sm font-display font-black text-white">
+                      {(story?.title || 'S').slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-display font-black text-white">{story?.title || 'Story'}</p>
+                    <p className="mt-1 truncate text-xs text-gray-400">{story?.subtitle || story?.caption || 'Archived story'}</p>
+                    <p className="mt-1 text-[10px] text-gray-500">Archived {formatRelativeTime(entry.archived_at)} ago</p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white">View</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </OverlayShell>
+  );
+}
+
+export function StoryViewerModal({
+  open,
+  user,
+  stories = [],
+  loading = false,
+  error = '',
+  onClose,
+  onStoriesChange,
+  onArchiveChange,
+  readonly = false,
+}) {
+  const { user: authUser } = useAuth();
   const [index, setIndex] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [engagementById, setEngagementById] = useState({});
+  const [commentPreviewIndex, setCommentPreviewIndex] = useState(0);
+  const [sharePickerOpen, setSharePickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [commentsState, setCommentsState] = useState({ loading: false, items: [], draft: '', sending: false, error: '' });
+  const [statsState, setStatsState] = useState({ loading: false, data: null, error: '' });
+  const frameRef = useRef(0);
+
   const story = stories[index] || null;
+  const ownerUserId = String(user?.id || '');
+  const isOwner = !readonly && String(authUser?.id || '') === ownerUserId;
+  const isPaused = menuOpen || commentsOpen || statsOpen || sharePickerOpen;
+  const activeEngagement = story?.id
+    ? (engagementById[story.id] || story.engagement || {
+      pump_count: 0,
+      comment_count: 0,
+      view_count: 0,
+      user_pumped: false,
+      preview_comments: [],
+    })
+    : { pump_count: 0, comment_count: 0, view_count: 0, user_pumped: false, preview_comments: [] };
 
   useEffect(() => {
     if (!open) return;
     setIndex(0);
+    setProgress(0);
+    setMenuOpen(false);
+    setCommentsOpen(false);
+    setStatsOpen(false);
+    setSharePickerOpen(false);
+    setCommentsState({ loading: false, items: [], draft: '', sending: false, error: '' });
+    setStatsState({ loading: false, data: null, error: '' });
   }, [open, user?.id]);
+
+  useEffect(() => {
+    const nextMap = {};
+    (stories || []).forEach((entry) => {
+      if (entry?.id) nextMap[entry.id] = entry.engagement || nextMap[entry.id] || {
+        pump_count: 0,
+        comment_count: 0,
+        view_count: 0,
+        user_pumped: false,
+        preview_comments: [],
+      };
+    });
+    setEngagementById((prev) => ({ ...prev, ...nextMap }));
+  }, [stories]);
+
+  useEffect(() => {
+    setProgress(0);
+    setCommentPreviewIndex(0);
+    setMenuOpen(false);
+    setCommentsState((prev) => ({ ...prev, items: [], error: '' }));
+    setStatsState({ loading: false, data: null, error: '' });
+  }, [story?.id]);
+
+  useEffect(() => {
+    if (!open || !story || loading || error || isPaused || readonly) return undefined;
+    const durationMs = 6000;
+    const startAt = performance.now();
+
+    const tick = (now) => {
+      const nextProgress = Math.min(1, (now - startAt) / durationMs);
+      setProgress(nextProgress);
+      if (nextProgress >= 1) {
+        if (index < stories.length - 1) {
+          setIndex((current) => Math.min(stories.length - 1, current + 1));
+          return;
+        }
+        onClose?.();
+        return;
+      }
+      frameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    frameRef.current = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, [open, story?.id, loading, error, isPaused, index, stories.length, onClose, readonly]);
+
+  useEffect(() => {
+    if (!open || !story?.id || !ownerUserId || readonly) return undefined;
+    let cancelled = false;
+
+    markMessageStoryViewed(ownerUserId, story.id)
+      .then((payload) => {
+        if (!cancelled && payload?.engagement) {
+          setEngagementById((prev) => ({ ...prev, [story.id]: payload.engagement }));
+        }
+      })
+      .catch(() => {});
+
+    getMessageStoryEngagement(ownerUserId, story.id)
+      .then((payload) => {
+        if (!cancelled && payload?.engagement) {
+          setEngagementById((prev) => ({ ...prev, [story.id]: payload.engagement }));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, story?.id, ownerUserId, readonly]);
+
+  useEffect(() => {
+    const previewComments = Array.isArray(activeEngagement?.preview_comments) ? activeEngagement.preview_comments : [];
+    if (!open || previewComments.length < 2 || commentsOpen) return undefined;
+    const interval = window.setInterval(() => {
+      setCommentPreviewIndex((current) => (current + 1) % previewComments.length);
+    }, 3200);
+    return () => window.clearInterval(interval);
+  }, [open, story?.id, activeEngagement?.preview_comments, commentsOpen]);
 
   const canGoBack = index > 0;
   const canGoForward = index < stories.length - 1;
+  const previewComments = Array.isArray(activeEngagement?.preview_comments) ? activeEngagement.preview_comments : [];
+  const previewComment = previewComments.length > 0
+    ? previewComments[commentPreviewIndex % previewComments.length]
+    : null;
+
+  const setStoryEngagement = (storyId, engagement) => {
+    if (!storyId || !engagement) return;
+    setEngagementById((prev) => ({ ...prev, [storyId]: engagement }));
+  };
+
+  const openComments = async () => {
+    if (!story?.id || !ownerUserId) return;
+    setCommentsOpen(true);
+    setCommentsState((prev) => ({
+      ...prev,
+      loading: true,
+      error: '',
+      items: Array.isArray(activeEngagement?.preview_comments) ? activeEngagement.preview_comments : prev.items,
+    }));
+    try {
+      const payload = await getMessageStoryComments(ownerUserId, story.id);
+      setCommentsState((prev) => ({
+        ...prev,
+        loading: false,
+        items: Array.isArray(payload?.comments) ? payload.comments : [],
+      }));
+    } catch (err) {
+      setCommentsState((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || 'Failed to load comments.',
+      }));
+    }
+  };
+
+  const handleSendComment = async () => {
+    const content = String(commentsState.draft || '').trim();
+    if (!content || commentsState.sending || !story?.id || !ownerUserId) return;
+    setCommentsState((prev) => ({ ...prev, sending: true, error: '' }));
+    try {
+      const payload = await addMessageStoryComment(ownerUserId, story.id, content);
+      setCommentsState((prev) => ({
+        ...prev,
+        sending: false,
+        draft: '',
+        items: Array.isArray(payload?.comments) ? payload.comments : prev.items,
+      }));
+      if (payload?.engagement) {
+        setStoryEngagement(story.id, payload.engagement);
+      }
+    } catch (err) {
+      setCommentsState((prev) => ({
+        ...prev,
+        sending: false,
+        error: err?.message || 'Failed to send comment.',
+      }));
+    }
+  };
+
+  const openStats = async () => {
+    if (!story?.id || !ownerUserId || !isOwner) return;
+    setStatsOpen(true);
+    setMenuOpen(false);
+    setStatsState({ loading: true, data: null, error: '' });
+    try {
+      const payload = await getMessageStoryStats(ownerUserId, story.id);
+      setStatsState({ loading: false, data: payload || null, error: '' });
+    } catch (err) {
+      setStatsState({ loading: false, data: null, error: err?.message || 'Failed to load story stats.' });
+    }
+  };
+
+  const handleTogglePump = async (event) => {
+    stopStoryEvent(event);
+    if (readonly || !story?.id || !ownerUserId) return;
+    try {
+      const payload = await toggleMessageStoryPump(ownerUserId, story.id);
+      if (payload?.engagement) {
+        setStoryEngagement(story.id, payload.engagement);
+      }
+    } catch {}
+  };
+
+  const handleShareToDm = async (selectedUser) => {
+    if (!story || !selectedUser?.id) return;
+    const directPayload = await getOrCreateDirectConversation(selectedUser.id);
+    const conversationId = directPayload?.conversation?.id || '';
+    if (!conversationId) throw new Error('Could not open a DM for this share.');
+    await sendConversationMessage(conversationId, {
+      link_share: buildStorySharePayload(story, user),
+    });
+    setSharePickerOpen(false);
+  };
+
+  const applyStoryMutation = (nextStories, nextArchive = null) => {
+    const normalizedStories = Array.isArray(nextStories) ? nextStories : [];
+    onStoriesChange?.(normalizedStories);
+    if (Array.isArray(nextArchive)) {
+      onArchiveChange?.(nextArchive);
+    }
+    if (normalizedStories.length === 0) {
+      onClose?.();
+      return;
+    }
+    setIndex((current) => Math.min(current, normalizedStories.length - 1));
+  };
+
+  const handleArchiveStory = async () => {
+    if (!story?.id || !ownerUserId || !isOwner) return;
+    setMenuOpen(false);
+    try {
+      const payload = await archiveMessageStory(ownerUserId, story.id);
+      applyStoryMutation(payload?.stories || [], payload?.archived || null);
+    } catch {}
+  };
+
+  const handleDeleteStory = async () => {
+    if (!story?.id || !ownerUserId || !isOwner) return;
+    setMenuOpen(false);
+    if (!window.confirm('Delete this story from your active circles?')) return;
+    try {
+      const payload = await deleteMessageStory(ownerUserId, story.id);
+      applyStoryMutation(payload?.stories || []);
+    } catch {}
+  };
 
   return (
-    <OverlayShell open={open} onClose={onClose} padded={false}>
-      <div className="relative min-h-[75vh] overflow-hidden rounded-t-[1.9rem] sm:rounded-[2rem]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,#070b13,#0d1320_42%,#080b12)]" />
-        <div className="relative z-30 flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
-          <div className="min-w-0 flex-1">
-            <div className="mb-3 flex gap-1.5">
-              {(stories.length > 0 ? stories : [null]).map((entry, entryIndex) => (
-                <span key={entry?.id || `empty-${entryIndex}`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
-                  <span className={`block h-full rounded-full ${entryIndex <= index ? 'bg-cyan-300' : 'bg-transparent'}`} />
-                </span>
-              ))}
-            </div>
-            <div className="flex items-center gap-3">
-              {user?.avatar ? <img src={user.avatar} alt="" className="h-10 w-10 rounded-full object-cover" /> : null}
-              <div className="min-w-0">
-                <p className="truncate font-display text-sm font-black text-white">{user?.username || 'Story'}</p>
-                <p className="text-xs text-gray-400">{formatRelativeTime(story?.created_at)}</p>
+    <>
+      <OverlayShell open={open} onClose={onClose} padded={false}>
+        <div className="relative min-h-[75vh] overflow-hidden rounded-t-[1.9rem] sm:rounded-[2rem]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,#070b13,#0d1320_42%,#080b12)]" />
+          <div className="relative z-30 flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
+            <div className="min-w-0 flex-1">
+              <div className="mb-3 flex gap-1.5">
+                {(stories.length > 0 ? stories : [null]).map((entry, entryIndex) => {
+                  const fill = entryIndex < index ? 100 : entryIndex === index ? (progress * 100) : 0;
+                  return (
+                    <span key={entry?.id || `empty-${entryIndex}`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <span className="block h-full rounded-full bg-cyan-300 transition-[width] duration-75" style={{ width: `${fill}%` }} />
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-3">
+                {user?.avatar ? <img src={user.avatar} alt="" className="h-10 w-10 rounded-full object-cover" /> : null}
+                <div className="min-w-0">
+                  <p className="truncate font-display text-sm font-black text-white">{user?.username || 'Story'}</p>
+                  <p className="text-xs text-gray-400">{formatRelativeTime(story?.created_at)}</p>
+                </div>
               </div>
             </div>
+            <div className="relative z-30 flex items-center gap-2">
+              {isOwner ? (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      stopStoryEvent(event);
+                      setMenuOpen((current) => !current);
+                    }}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/8 text-white hover:bg-white/12"
+                  >
+                    <span className="text-lg leading-none">...</span>
+                  </button>
+                  {menuOpen ? (
+                    <div className="absolute right-0 top-12 w-44 overflow-hidden rounded-[1.1rem] border border-white/10 bg-[#0d1320] shadow-[0_18px_42px_rgba(0,0,0,0.32)]">
+                      <button type="button" onClick={openStats} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Story stats</button>
+                      <button type="button" onClick={handleArchiveStory} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Archive story</button>
+                      <button type="button" onClick={handleDeleteStory} className="w-full px-4 py-3 text-left text-sm text-rose-200 hover:bg-rose-500/10">Delete story</button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/8 text-lg text-white hover:bg-white/12"
+              >
+                x
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="relative z-30 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/8 text-lg text-white hover:bg-white/12"
-          >
-            x
-          </button>
-        </div>
 
-        <div className="relative z-30 flex min-h-[calc(75vh-5rem)] items-center justify-center px-4 pb-10 pt-2 sm:px-6">
-          {loading ? (
-            <p className="text-sm text-gray-400">Loading story...</p>
-          ) : error ? (
-            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">Story unavailable right now.</div>
-          ) : story ? (
-            <StoryCard story={story} />
-          ) : (
-            <p className="text-sm text-gray-400">No story yet.</p>
-          )}
-        </div>
+          <div className="relative z-30 flex min-h-[calc(75vh-5rem)] items-center justify-center px-4 pb-28 pt-2 sm:px-6">
+            {loading ? (
+              <p className="text-sm text-gray-400">Loading story...</p>
+            ) : error ? (
+              <div className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">Story unavailable right now.</div>
+            ) : story ? (
+              <StoryCard story={story} />
+            ) : (
+              <p className="text-sm text-gray-400">No story yet.</p>
+            )}
+          </div>
 
-        {stories.length > 1 ? (
-          <>
+          {previewComment ? (
             <button
               type="button"
-              onClick={() => canGoBack && setIndex((current) => Math.max(0, current - 1))}
-              className="absolute bottom-0 left-0 top-24 z-10 w-1/2"
-              aria-label="Previous story"
-            />
-            <button
-              type="button"
-              onClick={() => canGoForward && setIndex((current) => Math.min(stories.length - 1, current + 1))}
-              className="absolute bottom-0 right-0 top-24 z-10 w-1/2"
-              aria-label="Next story"
-            />
-          </>
-        ) : null}
-      </div>
-    </OverlayShell>
+              onClick={(event) => {
+                stopStoryEvent(event);
+                openComments();
+              }}
+              className="absolute bottom-24 left-4 z-40 max-w-[70%] rounded-[1.4rem] border border-white/12 bg-black/45 px-3 py-2 text-left shadow-[0_12px_30px_rgba(0,0,0,0.25)] backdrop-blur-md"
+            >
+              <div className="flex items-center gap-2">
+                {previewComment.user?.avatar ? (
+                  <img src={previewComment.user.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
+                ) : null}
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-display font-black uppercase tracking-[0.14em] text-cyan-200/80">
+                    {previewComment.user?.username || 'Comment'}
+                  </p>
+                  <p className="truncate text-sm text-white">{previewComment.content}</p>
+                </div>
+              </div>
+            </button>
+          ) : null}
+
+          {!readonly && story ? (
+            <div className="absolute bottom-5 left-1/2 z-40 flex w-[calc(100%-2rem)] max-w-[26rem] -translate-x-1/2 items-center justify-between gap-2 rounded-full border border-white/12 bg-black/45 px-3 py-2.5 shadow-[0_18px_42px_rgba(0,0,0,0.3)] backdrop-blur-md">
+              <button
+                type="button"
+                onClick={handleTogglePump}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-display font-black transition-colors ${
+                  activeEngagement.user_pumped ? 'bg-cyan-500/18 text-cyan-100' : 'text-white hover:bg-white/8'
+                }`}
+              >
+                <span>Pumps</span>
+                <span className="text-xs text-cyan-100/90">{activeEngagement.pump_count || 0}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  stopStoryEvent(event);
+                  setSharePickerOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-display font-black text-white transition-colors hover:bg-white/8"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l10-7-3 14-4-5-3-2z" />
+                </svg>
+                <span>Share</span>
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  stopStoryEvent(event);
+                  openComments();
+                }}
+                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-display font-black text-white transition-colors hover:bg-white/8"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-6 7l-3-3V6a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H9l-2 3z" />
+                </svg>
+                <span>Comment</span>
+                <span className="text-xs text-cyan-100/90">{activeEngagement.comment_count || 0}</span>
+              </button>
+            </div>
+          ) : null}
+
+          {stories.length > 1 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => canGoBack && setIndex((current) => Math.max(0, current - 1))}
+                className="absolute bottom-0 left-0 top-24 z-10 w-1/2"
+                aria-label="Previous story"
+              />
+              <button
+                type="button"
+                onClick={() => canGoForward && setIndex((current) => Math.min(stories.length - 1, current + 1))}
+                className="absolute bottom-0 right-0 top-24 z-10 w-1/2"
+                aria-label="Next story"
+              />
+            </>
+          ) : null}
+        </div>
+      </OverlayShell>
+
+      <StoryCommentsModal
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        ownerUser={user}
+        comments={commentsState.items}
+        loading={commentsState.loading}
+        error={commentsState.error}
+        draft={commentsState.draft}
+        sending={commentsState.sending}
+        onDraftChange={(value) => setCommentsState((prev) => ({ ...prev, draft: value }))}
+        onSend={handleSendComment}
+      />
+
+      <StoryStatsModal
+        open={statsOpen}
+        onClose={() => setStatsOpen(false)}
+        ownerUser={user}
+        stats={statsState.data}
+        loading={statsState.loading}
+        error={statsState.error}
+      />
+
+      <UserPickerDialog
+        open={sharePickerOpen}
+        title="Send story"
+        description="Pick someone on Shinsa to share this story with."
+        selectLabel="Send"
+        excludeUserIds={[authUser?.id].filter(Boolean)}
+        onClose={() => setSharePickerOpen(false)}
+        onSelect={handleShareToDm}
+      />
+    </>
   );
 }
 

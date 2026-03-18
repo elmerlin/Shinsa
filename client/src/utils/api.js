@@ -623,6 +623,26 @@ export const getOrCreateDirectConversation = (userId, data = null) => request(`/
 });
 export const getMessageHighlights = () => request('/messages/highlights');
 export const getMessageStory = (userId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story`);
+export const getMessageStoryArchive = () => request('/messages/highlights/archive');
+export const markMessageStoryViewed = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/view`, {
+  method: 'POST',
+});
+export const getMessageStoryEngagement = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/engagement`);
+export const toggleMessageStoryPump = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/pump`, {
+  method: 'POST',
+});
+export const getMessageStoryComments = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/comments`);
+export const addMessageStoryComment = (userId, storyId, content) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/comments`, {
+  method: 'POST',
+  body: JSON.stringify({ content }),
+});
+export const getMessageStoryStats = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/stats`);
+export const archiveMessageStory = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/archive`, {
+  method: 'POST',
+});
+export const deleteMessageStory = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}`, {
+  method: 'DELETE',
+});
 export const createMessageNote = (data) => request('/messages/highlights/note', {
   method: 'POST',
   body: JSON.stringify(data || {}),

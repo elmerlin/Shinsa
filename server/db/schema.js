@@ -1503,6 +1503,49 @@ function initializeDb() {
       deleted_at TEXT DEFAULT ''
     );
 
+    CREATE TABLE IF NOT EXISTS user_story_views (
+      story_id TEXT NOT NULL,
+      viewer_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      viewed_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (story_id, viewer_user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_story_pumps (
+      story_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (story_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_story_comments (
+      id TEXT PRIMARY KEY,
+      story_id TEXT NOT NULL,
+      owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS user_story_archives (
+      story_id TEXT PRIMARY KEY,
+      owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      story_type TEXT NOT NULL DEFAULT '',
+      story_payload_json TEXT NOT NULL DEFAULT '{}',
+      original_created_at TEXT DEFAULT '',
+      expires_at TEXT DEFAULT '',
+      archived_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_story_hidden_items (
+      story_id TEXT PRIMARY KEY,
+      owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL DEFAULT 'delete',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS auth_qr_login_challenges (
       id TEXT PRIMARY KEY,
       claim_token TEXT NOT NULL UNIQUE,
@@ -1616,6 +1659,12 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_sender ON conversation_messages(sender_user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_user_inbox_notes_user_active ON user_inbox_notes(user_id, cleared_at, expires_at, created_at);
     CREATE INDEX IF NOT EXISTS idx_user_story_items_user_active ON user_story_items(user_id, deleted_at, expires_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_user_story_views_owner ON user_story_views(owner_user_id, viewed_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_story_pumps_owner ON user_story_pumps(owner_user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_story_comments_story ON user_story_comments(story_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_story_comments_owner ON user_story_comments(owner_user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_story_archives_owner ON user_story_archives(owner_user_id, archived_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_story_hidden_items_owner ON user_story_hidden_items(owner_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_status ON auth_qr_login_challenges(status, expires_at);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_approved_user ON auth_qr_login_challenges(approved_user_id, created_at);
 

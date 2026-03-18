@@ -8,6 +8,7 @@ import {
   createMessageStoryItem,
   getChartKeyMap,
   getMessageHighlights,
+  getMessageStoryArchive,
   getMessageStory,
   getNewClear,
   getMessageConversation,
@@ -31,6 +32,7 @@ import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import InboxHighlightsStrip, {
   NoteComposerModal,
   NoteThreadModal,
+  StoryArchiveModal,
   StoryComposerModal,
   StoryViewerModal,
 } from '../components/InboxHighlightsStrip';
@@ -719,32 +721,45 @@ function InboxView({
   onOpenHighlightStory,
   onOpenHighlightNote,
   onOpenStoryComposer,
+  onOpenStoryArchive,
   onStartChat,
 }) {
   return (
     <div className="flex min-h-screen flex-col sm:min-h-0 sm:mx-auto sm:w-full sm:max-w-3xl sm:px-4 sm:py-6">
-      <section className="relative flex flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
+      <section className="relative flex flex-1 flex-col overflow-visible bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
         <div
-          className="fixed inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/95 px-4 py-3 backdrop-blur-md sm:sticky sm:inset-x-auto sm:top-0 sm:z-20 sm:px-5"
-          style={{ paddingTop: 'max(env(safe-area-inset-top), 0.75rem)' }}
+          className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/95 px-4 py-2.5 backdrop-blur-md sm:px-5"
+          style={{ paddingTop: 'max(env(safe-area-inset-top), 0.55rem)' }}
         >
           <div className="min-w-0">
-            <h1 className="text-[2.35rem] leading-none font-display font-black text-white sm:text-[2.65rem]">Messages</h1>
+            <h1 className="text-[2rem] leading-none font-display font-black text-white sm:text-[2.35rem]">Messages</h1>
           </div>
-          <ActionIconButton
-            onClick={onStartChat}
-            title="New chat"
-            ariaLabel="Start new chat"
-            tone="cyan"
-            className="h-11 w-11 justify-center rounded-[1.2rem] border border-cyan-400/30 bg-cyan-500/10 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/45"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
-            </svg>
-          </ActionIconButton>
+          <div className="flex items-center gap-2">
+            <ActionIconButton
+              onClick={onOpenStoryArchive}
+              title="Story archive"
+              ariaLabel="Open story archive"
+              tone="cyan"
+              className="h-10 w-10 justify-center rounded-[1.05rem] border border-white/12 bg-white/6 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/35"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v11A2.5 2.5 0 0117.5 21h-11A2.5 2.5 0 014 18.5v-11z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 5v4h8V5" />
+              </svg>
+            </ActionIconButton>
+            <ActionIconButton
+              onClick={onStartChat}
+              title="New chat"
+              ariaLabel="Start new chat"
+              tone="cyan"
+              className="h-10 w-10 justify-center rounded-[1.05rem] border border-cyan-400/30 bg-cyan-500/10 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/45"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
+              </svg>
+            </ActionIconButton>
+          </div>
         </div>
-
-        <div aria-hidden="true" className="h-[5.85rem] shrink-0 sm:hidden" />
 
         <InboxHighlightsStrip
           me={highlights?.me || null}
@@ -756,7 +771,7 @@ function InboxView({
           onOpenStoryComposer={onOpenStoryComposer}
         />
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1">
           {loadingConversations ? (
             <div className="px-4 py-10 text-center text-sm text-gray-500">Loading conversations...</div>
           ) : conversations.length === 0 ? (
@@ -988,12 +1003,16 @@ export default function MessagesPage() {
   const [storyComposerSubmitting, setStoryComposerSubmitting] = useState(false);
   const [storyComposerError, setStoryComposerError] = useState('');
   const [storyComposerOptions, setStoryComposerOptions] = useState([]);
+  const [storyArchiveOpen, setStoryArchiveOpen] = useState(false);
+  const [archivedStories, setArchivedStories] = useState([]);
+  const [storyArchiveError, setStoryArchiveError] = useState('');
   const [storyViewerState, setStoryViewerState] = useState({
     open: false,
     user: null,
     stories: [],
     loading: false,
     error: '',
+    readonly: false,
   });
   const [threadState, setThreadState] = useState({
     open: false,
@@ -1629,6 +1648,17 @@ export default function MessagesPage() {
     }
   };
 
+  const closeStoryViewer = useCallback(() => {
+    setStoryViewerState({
+      open: false,
+      user: null,
+      stories: [],
+      loading: false,
+      error: '',
+      readonly: false,
+    });
+  }, []);
+
   const handleOpenHighlightStory = useCallback(async (circle) => {
     if (!circle?.user?.id) return;
     setStoryViewerState({
@@ -1637,6 +1667,7 @@ export default function MessagesPage() {
       stories: [],
       loading: true,
       error: '',
+      readonly: false,
     });
     try {
       const payload = await getMessageStory(circle.user.id);
@@ -1646,6 +1677,7 @@ export default function MessagesPage() {
         stories: Array.isArray(payload?.stories) ? payload.stories : [],
         loading: false,
         error: '',
+        readonly: false,
       });
     } catch (err) {
       setStoryViewerState({
@@ -1654,8 +1686,46 @@ export default function MessagesPage() {
         stories: [],
         loading: false,
         error: 'Story unavailable right now.',
+        readonly: false,
       });
     }
+  }, []);
+
+  const handleOpenStoryArchive = useCallback(async () => {
+    setStoryArchiveOpen(true);
+    setStoryArchiveError('');
+    try {
+      const payload = await getMessageStoryArchive();
+      setArchivedStories(Array.isArray(payload?.stories) ? payload.stories : []);
+    } catch (err) {
+      setArchivedStories([]);
+      setStoryArchiveError(err?.message || 'Failed to load archive.');
+    }
+  }, []);
+
+  const handleOpenArchivedStory = useCallback((story) => {
+    if (!story) return;
+    setStoryArchiveOpen(false);
+    setStoryViewerState({
+      open: true,
+      user: story.user || highlights?.me?.user || null,
+      stories: [story],
+      loading: false,
+      error: '',
+      readonly: true,
+    });
+  }, [highlights?.me?.user]);
+
+  const handleStoryViewerStoriesChange = useCallback((nextStories) => {
+    setStoryViewerState((prev) => ({
+      ...prev,
+      stories: Array.isArray(nextStories) ? nextStories : prev.stories,
+    }));
+    loadHighlights();
+  }, [loadHighlights]);
+
+  const handleStoryArchiveChange = useCallback((nextArchived) => {
+    setArchivedStories(Array.isArray(nextArchived) ? nextArchived : []);
   }, []);
 
   const handleOpenStoryComposer = useCallback(async () => {
@@ -1880,6 +1950,7 @@ export default function MessagesPage() {
           onOpenHighlightStory={handleOpenHighlightStory}
           onOpenHighlightNote={handleOpenHighlightNote}
           onOpenStoryComposer={handleOpenStoryComposer}
+          onOpenStoryArchive={handleOpenStoryArchive}
           onStartChat={() => setPickerOpen(true)}
         />
       )}
@@ -1897,8 +1968,24 @@ export default function MessagesPage() {
         stories={storyViewerState.stories}
         loading={storyViewerState.loading}
         error={storyViewerState.error}
-        onClose={() => setStoryViewerState({ open: false, user: null, stories: [], loading: false, error: '' })}
+        readonly={storyViewerState.readonly}
+        onStoriesChange={handleStoryViewerStoriesChange}
+        onArchiveChange={handleStoryArchiveChange}
+        onClose={closeStoryViewer}
       />
+
+      <StoryArchiveModal
+        open={storyArchiveOpen}
+        stories={archivedStories}
+        onClose={() => setStoryArchiveOpen(false)}
+        onOpenStory={handleOpenArchivedStory}
+      />
+
+      {storyArchiveOpen && storyArchiveError ? (
+        <div className="fixed inset-x-4 bottom-4 z-[170] rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-200 shadow-[0_18px_42px_rgba(0,0,0,0.28)] sm:left-1/2 sm:max-w-md sm:-translate-x-1/2">
+          {storyArchiveError}
+        </div>
+      ) : null}
 
       <NoteComposerModal
         open={noteComposerOpen}

@@ -12,6 +12,7 @@ const LINK_SHARE_KIND_LABELS = {
   score_snapshot: 'Score',
   chart_compare: 'Compare reply',
   hour_of_power: 'Hour of Power',
+  story: 'Story',
   link: 'Link',
 };
 const CHALLENGE_KIND_LABELS = {

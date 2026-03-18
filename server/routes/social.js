@@ -853,9 +853,10 @@ router.get('/counts/:userId', (req, res) => {
             WHEN lsm.message_type IN ('play', 'request_fulfilled') THEN COALESCE(ls.host_user_id, '')
             ELSE ''
           END = ?
-        )
+        ) +
+        (SELECT COUNT(*) FROM user_story_pumps usp WHERE usp.owner_user_id = ?)
         as total
-    `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId);
+    `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId, userId);
     totalPumps = pumpResult.total || 0;
   } catch {}
 
