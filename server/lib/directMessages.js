@@ -231,6 +231,28 @@ function sanitizeChallengeCardPayload(challengeCard) {
   };
 }
 
+function sanitizeNoteThreadPayload(noteThread) {
+  if (!noteThread || typeof noteThread !== 'object') return null;
+  const src = noteThread || {};
+  const threadKey = String(src.threadKey || src.thread_key || '').trim().slice(0, 120);
+  if (!threadKey) return null;
+
+  return {
+    version: 1,
+    threadKey,
+    noteId: String(src.noteId || src.note_id || '').trim().slice(0, 120),
+    ownerUserId: String(src.ownerUserId || src.owner_user_id || '').trim().slice(0, 80),
+    ownerUsername: String(src.ownerUsername || src.owner_username || '').trim().slice(0, 60),
+    noteText: normalizeMessageText(src.noteText || src.note_text || '', 180),
+    noteKind: String(src.noteKind || src.note_kind || '').trim().slice(0, 40),
+    createdAt: String(src.createdAt || src.created_at || '').trim().slice(0, 40),
+    expiresAt: String(src.expiresAt || src.expires_at || '').trim().slice(0, 40),
+    linkPath: sanitizeRelativePath(src.linkPath || src.link_path),
+    linkUrl: sanitizeAbsoluteUrl(src.linkUrl || src.link_url),
+    linkLabel: String(src.linkLabel || src.link_label || '').trim().slice(0, 48),
+  };
+}
+
 function parseJsonObject(raw, fallback = {}) {
   try {
     const parsed = JSON.parse(String(raw || '{}'));
@@ -389,6 +411,7 @@ function normalizeConversationRow(row) {
   const share = sanitizeSessionSharePayload(lastMetadata.share);
   const linkShare = sanitizeLinkSharePayload(lastMetadata.link_share);
   const challengeCard = sanitizeChallengeCardPayload(lastMetadata.challenge_card);
+  const noteThread = sanitizeNoteThreadPayload(lastMetadata.note_thread);
   const messageType = String(row.last_message_type || '').trim() || 'text';
   const content = String(row.last_message_content || '');
 
@@ -408,6 +431,7 @@ function normalizeConversationRow(row) {
       share,
       link_share: linkShare,
       challenge_card: challengeCard,
+      note_thread: noteThread,
       created_at: row.last_message_at || '',
       preview: buildMessagePreview(messageType, content, share, linkShare, challengeCard),
     } : null,
@@ -419,6 +443,7 @@ function normalizeConversationMessage(row, viewerUserId = '') {
   const share = sanitizeSessionSharePayload(metadata.share);
   const linkShare = sanitizeLinkSharePayload(metadata.link_share);
   const challengeCard = sanitizeChallengeCardPayload(metadata.challenge_card);
+  const noteThread = sanitizeNoteThreadPayload(metadata.note_thread);
   const senderUserId = String(row?.sender_user_id || '').trim();
 
   return {
@@ -429,6 +454,7 @@ function normalizeConversationMessage(row, viewerUserId = '') {
     share,
     link_share: linkShare,
     challenge_card: challengeCard,
+    note_thread: noteThread,
     created_at: row?.created_at || '',
     updated_at: row?.updated_at || '',
     sender: {
@@ -445,6 +471,7 @@ function normalizeConversationInput(raw = {}) {
   const share = sanitizeSessionSharePayload(raw.session_share || raw.share || null);
   const linkShare = sanitizeLinkSharePayload(raw.link_share || raw.linkShare || raw.link || null);
   const challengeCard = sanitizeChallengeCardPayload(raw.challenge_card || raw.challengeCard || raw.challenge || null);
+  const noteThread = sanitizeNoteThreadPayload(raw.note_thread || raw.noteThread || null);
   const messageType = share
     ? 'session_share'
     : (challengeCard ? 'challenge_card' : (linkShare ? 'link_share' : 'text'));
@@ -453,15 +480,20 @@ function normalizeConversationInput(raw = {}) {
     return { error: 'Message is required' };
   }
 
+  const metadata = {};
+  if (share) metadata.share = share;
+  if (challengeCard) metadata.challenge_card = challengeCard;
+  if (linkShare) metadata.link_share = linkShare;
+  if (noteThread) metadata.note_thread = noteThread;
+
   return {
     messageType,
     content,
     share,
     linkShare,
     challengeCard,
-    metadata: share
-      ? { share }
-      : (challengeCard ? { challenge_card: challengeCard } : (linkShare ? { link_share: linkShare } : {})),
+    noteThread,
+    metadata,
   };
 }
 
@@ -477,6 +509,7 @@ module.exports = {
   parseMessageMetadata,
   sanitizeChallengeCardPayload,
   sanitizeLinkSharePayload,
+  sanitizeNoteThreadPayload,
   sanitizeSessionSharePayload,
   textSnippet,
 };

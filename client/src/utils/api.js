@@ -621,6 +621,55 @@ export const getOrCreateDirectConversation = (userId, data = null) => request(`/
   method: 'POST',
   body: JSON.stringify(data || {}),
 });
+export const getMessageHighlights = () => request('/messages/highlights');
+export const getMessageStory = (userId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story`);
+export const createMessageNote = (data) => request('/messages/highlights/note', {
+  method: 'POST',
+  body: JSON.stringify(data || {}),
+});
+export const clearMessageNote = () => request('/messages/highlights/note', {
+  method: 'DELETE',
+});
+export async function createMessageStoryItem({
+  storyType = 'image',
+  caption = '',
+  sourceKind = '',
+  sourceId = '',
+  title = '',
+  subtitle = '',
+  linkPath = '',
+  linkUrl = '',
+  linkLabel = '',
+  stickerTokens = [],
+  imageFile = null,
+} = {}) {
+  const formData = new FormData();
+  formData.append('story_type', String(storyType || '').trim() || 'image');
+  if (caption) formData.append('caption', String(caption));
+  if (sourceKind) formData.append('source_kind', String(sourceKind));
+  if (sourceId) formData.append('source_id', String(sourceId));
+  if (title) formData.append('title', String(title));
+  if (subtitle) formData.append('subtitle', String(subtitle));
+  if (linkPath) formData.append('link_path', String(linkPath));
+  if (linkUrl) formData.append('link_url', String(linkUrl));
+  if (linkLabel) formData.append('link_label', String(linkLabel));
+  if (Array.isArray(stickerTokens) && stickerTokens.length > 0) {
+    formData.append('sticker_tokens_json', JSON.stringify(stickerTokens));
+  }
+  if (imageFile) formData.append('image', imageFile);
+
+  const token = localStorage.getItem('token');
+  const res = await fetch(`${API_BASE}/messages/highlights/story`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Failed to add story item');
+  }
+  return res.json();
+}
 
 // Social — Follows
 export const followUser = (userId) => request(`/social/follow/${userId}`, { method: 'POST' });

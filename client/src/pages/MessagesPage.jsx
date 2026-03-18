@@ -2,7 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  clearMessageNote,
+  createMessageNote,
+  createMessageStoryItem,
   getChartKeyMap,
+  getMessageHighlights,
+  getMessageStory,
   getNewClear,
   getMessageConversation,
   getMessageConversations,
@@ -22,6 +27,12 @@ import { getProfilePath } from '../utils/profile';
 import { renderFormattedText } from '../utils/formatText';
 import ActionIconButton from '../components/ActionIconButton';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
+import InboxHighlightsStrip, {
+  NoteComposerModal,
+  NoteThreadModal,
+  StoryComposerModal,
+  StoryViewerModal,
+} from '../components/InboxHighlightsStrip';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
 import UserPickerDialog from '../components/UserPickerDialog';
@@ -130,6 +141,46 @@ function appendStickerToken(value, token) {
   const current = String(value || '');
   const needsSpace = current.length > 0 && !/\s$/.test(current);
   return `${current}${needsSpace ? ' ' : ''}${token} `;
+}
+
+function buildNoteThreadPayload(note) {
+  if (!note?.thread_key) return null;
+  return {
+    thread_key: note.thread_key,
+    note_id: note.id || '',
+    owner_user_id: note.user?.id || note.user_id || '',
+    owner_username: note.user?.username || '',
+    note_text: note.content || '',
+    note_kind: note.kind || '',
+    created_at: note.created_at || '',
+    expires_at: note.expires_at || '',
+    link_path: note.link?.path || '',
+    link_url: note.link?.url || '',
+    link_label: note.link?.label || '',
+  };
+}
+
+function getThreadMessages(messages, note) {
+  const threadKey = String(note?.thread_key || '').trim();
+  if (!threadKey) return [];
+  return Array.isArray(messages)
+    ? messages.filter((message) => String(message?.note_thread?.threadKey || '').trim() === threadKey)
+    : [];
+}
+
+function buildScoreStoryOptions(stories = []) {
+  return (Array.isArray(stories) ? stories : [])
+    .filter((story) => story?.source?.kind === 'upscore' || story?.source?.kind === 'clear')
+    .map((story) => ({
+      value: `${story.source.kind}:${story.source.id}`,
+      sourceKind: story.source.kind,
+      sourceId: story.source.id,
+      label: story.snapshot
+        ? `${story.snapshot.song_title || 'Song'} ${story.snapshot.mode || ''}${story.snapshot.level ? ` ${story.snapshot.level}` : ''}`.trim()
+        : (story.title || 'Score snapshot'),
+      subtitle: story.title || story.subtitle || 'Recent score activity',
+      timeLabel: formatConversationTime(story.created_at),
+    }));
 }
 
 function formatConversationTime(value) {
@@ -506,6 +557,7 @@ function MessageBubble({
   lifecycleAction = null,
   lifecycleLoading = false,
   lifecycleLabel = 'Accept',
+  onOpenThread = null,
 }) {
   const isOwn = !!message?.is_own;
   const hasContent = !!String(message?.content || '').trim();
@@ -520,6 +572,7 @@ function MessageBubble({
     : 'border-piu-border/60 bg-piu-dark/55';
   const senderName = message?.sender?.username || 'Unknown';
   const shareLabel = getMessageLabel(message);
+  const noteThread = message?.note_thread || null;
   const bubbleClass = isAttachmentOnly
     ? 'w-full max-w-[19.25rem] sm:max-w-[22.5rem]'
     : `w-fit max-w-[81%] sm:max-w-[30rem] rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
@@ -532,6 +585,22 @@ function MessageBubble({
         </p>
       ) : null}
       <div className={bubbleClass}>
+        {noteThread ? (
+          <button
+            type="button"
+            onClick={() => onOpenThread?.(message)}
+            className={`mb-2 block w-full rounded-[1rem] border px-3 py-2 text-left transition-colors ${
+              isOwn
+                ? 'border-cyan-200/15 bg-black/20 hover:bg-black/30'
+                : 'border-white/10 bg-black/20 hover:bg-black/30'
+            }`}
+          >
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">
+              {noteThread.ownerUsername ? `${noteThread.ownerUsername}'s note` : 'Note thread'}
+            </p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-200">{noteThread.noteText || 'Open thread'}</p>
+          </button>
+        ) : null}
         {hasContent ? (
           <div className="whitespace-pre-wrap break-words text-sm leading-5 text-gray-100">
             {renderFormattedText(message.content)}
@@ -617,6 +686,12 @@ function InboxView({
   conversations,
   loadingConversations,
   conversationError,
+  highlights,
+  loadingHighlights,
+  highlightError,
+  onOpenHighlightStory,
+  onOpenHighlightNote,
+  onOpenStoryComposer,
   onStartChat,
 }) {
   return (
@@ -641,6 +716,16 @@ function InboxView({
             </svg>
           </ActionIconButton>
         </div>
+
+        <InboxHighlightsStrip
+          me={highlights?.me || null}
+          circles={highlights?.circles || []}
+          loading={loadingHighlights}
+          error={highlightError}
+          onOpenStory={onOpenHighlightStory}
+          onOpenNote={onOpenHighlightNote}
+          onOpenStoryComposer={onOpenStoryComposer}
+        />
 
         <div className="flex-1 overflow-y-auto">
           {loadingConversations ? (
@@ -700,6 +785,7 @@ function ConversationView({
   expiringMessageId,
   replyingMessageId,
   sending,
+  onOpenThread,
 }) {
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
@@ -786,6 +872,7 @@ function ConversationView({
                   }
                   lifecycleLoading={acceptingMessageId === message.id || expiringMessageId === message.id}
                   lifecycleLabel={canAcceptChallenge(message) ? 'Accept' : 'Expire'}
+                  onOpenThread={message?.note_thread?.threadKey ? () => onOpenThread?.(message) : null}
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -846,6 +933,9 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [conversationError, setConversationError] = useState('');
+  const [highlights, setHighlights] = useState({ me: null, circles: [] });
+  const [loadingHighlights, setLoadingHighlights] = useState(true);
+  const [highlightError, setHighlightError] = useState('');
 
   const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -860,6 +950,30 @@ export default function MessagesPage() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [noteComposerOpen, setNoteComposerOpen] = useState(false);
+  const [noteSubmitting, setNoteSubmitting] = useState(false);
+  const [noteComposerError, setNoteComposerError] = useState('');
+  const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const [storyComposerSubmitting, setStoryComposerSubmitting] = useState(false);
+  const [storyComposerError, setStoryComposerError] = useState('');
+  const [storyComposerOptions, setStoryComposerOptions] = useState([]);
+  const [storyViewerState, setStoryViewerState] = useState({
+    open: false,
+    user: null,
+    stories: [],
+    loading: false,
+    error: '',
+  });
+  const [threadState, setThreadState] = useState({
+    open: false,
+    note: null,
+    conversation: null,
+    messages: [],
+    loading: false,
+    sending: false,
+    draft: '',
+    error: '',
+  });
 
   const activePartner = activeConversation?.partner || null;
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
@@ -1111,6 +1225,22 @@ export default function MessagesPage() {
     }
   }, [user]);
 
+  const loadHighlights = useCallback(async () => {
+    if (!user) return;
+    try {
+      const payload = await getMessageHighlights();
+      setHighlights({
+        me: payload?.me || null,
+        circles: Array.isArray(payload?.circles) ? payload.circles : [],
+      });
+      setHighlightError('');
+    } catch (err) {
+      setHighlightError(err?.message || 'Failed to load circles.');
+    } finally {
+      setLoadingHighlights(false);
+    }
+  }, [user]);
+
   const loadConversation = useCallback(async (targetConversationId) => {
     if (!user || !targetConversationId) return;
     setLoadingMessages(true);
@@ -1141,6 +1271,14 @@ export default function MessagesPage() {
     const interval = setInterval(loadConversations, 15000);
     return () => clearInterval(interval);
   }, [user, loadConversations]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    setLoadingHighlights(true);
+    loadHighlights();
+    const interval = setInterval(loadHighlights, 20000);
+    return () => clearInterval(interval);
+  }, [user, loadHighlights]);
 
   useEffect(() => {
     if (!user) return undefined;
@@ -1435,6 +1573,211 @@ export default function MessagesPage() {
     }
   };
 
+  const handleOpenHighlightStory = useCallback(async (circle) => {
+    if (!circle?.user?.id) return;
+    setStoryViewerState({
+      open: true,
+      user: circle.user,
+      stories: [],
+      loading: true,
+      error: '',
+    });
+    try {
+      const payload = await getMessageStory(circle.user.id);
+      setStoryViewerState({
+        open: true,
+        user: payload?.user || circle.user,
+        stories: Array.isArray(payload?.stories) ? payload.stories : [],
+        loading: false,
+        error: '',
+      });
+    } catch (err) {
+      setStoryViewerState({
+        open: true,
+        user: circle.user,
+        stories: [],
+        loading: false,
+        error: err?.message || 'Failed to load story.',
+      });
+    }
+  }, []);
+
+  const handleOpenStoryComposer = useCallback(async () => {
+    if (!user?.id) return;
+    setStoryComposerError('');
+    setStoryComposerOpen(true);
+    try {
+      const payload = await getMessageStory(user.id);
+      setStoryComposerOptions(buildScoreStoryOptions(payload?.stories || []));
+    } catch {
+      setStoryComposerOptions([]);
+    }
+  }, [user?.id]);
+
+  const handleOpenHighlightNote = useCallback(async (circle) => {
+    if (!circle?.user?.id) return;
+    if (circle.is_self) {
+      setNoteComposerError('');
+      setNoteComposerOpen(true);
+      return;
+    }
+    if (!circle.note?.thread_key) return;
+
+    setThreadState({
+      open: true,
+      note: { ...circle.note, user: circle.user },
+      conversation: null,
+      messages: [],
+      loading: true,
+      sending: false,
+      draft: '',
+      error: '',
+    });
+
+    try {
+      const directPayload = await getOrCreateDirectConversation(circle.user.id);
+      const targetConversationId = directPayload?.conversation?.id || '';
+      if (!targetConversationId) {
+        throw new Error('Could not open this thread yet.');
+      }
+      const payload = await getMessageConversation(targetConversationId);
+      setThreadState({
+        open: true,
+        note: { ...circle.note, user: circle.user },
+        conversation: payload?.conversation || null,
+        messages: getThreadMessages(payload?.messages || [], circle.note),
+        loading: false,
+        sending: false,
+        draft: '',
+        error: '',
+      });
+    } catch (err) {
+      setThreadState({
+        open: true,
+        note: { ...circle.note, user: circle.user },
+        conversation: null,
+        messages: [],
+        loading: false,
+        sending: false,
+        draft: '',
+        error: err?.message || 'Failed to load thread.',
+      });
+    }
+  }, []);
+
+  const handleOpenMessageThread = useCallback((message) => {
+    const thread = message?.note_thread || null;
+    if (!thread?.threadKey) return;
+    const note = {
+      id: thread.noteId || thread.threadKey,
+      user_id: thread.ownerUserId || '',
+      user: {
+        id: thread.ownerUserId || '',
+        username: thread.ownerUsername || 'Thread',
+      },
+      content: thread.noteText || '',
+      kind: thread.noteKind || '',
+      thread_key: thread.threadKey,
+      created_at: thread.createdAt || '',
+      expires_at: thread.expiresAt || '',
+      link: {
+        path: thread.linkPath || '',
+        url: thread.linkUrl || '',
+        label: thread.linkLabel || '',
+      },
+    };
+    setThreadState({
+      open: true,
+      note,
+      conversation: activeConversation,
+      messages: getThreadMessages(messages, note),
+      loading: false,
+      sending: false,
+      draft: '',
+      error: '',
+    });
+  }, [activeConversation, messages]);
+
+  const handleThreadSend = useCallback(async () => {
+    const trimmedDraft = threadState.draft.trim();
+    const notePayload = buildNoteThreadPayload(threadState.note);
+    if (!threadState.conversation?.id || !trimmedDraft || !notePayload || threadState.sending) return;
+
+    setThreadState((prev) => ({ ...prev, sending: true, error: '' }));
+    try {
+      const payload = await sendConversationMessage(threadState.conversation.id, {
+        content: trimmedDraft,
+        note_thread: notePayload,
+      });
+      const nextMessage = payload?.message || null;
+      if (!nextMessage) throw new Error('Failed to send reply.');
+
+      setThreadState((prev) => ({
+        ...prev,
+        sending: false,
+        draft: '',
+        messages: [...prev.messages, nextMessage],
+      }));
+
+      if (conversationId === threadState.conversation.id) {
+        setMessages((prev) => [...prev, nextMessage]);
+      }
+      if (payload?.conversation && conversationId === payload.conversation.id) {
+        setActiveConversation(payload.conversation);
+      }
+      loadConversations();
+      loadHighlights();
+    } catch (err) {
+      setThreadState((prev) => ({
+        ...prev,
+        sending: false,
+        error: err?.message || 'Failed to send reply.',
+      }));
+    }
+  }, [conversationId, loadConversations, loadHighlights, threadState]);
+
+  const handleSaveNote = useCallback(async ({ content }) => {
+    setNoteSubmitting(true);
+    setNoteComposerError('');
+    try {
+      await createMessageNote({ content });
+      await loadHighlights();
+      setNoteComposerOpen(false);
+    } catch (err) {
+      setNoteComposerError(err?.message || 'Failed to save note.');
+    } finally {
+      setNoteSubmitting(false);
+    }
+  }, [loadHighlights]);
+
+  const handleClearNote = useCallback(async () => {
+    setNoteSubmitting(true);
+    setNoteComposerError('');
+    try {
+      await clearMessageNote();
+      await loadHighlights();
+      setNoteComposerOpen(false);
+    } catch (err) {
+      setNoteComposerError(err?.message || 'Failed to clear note.');
+    } finally {
+      setNoteSubmitting(false);
+    }
+  }, [loadHighlights]);
+
+  const handleSubmitStory = useCallback(async (payload) => {
+    setStoryComposerSubmitting(true);
+    setStoryComposerError('');
+    try {
+      await createMessageStoryItem(payload);
+      await loadHighlights();
+      setStoryComposerOpen(false);
+    } catch (err) {
+      setStoryComposerError(err?.message || 'Failed to add story.');
+    } finally {
+      setStoryComposerSubmitting(false);
+    }
+  }, [loadHighlights]);
+
   return (
     <>
       {conversationId ? (
@@ -1467,12 +1810,19 @@ export default function MessagesPage() {
           expiringMessageId={expiringMessageId}
           replyingMessageId={replyingMessageId}
           sending={sending}
+          onOpenThread={handleOpenMessageThread}
         />
       ) : (
         <InboxView
           conversations={conversations}
           loadingConversations={loadingConversations}
           conversationError={conversationError}
+          highlights={highlights}
+          loadingHighlights={loadingHighlights}
+          highlightError={highlightError}
+          onOpenHighlightStory={handleOpenHighlightStory}
+          onOpenHighlightNote={handleOpenHighlightNote}
+          onOpenStoryComposer={handleOpenStoryComposer}
           onStartChat={() => setPickerOpen(true)}
         />
       )}
@@ -1482,6 +1832,72 @@ export default function MessagesPage() {
         onClose={() => setPickerOpen(false)}
         onSelect={handleStartConversation}
         excludeUserIds={excludeUserIds}
+      />
+
+      <StoryViewerModal
+        open={storyViewerState.open}
+        user={storyViewerState.user}
+        stories={storyViewerState.stories}
+        loading={storyViewerState.loading}
+        error={storyViewerState.error}
+        onClose={() => setStoryViewerState({ open: false, user: null, stories: [], loading: false, error: '' })}
+      />
+
+      <NoteComposerModal
+        open={noteComposerOpen}
+        note={highlights?.me?.note || null}
+        submitting={noteSubmitting}
+        error={noteComposerError}
+        onClose={() => setNoteComposerOpen(false)}
+        onSubmit={handleSaveNote}
+        onClear={handleClearNote}
+      />
+
+      <StoryComposerModal
+        open={storyComposerOpen}
+        scoreOptions={storyComposerOptions}
+        submitting={storyComposerSubmitting}
+        error={storyComposerError}
+        onClose={() => setStoryComposerOpen(false)}
+        onSubmit={handleSubmitStory}
+      />
+
+      <NoteThreadModal
+        open={threadState.open}
+        note={threadState.note}
+        conversation={threadState.conversation}
+        messages={threadState.messages}
+        loading={threadState.loading}
+        sending={threadState.sending}
+        error={threadState.error}
+        draft={threadState.draft}
+        onClose={() => setThreadState({
+          open: false,
+          note: null,
+          conversation: null,
+          messages: [],
+          loading: false,
+          sending: false,
+          draft: '',
+          error: '',
+        })}
+        onDraftChange={(value) => setThreadState((prev) => ({ ...prev, draft: value }))}
+        onSend={handleThreadSend}
+        onOpenConversation={() => {
+          if (threadState.conversation?.id) {
+            navigate(`/messages/${threadState.conversation.id}`);
+            setThreadState({
+              open: false,
+              note: null,
+              conversation: null,
+              messages: [],
+              loading: false,
+              sending: false,
+              draft: '',
+              error: '',
+            });
+          }
+        }}
       />
     </>
   );

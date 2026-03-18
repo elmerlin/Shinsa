@@ -1,4 +1,6 @@
 const express = require('express');
+const multer = require('multer');
+const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth } = require('./auth');
@@ -11,8 +13,30 @@ const {
   normalizeConversationMessage,
   normalizeConversationRow,
 } = require('../lib/directMessages');
+const {
+  NOTE_TTL_HOURS,
+  STORY_TTL_HOURS,
+  addHours,
+  getInboxHighlights,
+  getStoryItemsForUser,
+  normalizeNotePayload,
+  normalizeStoryUser,
+  normalizeText,
+  sanitizeAbsoluteUrl,
+  sanitizeRelativePath,
+  sanitizeStickerTokens,
+  toSqliteDateTime: toInboxSqliteDateTime,
+} = require('../lib/inboxHighlights');
 
 const router = express.Router();
+const highlightUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/x-png', 'image/heic', 'image/heif', 'image/avif'];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 function toSqliteDateTime(date = new Date()) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
@@ -111,6 +135,28 @@ function getUserIdentity(db, userId) {
     WHERE id = ?
     LIMIT 1
   `).get(userId);
+}
+
+function getHighlightUserRow(db, userId) {
+  return db.prepare(`
+    SELECT id, username, avatar, avatar_v, playing_status, updated_at
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+  `).get(userId);
+}
+
+function isFollowingOrSelf(db, viewerUserId, targetUserId) {
+  const viewer = String(viewerUserId || '').trim();
+  const target = String(targetUserId || '').trim();
+  if (!viewer || !target) return false;
+  if (viewer === target) return true;
+  return !!db.prepare(`
+    SELECT 1
+    FROM user_follows
+    WHERE follower_id = ? AND following_id = ?
+    LIMIT 1
+  `).get(viewer, target);
 }
 
 function getConversationMember(db, conversationId, userId) {
@@ -263,6 +309,228 @@ function notifyRecipients(db, conversationId, senderUser, recipientIds, input) {
     );
   }
 }
+
+function normalizeStoryLinkInput(raw = {}) {
+  const path = sanitizeRelativePath(raw.link_path || raw.linkPath || '');
+  const url = sanitizeAbsoluteUrl(raw.link_url || raw.linkUrl || '');
+  const label = normalizeText(raw.link_label || raw.linkLabel || '', 48);
+  return { path, url, label };
+}
+
+function normalizeNoteInput(raw = {}) {
+  const content = normalizeText(raw.content, 120);
+  const link = normalizeStoryLinkInput(raw);
+  if (!content && !link.path && !link.url) {
+    return { error: 'A note needs text or a link.' };
+  }
+  return { content, link };
+}
+
+async function processStoryImage(file) {
+  if (!file?.buffer) return '';
+  try {
+    let buffer = await sharp(file.buffer)
+      .rotate()
+      .resize(1080, 1920, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 72 })
+      .toBuffer();
+
+    if (buffer.length > 350 * 1024) {
+      buffer = await sharp(file.buffer)
+        .rotate()
+        .resize(900, 1600, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 58 })
+        .toBuffer();
+    }
+
+    return `data:image/webp;base64,${buffer.toString('base64')}`;
+  } catch {
+    try {
+      const mime = file.mimetype || 'image/png';
+      return `data:${mime};base64,${file.buffer.toString('base64')}`;
+    } catch {
+      return '';
+    }
+  }
+}
+
+router.get('/highlights', requireAuth, (req, res) => {
+  const db = getDb();
+  res.json(getInboxHighlights(db, req.user.id));
+});
+
+router.get('/highlights/:userId/story', requireAuth, (req, res) => {
+  const db = getDb();
+  const targetUserId = String(req.params.userId || '').trim();
+  if (!targetUserId) return res.status(400).json({ error: 'User id is required' });
+  if (!isFollowingOrSelf(db, req.user.id, targetUserId)) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const user = getHighlightUserRow(db, targetUserId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  res.json({
+    user: normalizeStoryUser(user, 72),
+    stories: getStoryItemsForUser(db, {
+      ...user,
+      avatar: normalizeStoryUser(user, 72)?.avatar || '',
+    }),
+  });
+});
+
+router.post('/highlights/note', requireAuth, (req, res) => {
+  const db = getDb();
+  const input = normalizeNoteInput(req.body || {});
+  if (input.error) return res.status(400).json({ error: input.error });
+
+  const user = getHighlightUserRow(db, req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const now = new Date();
+  const nowSql = toInboxSqliteDateTime(now);
+  const expiresAt = toInboxSqliteDateTime(addHours(now, NOTE_TTL_HOURS));
+  const noteId = uuidv4();
+  const threadKey = `note:${noteId}`;
+
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      UPDATE user_inbox_notes
+      SET cleared_at = ?, updated_at = ?
+      WHERE user_id = ?
+        AND COALESCE(cleared_at, '') = ''
+        AND datetime(expires_at) > datetime('now')
+    `).run(nowSql, nowSql, req.user.id);
+
+    db.prepare(`
+      INSERT INTO user_inbox_notes (
+        id, user_id, content, link_path, link_url, link_label, thread_key, created_at, updated_at, expires_at, cleared_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+    `).run(
+      noteId,
+      req.user.id,
+      input.content,
+      input.link.path,
+      input.link.url,
+      input.link.label,
+      threadKey,
+      nowSql,
+      nowSql,
+      expiresAt
+    );
+  });
+
+  transaction();
+
+  res.status(201).json({
+    note: normalizeNotePayload({
+      id: noteId,
+      user_id: req.user.id,
+      content: input.content,
+      note_kind: 'manual',
+      thread_key: threadKey,
+      created_at: nowSql,
+      updated_at: nowSql,
+      expires_at: expiresAt,
+      link_path: input.link.path,
+      link_url: input.link.url,
+      link_label: input.link.label,
+    }, normalizeStoryUser(user, 56)),
+  });
+});
+
+router.delete('/highlights/note', requireAuth, (req, res) => {
+  const db = getDb();
+  const nowSql = toInboxSqliteDateTime(new Date());
+  db.prepare(`
+    UPDATE user_inbox_notes
+    SET cleared_at = ?, updated_at = ?
+    WHERE user_id = ?
+      AND COALESCE(cleared_at, '') = ''
+      AND datetime(expires_at) > datetime('now')
+  `).run(nowSql, nowSql, req.user.id);
+  res.json({ success: true });
+});
+
+router.post('/highlights/story', requireAuth, highlightUpload.single('image'), async (req, res) => {
+  try {
+    const db = getDb();
+    const user = getHighlightUserRow(db, req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const storyType = String(req.body?.story_type || req.body?.storyType || '').trim().toLowerCase() || 'image';
+    const caption = normalizeText(req.body?.caption || '', 420);
+    const sourceKind = String(req.body?.source_kind || req.body?.sourceKind || '').trim().toLowerCase();
+    const sourceId = String(req.body?.source_id || req.body?.sourceId || '').trim();
+    const stickerTokens = sanitizeStickerTokens(req.body?.sticker_tokens_json || req.body?.stickerTokens || req.body?.stickers || []);
+    const link = normalizeStoryLinkInput(req.body || {});
+    const metadata = {};
+    let mediaUrl = '';
+
+    if (!['image', 'link', 'score_snapshot'].includes(storyType)) {
+      return res.status(400).json({ error: 'Unsupported story type' });
+    }
+
+    if (storyType === 'image') {
+      mediaUrl = await processStoryImage(req.file);
+      if (!mediaUrl) return res.status(400).json({ error: 'Please upload an image.' });
+      metadata.title = normalizeText(req.body?.title || 'Story', 80);
+      metadata.subtitle = normalizeText(req.body?.subtitle || '', 120);
+    }
+
+    if (storyType === 'link') {
+      if (!caption && !link.path && !link.url) {
+        return res.status(400).json({ error: 'A link story needs text or a destination.' });
+      }
+      metadata.title = normalizeText(req.body?.title || 'Shared link', 80);
+      metadata.subtitle = normalizeText(req.body?.subtitle || '', 120);
+    }
+
+    if (storyType === 'score_snapshot') {
+      if (!['upscore', 'clear'].includes(sourceKind) || !sourceId) {
+        return res.status(400).json({ error: 'Choose a recent upscore or clear to share.' });
+      }
+    }
+
+    const now = new Date();
+    const nowSql = toInboxSqliteDateTime(now);
+    const expiresAt = toInboxSqliteDateTime(addHours(now, STORY_TTL_HOURS));
+    const storyId = uuidv4();
+
+    db.prepare(`
+      INSERT INTO user_story_items (
+        id, user_id, story_type, source_kind, source_id, caption, media_url, link_path, link_url, link_label,
+        sticker_tokens_json, metadata_json, created_at, expires_at, deleted_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+    `).run(
+      storyId,
+      req.user.id,
+      storyType,
+      sourceKind,
+      sourceId,
+      caption,
+      mediaUrl,
+      link.path,
+      link.url,
+      link.label,
+      JSON.stringify(stickerTokens),
+      JSON.stringify(metadata),
+      nowSql,
+      expiresAt
+    );
+
+    const stories = getStoryItemsForUser(db, {
+      ...user,
+      avatar: normalizeStoryUser(user, 72)?.avatar || '',
+    });
+    const story = stories.find((item) => item.id === `story:${storyId}`) || null;
+    res.status(201).json({ story });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to add story item' });
+  }
+});
 
 router.get('/conversations', requireAuth, (req, res) => {
   const db = getDb();

@@ -1471,6 +1471,38 @@ function initializeDb() {
       deleted_at TEXT DEFAULT ''
     );
 
+    CREATE TABLE IF NOT EXISTS user_inbox_notes (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL DEFAULT '',
+      link_path TEXT DEFAULT '',
+      link_url TEXT DEFAULT '',
+      link_label TEXT DEFAULT '',
+      thread_key TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL DEFAULT '',
+      cleared_at TEXT DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS user_story_items (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      story_type TEXT NOT NULL DEFAULT 'image',
+      source_kind TEXT DEFAULT '',
+      source_id TEXT DEFAULT '',
+      caption TEXT DEFAULT '',
+      media_url TEXT DEFAULT '',
+      link_path TEXT DEFAULT '',
+      link_url TEXT DEFAULT '',
+      link_label TEXT DEFAULT '',
+      sticker_tokens_json TEXT NOT NULL DEFAULT '[]',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL DEFAULT '',
+      deleted_at TEXT DEFAULT ''
+    );
+
     CREATE TABLE IF NOT EXISTS auth_qr_login_challenges (
       id TEXT PRIMARY KEY,
       claim_token TEXT NOT NULL UNIQUE,
@@ -1582,6 +1614,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_conversation_members_user ON conversation_members(user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation_time ON conversation_messages(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_sender ON conversation_messages(sender_user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_user_inbox_notes_user_active ON user_inbox_notes(user_id, cleared_at, expires_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_user_story_items_user_active ON user_story_items(user_id, deleted_at, expires_at, created_at);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_status ON auth_qr_login_challenges(status, expires_at);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_approved_user ON auth_qr_login_challenges(approved_user_id, created_at);
 
