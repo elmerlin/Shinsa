@@ -51,6 +51,8 @@ import LeaderboardsPage from './pages/LeaderboardsPage';
 import LivePage from './pages/LivePage';
 import LiveOverlayPage from './pages/LiveOverlayPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TranslationEditorDrawer from './components/TranslationEditorDrawer';
+import { useI18n } from './i18n/TranslationContext';
 
 const DOJO_TARGET_GROUP = 'pump dojo';
 const DOJO_VENUE_SLUG = 'london-pump-dojo';
@@ -159,6 +161,7 @@ function getDojoCheckoutReminderRemainingMs(userId, checkinId) {
 
 function NotificationBell() {
   const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -174,7 +177,7 @@ function NotificationBell() {
       <button
         onClick={() => setOpen(!open)}
         className="relative p-1.5 text-gray-400 hover:text-white transition-colors"
-        aria-label="Notifications"
+        aria-label={t('app.notifications.title')}
       >
         {/* Bell icon */}
         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -190,9 +193,9 @@ function NotificationBell() {
       {open && (
         <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 max-h-96 overflow-y-auto bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50">
           <div className="flex items-center justify-between px-3 py-2 border-b border-piu-border/50">
-            <span className="font-display font-bold text-xs text-gray-400">NOTIFICATIONS</span>
+            <span className="font-display font-bold text-xs text-gray-400">{t('app.notifications.title')}</span>
             {unreadCount > 0 && (
-              <button onClick={markAllRead} className="text-[10px] text-piu-accent hover:underline">Mark all read</button>
+              <button onClick={markAllRead} className="text-[10px] text-piu-accent hover:underline">{t('app.notifications.mark_all_read')}</button>
             )}
           </div>
 
@@ -210,7 +213,7 @@ function NotificationBell() {
           )}
 
           {notifications.length === 0 && invitationCount === 0 && (
-            <p className="text-center text-gray-500 text-xs py-6">No notifications</p>
+            <p className="text-center text-gray-500 text-xs py-6">{t('app.notifications.none')}</p>
           )}
 
           {notifications.map(n => (
@@ -243,6 +246,7 @@ function NotificationBell() {
 }
 
 function UserSearch() {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -308,7 +312,7 @@ function UserSearch() {
                 setOpen(false);
               }
             }}
-            placeholder="Search players..."
+            placeholder={t('app.search.players_placeholder')}
             className="w-full bg-piu-dark border border-piu-border rounded-lg text-xs py-1.5 px-2 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-piu-accent/50 transition-colors"
           />
         </div>
@@ -322,7 +326,7 @@ function UserSearch() {
             });
           }}
           className="p-1.5 text-gray-400 hover:text-white transition-colors"
-          aria-label="Search players"
+          aria-label={t('app.search.players_placeholder')}
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -367,6 +371,7 @@ function UserSearch() {
 
 function UserMenu() {
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [dojoMembershipEligible, setDojoMembershipEligible] = useState(false);
@@ -441,7 +446,7 @@ function UserMenu() {
             )}
             <div className="min-w-0">
               <p className="text-sm font-display font-bold text-gray-200 truncate">{user.username}</p>
-              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Menu</p>
+              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{t('app.menu.label')}</p>
             </div>
           </div>
           <button
@@ -465,7 +470,7 @@ function UserMenu() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
-            My Profile
+            {t('app.nav.my_profile')}
           </Link>
           <Link
             to="/posts"
@@ -475,7 +480,7 @@ function UserMenu() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
-            Posts
+            {t('app.nav.posts')}
           </Link>
           <Link
             to="/live"
@@ -485,7 +490,7 @@ function UserMenu() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
-            Shinsa Live
+            {t('app.nav.shinsa_live')}
           </Link>
           <Link
             to="/world-max"
@@ -496,7 +501,7 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18M12 3a15 15 0 000 18" />
             </svg>
-            World Max
+            {t('app.nav.world_max')}
           </Link>
           <Link
             to="/songs"
@@ -506,7 +511,7 @@ function UserMenu() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-2v13M9 19a2 2 0 11-4 0 2 2 0 014 0Zm12-2a2 2 0 11-4 0 2 2 0 014 0Z" />
             </svg>
-            Songs
+            {t('app.nav.songs')}
           </Link>
           <Link
             to="/lists"
@@ -516,7 +521,7 @@ function UserMenu() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
-            Lists
+            {t('app.nav.lists')}
           </Link>
           <Link
             to="/leaderboards"
@@ -527,7 +532,7 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 6v12M12 6v12M17 6v12" />
             </svg>
-            Leaderboards
+            {t('app.nav.leaderboards')}
           </Link>
           <Link
             to="/shoes"
@@ -538,7 +543,7 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 16h12M5 20h14M7 8c0-1.657 1.343-3 3-3h5v3a3 3 0 0 1-3 3H7V8Z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 11h3a2 2 0 0 1 2 2v3h-5v-5Z" />
             </svg>
-            Shoes
+            {t('app.nav.shoes')}
           </Link>
           {canAccessOptimise && (
             <Link
@@ -550,7 +555,7 @@ function UserMenu() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3M9 12h6M7.5 18h9" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 7a2 2 0 012-2h1m10 0h1a2 2 0 012 2v1m0 8v1a2 2 0 01-2 2h-1m-10 0H6a2 2 0 01-2-2v-1m0-8V7" />
               </svg>
-              Optimise
+              {t('app.nav.optimise')}
             </Link>
           )}
           <Link
@@ -561,7 +566,7 @@ function UserMenu() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h14M3 18h10" />
             </svg>
-            Tiers
+            {t('app.nav.tiers')}
           </Link>
           <Link
             to="/head-to-head"
@@ -572,7 +577,7 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
             </svg>
-            Rivals
+            {t('app.nav.rivals')}
           </Link>
           <Link
             to="/fun"
@@ -583,7 +588,7 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0Zm6 0a9 9 0 11-18 0 9 9 0 0118 0Z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 15.5h8" />
             </svg>
-            Fun
+            {t('app.nav.fun')}
           </Link>
           {canAccessCheckin && (
             <Link
@@ -595,7 +600,7 @@ function UserMenu() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              Check In
+              {t('app.nav.check_in')}
             </Link>
           )}
           {dojoMembershipEligible && (
@@ -608,7 +613,7 @@ function UserMenu() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 4.5-2.8 7.7-7 9-4.2-1.3-7-4.5-7-9V7l7-4Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M12 9v6" />
               </svg>
-              Pump Dojo
+              {t('app.nav.pump_dojo')}
             </Link>
           )}
           {canAccessDojoAdmin && (
@@ -621,7 +626,7 @@ function UserMenu() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M6 7v10a2 2 0 002 2h8a2 2 0 002-2V7" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 11h6M9 15h4" />
               </svg>
-              Dojo Admin
+              {t('app.nav.dojo_admin')}
             </Link>
           )}
           <Link
@@ -634,7 +639,7 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5a2 2 0 002 2h2a2 2 0 002-2" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M9 8h6" />
             </svg>
-            Changelog
+            {t('app.nav.changelog')}
           </Link>
           <Link
             to="/account"
@@ -645,7 +650,7 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            Profile Settings
+            {t('app.nav.profile_settings')}
           </Link>
           {canAccessAdmin && (
             <Link
@@ -657,7 +662,7 @@ function UserMenu() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l2 2 3-3" />
               </svg>
-              Admin
+              {t('app.nav.admin')}
             </Link>
           )}
           <div className="border-t border-piu-border/30 my-1" />
@@ -668,7 +673,7 @@ function UserMenu() {
             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            Logout
+            {t('app.nav.logout')}
           </button>
         </div>
       </aside>
@@ -712,6 +717,7 @@ function UserMenu() {
 }
 
 function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
+  const { t } = useI18n();
   if (!popup) return null;
   const slides = Array.isArray(popup.slides) ? popup.slides : [];
   if (slides.length === 0) return null;
@@ -724,9 +730,9 @@ function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
       <div className="w-full max-w-2xl rounded-2xl border border-piu-border bg-[#0b1324] shadow-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-piu-border/60 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Announcement</p>
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">{t('app.popup.announcement')}</p>
             <h3 className="text-base font-display font-bold text-piu-accent truncate">
-              {popup.title || 'Group Update'}
+              {popup.title || t('app.popup.group_update')}
             </h3>
           </div>
           <button
@@ -734,14 +740,14 @@ function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
             onClick={onClose}
             className="text-sm text-gray-400 hover:text-white transition-colors"
           >
-            Close
+            {t('app.popup.close')}
           </button>
         </div>
 
         <div className="px-4 py-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-gray-400 font-display">
-              Slide {safeIndex + 1} of {slides.length}
+              {t('app.popup.slide_progress', { current: safeIndex + 1, total: slides.length })}
             </p>
             <div className="h-1.5 w-28 rounded-full bg-piu-dark/70 overflow-hidden">
               <div
@@ -793,6 +799,22 @@ function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function LocaleSwitchButton() {
+  const { isKorean, getLocaleHref, t } = useI18n();
+  const nextLocale = isKorean ? 'en' : 'ko';
+  const label = isKorean ? t('app.language.switch_to_english') : t('app.language.switch_to_korean');
+
+  return (
+    <button
+      type="button"
+      onClick={() => window.location.assign(getLocaleHref(nextLocale))}
+      className="rounded-full border border-piu-border/60 px-2.5 py-1 text-[11px] font-display text-gray-300 hover:text-white transition-colors"
+    >
+      {label}
+    </button>
   );
 }
 
@@ -904,6 +926,7 @@ function DojoCheckoutPopupModal({ prompt, loading, error, onClose, onCheckout })
 }
 
 export default function App() {
+  const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -1200,42 +1223,43 @@ export default function App() {
           <div className="flex items-center gap-2 sm:gap-3">
             {!isHome && (
               <Link to="/" onClick={scrollToTop} className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-                Home
+                {t('app.nav.home')}
               </Link>
             )}
             {user && (
               <Link to="/feed" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-                Feed
+                {t('app.nav.feed')}
               </Link>
             )}
             {user && (
               <Link to="/live" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-                Live
+                {t('app.nav.live')}
               </Link>
             )}
             <Link to="/world-max" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-              World Max
+              {t('app.nav.world_max')}
             </Link>
             <Link to="/songs" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-              Songs
+              {t('app.nav.songs')}
             </Link>
             <Link to="/lists" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-              Lists
+              {t('app.nav.lists')}
             </Link>
             <Link to="/tiers" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-              Tiers
+              {t('app.nav.tiers')}
             </Link>
             {canAccessDojo && (
               <Link to="/dojoadmin" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-                Dojo Admin
+                {t('app.nav.dojo_admin')}
               </Link>
             )}
             <Link to="/head-to-head" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-              Rivals
+              {t('app.nav.rivals')}
             </Link>
             <Link to="/communities" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-              Communities
+              {t('app.nav.communities')}
             </Link>
+            <LocaleSwitchButton />
             <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
@@ -1244,7 +1268,7 @@ export default function App() {
               </div>
             ) : (
               <Link to="/login" className="text-sm text-piu-accent hover:text-piu-accent/80 transition-colors font-display font-bold">
-                Login
+                {t('app.nav.login')}
               </Link>
             )}
           </div>
@@ -1351,11 +1375,13 @@ export default function App() {
 
       {/* Mobile Bottom Navigation — Instagram style */}
       {!isLiveOverlay && user && <MobileBottomNav />}
+      <TranslationEditorDrawer />
     </div>
   );
 }
 
 function MobileBottomNav() {
+  const { t } = useI18n();
   const location = useLocation();
   const { user } = useAuth();
   const scrollToTop = () => {
@@ -1376,7 +1402,7 @@ function MobileBottomNav() {
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
           </svg>
-          <span className="text-[9px] font-display">Home</span>
+          <span className="text-[9px] font-display">{t('app.nav.home')}</span>
         </Link>
 
         {/* Feed */}
@@ -1384,7 +1410,7 @@ function MobileBottomNav() {
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
           </svg>
-          <span className="text-[9px] font-display">Feed</span>
+          <span className="text-[9px] font-display">{t('app.nav.feed')}</span>
         </Link>
 
         {/* Add Post */}
@@ -1394,7 +1420,7 @@ function MobileBottomNav() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
           </div>
-          <span className="text-[9px] font-display">Post</span>
+          <span className="text-[9px] font-display">{t('app.nav.posts')}</span>
         </Link>
 
         {/* Tiers */}
@@ -1402,7 +1428,7 @@ function MobileBottomNav() {
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h12M4 17h8" />
           </svg>
-          <span className="text-[9px] font-display">Tiers</span>
+          <span className="text-[9px] font-display">{t('app.nav.tiers')}</span>
         </Link>
 
         {/* Profile */}
@@ -1414,7 +1440,7 @@ function MobileBottomNav() {
               {user.username[0].toUpperCase()}
             </div>
           )}
-          <span className="text-[9px] font-display">Profile</span>
+          <span className="text-[9px] font-display">{t('app.nav.my_profile')}</span>
         </Link>
       </div>
     </nav>

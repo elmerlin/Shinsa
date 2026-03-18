@@ -1,0 +1,819 @@
+[
+  {
+    "key": "app.language.switch_to_korean",
+    "category": "language",
+    "pages": ["app"],
+    "english": "KR",
+    "korean": "KR",
+    "keepEnglish": true
+  },
+  {
+    "key": "app.language.switch_to_english",
+    "category": "language",
+    "pages": ["app"],
+    "english": "EN",
+    "korean": "EN",
+    "keepEnglish": true
+  },
+  {
+    "key": "app.editor.open",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Edit KR",
+    "korean": "KR 편집"
+  },
+  {
+    "key": "app.editor.title",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Korean Translation Review",
+    "korean": "한국어 번역 검수"
+  },
+  {
+    "key": "app.editor.subtitle",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Edit current Korean copy, save changes, and accept approved wording.",
+    "korean": "현재 한국어 문구를 수정하고, 저장하고, 승인된 표현을 확정할 수 있습니다."
+  },
+  {
+    "key": "app.editor.current_page",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Current page",
+    "korean": "현재 페이지"
+  },
+  {
+    "key": "app.editor.all_pages",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "All pages",
+    "korean": "전체 페이지"
+  },
+  {
+    "key": "app.editor.search_placeholder",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Search translations",
+    "korean": "번역 검색"
+  },
+  {
+    "key": "app.editor.english_source",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "English source",
+    "korean": "영문 원문"
+  },
+  {
+    "key": "app.editor.current_translation",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Current Korean",
+    "korean": "현재 한국어"
+  },
+  {
+    "key": "app.editor.seeded",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Seeded",
+    "korean": "초안"
+  },
+  {
+    "key": "app.editor.draft",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Draft",
+    "korean": "임시 저장"
+  },
+  {
+    "key": "app.editor.accepted",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Accepted",
+    "korean": "승인됨"
+  },
+  {
+    "key": "app.editor.kept_english",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Keep English",
+    "korean": "영문 유지"
+  },
+  {
+    "key": "app.editor.save",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Save",
+    "korean": "저장"
+  },
+  {
+    "key": "app.editor.accept",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Accept",
+    "korean": "승인"
+  },
+  {
+    "key": "app.editor.saving",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Saving...",
+    "korean": "저장 중..."
+  },
+  {
+    "key": "app.editor.no_results",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "No translations match this filter yet.",
+    "korean": "이 필터와 일치하는 번역이 아직 없습니다."
+  },
+  {
+    "key": "app.editor.login_required",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Sign in to save Korean translation edits.",
+    "korean": "한국어 번역 수정 사항을 저장하려면 로그인하세요."
+  },
+  {
+    "key": "app.editor.accept_requires_admin",
+    "category": "editor",
+    "pages": ["app"],
+    "english": "Only admins can accept translations right now.",
+    "korean": "현재 번역 승인 처리는 관리자만 할 수 있습니다."
+  },
+  {
+    "key": "app.notifications.title",
+    "category": "notifications",
+    "pages": ["app"],
+    "english": "NOTIFICATIONS",
+    "korean": "알림"
+  },
+  {
+    "key": "app.notifications.mark_all_read",
+    "category": "notifications",
+    "pages": ["app"],
+    "english": "Mark all read",
+    "korean": "모두 읽음 처리"
+  },
+  {
+    "key": "app.notifications.none",
+    "category": "notifications",
+    "pages": ["app"],
+    "english": "No notifications",
+    "korean": "알림이 없습니다"
+  },
+  {
+    "key": "app.search.players_placeholder",
+    "category": "search",
+    "pages": ["app"],
+    "english": "Search players...",
+    "korean": "플레이어 검색..."
+  },
+  {
+    "key": "app.menu.label",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Menu",
+    "korean": "메뉴"
+  },
+  {
+    "key": "app.nav.my_profile",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "My Profile",
+    "korean": "내 프로필"
+  },
+  {
+    "key": "app.nav.home",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Home",
+    "korean": "홈"
+  },
+  {
+    "key": "app.nav.feed",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Feed",
+    "korean": "피드"
+  },
+  {
+    "key": "app.nav.live",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Live",
+    "korean": "라이브"
+  },
+  {
+    "key": "app.nav.posts",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Posts",
+    "korean": "게시물"
+  },
+  {
+    "key": "app.nav.communities",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Communities",
+    "korean": "커뮤니티"
+  },
+  {
+    "key": "app.nav.shinsa_live",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Shinsa Live",
+    "korean": "Shinsa Live",
+    "keepEnglish": true
+  },
+  {
+    "key": "app.nav.world_max",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "World Max",
+    "korean": "World Max",
+    "keepEnglish": true
+  },
+  {
+    "key": "app.nav.songs",
+    "category": "navigation",
+    "pages": ["app", "songs"],
+    "english": "Songs",
+    "korean": "곡"
+  },
+  {
+    "key": "app.nav.lists",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Lists",
+    "korean": "리스트"
+  },
+  {
+    "key": "app.nav.leaderboards",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Leaderboards",
+    "korean": "리더보드"
+  },
+  {
+    "key": "app.nav.shoes",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Shoes",
+    "korean": "신발"
+  },
+  {
+    "key": "app.nav.optimise",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Optimise",
+    "korean": "최적화"
+  },
+  {
+    "key": "app.nav.tiers",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Tiers",
+    "korean": "티어"
+  },
+  {
+    "key": "app.nav.rivals",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Rivals",
+    "korean": "라이벌"
+  },
+  {
+    "key": "app.nav.fun",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Fun",
+    "korean": "재미"
+  },
+  {
+    "key": "app.nav.check_in",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Check In",
+    "korean": "체크인"
+  },
+  {
+    "key": "app.nav.pump_dojo",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Pump Dojo",
+    "korean": "Pump Dojo",
+    "keepEnglish": true
+  },
+  {
+    "key": "app.nav.dojo_admin",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Dojo Admin",
+    "korean": "도장 관리자"
+  },
+  {
+    "key": "app.nav.changelog",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Changelog",
+    "korean": "변경 로그"
+  },
+  {
+    "key": "app.nav.profile_settings",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Profile Settings",
+    "korean": "프로필 설정"
+  },
+  {
+    "key": "app.nav.admin",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Admin",
+    "korean": "관리자"
+  },
+  {
+    "key": "app.nav.logout",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Logout",
+    "korean": "로그아웃"
+  },
+  {
+    "key": "app.nav.login",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "Login",
+    "korean": "로그인"
+  },
+  {
+    "key": "app.popup.announcement",
+    "category": "modal",
+    "pages": ["app"],
+    "english": "Announcement",
+    "korean": "공지"
+  },
+  {
+    "key": "app.popup.group_update",
+    "category": "modal",
+    "pages": ["app"],
+    "english": "Group Update",
+    "korean": "그룹 업데이트"
+  },
+  {
+    "key": "app.popup.close",
+    "category": "modal",
+    "pages": ["app", "login", "leaderboards"],
+    "english": "Close",
+    "korean": "닫기"
+  },
+  {
+    "key": "app.popup.slide_progress",
+    "category": "modal",
+    "pages": ["app"],
+    "english": "Slide {current} of {total}",
+    "korean": "{total}장 중 {current}장"
+  },
+  {
+    "key": "login.password_login",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "PASSWORD LOGIN",
+    "korean": "비밀번호 로그인"
+  },
+  {
+    "key": "login.title",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "LOGIN",
+    "korean": "로그인"
+  },
+  {
+    "key": "login.subtitle.default",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Use your Pump Alias and password, or scan the QR code from a phone already signed into Shinsa.",
+    "korean": "Pump Alias와 비밀번호를 사용하거나, 이미 Shinsa에 로그인된 휴대폰으로 QR 코드를 스캔하세요."
+  },
+  {
+    "key": "login.subtitle.approve",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Sign in on this phone so you can approve the browser login request.",
+    "korean": "브라우저 로그인 요청을 승인하려면 이 휴대폰에서 로그인하세요."
+  },
+  {
+    "key": "login.pump_alias",
+    "category": "auth",
+    "pages": ["login", "register"],
+    "english": "Pump Alias",
+    "korean": "Pump Alias",
+    "keepEnglish": true
+  },
+  {
+    "key": "login.username_placeholder",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Your username",
+    "korean": "사용자 이름"
+  },
+  {
+    "key": "login.password",
+    "category": "auth",
+    "pages": ["login", "register"],
+    "english": "Password",
+    "korean": "비밀번호"
+  },
+  {
+    "key": "login.password_placeholder",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Password",
+    "korean": "비밀번호"
+  },
+  {
+    "key": "login.logging_in",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Logging in...",
+    "korean": "로그인 중..."
+  },
+  {
+    "key": "login.submit",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Login",
+    "korean": "로그인"
+  },
+  {
+    "key": "login.no_account",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Don't have an account?",
+    "korean": "계정이 없으신가요?"
+  },
+  {
+    "key": "login.register",
+    "category": "auth",
+    "pages": ["login", "register"],
+    "english": "Register",
+    "korean": "회원가입"
+  },
+  {
+    "key": "login.passwordless_login",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "PASSWORDLESS LOGIN",
+    "korean": "비밀번호 없는 로그인"
+  },
+  {
+    "key": "login.scan_with_phone",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Scan With Your Phone",
+    "korean": "휴대폰으로 스캔"
+  },
+  {
+    "key": "login.scan_subtitle",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "If you're already signed into Shinsa on mobile, scan this code, approve the login, and this browser will sign in automatically.",
+    "korean": "모바일에서 이미 Shinsa에 로그인되어 있다면 이 코드를 스캔하고 로그인을 승인하면 이 브라우저가 자동으로 로그인됩니다."
+  },
+  {
+    "key": "login.step.scan",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Scan",
+    "korean": "스캔"
+  },
+  {
+    "key": "login.step.confirm",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Confirm",
+    "korean": "확인"
+  },
+  {
+    "key": "login.step.log_in",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Log In",
+    "korean": "로그인"
+  },
+  {
+    "key": "login.waiting_for_phone",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Waiting for approval from your phone.",
+    "korean": "휴대폰 승인 대기 중입니다."
+  },
+  {
+    "key": "login.phone_link",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "PHONE LINK",
+    "korean": "휴대폰 링크"
+  },
+  {
+    "key": "login.refresh_qr",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Refresh QR",
+    "korean": "QR 새로고침"
+  },
+  {
+    "key": "login.expires_soon",
+    "category": "auth",
+    "pages": ["login"],
+    "english": "Expires soon for shared-space safety",
+    "korean": "공용 공간 보안을 위해 곧 만료됩니다"
+  },
+  {
+    "key": "register.title",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "REGISTER",
+    "korean": "회원가입"
+  },
+  {
+    "key": "register.email_optional",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Email (optional)",
+    "korean": "이메일 (선택)"
+  },
+  {
+    "key": "register.username_placeholder",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Your username (2-30 chars)",
+    "korean": "사용자 이름 (2~30자)"
+  },
+  {
+    "key": "register.email_placeholder",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "For password recovery",
+    "korean": "비밀번호 찾기용"
+  },
+  {
+    "key": "register.password_minimum",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "At least 4 characters",
+    "korean": "최소 4자"
+  },
+  {
+    "key": "register.confirm_password",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Confirm Password",
+    "korean": "비밀번호 확인"
+  },
+  {
+    "key": "register.confirm_password_placeholder",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Retype password",
+    "korean": "비밀번호 다시 입력"
+  },
+  {
+    "key": "register.pumbility",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Pumbility",
+    "korean": "Pumbility",
+    "keepEnglish": true
+  },
+  {
+    "key": "register.pumbility_placeholder",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "e.g. 2500",
+    "korean": "예: 2500"
+  },
+  {
+    "key": "register.hide_details",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Hide details",
+    "korean": "상세 정보 숨기기"
+  },
+  {
+    "key": "register.more_details",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "More details (skill, nationality, etc.)",
+    "korean": "추가 정보 (실력, 국적 등)"
+  },
+  {
+    "key": "register.skill_title",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Skill Title",
+    "korean": "실력 칭호"
+  },
+  {
+    "key": "register.skill_level",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Skill Level",
+    "korean": "실력 레벨"
+  },
+  {
+    "key": "register.gender",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Gender",
+    "korean": "성별"
+  },
+  {
+    "key": "register.nationality",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Nationality",
+    "korean": "국적"
+  },
+  {
+    "key": "register.date_of_birth",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Date of Birth",
+    "korean": "생년월일"
+  },
+  {
+    "key": "register.show_age",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Show age on profile",
+    "korean": "프로필에 나이 표시"
+  },
+  {
+    "key": "register.description",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Description",
+    "korean": "소개"
+  },
+  {
+    "key": "register.description_placeholder",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Short bio...",
+    "korean": "짧은 소개..."
+  },
+  {
+    "key": "register.location_country",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Location Country",
+    "korean": "거주 국가"
+  },
+  {
+    "key": "register.location_city",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Location City / Town",
+    "korean": "거주 도시 / 지역"
+  },
+  {
+    "key": "register.preview",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Preview:",
+    "korean": "미리보기:"
+  },
+  {
+    "key": "register.creating_account",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Creating account...",
+    "korean": "계정 생성 중..."
+  },
+  {
+    "key": "register.create_account",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Create Account",
+    "korean": "계정 만들기"
+  },
+  {
+    "key": "register.already_have_account",
+    "category": "auth",
+    "pages": ["register"],
+    "english": "Already have an account?",
+    "korean": "이미 계정이 있으신가요?"
+  },
+  {
+    "key": "songs.title",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "SONGS",
+    "korean": "곡"
+  },
+  {
+    "key": "songs.subtitle",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "Phoenix chart database with singles and doubles",
+    "korean": "싱글과 더블을 포함한 Phoenix 차트 데이터베이스"
+  },
+  {
+    "key": "songs.loading",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "Loading songs...",
+    "korean": "곡 불러오는 중..."
+  },
+  {
+    "key": "songs.recommend",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "Recommend",
+    "korean": "추천"
+  },
+  {
+    "key": "songs.head_to_head",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "Head to Head",
+    "korean": "헤드 투 헤드"
+  },
+  {
+    "key": "songs.search_placeholder",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "Search songs",
+    "korean": "곡 검색"
+  },
+  {
+    "key": "songs.unknown_artist",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "Unknown artist",
+    "korean": "아티스트 정보 없음"
+  },
+  {
+    "key": "songs.no_image",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "No image",
+    "korean": "이미지 없음"
+  },
+  {
+    "key": "songs.none_found",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "No songs found",
+    "korean": "검색 결과가 없습니다"
+  },
+  {
+    "key": "songs.error_load_failed",
+    "category": "songs",
+    "pages": ["songs"],
+    "english": "Failed to load songs",
+    "korean": "곡을 불러오지 못했습니다"
+  },
+  {
+    "key": "terms.judgement.perfect",
+    "category": "gameplay",
+    "pages": ["duel"],
+    "english": "PERFECT",
+    "korean": "PERFECT",
+    "keepEnglish": true
+  },
+  {
+    "key": "terms.judgement.great",
+    "category": "gameplay",
+    "pages": ["duel"],
+    "english": "GREAT",
+    "korean": "GREAT",
+    "keepEnglish": true
+  },
+  {
+    "key": "terms.judgement.good",
+    "category": "gameplay",
+    "pages": ["duel"],
+    "english": "GOOD",
+    "korean": "GOOD",
+    "keepEnglish": true
+  },
+  {
+    "key": "terms.judgement.bad",
+    "category": "gameplay",
+    "pages": ["duel"],
+    "english": "BAD",
+    "korean": "BAD",
+    "keepEnglish": true
+  },
+  {
+    "key": "terms.judgement.miss",
+    "category": "gameplay",
+    "pages": ["duel"],
+    "english": "MISS",
+    "korean": "MISS",
+    "keepEnglish": true
+  }
+]

@@ -3361,6 +3361,21 @@ function initializeDb() {
     db.exec("ALTER TABLE venue_payments ADD COLUMN billing_interval_months INTEGER NOT NULL DEFAULT 1");
   }
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ui_translation_overrides (
+      locale TEXT NOT NULL,
+      translation_key TEXT NOT NULL,
+      value TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft', 'accepted')),
+      updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (locale, translation_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ui_translation_overrides_locale
+      ON ui_translation_overrides(locale, status, updated_at DESC);
+  `);
+
   ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();
 }

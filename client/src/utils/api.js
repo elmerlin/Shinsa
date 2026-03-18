@@ -66,6 +66,13 @@ async function pumpRequestWithHaptic(url, options = {}) {
 // Dashboard (combined)
 export const getDashboard = () => request('/dashboard');
 
+// i18n
+export const getLocaleTranslations = (locale = 'ko') => request(`/i18n/translations?locale=${encodeURIComponent(locale)}`);
+export const saveLocaleTranslation = ({ locale = 'ko', key, value, status = 'draft' }) => request(`/i18n/translations/${encodeURIComponent(key)}`, {
+  method: 'PUT',
+  body: JSON.stringify({ locale, value, status }),
+});
+
 // Tournaments
 export const getTournaments = () => request('/tournaments');
 export const getTournament = (id) => request(`/tournaments/${id}`);

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { TranslationProvider } from './i18n/TranslationContext';
 import App from './App';
 import './index.css';
 
@@ -52,14 +53,26 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   });
 }
 
+function detectLocaleFromPathname(pathname) {
+  const path = String(pathname || '/').toLowerCase();
+  return path === '/kr' || path.startsWith('/kr/') ? 'ko' : 'en';
+}
+
+const initialLocale = typeof window !== 'undefined'
+  ? detectLocaleFromPathname(window.location.pathname)
+  : 'en';
+const routerBasename = initialLocale === 'ko' ? '/kr' : undefined;
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <NotificationProvider>
-          <App />
-        </NotificationProvider>
-      </AuthProvider>
+    <BrowserRouter basename={routerBasename}>
+      <TranslationProvider locale={initialLocale}>
+        <AuthProvider>
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
+        </AuthProvider>
+      </TranslationProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

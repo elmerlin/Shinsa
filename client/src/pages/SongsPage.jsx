@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getSongLibrary } from '../utils/api';
 import RecommendModal from '../components/RecommendModal';
+import { useI18n } from '../i18n/TranslationContext';
 
 function ChartBadge({ chart }) {
   const isSingle = chart.mode === 'Single';
@@ -22,6 +23,7 @@ function ChartBadge({ chart }) {
 }
 
 export default function SongsPage() {
+  const { t } = useI18n();
   const { user } = useAuth();
 
   const [library, setLibrary] = useState([]);
@@ -47,7 +49,7 @@ export default function SongsPage() {
       } catch (err) {
         if (cancelled) return;
         setLibrary([]);
-        setError(err.message || 'Failed to load songs');
+        setError(err.message || t('songs.error_load_failed'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -55,7 +57,7 @@ export default function SongsPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [t, user?.id]);
 
   const filteredSongs = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -117,15 +119,15 @@ export default function SongsPage() {
   }, []);
 
   if (loading) {
-    return <div className="max-w-6xl mx-auto px-4 py-10 text-center text-gray-500">Loading songs...</div>;
+    return <div className="max-w-6xl mx-auto px-4 py-10 text-center text-gray-500">{t('songs.loading')}</div>;
   }
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">SONGS</h1>
-          <p className="text-xs text-gray-500">Phoenix chart database with singles and doubles</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wide">{t('songs.title')}</h1>
+          <p className="text-xs text-gray-500">{t('songs.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           {user && (
@@ -137,7 +139,7 @@ export default function SongsPage() {
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
               </svg>
-              Recommend
+              {t('songs.recommend')}
             </button>
           )}
           <Link
@@ -148,7 +150,7 @@ export default function SongsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V8a2 2 0 012-2h4a3 3 0 013 3v9H9a4 4 0 01-4-4v-3a1 1 0 011-1h1Z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 10h2V7a1 1 0 10-2 0v3Zm3 0h2V7a1 1 0 10-2 0v3Z" />
             </svg>
-            Head to Head
+            {t('songs.head_to_head')}
           </Link>
         </div>
       </div>
@@ -169,7 +171,7 @@ export default function SongsPage() {
                 setSearch(event.target.value);
                 setShowSuggestions(true);
               }}
-              placeholder="Search songs"
+              placeholder={t('songs.search_placeholder')}
               className="input-field w-full"
             />
             {showSuggestions && songSuggestions.length > 0 && (
@@ -185,7 +187,7 @@ export default function SongsPage() {
                     className="w-full text-left px-3 py-2 hover:bg-piu-dark/70 transition-colors border-b border-piu-border/20 last:border-0"
                   >
                     <p className="text-sm font-display font-bold truncate">{item.title}</p>
-                    <p className="text-[11px] text-gray-500 truncate">{item.artist || 'Unknown artist'}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{item.artist || t('songs.unknown_artist')}</p>
                   </button>
                 ))}
               </div>
@@ -201,12 +203,12 @@ export default function SongsPage() {
                   <img src={song.jacket_url} alt={song.title} className="w-24 h-14 sm:w-28 sm:h-16 rounded object-cover border border-piu-border/40" />
                 ) : (
                   <div className="w-24 h-14 sm:w-28 sm:h-16 rounded bg-piu-dark border border-piu-border/40 flex items-center justify-center text-xs text-gray-500">
-                    No image
+                    {t('songs.no_image')}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="text-lg font-display font-bold leading-tight truncate">{song.title}</p>
-                  <p className="text-xs text-gray-400 truncate">{song.artist || 'Unknown artist'}</p>
+                  <p className="text-xs text-gray-400 truncate">{song.artist || t('songs.unknown_artist')}</p>
                 </div>
               </div>
 
@@ -226,7 +228,7 @@ export default function SongsPage() {
           ))}
 
           {filteredSongs.length === 0 && (
-            <p className="text-center text-gray-500 text-sm py-6">No songs found</p>
+            <p className="text-center text-gray-500 text-sm py-6">{t('songs.none_found')}</p>
           )}
         </div>
       </section>

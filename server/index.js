@@ -24,6 +24,7 @@ const changelogRoutes = require('./routes/changelog');
 const checkinRoutes = require('./routes/checkins');
 const venueAccessRoutes = require('./routes/venueAccess');
 const youtubeRoutes = require('./routes/youtube');
+const i18nRoutes = require('./routes/i18n');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -76,6 +77,7 @@ app.use('/api/changelog', changelogRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/venue-access', venueAccessRoutes);
 app.use('/api/youtube', youtubeRoutes);
+app.use('/api/i18n', i18nRoutes);
 
 if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {
   try {

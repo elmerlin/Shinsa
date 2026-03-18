@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { createQrLoginChallenge, getQrLoginChallengeQrUrl, login, pollQrLoginChallenge } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useI18n } from '../i18n/TranslationContext';
 
 function getSafeRedirectTarget(value) {
   const target = String(value || '').trim();
@@ -11,6 +12,7 @@ function getSafeRedirectTarget(value) {
 }
 
 export default function LoginPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTarget = useMemo(() => getSafeRedirectTarget(searchParams.get('redirect')), [searchParams]);
@@ -188,12 +190,12 @@ export default function LoginPage() {
       <div className={`grid gap-6 ${showQrLogin ? 'lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]' : 'max-w-md mx-auto'}`}>
         <form onSubmit={handleSubmit} className="card space-y-4">
           <div>
-            <p className="text-xs font-display tracking-[0.35em] text-piu-accent/80 mb-2">PASSWORD LOGIN</p>
-            <h1 className="text-3xl font-display font-bold tracking-wider">LOGIN</h1>
+            <p className="text-xs font-display tracking-[0.35em] text-piu-accent/80 mb-2">{t('login.password_login')}</p>
+            <h1 className="text-3xl font-display font-bold tracking-wider">{t('login.title')}</h1>
             <p className="text-sm text-gray-400 mt-2">
               {showQrLogin
-                ? 'Use your Pump Alias and password, or scan the QR code from a phone already signed into Shinsa.'
-                : 'Sign in on this phone so you can approve the browser login request.'}
+                ? t('login.subtitle.default')
+                : t('login.subtitle.approve')}
             </p>
           </div>
 
@@ -204,11 +206,11 @@ export default function LoginPage() {
           )}
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Pump Alias</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('login.pump_alias')}</label>
             <input
               type="text"
               className="input-field"
-              placeholder="Your username"
+              placeholder={t('login.username_placeholder')}
               value={form.username}
               onChange={(e) => setForm((current) => ({ ...current, username: e.target.value }))}
               required
@@ -217,11 +219,11 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Password</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('login.password')}</label>
             <input
               type="password"
               className="input-field"
-              placeholder="Password"
+              placeholder={t('login.password_placeholder')}
               value={form.password}
               onChange={(e) => setForm((current) => ({ ...current, password: e.target.value }))}
               required
@@ -229,12 +231,12 @@ export default function LoginPage() {
           </div>
 
           <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? t('login.logging_in') : t('login.submit')}
           </button>
 
           <p className="text-center text-sm text-gray-500">
-            Don&apos;t have an account?{' '}
-            <Link to="/register" className="text-piu-accent hover:underline">Register</Link>
+            {t('login.no_account')}{' '}
+            <Link to="/register" className="text-piu-accent hover:underline">{t('login.register')}</Link>
           </p>
         </form>
 
@@ -261,26 +263,25 @@ export default function LoginPage() {
 
               <div className="flex-1 space-y-4">
                 <div>
-                  <p className="text-xs font-display tracking-[0.35em] text-piu-gold/80 mb-2">PASSWORDLESS LOGIN</p>
-                  <h2 className="text-2xl font-display font-bold tracking-wide">Scan With Your Phone</h2>
+                  <p className="text-xs font-display tracking-[0.35em] text-piu-gold/80 mb-2">{t('login.passwordless_login')}</p>
+                  <h2 className="text-2xl font-display font-bold tracking-wide">{t('login.scan_with_phone')}</h2>
                   <p className="text-sm text-gray-300 mt-2">
-                    If you&apos;re already signed into Shinsa on mobile, scan this code, approve the login, and this browser
-                    will sign in automatically.
+                    {t('login.scan_subtitle')}
                   </p>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-white/10 bg-piu-dark/40 px-4 py-3">
                     <p className="text-[11px] font-display tracking-[0.28em] text-piu-accent/80">1</p>
-                    <p className="text-sm text-white mt-1">Scan</p>
+                    <p className="text-sm text-white mt-1">{t('login.step.scan')}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-piu-dark/40 px-4 py-3">
                     <p className="text-[11px] font-display tracking-[0.28em] text-piu-accent/80">2</p>
-                    <p className="text-sm text-white mt-1">Confirm</p>
+                    <p className="text-sm text-white mt-1">{t('login.step.confirm')}</p>
                   </div>
                   <div className="rounded-2xl border border-white/10 bg-piu-dark/40 px-4 py-3">
                     <p className="text-[11px] font-display tracking-[0.28em] text-piu-accent/80">3</p>
-                    <p className="text-sm text-white mt-1">Log In</p>
+                    <p className="text-sm text-white mt-1">{t('login.step.log_in')}</p>
                   </div>
                 </div>
 
@@ -290,13 +291,13 @@ export default function LoginPage() {
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-                    Waiting for approval from your phone.
+                    {t('login.waiting_for_phone')}
                   </div>
                 )}
 
                 {qrState.approveUrl && (
                   <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                    <p className="text-[11px] font-display tracking-[0.28em] text-gray-400">PHONE LINK</p>
+                    <p className="text-[11px] font-display tracking-[0.28em] text-gray-400">{t('login.phone_link')}</p>
                     <a
                       href={qrState.approveUrl}
                       className="mt-2 block break-all text-sm text-piu-accent hover:underline"
@@ -308,11 +309,11 @@ export default function LoginPage() {
 
                 <div className="flex flex-wrap gap-3">
                   <button type="button" className="btn-secondary" onClick={handleRefreshQr}>
-                    Refresh QR
+                    {t('login.refresh_qr')}
                   </button>
                   {qrState.expiresAt && (
                     <span className="inline-flex items-center rounded-full border border-white/10 px-3 py-2 text-xs text-gray-400">
-                      Expires soon for shared-space safety
+                      {t('login.expires_soon')}
                     </span>
                   )}
                 </div>

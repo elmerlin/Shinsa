@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { register, saveWorldMaxLocation } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import AvatarPicker from '../components/AvatarPicker';
+import { useI18n } from '../i18n/TranslationContext';
 import {
   SKILL_TITLES, SKILL_LEVELS, GENDER_OPTIONS, GENDER_SYMBOLS,
   COUNTRIES, getCountryFlag, getSkillColor,
@@ -28,6 +29,7 @@ function resolveCountryCode(input) {
 }
 
 export default function RegisterPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { loginUser } = useAuth();
   const [form, setForm] = useState({
@@ -87,7 +89,7 @@ export default function RegisterPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
-      <h1 className="text-3xl font-display font-bold tracking-wider text-center mb-6">REGISTER</h1>
+      <h1 className="text-3xl font-display font-bold tracking-wider text-center mb-6">{t('register.title')}</h1>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
         {/* Avatar */}
@@ -100,11 +102,11 @@ export default function RegisterPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Pump Alias *</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('login.pump_alias')} *</label>
             <input
               type="text"
               className="input-field"
-              placeholder="Your username (2-30 chars)"
+              placeholder={t('register.username_placeholder')}
               value={form.username}
               onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
               required
@@ -114,11 +116,11 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email (optional)</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('register.email_optional')}</label>
             <input
               type="email"
               className="input-field"
-              placeholder="For password recovery"
+              placeholder={t('register.email_placeholder')}
               value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
             />
@@ -127,11 +129,11 @@ export default function RegisterPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Password *</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('login.password')} *</label>
             <input
               type="password"
               className="input-field"
-              placeholder="At least 4 characters"
+              placeholder={t('register.password_minimum')}
               value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
               required
@@ -139,11 +141,11 @@ export default function RegisterPage() {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Confirm Password *</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('register.confirm_password')} *</label>
             <input
               type="password"
               className="input-field"
-              placeholder="Retype password"
+              placeholder={t('register.confirm_password_placeholder')}
               value={form.confirmPassword}
               onChange={e => setForm(f => ({ ...f, confirmPassword: e.target.value }))}
               required
@@ -152,11 +154,11 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Pumbility</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('register.pumbility')}</label>
           <input
             type="number"
             className="input-field"
-            placeholder="e.g. 2500"
+            placeholder={t('register.pumbility_placeholder')}
             value={form.pumbility}
             onChange={e => setForm(f => ({ ...f, pumbility: e.target.value }))}
           />
@@ -168,14 +170,14 @@ export default function RegisterPage() {
           onClick={() => setShowDetails(!showDetails)}
           className="text-sm text-piu-accent hover:underline font-display"
         >
-          {showDetails ? 'Hide details' : 'More details (skill, nationality, etc.)'}
+          {showDetails ? t('register.hide_details') : t('register.more_details')}
         </button>
 
         {showDetails && (
           <div className="space-y-4 animate-slide-up">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('register.skill_title')}</label>
                 <select
                   className="input-field"
                   value={form.skill_title}
@@ -185,7 +187,7 @@ export default function RegisterPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Skill Level</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('register.skill_level')}</label>
                 <select
                   className="input-field"
                   value={form.skill_level}
@@ -195,7 +197,7 @@ export default function RegisterPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Gender</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('register.gender')}</label>
                 <select
                   className="input-field"
                   value={form.gender}
@@ -205,7 +207,7 @@ export default function RegisterPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Nationality</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('register.nationality')}</label>
                 <select
                   className="input-field"
                   value={form.nationality}
@@ -220,7 +222,7 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Date of Birth</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('register.date_of_birth')}</label>
                 <input
                   type="date"
                   className="input-field"
@@ -236,17 +238,17 @@ export default function RegisterPage() {
                     onChange={e => setForm(f => ({ ...f, show_age: e.target.checked }))}
                     className="w-4 h-4 rounded"
                   />
-                  <span className="text-sm text-gray-400">Show age on profile</span>
+                  <span className="text-sm text-gray-400">{t('register.show_age')}</span>
                 </label>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Description</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('register.description')}</label>
               <textarea
                 className="input-field resize-none"
                 rows="2"
-                placeholder="Short bio..."
+                placeholder={t('register.description_placeholder')}
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
               />
@@ -254,7 +256,7 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Location Country</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('register.location_country')}</label>
                 <input
                   type="text"
                   className="input-field"
@@ -264,7 +266,7 @@ export default function RegisterPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Location City / Town</label>
+                <label className="block text-sm text-gray-400 mb-1">{t('register.location_city')}</label>
                 <input
                   type="text"
                   className="input-field"
@@ -277,7 +279,7 @@ export default function RegisterPage() {
 
             {/* Preview */}
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500">Preview:</span>
+              <span className="text-gray-500">{t('register.preview')}</span>
               {form.nationality && <span className="text-base">{getCountryFlag(form.nationality)}</span>}
               <span className={`badge border ${getSkillColor(form.skill_title)}`}>
                 {form.skill_title} lvl. {form.skill_level}
@@ -298,12 +300,12 @@ export default function RegisterPage() {
         )}
 
         <button type="submit" className="btn-primary w-full" disabled={loading}>
-          {loading ? 'Creating account...' : 'Create Account'}
+          {loading ? t('register.creating_account') : t('register.create_account')}
         </button>
 
         <p className="text-center text-sm text-gray-500">
-          Already have an account?{' '}
-          <Link to="/login" className="text-piu-accent hover:underline">Login</Link>
+          {t('register.already_have_account')}{' '}
+          <Link to="/login" className="text-piu-accent hover:underline">{t('app.nav.login')}</Link>
         </p>
       </form>
     </div>
