@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   getNotifications,
+  getMessageConversations,
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
@@ -33,6 +34,7 @@ export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [invitationCount, setInvitationCount] = useState(0);
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const streamRef = useRef(null);
   const webPushActiveRef = useRef(false);
   const permissionPromptAttachedRef = useRef(false);
@@ -125,6 +127,18 @@ export function NotificationProvider({ children }) {
     }).catch(() => {});
   }, [user]);
 
+  const refreshMessageUnread = useCallback(() => {
+    if (!user) return Promise.resolve();
+    return getMessageConversations()
+      .then((data) => {
+        const total = Array.isArray(data?.conversations)
+          ? data.conversations.reduce((sum, conversation) => sum + (parseInt(conversation?.unread_count, 10) || 0), 0)
+          : 0;
+        setMessageUnreadCount(total);
+      })
+      .catch(() => {});
+  }, [user]);
+
   // Poll every 15 seconds when logged in (fallback + invitations count)
   useEffect(() => {
     if (loading) return undefined;
@@ -132,12 +146,18 @@ export function NotificationProvider({ children }) {
       setNotifications([]);
       setUnreadCount(0);
       setInvitationCount(0);
+      setMessageUnreadCount(0);
       return;
     }
     refresh();
-    const interval = setInterval(refresh, 15000);
-    return () => clearInterval(interval);
-  }, [user, refresh, loading]);
+    refreshMessageUnread();
+    const notificationInterval = setInterval(refresh, 15000);
+    const messageInterval = setInterval(refreshMessageUnread, 15000);
+    return () => {
+      clearInterval(notificationInterval);
+      clearInterval(messageInterval);
+    };
+  }, [user, refresh, refreshMessageUnread, loading]);
 
   // Request notification permission after first user interaction.
   // This is more reliable on Chrome mobile than auto-prompting on load.
@@ -197,6 +217,13 @@ export function NotificationProvider({ children }) {
         try {
           const incoming = JSON.parse(event.data || '{}');
           if (!incoming?.id) return;
+          if (incoming.type === 'direct_message') {
+            refreshMessageUnread();
+            if (!webPushActiveRef.current) {
+              showBrowserNotification(incoming);
+            }
+            return;
+          }
           upsertIncomingNotification(incoming);
           if (!webPushActiveRef.current) {
             showBrowserNotification(incoming);
@@ -220,7 +247,7 @@ export function NotificationProvider({ children }) {
         streamRef.current = null;
       }
     };
-  }, [user, upsertIncomingNotification, showBrowserNotification, loading]);
+  }, [user, upsertIncomingNotification, showBrowserNotification, refreshMessageUnread, loading]);
 
   const markRead = async (id) => {
     await markNotificationRead(id);
@@ -244,7 +271,7 @@ export function NotificationProvider({ children }) {
   const totalBadge = unreadCount + invitationCount;
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, refresh, markRead, markAllRead, dismiss }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, refresh, refreshMessageUnread, markRead, markAllRead, dismiss }}>
       {children}
     </NotificationContext.Provider>
   );

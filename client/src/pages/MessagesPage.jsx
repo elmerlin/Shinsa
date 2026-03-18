@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import {
   clearMessageNote,
   createMessageNote,
@@ -921,6 +922,7 @@ function ConversationView({
 
 export default function MessagesPage() {
   const { user } = useAuth();
+  const { refreshMessageUnread } = useNotifications();
   const navigate = useNavigate();
   const { conversationId = '' } = useParams();
   const messagesEndRef = useRef(null);
@@ -1249,6 +1251,7 @@ export default function MessagesPage() {
       setActiveConversation(payload?.conversation || null);
       setMessages(Array.isArray(payload?.messages) ? payload.messages : []);
       setMessageError('');
+      refreshMessageUnread();
     } catch (err) {
       setActiveConversation(null);
       setMessages([]);
@@ -1256,7 +1259,7 @@ export default function MessagesPage() {
     } finally {
       setLoadingMessages(false);
     }
-  }, [user]);
+  }, [user, refreshMessageUnread]);
 
   useEffect(() => {
     if (!user) {
@@ -1651,6 +1654,7 @@ export default function MessagesPage() {
         draft: '',
         error: '',
       });
+      refreshMessageUnread();
     } catch (err) {
       setThreadState({
         open: true,
@@ -1663,7 +1667,7 @@ export default function MessagesPage() {
         error: err?.message || 'Failed to load thread.',
       });
     }
-  }, []);
+  }, [refreshMessageUnread]);
 
   const handleOpenMessageThread = useCallback((message) => {
     const thread = message?.note_thread || null;

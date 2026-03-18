@@ -2623,7 +2623,12 @@ router.get('/notifications/stream', (req, res) => {
 router.get('/notifications', requireAuth, (req, res) => {
   const db = getDb();
   const notifications = db.prepare(`
-    SELECT * FROM user_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
+    SELECT *
+    FROM user_notifications
+    WHERE user_id = ?
+      AND type != 'direct_message'
+    ORDER BY created_at DESC
+    LIMIT 50
   `).all(req.user.id);
 
   const invitationCount = db.prepare(`
@@ -2631,7 +2636,11 @@ router.get('/notifications', requireAuth, (req, res) => {
   `).get(req.user.id).count;
 
   const unreadCount = db.prepare(`
-    SELECT COUNT(*) as count FROM user_notifications WHERE user_id = ? AND read = 0
+    SELECT COUNT(*) as count
+    FROM user_notifications
+    WHERE user_id = ?
+      AND read = 0
+      AND type != 'direct_message'
   `).get(req.user.id).count;
 
   res.json({ notifications, invitation_count: invitationCount, unread_count: unreadCount });

@@ -804,6 +804,28 @@ function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
   );
 }
 
+function MessageInboxButton() {
+  const { messageUnreadCount } = useNotifications();
+
+  return (
+    <Link
+      to="/messages"
+      className="relative p-1.5 text-gray-400 hover:text-white transition-colors"
+      aria-label="Messages"
+      title="Messages"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-7 7l-3-3V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 3z" />
+      </svg>
+      {messageUnreadCount > 0 ? (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-cyan-500 text-white text-[10px] font-bold px-1">
+          {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
 function LocaleSwitchButton() {
   if (!KOREAN_LOCALE_ENABLED) return null;
   const { isKorean, getLocaleHref, t } = useI18n();
@@ -1270,16 +1292,7 @@ export default function App() {
             <UserSearch />
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2">
-                <Link
-                  to="/messages"
-                  className="relative p-1.5 text-gray-400 hover:text-white transition-colors"
-                  aria-label="Messages"
-                  title="Messages"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-7 7l-3-3V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 3z" />
-                  </svg>
-                </Link>
+                <MessageInboxButton />
                 <NotificationBell />
                 <UserMenu />
               </div>
