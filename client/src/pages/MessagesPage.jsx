@@ -290,6 +290,10 @@ function MessageLinkCard({
       bad: linkShare.bad,
       miss: linkShare.miss,
       username: linkShare.playerName,
+      playerAvatar: linkShare.playerAvatar,
+      playerSkillTitle: linkShare.playerSkillTitle,
+      playerRoleLabel: linkShare.playerRoleLabel,
+      contextLabel: linkShare.contextLabel,
       date_played: linkShare.playedAt,
     };
 

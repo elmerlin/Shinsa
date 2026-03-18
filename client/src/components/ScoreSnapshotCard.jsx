@@ -91,7 +91,45 @@ function hasJudgments(score) {
 function formatDateLabel(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
-  return raw.length >= 10 ? raw.slice(0, 10) : raw;
+  const hasExplicitTimezone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const candidate = hasExplicitTimezone || /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+    ? normalized
+    : `${normalized}Z`;
+  const parsed = new Date(candidate);
+  if (Number.isNaN(parsed.getTime())) {
+    if (raw.length >= 16) return raw.slice(0, 16).replace('T', ' ');
+    return raw.length >= 10 ? raw.slice(0, 10) : raw;
+  }
+
+  const hasTime = /(?:T|\s)\d{2}:\d{2}/.test(raw);
+  return hasTime
+    ? parsed.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    : parsed.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+}
+
+function normalizeMetaBadges(badges = []) {
+  if (!Array.isArray(badges)) return [];
+  return badges
+    .map((badge) => {
+      if (!badge || typeof badge !== 'object') return null;
+      const label = String(badge.label || '').trim();
+      if (!label) return null;
+      return {
+        label,
+        className: String(badge.className || '').trim(),
+      };
+    })
+    .filter(Boolean);
 }
 
 export default function ScoreSnapshotCard({
@@ -99,12 +137,21 @@ export default function ScoreSnapshotCard({
   jacketUrl = '',
   chartLink = '',
   className = '',
+  avatarUrl = '',
+  skillTitle = '',
+  roleLabel = '',
+  contextLabel = '',
+  metaBadges = [],
 }) {
   if (!score) return null;
 
   const songTitle = String(score.song_title || score.songTitle || 'Score details').trim() || 'Score details';
   const username = String(score.username || score.playerName || '').trim();
   const playedAt = formatDateLabel(score.date_played || score.playedAt);
+  const resolvedAvatarUrl = String(avatarUrl || score.playerAvatar || score.avatar || '').trim();
+  const resolvedSkillTitle = String(skillTitle || score.playerSkillTitle || score.skillTitle || score.skill_title || '').trim();
+  const resolvedRoleLabel = String(roleLabel || score.playerRoleLabel || score.roleLabel || '').trim();
+  const resolvedContextLabel = String(contextLabel || score.contextLabel || score.context_label || '').trim();
   const mode = String(score.mode || '').trim();
   const level = parseInt(score.level, 10) || 0;
   const displayScore = parseInt(score.new_score ?? score.score, 10) || 0;
@@ -122,6 +169,25 @@ export default function ScoreSnapshotCard({
   const plateName = PLATE_NAMES[String(score.plate || '').trim().toUpperCase()] || String(score.plate || '').trim();
   const plateColor = PLATE_COLORS[String(score.plate || '').trim().toUpperCase()] || 'text-gray-300';
   const isStageBreak = !!score.is_stage_break || !!score.isStageBreak;
+  const infoBadges = [
+    resolvedRoleLabel ? {
+      label: resolvedRoleLabel,
+      className: 'border-amber-300/45 bg-amber-500/14 text-amber-100',
+    } : null,
+    resolvedSkillTitle ? {
+      label: resolvedSkillTitle,
+      className: 'border-cyan-300/35 bg-cyan-500/12 text-cyan-100',
+    } : null,
+    resolvedContextLabel ? {
+      label: resolvedContextLabel,
+      className: 'border-emerald-300/35 bg-emerald-500/12 text-emerald-100',
+    } : null,
+    overRank > 0 ? {
+      label: `TOP #${overRank}`,
+      className: 'border-piu-gold/55 bg-piu-gold/15 text-yellow-200',
+    } : null,
+    ...normalizeMetaBadges(metaBadges),
+  ].filter(Boolean);
   const judgmentItems = JUDGMENT_META.map(({ key, field, labelClass }) => ({
     key,
     labelClass,
@@ -151,15 +217,37 @@ export default function ScoreSnapshotCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             {titleNode}
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-gray-200/90">
-              {username ? <span className="font-display font-bold text-white">{username}</span> : null}
-              {playedAt ? <span>{playedAt}</span> : null}
-              {overRank > 0 ? (
-                <span className="inline-flex rounded-full border border-piu-gold/55 bg-piu-gold/15 px-2 py-0.5 font-display font-black tracking-wide text-yellow-200">
-                  TOP #{overRank}
-                </span>
-              ) : null}
-            </div>
+            {(resolvedAvatarUrl || username || playedAt || infoBadges.length > 0) ? (
+              <div className="mt-2 flex items-start gap-2.5">
+                {resolvedAvatarUrl ? (
+                  <img
+                    src={resolvedAvatarUrl}
+                    alt={username || 'Player'}
+                    className="h-8 w-8 shrink-0 rounded-full border border-white/15 bg-piu-dark/80 object-cover shadow-[0_4px_14px_rgba(0,0,0,0.2)]"
+                  />
+                ) : null}
+                <div className="min-w-0 flex-1">
+                  {(username || playedAt) ? (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-gray-200/90">
+                      {username ? <span className="font-display font-bold text-white">{username}</span> : null}
+                      {playedAt ? <span>{playedAt}</span> : null}
+                    </div>
+                  ) : null}
+                  {infoBadges.length > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {infoBadges.map((badge) => (
+                        <span
+                          key={`${badge.label}:${badge.className}`}
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold ${badge.className}`}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
           {level > 0 ? (
             <span className={`inline-flex h-10 min-w-[42px] shrink-0 items-center justify-center rounded-full border px-2 font-display text-lg font-black ${getModeBadgeClasses(mode)}`}>

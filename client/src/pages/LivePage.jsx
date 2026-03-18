@@ -35,6 +35,7 @@ import LiveEmote from '../components/LiveEmote';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import LiveHeaderStatusStrip from '../components/LiveHeaderStatusStrip';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
+import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import { HourOfPowerLogo, HourOfPowerWordmark } from '../components/HourOfPowerBrand';
 import PiuChartJacket from '../components/PiuChartJacket';
 import StickerAsset from '../components/StickerAsset';
@@ -48,7 +49,7 @@ import {
 } from '../utils/liveEmotes';
 import { renderFormattedText } from '../utils/formatText';
 import { isStickerOnlyMessage, STICKER_GROUPS } from '../utils/stickers';
-import { buildLiveSessionLinkShare } from '../utils/directMessageShares';
+import { buildLiveSessionLinkShare, buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import {
   getLiveOverlaySceneOptions,
   getLiveOverlayOutputSpec,
@@ -1287,110 +1288,37 @@ function applyModerationToRequests(requests, targetUserId, moderation) {
 
 function PlayDetailModal({ play, onClose }) {
   if (!play) return null;
-  const rank = getRank(play.score ?? 0);
-  const displayScore = play.score ?? 0;
-  const parsedGrade = parseGrade(play.grade, rank.label);
-  const grade = parsedGrade.display || rank.label;
-  const overRank = getOverTop100Rank(play.over_top100_rank);
-  const plateName = PLATE_NAMES[play.plate] || play.plate || '';
-  const plateColor = PLATE_COLORS[play.plate] || 'text-gray-400';
-  const hasJudgments = (play.perfect > 0 || play.great > 0 || play.good > 0 || play.bad > 0 || play.miss > 0);
-  const judgments = [
-    { label: 'PERFECT', value: play.perfect || 0, textColor: 'text-sky-400' },
-    { label: 'GREAT', value: play.great || 0, textColor: 'text-green-400' },
-    { label: 'GOOD', value: play.good || 0, textColor: 'text-yellow-400' },
-    { label: 'BAD', value: play.bad || 0, textColor: 'text-fuchsia-400' },
-    { label: 'MISS', value: play.miss || 0, textColor: 'text-gray-400' },
-  ];
-  const modalBg = play.jacket_url || play.background_url || '';
+  const chartId = parseInt(play?.chart_id, 10) || 0;
+  const chartLink = chartId > 0
+    ? `/songs/chart/${chartId}`
+    : (String(play?.song_title || '').trim() ? `/songs?q=${encodeURIComponent(play.song_title)}` : '/songs');
+  const snapshotScore = {
+    ...play,
+    playerAvatar: play.avatar,
+    playerSkillTitle: play.skill_title,
+    playerRoleLabel: getParticipantRoleLabel(play.participant_role),
+    contextLabel: 'During live session',
+  };
+  const directMessageLinkShare = buildScoreSnapshotLinkShare({
+    kind: 'score_snapshot',
+    sourceId: play.id,
+    username: play.username,
+    avatar: play.avatar,
+    score: snapshotScore,
+    path: chartLink,
+    chartPath: chartLink,
+    jacketUrl: play.jacket_url || play.background_url || '',
+  });
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-[90] flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        className="relative w-full max-w-sm overflow-hidden rounded-xl border border-piu-border/60 bg-piu-card/95 shadow-[0_8px_24px_rgba(0,0,0,0.28)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {modalBg ? (
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-15"
-            style={{ backgroundImage: `url(${modalBg})` }}
-          />
-        ) : null}
-        <div className="absolute inset-0 bg-piu-card/90" />
-
-        <div className="relative p-5">
-          <button
-            type="button"
-            className="absolute right-3 top-3 text-xl leading-none text-gray-500 hover:text-white"
-            onClick={onClose}
-          >
-            x
-          </button>
-
-          <p className="font-display font-bold text-lg leading-tight pr-6 break-words">{play.song_title || 'Song'}</p>
-          {play?.username ? (
-            <UserIdentity
-              avatar={play.avatar}
-              username={play.username}
-              skillTitle={play.skill_title}
-              isHost={play.participant_role === 'owner'}
-              participantRole={play.participant_role}
-              className="mt-3"
-            />
-          ) : null}
-
-          <div className="flex items-center gap-3 mt-4">
-            <div className={`flex items-center gap-1 rounded-md border px-2.5 py-1 ${
-              play.mode === 'Single' ? 'border-red-500/40 bg-red-500/10' : play.mode === 'Double' ? 'border-green-500/40 bg-green-500/10' : 'border-slate-500/40 bg-white/[0.04]'
-            }`}>
-              <span className={`font-display text-[10px] font-semibold ${play.mode === 'Single' ? 'text-red-300' : play.mode === 'Double' ? 'text-green-300' : 'text-slate-300'}`}>{play.mode}</span>
-              <span className={`font-display text-base font-bold ${play.mode === 'Single' ? 'text-red-200' : play.mode === 'Double' ? 'text-green-200' : 'text-slate-100'}`}>{play.level}</span>
-            </div>
-            {overRank > 0 ? (
-              <span className="rounded-md border border-piu-gold/40 bg-piu-gold/12 px-2 py-0.5 text-[11px] leading-none text-yellow-200">
-                TOP #{overRank}
-              </span>
-            ) : null}
-            <div className="text-center flex-1">
-              {displayScore > 0 ? (
-                <p
-                  className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
-                  data-grade={grade}
-                >
-                  {grade}
-                </p>
-              ) : (
-                <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
-              )}
-            </div>
-          </div>
-
-          {plateName ? (
-            <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
-          ) : null}
-
-          {displayScore > 0 ? (
-            <p className="text-center font-mono text-2xl font-bold mt-2">{displayScore.toLocaleString()}</p>
-          ) : null}
-
-          {hasJudgments ? (
-            <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
-              {judgments.map((j) => (
-                <div key={j.label}>
-                  <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
-                  <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
-                </div>
-              ))}
-            </div>
-          ) : displayScore > 0 ? (
-            <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
-              Judgment breakdown not available
-            </p>
-          ) : null}
-
-        </div>
-      </div>
-    </div>
+    <ScoreSnapshotModal
+      score={snapshotScore}
+      jacketUrl={play.jacket_url || play.background_url || ''}
+      chartLink={chartLink}
+      onClose={onClose}
+      directMessageLinkShare={directMessageLinkShare}
+      modalLabel="Live play"
+    />
   );
 }
 

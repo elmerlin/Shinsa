@@ -276,12 +276,13 @@ export function buildScoreSnapshotLinkShare({
     : (displayScore > 0 && oldScore > 0 ? displayScore - oldScore : 0);
   const grade = compactText(row.new_grade || row.grade, 20);
   const playedAt = String(row.date_played || row.playedAt || '').trim();
+  const summaryLabel = normalizedKind === 'clear' ? 'clear' : 'score';
 
   return {
     kind: normalizedKind,
     path: resolvedPath,
     chartPath: String(chartPath || '').trim(),
-    title: `${authorName}'s ${normalizedKind === 'upscore' ? 'score' : 'clear'}`,
+    title: `${authorName}'s ${summaryLabel}`,
     subtitle: [
       formatChartLabel(songTitle, mode, level),
       grade || (row.is_stage_break ? 'Stage break' : ''),
@@ -301,6 +302,9 @@ export function buildScoreSnapshotLinkShare({
     targetScore: displayScore,
     playerName: authorName,
     playerAvatar: String(avatar || row.playerAvatar || row.avatar || '').trim(),
+    playerSkillTitle: String(row.playerSkillTitle || row.skill_title || row.skillTitle || '').trim(),
+    playerRoleLabel: String(row.playerRoleLabel || row.roleLabel || '').trim(),
+    contextLabel: String(row.contextLabel || row.context_label || '').trim(),
     playedAt,
     jacketUrl: String(jacketUrl || row._jacketUrl || row.jacket_url || row.background_url || '').trim(),
     oldScore,
