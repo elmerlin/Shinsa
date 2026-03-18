@@ -195,6 +195,7 @@ function sanitizeChallengeCardPayload(challengeCard) {
     sourceKind,
     sourceId: String(src.sourceId || src.source_id || '').trim().slice(0, 80),
     path,
+    chartPath: sanitizeRelativePath(src.chartPath || src.chart_path),
     title: String(src.title || '').trim().slice(0, 120),
     subtitle: String(src.subtitle || '').trim().slice(0, MAX_CHALLENGE_TEXT_LENGTH),
     targetLabel: String(src.targetLabel || src.target_label || '').trim().slice(0, 80),
@@ -206,6 +207,9 @@ function sanitizeChallengeCardPayload(challengeCard) {
     targetScore: toInt(src.targetScore || src.target_score),
     targetGrade: String(src.targetGrade || src.target_grade || '').trim().slice(0, 24),
     originUsername: String(src.originUsername || src.origin_username || '').trim().slice(0, 40),
+    sourceMessageId: String(src.sourceMessageId || src.source_message_id || '').trim().slice(0, 80),
+    statusKind: String(src.statusKind || src.status_kind || '').trim().slice(0, 24),
+    statusLabel: String(src.statusLabel || src.status_label || '').trim().slice(0, 120),
   };
 }
 
@@ -242,6 +246,9 @@ function buildLinkSharePreview(linkShare) {
 
 function buildChallengeCardPreview(challengeCard) {
   if (!challengeCard) return 'Challenge sent';
+  if (challengeCard.statusLabel) {
+    return challengeCard.statusLabel;
+  }
   if (challengeCard.targetLabel) {
     return `${CHALLENGE_KIND_LABELS[challengeCard.kind] || 'Challenge'}: ${challengeCard.targetLabel}`;
   }
@@ -291,9 +298,21 @@ function buildNotificationTitle(senderUsername, messageType, share = null, linkS
     return `${sender} shared a ${kindLabel.toLowerCase()}`;
   }
   if (messageType === 'challenge_card' && challengeCard?.kind === 'beat_score') {
+    if (challengeCard.statusKind === 'accepted') {
+      return `${sender} accepted a challenge`;
+    }
+    if (challengeCard.statusKind === 'expired') {
+      return `${sender} closed a challenge`;
+    }
     return `${sender} challenged you to beat a score`;
   }
   if (messageType === 'challenge_card' && challengeCard?.kind === 'clear_chart') {
+    if (challengeCard.statusKind === 'accepted') {
+      return `${sender} accepted a challenge`;
+    }
+    if (challengeCard.statusKind === 'expired') {
+      return `${sender} closed a challenge`;
+    }
     return `${sender} challenged you to clear a chart`;
   }
   if (messageType === 'challenge_card') {
@@ -325,6 +344,7 @@ function buildNotificationBody(content, messageType, share = null, linkShare = n
     return `${kindLabel} shared with you`;
   }
   if (messageType === 'challenge_card' && challengeCard?.targetLabel) {
+    if (challengeCard.statusLabel) return challengeCard.statusLabel;
     return challengeCard.targetLabel;
   }
   if (messageType === 'challenge_card' && challengeCard?.subtitle) {

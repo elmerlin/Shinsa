@@ -13,6 +13,7 @@ import {
 } from '../utils/api';
 import {
   buildChartCompareLinkShare,
+  buildChallengeLifecycleCard,
   buildClearChallengeCard,
   buildRematchChallengeCard,
   buildUpscoreChallengeCard,
@@ -54,6 +55,14 @@ const COMPARE_STATUS_META = {
   shared_best: {
     fallbackLabel: 'Current best',
     className: 'border-cyan-300/35 bg-cyan-500/15 text-cyan-100',
+  },
+  accepted: {
+    fallbackLabel: 'Accepted',
+    className: 'border-sky-300/35 bg-sky-500/15 text-sky-100',
+  },
+  expired: {
+    fallbackLabel: 'Expired',
+    className: 'border-gray-300/25 bg-gray-500/10 text-gray-200',
   },
 };
 
@@ -149,6 +158,12 @@ function CompareStatusPill({ statusKind = '', statusLabel = '', prefix = '' }) {
 function getResponseStatusPrefix(responseStatus) {
   if (!responseStatus) return 'Latest reply';
   const senderLabel = responseStatus.senderName ? ` by ${responseStatus.senderName}` : '';
+  if (responseStatus.statusKind === 'accepted') {
+    return `Accepted${senderLabel}`;
+  }
+  if (responseStatus.statusKind === 'expired') {
+    return `Expired${senderLabel}`;
+  }
   if (responseStatus.statusKind === 'beat_target' || responseStatus.statusKind === 'pass_earned') {
     return `Challenge complete${senderLabel}`;
   }
@@ -179,9 +194,13 @@ function getMessageLabel(message) {
     return 'Compare reply';
   }
   if (message.message_type === 'challenge_card' && message.challenge_card?.kind === 'beat_score') {
+    if (message.challenge_card?.statusKind === 'accepted') return 'Challenge accepted';
+    if (message.challenge_card?.statusKind === 'expired') return 'Challenge expired';
     return 'Score challenge';
   }
   if (message.message_type === 'challenge_card' && message.challenge_card?.kind === 'clear_chart') {
+    if (message.challenge_card?.statusKind === 'accepted') return 'Challenge accepted';
+    if (message.challenge_card?.statusKind === 'expired') return 'Challenge expired';
     return 'Clear challenge';
   }
   if (message.message_type === 'challenge_card') {
@@ -280,7 +299,15 @@ function MessageLinkCard({
   );
 }
 
-function MessageChallengeCard({ challengeCard, compareAction = null, compareLoading = false, responseStatus = null }) {
+function MessageChallengeCard({
+  challengeCard,
+  compareAction = null,
+  compareLoading = false,
+  responseStatus = null,
+  lifecycleAction = null,
+  lifecycleLoading = false,
+  lifecycleLabel = 'Accept',
+}) {
   if (!challengeCard) return null;
 
   const badge = CHALLENGE_BADGES[challengeCard.kind] || 'Challenge';
@@ -290,12 +317,18 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
   const detailLabel = String(challengeCard.detailLabel || '').trim();
   const buttonLabel = String(challengeCard.buttonLabel || '').trim() || 'Open challenge';
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
+  const hasLifecycleStatus = !!String(challengeCard.statusKind || '').trim();
 
   return (
     <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-3">
       <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-amber-200/90">{badge}</p>
       <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
       {subtitle ? <p className="mt-1 text-xs text-gray-300">{subtitle}</p> : null}
+      {hasLifecycleStatus ? (
+        <div className="mt-3">
+          <CompareStatusPill statusKind={challengeCard.statusKind} statusLabel={challengeCard.statusLabel} />
+        </div>
+      ) : null}
       {targetLabel ? (
         <p className="mt-3 inline-flex rounded-md border border-amber-300/25 bg-black/15 px-2.5 py-1 text-[11px] font-display font-bold text-amber-100">
           {targetLabel}
@@ -328,6 +361,16 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
             {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
         ) : null}
+        {lifecycleAction ? (
+          <button
+            type="button"
+            onClick={lifecycleAction}
+            disabled={lifecycleLoading}
+            className="inline-flex rounded-md border border-sky-300/35 bg-sky-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-sky-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {lifecycleLoading ? 'Sending...' : lifecycleLabel}
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -340,6 +383,9 @@ function MessageBubble({
   responseStatus = null,
   onFollowUp = null,
   followUpLoading = false,
+  lifecycleAction = null,
+  lifecycleLoading = false,
+  lifecycleLabel = 'Accept',
 }) {
   const isOwn = !!message?.is_own;
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
@@ -399,6 +445,9 @@ function MessageBubble({
               compareAction={onReplyWithBest}
               compareLoading={compareLoading}
               responseStatus={responseStatus}
+              lifecycleAction={lifecycleAction}
+              lifecycleLoading={lifecycleLoading}
+              lifecycleLabel={lifecycleLabel}
             />
           </div>
         ) : null}
@@ -502,7 +551,7 @@ function ConversationView({
   messageError,
   actionError,
   messages,
-  latestCompareBySourceId,
+  getMessageStatus,
   messagesEndRef,
   draft,
   onDraftChange,
@@ -513,6 +562,12 @@ function ConversationView({
   onSendRematch,
   canSendRematch,
   rematchingMessageId,
+  onAcceptChallenge,
+  canAcceptChallenge,
+  acceptingMessageId,
+  onExpireChallenge,
+  canExpireChallenge,
+  expiringMessageId,
   replyingMessageId,
   sending,
 }) {
@@ -570,9 +625,16 @@ function ConversationView({
                   message={message}
                   onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
                   compareLoading={replyingMessageId === message.id}
-                  responseStatus={latestCompareBySourceId?.[message.id] || null}
+                  responseStatus={getMessageStatus(message) || null}
                   onFollowUp={canSendRematch(message) ? () => onSendRematch(message) : null}
                   followUpLoading={rematchingMessageId === message.id}
+                  lifecycleAction={
+                    canAcceptChallenge(message)
+                      ? () => onAcceptChallenge(message)
+                      : (canExpireChallenge(message) ? () => onExpireChallenge(message) : null)
+                  }
+                  lifecycleLoading={acceptingMessageId === message.id || expiringMessageId === message.id}
+                  lifecycleLabel={canAcceptChallenge(message) ? 'Accept' : 'Expire'}
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -627,6 +689,8 @@ export default function MessagesPage() {
   const [actionError, setActionError] = useState('');
   const [replyingMessageId, setReplyingMessageId] = useState('');
   const [rematchingMessageId, setRematchingMessageId] = useState('');
+  const [acceptingMessageId, setAcceptingMessageId] = useState('');
+  const [expiringMessageId, setExpiringMessageId] = useState('');
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -799,12 +863,17 @@ export default function MessagesPage() {
 
   const canReplyWithBest = useCallback((message) => {
     if (!message || message.is_own) return false;
+    const state = latestChallengeLifecycleBySourceId[message.id] || latestCompareBySourceId[message.id] || null;
+    if (state?.statusKind === 'expired' || state?.statusKind === 'beat_target' || state?.statusKind === 'pass_earned') {
+      return false;
+    }
     if (message.message_type === 'challenge_card' && message.challenge_card) {
+      if (message.challenge_card.sourceMessageId || message.challenge_card.statusKind) return false;
       return message.challenge_card.kind === 'beat_score' || message.challenge_card.kind === 'clear_chart';
     }
     if (message.message_type !== 'link_share') return false;
     return message.link_share?.kind === 'upscore' || message.link_share?.kind === 'clear';
-  }, []);
+  }, [latestChallengeLifecycleBySourceId, latestCompareBySourceId]);
 
   const latestCompareBySourceId = useMemo(() => {
     const next = {};
@@ -822,11 +891,47 @@ export default function MessagesPage() {
     return next;
   }, [messages]);
 
+  const latestChallengeLifecycleBySourceId = useMemo(() => {
+    const next = {};
+    for (const message of messages) {
+      if (message?.message_type !== 'challenge_card' || !message?.challenge_card?.sourceMessageId) continue;
+      next[String(message.challenge_card.sourceMessageId).trim()] = {
+        statusKind: String(message.challenge_card.statusKind || '').trim(),
+        statusLabel: String(message.challenge_card.statusLabel || message.challenge_card.subtitle || '').trim(),
+        senderName: String(message?.sender?.username || '').trim(),
+        messageId: message.id,
+      };
+    }
+    return next;
+  }, [messages]);
+
+  const getChallengeStatusForMessage = useCallback((message) => {
+    if (!message?.id) return null;
+    return latestChallengeLifecycleBySourceId[message.id] || latestCompareBySourceId[message.id] || null;
+  }, [latestChallengeLifecycleBySourceId, latestCompareBySourceId]);
+
   const canSendRematch = useCallback((message) => {
     if (!message || message.is_own) return false;
     if (message.message_type !== 'link_share' || message.link_share?.kind !== 'chart_compare') return false;
     return message.link_share.statusKind === 'beat_target' || message.link_share.statusKind === 'pass_earned';
   }, []);
+
+  const canAcceptChallenge = useCallback((message) => {
+    if (!message || message.is_own) return false;
+    if (message.message_type !== 'challenge_card' || !message.challenge_card) return false;
+    if (message.challenge_card.sourceMessageId || message.challenge_card.statusKind) return false;
+    const state = latestChallengeLifecycleBySourceId[message.id] || latestCompareBySourceId[message.id] || null;
+    return !state;
+  }, [latestChallengeLifecycleBySourceId, latestCompareBySourceId]);
+
+  const canExpireChallenge = useCallback((message) => {
+    if (!message || !message.is_own) return false;
+    if (message.message_type !== 'challenge_card' || !message.challenge_card) return false;
+    if (message.challenge_card.sourceMessageId || message.challenge_card.statusKind) return false;
+    const state = latestChallengeLifecycleBySourceId[message.id] || latestCompareBySourceId[message.id] || null;
+    if (!state) return true;
+    return state.statusKind !== 'expired' && state.statusKind !== 'beat_target' && state.statusKind !== 'pass_earned';
+  }, [latestChallengeLifecycleBySourceId, latestCompareBySourceId]);
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
@@ -890,6 +995,8 @@ export default function MessagesPage() {
     setActionError('');
     setReplyingMessageId('');
     setRematchingMessageId('');
+    setAcceptingMessageId('');
+    setExpiringMessageId('');
   }, [conversationId]);
 
   useEffect(() => {
@@ -977,6 +1084,47 @@ export default function MessagesPage() {
       setReplyingMessageId('');
     }
   }, [conversationId, loadConversations, resolveCompareSource, user]);
+
+  const sendChallengeLifecycleUpdate = useCallback(async (message, statusKind, setLoadingId) => {
+    if (!conversationId || !user || !message?.id || message?.message_type !== 'challenge_card' || !message.challenge_card) return;
+
+    setActionError('');
+    setLoadingId(message.id);
+
+    try {
+      const lifecycleCard = buildChallengeLifecycleCard({
+        challengeCard: message.challenge_card,
+        actorName: user.username,
+        statusKind,
+        sourceMessageId: message.id,
+      });
+
+      if (!lifecycleCard) {
+        throw new Error('Could not update challenge state.');
+      }
+
+      const payload = await sendConversationMessage(conversationId, { challenge_card: lifecycleCard });
+      if (payload?.message) {
+        setMessages((prev) => [...prev, payload.message]);
+      }
+      if (payload?.conversation) {
+        setActiveConversation(payload.conversation);
+      }
+      loadConversations();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to update challenge.');
+    } finally {
+      setLoadingId('');
+    }
+  }, [conversationId, loadConversations, user]);
+
+  const handleAcceptChallenge = useCallback(async (message) => {
+    await sendChallengeLifecycleUpdate(message, 'accepted', setAcceptingMessageId);
+  }, [sendChallengeLifecycleUpdate]);
+
+  const handleExpireChallenge = useCallback(async (message) => {
+    await sendChallengeLifecycleUpdate(message, 'expired', setExpiringMessageId);
+  }, [sendChallengeLifecycleUpdate]);
 
   const handleSendRematch = useCallback(async (message) => {
     if (!conversationId || !user || !message?.id || message?.message_type !== 'link_share') return;
@@ -1069,7 +1217,7 @@ export default function MessagesPage() {
           messageError={messageError}
           actionError={actionError}
           messages={messages}
-          latestCompareBySourceId={latestCompareBySourceId}
+          getMessageStatus={getChallengeStatusForMessage}
           messagesEndRef={messagesEndRef}
           draft={draft}
           onDraftChange={setDraft}
@@ -1080,6 +1228,12 @@ export default function MessagesPage() {
           onSendRematch={handleSendRematch}
           canSendRematch={canSendRematch}
           rematchingMessageId={rematchingMessageId}
+          onAcceptChallenge={handleAcceptChallenge}
+          canAcceptChallenge={canAcceptChallenge}
+          acceptingMessageId={acceptingMessageId}
+          onExpireChallenge={handleExpireChallenge}
+          canExpireChallenge={canExpireChallenge}
+          expiringMessageId={expiringMessageId}
           replyingMessageId={replyingMessageId}
           sending={sending}
         />

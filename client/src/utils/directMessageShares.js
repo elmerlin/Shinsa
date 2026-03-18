@@ -460,3 +460,46 @@ export function buildRematchChallengeCard({
     originUsername: challenger,
   };
 }
+
+export function buildChallengeLifecycleCard({
+  challengeCard,
+  actorName,
+  statusKind,
+  sourceMessageId = '',
+}) {
+  const source = challengeCard && typeof challengeCard === 'object' ? challengeCard : null;
+  if (!source) return null;
+
+  const normalizedStatusKind = String(statusKind || '').trim().toLowerCase();
+  if (normalizedStatusKind !== 'accepted' && normalizedStatusKind !== 'expired') {
+    return null;
+  }
+
+  const actor = String(actorName || 'Player').trim() || 'Player';
+  const chartLabel = formatChartLabel(source.songTitle, source.mode, source.level);
+  const isAccepted = normalizedStatusKind === 'accepted';
+
+  return {
+    kind: source.kind || 'beat_score',
+    sourceKind: source.sourceKind || '',
+    sourceId: String(source.sourceId || '').trim(),
+    path: source.path || '',
+    chartPath: source.chartPath || '',
+    title: isAccepted ? 'Challenge accepted' : 'Challenge expired',
+    subtitle: isAccepted
+      ? `${actor} accepted the challenge on ${chartLabel}`
+      : `${actor} closed the challenge on ${chartLabel}`,
+    targetLabel: source.targetLabel || chartLabel,
+    detailLabel: source.detailLabel || '',
+    buttonLabel: source.buttonLabel || 'Open challenge',
+    songTitle: String(source.songTitle || ''),
+    mode: String(source.mode || ''),
+    level: Number(source.level) || 0,
+    targetScore: Number(source.targetScore) || 0,
+    targetGrade: String(source.targetGrade || ''),
+    originUsername: String(source.originUsername || ''),
+    sourceMessageId: String(sourceMessageId || '').trim(),
+    statusKind: normalizedStatusKind,
+    statusLabel: isAccepted ? `Accepted by ${actor}` : `Expired by ${actor}`,
+  };
+}
