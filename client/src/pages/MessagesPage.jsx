@@ -14,6 +14,7 @@ import {
 import {
   buildChartCompareLinkShare,
   buildClearChallengeCard,
+  buildRematchChallengeCard,
   buildUpscoreChallengeCard,
 } from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
@@ -145,6 +146,15 @@ function CompareStatusPill({ statusKind = '', statusLabel = '', prefix = '' }) {
   );
 }
 
+function getResponseStatusPrefix(responseStatus) {
+  if (!responseStatus) return 'Latest reply';
+  const senderLabel = responseStatus.senderName ? ` by ${responseStatus.senderName}` : '';
+  if (responseStatus.statusKind === 'beat_target' || responseStatus.statusKind === 'pass_earned') {
+    return `Challenge complete${senderLabel}`;
+  }
+  return responseStatus.senderName ? `Latest reply from ${responseStatus.senderName}` : 'Latest reply';
+}
+
 function getMessageLabel(message) {
   if (!message) return '';
   if (message.message_type === 'session_share' && message.share?.shareType === 'hour_of_power') {
@@ -183,7 +193,15 @@ function getMessageLabel(message) {
   return '';
 }
 
-function MessageLinkCard({ linkShare, compareAction = null, compareLoading = false, responseStatus = null }) {
+function MessageLinkCard({
+  linkShare,
+  compareAction = null,
+  compareLoading = false,
+  responseStatus = null,
+  followUpAction = null,
+  followUpLoading = false,
+  followUpLabel = 'Rematch',
+}) {
   if (!linkShare) return null;
 
   const title = String(linkShare.title || '').trim() || 'Open link';
@@ -215,7 +233,7 @@ function MessageLinkCard({ linkShare, compareAction = null, compareLoading = fal
           <CompareStatusPill
             statusKind={responseStatus.statusKind}
             statusLabel={responseStatus.statusLabel}
-            prefix={responseStatus.senderName ? `Latest reply from ${responseStatus.senderName}` : 'Latest reply'}
+            prefix={getResponseStatusPrefix(responseStatus)}
           />
         </div>
       ) : null}
@@ -245,6 +263,16 @@ function MessageLinkCard({ linkShare, compareAction = null, compareLoading = fal
             className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {compareLoading ? 'Sending...' : compareButtonLabel}
+          </button>
+        ) : null}
+        {followUpAction ? (
+          <button
+            type="button"
+            onClick={followUpAction}
+            disabled={followUpLoading}
+            className="inline-flex rounded-md border border-amber-300/35 bg-amber-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {followUpLoading ? 'Sending...' : followUpLabel}
           </button>
         ) : null}
       </div>
@@ -279,7 +307,7 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
           <CompareStatusPill
             statusKind={responseStatus.statusKind}
             statusLabel={responseStatus.statusLabel}
-            prefix={responseStatus.senderName ? `Latest reply from ${responseStatus.senderName}` : 'Latest reply'}
+            prefix={getResponseStatusPrefix(responseStatus)}
           />
         </div>
       ) : null}
@@ -305,7 +333,14 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
   );
 }
 
-function MessageBubble({ message, onReplyWithBest = null, compareLoading = false, responseStatus = null }) {
+function MessageBubble({
+  message,
+  onReplyWithBest = null,
+  compareLoading = false,
+  responseStatus = null,
+  onFollowUp = null,
+  followUpLoading = false,
+}) {
   const isOwn = !!message?.is_own;
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
   const bubbleTone = isOwn
@@ -347,6 +382,8 @@ function MessageBubble({ message, onReplyWithBest = null, compareLoading = false
               compareAction={onReplyWithBest}
               compareLoading={compareLoading}
               responseStatus={responseStatus}
+              followUpAction={onFollowUp}
+              followUpLoading={followUpLoading}
             />
           </div>
         ) : null}
@@ -473,6 +510,9 @@ function ConversationView({
   onSend,
   onReplyWithBest,
   canReplyWithBest,
+  onSendRematch,
+  canSendRematch,
+  rematchingMessageId,
   replyingMessageId,
   sending,
 }) {
@@ -531,6 +571,8 @@ function ConversationView({
                   onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
                   compareLoading={replyingMessageId === message.id}
                   responseStatus={latestCompareBySourceId?.[message.id] || null}
+                  onFollowUp={canSendRematch(message) ? () => onSendRematch(message) : null}
+                  followUpLoading={rematchingMessageId === message.id}
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -584,6 +626,7 @@ export default function MessagesPage() {
   const [messageError, setMessageError] = useState('');
   const [actionError, setActionError] = useState('');
   const [replyingMessageId, setReplyingMessageId] = useState('');
+  const [rematchingMessageId, setRematchingMessageId] = useState('');
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -779,6 +822,12 @@ export default function MessagesPage() {
     return next;
   }, [messages]);
 
+  const canSendRematch = useCallback((message) => {
+    if (!message || message.is_own) return false;
+    if (message.message_type !== 'link_share' || message.link_share?.kind !== 'chart_compare') return false;
+    return message.link_share.statusKind === 'beat_target' || message.link_share.statusKind === 'pass_earned';
+  }, []);
+
   const loadConversations = useCallback(async () => {
     if (!user) return;
     try {
@@ -840,6 +889,7 @@ export default function MessagesPage() {
     setDraft('');
     setActionError('');
     setReplyingMessageId('');
+    setRematchingMessageId('');
   }, [conversationId]);
 
   useEffect(() => {
@@ -928,6 +978,78 @@ export default function MessagesPage() {
     }
   }, [conversationId, loadConversations, resolveCompareSource, user]);
 
+  const handleSendRematch = useCallback(async (message) => {
+    if (!conversationId || !user || !message?.id || message?.message_type !== 'link_share') return;
+    const linkShare = message.link_share || null;
+    if (!linkShare || linkShare.kind !== 'chart_compare') return;
+
+    setActionError('');
+    setRematchingMessageId(message.id);
+
+    try {
+      const chartId = await resolveChartReference({
+        chartPath: linkShare.chartPath || linkShare.path,
+        songTitle: linkShare.songTitle,
+        mode: linkShare.mode,
+        level: linkShare.level,
+      });
+      if (!chartId) {
+        throw new Error('Could not find the chart for this rematch.');
+      }
+
+      let targetScore = parseInt(linkShare.score, 10) || 0;
+      let targetGrade = String(linkShare.grade || '').trim();
+      let chartTitle = String(linkShare.songTitle || '').trim();
+      let mode = String(linkShare.mode || '').trim();
+      let level = parseInt(linkShare.level, 10) || 0;
+
+      if (!targetScore || !chartTitle || !mode || !level) {
+        const detail = await getSongChartDetail(chartId, { user_id: message.sender?.id || '' });
+        const chart = detail?.chart || null;
+        const best = detail?.user_summary?.best || null;
+        if (!chart) {
+          throw new Error('That chart could not be loaded.');
+        }
+        chartTitle = chart.title;
+        mode = chart.mode;
+        level = chart.level;
+        targetScore = targetScore || (parseInt(best?.score, 10) || 0);
+        targetGrade = targetGrade || String(best?.grade || '').trim();
+      }
+
+      if (!targetScore) {
+        throw new Error('No rematch target is available for this reply yet.');
+      }
+
+      const rematchCard = buildRematchChallengeCard({
+        chartId,
+        chartTitle,
+        mode,
+        level,
+        challengerName: user.username,
+        targetScore,
+        targetGrade,
+      });
+
+      if (!rematchCard) {
+        throw new Error('Could not build a rematch challenge.');
+      }
+
+      const payload = await sendConversationMessage(conversationId, { challenge_card: rematchCard });
+      if (payload?.message) {
+        setMessages((prev) => [...prev, payload.message]);
+      }
+      if (payload?.conversation) {
+        setActiveConversation(payload.conversation);
+      }
+      loadConversations();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to send rematch.');
+    } finally {
+      setRematchingMessageId('');
+    }
+  }, [conversationId, loadConversations, resolveChartReference, user]);
+
   const handleStartConversation = async (selectedUser) => {
     const payload = await getOrCreateDirectConversation(selectedUser.id);
     setPickerOpen(false);
@@ -955,6 +1077,9 @@ export default function MessagesPage() {
           onSend={handleSend}
           onReplyWithBest={handleReplyWithBest}
           canReplyWithBest={canReplyWithBest}
+          onSendRematch={handleSendRematch}
+          canSendRematch={canSendRematch}
+          rematchingMessageId={rematchingMessageId}
           replyingMessageId={replyingMessageId}
           sending={sending}
         />

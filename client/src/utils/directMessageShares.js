@@ -412,10 +412,51 @@ export function buildChartCompareLinkShare({
     songTitle: String(chartTitle || ''),
     mode: String(mode || ''),
     level: Number(level) || 0,
+    score,
+    grade,
+    isStageBreak: !!best?.is_stage_break,
     targetScore: Number(targetScore) || 0,
     challengeKind: String(challengeKind || '').trim(),
     sourceMessageId: String(sourceMessageId || '').trim(),
     statusKind: outcome.statusKind,
     statusLabel: outcome.statusLabel,
+  };
+}
+
+export function buildRematchChallengeCard({
+  chartId,
+  chartTitle,
+  mode,
+  level,
+  challengerName,
+  targetScore = 0,
+  targetGrade = '',
+}) {
+  const id = String(chartId || '').trim();
+  if (!id) return null;
+
+  const challenger = String(challengerName || 'Player').trim() || 'Player';
+  const normalizedTargetScore = Number(targetScore) || 0;
+  const normalizedTargetGrade = compactText(targetGrade, 20);
+  const chartLabel = formatChartLabel(chartTitle, mode, level);
+  const detailBits = [];
+
+  if (normalizedTargetGrade) detailBits.push(normalizedTargetGrade);
+  if (normalizedTargetScore > 0) detailBits.push(`Target ${formatScore(normalizedTargetScore)}`);
+
+  return {
+    kind: 'beat_score',
+    path: `/songs/chart/${id}`,
+    title: 'Rematch on this chart',
+    subtitle: `${challenger} set a new target on ${chartLabel}`,
+    targetLabel: normalizedTargetScore > 0 ? `Target ${formatScore(normalizedTargetScore)}` : chartLabel,
+    detailLabel: detailBits.join(' • '),
+    buttonLabel: 'Open chart',
+    songTitle: String(chartTitle || ''),
+    mode: String(mode || ''),
+    level: Number(level) || 0,
+    targetScore: normalizedTargetScore,
+    targetGrade: normalizedTargetGrade,
+    originUsername: challenger,
   };
 }
