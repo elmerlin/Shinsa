@@ -900,20 +900,6 @@ export default function MessagesPage() {
     throw new Error('This share does not point to a playable chart yet.');
   }, [resolveChartReference]);
 
-  const canReplyWithBest = useCallback((message) => {
-    if (!message || message.is_own) return false;
-    const state = latestChallengeLifecycleBySourceId[message.id] || latestCompareBySourceId[message.id] || null;
-    if (state?.statusKind === 'expired' || state?.statusKind === 'beat_target' || state?.statusKind === 'pass_earned') {
-      return false;
-    }
-    if (message.message_type === 'challenge_card' && message.challenge_card) {
-      if (message.challenge_card.sourceMessageId || message.challenge_card.statusKind) return false;
-      return message.challenge_card.kind === 'beat_score' || message.challenge_card.kind === 'clear_chart';
-    }
-    if (message.message_type !== 'link_share') return false;
-    return message.link_share?.kind === 'upscore' || message.link_share?.kind === 'clear';
-  }, [latestChallengeLifecycleBySourceId, latestCompareBySourceId]);
-
   const latestCompareBySourceId = useMemo(() => {
     const next = {};
     for (const message of messages) {
@@ -929,6 +915,20 @@ export default function MessagesPage() {
     }
     return next;
   }, [messages]);
+
+  const canReplyWithBest = useCallback((message) => {
+    if (!message || message.is_own) return false;
+    const state = latestChallengeLifecycleBySourceId[message.id] || latestCompareBySourceId[message.id] || null;
+    if (state?.statusKind === 'expired' || state?.statusKind === 'beat_target' || state?.statusKind === 'pass_earned') {
+      return false;
+    }
+    if (message.message_type === 'challenge_card' && message.challenge_card) {
+      if (message.challenge_card.sourceMessageId || message.challenge_card.statusKind) return false;
+      return message.challenge_card.kind === 'beat_score' || message.challenge_card.kind === 'clear_chart';
+    }
+    if (message.message_type !== 'link_share') return false;
+    return message.link_share?.kind === 'upscore' || message.link_share?.kind === 'clear';
+  }, [latestChallengeLifecycleBySourceId, latestCompareBySourceId]);
 
   const latestChallengeLifecycleBySourceId = useMemo(() => {
     const next = {};
