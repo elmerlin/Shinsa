@@ -8,6 +8,7 @@
     "client": "cd client && npx vite --host",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "build": "cd client && node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
+    "preview:check": "node scripts/check-share-preview.mjs",
     "seed": "node server/db/seed.js",
     "piu:aliases": "node server/scripts/generatePiugameSongAliases.js --date=202602 --mode=total",
     "piu:jackets:sync": "node server/scripts/syncPiugameJackets.js --date=202602 --mode=total",
