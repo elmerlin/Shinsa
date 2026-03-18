@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getAvatarUrl } from './AvatarPicker';
 import DojoCatStickerPicker from './DojoCatStickerPicker';
 import ScoreSnapshotCard from './ScoreSnapshotCard';
 import StickerAsset from './StickerAsset';
+import { useAuth } from '../contexts/AuthContext';
 import { renderFormattedText } from '../utils/formatText';
 import { getStickerEmoji } from '../utils/stickers';
 
@@ -78,8 +80,31 @@ function HighlightAvatar({ user, hasStory = false, onClick = null, isSelf = fals
         </span>
       </span>
       <span className="max-w-[4.8rem] truncate text-[11px] font-display font-bold text-gray-200">
-        {isSelf ? 'Your circle' : (user?.username || 'Player')}
+        {isSelf ? 'Your note' : (user?.username || 'Player')}
       </span>
+    </button>
+  );
+}
+
+function HighlightNoteBubble({ note, isSelf = false, onClick = null }) {
+  const content = String(note?.content || '').trim();
+  if (!content && !isSelf) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`absolute -top-4 left-1/2 z-10 flex min-h-[2.8rem] w-max max-w-[6.9rem] -translate-x-1/2 items-center rounded-[1.3rem] px-3 py-2 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
+        content
+          ? 'bg-[#343945] text-white hover:bg-[#3b4150]'
+          : 'border border-dashed border-white/12 bg-[#262b35] text-gray-300 hover:bg-[#2c313c]'
+      }`}
+      aria-label={isSelf ? 'Set your note' : 'Open note thread'}
+    >
+      <span className="line-clamp-2 text-[11px] font-medium leading-4">
+        {content || 'Share a note'}
+      </span>
+      <span className={`absolute -bottom-1 left-[1.05rem] h-3 w-3 rotate-45 rounded-[0.25rem] ${content ? 'bg-[#343945]' : 'border-r border-b border-dashed border-white/12 bg-[#262b35]'}`} />
     </button>
   );
 }
@@ -91,21 +116,29 @@ function HighlightCircle({
   onOpenStoryComposer,
 }) {
   const note = circle?.note || null;
+  const avatarAction = () => {
+    if (circle?.has_story) {
+      onOpenStory?.(circle);
+      return;
+    }
+    if (circle?.is_self) {
+      onOpenStoryComposer?.();
+    }
+  };
 
   return (
-    <div className="flex w-[5.5rem] shrink-0 flex-col items-center gap-2.5">
-      <div className="relative">
+    <div className="flex w-[5.8rem] shrink-0 flex-col items-center gap-2.5 pt-3">
+      <div className="relative pt-5">
+        <HighlightNoteBubble
+          note={note}
+          isSelf={circle?.is_self}
+          onClick={() => onOpenNote?.(circle)}
+        />
         <HighlightAvatar
           user={circle?.user}
           hasStory={circle?.has_story}
           isSelf={circle?.is_self}
-          onClick={() => {
-            if (circle?.has_story) {
-              onOpenStory?.(circle);
-            } else if (circle?.is_self) {
-              onOpenStoryComposer?.();
-            }
-          }}
+          onClick={avatarAction}
         />
         {circle?.is_self ? (
           <button
@@ -118,19 +151,6 @@ function HighlightCircle({
           </button>
         ) : null}
       </div>
-      <button
-        type="button"
-        onClick={() => onOpenNote?.(circle)}
-        className={`w-full rounded-[1.35rem] border px-3 py-2 text-left shadow-[0_10px_24px_rgba(0,0,0,0.16)] transition-colors ${
-          note
-            ? 'border-white/12 bg-white/8 hover:bg-white/10'
-            : 'border-dashed border-white/10 bg-white/5 hover:bg-white/8'
-        }`}
-      >
-        <p className={`line-clamp-2 min-h-[2.4rem] text-[12px] leading-5 ${note ? 'text-white' : 'text-gray-500'}`}>
-          {note?.content || (circle?.is_self ? 'Set a note' : 'No note right now')}
-        </p>
-      </button>
     </div>
   );
 }
@@ -667,34 +687,44 @@ export default function InboxHighlightsStrip({
   onOpenNote,
   onOpenStoryComposer,
 }) {
+  const { user } = useAuth();
+  const fallbackSelfCircle = user?.id ? {
+    is_self: true,
+    has_story: false,
+    note: null,
+    stories: [],
+    user: {
+      id: user.id,
+      username: user.username || '',
+      avatar: getAvatarUrl(user.avatar || ''),
+      avatar_v: user.avatar_v || 0,
+    },
+  } : null;
+  const selfCircle = me || circles.find((circle) => circle?.is_self) || fallbackSelfCircle;
+  const orderedCircles = [
+    selfCircle,
+    ...circles.filter((circle) => !circle?.is_self),
+  ].filter(Boolean);
+
+  if (!loading && orderedCircles.length === 0 && !error) return null;
+
   return (
     <div className="border-b border-piu-border/25 bg-[linear-gradient(180deg,rgba(7,12,21,0.92),rgba(7,12,21,0.58))] px-4 pb-4 pt-3 sm:px-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/75">Circles</p>
-          <p className="mt-1 text-xs text-gray-400">Notes, recent clears, fresh upscores, and live sessions from your people.</p>
-        </div>
-        <button
-          type="button"
-          onClick={onOpenStoryComposer}
-          className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-xs font-display font-bold text-gray-100 hover:bg-white/10"
-        >
-          Add story
-        </button>
-      </div>
       {loading ? (
-        <p className="text-sm text-gray-500">Loading circles...</p>
+        <div className="flex gap-3 overflow-x-auto pb-1 pt-3">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="flex w-[5.8rem] shrink-0 flex-col items-center gap-2.5 pt-3">
+              <div className="relative pt-5">
+                <div className="absolute -top-4 left-1/2 h-[2.8rem] w-[6.4rem] -translate-x-1/2 rounded-[1.3rem] bg-white/6" />
+                <div className="h-[4.65rem] w-[4.65rem] animate-pulse rounded-full bg-white/8" />
+              </div>
+              <div className="h-3 w-14 animate-pulse rounded-full bg-white/8" />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-1">
-          {me ? (
-            <HighlightCircle
-              circle={me}
-              onOpenStory={onOpenStory}
-              onOpenNote={onOpenNote}
-              onOpenStoryComposer={onOpenStoryComposer}
-            />
-          ) : null}
-          {circles.filter((circle) => !circle.is_self).map((circle) => (
+          {orderedCircles.map((circle) => (
             <HighlightCircle
               key={circle.user.id}
               circle={circle}
@@ -703,14 +733,8 @@ export default function InboxHighlightsStrip({
               onOpenStoryComposer={onOpenStoryComposer}
             />
           ))}
-          {!me && circles.length === 0 ? (
-            <div className="rounded-[1.35rem] border border-dashed border-white/10 bg-white/4 px-4 py-4 text-sm text-gray-500">
-              Follow more players to fill your circles.
-            </div>
-          ) : null}
         </div>
       )}
-      {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
     </div>
   );
 }
