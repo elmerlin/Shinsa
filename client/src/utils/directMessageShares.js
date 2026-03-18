@@ -26,6 +26,57 @@ function formatDelta(value) {
   return Number.isFinite(numeric) && numeric > 0 ? `+${numeric.toLocaleString()}` : '';
 }
 
+function buildCompareOutcome({ best, targetScore = 0, challengeKind = '' }) {
+  if (!best || typeof best !== 'object') {
+    return {
+      statusKind: 'shared_best',
+      statusLabel: 'Shared current best',
+    };
+  }
+
+  const score = Number(best.score) || 0;
+  const normalizedChallengeKind = String(challengeKind || '').trim().toLowerCase();
+  const normalizedTargetScore = Number(targetScore) || 0;
+
+  if ((normalizedChallengeKind === 'beat_score' || normalizedTargetScore > 0) && score > 0) {
+    if (normalizedTargetScore > 0) {
+      const delta = score - normalizedTargetScore;
+      if (delta >= 0) {
+        return {
+          statusKind: 'beat_target',
+          statusLabel: delta > 0 ? `Beat target by ${delta.toLocaleString()}` : 'Matched the target',
+        };
+      }
+      return {
+        statusKind: 'chasing_target',
+        statusLabel: `Need +${Math.abs(delta).toLocaleString()}`,
+      };
+    }
+
+    return {
+      statusKind: 'shared_best',
+      statusLabel: 'Shared current best',
+    };
+  }
+
+  if (normalizedChallengeKind === 'clear_chart') {
+    return best.is_stage_break
+      ? {
+        statusKind: 'still_breaking',
+        statusLabel: 'Still stage breaking',
+      }
+      : {
+        statusKind: 'pass_earned',
+        statusLabel: 'Pass earned',
+      };
+  }
+
+  return {
+    statusKind: 'shared_best',
+    statusLabel: 'Shared current best',
+  };
+}
+
 function formatLeadClearLabel(clear) {
   if (!clear || typeof clear !== 'object') return 'New clear';
   if (String(clear.entry_type || '').trim().toLowerCase() === 'title_unlock') {
@@ -213,6 +264,7 @@ export function buildClearLinkShare({
       songTitle: '',
       mode: '',
       level: 0,
+      targetScore: 0,
     };
   }
 
@@ -336,6 +388,7 @@ export function buildChartCompareLinkShare({
   best,
   targetScore = 0,
   challengeKind = '',
+  sourceMessageId = '',
 }) {
   const id = String(chartId || '').trim();
   if (!id || !best) return null;
@@ -345,25 +398,24 @@ export function buildChartCompareLinkShare({
   const grade = compactText(best?.grade, 20);
   const chartLabel = formatChartLabel(chartTitle, mode, level);
   const parts = [chartLabel];
+  const outcome = buildCompareOutcome({ best, targetScore, challengeKind });
 
   if (score > 0) parts.push(formatScore(score));
   if (grade) parts.push(grade);
-
-  if (targetScore > 0 && score > 0) {
-    const delta = score - targetScore;
-    parts.push(delta >= 0 ? `Beat target by ${delta.toLocaleString()}` : `Need +${Math.abs(delta).toLocaleString()}`);
-  } else if (challengeKind === 'clear_chart') {
-    parts.push(best?.is_stage_break ? 'No pass yet' : 'Pass on record');
-  }
 
   return {
     kind: 'chart_compare',
     path: `/songs/chart/${id}`,
     title: `${authorName}'s current best`,
-    subtitle: parts.filter(Boolean).join(' • '),
+    subtitle: parts.filter(Boolean).join(' • ') || outcome.statusLabel,
     buttonLabel: 'Open chart',
     songTitle: String(chartTitle || ''),
     mode: String(mode || ''),
     level: Number(level) || 0,
+    targetScore: Number(targetScore) || 0,
+    challengeKind: String(challengeKind || '').trim(),
+    sourceMessageId: String(sourceMessageId || '').trim(),
+    statusKind: outcome.statusKind,
+    statusLabel: outcome.statusLabel,
   };
 }

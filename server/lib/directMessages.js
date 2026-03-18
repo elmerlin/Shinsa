@@ -161,6 +161,10 @@ function sanitizeLinkSharePayload(linkShare) {
     mode: String(src.mode || '').trim().slice(0, 24),
     level: toInt(src.level),
     targetScore: toInt(src.targetScore || src.target_score),
+    challengeKind: String(src.challengeKind || src.challenge_kind || '').trim().slice(0, 24),
+    sourceMessageId: String(src.sourceMessageId || src.source_message_id || '').trim().slice(0, 80),
+    statusKind: String(src.statusKind || src.status_kind || '').trim().slice(0, 24),
+    statusLabel: String(src.statusLabel || src.status_label || '').trim().slice(0, 120),
   };
 }
 
@@ -224,6 +228,9 @@ function buildDirectConversationKey(userIdA, userIdB) {
 
 function buildLinkSharePreview(linkShare) {
   if (!linkShare) return 'Shared link';
+  if (linkShare.kind === 'chart_compare' && linkShare.statusLabel) {
+    return `Compare reply: ${linkShare.statusLabel}`;
+  }
   const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'Link';
   return linkShare.title
     ? `${kindLabel}: ${linkShare.title}`
@@ -271,7 +278,11 @@ function buildNotificationTitle(senderUsername, messageType, share = null, linkS
   }
   if (messageType === 'link_share' && linkShare) {
     if (linkShare.kind === 'chart_compare') {
-      return `${sender} sent a compare reply`;
+      return linkShare.statusKind === 'beat_target'
+        ? `${sender} beat the target`
+        : linkShare.statusKind === 'pass_earned'
+          ? `${sender} earned the pass`
+          : `${sender} sent a compare reply`;
     }
     const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'link';
     return `${sender} shared a ${kindLabel.toLowerCase()}`;
@@ -301,7 +312,7 @@ function buildNotificationBody(content, messageType, share = null, linkShare = n
     return 'Session recap';
   }
   if (messageType === 'link_share' && linkShare?.kind === 'chart_compare' && linkShare?.subtitle) {
-    return linkShare.subtitle;
+    return linkShare.statusLabel || linkShare.subtitle;
   }
   if (messageType === 'link_share' && linkShare?.title) {
     return linkShare.title;

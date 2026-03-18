@@ -33,6 +33,28 @@ const CHALLENGE_BADGES = {
   beat_score: 'Score Challenge',
   clear_chart: 'Clear Challenge',
 };
+const COMPARE_STATUS_META = {
+  beat_target: {
+    fallbackLabel: 'Beat target',
+    className: 'border-emerald-300/35 bg-emerald-500/15 text-emerald-100',
+  },
+  pass_earned: {
+    fallbackLabel: 'Pass earned',
+    className: 'border-emerald-300/35 bg-emerald-500/15 text-emerald-100',
+  },
+  chasing_target: {
+    fallbackLabel: 'Still chasing',
+    className: 'border-amber-300/35 bg-amber-500/15 text-amber-100',
+  },
+  still_breaking: {
+    fallbackLabel: 'Still breaking',
+    className: 'border-rose-300/35 bg-rose-500/15 text-rose-100',
+  },
+  shared_best: {
+    fallbackLabel: 'Current best',
+    className: 'border-cyan-300/35 bg-cyan-500/15 text-cyan-100',
+  },
+};
 
 function normalizeSongName(value) {
   return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -106,6 +128,23 @@ function formatConversationTime(value) {
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function getCompareStatusInfo(statusKind, statusLabel) {
+  const meta = COMPARE_STATUS_META[String(statusKind || '').trim()] || COMPARE_STATUS_META.shared_best;
+  return {
+    label: String(statusLabel || '').trim() || meta.fallbackLabel,
+    className: meta.className,
+  };
+}
+
+function CompareStatusPill({ statusKind = '', statusLabel = '', prefix = '' }) {
+  const info = getCompareStatusInfo(statusKind, statusLabel);
+  return (
+    <p className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-display font-bold ${info.className}`}>
+      {prefix ? `${prefix}: ${info.label}` : info.label}
+    </p>
+  );
+}
+
 function getMessageLabel(message) {
   if (!message) return '';
   if (message.message_type === 'session_share' && message.share?.shareType === 'hour_of_power') {
@@ -144,7 +183,7 @@ function getMessageLabel(message) {
   return '';
 }
 
-function MessageLinkCard({ linkShare, compareAction = null, compareLoading = false }) {
+function MessageLinkCard({ linkShare, compareAction = null, compareLoading = false, responseStatus = null }) {
   if (!linkShare) return null;
 
   const title = String(linkShare.title || '').trim() || 'Open link';
@@ -159,12 +198,27 @@ function MessageLinkCard({ linkShare, compareAction = null, compareLoading = fal
   const buttonClass = isCompare
     ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:text-white'
     : 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100 hover:text-white';
+  const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
 
   return (
     <div className={`rounded-xl border px-3 py-3 ${frameClass}`}>
       <p className={`text-[10px] font-display font-bold uppercase tracking-[0.2em] ${badgeClass}`}>{badge}</p>
       <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
       {subtitle ? <p className="mt-1 text-xs text-gray-400">{subtitle}</p> : null}
+      {isCompare && linkShare.statusLabel ? (
+        <div className="mt-3">
+          <CompareStatusPill statusKind={linkShare.statusKind} statusLabel={linkShare.statusLabel} />
+        </div>
+      ) : null}
+      {!isCompare && responseStatus ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <CompareStatusPill
+            statusKind={responseStatus.statusKind}
+            statusLabel={responseStatus.statusLabel}
+            prefix={responseStatus.senderName ? `Latest reply from ${responseStatus.senderName}` : 'Latest reply'}
+          />
+        </div>
+      ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
         {linkShare.path ? (
           <Link
@@ -190,7 +244,7 @@ function MessageLinkCard({ linkShare, compareAction = null, compareLoading = fal
             disabled={compareLoading}
             className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {compareLoading ? 'Sending...' : 'Reply with my best'}
+            {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
         ) : null}
       </div>
@@ -198,7 +252,7 @@ function MessageLinkCard({ linkShare, compareAction = null, compareLoading = fal
   );
 }
 
-function MessageChallengeCard({ challengeCard, compareAction = null, compareLoading = false }) {
+function MessageChallengeCard({ challengeCard, compareAction = null, compareLoading = false, responseStatus = null }) {
   if (!challengeCard) return null;
 
   const badge = CHALLENGE_BADGES[challengeCard.kind] || 'Challenge';
@@ -207,6 +261,7 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
   const targetLabel = String(challengeCard.targetLabel || '').trim();
   const detailLabel = String(challengeCard.detailLabel || '').trim();
   const buttonLabel = String(challengeCard.buttonLabel || '').trim() || 'Open challenge';
+  const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
 
   return (
     <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-3">
@@ -219,6 +274,15 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
         </p>
       ) : null}
       {detailLabel ? <p className="mt-2 text-xs text-amber-100/80">{detailLabel}</p> : null}
+      {responseStatus ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <CompareStatusPill
+            statusKind={responseStatus.statusKind}
+            statusLabel={responseStatus.statusLabel}
+            prefix={responseStatus.senderName ? `Latest reply from ${responseStatus.senderName}` : 'Latest reply'}
+          />
+        </div>
+      ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           to={challengeCard.path}
@@ -233,7 +297,7 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
             disabled={compareLoading}
             className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {compareLoading ? 'Sending...' : 'Reply with my best'}
+            {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
         ) : null}
       </div>
@@ -241,7 +305,7 @@ function MessageChallengeCard({ challengeCard, compareAction = null, compareLoad
   );
 }
 
-function MessageBubble({ message, onReplyWithBest = null, compareLoading = false }) {
+function MessageBubble({ message, onReplyWithBest = null, compareLoading = false, responseStatus = null }) {
   const isOwn = !!message?.is_own;
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
   const bubbleTone = isOwn
@@ -282,6 +346,7 @@ function MessageBubble({ message, onReplyWithBest = null, compareLoading = false
               linkShare={message.link_share}
               compareAction={onReplyWithBest}
               compareLoading={compareLoading}
+              responseStatus={responseStatus}
             />
           </div>
         ) : null}
@@ -296,6 +361,7 @@ function MessageBubble({ message, onReplyWithBest = null, compareLoading = false
               challengeCard={message.challenge_card}
               compareAction={onReplyWithBest}
               compareLoading={compareLoading}
+              responseStatus={responseStatus}
             />
           </div>
         ) : null}
@@ -399,6 +465,7 @@ function ConversationView({
   messageError,
   actionError,
   messages,
+  latestCompareBySourceId,
   messagesEndRef,
   draft,
   onDraftChange,
@@ -463,6 +530,7 @@ function ConversationView({
                   message={message}
                   onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
                   compareLoading={replyingMessageId === message.id}
+                  responseStatus={latestCompareBySourceId?.[message.id] || null}
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -695,6 +763,22 @@ export default function MessagesPage() {
     return message.link_share?.kind === 'upscore' || message.link_share?.kind === 'clear';
   }, []);
 
+  const latestCompareBySourceId = useMemo(() => {
+    const next = {};
+    for (const message of messages) {
+      if (message?.message_type !== 'link_share' || message?.link_share?.kind !== 'chart_compare') continue;
+      const sourceMessageId = String(message?.link_share?.sourceMessageId || '').trim();
+      if (!sourceMessageId) continue;
+      next[sourceMessageId] = {
+        statusKind: String(message.link_share.statusKind || '').trim(),
+        statusLabel: String(message.link_share.statusLabel || message.link_share.subtitle || '').trim(),
+        senderName: String(message?.sender?.username || '').trim(),
+        messageId: message.id,
+      };
+    }
+    return next;
+  }, [messages]);
+
   const loadConversations = useCallback(async () => {
     if (!user) return;
     try {
@@ -822,6 +906,7 @@ export default function MessagesPage() {
         best,
         targetScore: source.targetScore,
         challengeKind: source.challengeKind,
+        sourceMessageId: message.id,
       });
 
       if (!compareLinkShare) {
@@ -862,6 +947,7 @@ export default function MessagesPage() {
           messageError={messageError}
           actionError={actionError}
           messages={messages}
+          latestCompareBySourceId={latestCompareBySourceId}
           messagesEndRef={messagesEndRef}
           draft={draft}
           onDraftChange={setDraft}
