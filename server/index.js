@@ -119,17 +119,14 @@ app.use('/api', (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 if (!KOREAN_LOCALE_ENABLED) {
-  app.use((req, res, next) => {
-    if ((req.method !== 'GET' && req.method !== 'HEAD') || !req.path) {
-      return next();
-    }
-    if (req.path === '/kr' || req.path.startsWith('/kr/')) {
-      const nextPath = req.path === '/kr' ? '/' : req.path.slice(3);
-      const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-      return res.redirect(302, `${nextPath}${query}`);
-    }
-    return next();
-  });
+  const redirectHiddenKoreanLocale = (req, res) => {
+    const nextPath = req.path === '/kr' ? '/' : req.path.slice(3);
+    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    return res.redirect(302, `${nextPath}${query}`);
+  };
+
+  app.get(/^\/kr(?:\/.*)?$/, redirectHiddenKoreanLocale);
+  app.head(/^\/kr(?:\/.*)?$/, redirectHiddenKoreanLocale);
 }
 
 // Serve static files in production
