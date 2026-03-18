@@ -20,6 +20,7 @@ import {
 } from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
 import { renderFormattedText } from '../utils/formatText';
+import ActionIconButton from '../components/ActionIconButton';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import SessionShareCard from '../components/SessionShareCard';
 import UserPickerDialog from '../components/UserPickerDialog';
@@ -516,15 +517,18 @@ function InboxView({
         >
           <div className="min-w-0">
             <h1 className="text-xl font-display font-black text-white sm:text-2xl">Messages</h1>
-            <p className="mt-1 text-xs text-gray-400">Keep your score shares, challenges, and chats moving.</p>
           </div>
-          <button
-            type="button"
+          <ActionIconButton
             onClick={onStartChat}
-            className="rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-3.5 py-2 text-xs font-display font-bold text-cyan-100 transition-colors hover:border-cyan-300/45 hover:text-white"
+            title="New chat"
+            ariaLabel="Start new chat"
+            tone="cyan"
+            className="h-12 w-12 justify-center rounded-2xl border border-cyan-400/30 bg-cyan-500/10 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/45"
           >
-            New chat
-          </button>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
+            </svg>
+          </ActionIconButton>
         </div>
 
         <div className="flex-1 overflow-y-auto">
