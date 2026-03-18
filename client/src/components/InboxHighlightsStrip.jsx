@@ -33,15 +33,32 @@ function formatRelativeTime(value) {
 function renderLinkButton(link, className = '') {
   if (!link?.path && !link?.url) return null;
   const label = link?.label || 'Open';
+  const stopStoryAdvance = (event) => {
+    event?.stopPropagation?.();
+  };
   if (link.path) {
     return (
-      <Link to={link.path} className={className}>
+      <Link
+        to={link.path}
+        className={className}
+        onClick={stopStoryAdvance}
+        onMouseDown={stopStoryAdvance}
+        onTouchStart={stopStoryAdvance}
+      >
         {label}
       </Link>
     );
   }
   return (
-    <a href={link.url} target="_blank" rel="noreferrer" className={className}>
+    <a
+      href={link.url}
+      target="_blank"
+      rel="noreferrer"
+      className={className}
+      onClick={stopStoryAdvance}
+      onMouseDown={stopStoryAdvance}
+      onTouchStart={stopStoryAdvance}
+    >
       {label}
     </a>
   );
@@ -210,6 +227,12 @@ function StoryCard({ story }) {
   const plan = planSplit.plan || null;
   const visibleCaption = String(planSplit.text || '').trim();
   const hasEmbeddedCard = !!(summary || share || live || plan);
+  const bareLiveRecapPost = story.type === 'post'
+    && !story.media_url
+    && !!live
+    && !summary
+    && !share
+    && !plan;
   const bareHourOfPowerShare = story.type === 'post'
     && !story.media_url
     && share?.shareType === 'hour_of_power'
@@ -299,6 +322,22 @@ function StoryCard({ story }) {
   }
 
   if (story.type === 'post') {
+    if (bareLiveRecapPost) {
+      return (
+        <div className="w-full max-w-sm space-y-3">
+          <LiveSessionCard
+            summary={live}
+            title="Shinsa Live Recap"
+            compact
+            className="shadow-[0_18px_42px_rgba(0,0,0,0.28)]"
+          />
+          {visibleCaption ? <div className="text-sm leading-6 text-gray-100">{renderFormattedText(visibleCaption)}</div> : null}
+          {renderLinkButton(story.link, 'inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white hover:bg-white/12')}
+          <StickerRow tokens={story.sticker_tokens} />
+        </div>
+      );
+    }
+
     if (bareHourOfPowerShare) {
       return (
         <div className="w-full max-w-sm space-y-3">
@@ -364,9 +403,13 @@ function StoryCard({ story }) {
   }
 
   if (story.type === 'live_session' || story.type === 'hour_of_power') {
-    const isHop = story.type === 'hour_of_power';
+    const isHop = story.type === 'hour_of_power' || /hour of power/i.test(String(story.title || ''));
     return (
-      <div className="w-full max-w-sm overflow-hidden rounded-[1.8rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_42%),linear-gradient(160deg,#0a101b,#151d2f)] px-5 py-5 text-white shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
+      <div className={`w-full max-w-sm overflow-hidden rounded-[1.8rem] border px-5 py-5 text-white shadow-[0_18px_42px_rgba(0,0,0,0.28)] ${
+        isHop
+          ? 'border-yellow-300/20 bg-[radial-gradient(circle_at_top,rgba(250,204,21,0.18),transparent_42%),linear-gradient(160deg,#111528,#1a2136)]'
+          : 'border-rose-300/14 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_42%),linear-gradient(160deg,#0a101b,#151d2f)]'
+      }`}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-200/80">
@@ -466,7 +509,7 @@ export function StoryViewerModal({ open, user, stories = [], loading = false, er
           </button>
         </div>
 
-        <div className="relative z-10 flex min-h-[calc(75vh-5rem)] items-center justify-center px-4 pb-10 pt-2 sm:px-6">
+        <div className="relative z-30 flex min-h-[calc(75vh-5rem)] items-center justify-center px-4 pb-10 pt-2 sm:px-6">
           {loading ? (
             <p className="text-sm text-gray-400">Loading story...</p>
           ) : error ? (
@@ -483,13 +526,13 @@ export function StoryViewerModal({ open, user, stories = [], loading = false, er
             <button
               type="button"
               onClick={() => canGoBack && setIndex((current) => Math.max(0, current - 1))}
-              className="absolute bottom-0 left-0 top-24 z-20 w-1/2"
+              className="absolute bottom-0 left-0 top-24 z-10 w-1/2"
               aria-label="Previous story"
             />
             <button
               type="button"
               onClick={() => canGoForward && setIndex((current) => Math.min(stories.length - 1, current + 1))}
-              className="absolute bottom-0 right-0 top-24 z-20 w-1/2"
+              className="absolute bottom-0 right-0 top-24 z-10 w-1/2"
               aria-label="Next story"
             />
           </>

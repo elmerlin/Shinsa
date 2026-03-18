@@ -616,7 +616,11 @@ function buildPostStoryItem(row, user) {
 
 function buildLiveStoryItem(row, user) {
   if (!row || !user) return null;
-  const isHop = String(row.session_type || '').trim() === 'hour_of_power';
+  const sessionTitle = String(row.title || '').trim();
+  const sessionStatus = String(row.status_text || '').trim();
+  const isHop = String(row.session_type || '').trim() === 'hour_of_power'
+    || /hour of power/i.test(sessionTitle)
+    || /hour of power/i.test(sessionStatus);
   return buildLinkStoryItem({
     id: `live:${row.id}`,
     user,
@@ -624,7 +628,7 @@ function buildLiveStoryItem(row, user) {
     createdAt: row.created_at || '',
     expiresAt: getStoryExpiry(row.created_at),
     caption: normalizeText(row.status_text, 220),
-    title: row.title || (isHop ? 'Hour of Power' : 'Live session'),
+    title: sessionTitle || (isHop ? 'Hour of Power' : 'Live session'),
     subtitle: isHop ? 'Jump in before the clock runs out.' : 'Join the live room.',
     link: buildStoryLink({
       path: `/live/${row.id}`,

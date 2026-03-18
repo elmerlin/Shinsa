@@ -725,7 +725,7 @@ function InboxView({
     <div className="flex min-h-screen flex-col sm:min-h-0 sm:mx-auto sm:w-full sm:max-w-3xl sm:px-4 sm:py-6">
       <section className="relative flex flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
         <div
-          className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/90 px-4 py-3 backdrop-blur-md sm:px-5"
+          className="fixed inset-x-0 top-0 z-30 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/95 px-4 py-3 backdrop-blur-md sm:sticky sm:inset-x-auto sm:top-0 sm:z-20 sm:px-5"
           style={{ paddingTop: 'max(env(safe-area-inset-top), 0.75rem)' }}
         >
           <div className="min-w-0">
@@ -743,6 +743,8 @@ function InboxView({
             </svg>
           </ActionIconButton>
         </div>
+
+        <div aria-hidden="true" className="h-[5.85rem] shrink-0 sm:hidden" />
 
         <InboxHighlightsStrip
           me={highlights?.me || null}
