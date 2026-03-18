@@ -711,10 +711,19 @@ function ConversationView({
           <div className="flex min-w-0 items-center gap-3">
             <Link
               to="/messages"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/8 bg-black/20 text-gray-200 shadow-[0_8px_22px_rgba(0,0,0,0.22)] transition-colors hover:border-cyan-300/25 hover:bg-piu-dark/70 hover:text-white"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-black/30 text-white shadow-[0_8px_22px_rgba(0,0,0,0.22)] transition-colors hover:border-cyan-300/25 hover:bg-piu-dark/70 hover:text-white"
               aria-label="Back to inbox"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 shrink-0"
+                width="20"
+                height="20"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.25}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
               </svg>
             </Link>
