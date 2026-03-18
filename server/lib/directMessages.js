@@ -415,6 +415,8 @@ function normalizeConversationRow(row) {
   const noteThread = sanitizeNoteThreadPayload(lastMetadata.note_thread);
   const messageType = String(row.last_message_type || '').trim() || 'text';
   const content = String(row.last_message_content || '');
+  const stompSentAt = String(row.stomp_sent_at || '').trim();
+  const hasIncomingStomp = toInt(row.has_incoming_stomp) > 0;
 
   return {
     id: row.id,
@@ -435,6 +437,12 @@ function normalizeConversationRow(row) {
       note_thread: noteThread,
       created_at: row.last_message_at || '',
       preview: buildMessagePreview(messageType, content, share, linkShare, challengeCard),
+    } : null,
+    stomp: row.partner_user_id ? {
+      can_send: !stompSentAt,
+      is_waiting: !!stompSentAt,
+      sent_at: stompSentAt,
+      has_incoming: hasIncomingStomp,
     } : null,
   };
 }

@@ -1471,6 +1471,15 @@ function initializeDb() {
       deleted_at TEXT DEFAULT ''
     );
 
+    CREATE TABLE IF NOT EXISTS user_message_stomps (
+      sender_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (sender_user_id, recipient_user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS user_inbox_notes (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1657,6 +1666,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_conversation_members_user ON conversation_members(user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation_time ON conversation_messages(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_sender ON conversation_messages(sender_user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_user_message_stomps_recipient ON user_message_stomps(recipient_user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_message_stomps_conversation ON user_message_stomps(conversation_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_inbox_notes_user_active ON user_inbox_notes(user_id, cleared_at, expires_at, created_at);
     CREATE INDEX IF NOT EXISTS idx_user_story_items_user_active ON user_story_items(user_id, deleted_at, expires_at, created_at);
     CREATE INDEX IF NOT EXISTS idx_user_story_views_owner ON user_story_views(owner_user_id, viewed_at DESC);

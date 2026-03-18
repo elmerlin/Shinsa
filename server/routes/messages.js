@@ -62,6 +62,19 @@ function getConversationListRows(db, userId) {
       partner.avatar AS partner_avatar,
       partner.avatar_v AS partner_avatar_v,
       (
+        SELECT stomp_out.created_at
+        FROM user_message_stomps stomp_out
+        WHERE stomp_out.sender_user_id = ?
+          AND stomp_out.recipient_user_id = partner.id
+        LIMIT 1
+      ) AS stomp_sent_at,
+      EXISTS(
+        SELECT 1
+        FROM user_message_stomps stomp_in
+        WHERE stomp_in.sender_user_id = partner.id
+          AND stomp_in.recipient_user_id = ?
+      ) AS has_incoming_stomp,
+      (
         SELECT COUNT(*)
         FROM conversation_messages unread
         WHERE unread.conversation_id = c.id
@@ -83,7 +96,7 @@ function getConversationListRows(db, userId) {
     LEFT JOIN users partner ON partner.id = other_cm.user_id
     WHERE cm.is_hidden = 0
     ORDER BY datetime(COALESCE(NULLIF(c.last_message_at, ''), c.created_at)) DESC, c.id DESC
-  `).all(userId, userId, userId);
+  `).all(userId, userId, userId, userId, userId);
 }
 
 function getConversationRowForUser(db, conversationId, userId) {
@@ -103,6 +116,19 @@ function getConversationRowForUser(db, conversationId, userId) {
       partner.username AS partner_username,
       partner.avatar AS partner_avatar,
       partner.avatar_v AS partner_avatar_v,
+      (
+        SELECT stomp_out.created_at
+        FROM user_message_stomps stomp_out
+        WHERE stomp_out.sender_user_id = ?
+          AND stomp_out.recipient_user_id = partner.id
+        LIMIT 1
+      ) AS stomp_sent_at,
+      EXISTS(
+        SELECT 1
+        FROM user_message_stomps stomp_in
+        WHERE stomp_in.sender_user_id = partner.id
+          AND stomp_in.recipient_user_id = ?
+      ) AS has_incoming_stomp,
       (
         SELECT COUNT(*)
         FROM conversation_messages unread
@@ -126,7 +152,7 @@ function getConversationRowForUser(db, conversationId, userId) {
     WHERE c.id = ?
       AND cm.is_hidden = 0
     LIMIT 1
-  `).get(userId, userId, userId, conversationId);
+  `).get(userId, userId, userId, userId, userId, conversationId);
 }
 
 function getUserIdentity(db, userId) {
@@ -497,6 +523,47 @@ function notifyRecipients(db, conversationId, senderUser, recipientIds, input) {
       `/messages/${conversationId}`
     );
   }
+}
+
+function sendConversationStomp(db, conversationId, senderUserId, recipientUserId, now = toSqliteDateTime()) {
+  const transaction = db.transaction(() => {
+    const existing = db.prepare(`
+      SELECT created_at
+      FROM user_message_stomps
+      WHERE sender_user_id = ? AND recipient_user_id = ?
+      LIMIT 1
+    `).get(senderUserId, recipientUserId);
+
+    if (existing) {
+      return {
+        alreadyWaiting: true,
+        sentAt: existing.created_at || '',
+      };
+    }
+
+    db.prepare(`
+      DELETE FROM user_message_stomps
+      WHERE sender_user_id = ? AND recipient_user_id = ?
+    `).run(recipientUserId, senderUserId);
+
+    db.prepare(`
+      INSERT INTO user_message_stomps (
+        sender_user_id,
+        recipient_user_id,
+        conversation_id,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `).run(senderUserId, recipientUserId, conversationId, now, now);
+
+    return {
+      alreadyWaiting: false,
+      sentAt: now,
+    };
+  });
+
+  return transaction();
 }
 
 function normalizeStoryLinkInput(raw = {}) {
@@ -967,6 +1034,54 @@ router.post('/conversations/:id/read', requireAuth, (req, res) => {
   }
   markConversationRead(db, conversationId, req.user.id);
   res.json({ success: true });
+});
+
+router.post('/conversations/:id/stomp', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const conversationRow = getConversationRowForUser(db, conversationId, req.user.id);
+  if (!conversationRow || conversationRow.kind !== 'direct') {
+    return res.status(400).json({ error: 'Stomps are only available in direct messages' });
+  }
+
+  const partnerUserId = String(conversationRow.partner_user_id || '').trim();
+  if (!partnerUserId || partnerUserId === String(req.user.id || '').trim()) {
+    return res.status(400).json({ error: 'A valid stomp target is required' });
+  }
+
+  const senderUser = getUserIdentity(db, req.user.id);
+  if (!senderUser) {
+    return res.status(404).json({ error: 'Sender not found' });
+  }
+
+  const stompResult = sendConversationStomp(db, conversationId, req.user.id, partnerUserId);
+  const normalizedConversation = normalizeConversationRow(getConversationRowForUser(db, conversationId, req.user.id));
+
+  if (stompResult.alreadyWaiting) {
+    return res.status(409).json({
+      error: 'Wait for them to stomp you back first.',
+      conversation: normalizedConversation,
+    });
+  }
+
+  createUserNotification(
+    db,
+    partnerUserId,
+    'message_stomp',
+    `${senderUser.username || 'Someone'} stomped you`,
+    'Stomp them back from your inbox.',
+    `/messages/${conversationId}`
+  );
+
+  res.status(201).json({
+    success: true,
+    conversation: normalizedConversation,
+  });
 });
 
 router.post('/conversations/:id/messages', requireAuth, (req, res) => {

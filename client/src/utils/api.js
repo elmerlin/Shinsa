@@ -613,6 +613,9 @@ export const getMessageConversation = (conversationId) => request(`/messages/con
 export const markMessageConversationRead = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/read`, {
   method: 'POST',
 });
+export const sendMessageConversationStomp = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/stomp`, {
+  method: 'POST',
+});
 export const sendConversationMessage = (conversationId, data) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
   method: 'POST',
   body: JSON.stringify(data),

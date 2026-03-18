@@ -16,6 +16,7 @@ import {
   getOrCreateDirectConversation,
   getSongChartDetail,
   getUpscore,
+  sendMessageConversationStomp,
   sendConversationMessage,
 } from '../utils/api';
 import {
@@ -228,6 +229,8 @@ function formatConversationTime(value) {
   if (diffDays < 7) return `${diffDays}d`;
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+const STOMP_ICON_PATH = '/fun-assets/stomp.png';
 
 function getCompareStatusInfo(statusKind, statusLabel) {
   const meta = COMPARE_STATUS_META[String(statusKind || '').trim()] || COMPARE_STATUS_META.shared_best;
@@ -676,8 +679,15 @@ function MessageBubble({
   );
 }
 
-function ConversationRow({ conversation }) {
+function ConversationRow({ conversation, stomping, onStomp }) {
   const partner = conversation?.partner;
+  const timeLabel = formatConversationTime(conversation.last_message_at);
+  const previewText = conversation?.last_message?.preview || 'Started a conversation';
+  const stompState = conversation?.stomp || null;
+  const stompDisabled = Boolean(stomping || (stompState && !stompState.can_send));
+  const stompButtonTone = stompState?.has_incoming
+    ? 'border-amber-300/40 bg-amber-400/10 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]'
+    : 'border-white/10 bg-white/5';
 
   return (
     <Link
@@ -692,21 +702,45 @@ function ConversationRow({ conversation }) {
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
           <p className={`truncate text-sm font-display font-black ${conversation.unread_count > 0 ? 'text-white' : 'text-gray-200'}`}>
             {partner?.username || 'Unknown player'}
           </p>
-          <span className="shrink-0 text-[10px] text-gray-500">{formatConversationTime(conversation.last_message_at)}</span>
+          {conversation.unread_count > 0 ? (
+            <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-cyan-500 px-1 text-[9px] font-display font-black text-white">
+              {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
+            </span>
+          ) : null}
         </div>
-        <p className={`mt-1 truncate text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
-          {conversation?.last_message?.preview || 'Started a conversation'}
-        </p>
+        <div className={`mt-1 flex items-center gap-1 text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
+          <span className="min-w-0 flex-1 truncate">{previewText}</span>
+          {timeLabel ? (
+            <span className="shrink-0 text-[10px] text-gray-500">
+              <span className="px-0.5 text-gray-600">•</span>
+              {timeLabel}
+            </span>
+          ) : null}
+        </div>
       </div>
-      {conversation.unread_count > 0 ? (
-        <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-cyan-500 px-1 text-[10px] font-display font-black text-white">
-          {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
-        </span>
-      ) : null}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (stompDisabled || !onStomp) return;
+          onStomp(conversation);
+        }}
+        disabled={stompDisabled}
+        aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
+        title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
+        className={`group relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'}`}
+      >
+        <img
+          src={STOMP_ICON_PATH}
+          alt=""
+          className={`h-7 w-7 object-contain transition-transform duration-200 ${stompDisabled ? '' : 'group-hover:scale-105'}`}
+        />
+      </button>
     </Link>
   );
 }
@@ -722,6 +756,8 @@ function InboxView({
   onOpenHighlightNote,
   onOpenStoryComposer,
   onOpenStoryArchive,
+  onStompConversation,
+  stompingConversationId,
   onStartChat,
 }) {
   return (
@@ -788,7 +824,12 @@ function InboxView({
             </div>
           ) : (
             conversations.map((conversation) => (
-              <ConversationRow key={conversation.id} conversation={conversation} />
+              <ConversationRow
+                key={conversation.id}
+                conversation={conversation}
+                stomping={stompingConversationId === conversation.id}
+                onStomp={onStompConversation}
+              />
             ))
           )}
         </div>
@@ -979,6 +1020,7 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [conversationError, setConversationError] = useState('');
+  const [stompingConversationId, setStompingConversationId] = useState('');
   const [highlights, setHighlights] = useState({ me: null, circles: [] });
   const [loadingHighlights, setLoadingHighlights] = useState(true);
   const [highlightError, setHighlightError] = useState('');
@@ -1290,6 +1332,33 @@ export default function MessagesPage() {
       setLoadingHighlights(false);
     }
   }, [user]);
+
+  const handleConversationStomp = useCallback(async (conversation) => {
+    const targetConversationId = String(conversation?.id || '').trim();
+    if (!targetConversationId) return;
+    if (!conversation?.stomp?.can_send) return;
+
+    setStompingConversationId(targetConversationId);
+    setConversationError('');
+    try {
+      const payload = await sendMessageConversationStomp(targetConversationId);
+      if (payload?.conversation?.id) {
+        setConversations((prev) => prev.map((entry) => (
+          entry.id === payload.conversation.id ? payload.conversation : entry
+        )));
+      } else {
+        await loadConversations();
+      }
+    } catch (err) {
+      if (String(err?.message || '').toLowerCase().includes('stomp you back')) {
+        await loadConversations();
+      } else {
+        setConversationError(err?.message || 'Failed to stomp player.');
+      }
+    } finally {
+      setStompingConversationId('');
+    }
+  }, [loadConversations]);
 
   const loadConversation = useCallback(async (targetConversationId) => {
     if (!user || !targetConversationId) return;
@@ -1951,6 +2020,8 @@ export default function MessagesPage() {
           onOpenHighlightNote={handleOpenHighlightNote}
           onOpenStoryComposer={handleOpenStoryComposer}
           onOpenStoryArchive={handleOpenStoryArchive}
+          onStompConversation={handleConversationStomp}
+          stompingConversationId={stompingConversationId}
           onStartChat={() => setPickerOpen(true)}
         />
       )}
