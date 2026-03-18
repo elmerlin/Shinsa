@@ -141,6 +141,10 @@ export function buildUpscoreLinkShare({
       title: `${authorName}'s upscore`,
       subtitle: 'Open this upscore on Shinsa.',
       buttonLabel: 'Open upscore',
+      songTitle: '',
+      mode: '',
+      level: 0,
+      targetScore: 0,
     };
   }
 
@@ -161,6 +165,10 @@ export function buildUpscoreLinkShare({
         gainLabel,
       ].filter(Boolean).join(' • '),
       buttonLabel: 'Open upscore',
+      songTitle: String(entry?.song_title || ''),
+      mode: String(entry?.mode || ''),
+      level: Number(entry?.level) || 0,
+      targetScore: Number(entry?.new_score) || 0,
     };
   }
 
@@ -178,6 +186,10 @@ export function buildUpscoreLinkShare({
       ? `Best gain ${formatDelta(bestGainEntry.gain) || 'posted'} on ${formatChartLabel(bestGainEntry.entry.song_title, bestGainEntry.entry.mode, bestGainEntry.entry.level)}`
       : `${rows.length} charts improved`,
     buttonLabel: 'Open upscore',
+    songTitle: String(bestGainEntry?.entry?.song_title || ''),
+    mode: String(bestGainEntry?.entry?.mode || ''),
+    level: Number(bestGainEntry?.entry?.level) || 0,
+    targetScore: Number(bestGainEntry?.entry?.new_score) || 0,
   };
 }
 
@@ -198,6 +210,9 @@ export function buildClearLinkShare({
       title: `${authorName}'s new clear`,
       subtitle: 'Open this clear on Shinsa.',
       buttonLabel: 'Open clear',
+      songTitle: '',
+      mode: '',
+      level: 0,
     };
   }
 
@@ -214,6 +229,10 @@ export function buildClearLinkShare({
         formatScore(entry?.score),
       ].filter(Boolean).join(' • '),
       buttonLabel: 'Open clear',
+      songTitle: String(entry?.song_title || ''),
+      mode: String(entry?.mode || ''),
+      level: Number(entry?.level) || 0,
+      targetScore: Number(entry?.score) || 0,
     };
   }
 
@@ -224,6 +243,10 @@ export function buildClearLinkShare({
     title: allTitleUnlocks ? `${authorName}'s ${rows.length} title unlocks` : `${authorName}'s ${rows.length} new clears`,
     subtitle: `${leadLabel} + ${rows.length - 1} more`,
     buttonLabel: 'Open clear',
+    songTitle: String(rows[0]?.song_title || ''),
+    mode: String(rows[0]?.mode || ''),
+    level: Number(rows[0]?.level) || 0,
+    targetScore: Number(rows[0]?.score) || 0,
   };
 }
 
@@ -301,5 +324,46 @@ export function buildClearChallengeCard({
     targetScore: Number(entry?.score) || 0,
     targetGrade: String(entry?.grade || ''),
     originUsername: authorName,
+  };
+}
+
+export function buildChartCompareLinkShare({
+  chartId,
+  chartTitle,
+  mode,
+  level,
+  username,
+  best,
+  targetScore = 0,
+  challengeKind = '',
+}) {
+  const id = String(chartId || '').trim();
+  if (!id || !best) return null;
+
+  const authorName = String(username || 'Player').trim() || 'Player';
+  const score = Number(best?.score) || 0;
+  const grade = compactText(best?.grade, 20);
+  const chartLabel = formatChartLabel(chartTitle, mode, level);
+  const parts = [chartLabel];
+
+  if (score > 0) parts.push(formatScore(score));
+  if (grade) parts.push(grade);
+
+  if (targetScore > 0 && score > 0) {
+    const delta = score - targetScore;
+    parts.push(delta >= 0 ? `Beat target by ${delta.toLocaleString()}` : `Need +${Math.abs(delta).toLocaleString()}`);
+  } else if (challengeKind === 'clear_chart') {
+    parts.push(best?.is_stage_break ? 'No pass yet' : 'Pass on record');
+  }
+
+  return {
+    kind: 'chart_compare',
+    path: `/songs/chart/${id}`,
+    title: `${authorName}'s current best`,
+    subtitle: parts.filter(Boolean).join(' • '),
+    buttonLabel: 'Open chart',
+    songTitle: String(chartTitle || ''),
+    mode: String(mode || ''),
+    level: Number(level) || 0,
   };
 }

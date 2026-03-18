@@ -2,11 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  getChartKeyMap,
+  getNewClear,
   getMessageConversation,
   getMessageConversations,
   getOrCreateDirectConversation,
+  getSongChartDetail,
+  getUpscore,
   sendConversationMessage,
 } from '../utils/api';
+import {
+  buildChartCompareLinkShare,
+  buildClearChallengeCard,
+  buildUpscoreChallengeCard,
+} from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
 import SessionShareCard from '../components/SessionShareCard';
 import UserPickerDialog from '../components/UserPickerDialog';
@@ -16,6 +25,7 @@ const LINK_SHARE_BADGES = {
   post: 'Post',
   upscore: 'Upscore',
   clear: 'Clear',
+  chart_compare: 'Compare',
   hour_of_power: 'Hour of Power',
   link: 'Link',
 };
@@ -23,6 +33,61 @@ const CHALLENGE_BADGES = {
   beat_score: 'Score Challenge',
   clear_chart: 'Clear Challenge',
 };
+
+function normalizeSongName(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function parseResourceIdFromPath(path, resource) {
+  const raw = String(path || '').trim();
+  const prefix = `/${String(resource || '').replace(/^\/+|\/+$/g, '')}/`;
+  if (!raw.startsWith(prefix)) return '';
+  return raw.slice(prefix.length).split(/[/?#]/, 1)[0] || '';
+}
+
+function resolveChartId(songTitle, mode, level, chartMap) {
+  if (!chartMap || typeof chartMap !== 'object') return '';
+  const normalizedTitle = normalizeSongName(songTitle);
+  const modeLabel = String(mode || '').trim();
+  const levelValue = parseInt(level, 10) || 0;
+  if (!normalizedTitle || !modeLabel || levelValue <= 0) return '';
+  return String(chartMap[`${normalizedTitle}|${modeLabel}|${levelValue}`] || '').trim();
+}
+
+function parseUpscoreItems(item) {
+  try {
+    const parsed = JSON.parse(item?.upscores_json || '[]');
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getClearItems(item) {
+  const fallback = [{
+    entry_type: 'song_clear',
+    song_title: item?.song_title || '',
+    mode: item?.mode || 'Single',
+    level: parseInt(item?.level, 10) || 0,
+    score: parseInt(item?.score, 10) || 0,
+    grade: item?.grade || '',
+  }];
+
+  try {
+    const parsed = JSON.parse(item?.clears_json || '[]');
+    if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
+    return parsed.map((entry) => ({
+      entry_type: entry?.entry_type || 'song_clear',
+      song_title: entry?.song_title || fallback[0].song_title,
+      mode: entry?.mode || fallback[0].mode,
+      level: parseInt(entry?.level, 10) || fallback[0].level,
+      score: parseInt(entry?.score, 10) || 0,
+      grade: entry?.grade || '',
+    }));
+  } catch {
+    return fallback;
+  }
+}
 
 function formatConversationTime(value) {
   const raw = String(value || '').trim();
@@ -61,6 +126,9 @@ function getMessageLabel(message) {
   if (message.message_type === 'link_share' && message.link_share?.kind === 'clear') {
     return 'Shared clear';
   }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'chart_compare') {
+    return 'Compare reply';
+  }
   if (message.message_type === 'challenge_card' && message.challenge_card?.kind === 'beat_score') {
     return 'Score challenge';
   }
@@ -76,24 +144,32 @@ function getMessageLabel(message) {
   return '';
 }
 
-function MessageLinkCard({ linkShare }) {
+function MessageLinkCard({ linkShare, compareAction = null, compareLoading = false }) {
   if (!linkShare) return null;
 
   const title = String(linkShare.title || '').trim() || 'Open link';
   const subtitle = String(linkShare.subtitle || '').trim();
   const badge = LINK_SHARE_BADGES[linkShare.kind] || 'Link';
   const buttonLabel = String(linkShare.buttonLabel || '').trim() || 'Open';
+  const isCompare = linkShare.kind === 'chart_compare';
+  const frameClass = isCompare
+    ? 'border-emerald-400/30 bg-emerald-500/10'
+    : 'border-piu-border/50 bg-piu-dark/45';
+  const badgeClass = isCompare ? 'text-emerald-200/90' : 'text-cyan-200/80';
+  const buttonClass = isCompare
+    ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:text-white'
+    : 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100 hover:text-white';
 
   return (
-    <div className="rounded-xl border border-piu-border/50 bg-piu-dark/45 px-3 py-3">
-      <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">{badge}</p>
+    <div className={`rounded-xl border px-3 py-3 ${frameClass}`}>
+      <p className={`text-[10px] font-display font-bold uppercase tracking-[0.2em] ${badgeClass}`}>{badge}</p>
       <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
       {subtitle ? <p className="mt-1 text-xs text-gray-400">{subtitle}</p> : null}
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap gap-2">
         {linkShare.path ? (
           <Link
             to={linkShare.path}
-            className="inline-flex rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+            className={`inline-flex rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${buttonClass}`}
           >
             {buttonLabel}
           </Link>
@@ -102,17 +178,27 @@ function MessageLinkCard({ linkShare }) {
             href={linkShare.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+            className={`inline-flex rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors ${buttonClass}`}
           >
             {buttonLabel}
           </a>
         )}
+        {compareAction ? (
+          <button
+            type="button"
+            onClick={compareAction}
+            disabled={compareLoading}
+            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {compareLoading ? 'Sending...' : 'Reply with my best'}
+          </button>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function MessageChallengeCard({ challengeCard }) {
+function MessageChallengeCard({ challengeCard, compareAction = null, compareLoading = false }) {
   if (!challengeCard) return null;
 
   const badge = CHALLENGE_BADGES[challengeCard.kind] || 'Challenge';
@@ -133,19 +219,29 @@ function MessageChallengeCard({ challengeCard }) {
         </p>
       ) : null}
       {detailLabel ? <p className="mt-2 text-xs text-amber-100/80">{detailLabel}</p> : null}
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap gap-2">
         <Link
           to={challengeCard.path}
           className="inline-flex rounded-md border border-amber-300/30 bg-amber-400/15 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:text-white"
         >
           {buttonLabel}
         </Link>
+        {compareAction ? (
+          <button
+            type="button"
+            onClick={compareAction}
+            disabled={compareLoading}
+            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {compareLoading ? 'Sending...' : 'Reply with my best'}
+          </button>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function MessageBubble({ message }) {
+function MessageBubble({ message, onReplyWithBest = null, compareLoading = false }) {
   const isOwn = !!message?.is_own;
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
   const bubbleTone = isOwn
@@ -182,7 +278,11 @@ function MessageBubble({ message }) {
                 {shareLabel}
               </p>
             ) : null}
-            <MessageLinkCard linkShare={message.link_share} />
+            <MessageLinkCard
+              linkShare={message.link_share}
+              compareAction={onReplyWithBest}
+              compareLoading={compareLoading}
+            />
           </div>
         ) : null}
         {message?.challenge_card ? (
@@ -192,7 +292,11 @@ function MessageBubble({ message }) {
                 {shareLabel}
               </p>
             ) : null}
-            <MessageChallengeCard challengeCard={message.challenge_card} />
+            <MessageChallengeCard
+              challengeCard={message.challenge_card}
+              compareAction={onReplyWithBest}
+              compareLoading={compareLoading}
+            />
           </div>
         ) : null}
       </div>
@@ -293,12 +397,16 @@ function ConversationView({
   activePartner,
   loadingMessages,
   messageError,
+  actionError,
   messages,
   messagesEndRef,
   draft,
   onDraftChange,
   onComposerKeyDown,
   onSend,
+  onReplyWithBest,
+  canReplyWithBest,
+  replyingMessageId,
   sending,
 }) {
   return (
@@ -350,7 +458,12 @@ function ConversationView({
           ) : (
             <div className="space-y-4">
               {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
+                  compareLoading={replyingMessageId === message.id}
+                />
               ))}
               <div ref={messagesEndRef} />
             </div>
@@ -358,6 +471,7 @@ function ConversationView({
         </div>
 
         <div className="border-t border-piu-border/50 bg-piu-dark/30 px-4 py-3">
+          {actionError ? <p className="mb-3 text-sm text-red-300">{actionError}</p> : null}
           <div className="flex items-end gap-3">
             <textarea
               value={draft}
@@ -389,6 +503,8 @@ export default function MessagesPage() {
   const navigate = useNavigate();
   const { conversationId = '' } = useParams();
   const messagesEndRef = useRef(null);
+  const chartKeyMapRef = useRef(null);
+  const chartKeyMapPromiseRef = useRef(null);
 
   const [conversations, setConversations] = useState([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
@@ -398,6 +514,8 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageError, setMessageError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [replyingMessageId, setReplyingMessageId] = useState('');
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -405,6 +523,177 @@ export default function MessagesPage() {
 
   const activePartner = activeConversation?.partner || null;
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
+
+  const ensureChartKeyMap = useCallback(async () => {
+    if (chartKeyMapRef.current) return chartKeyMapRef.current;
+    if (!chartKeyMapPromiseRef.current) {
+      chartKeyMapPromiseRef.current = getChartKeyMap()
+        .then((payload) => {
+          const nextMap = payload && typeof payload === 'object' ? payload : {};
+          chartKeyMapRef.current = nextMap;
+          return nextMap;
+        })
+        .catch((err) => {
+          chartKeyMapPromiseRef.current = null;
+          throw err;
+        });
+    }
+    return chartKeyMapPromiseRef.current;
+  }, []);
+
+  const resolveChartReference = useCallback(async ({ chartPath = '', songTitle = '', mode = '', level = 0 } = {}) => {
+    const directChartId = parseResourceIdFromPath(chartPath, 'songs/chart');
+    if (directChartId) return directChartId;
+    const chartMap = await ensureChartKeyMap();
+    return resolveChartId(songTitle, mode, level, chartMap);
+  }, [ensureChartKeyMap]);
+
+  const resolveCompareSource = useCallback(async (message) => {
+    if (!message) {
+      throw new Error('This message cannot be compared yet.');
+    }
+
+    if (message.message_type === 'challenge_card' && message.challenge_card) {
+      const challengeCard = message.challenge_card;
+      const directChartId = await resolveChartReference({
+        chartPath: challengeCard.chartPath || '',
+        songTitle: challengeCard.songTitle,
+        mode: challengeCard.mode,
+        level: challengeCard.level,
+      });
+      if (directChartId) {
+        return {
+          chartId: directChartId,
+          targetScore: parseInt(challengeCard.targetScore, 10) || 0,
+          challengeKind: challengeCard.kind || '',
+        };
+      }
+
+      const upscoreId = challengeCard.sourceKind === 'upscore'
+        ? String(challengeCard.sourceId || '').trim() || parseResourceIdFromPath(challengeCard.path, 'upscore')
+        : '';
+      if (upscoreId) {
+        const upscore = await getUpscore(upscoreId);
+        const fallbackCard = buildUpscoreChallengeCard({
+          upscoreId: upscore?.id || upscoreId,
+          username: upscore?.username,
+          upscores: parseUpscoreItems(upscore),
+        });
+        const fallbackChartId = await resolveChartReference({
+          songTitle: fallbackCard?.songTitle,
+          mode: fallbackCard?.mode,
+          level: fallbackCard?.level,
+        });
+        if (fallbackChartId) {
+          return {
+            chartId: fallbackChartId,
+            targetScore: parseInt(fallbackCard?.targetScore, 10) || parseInt(challengeCard.targetScore, 10) || 0,
+            challengeKind: challengeCard.kind || fallbackCard?.kind || '',
+          };
+        }
+      }
+
+      const clearId = challengeCard.sourceKind === 'clear'
+        ? String(challengeCard.sourceId || '').trim() || parseResourceIdFromPath(challengeCard.path, 'clear')
+        : '';
+      if (clearId) {
+        const clear = await getNewClear(clearId);
+        const fallbackCard = buildClearChallengeCard({
+          clearId: clear?.id || clearId,
+          username: clear?.username,
+          clears: getClearItems(clear),
+        });
+        const fallbackChartId = await resolveChartReference({
+          songTitle: fallbackCard?.songTitle,
+          mode: fallbackCard?.mode,
+          level: fallbackCard?.level,
+        });
+        if (fallbackChartId) {
+          return {
+            chartId: fallbackChartId,
+            targetScore: parseInt(fallbackCard?.targetScore, 10) || parseInt(challengeCard.targetScore, 10) || 0,
+            challengeKind: challengeCard.kind || fallbackCard?.kind || '',
+          };
+        }
+      }
+    }
+
+    if (message.message_type === 'link_share' && message.link_share) {
+      const linkShare = message.link_share;
+      const directChartId = await resolveChartReference({
+        chartPath: linkShare.chartPath || (linkShare.kind === 'chart_compare' ? linkShare.path : ''),
+        songTitle: linkShare.songTitle,
+        mode: linkShare.mode,
+        level: linkShare.level,
+      });
+      if (directChartId) {
+        return {
+          chartId: directChartId,
+          targetScore: parseInt(linkShare.targetScore, 10) || 0,
+          challengeKind: linkShare.kind === 'clear' ? 'clear_chart' : (linkShare.kind === 'upscore' ? 'beat_score' : ''),
+        };
+      }
+
+      const upscoreId = linkShare.kind === 'upscore'
+        ? parseResourceIdFromPath(linkShare.path, 'upscore')
+        : '';
+      if (upscoreId) {
+        const upscore = await getUpscore(upscoreId);
+        const fallbackCard = buildUpscoreChallengeCard({
+          upscoreId: upscore?.id || upscoreId,
+          username: upscore?.username,
+          upscores: parseUpscoreItems(upscore),
+        });
+        const fallbackChartId = await resolveChartReference({
+          songTitle: fallbackCard?.songTitle,
+          mode: fallbackCard?.mode,
+          level: fallbackCard?.level,
+        });
+        if (fallbackChartId) {
+          return {
+            chartId: fallbackChartId,
+            targetScore: parseInt(fallbackCard?.targetScore, 10) || 0,
+            challengeKind: fallbackCard?.kind || 'beat_score',
+          };
+        }
+      }
+
+      const clearId = linkShare.kind === 'clear'
+        ? parseResourceIdFromPath(linkShare.path, 'clear')
+        : '';
+      if (clearId) {
+        const clear = await getNewClear(clearId);
+        const fallbackCard = buildClearChallengeCard({
+          clearId: clear?.id || clearId,
+          username: clear?.username,
+          clears: getClearItems(clear),
+        });
+        const fallbackChartId = await resolveChartReference({
+          songTitle: fallbackCard?.songTitle,
+          mode: fallbackCard?.mode,
+          level: fallbackCard?.level,
+        });
+        if (fallbackChartId) {
+          return {
+            chartId: fallbackChartId,
+            targetScore: parseInt(fallbackCard?.targetScore, 10) || 0,
+            challengeKind: fallbackCard?.kind || 'clear_chart',
+          };
+        }
+      }
+    }
+
+    throw new Error('This share does not point to a playable chart yet.');
+  }, [resolveChartReference]);
+
+  const canReplyWithBest = useCallback((message) => {
+    if (!message || message.is_own) return false;
+    if (message.message_type === 'challenge_card' && message.challenge_card) {
+      return message.challenge_card.kind === 'beat_score' || message.challenge_card.kind === 'clear_chart';
+    }
+    if (message.message_type !== 'link_share') return false;
+    return message.link_share?.kind === 'upscore' || message.link_share?.kind === 'clear';
+  }, []);
 
   const loadConversations = useCallback(async () => {
     if (!user) return;
@@ -465,6 +754,8 @@ export default function MessagesPage() {
 
   useEffect(() => {
     setDraft('');
+    setActionError('');
+    setReplyingMessageId('');
   }, [conversationId]);
 
   useEffect(() => {
@@ -474,6 +765,7 @@ export default function MessagesPage() {
   const handleSend = async () => {
     if (!conversationId || sending) return;
     if (!draft.trim()) return;
+    setActionError('');
     setSending(true);
     try {
       const payload = await sendConversationMessage(conversationId, { content: draft });
@@ -486,7 +778,7 @@ export default function MessagesPage() {
       }
       loadConversations();
     } catch (err) {
-      setMessageError(err?.message || 'Failed to send message.');
+      setActionError(err?.message || 'Failed to send message.');
     } finally {
       setSending(false);
     }
@@ -498,6 +790,58 @@ export default function MessagesPage() {
       handleSend();
     }
   };
+
+  const handleReplyWithBest = useCallback(async (message) => {
+    if (!conversationId || !user || !message?.id) return;
+    setActionError('');
+    setReplyingMessageId(message.id);
+
+    try {
+      const source = await resolveCompareSource(message);
+      if (!source?.chartId) {
+        throw new Error('Could not find the chart for this compare reply.');
+      }
+
+      const detail = await getSongChartDetail(source.chartId, { user_id: user.id });
+      const chart = detail?.chart || null;
+      const best = detail?.user_summary?.best || null;
+
+      if (!chart) {
+        throw new Error('That chart could not be loaded.');
+      }
+      if (!best) {
+        throw new Error('You do not have a recorded best on that chart yet.');
+      }
+
+      const compareLinkShare = buildChartCompareLinkShare({
+        chartId: chart.chart_id || source.chartId,
+        chartTitle: chart.title,
+        mode: chart.mode,
+        level: chart.level,
+        username: user.username,
+        best,
+        targetScore: source.targetScore,
+        challengeKind: source.challengeKind,
+      });
+
+      if (!compareLinkShare) {
+        throw new Error('Could not build a compare reply for this chart.');
+      }
+
+      const payload = await sendConversationMessage(conversationId, { link_share: compareLinkShare });
+      if (payload?.message) {
+        setMessages((prev) => [...prev, payload.message]);
+      }
+      if (payload?.conversation) {
+        setActiveConversation(payload.conversation);
+      }
+      loadConversations();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to send compare reply.');
+    } finally {
+      setReplyingMessageId('');
+    }
+  }, [conversationId, loadConversations, resolveCompareSource, user]);
 
   const handleStartConversation = async (selectedUser) => {
     const payload = await getOrCreateDirectConversation(selectedUser.id);
@@ -516,12 +860,16 @@ export default function MessagesPage() {
           activePartner={activePartner}
           loadingMessages={loadingMessages}
           messageError={messageError}
+          actionError={actionError}
           messages={messages}
           messagesEndRef={messagesEndRef}
           draft={draft}
           onDraftChange={setDraft}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={handleSend}
+          onReplyWithBest={handleReplyWithBest}
+          canReplyWithBest={canReplyWithBest}
+          replyingMessageId={replyingMessageId}
           sending={sending}
         />
       ) : (

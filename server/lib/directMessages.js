@@ -9,6 +9,7 @@ const LINK_SHARE_KIND_LABELS = {
   post: 'Post',
   upscore: 'Upscore',
   clear: 'Clear',
+  chart_compare: 'Compare reply',
   hour_of_power: 'Hour of Power',
   link: 'Link',
 };
@@ -152,9 +153,14 @@ function sanitizeLinkSharePayload(linkShare) {
     kind,
     path,
     url,
+    chartPath: sanitizeRelativePath(src.chartPath || src.chart_path),
     title: String(src.title || '').trim().slice(0, 160),
     subtitle: String(src.subtitle || '').trim().slice(0, 220),
     buttonLabel: String(src.buttonLabel || src.button_label || '').trim().slice(0, 48),
+    songTitle: String(src.songTitle || src.song_title || '').trim().slice(0, 120),
+    mode: String(src.mode || '').trim().slice(0, 24),
+    level: toInt(src.level),
+    targetScore: toInt(src.targetScore || src.target_score),
   };
 }
 
@@ -264,6 +270,9 @@ function buildNotificationTitle(senderUsername, messageType, share = null, linkS
     return `${sender} shared a session recap`;
   }
   if (messageType === 'link_share' && linkShare) {
+    if (linkShare.kind === 'chart_compare') {
+      return `${sender} sent a compare reply`;
+    }
     const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'link';
     return `${sender} shared a ${kindLabel.toLowerCase()}`;
   }
@@ -290,6 +299,9 @@ function buildNotificationBody(content, messageType, share = null, linkShare = n
   }
   if (messageType === 'session_share') {
     return 'Session recap';
+  }
+  if (messageType === 'link_share' && linkShare?.kind === 'chart_compare' && linkShare?.subtitle) {
+    return linkShare.subtitle;
   }
   if (messageType === 'link_share' && linkShare?.title) {
     return linkShare.title;
