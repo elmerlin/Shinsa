@@ -139,7 +139,7 @@ function getUserIdentity(db, userId) {
 
 function getHighlightUserRow(db, userId) {
   return db.prepare(`
-    SELECT id, username, avatar, avatar_v, playing_status, updated_at
+    SELECT id, username, avatar, avatar_v, playing_status
     FROM users
     WHERE id = ?
     LIMIT 1
