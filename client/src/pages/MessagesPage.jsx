@@ -690,7 +690,7 @@ function ConversationView({
               rows={1}
               maxLength={4000}
               placeholder={`Message ${activePartner?.username || 'player'}...`}
-              className="min-h-[2.75rem] max-h-40 flex-1 resize-none rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
+              className="min-h-[2.75rem] max-h-40 flex-1 resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
               disabled={sending || !activeConversation}
             />
             <button
@@ -1067,7 +1067,9 @@ export default function MessagesPage() {
     const input = draftInputRef.current;
     if (!input) return;
     input.style.height = '0px';
-    input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+    const nextHeight = Math.min(input.scrollHeight, 160);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > 160 ? 'auto' : 'hidden';
   }, [draft, conversationId]);
 
   useEffect(() => {
