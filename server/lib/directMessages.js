@@ -9,6 +9,7 @@ const LINK_SHARE_KIND_LABELS = {
   post: 'Post',
   upscore: 'Upscore',
   clear: 'Clear',
+  score_snapshot: 'Score',
   chart_compare: 'Compare reply',
   hour_of_power: 'Hour of Power',
   link: 'Link',

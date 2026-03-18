@@ -254,7 +254,12 @@ export function buildScoreSnapshotLinkShare({
   chartPath = '',
   jacketUrl = '',
 }) {
-  const normalizedKind = String(kind || '').trim().toLowerCase() === 'clear' ? 'clear' : 'upscore';
+  const requestedKind = String(kind || '').trim().toLowerCase();
+  const normalizedKind = requestedKind === 'clear'
+    ? 'clear'
+    : requestedKind === 'score_snapshot'
+      ? 'score_snapshot'
+      : 'upscore';
   const id = String(sourceId || '').trim();
   const resolvedPath = String(path || (id ? `/${normalizedKind}/${id}` : '')).trim();
   if (!resolvedPath) return null;
@@ -282,7 +287,11 @@ export function buildScoreSnapshotLinkShare({
       grade || (row.is_stage_break ? 'Stage break' : ''),
       delta > 0 ? formatDelta(delta) : '',
     ].filter(Boolean).join(' • '),
-    buttonLabel: normalizedKind === 'upscore' ? 'Open upscore' : 'Open clear',
+    buttonLabel: normalizedKind === 'upscore'
+      ? 'Open upscore'
+      : normalizedKind === 'clear'
+        ? 'Open clear'
+        : 'Open chart',
     songTitle,
     mode,
     level,

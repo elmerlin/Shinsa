@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PiuChartJacket from './PiuChartJacket';
+import ScoreSnapshotModal from './ScoreSnapshotModal';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import { HourOfPowerLogo } from './HourOfPowerBrand';
 import { parseGrade } from '../utils/grades';
+import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 
 function formatNumber(value) {
@@ -106,101 +108,9 @@ function SongJacketButton({ row, onClick }) {
 const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
 const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
 
-function JudgmentModal({ row, onClose }) {
-  if (!row) return null;
-  const rank = getRank(row.score ?? 0);
-  const displayScore = row.score ?? 0;
-  const parsedGrade = parseGrade(row.grade, rank.label);
-  const grade = parsedGrade.display || rank.label;
-  const plateName = PLATE_NAMES[row.plate] || row.plate || '';
-  const plateColor = PLATE_COLORS[row.plate] || 'text-gray-400';
-  const hasJudgments = (row.perfect > 0 || row.great > 0 || row.good > 0 || row.bad > 0 || row.miss > 0);
-  const judgments = [
-    { label: 'PERFECT', value: row.perfect || 0, textColor: 'text-sky-400' },
-    { label: 'GREAT', value: row.great || 0, textColor: 'text-green-400' },
-    { label: 'GOOD', value: row.good || 0, textColor: 'text-yellow-400' },
-    { label: 'BAD', value: row.bad || 0, textColor: 'text-fuchsia-400' },
-    { label: 'MISS', value: row.miss || 0, textColor: 'text-gray-400' },
-  ];
-
-  return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {row.jacket_url && (
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-15"
-            style={{ backgroundImage: `url(${row.jacket_url})` }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
-
-        <div className="relative p-5">
-          <button
-            className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
-            onClick={onClose}
-          >
-            x
-          </button>
-
-          <p className="font-display font-bold text-lg leading-tight pr-6 break-words">{row.song_title || 'Song'}</p>
-
-          <div className="flex items-center gap-3 mt-4">
-            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
-              row.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : row.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
-            }`}>
-              <span className={`font-display font-bold text-[10px] uppercase ${row.mode === 'Single' ? 'text-red-400' : row.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{row.mode}</span>
-              <span className={`font-display font-bold text-base ${row.mode === 'Single' ? 'text-red-300' : row.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{row.level}</span>
-            </div>
-            {getOverTop100Rank(row.over_top100_rank) > 0 && (
-              <span className="px-2 py-0.5 rounded border border-yellow-300/60 bg-yellow-500/15 text-yellow-100 text-[11px] leading-none font-display font-black tracking-wide">
-                TOP #{getOverTop100Rank(row.over_top100_rank)}
-              </span>
-            )}
-            <div className="text-center flex-1">
-              {displayScore > 0 ? (
-                <p
-                  className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
-                  data-grade={grade}
-                >
-                  {grade}
-                </p>
-              ) : (
-                <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
-              )}
-            </div>
-          </div>
-
-          {plateName && (
-            <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
-          )}
-
-          {displayScore > 0 && (
-            <p className="text-center font-mono text-2xl font-bold mt-2">{displayScore.toLocaleString()}</p>
-          )}
-
-          {hasJudgments && (
-            <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
-              {judgments.map((j) => (
-                <div key={j.label}>
-                  <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
-                  <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!hasJudgments && displayScore > 0 && (
-            <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
-              Judgment breakdown not available
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+function buildSessionRowChartPath(row) {
+  const title = String(row?.song_title || '').trim();
+  return title ? `/songs?q=${encodeURIComponent(title)}` : '/songs';
 }
 
 export default function SessionShareCard({
@@ -218,6 +128,16 @@ export default function SessionShareCard({
   const totalPages = Math.max(1, Math.ceil(rows.length / 10));
   const isHopShare = share?.shareType === 'hour_of_power';
   const displayTitle = title === 'Session Share' && isHopShare ? 'Hour of Power Recap' : title;
+  const activeRowDmShare = useMemo(() => {
+    if (!activeRow) return null;
+    return buildScoreSnapshotLinkShare({
+      kind: 'score_snapshot',
+      score: activeRow,
+      path: buildSessionRowChartPath(activeRow),
+      chartPath: buildSessionRowChartPath(activeRow),
+      jacketUrl: activeRow.jacket_url,
+    });
+  }, [activeRow]);
 
   useEffect(() => {
     if (!expanded) setPage(1);
@@ -440,7 +360,14 @@ export default function SessionShareCard({
         )}
       </div>
 
-      <JudgmentModal row={activeRow} onClose={() => setActiveRow(null)} />
+      <ScoreSnapshotModal
+        score={activeRow}
+        jacketUrl={activeRow?.jacket_url || ''}
+        chartLink={activeRow ? buildSessionRowChartPath(activeRow) : ''}
+        directMessageLinkShare={activeRowDmShare}
+        modalLabel={isHopShare ? 'Session result' : 'Shared result'}
+        onClose={() => setActiveRow(null)}
+      />
       {selectedReplay ? (
         <YouTubeReplayModal
           url={selectedReplay.url}

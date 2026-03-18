@@ -31,6 +31,7 @@ const LINK_SHARE_BADGES = {
   post: 'Post',
   upscore: 'Upscore',
   clear: 'Clear',
+  score_snapshot: 'Score',
   chart_compare: 'Compare',
   hour_of_power: 'Hour of Power',
   link: 'Link',
@@ -200,6 +201,9 @@ function getMessageLabel(message) {
   if (message.message_type === 'link_share' && message.link_share?.kind === 'clear') {
     return 'Shared clear';
   }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'score_snapshot') {
+    return 'Shared score';
+  }
   if (message.message_type === 'link_share' && message.link_share?.kind === 'chart_compare') {
     return 'Compare reply';
   }
@@ -223,7 +227,7 @@ function getMessageLabel(message) {
 }
 
 function hasScoreSnapshotLinkShare(linkShare) {
-  if (!linkShare || (linkShare.kind !== 'upscore' && linkShare.kind !== 'clear')) return false;
+  if (!linkShare || !['upscore', 'clear', 'score_snapshot'].includes(linkShare.kind)) return false;
   return !!(
     linkShare.songTitle
     && linkShare.mode
