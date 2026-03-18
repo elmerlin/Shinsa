@@ -587,19 +587,21 @@ function ConversationView({
   sending,
 }) {
   return (
-    <div className="flex min-h-screen flex-col overflow-hidden sm:min-h-0 sm:mx-auto sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
-      <section className="flex flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
+    <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
         <div
-          className="flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/88 px-4 pb-3 pt-4 backdrop-blur-md sm:px-5 sm:pt-4"
+          className="z-10 shrink-0 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/92 px-4 pb-3 pt-4 backdrop-blur-md sm:px-5 sm:pt-4"
           style={{ paddingTop: 'max(env(safe-area-inset-top), 0.9rem)' }}
         >
           <div className="flex min-w-0 items-center gap-3">
             <Link
               to="/messages"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-piu-border/60 bg-piu-dark/70 text-lg text-gray-300 transition-colors hover:text-white"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/8 bg-black/20 text-gray-200 shadow-[0_8px_22px_rgba(0,0,0,0.22)] transition-colors hover:border-cyan-300/25 hover:bg-piu-dark/70 hover:text-white"
               aria-label="Back to inbox"
             >
-              ←
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
+              </svg>
             </Link>
             {activePartner?.avatar ? (
               <img src={activePartner.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
@@ -610,7 +612,7 @@ function ConversationView({
             )}
             <div className="min-w-0">
               <h1 className="truncate text-lg font-display font-black text-white">{activePartner?.username || 'Unknown player'}</h1>
-              <p className="mt-0.5 text-[11px] text-gray-500">Direct messages</p>
+              <p className="mt-0.5 text-[11px] text-gray-500">Private chat</p>
             </div>
           </div>
           {activePartner?.id ? (
@@ -620,10 +622,10 @@ function ConversationView({
             >
               View profile
             </Link>
-          ) : null}
+            ) : null}
         </div>
 
-        <div ref={messagesViewportRef} className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div ref={messagesViewportRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {loadingMessages && messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading conversation...</div>
           ) : messageError ? (
@@ -668,7 +670,7 @@ function ConversationView({
         </div>
 
         <div
-          className="border-t border-piu-border/40 bg-piu-card/92 px-4 pb-3 pt-3 backdrop-blur-md sm:px-5"
+          className="z-10 shrink-0 border-t border-piu-border/40 bg-piu-card/94 px-4 pb-3 pt-3 backdrop-blur-md sm:px-5"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
         >
           {actionError ? <p className="mb-3 text-sm text-red-300">{actionError}</p> : null}
