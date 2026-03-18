@@ -1078,9 +1078,8 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
           {user && postLinkShare ? (
             <SendToDirectMessageButton
               linkShare={postLinkShare}
-              label="Send post"
+              variant="icon"
               title="Send post to a player"
-              description="Choose a player to send this post to."
               className="px-2.5 py-1.5 text-sm text-gray-400 hover:bg-piu-dark/50 hover:text-white"
             />
           ) : null}

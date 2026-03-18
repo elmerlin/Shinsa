@@ -745,15 +745,14 @@ export function SingleUpscorePage() {
             <ShareButton path={`/upscore/${item.id}`} />
             <SendToDirectMessageButton
               linkShare={upscoreLinkShare}
+              variant="icon"
               title="Send upscore"
-              description="Choose a player to send this upscore to."
             />
             <SendToDirectMessageButton
               challengeCard={upscoreChallengeCard}
-              label="Challenge"
+              variant="icon"
               tone="amber"
               title="Challenge a player"
-              description="Choose a player to challenge to beat this score."
             />
           </div>
         </div>
@@ -932,16 +931,15 @@ export function SingleClearPage() {
             <ShareButton path={`/clear/${item.id}`} />
             <SendToDirectMessageButton
               linkShare={clearLinkShare}
+              variant="icon"
               title={isGrouped ? 'Send new clears' : 'Send new clear'}
-              description="Choose a player to send this clear to."
             />
             {!isTitleUnlockPost ? (
               <SendToDirectMessageButton
                 challengeCard={clearChallengeCard}
-                label="Challenge"
+                variant="icon"
                 tone="amber"
                 title="Challenge a player"
-                description="Choose a player to challenge to clear this chart."
               />
             ) : null}
           </div>

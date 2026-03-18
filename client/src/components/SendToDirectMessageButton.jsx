@@ -12,9 +12,10 @@ export default function SendToDirectMessageButton({
   content = '',
   label = 'Send to DM',
   tone = 'cyan',
+  variant = 'button',
   className = '',
   title = 'Send to a player',
-  description = 'Choose a player to send this to.',
+  description = '',
   navigateAfterSend = true,
 }) {
   const { user } = useAuth();
@@ -45,6 +46,11 @@ export default function SendToDirectMessageButton({
   const toneClassName = tone === 'amber'
     ? 'border-amber-400/30 bg-amber-500/10 text-amber-100'
     : 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100';
+  const isIcon = variant === 'icon';
+  const iconToneClassName = tone === 'amber'
+    ? 'text-amber-200 hover:bg-amber-500/10 hover:text-amber-100'
+    : 'text-gray-400 hover:bg-piu-dark/50 hover:text-white';
+  const selectLabel = tone === 'amber' ? 'Challenge' : 'Send';
 
   const handleSelect = async (selectedUser) => {
     const response = await getOrCreateDirectConversation(selectedUser.id, payload);
@@ -65,15 +71,37 @@ export default function SendToDirectMessageButton({
         onClick={() => {
           setPickerOpen(true);
         }}
-        className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors hover:text-white ${toneClassName} ${className}`.trim()}
+        className={
+          isIcon
+            ? `flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-display font-bold transition-colors ${iconToneClassName} ${className}`.trim()
+            : `rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors hover:text-white ${toneClassName} ${className}`.trim()
+        }
+        aria-label={title}
+        title={title}
       >
-        {label}
+        {isIcon ? (
+          <>
+            {tone === 'amber' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12.5l1.7 1.7 3.8-4.2" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h6m-9 8l-3-3V6a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H7l-4 3z" />
+              </svg>
+            )}
+          </>
+        ) : (
+          label
+        )}
       </button>
 
       <UserPickerDialog
         open={pickerOpen}
         title={title}
         description={description}
+        selectLabel={selectLabel}
         onClose={() => {
           setPickerOpen(false);
         }}
