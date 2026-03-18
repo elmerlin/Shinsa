@@ -9,6 +9,7 @@ import ActionIconButton from '../components/ActionIconButton';
 import PumpersModal from '../components/PumpersModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
+import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { renderFormattedText } from '../utils/formatText';
@@ -18,6 +19,7 @@ import { buildReplayModalTitle } from '../utils/replayTitle';
 import {
   buildClearChallengeCard,
   buildClearLinkShare,
+  buildScoreSnapshotLinkShare,
   buildUpscoreChallengeCard,
   buildUpscoreLinkShare,
 } from '../utils/directMessageShares';
@@ -186,121 +188,15 @@ function getTitlePlateStyles(clear) {
 }
 
 function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
-  if (!score) return null;
-  const rank = getRank(score.new_score ?? score.score ?? 0);
-  const displayScore = score.new_score ?? score.score ?? 0;
-  const parsedGrade = parseGrade(score.new_grade || score.grade, rank.label);
-  const grade = parsedGrade.display || rank.label;
-  const plateName = PLATE_NAMES[score.plate] || score.plate || '';
-  const plateColor = PLATE_COLORS[score.plate] || 'text-gray-400';
-  const parsedOldGrade = parseGrade(score.old_grade, getRank(score.old_score).label);
-  const hasJudgments = (score.perfect > 0 || score.great > 0 || score.good > 0 || score.bad > 0 || score.miss > 0);
-  const overRank = getOverTop100Rank(score.over_top100_rank);
-  const judgments = [
-    { label: 'PERFECT', value: score.perfect || 0, textColor: 'text-sky-400' },
-    { label: 'GREAT', value: score.great || 0, textColor: 'text-green-400' },
-    { label: 'GOOD', value: score.good || 0, textColor: 'text-yellow-400' },
-    { label: 'BAD', value: score.bad || 0, textColor: 'text-fuchsia-400' },
-    { label: 'MISS', value: score.miss || 0, textColor: 'text-gray-400' },
-  ];
-  const isUpscore = score.old_score !== undefined;
-
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div
-        className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
-        {jacketUrl && (
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-15"
-            style={{ backgroundImage: `url(${jacketUrl})` }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
-
-        <div className="relative p-5">
-          <button
-            className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
-            onClick={onClose}
-          >
-            x
-          </button>
-
-          {chartLink ? (
-            <Link to={chartLink} className="font-display font-bold text-lg leading-tight pr-6 hover:text-piu-accent transition-colors block" onClick={onClose}>{score.song_title}</Link>
-          ) : (
-            <p className="font-display font-bold text-lg leading-tight pr-6">{score.song_title}</p>
-          )}
-
-          <div className="flex items-center gap-3 mt-4">
-            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
-              score.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : score.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
-            }`}>
-              <span className={`font-display font-bold text-[10px] uppercase ${score.mode === 'Single' ? 'text-red-400' : score.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{score.mode}</span>
-              <span className={`font-display font-bold text-base ${score.mode === 'Single' ? 'text-red-300' : score.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{score.level}</span>
-            </div>
-            {overRank > 0 && (
-              <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
-                TOP #{overRank}
-              </span>
-            )}
-            <div className="text-center flex-1">
-              {displayScore > 0 ? (
-                <p
-                  className={`text-3xl font-display font-black ${getGradeColor(grade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
-                  data-grade={grade}
-                >
-                  {grade}
-                </p>
-              ) : (
-                <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
-              )}
-            </div>
-          </div>
-
-          {plateName && (
-            <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
-          )}
-
-          {displayScore > 0 && (
-            <p className="text-center font-mono text-2xl font-bold mt-2">{displayScore.toLocaleString()}</p>
-          )}
-
-          {isUpscore && score.old_score > 0 && (
-            <div className="text-center mt-2 space-y-0.5">
-              <p className="text-[10px] text-gray-500">
-                Previous:
-                {' '}
-                <span className="font-mono">{score.old_score.toLocaleString()}</span>
-                {' '}
-                <span className={parsedOldGrade.isBroken ? 'grade-broken' : ''} data-grade={parsedOldGrade.display}>
-                  {parsedOldGrade.display}
-                </span>
-              </p>
-              <p className="text-xs text-piu-green font-mono font-bold">+{(displayScore - score.old_score).toLocaleString()}</p>
-            </div>
-          )}
-
-          {hasJudgments && (
-            <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
-              {judgments.map(j => (
-                <div key={j.label}>
-                  <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
-                  <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!hasJudgments && displayScore > 0 && (
-            <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
-              Judgment breakdown not available
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
+    <ScoreSnapshotModal
+      score={score}
+      jacketUrl={jacketUrl}
+      chartLink={chartLink}
+      directMessageLinkShare={score?._dmLinkShare || null}
+      modalLabel="Score details"
+      onClose={onClose}
+    />
   );
 }
 
@@ -673,7 +569,27 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
                 <button
                   type="button"
                   className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                  onClick={() => onScoreClick && onScoreClick({ ...u, _jacketUrl: jacketUrl, _chartLink: chartLink })}
+                  onClick={() => onScoreClick && onScoreClick({
+                    ...u,
+                    username: item.username,
+                    date_played: u.date_played || item.created_at,
+                    _jacketUrl: jacketUrl,
+                    _chartLink: chartLink,
+                    _dmLinkShare: buildScoreSnapshotLinkShare({
+                      kind: 'upscore',
+                      sourceId: item.id,
+                      username: item.username,
+                      avatar: item.avatar ? getAvatarUrl(item.avatar) : '',
+                      score: {
+                        ...u,
+                        username: item.username,
+                        date_played: u.date_played || item.created_at,
+                      },
+                      path: `/upscore/${item.id}`,
+                      chartPath: chartLink,
+                      jacketUrl,
+                    }),
+                  })}
                 >
                   <div className="flex items-center gap-1 justify-end">
                     <span className={`text-[10px] font-mono ${oldRank.color}`}>{u.old_score.toLocaleString()}</span>
@@ -1099,7 +1015,27 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
                 <button
                   type="button"
                   className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                  onClick={() => onScoreClick && onScoreClick({ ...clear, _jacketUrl: jacketUrl, _chartLink: chartLink })}
+                  onClick={() => onScoreClick && onScoreClick({
+                    ...clear,
+                    username: item.username,
+                    date_played: clear.date_played || item.created_at,
+                    _jacketUrl: jacketUrl,
+                    _chartLink: chartLink,
+                    _dmLinkShare: buildScoreSnapshotLinkShare({
+                      kind: 'clear',
+                      sourceId: item.id,
+                      username: item.username,
+                      avatar: item.avatar ? getAvatarUrl(item.avatar) : '',
+                      score: {
+                        ...clear,
+                        username: item.username,
+                        date_played: clear.date_played || item.created_at,
+                      },
+                      path: `/clear/${item.id}`,
+                      chartPath: chartLink,
+                      jacketUrl,
+                    }),
+                  })}
                 >
                   <span
                     className={`text-xs font-display font-bold ${getGradeColor(parsedGrade.display, clear.score)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}

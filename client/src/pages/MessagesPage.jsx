@@ -22,6 +22,7 @@ import { getProfilePath } from '../utils/profile';
 import { renderFormattedText } from '../utils/formatText';
 import ActionIconButton from '../components/ActionIconButton';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
+import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
 import UserPickerDialog from '../components/UserPickerDialog';
 
@@ -221,6 +222,25 @@ function getMessageLabel(message) {
   return '';
 }
 
+function hasScoreSnapshotLinkShare(linkShare) {
+  if (!linkShare || (linkShare.kind !== 'upscore' && linkShare.kind !== 'clear')) return false;
+  return !!(
+    linkShare.songTitle
+    && linkShare.mode
+    && Number(linkShare.level) > 0
+    && (
+      Number(linkShare.score) > 0
+      || Number(linkShare.oldScore) > 0
+      || Number(linkShare.perfect) > 0
+      || Number(linkShare.great) > 0
+      || Number(linkShare.good) > 0
+      || Number(linkShare.bad) > 0
+      || Number(linkShare.miss) > 0
+      || linkShare.playerName
+    )
+  );
+}
+
 function MessageLinkCard({
   linkShare,
   compareAction = null,
@@ -245,6 +265,89 @@ function MessageLinkCard({
     ? 'border-emerald-300/30 bg-emerald-500/12 text-emerald-100 hover:border-emerald-200/40 hover:text-white'
     : 'border-piu-border/70 bg-piu-dark/40 text-cyan-100 hover:border-cyan-300/35 hover:text-white';
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
+  const isScoreSnapshot = hasScoreSnapshotLinkShare(linkShare);
+
+  if (isScoreSnapshot) {
+    const snapshotScore = {
+      song_title: linkShare.songTitle,
+      mode: linkShare.mode,
+      level: linkShare.level,
+      score: linkShare.score,
+      grade: linkShare.grade,
+      is_stage_break: linkShare.isStageBreak,
+      old_score: linkShare.oldScore,
+      old_grade: linkShare.oldGrade,
+      scoreDelta: linkShare.scoreDelta,
+      over_top100_rank: linkShare.overTop100Rank,
+      plate: linkShare.plate,
+      perfect: linkShare.perfect,
+      great: linkShare.great,
+      good: linkShare.good,
+      bad: linkShare.bad,
+      miss: linkShare.miss,
+      username: linkShare.playerName,
+      date_played: linkShare.playedAt,
+    };
+
+    return (
+      <div className="w-full space-y-2">
+        <p className="px-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/75">{badge}</p>
+        <ScoreSnapshotCard
+          score={snapshotScore}
+          jacketUrl={linkShare.jacketUrl}
+          chartLink={linkShare.chartPath || ''}
+        />
+        {responseStatus ? (
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            <CompareStatusPill
+              statusKind={responseStatus.statusKind}
+              statusLabel={responseStatus.statusLabel}
+              prefix={getResponseStatusPrefix(responseStatus)}
+            />
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-1.5 px-1">
+          {linkShare.path ? (
+            <Link
+              to={linkShare.path}
+              className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+            >
+              {buttonLabel}
+            </Link>
+          ) : (
+            <a
+              href={linkShare.url}
+              target="_blank"
+              rel="noreferrer"
+              className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+            >
+              {buttonLabel}
+            </a>
+          )}
+          {compareAction ? (
+            <button
+              type="button"
+              onClick={compareAction}
+              disabled={compareLoading}
+              className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {compareLoading ? 'Sending...' : compareButtonLabel}
+            </button>
+          ) : null}
+          {followUpAction ? (
+            <button
+              type="button"
+              onClick={followUpAction}
+              disabled={followUpLoading}
+              className="inline-flex rounded-md border border-amber-300/30 bg-amber-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-amber-100 transition-colors hover:border-amber-200/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {followUpLoading ? 'Sending...' : followUpLabel}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`w-full rounded-[1.2rem] border px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)] ${frameClass}`}>

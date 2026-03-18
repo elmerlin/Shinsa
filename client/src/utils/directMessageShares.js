@@ -244,6 +244,69 @@ export function buildUpscoreLinkShare({
   };
 }
 
+export function buildScoreSnapshotLinkShare({
+  kind = 'upscore',
+  sourceId,
+  username,
+  avatar = '',
+  score,
+  path = '',
+  chartPath = '',
+  jacketUrl = '',
+}) {
+  const normalizedKind = String(kind || '').trim().toLowerCase() === 'clear' ? 'clear' : 'upscore';
+  const id = String(sourceId || '').trim();
+  const resolvedPath = String(path || (id ? `/${normalizedKind}/${id}` : '')).trim();
+  if (!resolvedPath) return null;
+
+  const row = score && typeof score === 'object' ? score : {};
+  const authorName = String(username || row.username || row.playerName || 'Player').trim() || 'Player';
+  const songTitle = String(row.song_title || row.songTitle || '').trim();
+  const mode = String(row.mode || '').trim();
+  const level = Number(row.level) || 0;
+  const displayScore = Number(row.new_score ?? row.score) || 0;
+  const oldScore = Number(row.old_score) || 0;
+  const delta = Number.isFinite(Number(row.scoreDelta))
+    ? Number(row.scoreDelta)
+    : (displayScore > 0 && oldScore > 0 ? displayScore - oldScore : 0);
+  const grade = compactText(row.new_grade || row.grade, 20);
+  const playedAt = String(row.date_played || row.playedAt || '').trim();
+
+  return {
+    kind: normalizedKind,
+    path: resolvedPath,
+    chartPath: String(chartPath || '').trim(),
+    title: `${authorName}'s ${normalizedKind === 'upscore' ? 'score' : 'clear'}`,
+    subtitle: [
+      formatChartLabel(songTitle, mode, level),
+      grade || (row.is_stage_break ? 'Stage break' : ''),
+      delta > 0 ? formatDelta(delta) : '',
+    ].filter(Boolean).join(' • '),
+    buttonLabel: normalizedKind === 'upscore' ? 'Open upscore' : 'Open clear',
+    songTitle,
+    mode,
+    level,
+    score: displayScore,
+    grade,
+    isStageBreak: !!row.is_stage_break,
+    targetScore: displayScore,
+    playerName: authorName,
+    playerAvatar: String(avatar || row.playerAvatar || row.avatar || '').trim(),
+    playedAt,
+    jacketUrl: String(jacketUrl || row._jacketUrl || row.jacket_url || row.background_url || '').trim(),
+    oldScore,
+    oldGrade: compactText(row.old_grade, 20),
+    scoreDelta: delta,
+    overTop100Rank: Number(row.over_top100_rank ?? row.overTop100Rank) || 0,
+    plate: compactText(row.plate, 20),
+    perfect: Number(row.perfect) || 0,
+    great: Number(row.great) || 0,
+    good: Number(row.good) || 0,
+    bad: Number(row.bad) || 0,
+    miss: Number(row.miss) || 0,
+  };
+}
+
 export function buildClearLinkShare({
   clearId,
   username,
