@@ -145,6 +145,189 @@ function MessageBubble({ message }) {
   );
 }
 
+function ConversationRow({ conversation }) {
+  const partner = conversation?.partner;
+
+  return (
+    <Link
+      to={`/messages/${conversation.id}`}
+      className="flex items-center gap-3 border-b border-piu-border/20 px-4 py-3 transition-colors hover:bg-piu-dark/35"
+    >
+      {partner?.avatar ? (
+        <img src={partner.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
+      ) : (
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
+          {(partner?.username || 'U').slice(0, 1).toUpperCase()}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <p className={`truncate text-sm font-display font-black ${conversation.unread_count > 0 ? 'text-white' : 'text-gray-200'}`}>
+            {partner?.username || 'Unknown player'}
+          </p>
+          <span className="shrink-0 text-[10px] text-gray-500">{formatConversationTime(conversation.last_message_at)}</span>
+        </div>
+        <p className={`mt-1 truncate text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
+          {conversation?.last_message?.preview || 'Open conversation'}
+        </p>
+      </div>
+      {conversation.unread_count > 0 ? (
+        <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-cyan-500 px-1 text-[10px] font-display font-black text-white">
+          {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+function InboxView({
+  conversations,
+  loadingConversations,
+  conversationError,
+  onStartChat,
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4 sm:py-6">
+      <section className="card min-h-[16rem] overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
+          <div>
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Inbox</p>
+            <h1 className="mt-1 text-lg font-display font-black text-white">Direct Messages</h1>
+          </div>
+          <button
+            type="button"
+            onClick={onStartChat}
+            className="rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-display font-bold text-cyan-100 transition-colors hover:text-white"
+          >
+            New chat
+          </button>
+        </div>
+
+        <div className="max-h-[calc(100vh-13rem)] overflow-y-auto">
+          {loadingConversations ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-500">Loading conversations...</div>
+          ) : conversations.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <p className="text-sm text-gray-400">No conversations yet.</p>
+              <p className="mt-1 text-xs text-gray-500">Start one from here, from a profile, or by sending a play into DM.</p>
+              <button
+                type="button"
+                onClick={onStartChat}
+                className="mt-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-4 py-2 text-sm font-display font-bold text-cyan-100 transition-colors hover:text-white"
+              >
+                Start new chat
+              </button>
+            </div>
+          ) : (
+            conversations.map((conversation) => (
+              <ConversationRow key={conversation.id} conversation={conversation} />
+            ))
+          )}
+        </div>
+        {conversationError ? (
+          <p className="border-t border-piu-border/40 px-4 py-3 text-sm text-red-300">{conversationError}</p>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function ConversationView({
+  activeConversation,
+  activePartner,
+  loadingMessages,
+  messageError,
+  messages,
+  messagesEndRef,
+  draft,
+  onDraftChange,
+  onComposerKeyDown,
+  onSend,
+  sending,
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-4 sm:py-6">
+      <section className="card flex min-h-[40rem] flex-col overflow-hidden p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link
+              to="/messages"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-piu-border/60 bg-piu-dark/70 text-lg text-gray-300 transition-colors hover:text-white"
+              aria-label="Back to inbox"
+            >
+              ←
+            </Link>
+            <div className="min-w-0">
+              <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-cyan-300">Conversation</p>
+              <h1 className="mt-1 truncate text-lg font-display font-black text-white">{activePartner?.username || 'Unknown player'}</h1>
+            </div>
+          </div>
+          {activePartner?.id ? (
+            <Link
+              to={getProfilePath(activePartner.id, activePartner.username)}
+              className="rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white"
+            >
+              View profile
+            </Link>
+          ) : null}
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {loadingMessages && messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading conversation...</div>
+          ) : messageError ? (
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-5 text-sm text-red-200">
+                {messageError}
+              </div>
+              <Link
+                to="/messages"
+                className="mt-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-4 py-2 text-sm font-display font-bold text-cyan-100 transition-colors hover:text-white"
+              >
+                Back to inbox
+              </Link>
+            </div>
+          ) : !activeConversation ? (
+            <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading conversation...</div>
+          ) : messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet. Say hello.</div>
+          ) : (
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <MessageBubble key={message.id} message={message} />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-piu-border/50 bg-piu-dark/30 px-4 py-3">
+          <div className="flex items-end gap-3">
+            <textarea
+              value={draft}
+              onChange={(event) => onDraftChange(event.target.value)}
+              onKeyDown={onComposerKeyDown}
+              rows={3}
+              maxLength={4000}
+              placeholder={`Message ${activePartner?.username || 'player'}...`}
+              className="input-field min-h-[5.25rem] flex-1 resize-none"
+              disabled={sending || !activeConversation}
+            />
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={sending || !draft.trim() || !activeConversation}
+              className="rounded-xl bg-cyan-500 px-4 py-3 text-sm font-display font-black text-white transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function MessagesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -225,10 +408,8 @@ export default function MessagesPage() {
   }, [user, conversationId, loadConversation]);
 
   useEffect(() => {
-    if (!conversationId && conversations.length > 0) {
-      navigate(`/messages/${conversations[0].id}`, { replace: true });
-    }
-  }, [conversationId, conversations, navigate]);
+    setDraft('');
+  }, [conversationId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -273,153 +454,28 @@ export default function MessagesPage() {
 
   return (
     <>
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:py-6 lg:grid lg:grid-cols-[20rem_minmax(0,1fr)]">
-        <section className="card min-h-[14rem] overflow-hidden p-0">
-          <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
-            <div>
-              <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Inbox</p>
-              <h1 className="mt-1 text-lg font-display font-black text-white">Direct Messages</h1>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-display font-bold text-cyan-100 transition-colors hover:text-white"
-            >
-              New chat
-            </button>
-          </div>
-
-          <div className="max-h-[28rem] overflow-y-auto lg:max-h-[calc(100vh-13rem)]">
-            {loadingConversations ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-500">Loading conversations...</div>
-            ) : conversations.length === 0 ? (
-              <div className="px-4 py-8 text-center">
-                <p className="text-sm text-gray-400">No conversations yet.</p>
-                <p className="mt-1 text-xs text-gray-500">Start one from here, from a profile, or from a shared Hour of Power recap.</p>
-              </div>
-            ) : (
-              conversations.map((conversation) => {
-                const partner = conversation?.partner;
-                const selected = conversation.id === conversationId;
-                return (
-                  <Link
-                    key={conversation.id}
-                    to={`/messages/${conversation.id}`}
-                    className={`flex items-center gap-3 border-b border-piu-border/20 px-4 py-3 transition-colors ${
-                      selected ? 'bg-cyan-500/10' : 'hover:bg-piu-dark/35'
-                    }`}
-                  >
-                    {partner?.avatar ? (
-                      <img src={partner.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
-                    ) : (
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
-                        {(partner?.username || 'U').slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className={`truncate text-sm font-display font-black ${conversation.unread_count > 0 ? 'text-white' : 'text-gray-200'}`}>
-                          {partner?.username || 'Unknown player'}
-                        </p>
-                        <span className="shrink-0 text-[10px] text-gray-500">{formatConversationTime(conversation.last_message_at)}</span>
-                      </div>
-                      <p className={`mt-1 truncate text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
-                        {conversation?.last_message?.preview || 'Open conversation'}
-                      </p>
-                    </div>
-                    {conversation.unread_count > 0 ? (
-                      <span className="flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-cyan-500 px-1 text-[10px] font-display font-black text-white">
-                        {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })
-            )}
-          </div>
-          {conversationError ? (
-            <p className="border-t border-piu-border/40 px-4 py-3 text-sm text-red-300">{conversationError}</p>
-          ) : null}
-        </section>
-
-        <section className="card flex min-h-[34rem] flex-col overflow-hidden p-0">
-          {activeConversation ? (
-            <>
-              <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-cyan-300">Conversation</p>
-                  <h2 className="mt-1 truncate text-lg font-display font-black text-white">{activePartner?.username || 'Unknown player'}</h2>
-                </div>
-                {activePartner?.id ? (
-                  <Link
-                    to={getProfilePath(activePartner.id, activePartner.username)}
-                    className="rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white"
-                  >
-                    View profile
-                  </Link>
-                ) : null}
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-4 py-4">
-                {loadingMessages && messages.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading conversation...</div>
-                ) : messageError ? (
-                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-5 text-sm text-red-200">
-                    {messageError}
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet. Say hello.</div>
-                ) : (
-                  <div className="space-y-4">
-                    {messages.map((message) => (
-                      <MessageBubble key={message.id} message={message} />
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-piu-border/50 bg-piu-dark/30 px-4 py-3">
-                <div className="flex items-end gap-3">
-                  <textarea
-                    value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
-                    onKeyDown={handleComposerKeyDown}
-                    rows={3}
-                    maxLength={4000}
-                    placeholder={`Message ${activePartner?.username || 'player'}...`}
-                    className="input-field min-h-[5.25rem] flex-1 resize-none"
-                    disabled={sending}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSend}
-                    disabled={sending || !draft.trim()}
-                    className="rounded-xl bg-cyan-500 px-4 py-3 text-sm font-display font-black text-white transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {sending ? 'Sending...' : 'Send'}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex h-full min-h-[34rem] flex-col items-center justify-center px-6 text-center">
-              <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Messages</p>
-              <h2 className="mt-2 text-2xl font-display font-black text-white">Pick a conversation</h2>
-              <p className="mt-2 max-w-md text-sm text-gray-400">
-                Start with a player profile, open a chat from here, or send a recap directly from Hour of Power.
-              </p>
-              <button
-                type="button"
-                onClick={() => setPickerOpen(true)}
-                className="mt-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-4 py-2 text-sm font-display font-bold text-cyan-100 transition-colors hover:text-white"
-              >
-                Start new chat
-              </button>
-            </div>
-          )}
-        </section>
-      </div>
+      {conversationId ? (
+        <ConversationView
+          activeConversation={activeConversation}
+          activePartner={activePartner}
+          loadingMessages={loadingMessages}
+          messageError={messageError}
+          messages={messages}
+          messagesEndRef={messagesEndRef}
+          draft={draft}
+          onDraftChange={setDraft}
+          onComposerKeyDown={handleComposerKeyDown}
+          onSend={handleSend}
+          sending={sending}
+        />
+      ) : (
+        <InboxView
+          conversations={conversations}
+          loadingConversations={loadingConversations}
+          conversationError={conversationError}
+          onStartChat={() => setPickerOpen(true)}
+        />
+      )}
 
       <UserPickerDialog
         open={pickerOpen}
