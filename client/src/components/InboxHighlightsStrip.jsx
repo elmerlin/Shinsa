@@ -56,33 +56,54 @@ function StickerRow({ tokens = [] }) {
   );
 }
 
-function HighlightAvatar({ user, hasStory = false, onClick = null, isSelf = false }) {
+function HighlightAvatar({
+  user,
+  hasStory = false,
+  onClick = null,
+  isSelf = false,
+  showAddBadge = false,
+  onAddBadge = null,
+}) {
   const frameClass = hasStory
     ? 'bg-[conic-gradient(from_180deg_at_50%_50%,rgba(34,211,238,0.95),rgba(250,204,21,0.9),rgba(16,185,129,0.9),rgba(34,211,238,0.95))]'
     : 'bg-white/10';
   const fallback = (user?.username || 'U').slice(0, 1).toUpperCase();
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex flex-col items-center gap-2 text-center"
-      aria-label={isSelf ? 'Open your story tools' : `Open ${user?.username || 'story'} story`}
-    >
-      <span className={`relative flex h-[4.65rem] w-[4.65rem] items-center justify-center rounded-full p-[3px] shadow-[0_12px_30px_rgba(0,0,0,0.25)] transition-transform group-hover:scale-[1.02] ${frameClass}`}>
-        <span className="absolute inset-[3px] rounded-full border border-white/10" />
-        <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#070b13]">
-          {user?.avatar ? (
-            <img src={user.avatar} alt={user?.username || ''} className="h-full w-full object-cover" />
-          ) : (
-            <span className="font-display text-xl font-black text-white">{fallback}</span>
-          )}
-        </span>
-      </span>
+    <div className="group flex flex-col items-center gap-1.5 text-center">
+      <div className="relative">
+        <button
+          type="button"
+          onClick={onClick}
+          className="relative"
+          aria-label={isSelf ? 'Open your story tools' : `Open ${user?.username || 'story'} story`}
+        >
+          <span className={`relative flex h-[3.85rem] w-[3.85rem] items-center justify-center rounded-full p-[3px] shadow-[0_12px_30px_rgba(0,0,0,0.25)] transition-transform group-hover:scale-[1.02] ${frameClass}`}>
+            <span className="absolute inset-[3px] rounded-full border border-white/10" />
+            <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#070b13]">
+              {user?.avatar ? (
+                <img src={user.avatar} alt={user?.username || ''} className="h-full w-full object-cover" />
+              ) : (
+                <span className="font-display text-xl font-black text-white">{fallback}</span>
+              )}
+            </span>
+          </span>
+        </button>
+        {showAddBadge ? (
+          <button
+            type="button"
+            onClick={onAddBadge}
+            className="absolute -bottom-0.5 -right-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border-[3px] border-[#070b13] bg-cyan-500 text-sm font-display font-black text-white shadow-[0_10px_20px_rgba(6,182,212,0.35)]"
+            aria-label="Add to story"
+          >
+            +
+          </button>
+        ) : null}
+      </div>
       <span className="max-w-[4.8rem] truncate text-[11px] font-display font-bold text-gray-200">
         {isSelf ? 'Your Status' : (user?.username || 'Player')}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -94,17 +115,17 @@ function HighlightNoteBubble({ note, isSelf = false, onClick = null }) {
     <button
       type="button"
       onClick={onClick}
-      className={`absolute -top-1.5 left-1/2 z-10 flex min-h-[2.7rem] w-max max-w-[6.9rem] -translate-x-1/2 items-center rounded-[1.3rem] px-3 py-2 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
+      className={`absolute left-1/2 top-0 z-10 flex min-h-[2.45rem] w-max max-w-[5.75rem] -translate-x-1/2 items-center rounded-[1.15rem] px-2.5 py-1.5 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
         content
           ? 'bg-[#343945] text-white hover:bg-[#3b4150]'
           : 'border border-dashed border-white/12 bg-[#262b35] text-gray-300 hover:bg-[#2c313c]'
       }`}
       aria-label={isSelf ? 'Set your note' : 'Open note thread'}
     >
-      <span className="line-clamp-2 text-[11px] font-medium leading-4">
+      <span className="line-clamp-2 text-[10px] font-medium leading-4">
         {content || 'Share a note'}
       </span>
-      <span className={`absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 rounded-[0.25rem] ${content ? 'bg-[#343945]' : 'border-r border-b border-dashed border-white/12 bg-[#262b35]'}`} />
+      <span className={`absolute -bottom-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 rounded-[0.2rem] ${content ? 'bg-[#343945]' : 'border-r border-b border-dashed border-white/12 bg-[#262b35]'}`} />
     </button>
   );
 }
@@ -127,8 +148,8 @@ function HighlightCircle({
   };
 
   return (
-    <div className="flex w-[5.8rem] shrink-0 flex-col items-center gap-2.5 pt-3">
-      <div className="relative pt-7">
+    <div className="flex w-[4.55rem] shrink-0 flex-col items-center pt-2">
+      <div className="relative pt-[2.15rem]">
         <HighlightNoteBubble
           note={note}
           isSelf={circle?.is_self}
@@ -139,17 +160,9 @@ function HighlightCircle({
           hasStory={circle?.has_story}
           isSelf={circle?.is_self}
           onClick={avatarAction}
+          showAddBadge={!!circle?.is_self}
+          onAddBadge={onOpenStoryComposer}
         />
-        {circle?.is_self ? (
-          <button
-            type="button"
-            onClick={onOpenStoryComposer}
-            className="absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-cyan-200/35 bg-cyan-500 text-sm font-display font-black text-white shadow-[0_10px_20px_rgba(6,182,212,0.35)]"
-            aria-label="Add to story"
-          >
-            +
-          </button>
-        ) : null}
       </div>
     </div>
   );
@@ -290,7 +303,7 @@ export function StoryViewerModal({ open, user, stories = [], loading = false, er
           {loading ? (
             <p className="text-sm text-gray-400">Loading story...</p>
           ) : error ? (
-            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">{error}</div>
+            <div className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">Story unavailable right now.</div>
           ) : story ? (
             <StoryCard story={story} />
           ) : (
@@ -711,19 +724,19 @@ export default function InboxHighlightsStrip({
   return (
     <div className="border-b border-piu-border/25 bg-[linear-gradient(180deg,rgba(7,12,21,0.92),rgba(7,12,21,0.58))] px-4 pb-4 pt-3 sm:px-5">
       {loading ? (
-        <div className="scrollbar-none flex gap-3 overflow-x-auto pb-1 pt-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[0, 1, 2, 3].map((index) => (
-            <div key={index} className="flex w-[5.8rem] shrink-0 flex-col items-center gap-2.5 pt-3">
-              <div className="relative pt-7">
-                <div className="absolute -top-1.5 left-1/2 h-[2.7rem] w-[6.4rem] -translate-x-1/2 rounded-[1.3rem] bg-white/6" />
-                <div className="h-[4.65rem] w-[4.65rem] animate-pulse rounded-full bg-white/8" />
+            <div key={index} className="flex w-[4.55rem] shrink-0 flex-col items-center pt-2">
+              <div className="relative pt-[2.15rem]">
+                <div className="absolute left-1/2 top-0 h-[2.45rem] w-[5.4rem] -translate-x-1/2 rounded-[1.15rem] bg-white/6" />
+                <div className="h-[3.85rem] w-[3.85rem] animate-pulse rounded-full bg-white/8" />
               </div>
-              <div className="h-3 w-14 animate-pulse rounded-full bg-white/8" />
+              <div className="mt-1.5 h-3 w-12 animate-pulse rounded-full bg-white/8" />
             </div>
           ))}
         </div>
       ) : (
-        <div className="scrollbar-none flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {orderedCircles.map((circle) => (
             <HighlightCircle
               key={circle.user.id}

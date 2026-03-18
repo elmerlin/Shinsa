@@ -1600,7 +1600,7 @@ export default function MessagesPage() {
         user: circle.user,
         stories: [],
         loading: false,
-        error: err?.message || 'Failed to load story.',
+        error: 'Story unavailable right now.',
       });
     }
   }, []);
