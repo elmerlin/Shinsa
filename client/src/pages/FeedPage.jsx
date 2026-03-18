@@ -14,7 +14,12 @@ import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import { buildReplayModalTitle } from '../utils/replayTitle';
-import { buildClearLinkShare, buildUpscoreLinkShare } from '../utils/directMessageShares';
+import {
+  buildClearChallengeCard,
+  buildClearLinkShare,
+  buildUpscoreChallengeCard,
+  buildUpscoreLinkShare,
+} from '../utils/directMessageShares';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -556,6 +561,11 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
     username: item.username,
     upscores,
   });
+  const upscoreChallengeCard = buildUpscoreChallengeCard({
+    upscoreId: item.id,
+    username: item.username,
+    upscores,
+  });
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
   const hasMore = upscores.length > 5;
@@ -706,6 +716,13 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
             linkShare={upscoreLinkShare}
             title="Send upscore"
             description="Choose a player to send this upscore to."
+          />
+          <SendToDirectMessageButton
+            challengeCard={upscoreChallengeCard}
+            label="Challenge"
+            tone="amber"
+            title="Challenge a player"
+            description="Choose a player to challenge to beat this score."
           />
         </div>
       </div>
@@ -938,6 +955,11 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
     username: item.username,
     clears,
   });
+  const clearChallengeCard = buildClearChallengeCard({
+    clearId: item.id,
+    username: item.username,
+    clears,
+  });
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
   const hasMore = clears.length > 5;
@@ -1110,6 +1132,15 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
             title={isGrouped ? 'Send new clears' : 'Send new clear'}
             description="Choose a player to send this clear to."
           />
+          {!isTitleUnlockPost ? (
+            <SendToDirectMessageButton
+              challengeCard={clearChallengeCard}
+              label="Challenge"
+              tone="amber"
+              title="Challenge a player"
+              description="Choose a player to challenge to clear this chart."
+            />
+          ) : null}
         </div>
       </div>
     </div>

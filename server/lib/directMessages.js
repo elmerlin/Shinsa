@@ -3,6 +3,7 @@ const { normalizeUserAvatarForList } = require('./avatarProxy');
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_SHARE_ROWS = 200;
 const MAX_LINK_LENGTH = 500;
+const MAX_CHALLENGE_TEXT_LENGTH = 220;
 const LINK_SHARE_KIND_LABELS = {
   live_session: 'Live session',
   post: 'Post',
@@ -10,6 +11,14 @@ const LINK_SHARE_KIND_LABELS = {
   clear: 'Clear',
   hour_of_power: 'Hour of Power',
   link: 'Link',
+};
+const CHALLENGE_KIND_LABELS = {
+  beat_score: 'Score challenge',
+  clear_chart: 'Clear challenge',
+};
+const CHALLENGE_SOURCE_KIND_LABELS = {
+  upscore: 'Upscore',
+  clear: 'Clear',
 };
 
 function toInt(value) {
@@ -149,6 +158,44 @@ function sanitizeLinkSharePayload(linkShare) {
   };
 }
 
+function sanitizeChallengeCardPayload(challengeCard) {
+  if (!challengeCard || typeof challengeCard !== 'object') return null;
+  const src = challengeCard || {};
+  const path = sanitizeRelativePath(src.path || src.source_path || src.sourcePath || src.url_path || src.urlPath);
+  if (!path) return null;
+
+  const kindKey = String(src.kind || src.challengeType || src.challenge_type || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_');
+  if (!CHALLENGE_KIND_LABELS[kindKey]) return null;
+
+  const sourceKindKey = String(src.sourceKind || src.source_kind || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_');
+  const sourceKind = CHALLENGE_SOURCE_KIND_LABELS[sourceKindKey] ? sourceKindKey : '';
+
+  return {
+    version: 1,
+    kind: kindKey,
+    sourceKind,
+    sourceId: String(src.sourceId || src.source_id || '').trim().slice(0, 80),
+    path,
+    title: String(src.title || '').trim().slice(0, 120),
+    subtitle: String(src.subtitle || '').trim().slice(0, MAX_CHALLENGE_TEXT_LENGTH),
+    targetLabel: String(src.targetLabel || src.target_label || '').trim().slice(0, 80),
+    detailLabel: String(src.detailLabel || src.detail_label || '').trim().slice(0, 120),
+    buttonLabel: String(src.buttonLabel || src.button_label || '').trim().slice(0, 48),
+    songTitle: String(src.songTitle || src.song_title || '').trim().slice(0, 120),
+    mode: String(src.mode || '').trim().slice(0, 24),
+    level: toInt(src.level),
+    targetScore: toInt(src.targetScore || src.target_score),
+    targetGrade: String(src.targetGrade || src.target_grade || '').trim().slice(0, 24),
+    originUsername: String(src.originUsername || src.origin_username || '').trim().slice(0, 40),
+  };
+}
+
 function parseJsonObject(raw, fallback = {}) {
   try {
     const parsed = JSON.parse(String(raw || '{}'));
@@ -177,7 +224,18 @@ function buildLinkSharePreview(linkShare) {
     : `Shared ${kindLabel.toLowerCase()}`;
 }
 
-function buildMessagePreview(messageType, content, share = null, linkShare = null) {
+function buildChallengeCardPreview(challengeCard) {
+  if (!challengeCard) return 'Challenge sent';
+  if (challengeCard.targetLabel) {
+    return `${CHALLENGE_KIND_LABELS[challengeCard.kind] || 'Challenge'}: ${challengeCard.targetLabel}`;
+  }
+  if (challengeCard.subtitle) {
+    return `${CHALLENGE_KIND_LABELS[challengeCard.kind] || 'Challenge'}: ${challengeCard.subtitle}`;
+  }
+  return challengeCard.title || 'Challenge sent';
+}
+
+function buildMessagePreview(messageType, content, share = null, linkShare = null, challengeCard = null) {
   const snippet = textSnippet(content, 120);
   if (snippet) return snippet;
   if (messageType === 'session_share' && share) {
@@ -191,10 +249,13 @@ function buildMessagePreview(messageType, content, share = null, linkShare = nul
   if (messageType === 'link_share' && linkShare) {
     return buildLinkSharePreview(linkShare);
   }
+  if (messageType === 'challenge_card' && challengeCard) {
+    return buildChallengeCardPreview(challengeCard);
+  }
   return 'Message';
 }
 
-function buildNotificationTitle(senderUsername, messageType, share = null, linkShare = null) {
+function buildNotificationTitle(senderUsername, messageType, share = null, linkShare = null, challengeCard = null) {
   const sender = String(senderUsername || 'Someone').trim() || 'Someone';
   if (messageType === 'session_share' && share?.shareType === 'hour_of_power') {
     return `${sender} shared an Hour of Power recap`;
@@ -206,10 +267,19 @@ function buildNotificationTitle(senderUsername, messageType, share = null, linkS
     const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'link';
     return `${sender} shared a ${kindLabel.toLowerCase()}`;
   }
+  if (messageType === 'challenge_card' && challengeCard?.kind === 'beat_score') {
+    return `${sender} challenged you to beat a score`;
+  }
+  if (messageType === 'challenge_card' && challengeCard?.kind === 'clear_chart') {
+    return `${sender} challenged you to clear a chart`;
+  }
+  if (messageType === 'challenge_card') {
+    return `${sender} sent you a challenge`;
+  }
   return `${sender} sent you a message`;
 }
 
-function buildNotificationBody(content, messageType, share = null, linkShare = null) {
+function buildNotificationBody(content, messageType, share = null, linkShare = null, challengeCard = null) {
   const snippet = textSnippet(content, 140);
   if (snippet) return snippet;
   if (messageType === 'session_share' && share?.sessionTitle) {
@@ -228,6 +298,15 @@ function buildNotificationBody(content, messageType, share = null, linkShare = n
     const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'Link';
     return `${kindLabel} shared with you`;
   }
+  if (messageType === 'challenge_card' && challengeCard?.targetLabel) {
+    return challengeCard.targetLabel;
+  }
+  if (messageType === 'challenge_card' && challengeCard?.subtitle) {
+    return challengeCard.subtitle;
+  }
+  if (messageType === 'challenge_card') {
+    return 'Open the conversation to take on the challenge.';
+  }
   return 'Open the conversation to reply.';
 }
 
@@ -245,6 +324,7 @@ function normalizeConversationRow(row) {
   const lastMetadata = parseMessageMetadata(row.last_message_metadata_json);
   const share = sanitizeSessionSharePayload(lastMetadata.share);
   const linkShare = sanitizeLinkSharePayload(lastMetadata.link_share);
+  const challengeCard = sanitizeChallengeCardPayload(lastMetadata.challenge_card);
   const messageType = String(row.last_message_type || '').trim() || 'text';
   const content = String(row.last_message_content || '');
 
@@ -263,8 +343,9 @@ function normalizeConversationRow(row) {
       content,
       share,
       link_share: linkShare,
+      challenge_card: challengeCard,
       created_at: row.last_message_at || '',
-      preview: buildMessagePreview(messageType, content, share, linkShare),
+      preview: buildMessagePreview(messageType, content, share, linkShare, challengeCard),
     } : null,
   };
 }
@@ -273,6 +354,7 @@ function normalizeConversationMessage(row, viewerUserId = '') {
   const metadata = parseMessageMetadata(row?.metadata_json);
   const share = sanitizeSessionSharePayload(metadata.share);
   const linkShare = sanitizeLinkSharePayload(metadata.link_share);
+  const challengeCard = sanitizeChallengeCardPayload(metadata.challenge_card);
   const senderUserId = String(row?.sender_user_id || '').trim();
 
   return {
@@ -282,6 +364,7 @@ function normalizeConversationMessage(row, viewerUserId = '') {
     content: String(row?.content || ''),
     share,
     link_share: linkShare,
+    challenge_card: challengeCard,
     created_at: row?.created_at || '',
     updated_at: row?.updated_at || '',
     sender: {
@@ -297,9 +380,12 @@ function normalizeConversationInput(raw = {}) {
   const content = normalizeMessageText(raw.content);
   const share = sanitizeSessionSharePayload(raw.session_share || raw.share || null);
   const linkShare = sanitizeLinkSharePayload(raw.link_share || raw.linkShare || raw.link || null);
-  const messageType = share ? 'session_share' : (linkShare ? 'link_share' : 'text');
+  const challengeCard = sanitizeChallengeCardPayload(raw.challenge_card || raw.challengeCard || raw.challenge || null);
+  const messageType = share
+    ? 'session_share'
+    : (challengeCard ? 'challenge_card' : (linkShare ? 'link_share' : 'text'));
 
-  if (!content && !share && !linkShare) {
+  if (!content && !share && !linkShare && !challengeCard) {
     return { error: 'Message is required' };
   }
 
@@ -308,7 +394,10 @@ function normalizeConversationInput(raw = {}) {
     content,
     share,
     linkShare,
-    metadata: share ? { share } : (linkShare ? { link_share: linkShare } : {}),
+    challengeCard,
+    metadata: share
+      ? { share }
+      : (challengeCard ? { challenge_card: challengeCard } : (linkShare ? { link_share: linkShare } : {})),
   };
 }
 
@@ -322,6 +411,7 @@ module.exports = {
   normalizeConversationMessage,
   normalizeConversationRow,
   parseMessageMetadata,
+  sanitizeChallengeCardPayload,
   sanitizeLinkSharePayload,
   sanitizeSessionSharePayload,
   textSnippet,

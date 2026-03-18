@@ -19,7 +19,12 @@ import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import { buildReplayModalTitle } from '../utils/replayTitle';
-import { buildClearLinkShare, buildUpscoreLinkShare } from '../utils/directMessageShares';
+import {
+  buildClearChallengeCard,
+  buildClearLinkShare,
+  buildUpscoreChallengeCard,
+  buildUpscoreLinkShare,
+} from '../utils/directMessageShares';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -599,6 +604,11 @@ export function SingleUpscorePage() {
     username: item.username,
     upscores,
   });
+  const upscoreChallengeCard = buildUpscoreChallengeCard({
+    upscoreId: item.id,
+    username: item.username,
+    upscores,
+  });
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
@@ -738,6 +748,13 @@ export function SingleUpscorePage() {
               title="Send upscore"
               description="Choose a player to send this upscore to."
             />
+            <SendToDirectMessageButton
+              challengeCard={upscoreChallengeCard}
+              label="Challenge"
+              tone="amber"
+              title="Challenge a player"
+              description="Choose a player to challenge to beat this score."
+            />
           </div>
         </div>
       </div>
@@ -784,7 +801,13 @@ export function SingleClearPage() {
     username: item.username,
     clears,
   });
+  const clearChallengeCard = buildClearChallengeCard({
+    clearId: item.id,
+    username: item.username,
+    clears,
+  });
   const isGrouped = clears.length > 1;
+  const isTitleUnlockPost = clears.length > 0 && clears.every((clear) => clear.entry_type === 'title_unlock');
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
@@ -912,6 +935,15 @@ export function SingleClearPage() {
               title={isGrouped ? 'Send new clears' : 'Send new clear'}
               description="Choose a player to send this clear to."
             />
+            {!isTitleUnlockPost ? (
+              <SendToDirectMessageButton
+                challengeCard={clearChallengeCard}
+                label="Challenge"
+                tone="amber"
+                title="Challenge a player"
+                description="Choose a player to challenge to clear this chart."
+              />
+            ) : null}
           </div>
         </div>
       </div>

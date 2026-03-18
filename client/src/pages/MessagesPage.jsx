@@ -19,6 +19,10 @@ const LINK_SHARE_BADGES = {
   hour_of_power: 'Hour of Power',
   link: 'Link',
 };
+const CHALLENGE_BADGES = {
+  beat_score: 'Score Challenge',
+  clear_chart: 'Clear Challenge',
+};
 
 function formatConversationTime(value) {
   const raw = String(value || '').trim();
@@ -56,6 +60,15 @@ function getMessageLabel(message) {
   }
   if (message.message_type === 'link_share' && message.link_share?.kind === 'clear') {
     return 'Shared clear';
+  }
+  if (message.message_type === 'challenge_card' && message.challenge_card?.kind === 'beat_score') {
+    return 'Score challenge';
+  }
+  if (message.message_type === 'challenge_card' && message.challenge_card?.kind === 'clear_chart') {
+    return 'Clear challenge';
+  }
+  if (message.message_type === 'challenge_card') {
+    return 'Challenge';
   }
   if (message.message_type === 'link_share') {
     return 'Shared link';
@@ -99,6 +112,39 @@ function MessageLinkCard({ linkShare }) {
   );
 }
 
+function MessageChallengeCard({ challengeCard }) {
+  if (!challengeCard) return null;
+
+  const badge = CHALLENGE_BADGES[challengeCard.kind] || 'Challenge';
+  const title = String(challengeCard.title || '').trim() || badge;
+  const subtitle = String(challengeCard.subtitle || '').trim();
+  const targetLabel = String(challengeCard.targetLabel || '').trim();
+  const detailLabel = String(challengeCard.detailLabel || '').trim();
+  const buttonLabel = String(challengeCard.buttonLabel || '').trim() || 'Open challenge';
+
+  return (
+    <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-3">
+      <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-amber-200/90">{badge}</p>
+      <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
+      {subtitle ? <p className="mt-1 text-xs text-gray-300">{subtitle}</p> : null}
+      {targetLabel ? (
+        <p className="mt-3 inline-flex rounded-md border border-amber-300/25 bg-black/15 px-2.5 py-1 text-[11px] font-display font-bold text-amber-100">
+          {targetLabel}
+        </p>
+      ) : null}
+      {detailLabel ? <p className="mt-2 text-xs text-amber-100/80">{detailLabel}</p> : null}
+      <div className="mt-3">
+        <Link
+          to={challengeCard.path}
+          className="inline-flex rounded-md border border-amber-300/30 bg-amber-400/15 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:text-white"
+        >
+          {buttonLabel}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function MessageBubble({ message }) {
   const isOwn = !!message?.is_own;
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
@@ -137,6 +183,16 @@ function MessageBubble({ message }) {
               </p>
             ) : null}
             <MessageLinkCard linkShare={message.link_share} />
+          </div>
+        ) : null}
+        {message?.challenge_card ? (
+          <div className={message?.content || message?.share || message?.link_share ? 'mt-3' : ''}>
+            {shareLabel ? (
+              <p className="mb-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">
+                {shareLabel}
+              </p>
+            ) : null}
+            <MessageChallengeCard challengeCard={message.challenge_card} />
           </div>
         ) : null}
       </div>

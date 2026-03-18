@@ -34,6 +34,43 @@ function formatLeadClearLabel(clear) {
   return formatChartLabel(clear.song_title, clear.mode, clear.level);
 }
 
+function pickUpscoreChallengeEntry(rows) {
+  return rows.reduce((best, entry) => {
+    if (!entry) return best;
+    if (!best) return entry;
+
+    const bestLevel = Number(best.level) || 0;
+    const entryLevel = Number(entry.level) || 0;
+    if (entryLevel !== bestLevel) return entryLevel > bestLevel ? entry : best;
+
+    const bestScore = Number(best.new_score) || 0;
+    const entryScore = Number(entry.new_score) || 0;
+    if (entryScore !== bestScore) return entryScore > bestScore ? entry : best;
+
+    const bestGain = (Number(best.new_score) || 0) - (Number(best.old_score) || 0);
+    const entryGain = (Number(entry.new_score) || 0) - (Number(entry.old_score) || 0);
+    return entryGain > bestGain ? entry : best;
+  }, null);
+}
+
+function pickClearChallengeEntry(rows) {
+  const playableRows = rows.filter((entry) => String(entry?.entry_type || '').trim().toLowerCase() !== 'title_unlock');
+  if (playableRows.length === 0) return null;
+
+  return playableRows.reduce((best, entry) => {
+    if (!entry) return best;
+    if (!best) return entry;
+
+    const bestLevel = Number(best.level) || 0;
+    const entryLevel = Number(entry.level) || 0;
+    if (entryLevel !== bestLevel) return entryLevel > bestLevel ? entry : best;
+
+    const bestScore = Number(best.score) || 0;
+    const entryScore = Number(entry.score) || 0;
+    return entryScore > bestScore ? entry : best;
+  }, null);
+}
+
 export function buildPostLinkShare({
   postId,
   username,
@@ -187,5 +224,82 @@ export function buildClearLinkShare({
     title: allTitleUnlocks ? `${authorName}'s ${rows.length} title unlocks` : `${authorName}'s ${rows.length} new clears`,
     subtitle: `${leadLabel} + ${rows.length - 1} more`,
     buttonLabel: 'Open clear',
+  };
+}
+
+export function buildUpscoreChallengeCard({
+  upscoreId,
+  username,
+  upscores,
+}) {
+  const id = String(upscoreId || '').trim();
+  if (!id) return null;
+
+  const rows = Array.isArray(upscores) ? upscores.filter(Boolean) : [];
+  const entry = pickUpscoreChallengeEntry(rows);
+  if (!entry) return null;
+
+  const authorName = String(username || 'Player').trim() || 'Player';
+  const targetScore = Number(entry?.new_score) || 0;
+  const gainLabel = formatDelta(targetScore - (Number(entry?.old_score) || 0));
+  const detailBits = [];
+  if (compactText(entry?.new_grade, 20)) detailBits.push(compactText(entry.new_grade, 20));
+  if (gainLabel) detailBits.push(gainLabel);
+  if (rows.length > 1) detailBits.push(`Picked from ${rows.length} upscores`);
+
+  return {
+    kind: 'beat_score',
+    sourceKind: 'upscore',
+    sourceId: id,
+    path: `/upscore/${id}`,
+    title: 'Beat this score',
+    subtitle: `${authorName} challenged you on ${formatChartLabel(entry?.song_title, entry?.mode, entry?.level)}`,
+    targetLabel: targetScore > 0 ? `Target ${formatScore(targetScore)}` : 'Beat this run',
+    detailLabel: detailBits.join(' • '),
+    buttonLabel: 'Open upscore',
+    songTitle: String(entry?.song_title || ''),
+    mode: String(entry?.mode || ''),
+    level: Number(entry?.level) || 0,
+    targetScore,
+    targetGrade: String(entry?.new_grade || ''),
+    originUsername: authorName,
+  };
+}
+
+export function buildClearChallengeCard({
+  clearId,
+  username,
+  clears,
+}) {
+  const id = String(clearId || '').trim();
+  if (!id) return null;
+
+  const rows = Array.isArray(clears) ? clears.filter(Boolean) : [];
+  const entry = pickClearChallengeEntry(rows);
+  if (!entry) return null;
+
+  const authorName = String(username || 'Player').trim() || 'Player';
+  const chartLabel = formatChartLabel(entry?.song_title, entry?.mode, entry?.level);
+  const detailBits = [];
+  if (compactText(entry?.grade, 20)) detailBits.push(compactText(entry.grade, 20));
+  if ((Number(entry?.score) || 0) > 0) detailBits.push(formatScore(entry.score));
+  if (rows.length > 1) detailBits.push(`Picked from ${rows.length} clears`);
+
+  return {
+    kind: 'clear_chart',
+    sourceKind: 'clear',
+    sourceId: id,
+    path: `/clear/${id}`,
+    title: 'Clear this chart',
+    subtitle: `${authorName} challenged you on ${chartLabel}`,
+    targetLabel: chartLabel,
+    detailLabel: detailBits.join(' • '),
+    buttonLabel: 'Open clear',
+    songTitle: String(entry?.song_title || ''),
+    mode: String(entry?.mode || ''),
+    level: Number(entry?.level) || 0,
+    targetScore: Number(entry?.score) || 0,
+    targetGrade: String(entry?.grade || ''),
+    originUsername: authorName,
   };
 }

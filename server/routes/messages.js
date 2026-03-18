@@ -257,8 +257,8 @@ function notifyRecipients(db, conversationId, senderUser, recipientIds, input) {
       db,
       userId,
       'direct_message',
-      buildNotificationTitle(senderUser?.username, input.messageType, input.share, input.linkShare),
-      buildNotificationBody(input.content, input.messageType, input.share, input.linkShare),
+      buildNotificationTitle(senderUser?.username, input.messageType, input.share, input.linkShare, input.challengeCard),
+      buildNotificationBody(input.content, input.messageType, input.share, input.linkShare, input.challengeCard),
       `/messages/${conversationId}`
     );
   }
@@ -364,6 +364,9 @@ router.post('/direct/:userId', requireAuth, (req, res) => {
     || req.body.share
     || req.body.link_share
     || req.body.linkShare
+    || req.body.challenge_card
+    || req.body.challengeCard
+    || req.body.challenge
     || req.body.link
   )) {
     return res.status(400).json({ error: input.error });
