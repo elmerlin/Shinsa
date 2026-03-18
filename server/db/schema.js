@@ -2987,7 +2987,15 @@ function initializeDb() {
   if (!liveSessionCols.includes('hop_completed')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN hop_completed INTEGER NOT NULL DEFAULT 0");
   }
-  db.exec('CREATE INDEX IF NOT EXISTS idx_live_sessions_type_status ON live_sessions(session_type, status, hop_completed, ended_at)');
+  const liveSessionIndexCols = db.prepare("PRAGMA table_info(live_sessions)").all().map((c) => c.name);
+  if (
+    liveSessionIndexCols.includes('session_type')
+    && liveSessionIndexCols.includes('status')
+    && liveSessionIndexCols.includes('hop_completed')
+    && liveSessionIndexCols.includes('ended_at')
+  ) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_live_sessions_type_status ON live_sessions(session_type, status, hop_completed, ended_at)');
+  }
 
   const livePlayCols = db.prepare("PRAGMA table_info(live_session_plays)").all().map((c) => c.name);
   if (!livePlayCols.includes('played_at_utc')) {

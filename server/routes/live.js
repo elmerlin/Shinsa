@@ -4000,6 +4000,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
       ? formatSqliteDateTime(new Date(now.getTime() + ((DEFAULT_HOP_WARMUP_SECONDS + DEFAULT_HOP_WINDOW_SECONDS) * 1000)))
       : '';
     const requestsEnabled = sessionType === HOP_SESSION_TYPE ? 0 : 1;
+    const nowSql = formatSqliteDateTime(now);
 
     await syncRecentlyPlayedForUser(req.user, { db, persistActivityPosts: true });
 
@@ -4014,34 +4015,54 @@ router.post('/sessions', requireAuth, async (req, res) => {
       INSERT INTO live_sessions (
         id, host_user_id, title, stream_url, youtube_broadcast_id, youtube_video_id, youtube_channel_id,
         youtube_stream_title, youtube_lifecycle_status, youtube_scheduled_start_time, youtube_actual_start_time,
-        status_text, requests_enabled, session_type, hop_warmup_started_at, hop_started_at, hop_ends_at,
+        status_text, requests_enabled, request_mode_filter, request_max_level, request_show_scores,
+        is_hidden_from_profile, deleted_at, session_type, hop_warmup_started_at, hop_started_at, hop_ends_at,
         hop_warmup_seconds, hop_window_seconds, status, recent_anchor_id, last_recent_row_id,
-        request_max_level, last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live', ?, ?, ?, datetime('now'), 'ready', 0, datetime('now'), datetime('now'), '', datetime('now'))
-    `).run(
+        last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
+      ) VALUES (
+        @id, @host_user_id, @title, @stream_url, @youtube_broadcast_id, @youtube_video_id, @youtube_channel_id,
+        @youtube_stream_title, @youtube_lifecycle_status, @youtube_scheduled_start_time, @youtube_actual_start_time,
+        @status_text, @requests_enabled, @request_mode_filter, @request_max_level, @request_show_scores,
+        @is_hidden_from_profile, @deleted_at, @session_type, @hop_warmup_started_at, @hop_started_at, @hop_ends_at,
+        @hop_warmup_seconds, @hop_window_seconds, @status, @recent_anchor_id, @last_recent_row_id,
+        @last_sync_at, @last_sync_status, @viewer_peak, @created_at, @started_at, @ended_at, @updated_at
+      )
+    `).run({
       id,
-      req.user.id,
+      host_user_id: req.user.id,
       title,
-      streamUrl,
-      youtubeFields.youtube_broadcast_id,
-      youtubeFields.youtube_video_id,
-      youtubeFields.youtube_channel_id,
-      youtubeFields.youtube_stream_title,
-      youtubeFields.youtube_lifecycle_status,
-      youtubeFields.youtube_scheduled_start_time,
-      youtubeFields.youtube_actual_start_time,
-      statusText,
-      requestsEnabled,
-      sessionType,
-      hopWarmupStartedAt,
-      hopStartedAt,
-      hopEndsAt,
-      DEFAULT_HOP_WARMUP_SECONDS,
-      DEFAULT_HOP_WINDOW_SECONDS,
-      toInt(anchor?.max_id),
-      toInt(anchor?.max_id),
-      defaultRequestMaxLevel
-    );
+      stream_url: streamUrl,
+      youtube_broadcast_id: youtubeFields.youtube_broadcast_id,
+      youtube_video_id: youtubeFields.youtube_video_id,
+      youtube_channel_id: youtubeFields.youtube_channel_id,
+      youtube_stream_title: youtubeFields.youtube_stream_title,
+      youtube_lifecycle_status: youtubeFields.youtube_lifecycle_status,
+      youtube_scheduled_start_time: youtubeFields.youtube_scheduled_start_time,
+      youtube_actual_start_time: youtubeFields.youtube_actual_start_time,
+      status_text: statusText,
+      requests_enabled: requestsEnabled,
+      request_mode_filter: 'All',
+      request_max_level: defaultRequestMaxLevel,
+      request_show_scores: 1,
+      is_hidden_from_profile: 0,
+      deleted_at: '',
+      session_type: sessionType,
+      hop_warmup_started_at: hopWarmupStartedAt,
+      hop_started_at: hopStartedAt,
+      hop_ends_at: hopEndsAt,
+      hop_warmup_seconds: DEFAULT_HOP_WARMUP_SECONDS,
+      hop_window_seconds: DEFAULT_HOP_WINDOW_SECONDS,
+      status: 'live',
+      recent_anchor_id: toInt(anchor?.max_id),
+      last_recent_row_id: toInt(anchor?.max_id),
+      last_sync_at: nowSql,
+      last_sync_status: 'ready',
+      viewer_peak: 0,
+      created_at: nowSql,
+      started_at: nowSql,
+      ended_at: '',
+      updated_at: nowSql,
+    });
 
     ensureSessionOwnerParticipant(db, {
       id,
