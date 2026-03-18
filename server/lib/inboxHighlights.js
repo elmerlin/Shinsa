@@ -166,14 +166,15 @@ function buildAutoNote(db, user) {
 
   const playingStatus = normalizeText(user.playing_status, 120);
   if (playingStatus) {
+    const statusTimestamp = user.updated_at || toSqliteDateTime(new Date());
     return normalizeNotePayload({
       id: `playing:${user.id}`,
       user_id: user.id,
       content: playingStatus,
       note_kind: 'playing_status',
       thread_key: `playing:${user.id}`,
-      created_at: user.updated_at || '',
-      updated_at: user.updated_at || '',
+      created_at: statusTimestamp,
+      updated_at: statusTimestamp,
       expires_at: toSqliteDateTime(addHours(new Date(), 1)),
       link_path: '',
       link_label: '',
@@ -566,7 +567,7 @@ function getStoryItemsForUser(db, user) {
 
 function getHighlightUsers(db, viewerUserId) {
   return db.prepare(`
-    SELECT id, username, avatar, avatar_v, playing_status, updated_at
+    SELECT id, username, avatar, avatar_v, playing_status
     FROM users
     WHERE id = ?
        OR id IN (
@@ -590,7 +591,7 @@ function getInboxHighlights(db, viewerUserId) {
       avatar: row.avatar || '',
       avatar_v: row.avatar_v || 0,
       playing_status: row.playing_status || '',
-      updated_at: row.updated_at || '',
+      updated_at: '',
     }));
 
   const circles = [];
