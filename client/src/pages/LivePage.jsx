@@ -34,6 +34,7 @@ import {
 import LiveEmote from '../components/LiveEmote';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import LiveHeaderStatusStrip from '../components/LiveHeaderStatusStrip';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { HourOfPowerLogo, HourOfPowerWordmark } from '../components/HourOfPowerBrand';
 import PiuChartJacket from '../components/PiuChartJacket';
 import StickerAsset from '../components/StickerAsset';
@@ -47,6 +48,7 @@ import {
 } from '../utils/liveEmotes';
 import { renderFormattedText } from '../utils/formatText';
 import { isStickerOnlyMessage, STICKER_GROUPS } from '../utils/stickers';
+import { buildLiveSessionLinkShare } from '../utils/directMessageShares';
 import {
   getLiveOverlaySceneOptions,
   getLiveOverlayOutputSpec,
@@ -3060,6 +3062,13 @@ export default function LivePage() {
   const lastPlay = snapshot?.last_play || null;
   const youtubeId = String(live?.youtube_video_id || '').trim() || getYouTubeId(live?.stream_url || '');
   const isHopSession = live?.session_type === 'hop';
+  const liveViewerLinkShare = useMemo(() => buildLiveSessionLinkShare({
+    liveId: live?.id,
+    title: live?.title,
+    hostUsername: live?.host?.username,
+    isHopSession,
+    status: live?.status,
+  }), [isHopSession, live?.host?.username, live?.id, live?.status, live?.title]);
   const participants = Array.isArray(live?.participants) ? live.participants : [];
   const activeParticipants = useMemo(
     () => participants.filter((participant) => String(participant?.status || 'active').trim() !== 'left'),
@@ -6165,6 +6174,17 @@ export default function LivePage() {
               <button type="button" onClick={handleShareViewerLink} className="btn-secondary px-3 py-1.5 text-xs">
                 {copied ? 'Shared' : 'Share viewer link'}
               </button>
+              {user && liveViewerLinkShare ? (
+                <SendToDirectMessageButton
+                  linkShare={liveViewerLinkShare}
+                  label={isHopSession ? 'Invite via DM' : 'Send room'}
+                  title={isHopSession ? 'Send Hour of Power room' : 'Send live room'}
+                  description={isHopSession
+                    ? 'Choose a player to invite into this Hour of Power room.'
+                    : 'Choose a player to invite into this live session.'}
+                  className="px-3 py-1.5 text-xs"
+                />
+              ) : null}
               {live?.is_host && live?.status === 'live' && (
                 <>
                   <button type="button" onClick={handleSyncNow} disabled={syncing} className="btn-secondary px-3 py-1.5 text-xs">

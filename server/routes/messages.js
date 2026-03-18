@@ -257,8 +257,8 @@ function notifyRecipients(db, conversationId, senderUser, recipientIds, input) {
       db,
       userId,
       'direct_message',
-      buildNotificationTitle(senderUser?.username, input.messageType, input.share),
-      buildNotificationBody(input.content, input.messageType, input.share),
+      buildNotificationTitle(senderUser?.username, input.messageType, input.share, input.linkShare),
+      buildNotificationBody(input.content, input.messageType, input.share, input.linkShare),
       `/messages/${conversationId}`
     );
   }
@@ -362,6 +362,9 @@ router.post('/direct/:userId', requireAuth, (req, res) => {
     String(req.body.content || '').trim()
     || req.body.session_share
     || req.body.share
+    || req.body.link_share
+    || req.body.linkShare
+    || req.body.link
   )) {
     return res.status(400).json({ error: input.error });
   }

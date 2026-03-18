@@ -6,10 +6,11 @@ import UserPickerDialog from './UserPickerDialog';
 
 export default function SendToDirectMessageButton({
   share,
+  linkShare,
   label = 'Send to DM',
   className = '',
   title = 'Send to a player',
-  description = 'Choose a player to send this recap to.',
+  description = 'Choose a player to send this to.',
   navigateAfterSend = true,
 }) {
   const { user } = useAuth();
@@ -18,11 +19,13 @@ export default function SendToDirectMessageButton({
 
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
 
-  if (!user || !share) return null;
+  if (!user || (!share && !linkShare)) return null;
 
   const handleSelect = async (selectedUser) => {
-    const payload = await getOrCreateDirectConversation(selectedUser.id, {
+    const payload = await getOrCreateDirectConversation(selectedUser.id, share ? {
       session_share: share,
+    } : {
+      link_share: linkShare,
     });
     const conversationId = String(payload?.conversation?.id || '').trim();
     if (!conversationId) {

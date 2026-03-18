@@ -2,6 +2,15 @@ const { normalizeUserAvatarForList } = require('./avatarProxy');
 
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_SHARE_ROWS = 200;
+const MAX_LINK_LENGTH = 500;
+const LINK_SHARE_KIND_LABELS = {
+  live_session: 'Live session',
+  post: 'Post',
+  upscore: 'Upscore',
+  clear: 'Clear',
+  hour_of_power: 'Hour of Power',
+  link: 'Link',
+};
 
 function toInt(value) {
   return parseInt(value, 10) || 0;
@@ -107,6 +116,39 @@ function sanitizeSessionSharePayload(share) {
   };
 }
 
+function sanitizeRelativePath(value) {
+  const raw = String(value || '').trim().slice(0, MAX_LINK_LENGTH);
+  if (!raw || /^https?:\/\//i.test(raw)) return '';
+  return raw.startsWith('/') ? raw : `/${raw}`;
+}
+
+function sanitizeAbsoluteUrl(value) {
+  const raw = String(value || '').trim().slice(0, MAX_LINK_LENGTH);
+  if (!/^https?:\/\//i.test(raw)) return '';
+  return raw;
+}
+
+function sanitizeLinkSharePayload(linkShare) {
+  if (!linkShare || typeof linkShare !== 'object') return null;
+  const src = linkShare || {};
+  const path = sanitizeRelativePath(src.path || src.url_path || src.urlPath);
+  const url = sanitizeAbsoluteUrl(src.url);
+  if (!path && !url) return null;
+
+  const kindKey = String(src.kind || src.linkType || 'link').trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_');
+  const kind = LINK_SHARE_KIND_LABELS[kindKey] ? kindKey : 'link';
+
+  return {
+    version: 1,
+    kind,
+    path,
+    url,
+    title: String(src.title || '').trim().slice(0, 160),
+    subtitle: String(src.subtitle || '').trim().slice(0, 220),
+    buttonLabel: String(src.buttonLabel || src.button_label || '').trim().slice(0, 48),
+  };
+}
+
 function parseJsonObject(raw, fallback = {}) {
   try {
     const parsed = JSON.parse(String(raw || '{}'));
@@ -127,7 +169,15 @@ function buildDirectConversationKey(userIdA, userIdB) {
   return values.length === 2 ? values.join(':') : '';
 }
 
-function buildMessagePreview(messageType, content, share = null) {
+function buildLinkSharePreview(linkShare) {
+  if (!linkShare) return 'Shared link';
+  const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'Link';
+  return linkShare.title
+    ? `${kindLabel}: ${linkShare.title}`
+    : `Shared ${kindLabel.toLowerCase()}`;
+}
+
+function buildMessagePreview(messageType, content, share = null, linkShare = null) {
   const snippet = textSnippet(content, 120);
   if (snippet) return snippet;
   if (messageType === 'session_share' && share) {
@@ -138,10 +188,13 @@ function buildMessagePreview(messageType, content, share = null) {
     }
     return share.sessionTitle ? `Session recap: ${share.sessionTitle}` : 'Session recap';
   }
+  if (messageType === 'link_share' && linkShare) {
+    return buildLinkSharePreview(linkShare);
+  }
   return 'Message';
 }
 
-function buildNotificationTitle(senderUsername, messageType, share = null) {
+function buildNotificationTitle(senderUsername, messageType, share = null, linkShare = null) {
   const sender = String(senderUsername || 'Someone').trim() || 'Someone';
   if (messageType === 'session_share' && share?.shareType === 'hour_of_power') {
     return `${sender} shared an Hour of Power recap`;
@@ -149,10 +202,14 @@ function buildNotificationTitle(senderUsername, messageType, share = null) {
   if (messageType === 'session_share') {
     return `${sender} shared a session recap`;
   }
+  if (messageType === 'link_share' && linkShare) {
+    const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'link';
+    return `${sender} shared a ${kindLabel.toLowerCase()}`;
+  }
   return `${sender} sent you a message`;
 }
 
-function buildNotificationBody(content, messageType, share = null) {
+function buildNotificationBody(content, messageType, share = null, linkShare = null) {
   const snippet = textSnippet(content, 140);
   if (snippet) return snippet;
   if (messageType === 'session_share' && share?.sessionTitle) {
@@ -163,6 +220,13 @@ function buildNotificationBody(content, messageType, share = null) {
   }
   if (messageType === 'session_share') {
     return 'Session recap';
+  }
+  if (messageType === 'link_share' && linkShare?.title) {
+    return linkShare.title;
+  }
+  if (messageType === 'link_share' && linkShare) {
+    const kindLabel = LINK_SHARE_KIND_LABELS[linkShare.kind] || 'Link';
+    return `${kindLabel} shared with you`;
   }
   return 'Open the conversation to reply.';
 }
@@ -180,6 +244,7 @@ function normalizeConversationRow(row) {
   if (!row) return null;
   const lastMetadata = parseMessageMetadata(row.last_message_metadata_json);
   const share = sanitizeSessionSharePayload(lastMetadata.share);
+  const linkShare = sanitizeLinkSharePayload(lastMetadata.link_share);
   const messageType = String(row.last_message_type || '').trim() || 'text';
   const content = String(row.last_message_content || '');
 
@@ -197,8 +262,9 @@ function normalizeConversationRow(row) {
       message_type: messageType,
       content,
       share,
+      link_share: linkShare,
       created_at: row.last_message_at || '',
-      preview: buildMessagePreview(messageType, content, share),
+      preview: buildMessagePreview(messageType, content, share, linkShare),
     } : null,
   };
 }
@@ -206,6 +272,7 @@ function normalizeConversationRow(row) {
 function normalizeConversationMessage(row, viewerUserId = '') {
   const metadata = parseMessageMetadata(row?.metadata_json);
   const share = sanitizeSessionSharePayload(metadata.share);
+  const linkShare = sanitizeLinkSharePayload(metadata.link_share);
   const senderUserId = String(row?.sender_user_id || '').trim();
 
   return {
@@ -214,6 +281,7 @@ function normalizeConversationMessage(row, viewerUserId = '') {
     message_type: row?.message_type || 'text',
     content: String(row?.content || ''),
     share,
+    link_share: linkShare,
     created_at: row?.created_at || '',
     updated_at: row?.updated_at || '',
     sender: {
@@ -228,9 +296,10 @@ function normalizeConversationMessage(row, viewerUserId = '') {
 function normalizeConversationInput(raw = {}) {
   const content = normalizeMessageText(raw.content);
   const share = sanitizeSessionSharePayload(raw.session_share || raw.share || null);
-  const messageType = share ? 'session_share' : 'text';
+  const linkShare = sanitizeLinkSharePayload(raw.link_share || raw.linkShare || raw.link || null);
+  const messageType = share ? 'session_share' : (linkShare ? 'link_share' : 'text');
 
-  if (!content && !share) {
+  if (!content && !share && !linkShare) {
     return { error: 'Message is required' };
   }
 
@@ -238,7 +307,8 @@ function normalizeConversationInput(raw = {}) {
     messageType,
     content,
     share,
-    metadata: share ? { share } : {},
+    linkShare,
+    metadata: share ? { share } : (linkShare ? { link_share: linkShare } : {}),
   };
 }
 
@@ -252,6 +322,7 @@ module.exports = {
   normalizeConversationMessage,
   normalizeConversationRow,
   parseMessageMetadata,
+  sanitizeLinkSharePayload,
   sanitizeSessionSharePayload,
   textSnippet,
 };

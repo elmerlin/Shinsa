@@ -18,6 +18,7 @@ import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/
 import { mergeLiveSessionSummary, splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 import { buildYouTubeEmbedSrc } from '../utils/youtube';
+import { buildPostLinkShare } from '../utils/directMessageShares';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -873,6 +874,12 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const visibleContent = currentLive && rawVisibleContent.trim().startsWith('🔴 **Shinsa Live Recap**')
     ? ''
     : rawVisibleContent;
+  const postLinkShare = useMemo(() => buildPostLinkShare({
+    postId: post.id,
+    username: post.username,
+    text: visibleContent,
+    shareType: currentShare?.shareType || '',
+  }), [currentShare?.shareType, post.id, post.username, visibleContent]);
 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }
@@ -1068,6 +1075,15 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
             isOwner={user && user.id === post.user_id}
             focusCommentId={focusCommentId}
           />
+          {user && postLinkShare ? (
+            <SendToDirectMessageButton
+              linkShare={postLinkShare}
+              label="Send post"
+              title="Send post to a player"
+              description="Choose a player to send this post to."
+              className="px-2.5 py-1.5 text-sm text-gray-400 hover:bg-piu-dark/50 hover:text-white"
+            />
+          ) : null}
           <ShareButton path={`/post/${post.id}`} />
         </div>
       </div>

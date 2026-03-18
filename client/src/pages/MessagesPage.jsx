@@ -36,7 +36,56 @@ function getMessageLabel(message) {
   if (message.message_type === 'session_share') {
     return 'Session recap';
   }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'live_session') {
+    return 'Live session invite';
+  }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'post') {
+    return 'Shared post';
+  }
+  if (message.message_type === 'link_share') {
+    return 'Shared link';
+  }
   return '';
+}
+
+function MessageLinkCard({ linkShare }) {
+  if (!linkShare) return null;
+
+  const title = String(linkShare.title || '').trim() || 'Open link';
+  const subtitle = String(linkShare.subtitle || '').trim();
+  const badge = linkShare.kind === 'live_session'
+    ? 'Live session'
+    : linkShare.kind === 'post'
+      ? 'Post'
+      : 'Link';
+  const buttonLabel = String(linkShare.buttonLabel || '').trim() || 'Open';
+
+  return (
+    <div className="rounded-xl border border-piu-border/50 bg-piu-dark/45 px-3 py-3">
+      <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">{badge}</p>
+      <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
+      {subtitle ? <p className="mt-1 text-xs text-gray-400">{subtitle}</p> : null}
+      <div className="mt-3">
+        {linkShare.path ? (
+          <Link
+            to={linkShare.path}
+            className="inline-flex rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+          >
+            {buttonLabel}
+          </Link>
+        ) : (
+          <a
+            href={linkShare.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex rounded-md border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:text-white"
+          >
+            {buttonLabel}
+          </a>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function MessageBubble({ message }) {
@@ -67,6 +116,16 @@ function MessageBubble({ message }) {
               </p>
             ) : null}
             <SessionShareCard share={message.share} />
+          </div>
+        ) : null}
+        {message?.link_share ? (
+          <div className={message?.content || message?.share ? 'mt-3' : ''}>
+            {shareLabel ? (
+              <p className="mb-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">
+                {shareLabel}
+              </p>
+            ) : null}
+            <MessageLinkCard linkShare={message.link_share} />
           </div>
         ) : null}
       </div>
