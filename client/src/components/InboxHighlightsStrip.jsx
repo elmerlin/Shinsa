@@ -47,6 +47,22 @@ function renderLinkButton(link, className = '') {
   );
 }
 
+function formatStoryScoreValue(value) {
+  return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function getStoryGradeTone(grade = '') {
+  const normalized = String(grade || '').trim().toUpperCase();
+  if (normalized.includes('SSS')) return 'text-sky-300';
+  if (normalized.includes('SS')) return 'text-yellow-300';
+  if (normalized.includes('S')) return 'text-amber-300';
+  if (normalized.includes('AAA')) return 'text-slate-100';
+  if (normalized.includes('AA')) return 'text-orange-200';
+  if (normalized.includes('A')) return 'text-lime-200';
+  if (normalized === 'B' || normalized === 'C') return 'text-gray-300';
+  return 'text-gray-400';
+}
+
 const MODAL_INPUT_CLASS = 'w-full rounded-[1.4rem] border border-cyan-300/18 bg-[#151b29] px-4 py-3 text-sm text-white placeholder:text-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-cyan-300/35 focus:bg-[#182032] focus:outline-none';
 const MODAL_INPUT_STYLE = { color: '#f8fbff', WebkitTextFillColor: '#f8fbff', caretColor: '#67e8f9' };
 
@@ -90,7 +106,7 @@ function HighlightAvatar({
           className="relative"
           aria-label={isSelf ? 'Open your story tools' : `Open ${user?.username || 'story'} story`}
         >
-          <span className={`relative flex h-[3.85rem] w-[3.85rem] items-center justify-center rounded-full p-[3px] shadow-[0_12px_30px_rgba(0,0,0,0.25)] transition-transform group-hover:scale-[1.02] ${frameClass}`}>
+          <span className={`relative flex h-[3.65rem] w-[3.65rem] items-center justify-center rounded-full p-[3px] shadow-[0_12px_30px_rgba(0,0,0,0.25)] transition-transform group-hover:scale-[1.02] ${frameClass}`}>
             <span className="absolute inset-[3px] rounded-full border border-white/10" />
             <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#070b13]">
               {user?.avatar ? (
@@ -112,7 +128,7 @@ function HighlightAvatar({
           </button>
         ) : null}
       </div>
-      <span className="max-w-[4.8rem] truncate text-[11px] font-display font-bold text-gray-200">
+      <span className="max-w-[4.55rem] truncate text-[11px] font-display font-bold text-gray-200">
         {isSelf ? 'Your Status' : (user?.username || 'Player')}
       </span>
     </div>
@@ -127,7 +143,7 @@ function HighlightNoteBubble({ note, isSelf = false, onClick = null }) {
     <button
       type="button"
       onClick={onClick}
-      className={`absolute left-1/2 top-0 z-10 flex min-h-[2.45rem] w-max max-w-[5.75rem] -translate-x-1/2 items-center rounded-[1.15rem] px-2.5 py-1.5 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
+      className={`absolute left-1/2 top-0 z-10 flex min-h-[2.35rem] w-max max-w-[5.7rem] -translate-x-1/2 items-center rounded-[1.15rem] px-2.5 py-1.5 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
         content
           ? 'bg-[#343945] text-white hover:bg-[#3b4150]'
           : 'border border-dashed border-white/12 bg-[#262b35] text-gray-300 hover:bg-[#2c313c]'
@@ -160,8 +176,8 @@ function HighlightCircle({
   };
 
   return (
-    <div className="flex w-[4.55rem] shrink-0 flex-col items-center pt-2">
-      <div className="relative pt-[2.15rem]">
+    <div className="flex w-[4.4rem] shrink-0 flex-col items-center pt-1.5">
+      <div className="relative pt-[2.05rem]">
         <HighlightNoteBubble
           note={note}
           isSelf={circle?.is_self}
@@ -194,6 +210,74 @@ function StoryCard({ story }) {
   const plan = planSplit.plan || null;
   const visibleCaption = String(planSplit.text || '').trim();
   const hasEmbeddedCard = !!(summary || share || live || plan);
+  const bareHourOfPowerShare = story.type === 'post'
+    && !story.media_url
+    && share?.shareType === 'hour_of_power'
+    && !summary
+    && !live
+    && !plan;
+
+  if (story.type === 'score_roundup') {
+    const rows = Array.isArray(story.scores) ? story.scores.slice(0, 5) : [];
+    return (
+      <div className="w-full max-w-sm space-y-3">
+        <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_44%),linear-gradient(160deg,#0b1019,#141b2a)] px-4 py-4 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">
+                {story.entry_kind === 'clear' ? 'New clears' : 'New upscores'}
+              </p>
+              <h3 className="mt-1 font-display text-2xl font-black leading-none text-white">
+                {story.title || 'Score update'}
+              </h3>
+              {story.subtitle ? <p className="mt-2 text-xs text-gray-400">{story.subtitle}</p> : null}
+            </div>
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-cyan-100">
+              {rows.length}/{Math.max(rows.length, parseInt(story.total_count, 10) || rows.length)}
+            </span>
+          </div>
+
+          <div className="mt-4 space-y-2.5">
+            {rows.map((entry, index) => (
+              <div key={`${story.id || 'story'}:${entry.song_title || 'song'}:${entry.mode || ''}:${entry.level || 0}:${index}`} className="flex items-center gap-3 rounded-[1.15rem] border border-white/8 bg-black/22 px-3 py-2.5">
+                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#0f1522]">
+                  {entry.jacket_url ? (
+                    <img src={entry.jacket_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_45%),linear-gradient(160deg,#0a101b,#13192a)] text-[10px] font-display font-bold uppercase tracking-[0.12em] text-gray-400">
+                      {String(entry.mode || 'PIU').slice(0, 3)}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-display text-sm font-black text-white">{entry.song_title || 'Song'}</p>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {entry.mode || 'Mode'}
+                    {entry.level ? ` ${entry.level}` : ''}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-display text-sm font-black text-white">{formatStoryScoreValue(entry.score)}</p>
+                  <p className={`mt-1 text-xs font-display font-bold ${getStoryGradeTone(entry.grade)}`}>{entry.grade || 'Score'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {story.caption ? (
+          <div className="rounded-[1.4rem] border border-white/10 bg-black/35 px-4 py-3 text-sm leading-6 text-gray-100 shadow-[0_14px_32px_rgba(0,0,0,0.24)]">
+            {renderFormattedText(story.caption)}
+          </div>
+        ) : null}
+
+        <div className="space-y-3">
+          {renderLinkButton(story.link, 'inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white hover:bg-white/12')}
+          <StickerRow tokens={story.sticker_tokens} />
+        </div>
+      </div>
+    );
+  }
 
   if (story.snapshot) {
     return (
@@ -215,6 +299,22 @@ function StoryCard({ story }) {
   }
 
   if (story.type === 'post') {
+    if (bareHourOfPowerShare) {
+      return (
+        <div className="w-full max-w-sm space-y-3">
+          <SessionShareCard
+            share={share}
+            title="Hour of Power Recap"
+            compact
+            className="shadow-[0_18px_42px_rgba(0,0,0,0.28)]"
+          />
+          {visibleCaption ? <div className="text-sm leading-6 text-gray-100">{renderFormattedText(visibleCaption)}</div> : null}
+          {renderLinkButton(story.link, 'inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white hover:bg-white/12')}
+          <StickerRow tokens={story.sticker_tokens} />
+        </div>
+      );
+    }
+
     return (
       <div className="w-full max-w-sm overflow-hidden rounded-[1.8rem] border border-white/10 bg-black/35 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
         {story.media_url ? (
@@ -793,21 +893,21 @@ export default function InboxHighlightsStrip({
   if (!loading && orderedCircles.length === 0 && !error) return null;
 
   return (
-    <div className="border-b border-piu-border/25 bg-[linear-gradient(180deg,rgba(7,12,21,0.92),rgba(7,12,21,0.58))] px-4 pb-4 pt-3 sm:px-5">
-      {loading ? (
-        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="border-b border-piu-border/25 bg-[linear-gradient(180deg,rgba(7,12,21,0.92),rgba(7,12,21,0.58))] px-4 pb-3 pt-2.5 sm:px-5">
+        {loading ? (
+        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[0, 1, 2, 3].map((index) => (
-            <div key={index} className="flex w-[4.55rem] shrink-0 flex-col items-center pt-2">
-              <div className="relative pt-[2.15rem]">
+            <div key={index} className="flex w-[4.4rem] shrink-0 flex-col items-center pt-1.5">
+              <div className="relative pt-[2.05rem]">
                 <div className="absolute left-1/2 top-0 h-[2.45rem] w-[5.4rem] -translate-x-1/2 rounded-[1.15rem] bg-white/6" />
-                <div className="h-[3.85rem] w-[3.85rem] animate-pulse rounded-full bg-white/8" />
+                <div className="h-[3.65rem] w-[3.65rem] animate-pulse rounded-full bg-white/8" />
               </div>
               <div className="mt-1.5 h-3 w-12 animate-pulse rounded-full bg-white/8" />
             </div>
           ))}
         </div>
       ) : (
-        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {orderedCircles.map((circle) => (
             <HighlightCircle
               key={circle.user.id}

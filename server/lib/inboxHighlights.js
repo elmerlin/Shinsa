@@ -357,6 +357,38 @@ function buildSnapshotStoryItem({
   };
 }
 
+function buildScoreRoundupStoryItem({
+  id = '',
+  user,
+  createdAt = '',
+  expiresAt = '',
+  caption = '',
+  link = null,
+  stickerTokens = [],
+  source = null,
+  title = '',
+  subtitle = '',
+  entries = [],
+  entryKind = 'score',
+}) {
+  return {
+    id,
+    type: 'score_roundup',
+    created_at: createdAt,
+    expires_at: expiresAt,
+    caption,
+    title,
+    subtitle,
+    sticker_tokens: sanitizeStickerTokens(stickerTokens),
+    link,
+    source,
+    user,
+    entry_kind: entryKind,
+    scores: Array.isArray(entries) ? entries.slice(0, 5) : [],
+    total_count: Array.isArray(entries) ? entries.length : 0,
+  };
+}
+
 function buildLinkStoryItem({
   id = '',
   user,
@@ -398,8 +430,39 @@ function getStoryExpiry(createdAt) {
 function buildUpscoreStoryItem(db, row, user) {
   if (!row || !user) return null;
   const items = parseJsonArray(row.upscores_json, []).filter(Boolean);
-  const primary = enrichStorySnapshotEntry(db, user.id, row.created_at, items[0] || null, { scoreKey: 'new_score' });
+  const enrichedItems = items
+    .map((entry) => enrichStorySnapshotEntry(db, user.id, row.created_at, entry, { scoreKey: 'new_score' }))
+    .filter(Boolean);
+  const primary = enrichedItems[0] || null;
   if (!primary) return null;
+
+  if (enrichedItems.length > 1) {
+    return buildScoreRoundupStoryItem({
+      id: `upscore:${row.id}`,
+      user,
+      createdAt: row.created_at || '',
+      expiresAt: getStoryExpiry(row.created_at),
+      caption: normalizeText(row.caption || '', 220),
+      stickerTokens: [],
+      link: buildStoryLink({
+        path: `/upscore/${row.id}`,
+        label: 'Open Upscore',
+      }),
+      source: { kind: 'upscore', id: String(row.id || '') },
+      title: `${enrichedItems.length} new upscores`,
+      subtitle: 'Top songs from the post',
+      entryKind: 'upscore',
+      entries: enrichedItems.map((entry) => ({
+        song_title: entry.song_title || '',
+        mode: entry.mode || '',
+        level: toInt(entry.level),
+        score: toInt(entry.new_score || entry.score),
+        grade: String(entry.new_grade || entry.grade || '').trim(),
+        jacket_url: entry.jacket_url || entry.background_url || '',
+      })),
+    });
+  }
+
   const displayScore = toInt(primary.new_score || primary.score);
   const displayGrade = String(primary.new_grade || primary.grade || '').trim();
   return buildSnapshotStoryItem({
@@ -454,8 +517,40 @@ function buildClearStoryItem(db, row, user) {
     plate: row.plate || '',
     background_url: row.background_url || '',
   };
-  const primary = enrichStorySnapshotEntry(db, user.id, row.created_at, parsedClears[0] || fallbackClear, { scoreKey: 'score' });
+  const sourceItems = parsedClears.length > 0 ? parsedClears : [fallbackClear];
+  const enrichedItems = sourceItems
+    .map((entry) => enrichStorySnapshotEntry(db, user.id, row.created_at, entry, { scoreKey: 'score' }))
+    .filter(Boolean);
+  const primary = enrichedItems[0] || null;
   if (!primary) return null;
+
+  if (enrichedItems.length > 1) {
+    return buildScoreRoundupStoryItem({
+      id: `clear:${row.id}`,
+      user,
+      createdAt: row.created_at || '',
+      expiresAt: getStoryExpiry(row.created_at),
+      caption: normalizeText(row.caption || '', 220),
+      stickerTokens: [],
+      link: buildStoryLink({
+        path: `/clear/${row.id}`,
+        label: 'Open Clear',
+      }),
+      source: { kind: 'clear', id: String(row.id || '') },
+      title: `${enrichedItems.length} new clears`,
+      subtitle: 'Top songs from the post',
+      entryKind: 'clear',
+      entries: enrichedItems.map((entry) => ({
+        song_title: entry.song_title || '',
+        mode: entry.mode || '',
+        level: toInt(entry.level),
+        score: toInt(entry.score),
+        grade: String(entry.grade || '').trim(),
+        jacket_url: entry.jacket_url || entry.background_url || '',
+      })),
+    });
+  }
+
   return buildSnapshotStoryItem({
     id: `clear:${row.id}`,
     user,

@@ -723,20 +723,20 @@ function InboxView({
 }) {
   return (
     <div className="flex min-h-screen flex-col sm:min-h-0 sm:mx-auto sm:w-full sm:max-w-3xl sm:px-4 sm:py-6">
-      <section className="flex flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
+      <section className="relative flex flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
         <div
-          className="flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/85 px-4 pb-3 pt-4 backdrop-blur-md sm:px-5 sm:pt-4"
-          style={{ paddingTop: 'max(env(safe-area-inset-top), 1rem)' }}
+          className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/90 px-4 py-3 backdrop-blur-md sm:px-5"
+          style={{ paddingTop: 'max(env(safe-area-inset-top), 0.75rem)' }}
         >
           <div className="min-w-0">
-            <h1 className="text-xl font-display font-black text-white sm:text-2xl">Messages</h1>
+            <h1 className="text-[2.35rem] leading-none font-display font-black text-white sm:text-[2.65rem]">Messages</h1>
           </div>
           <ActionIconButton
             onClick={onStartChat}
             title="New chat"
             ariaLabel="Start new chat"
             tone="cyan"
-            className="h-12 w-12 justify-center rounded-2xl border border-cyan-400/30 bg-cyan-500/10 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/45"
+            className="h-11 w-11 justify-center rounded-[1.2rem] border border-cyan-400/30 bg-cyan-500/10 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/45"
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m-7-7h14" />
