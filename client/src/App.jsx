@@ -943,6 +943,8 @@ export default function App() {
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
   const isLiveOverlay = /^\/live\/[^/]+\/overlay(?:\/|$)/.test(location.pathname);
+  const isMessagesRoute = /^\/messages(?:\/|$)/.test(location.pathname);
+  const hideMobileChrome = isMessagesRoute;
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canShowDojoPopup = canAccessCheckin && isPumpDojoMember(user);
@@ -1214,7 +1216,7 @@ export default function App() {
     <div className={`min-h-screen ${isLiveOverlay ? '' : 'flex flex-col'}`}>
       {/* Header */}
       {!isLiveOverlay ? (
-      <header className="border-b border-piu-border bg-piu-card/80 backdrop-blur-md sticky top-0 z-50">
+      <header className={`border-b border-piu-border bg-piu-card/80 backdrop-blur-md sticky top-0 z-50 ${hideMobileChrome ? 'hidden sm:block' : ''}`}>
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
           <Link to="/" onClick={scrollToTop} className="group">
             <img
@@ -1290,7 +1292,7 @@ export default function App() {
       ) : null}
 
       {/* Main */}
-      <main className={isLiveOverlay ? 'min-h-screen' : `flex-1 ${user ? 'pb-16 sm:pb-0' : ''}`}>
+      <main className={isLiveOverlay ? 'min-h-screen' : `flex-1 ${user && !hideMobileChrome ? 'pb-16 sm:pb-0' : ''}`}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tournament/new" element={<TournamentSetup />} />
@@ -1389,7 +1391,7 @@ export default function App() {
       ) : null}
 
       {/* Mobile Bottom Navigation — Instagram style */}
-      {!isLiveOverlay && user && <MobileBottomNav />}
+      {!isLiveOverlay && user && !hideMobileChrome && <MobileBottomNav />}
       <TranslationEditorDrawer />
     </div>
   );

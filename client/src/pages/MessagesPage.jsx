@@ -19,6 +19,8 @@ import {
   buildUpscoreChallengeCard,
 } from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
+import { renderFormattedText } from '../utils/formatText';
+import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import SessionShareCard from '../components/SessionShareCard';
 import UserPickerDialog from '../components/UserPickerDialog';
 
@@ -119,6 +121,12 @@ function getClearItems(item) {
   } catch {
     return fallback;
   }
+}
+
+function appendStickerToken(value, token) {
+  const current = String(value || '');
+  const needsSpace = current.length > 0 && !/\s$/.test(current);
+  return `${current}${needsSpace ? ' ' : ''}${token} `;
 }
 
 function formatConversationTime(value) {
@@ -229,19 +237,19 @@ function MessageLinkCard({
   const buttonLabel = String(linkShare.buttonLabel || '').trim() || 'Open';
   const isCompare = linkShare.kind === 'chart_compare';
   const frameClass = isCompare
-    ? 'border-emerald-400/30 bg-emerald-500/10'
-    : 'border-piu-border/50 bg-piu-dark/45';
-  const badgeClass = isCompare ? 'text-emerald-200/90' : 'text-cyan-200/80';
+    ? 'border-emerald-300/25 bg-emerald-500/10'
+    : 'border-piu-border/60 bg-piu-card/70';
+  const badgeClass = isCompare ? 'text-emerald-200/85' : 'text-cyan-200/75';
   const buttonClass = isCompare
-    ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-100 hover:text-white'
-    : 'border-cyan-400/30 bg-cyan-500/10 text-cyan-100 hover:text-white';
+    ? 'border-emerald-300/30 bg-emerald-500/12 text-emerald-100 hover:border-emerald-200/40 hover:text-white'
+    : 'border-piu-border/70 bg-piu-dark/40 text-cyan-100 hover:border-cyan-300/35 hover:text-white';
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
 
   return (
-    <div className={`rounded-xl border px-3 py-3 ${frameClass}`}>
+    <div className={`w-full rounded-[1.35rem] border px-3.5 py-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] ${frameClass}`}>
       <p className={`text-[10px] font-display font-bold uppercase tracking-[0.2em] ${badgeClass}`}>{badge}</p>
       <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
-      {subtitle ? <p className="mt-1 text-xs text-gray-400">{subtitle}</p> : null}
+      {subtitle ? <p className="mt-1 text-xs text-gray-300">{subtitle}</p> : null}
       {isCompare && linkShare.statusLabel ? (
         <div className="mt-3">
           <CompareStatusPill statusKind={linkShare.statusKind} statusLabel={linkShare.statusLabel} />
@@ -279,7 +287,7 @@ function MessageLinkCard({
             type="button"
             onClick={compareAction}
             disabled={compareLoading}
-            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
@@ -289,7 +297,7 @@ function MessageLinkCard({
             type="button"
             onClick={followUpAction}
             disabled={followUpLoading}
-            className="inline-flex rounded-md border border-amber-300/35 bg-amber-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-amber-300/30 bg-amber-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:border-amber-200/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {followUpLoading ? 'Sending...' : followUpLabel}
           </button>
@@ -320,8 +328,8 @@ function MessageChallengeCard({
   const hasLifecycleStatus = !!String(challengeCard.statusKind || '').trim();
 
   return (
-    <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-3">
-      <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-amber-200/90">{badge}</p>
+    <div className="w-full rounded-[1.35rem] border border-piu-border/65 bg-piu-card/80 px-3.5 py-3.5 shadow-[0_12px_30px_rgba(0,0,0,0.2)]">
+      <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-amber-200/85">{badge}</p>
       <p className="mt-1 text-sm font-display font-black text-white">{title}</p>
       {subtitle ? <p className="mt-1 text-xs text-gray-300">{subtitle}</p> : null}
       {hasLifecycleStatus ? (
@@ -330,11 +338,11 @@ function MessageChallengeCard({
         </div>
       ) : null}
       {targetLabel ? (
-        <p className="mt-3 inline-flex rounded-md border border-amber-300/25 bg-black/15 px-2.5 py-1 text-[11px] font-display font-bold text-amber-100">
+        <p className="mt-3 inline-flex rounded-md border border-amber-300/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-display font-bold text-amber-100">
           {targetLabel}
         </p>
       ) : null}
-      {detailLabel ? <p className="mt-2 text-xs text-amber-100/80">{detailLabel}</p> : null}
+      {detailLabel ? <p className="mt-2 text-xs text-gray-300">{detailLabel}</p> : null}
       {responseStatus ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <CompareStatusPill
@@ -347,7 +355,7 @@ function MessageChallengeCard({
       <div className="mt-3 flex flex-wrap gap-2">
         <Link
           to={challengeCard.path}
-          className="inline-flex rounded-md border border-amber-300/30 bg-amber-400/15 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:text-white"
+          className="inline-flex rounded-md border border-piu-border/70 bg-piu-dark/45 px-3 py-1.5 text-[11px] font-display font-bold text-amber-100 transition-colors hover:border-amber-300/35 hover:text-white"
         >
           {buttonLabel}
         </Link>
@@ -356,7 +364,7 @@ function MessageChallengeCard({
             type="button"
             onClick={compareAction}
             disabled={compareLoading}
-            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
@@ -366,7 +374,7 @@ function MessageChallengeCard({
             type="button"
             onClick={lifecycleAction}
             disabled={lifecycleLoading}
-            className="inline-flex rounded-md border border-sky-300/35 bg-sky-500/15 px-3 py-1.5 text-[11px] font-display font-bold text-sky-100 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex rounded-md border border-sky-300/35 bg-sky-500/12 px-3 py-1.5 text-[11px] font-display font-bold text-sky-100 transition-colors hover:border-sky-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {lifecycleLoading ? 'Sending...' : lifecycleLabel}
           </button>
@@ -388,12 +396,21 @@ function MessageBubble({
   lifecycleLabel = 'Accept',
 }) {
   const isOwn = !!message?.is_own;
+  const hasContent = !!String(message?.content || '').trim();
+  const hasShare = !!message?.share;
+  const hasLinkShare = !!message?.link_share;
+  const hasChallengeCard = !!message?.challenge_card;
+  const hasRichAttachment = hasShare || hasLinkShare || hasChallengeCard;
+  const isAttachmentOnly = hasRichAttachment && !hasContent;
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
   const bubbleTone = isOwn
-    ? 'border-cyan-400/30 bg-cyan-500/10'
-    : 'border-piu-border/60 bg-piu-dark/60';
+    ? 'border-cyan-400/20 bg-cyan-500/10'
+    : 'border-piu-border/60 bg-piu-dark/55';
   const senderName = message?.sender?.username || 'Unknown';
   const shareLabel = getMessageLabel(message);
+  const bubbleClass = isAttachmentOnly
+    ? 'w-full max-w-[21.5rem] sm:max-w-[24rem]'
+    : `w-fit max-w-[85%] sm:max-w-[32rem] rounded-[1.4rem] border ${bubbleTone} px-3 py-2.5 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
 
   return (
     <div className={`flex flex-col ${alignmentClass}`}>
@@ -402,13 +419,15 @@ function MessageBubble({
           {senderName}
         </p>
       ) : null}
-      <div className={`max-w-full rounded-2xl border ${bubbleTone} px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.18)]`}>
-        {message?.content ? (
-          <p className="whitespace-pre-wrap break-words text-sm text-gray-100">{message.content}</p>
+      <div className={bubbleClass}>
+        {hasContent ? (
+          <div className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-100">
+            {renderFormattedText(message.content)}
+          </div>
         ) : null}
-        {message?.share ? (
-          <div className={message?.content ? 'mt-3' : ''}>
-            {shareLabel ? (
+        {hasShare ? (
+          <div className={hasContent ? 'mt-3' : ''}>
+            {shareLabel && !isAttachmentOnly ? (
               <p className="mb-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">
                 {shareLabel}
               </p>
@@ -416,13 +435,8 @@ function MessageBubble({
             <SessionShareCard share={message.share} />
           </div>
         ) : null}
-        {message?.link_share ? (
-          <div className={message?.content || message?.share ? 'mt-3' : ''}>
-            {shareLabel ? (
-              <p className="mb-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">
-                {shareLabel}
-              </p>
-            ) : null}
+        {hasLinkShare ? (
+          <div className={hasContent || hasShare ? 'mt-3' : ''}>
             <MessageLinkCard
               linkShare={message.link_share}
               compareAction={onReplyWithBest}
@@ -433,13 +447,8 @@ function MessageBubble({
             />
           </div>
         ) : null}
-        {message?.challenge_card ? (
-          <div className={message?.content || message?.share || message?.link_share ? 'mt-3' : ''}>
-            {shareLabel ? (
-              <p className="mb-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">
-                {shareLabel}
-              </p>
-            ) : null}
+        {hasChallengeCard ? (
+          <div className={hasContent || hasShare || hasLinkShare ? 'mt-3' : ''}>
             <MessageChallengeCard
               challengeCard={message.challenge_card}
               compareAction={onReplyWithBest}
@@ -463,7 +472,7 @@ function ConversationRow({ conversation }) {
   return (
     <Link
       to={`/messages/${conversation.id}`}
-      className="flex items-center gap-3 border-b border-piu-border/20 px-4 py-3 transition-colors hover:bg-piu-dark/35"
+      className="flex items-center gap-3 border-b border-piu-border/20 px-4 py-3.5 transition-colors hover:bg-piu-dark/35 sm:px-5"
     >
       {partner?.avatar ? (
         <img src={partner.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
@@ -480,7 +489,7 @@ function ConversationRow({ conversation }) {
           <span className="shrink-0 text-[10px] text-gray-500">{formatConversationTime(conversation.last_message_at)}</span>
         </div>
         <p className={`mt-1 truncate text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
-          {conversation?.last_message?.preview || 'Open conversation'}
+          {conversation?.last_message?.preview || 'Started a conversation'}
         </p>
       </div>
       {conversation.unread_count > 0 ? (
@@ -499,33 +508,36 @@ function InboxView({
   onStartChat,
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4 sm:py-6">
-      <section className="card min-h-[16rem] overflow-hidden p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
-          <div>
-            <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Inbox</p>
-            <h1 className="mt-1 text-lg font-display font-black text-white">Direct Messages</h1>
+    <div className="flex min-h-screen flex-col sm:min-h-0 sm:mx-auto sm:w-full sm:max-w-3xl sm:px-4 sm:py-6">
+      <section className="flex flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
+        <div
+          className="flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/85 px-4 pb-3 pt-4 backdrop-blur-md sm:px-5 sm:pt-4"
+          style={{ paddingTop: 'max(env(safe-area-inset-top), 1rem)' }}
+        >
+          <div className="min-w-0">
+            <h1 className="text-xl font-display font-black text-white sm:text-2xl">Messages</h1>
+            <p className="mt-1 text-xs text-gray-400">Keep your score shares, challenges, and chats moving.</p>
           </div>
           <button
             type="button"
             onClick={onStartChat}
-            className="rounded-lg border border-cyan-400/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-display font-bold text-cyan-100 transition-colors hover:text-white"
+            className="rounded-xl border border-cyan-400/30 bg-cyan-500/10 px-3.5 py-2 text-xs font-display font-bold text-cyan-100 transition-colors hover:border-cyan-300/45 hover:text-white"
           >
             New chat
           </button>
         </div>
 
-        <div className="max-h-[calc(100vh-13rem)] overflow-y-auto">
+        <div className="flex-1 overflow-y-auto">
           {loadingConversations ? (
-            <div className="px-4 py-8 text-center text-sm text-gray-500">Loading conversations...</div>
+            <div className="px-4 py-10 text-center text-sm text-gray-500">Loading conversations...</div>
           ) : conversations.length === 0 ? (
-            <div className="px-4 py-10 text-center">
-              <p className="text-sm text-gray-400">No conversations yet.</p>
-              <p className="mt-1 text-xs text-gray-500">Start one from here, from a profile, or by sending a play into DM.</p>
+            <div className="px-5 py-14 text-center sm:px-8">
+              <p className="text-sm text-gray-300">No messages yet.</p>
+              <p className="mt-2 text-xs leading-6 text-gray-500">Start from here, from a profile, or by sending a play into DM.</p>
               <button
                 type="button"
                 onClick={onStartChat}
-                className="mt-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-4 py-2 text-sm font-display font-bold text-cyan-100 transition-colors hover:text-white"
+                className="mt-5 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-4 py-2 text-sm font-display font-bold text-cyan-100 transition-colors hover:border-cyan-300/45 hover:text-white"
               >
                 Start new chat
               </button>
@@ -552,11 +564,14 @@ function ConversationView({
   actionError,
   messages,
   getMessageStatus,
+  messagesViewportRef,
   messagesEndRef,
   draft,
+  draftInputRef,
   onDraftChange,
   onComposerKeyDown,
   onSend,
+  onInsertSticker,
   onReplyWithBest,
   canReplyWithBest,
   onSendRematch,
@@ -572,9 +587,12 @@ function ConversationView({
   sending,
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-4 sm:py-6">
-      <section className="card flex min-h-[40rem] flex-col overflow-hidden p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
+    <div className="flex min-h-screen flex-col overflow-hidden sm:min-h-0 sm:mx-auto sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
+      <section className="flex flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
+        <div
+          className="flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/88 px-4 pb-3 pt-4 backdrop-blur-md sm:px-5 sm:pt-4"
+          style={{ paddingTop: 'max(env(safe-area-inset-top), 0.9rem)' }}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <Link
               to="/messages"
@@ -583,22 +601,29 @@ function ConversationView({
             >
               ←
             </Link>
+            {activePartner?.avatar ? (
+              <img src={activePartner.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
+                {(activePartner?.username || 'U').slice(0, 1).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
-              <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-cyan-300">Conversation</p>
-              <h1 className="mt-1 truncate text-lg font-display font-black text-white">{activePartner?.username || 'Unknown player'}</h1>
+              <h1 className="truncate text-lg font-display font-black text-white">{activePartner?.username || 'Unknown player'}</h1>
+              <p className="mt-0.5 text-[11px] text-gray-500">Direct messages</p>
             </div>
           </div>
           {activePartner?.id ? (
             <Link
               to={getProfilePath(activePartner.id, activePartner.username)}
-              className="rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white"
+              className="hidden rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white sm:inline-flex"
             >
               View profile
             </Link>
           ) : null}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div ref={messagesViewportRef} className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {loadingMessages && messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading conversation...</div>
           ) : messageError ? (
@@ -618,7 +643,7 @@ function ConversationView({
           ) : messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet. Say hello.</div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-2">
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}
@@ -642,24 +667,35 @@ function ConversationView({
           )}
         </div>
 
-        <div className="border-t border-piu-border/50 bg-piu-dark/30 px-4 py-3">
+        <div
+          className="border-t border-piu-border/40 bg-piu-card/92 px-4 pb-3 pt-3 backdrop-blur-md sm:px-5"
+          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+        >
           {actionError ? <p className="mb-3 text-sm text-red-300">{actionError}</p> : null}
-          <div className="flex items-end gap-3">
+          <div className="flex items-end gap-2.5">
+            <DojoCatStickerPicker
+              compact
+              onSelect={onInsertSticker}
+              buttonClassName="h-11 w-11 rounded-full border border-piu-border/65 bg-piu-dark/55 text-lg text-gray-300 hover:border-cyan-300/35 hover:bg-piu-dark/80 hover:text-white"
+              panelClassName="w-[min(21rem,calc(100vw-1rem))]"
+              align="left"
+            />
             <textarea
+              ref={draftInputRef}
               value={draft}
               onChange={(event) => onDraftChange(event.target.value)}
               onKeyDown={onComposerKeyDown}
-              rows={3}
+              rows={1}
               maxLength={4000}
               placeholder={`Message ${activePartner?.username || 'player'}...`}
-              className="input-field min-h-[5.25rem] flex-1 resize-none"
+              className="min-h-[2.75rem] max-h-40 flex-1 resize-none rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
               disabled={sending || !activeConversation}
             />
             <button
               type="button"
               onClick={onSend}
               disabled={sending || !draft.trim() || !activeConversation}
-              className="rounded-xl bg-cyan-500 px-4 py-3 text-sm font-display font-black text-white transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-cyan-500 px-4 text-sm font-display font-black text-white transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? 'Sending...' : 'Send'}
             </button>
@@ -675,6 +711,9 @@ export default function MessagesPage() {
   const navigate = useNavigate();
   const { conversationId = '' } = useParams();
   const messagesEndRef = useRef(null);
+  const messagesViewportRef = useRef(null);
+  const draftInputRef = useRef(null);
+  const lastAutoScrollKeyRef = useRef('');
   const chartKeyMapRef = useRef(null);
   const chartKeyMapPromiseRef = useRef(null);
 
@@ -1000,16 +1039,43 @@ export default function MessagesPage() {
   }, [conversationId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const input = draftInputRef.current;
+    if (!input) return;
+    input.style.height = '0px';
+    input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+  }, [draft, conversationId]);
+
+  useEffect(() => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport) return;
+
+    const lastMessage = messages[messages.length - 1] || null;
+    const nextKey = conversationId
+      ? `${conversationId}:${messages.length}:${lastMessage?.id || 'empty'}`
+      : '';
+    const previousKey = lastAutoScrollKeyRef.current;
+    const isConversationChange = !previousKey || !previousKey.startsWith(`${conversationId}:`);
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    const isNearBottom = distanceFromBottom < 120;
+    const shouldScroll = isConversationChange || (nextKey !== previousKey && (isNearBottom || lastMessage?.is_own));
+
+    if (!shouldScroll) return;
+
+    lastAutoScrollKeyRef.current = nextKey;
+    const behavior = isConversationChange ? 'auto' : 'smooth';
+    window.requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
+    });
   }, [messages, conversationId]);
 
   const handleSend = async () => {
     if (!conversationId || sending) return;
-    if (!draft.trim()) return;
+    const trimmedDraft = draft.trim();
+    if (!trimmedDraft) return;
     setActionError('');
     setSending(true);
     try {
-      const payload = await sendConversationMessage(conversationId, { content: draft });
+      const payload = await sendConversationMessage(conversationId, { content: trimmedDraft });
       setDraft('');
       if (payload?.message) {
         setMessages((prev) => [...prev, payload.message]);
@@ -1031,6 +1097,17 @@ export default function MessagesPage() {
       handleSend();
     }
   };
+
+  const handleInsertSticker = useCallback((token) => {
+    setDraft((prev) => appendStickerToken(prev, token));
+    window.requestAnimationFrame(() => {
+      const input = draftInputRef.current;
+      if (!input) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
+  }, []);
 
   const handleReplyWithBest = useCallback(async (message) => {
     if (!conversationId || !user || !message?.id) return;
@@ -1218,11 +1295,14 @@ export default function MessagesPage() {
           actionError={actionError}
           messages={messages}
           getMessageStatus={getChallengeStatusForMessage}
+          messagesViewportRef={messagesViewportRef}
           messagesEndRef={messagesEndRef}
           draft={draft}
+          draftInputRef={draftInputRef}
           onDraftChange={setDraft}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={handleSend}
+          onInsertSticker={handleInsertSticker}
           onReplyWithBest={handleReplyWithBest}
           canReplyWithBest={canReplyWithBest}
           onSendRematch={handleSendRematch}
