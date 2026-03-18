@@ -9,10 +9,12 @@ import PumpersModal from '../components/PumpersModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import { buildReplayModalTitle } from '../utils/replayTitle';
+import { buildClearLinkShare, buildUpscoreLinkShare } from '../utils/directMessageShares';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -549,6 +551,11 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
   const upscores = (() => {
     try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; }
   })();
+  const upscoreLinkShare = buildUpscoreLinkShare({
+    upscoreId: item.id,
+    username: item.username,
+    upscores,
+  });
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
   const hasMore = upscores.length > 5;
@@ -695,6 +702,11 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
           <UpscorePumpButton upscoreId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
           <UpscoreCommentSection upscoreId={item.id} commentCount={item.comment_count || 0} />
           <ShareButton path={`/upscore/${item.id}`} />
+          <SendToDirectMessageButton
+            linkShare={upscoreLinkShare}
+            title="Send upscore"
+            description="Choose a player to send this upscore to."
+          />
         </div>
       </div>
     </div>
@@ -921,6 +933,11 @@ function NewClearCommentSection({ clearId, commentCount: initialCount }) {
 function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayClick }) {
   const [showAll, setShowAll] = useState(false);
   const clears = getClearItems(item);
+  const clearLinkShare = buildClearLinkShare({
+    clearId: item.id,
+    username: item.username,
+    clears,
+  });
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
   const hasMore = clears.length > 5;
@@ -1088,6 +1105,11 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
           <NewClearPumpButton clearId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
           <NewClearCommentSection clearId={item.id} commentCount={item.comment_count || 0} />
           <ShareButton path={`/clear/${item.id}`} />
+          <SendToDirectMessageButton
+            linkShare={clearLinkShare}
+            title={isGrouped ? 'Send new clears' : 'Send new clear'}
+            description="Choose a player to send this clear to."
+          />
         </div>
       </div>
     </div>

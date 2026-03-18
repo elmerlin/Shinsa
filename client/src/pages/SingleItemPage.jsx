@@ -9,6 +9,7 @@ import PumpersModal from '../components/PumpersModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
@@ -18,6 +19,7 @@ import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import { buildReplayModalTitle } from '../utils/replayTitle';
+import { buildClearLinkShare, buildUpscoreLinkShare } from '../utils/directMessageShares';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -592,6 +594,11 @@ export function SingleUpscorePage() {
   if (!item) return <div className="max-w-2xl mx-auto px-4 py-12 text-center text-gray-500">Upscore not found</div>;
 
   const upscores = (() => { try { return JSON.parse(item.upscores_json || '[]'); } catch { return []; } })();
+  const upscoreLinkShare = buildUpscoreLinkShare({
+    upscoreId: item.id,
+    username: item.username,
+    upscores,
+  });
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
@@ -726,6 +733,11 @@ export function SingleUpscorePage() {
               getCommentsFn={getUpscoreComments} addCommentFn={addUpscoreComment} deleteCommentFn={deleteUpscoreComment}
               focusCommentId={focusCommentId} />
             <ShareButton path={`/upscore/${item.id}`} />
+            <SendToDirectMessageButton
+              linkShare={upscoreLinkShare}
+              title="Send upscore"
+              description="Choose a player to send this upscore to."
+            />
           </div>
         </div>
       </div>
@@ -767,6 +779,11 @@ export function SingleClearPage() {
   if (!item) return <div className="max-w-2xl mx-auto px-4 py-12 text-center text-gray-500">Clear not found</div>;
 
   const clears = getClearItems(item);
+  const clearLinkShare = buildClearLinkShare({
+    clearId: item.id,
+    username: item.username,
+    clears,
+  });
   const isGrouped = clears.length > 1;
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
@@ -890,6 +907,11 @@ export function SingleClearPage() {
               getCommentsFn={getNewClearComments} addCommentFn={addNewClearComment} deleteCommentFn={deleteNewClearComment}
               focusCommentId={focusCommentId} />
             <ShareButton path={`/clear/${item.id}`} />
+            <SendToDirectMessageButton
+              linkShare={clearLinkShare}
+              title={isGrouped ? 'Send new clears' : 'Send new clear'}
+              description="Choose a player to send this clear to."
+            />
           </div>
         </div>
       </div>

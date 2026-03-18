@@ -11,6 +11,15 @@ import { getProfilePath } from '../utils/profile';
 import SessionShareCard from '../components/SessionShareCard';
 import UserPickerDialog from '../components/UserPickerDialog';
 
+const LINK_SHARE_BADGES = {
+  live_session: 'Live session',
+  post: 'Post',
+  upscore: 'Upscore',
+  clear: 'Clear',
+  hour_of_power: 'Hour of Power',
+  link: 'Link',
+};
+
 function formatConversationTime(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -42,6 +51,12 @@ function getMessageLabel(message) {
   if (message.message_type === 'link_share' && message.link_share?.kind === 'post') {
     return 'Shared post';
   }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'upscore') {
+    return 'Shared upscore';
+  }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'clear') {
+    return 'Shared clear';
+  }
   if (message.message_type === 'link_share') {
     return 'Shared link';
   }
@@ -53,11 +68,7 @@ function MessageLinkCard({ linkShare }) {
 
   const title = String(linkShare.title || '').trim() || 'Open link';
   const subtitle = String(linkShare.subtitle || '').trim();
-  const badge = linkShare.kind === 'live_session'
-    ? 'Live session'
-    : linkShare.kind === 'post'
-      ? 'Post'
-      : 'Link';
+  const badge = LINK_SHARE_BADGES[linkShare.kind] || 'Link';
   const buttonLabel = String(linkShare.buttonLabel || '').trim() || 'Open';
 
   return (
