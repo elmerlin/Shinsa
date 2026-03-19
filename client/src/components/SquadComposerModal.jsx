@@ -33,12 +33,37 @@ function getInitial(value) {
 
 function getStepButtonClass(isActive, isComplete) {
   if (isActive) {
-    return 'border-cyan-300/35 bg-cyan-400/12 text-white shadow-[0_18px_32px_rgba(12,72,96,0.22)]';
+    return 'border-cyan-400/25 bg-cyan-500/10 text-white shadow-[0_8px_20px_rgba(10,20,32,0.22)]';
   }
   if (isComplete) {
-    return 'border-white/12 bg-white/[0.06] text-cyan-100';
+    return 'border-piu-border/60 bg-piu-dark/70 text-gray-200';
   }
-  return 'border-white/10 bg-white/[0.03] text-gray-500';
+  return 'border-piu-border/50 bg-piu-dark/60 text-gray-500';
+}
+
+function SquadPreviewTile({ title, avatar, memberCount, caption }) {
+  return (
+    <div className="rounded-xl border border-piu-border/60 bg-piu-card/80 p-3.5">
+      <div className="flex items-center gap-3">
+        {avatar ? (
+          <img src={getAvatarUrl(avatar)} alt="" className="h-14 w-14 rounded-xl object-cover" />
+        ) : (
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-lg text-white">
+            {getInitial(title)}
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="truncate text-base font-display font-black text-white">{title}</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {memberCount} {memberCount === 1 ? 'member' : 'members'}
+          </p>
+          {caption ? (
+            <p className="mt-1 text-xs text-gray-500">{caption}</p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function SquadComposerModal({
@@ -135,14 +160,14 @@ export default function SquadComposerModal({
     <>
       <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm" onClick={closeModal}>
         <div
-          className="flex w-full max-w-[36rem] flex-col overflow-hidden rounded-[1.9rem] border border-piu-border/70 bg-[#07111f] shadow-[0_36px_90px_rgba(0,0,0,0.54)]"
+          className="flex w-full max-w-[36rem] flex-col overflow-hidden rounded-[1.35rem] border border-piu-border/60 bg-piu-card/95 shadow-[0_24px_72px_rgba(0,0,0,0.44)]"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="border-b border-white/8 px-5 pb-5 pt-5 sm:px-6">
+          <div className="border-b border-piu-border/50 px-5 pb-4 pt-5 sm:px-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] font-display font-bold uppercase tracking-[0.24em] text-cyan-200/70">Squads</p>
-                <h2 className="mt-2 text-[1.85rem] font-display font-black leading-none text-white">Create a squad</h2>
+                <p className="text-sm font-display font-semibold text-gray-300">Squads</p>
+                <h2 className="mt-1 text-[1.9rem] font-display font-black leading-none text-white">Create a squad</h2>
                 <p className="mt-2 max-w-md text-sm leading-6 text-gray-400">
                   {currentStep.description}
                 </p>
@@ -150,7 +175,7 @@ export default function SquadComposerModal({
               <button
                 type="button"
                 onClick={closeModal}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-piu-border/60 bg-piu-dark/70 text-gray-300 transition-colors hover:border-cyan-400/30 hover:text-white"
                 aria-label="Close squad creation"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -159,44 +184,44 @@ export default function SquadComposerModal({
               </button>
             </div>
 
-            <div className="mt-5 grid grid-cols-3 gap-2">
-              {STEPS.map((step, index) => {
-                const isActive = stepIndex === index;
-                const isComplete = stepIndex > index;
-                return (
-                  <div
-                    key={step.id}
-                    className={`rounded-[1.1rem] border px-3 py-3 transition-colors ${getStepButtonClass(isActive, isComplete)}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-display font-black ${
-                        isActive
-                          ? 'border-cyan-200/40 bg-cyan-300/12 text-cyan-50'
-                          : isComplete
-                            ? 'border-cyan-300/20 bg-cyan-400/10 text-cyan-100'
-                            : 'border-white/10 bg-white/[0.04] text-gray-500'
-                      }`}
-                      >
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-[10px] font-display font-bold uppercase tracking-[0.18em] text-current/70">{step.eyebrow}</p>
-                        <p className="truncate text-sm font-display font-black text-current">{step.label}</p>
+            <div className="mt-5 rounded-xl border border-piu-border/60 bg-piu-dark/40 p-2">
+              <div className="grid grid-cols-3 gap-2">
+                {STEPS.map((step, index) => {
+                  const isActive = stepIndex === index;
+                  const isComplete = stepIndex > index;
+                  return (
+                    <div
+                      key={step.id}
+                      className={`rounded-lg border px-3 py-2.5 transition-colors ${getStepButtonClass(isActive, isComplete)}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-display font-black ${
+                          isActive
+                            ? 'border-cyan-400/25 bg-cyan-500/10 text-cyan-100'
+                            : isComplete
+                              ? 'border-piu-border/60 bg-piu-dark/80 text-gray-200'
+                              : 'border-piu-border/60 bg-piu-dark/80 text-gray-500'
+                        }`}
+                        >
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[10px] font-display font-bold uppercase tracking-[0.18em] text-current/65">{step.eyebrow}</p>
+                          <p className="truncate text-sm font-display font-black text-current">{step.label}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           <div className="max-h-[calc(100vh-13rem)] overflow-y-auto px-5 py-5 sm:px-6">
             {stepIndex === 0 ? (
               <div className="space-y-4">
-                <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.04] p-4 sm:p-5">
-                  <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-100/65">
-                    {currentStep.eyebrow}
-                  </p>
+                <div className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4 sm:p-5">
+                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-gray-500">{currentStep.eyebrow}</p>
                   <h3 className="mt-2 text-xl font-display font-black text-white">{currentStep.title}</h3>
                   <label className="mt-4 block">
                     <span className="text-sm font-display font-black text-white">Squad name</span>
@@ -206,7 +231,7 @@ export default function SquadComposerModal({
                       onChange={(event) => setTitle(event.target.value)}
                       maxLength={60}
                       placeholder="Weekend lab, London crew, Arcade family..."
-                      className="mt-3 w-full rounded-[1.1rem] border border-piu-border/60 bg-piu-dark/45 px-4 py-3.5 text-base text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none"
+                      className="mt-3 w-full rounded-xl border border-piu-border/60 bg-piu-dark/80 px-4 py-3.5 text-base text-white placeholder:text-gray-500 focus:border-cyan-400/30 focus:outline-none"
                     />
                   </label>
                   <p className="mt-2 text-xs text-gray-500">
@@ -214,20 +239,28 @@ export default function SquadComposerModal({
                   </p>
                 </div>
 
-                <div className="rounded-[1.45rem] border border-cyan-400/14 bg-[linear-gradient(180deg,rgba(42,85,113,0.18),rgba(7,17,31,0.12))] p-4 sm:p-5">
-                  <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-100/65">Live preview</p>
-                  <div className="mt-3 flex items-center gap-3 rounded-[1.2rem] border border-white/8 bg-[#07131f]/88 px-3.5 py-3.5">
-                    {avatar ? (
-                      <img src={getAvatarUrl(avatar)} alt="" className="h-14 w-14 rounded-[1rem] object-cover" />
-                    ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-[1rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-lg text-white">
-                        {getInitial(previewTitle)}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-display font-black text-white">{previewTitle}</p>
-                      <p className="mt-1 text-xs text-gray-400">You and your crew will see this in chat.</p>
-                    </div>
+                <div className="rounded-xl border border-piu-border/60 bg-piu-dark/45 p-4 sm:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-gray-500">Preview</p>
+                    <span className="rounded-full border border-piu-border/60 bg-piu-card/70 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-gray-300">
+                      Squad chat
+                    </span>
+                  </div>
+                  <div className="mt-3">
+                    <SquadPreviewTile
+                      title={previewTitle}
+                      avatar={avatar}
+                      memberCount={totalMembers}
+                      caption="Muted panel styling keeps the room readable in the inbox."
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-piu-border/60 bg-piu-dark/70 px-2.5 py-1 text-[11px] font-display font-bold text-gray-300">
+                      Creator controls name and avatar
+                    </span>
+                    <span className="rounded-full border border-piu-border/60 bg-piu-dark/70 px-2.5 py-1 text-[11px] font-display font-bold text-gray-300">
+                      Moderators can be added later
+                    </span>
                   </div>
                 </div>
               </div>
@@ -235,15 +268,13 @@ export default function SquadComposerModal({
 
             {stepIndex === 1 ? (
               <div className="space-y-4">
-                <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.04] p-4 sm:p-5">
+                <div className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-100/65">
-                        {currentStep.eyebrow}
-                      </p>
+                      <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-gray-500">{currentStep.eyebrow}</p>
                       <h3 className="mt-2 text-xl font-display font-black text-white">{currentStep.title}</h3>
                     </div>
-                    <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-50/80">
+                    <div className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-3 py-1 text-[11px] font-display font-bold uppercase tracking-[0.18em] text-gray-300">
                       {members.length} added
                     </div>
                   </div>
@@ -252,7 +283,7 @@ export default function SquadComposerModal({
                     {members.length > 0 ? members.map((member) => (
                       <span
                         key={member.id}
-                        className="inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-cyan-400/[0.08] px-2.5 py-1.5 text-xs text-cyan-50"
+                        className="inline-flex items-center gap-2 rounded-full border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1.5 text-xs text-gray-200"
                       >
                         {member?.avatar ? (
                           <img src={getAvatarUrl(member.avatar)} alt="" className="h-6 w-6 rounded-full object-cover" />
@@ -265,14 +296,14 @@ export default function SquadComposerModal({
                         <button
                           type="button"
                           onClick={() => setMembers((prev) => prev.filter((entry) => entry.id !== member.id))}
-                          className="text-cyan-100/80 transition-colors hover:text-white"
+                          className="text-gray-400 transition-colors hover:text-white"
                           aria-label={`Remove ${member?.username || 'player'}`}
                         >
                           ×
                         </button>
                       </span>
                     )) : (
-                      <div className="w-full rounded-[1.15rem] border border-dashed border-white/10 bg-black/10 px-4 py-5 text-sm text-gray-500">
+                      <div className="w-full rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-5 text-sm text-gray-500">
                         No players added yet.
                       </div>
                     )}
@@ -281,29 +312,22 @@ export default function SquadComposerModal({
                   <button
                     type="button"
                     onClick={() => setPickerOpen(true)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-[1rem] border border-cyan-300/25 bg-cyan-500/10 px-3.5 py-2.5 text-sm font-display font-bold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:text-white"
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3.5 py-2.5 text-sm font-display font-bold text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white"
                   >
                     <span className="text-base leading-none">+</span>
                     <span>Add player</span>
                   </button>
                 </div>
 
-                <div className="rounded-[1.45rem] border border-white/8 bg-[#081422] p-4 sm:p-5">
-                  <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-100/65">Squad so far</p>
-                  <div className="mt-3 flex items-center gap-3 rounded-[1.2rem] border border-white/8 bg-black/15 px-3.5 py-3.5">
-                    {avatar ? (
-                      <img src={getAvatarUrl(avatar)} alt="" className="h-14 w-14 rounded-[1rem] object-cover" />
-                    ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded-[1rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-lg text-white">
-                        {getInitial(previewTitle)}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-display font-black text-white">{previewTitle}</p>
-                      <p className="mt-1 text-xs text-gray-400">
-                        {totalMembers} {totalMembers === 1 ? 'member' : 'members'} including you
-                      </p>
-                    </div>
+                <div className="rounded-xl border border-piu-border/60 bg-piu-dark/45 p-4 sm:p-5">
+                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-gray-500">Squad so far</p>
+                  <div className="mt-3">
+                    <SquadPreviewTile
+                      title={previewTitle}
+                      avatar={avatar}
+                      memberCount={totalMembers}
+                      caption="You can keep this lean now and fine-tune roles later in settings."
+                    />
                   </div>
                 </div>
               </div>
@@ -311,10 +335,8 @@ export default function SquadComposerModal({
 
             {stepIndex === 2 ? (
               <div className="space-y-4">
-                <div className="rounded-[1.45rem] border border-white/10 bg-white/[0.04] p-4 sm:p-5">
-                  <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-100/65">
-                    {currentStep.eyebrow}
-                  </p>
+                <div className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4 sm:p-5">
+                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-gray-500">{currentStep.eyebrow}</p>
                   <h3 className="mt-2 text-xl font-display font-black text-white">{currentStep.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-gray-400">
                     Upload a custom image or choose from the PIU set. You can always change this later in squad settings.
@@ -324,32 +346,56 @@ export default function SquadComposerModal({
                   </div>
                 </div>
 
-                <div className="rounded-[1.45rem] border border-cyan-400/14 bg-[linear-gradient(160deg,rgba(26,48,66,0.58),rgba(7,17,31,0.88))] p-4 sm:p-5">
-                  <p className="text-[11px] font-display font-bold uppercase tracking-[0.22em] text-cyan-100/65">Ready to create</p>
-                  <div className="mt-3 rounded-[1.25rem] border border-white/8 bg-[#07131f]/88 p-4">
-                    <div className="flex items-center gap-3">
-                      {avatar ? (
-                        <img src={getAvatarUrl(avatar)} alt="" className="h-16 w-16 rounded-[1.15rem] object-cover" />
-                      ) : (
-                        <div className="flex h-16 w-16 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-xl text-white">
-                          {getInitial(previewTitle)}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate text-lg font-display font-black text-white">{previewTitle}</p>
-                        <p className="mt-1 text-sm text-gray-400">
-                          {totalMembers} {totalMembers === 1 ? 'member' : 'members'} including you
-                        </p>
-                      </div>
-                    </div>
+                <div className="rounded-xl border border-piu-border/60 bg-piu-dark/45 p-4 sm:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-gray-500">Ready to create</p>
+                    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-emerald-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                      Final check
+                    </span>
+                  </div>
 
-                    <div className="mt-4 rounded-[1rem] border border-white/8 bg-black/12 px-3.5 py-3">
-                      <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-100/65">Starting players</p>
-                      <p className="mt-2 text-sm leading-6 text-gray-300">
-                        {members.length > 0
-                          ? members.map((member) => member?.username || 'Player').join(', ')
-                          : 'No players added yet.'}
-                      </p>
+                  <div className="mt-3">
+                    <SquadPreviewTile
+                      title={previewTitle}
+                      avatar={avatar}
+                      memberCount={totalMembers}
+                      caption="Shared videos, clears, and links will build into the squad settings as you chat."
+                    />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-piu-border/60 bg-piu-dark/70 px-2.5 py-1 text-[11px] font-display font-bold text-gray-300">
+                      Group chat
+                    </span>
+                    <span className="rounded-full border border-piu-border/60 bg-piu-dark/70 px-2.5 py-1 text-[11px] font-display font-bold text-gray-300">
+                      Shared links and clears
+                    </span>
+                    <span className="rounded-full border border-piu-border/60 bg-piu-dark/70 px-2.5 py-1 text-[11px] font-display font-bold text-gray-300">
+                      Notifications in settings
+                    </span>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-piu-border/60 bg-piu-card/60 p-3.5">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">Starting players</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {members.length > 0 ? members.map((member) => (
+                        <span
+                          key={member.id}
+                          className="inline-flex items-center gap-2 rounded-full border border-piu-border/60 bg-piu-dark/75 px-2.5 py-1.5 text-xs text-gray-200"
+                        >
+                          {member?.avatar ? (
+                            <img src={getAvatarUrl(member.avatar)} alt="" className="h-5 w-5 rounded-full object-cover" />
+                          ) : (
+                            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-[9px] text-white">
+                              {getInitial(member?.username)}
+                            </span>
+                          )}
+                          <span className="max-w-[9rem] truncate font-display font-bold">{member?.username || 'Player'}</span>
+                        </span>
+                      )) : (
+                        <p className="text-sm text-gray-500">No players added yet.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -361,7 +407,7 @@ export default function SquadComposerModal({
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-3 border-t border-white/8 px-5 py-4 sm:px-6">
+          <div className="flex items-center justify-between gap-3 border-t border-piu-border/50 px-5 py-4 sm:px-6">
             <div className="text-xs font-display font-bold uppercase tracking-[0.18em] text-gray-500">
               {currentStep.eyebrow}
             </div>
@@ -370,7 +416,7 @@ export default function SquadComposerModal({
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="rounded-[1rem] border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-display font-bold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                  className="rounded-lg border border-piu-border/60 bg-piu-dark/70 px-4 py-2.5 text-sm font-display font-bold text-gray-300 transition-colors hover:border-piu-accent/35 hover:text-white"
                 >
                   Back
                 </button>
@@ -378,7 +424,7 @@ export default function SquadComposerModal({
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="rounded-[1rem] border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-display font-bold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+                  className="rounded-lg border border-piu-border/60 bg-piu-dark/70 px-4 py-2.5 text-sm font-display font-bold text-gray-300 transition-colors hover:border-piu-accent/35 hover:text-white"
                 >
                   Cancel
                 </button>
@@ -388,7 +434,7 @@ export default function SquadComposerModal({
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="rounded-[1rem] border border-cyan-300/30 bg-cyan-500/15 px-4 py-2.5 text-sm font-display font-black text-cyan-50 transition-colors hover:border-cyan-200/45 hover:bg-cyan-500/20"
+                  className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2.5 text-sm font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white"
                 >
                   Next
                 </button>
@@ -397,7 +443,7 @@ export default function SquadComposerModal({
                   type="button"
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="rounded-[1rem] border border-cyan-300/30 bg-cyan-500/15 px-4 py-2.5 text-sm font-display font-black text-cyan-50 transition-colors hover:border-cyan-200/45 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2.5 text-sm font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {submitting ? 'Creating...' : 'Create squad'}
                 </button>
