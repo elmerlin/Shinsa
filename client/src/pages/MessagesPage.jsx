@@ -16,6 +16,7 @@ import {
   getOrCreateDirectConversation,
   getSongChartDetail,
   getUpscore,
+  setMessageConversationReaction,
   sendMessageConversationStomp,
   sendConversationMessage,
 } from '../utils/api';
@@ -28,6 +29,7 @@ import {
 } from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
 import { renderFormattedText } from '../utils/formatText';
+import { parseYouTubeUrl } from '../utils/youtube';
 import ActionIconButton from '../components/ActionIconButton';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import InboxHighlightsStrip, {
@@ -39,6 +41,7 @@ import InboxHighlightsStrip, {
 } from '../components/InboxHighlightsStrip';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
+import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 
 const LINK_SHARE_BADGES = {
@@ -55,6 +58,116 @@ const CHALLENGE_BADGES = {
   beat_score: 'Score Challenge',
   clear_chart: 'Clear Challenge',
 };
+const MESSAGE_LINK_PREFERENCE_KEY = 'shinsa.messages.open-links-externally';
+const CHAT_DEFAULT_REACTION_KEY = 'shinsa.messages.default-reaction';
+const CHAT_QUICK_REACTIONS_KEY = 'shinsa.messages.quick-reactions';
+const STOMP_ICON_PATH = '/fun-assets/stomp_png.png';
+const PUMP_ICON_ACTIVE_PATH = '/piu/stomp-yellow.svg';
+const PUMP_ICON_INACTIVE_PATH = '/piu/stomp-gray.svg';
+const EXTERNAL_URL_REGEX = /https?:\/\/[^\s<>()]+/ig;
+const REACTION_OPTIONS = [
+  { key: 'pump', label: 'Pumps', icon: PUMP_ICON_ACTIVE_PATH },
+  { key: 'fire', label: 'Fire', emoji: '🔥' },
+  { key: 'heart', label: 'Heart', emoji: '💜' },
+  { key: 'clap', label: 'Clap', emoji: '👏' },
+  { key: 'mind_blown', label: 'Mind blown', emoji: '🤯' },
+  { key: 'sleepy', label: 'Sleepy', emoji: '😴' },
+];
+const DEFAULT_QUICK_REACTION_KEYS = ['pump', 'fire', 'heart', 'clap'];
+
+function formatCompactScore(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric.toLocaleString() : '';
+}
+
+function formatCompactDelta(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? `+${numeric.toLocaleString()}` : '';
+}
+
+function extractUrlsFromText(value) {
+  const text = String(value || '');
+  return text.match(EXTERNAL_URL_REGEX) || [];
+}
+
+function extractFirstUrl(value) {
+  return extractUrlsFromText(value)[0] || '';
+}
+
+function isStandaloneUrlMessage(value, url = '') {
+  const text = String(value || '').trim();
+  const candidate = String(url || extractFirstUrl(text) || '').trim();
+  return !!text && !!candidate && text === candidate;
+}
+
+function extractFirstYouTubeUrl(value) {
+  return extractUrlsFromText(value).find((url) => parseYouTubeUrl(url).videoId) || '';
+}
+
+function getYouTubeThumbnailUrl(value) {
+  const videoId = parseYouTubeUrl(value).videoId;
+  return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : '';
+}
+
+function getLevelBadgeLabel(mode, level) {
+  const modeLabel = String(mode || '').trim();
+  const levelValue = Number(level) || 0;
+  if (!modeLabel && !levelValue) return '';
+  if (!modeLabel) return String(levelValue);
+  const prefix = modeLabel.toLowerCase().startsWith('double')
+    ? 'D'
+    : modeLabel.toLowerCase().startsWith('single')
+      ? 'S'
+      : modeLabel.slice(0, 1).toUpperCase();
+  return `${prefix}${levelValue || ''}`;
+}
+
+function getExternalHostLabel(url) {
+  try {
+    const parsed = new URL(String(url || ''));
+    return String(parsed.hostname || '').replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeReactionKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .slice(0, 32);
+}
+
+function normalizeReactionKeys(value) {
+  const keys = Array.isArray(value) ? value : [];
+  const unique = [];
+  for (const entry of keys) {
+    const key = sanitizeReactionKey(entry);
+    if (!key || unique.includes(key) || !REACTION_OPTIONS.some((option) => option.key === key)) continue;
+    unique.push(key);
+  }
+  return unique;
+}
+
+function getReactionOption(key) {
+  return REACTION_OPTIONS.find((option) => option.key === sanitizeReactionKey(key)) || REACTION_OPTIONS[0];
+}
+
+function renderReactionGlyph(key, className = 'h-4 w-4', active = true) {
+  const option = getReactionOption(key);
+  if (option.icon) {
+    return <img src={active ? option.icon : PUMP_ICON_INACTIVE_PATH} alt="" className={`${className} object-contain`} />;
+  }
+  return <span className={`${className} inline-flex items-center justify-center text-[1rem] leading-none`}>{option.emoji || '•'}</span>;
+}
+
+function formatReactionCount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return '0';
+  return numeric > 99 ? '99+' : String(numeric);
+}
+
 const COMPARE_STATUS_META = {
   beat_target: {
     fallbackLabel: 'Beat target',
@@ -230,7 +343,308 @@ function formatConversationTime(value) {
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-const STOMP_ICON_PATH = '/fun-assets/stomp_png.png';
+function MultiScorePreviewCard({ linkShare, badge, buttonClass, onOpenLink }) {
+  const previewItems = Array.isArray(linkShare?.previewItems) ? linkShare.previewItems.filter(Boolean).slice(0, 3) : [];
+  const extraItemCount = Math.max(0, Number(linkShare?.extraItemCount) || 0);
+  const title = String(linkShare?.title || '').trim() || 'Shared charts';
+  const subtitle = String(linkShare?.subtitle || '').trim();
+  const buttonLabel = String(linkShare?.buttonLabel || '').trim() || 'Open';
+
+  if (previewItems.length === 0) return null;
+
+  return (
+    <div className="w-full rounded-[1.2rem] border border-piu-border/60 bg-piu-card/75 px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[9px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/75">{badge}</p>
+          <p className="mt-1 text-[15px] font-display font-black leading-tight text-white">{title}</p>
+          {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
+        </div>
+        {Number(linkShare?.totalItemCount) > previewItems.length ? (
+          <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-display font-black tracking-[0.18em] text-cyan-100">
+            {previewItems.length}/{Number(linkShare.totalItemCount)}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-3 space-y-2">
+        {previewItems.map((item, index) => (
+          <div
+            key={`${item.songTitle || 'song'}-${index}`}
+            className="flex items-center gap-2.5 rounded-[1rem] border border-white/10 bg-piu-dark/45 px-2.5 py-2.5"
+          >
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[0.95rem] border border-white/10 bg-black/30">
+              {item.jacketUrl ? (
+                <img src={item.jacketUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-cyan-500/30 to-emerald-500/20 text-[10px] font-display font-black text-cyan-100">
+                  {getLevelBadgeLabel(item.mode, item.level) || 'PIU'}
+                </div>
+              )}
+              {getLevelBadgeLabel(item.mode, item.level) ? (
+                <span className="absolute bottom-1 right-1 rounded-full border border-cyan-200/25 bg-[#03131d]/90 px-1.5 py-0.5 text-[9px] font-display font-black tracking-[0.14em] text-cyan-100">
+                  {getLevelBadgeLabel(item.mode, item.level)}
+                </span>
+              ) : null}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-display font-black text-white">{item.songTitle || 'Song'}</p>
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                {[String(item.mode || '').trim(), Number(item.level) > 0 ? `Level ${item.level}` : ''].filter(Boolean).join(' • ')}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[12px] font-display font-black text-white">{formatCompactScore(item.score) || '--'}</p>
+              <p className="mt-0.5 text-[11px] font-display font-black text-cyan-100">{item.grade || '--'}</p>
+              {Number(item.scoreDelta) > 0 ? (
+                <p className="mt-0.5 text-[10px] font-display font-bold text-emerald-300">{formatCompactDelta(item.scoreDelta)}</p>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        {extraItemCount > 0 ? (
+          <p className="text-[11px] font-display font-bold tracking-[0.14em] text-gray-400">+ {extraItemCount} more</p>
+        ) : <span />}
+        <button
+          type="button"
+          onClick={onOpenLink}
+          className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function YouTubeMessagePreviewCard({ url, onOpen }) {
+  const [meta, setMeta] = useState({ title: '', authorName: '' });
+  const videoId = parseYouTubeUrl(url).videoId;
+  const thumbnailUrl = getYouTubeThumbnailUrl(url);
+
+  useEffect(() => {
+    let active = true;
+    if (!videoId || !url) {
+      setMeta({ title: '', authorName: '' });
+      return undefined;
+    }
+
+    fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (!active || !payload || typeof payload !== 'object') return;
+        setMeta({
+          title: String(payload.title || '').trim(),
+          authorName: String(payload.author_name || '').trim(),
+        });
+      })
+      .catch(() => {
+        if (active) setMeta({ title: '', authorName: '' });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [url, videoId]);
+
+  if (!videoId) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="w-full overflow-hidden rounded-[1.2rem] border border-piu-border/60 bg-piu-card/75 text-left shadow-[0_10px_24px_rgba(0,0,0,0.16)] transition-colors hover:border-cyan-300/30"
+    >
+      <div className="relative aspect-video w-full overflow-hidden bg-black">
+        {thumbnailUrl ? <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" /> : null}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+        <div className="absolute bottom-3 left-3 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-display font-black tracking-[0.18em] text-white">
+          YOUTUBE
+        </div>
+      </div>
+      <div className="space-y-1 px-3 py-3">
+        <p className="line-clamp-2 text-[14px] font-display font-black text-white">
+          {meta.title || 'YouTube video'}
+        </p>
+        <p className="text-[11px] text-gray-400">
+          {[meta.authorName, getExternalHostLabel(url)].filter(Boolean).join(' • ') || 'Watch in chat'}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+function InAppBrowserModal({ open, title = 'Open link', url, onClose }) {
+  if (!open || !url) return null;
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <div
+        className="flex h-[min(88vh,46rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.8rem] border border-piu-border/70 bg-[#07111f] shadow-[0_30px_80px_rgba(0,0,0,0.45)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-piu-border/40 px-4 py-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-display font-black text-white">{title}</p>
+            <p className="truncate text-xs text-gray-500">{getExternalHostLabel(url) || url}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex rounded-xl border border-cyan-300/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-display font-bold text-cyan-100 transition-colors hover:border-cyan-200/45 hover:text-white"
+            >
+              Open externally
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <iframe title={title} src={url} className="h-full w-full bg-white" />
+      </div>
+    </div>
+  );
+}
+
+function ChatSettingsModal({
+  open,
+  openLinksExternally,
+  onToggleOpenLinksExternally,
+  defaultReaction,
+  quickReactions = [],
+  onDefaultReactionChange,
+  onQuickReactionsChange,
+  onClose,
+}) {
+  if (!open) return null;
+
+  const selectedQuickReactions = normalizeReactionKeys(quickReactions);
+
+  const toggleQuickReaction = (reactionKey) => {
+    const normalizedKey = sanitizeReactionKey(reactionKey);
+    const hasKey = selectedQuickReactions.includes(normalizedKey);
+    const next = hasKey
+      ? selectedQuickReactions.filter((entry) => entry !== normalizedKey)
+      : [...selectedQuickReactions, normalizedKey].slice(0, 5);
+    onQuickReactionsChange?.(next.length > 0 ? next : DEFAULT_QUICK_REACTION_KEYS);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[145] flex items-center justify-center bg-black/75 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-[1.8rem] border border-piu-border/65 bg-[#07111f] p-5 shadow-[0_28px_70px_rgba(0,0,0,0.42)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-display font-bold uppercase tracking-[0.24em] text-cyan-200/70">Chat settings</p>
+            <h2 className="mt-2 text-2xl font-display font-black text-white">Chat behavior</h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="mt-5 space-y-4">
+          <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-display font-black text-white">Open web links in external browser</p>
+                <p className="mt-1 text-xs leading-5 text-gray-400">
+                  Turn this off to open links inside chat. YouTube videos will play in a modal, and other web links will try to load in-app first.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToggleOpenLinksExternally(!openLinksExternally)}
+                className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border transition-colors ${
+                  openLinksExternally
+                    ? 'border-cyan-300/35 bg-cyan-400/20'
+                    : 'border-white/15 bg-white/10'
+                }`}
+                aria-pressed={openLinksExternally}
+              >
+                <span
+                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_6px_16px_rgba(0,0,0,0.24)] transition-transform ${
+                    openLinksExternally ? 'translate-x-8' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
+            <p className="text-sm font-display font-black text-white">Default double-tap reaction</p>
+            <p className="mt-1 text-xs leading-5 text-gray-400">
+              Double-tapping a DM uses this reaction first.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {REACTION_OPTIONS.map((option) => {
+                const selected = sanitizeReactionKey(defaultReaction) === option.key;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => onDefaultReactionChange?.(option.key)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-display font-black transition-colors ${
+                      selected
+                        ? 'border-cyan-300/35 bg-cyan-400/14 text-white'
+                        : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    {renderReactionGlyph(option.key, 'h-4 w-4', selected)}
+                    <span>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
+            <p className="text-sm font-display font-black text-white">Quick reaction tray</p>
+            <p className="mt-1 text-xs leading-5 text-gray-400">
+              Single tap or hover opens this one-line tray. Pick up to 5.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {REACTION_OPTIONS.map((option) => {
+                const selected = selectedQuickReactions.includes(option.key);
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => toggleQuickReaction(option.key)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-display font-black transition-colors ${
+                      selected
+                        ? 'border-cyan-300/35 bg-cyan-400/14 text-white'
+                        : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    {renderReactionGlyph(option.key, 'h-4 w-4', selected)}
+                    <span>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function getCompareStatusInfo(statusKind, statusLabel) {
   const meta = COMPARE_STATUS_META[String(statusKind || '').trim()] || COMPARE_STATUS_META.shared_best;
@@ -336,6 +750,7 @@ function MessageLinkCard({
   followUpAction = null,
   followUpLoading = false,
   followUpLabel = 'Rematch',
+  onOpenLink = null,
 }) {
   if (!linkShare) return null;
 
@@ -353,6 +768,12 @@ function MessageLinkCard({
     : 'border-piu-border/70 bg-piu-dark/40 text-cyan-100 hover:border-cyan-300/35 hover:text-white';
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
   const isScoreSnapshot = hasScoreSnapshotLinkShare(linkShare);
+  const isMultiScoreShare = !isScoreSnapshot
+    && ['upscore', 'clear'].includes(linkShare.kind)
+    && Array.isArray(linkShare.previewItems)
+    && linkShare.previewItems.length > 0;
+  const isYouTubeShare = !linkShare.path && !!parseYouTubeUrl(linkShare.url).videoId;
+  const handlePrimaryOpen = () => onOpenLink?.(linkShare);
 
   if (isScoreSnapshot) {
     const snapshotScore = {
@@ -398,23 +819,13 @@ function MessageLinkCard({
           </div>
         ) : null}
         <div className="flex flex-wrap gap-1.5 px-1">
-          {linkShare.path ? (
-            <Link
-              to={linkShare.path}
-              className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
-            >
-              {buttonLabel}
-            </Link>
-          ) : (
-            <a
-              href={linkShare.url}
-              target="_blank"
-              rel="noreferrer"
-              className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
-            >
-              {buttonLabel}
-            </a>
-          )}
+          <button
+            type="button"
+            onClick={handlePrimaryOpen}
+            className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+          >
+            {buttonLabel}
+          </button>
           {compareAction ? (
             <button
               type="button"
@@ -440,11 +851,27 @@ function MessageLinkCard({
     );
   }
 
+  if (isMultiScoreShare) {
+    return (
+      <MultiScorePreviewCard
+        linkShare={linkShare}
+        badge={badge}
+        buttonClass={buttonClass}
+        onOpenLink={handlePrimaryOpen}
+      />
+    );
+  }
+
   return (
     <div className={`w-full rounded-[1.2rem] border px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)] ${frameClass}`}>
       <p className={`text-[9px] font-display font-bold uppercase tracking-[0.18em] ${badgeClass}`}>{badge}</p>
       <p className="mt-1 text-[15px] font-display font-black leading-tight text-white">{title}</p>
       {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
+      {isYouTubeShare ? (
+        <div className="mt-3">
+          <YouTubeMessagePreviewCard url={linkShare.url} onOpen={handlePrimaryOpen} />
+        </div>
+      ) : null}
       {isCompare && linkShare.statusLabel ? (
         <div className="mt-2.5">
           <CompareStatusPill statusKind={linkShare.statusKind} statusLabel={linkShare.statusLabel} />
@@ -460,23 +887,13 @@ function MessageLinkCard({
         </div>
       ) : null}
       <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {linkShare.path ? (
-          <Link
-            to={linkShare.path}
-            className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
-          >
-            {buttonLabel}
-          </Link>
-        ) : (
-          <a
-            href={linkShare.url}
-            target="_blank"
-            rel="noreferrer"
-            className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
-          >
-            {buttonLabel}
-          </a>
-        )}
+        <button
+          type="button"
+          onClick={handlePrimaryOpen}
+          className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+        >
+          {buttonLabel}
+        </button>
         {compareAction ? (
           <button
             type="button"
@@ -590,6 +1007,10 @@ function MessageBubble({
   lifecycleLoading = false,
   lifecycleLabel = 'Accept',
   onOpenThread = null,
+  onOpenLink = null,
+  availableReactions = DEFAULT_QUICK_REACTION_KEYS,
+  defaultReaction = 'pump',
+  onReact = null,
 }) {
   const isOwn = !!message?.is_own;
   const hasContent = !!String(message?.content || '').trim();
@@ -597,7 +1018,6 @@ function MessageBubble({
   const hasLinkShare = !!message?.link_share;
   const hasChallengeCard = !!message?.challenge_card;
   const hasRichAttachment = hasShare || hasLinkShare || hasChallengeCard;
-  const isAttachmentOnly = hasRichAttachment && !hasContent;
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
   const bubbleTone = isOwn
     ? 'border-cyan-400/20 bg-cyan-500/10'
@@ -605,18 +1025,98 @@ function MessageBubble({
   const senderName = message?.sender?.username || 'Unknown';
   const shareLabel = getMessageLabel(message);
   const noteThread = message?.note_thread || null;
+  const inlineYouTubeUrl = !hasShare && !hasLinkShare && !hasChallengeCard
+    ? extractFirstYouTubeUrl(message?.content || '')
+    : '';
+  const suppressRawUrlContent = !!inlineYouTubeUrl && isStandaloneUrlMessage(message?.content || '', inlineYouTubeUrl);
+  const isAttachmentOnly = (hasRichAttachment && !hasContent) || (!hasRichAttachment && suppressRawUrlContent);
   const bubbleClass = isAttachmentOnly
     ? 'w-full max-w-[19.25rem] sm:max-w-[22.5rem]'
     : `w-fit max-w-[81%] sm:max-w-[30rem] rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
+  const reactionItems = Array.isArray(message?.reactions) ? message.reactions : [];
+  const viewerReaction = sanitizeReactionKey(message?.viewer_reaction);
+  const trayKeys = normalizeReactionKeys(availableReactions).length > 0
+    ? normalizeReactionKeys(availableReactions)
+    : DEFAULT_QUICK_REACTION_KEYS;
+  const [trayOpen, setTrayOpen] = useState(false);
+  const tapStateRef = useRef({ lastTapAt: 0, timer: null });
+
+  useEffect(() => () => {
+    if (tapStateRef.current.timer) {
+      window.clearTimeout(tapStateRef.current.timer);
+    }
+  }, []);
+
+  const triggerReaction = (reactionKey) => {
+    if (!message?.id || !onReact) return;
+    onReact(message, reactionKey);
+  };
+
+  const handleBubbleClick = (event) => {
+    if (event?.target?.closest?.('button,a,textarea,input,select')) return;
+    const now = Date.now();
+    if (now - tapStateRef.current.lastTapAt < 260) {
+      if (tapStateRef.current.timer) {
+        window.clearTimeout(tapStateRef.current.timer);
+        tapStateRef.current.timer = null;
+      }
+      tapStateRef.current.lastTapAt = 0;
+      triggerReaction(defaultReaction);
+      setTrayOpen(false);
+      return;
+    }
+
+    tapStateRef.current.lastTapAt = now;
+    if (tapStateRef.current.timer) window.clearTimeout(tapStateRef.current.timer);
+    tapStateRef.current.timer = window.setTimeout(() => {
+      setTrayOpen((current) => !current);
+      tapStateRef.current.timer = null;
+    }, 210);
+  };
 
   return (
-    <div className={`flex flex-col ${alignmentClass}`}>
+    <div
+      className={`relative flex flex-col ${alignmentClass}`}
+      onMouseEnter={() => setTrayOpen(true)}
+      onMouseLeave={() => setTrayOpen(false)}
+    >
       {!isOwn ? (
         <p className="mb-1 px-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
           {senderName}
         </p>
       ) : null}
-      <div className={bubbleClass}>
+      {trayOpen ? (
+        <div className={`mb-1 flex ${isOwn ? 'justify-end' : 'justify-start'} px-1`}>
+          <div className="flex items-center gap-1 rounded-full border border-white/12 bg-[#07101c]/92 px-1.5 py-1 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-md">
+            {trayKeys.map((reactionKey) => {
+              const selected = viewerReaction === reactionKey;
+              return (
+                <button
+                  key={`${message?.id}-${reactionKey}`}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    triggerReaction(reactionKey);
+                    setTrayOpen(false);
+                  }}
+                  className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full border px-2 transition-colors ${
+                    selected
+                      ? 'border-cyan-300/35 bg-cyan-400/14'
+                      : 'border-transparent bg-white/0 hover:border-white/12 hover:bg-white/10'
+                  }`}
+                  aria-label={`React with ${getReactionOption(reactionKey).label}`}
+                >
+                  {renderReactionGlyph(reactionKey, 'h-4 w-4', selected)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      <div
+        className={bubbleClass}
+        onClick={handleBubbleClick}
+      >
         {noteThread ? (
           <button
             type="button"
@@ -633,9 +1133,17 @@ function MessageBubble({
             <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-200">{noteThread.noteText || 'Open thread'}</p>
           </button>
         ) : null}
-        {hasContent ? (
+        {hasContent && !suppressRawUrlContent ? (
           <div className="whitespace-pre-wrap break-words text-sm leading-5 text-gray-100">
             {renderFormattedText(message.content)}
+          </div>
+        ) : null}
+        {inlineYouTubeUrl ? (
+          <div className={hasContent && !suppressRawUrlContent ? 'mt-3' : ''}>
+            <YouTubeMessagePreviewCard
+              url={inlineYouTubeUrl}
+              onOpen={() => onOpenLink?.({ url: inlineYouTubeUrl, title: 'YouTube video' })}
+            />
           </div>
         ) : null}
         {hasShare ? (
@@ -657,6 +1165,7 @@ function MessageBubble({
               responseStatus={responseStatus}
               followUpAction={onFollowUp}
               followUpLoading={followUpLoading}
+              onOpenLink={onOpenLink}
             />
           </div>
         ) : null}
@@ -674,6 +1183,29 @@ function MessageBubble({
           </div>
         ) : null}
       </div>
+      {reactionItems.length > 0 ? (
+        <div className={`mt-1 flex flex-wrap gap-1 px-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+          {reactionItems.map((entry) => {
+            const option = getReactionOption(entry.key);
+            const selected = viewerReaction === option.key;
+            return (
+              <button
+                key={`${message?.id}-${option.key}`}
+                type="button"
+                onClick={() => triggerReaction(option.key)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-display font-black transition-colors ${
+                  selected
+                    ? 'border-cyan-300/35 bg-cyan-400/14 text-white'
+                    : 'border-white/12 bg-white/6 text-gray-200 hover:bg-white/10'
+                }`}
+              >
+                {renderReactionGlyph(option.key, 'h-3.5 w-3.5', selected)}
+                <span>{formatReactionCount(entry.count)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <p className="mt-0.5 px-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
     </div>
   );
@@ -730,7 +1262,7 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
         disabled={stompDisabled}
         aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
         title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-        className={`group relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
+        className={`group relative flex h-11 w-[4.4rem] shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
       >
         <span
           aria-hidden="true"
@@ -740,17 +1272,16 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
           aria-hidden="true"
           className={`pointer-events-none absolute inset-[3px] rounded-[0.8rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
         />
-        <img
-          src={STOMP_ICON_PATH}
-          alt=""
-          className={`relative z-[1] h-6 w-6 object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-105'} ${stomping ? 'scale-110 rotate-[-10deg]' : ''} ${isCelebrating ? 'scale-[1.18] rotate-[10deg]' : ''}`}
-        />
-        <span
-          aria-hidden="true"
-          className={`pointer-events-none absolute -top-1 right-[-0.2rem] z-[1] rounded-full border border-cyan-200/35 bg-cyan-300/15 px-1.5 py-0.5 text-[10px] font-display font-black tracking-[0.14em] text-cyan-100 transition-all duration-300 ${isCelebrating ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'}`}
-        >
-          STOMP
-        </span>
+        <div className="relative z-[1] flex items-center gap-1">
+          <img
+            src={STOMP_ICON_PATH}
+            alt=""
+            className={`h-6 w-6 object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-110'} ${stomping ? 'scale-110 rotate-[-8deg]' : ''} ${isCelebrating ? 'scale-[1.16] rotate-[8deg]' : ''}`}
+          />
+          <span className="text-[10px] font-display font-black tracking-[0.18em] text-cyan-50">
+            STOMP
+          </span>
+        </div>
       </button>
     </Link>
   );
@@ -767,11 +1298,31 @@ function InboxView({
   onOpenHighlightNote,
   onOpenStoryComposer,
   onOpenStoryArchive,
+  onOpenChatSettings,
   onStompConversation,
   stompCelebrationConversationId,
   stompingConversationId,
   onStartChat,
 }) {
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const optionsRef = useRef(null);
+
+  useEffect(() => {
+    if (!optionsOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!optionsRef.current || optionsRef.current.contains(event.target)) return;
+      setOptionsOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+    };
+  }, [optionsOpen]);
+
   return (
     <div className="flex min-h-screen flex-col sm:min-h-0 sm:mx-auto sm:w-full sm:max-w-3xl sm:px-4 sm:py-6">
       <section className="relative flex flex-1 flex-col overflow-visible bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
@@ -783,18 +1334,62 @@ function InboxView({
             <h1 className="text-[2rem] leading-none font-display font-black text-white sm:text-[2.35rem]">Messages</h1>
           </div>
           <div className="flex items-center gap-2">
-            <ActionIconButton
-              onClick={onOpenStoryArchive}
-              title="Story archive"
-              ariaLabel="Open story archive"
-              tone="cyan"
-              className="h-10 w-10 justify-center rounded-[1.05rem] border border-white/12 bg-white/6 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/35"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v11A2.5 2.5 0 0117.5 21h-11A2.5 2.5 0 014 18.5v-11z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 5v4h8V5" />
-              </svg>
-            </ActionIconButton>
+            <div className="relative" ref={optionsRef}>
+              <ActionIconButton
+                onClick={() => setOptionsOpen((prev) => !prev)}
+                title="More options"
+                ariaLabel="Open messages options"
+                tone="cyan"
+                active={optionsOpen}
+                className="h-10 w-10 justify-center rounded-[1.05rem] border border-white/12 bg-white/6 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/35"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zm0 6a.75.75 0 110-1.5.75.75 0 010 1.5zm0 6a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                </svg>
+              </ActionIconButton>
+              {optionsOpen ? (
+                <div className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-56 overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#091421]/96 p-2 shadow-[0_22px_50px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      onOpenStoryArchive?.();
+                    }}
+                    className="flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left transition-colors hover:bg-white/6"
+                  >
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v11A2.5 2.5 0 0117.5 21h-11A2.5 2.5 0 014 18.5v-11z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5v4h8V5" />
+                      </svg>
+                    </span>
+                    <span>
+                      <p className="text-sm font-display font-black text-white">Archive</p>
+                      <p className="text-[11px] text-gray-400">Open your saved stories</p>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOptionsOpen(false);
+                      onOpenChatSettings?.();
+                    }}
+                    className="mt-1 flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left transition-colors hover:bg-white/6"
+                  >
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3m-7.286 3.857l2.122-.707a7.5 7.5 0 001.163 1.163l-.707 2.122 1.8 1.04 1.415-1.71c.53.08 1.07.08 1.6 0l1.414 1.71 1.8-1.04-.707-2.122a7.497 7.497 0 001.163-1.163l2.122.707 1.04-1.8-1.71-1.415a7.44 7.44 0 000-1.6l1.71-1.414-1.04-1.8-2.122.707A7.496 7.496 0 0016.85 3.55l.707-2.122-1.8-1.04-1.414 1.71a7.44 7.44 0 00-1.6 0L11.33.388l-1.8 1.04.707 2.122A7.496 7.496 0 008.713 4.713l-2.122-.707-1.04 1.8 1.71 1.414a7.44 7.44 0 000 1.6l-1.71 1.415 1.04 1.8z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
+                      </svg>
+                    </span>
+                    <span>
+                      <p className="text-sm font-display font-black text-white">Chat settings</p>
+                      <p className="text-[11px] text-gray-400">Control how links open</p>
+                    </span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <ActionIconButton
               onClick={onStartChat}
               title="New chat"
@@ -884,6 +1479,10 @@ function ConversationView({
   replyingMessageId,
   sending,
   onOpenThread,
+  onOpenLink,
+  defaultReaction,
+  availableReactions,
+  onReact,
 }) {
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
@@ -971,6 +1570,10 @@ function ConversationView({
                   lifecycleLoading={acceptingMessageId === message.id || expiringMessageId === message.id}
                   lifecycleLabel={canAcceptChallenge(message) ? 'Accept' : 'Expire'}
                   onOpenThread={message?.note_thread?.threadKey ? () => onOpenThread?.(message) : null}
+                  onOpenLink={onOpenLink}
+                  defaultReaction={defaultReaction}
+                  availableReactions={availableReactions}
+                  onReact={onReact}
                 />
               ))}
               <div ref={messagesEndRef} />
@@ -1062,6 +1665,36 @@ export default function MessagesPage() {
   const [storyArchiveOpen, setStoryArchiveOpen] = useState(false);
   const [archivedStories, setArchivedStories] = useState([]);
   const [storyArchiveError, setStoryArchiveError] = useState('');
+  const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
+  const [openLinksExternally, setOpenLinksExternally] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem(MESSAGE_LINK_PREFERENCE_KEY) !== 'internal';
+  });
+  const [defaultReaction, setDefaultReaction] = useState(() => {
+    if (typeof window === 'undefined') return 'pump';
+    const stored = sanitizeReactionKey(localStorage.getItem(CHAT_DEFAULT_REACTION_KEY));
+    return REACTION_OPTIONS.some((option) => option.key === stored) ? stored : 'pump';
+  });
+  const [quickReactions, setQuickReactions] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_QUICK_REACTION_KEYS;
+    try {
+      const stored = JSON.parse(localStorage.getItem(CHAT_QUICK_REACTIONS_KEY) || '[]');
+      const normalized = normalizeReactionKeys(stored);
+      return normalized.length > 0 ? normalized : DEFAULT_QUICK_REACTION_KEYS;
+    } catch {
+      return DEFAULT_QUICK_REACTION_KEYS;
+    }
+  });
+  const [embeddedBrowserState, setEmbeddedBrowserState] = useState({
+    open: false,
+    title: '',
+    url: '',
+  });
+  const [youtubeModalState, setYoutubeModalState] = useState({
+    open: false,
+    title: '',
+    url: '',
+  });
   const [storyViewerState, setStoryViewerState] = useState({
     open: false,
     user: null,
@@ -1069,6 +1702,8 @@ export default function MessagesPage() {
     loading: false,
     error: '',
     readonly: false,
+    sourceUserId: '',
+    initialIndex: 0,
   });
   const [threadState, setThreadState] = useState({
     open: false,
@@ -1083,6 +1718,70 @@ export default function MessagesPage() {
 
   const activePartner = activeConversation?.partner || null;
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
+  const orderedStoryCircles = useMemo(() => {
+    const circles = [];
+    if (highlights?.me?.user) {
+      circles.push({
+        is_self: true,
+        user: highlights.me.user,
+        has_story: !!highlights.me.has_story,
+        note: highlights.me.note || null,
+      });
+    }
+    for (const circle of Array.isArray(highlights?.circles) ? highlights.circles : []) {
+      if (!circle?.user?.id) continue;
+      circles.push(circle);
+    }
+    return circles.filter((circle) => circle?.has_story && circle?.user?.id);
+  }, [highlights]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(MESSAGE_LINK_PREFERENCE_KEY, openLinksExternally ? 'external' : 'internal');
+  }, [openLinksExternally]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(CHAT_DEFAULT_REACTION_KEY, sanitizeReactionKey(defaultReaction) || 'pump');
+  }, [defaultReaction]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(CHAT_QUICK_REACTIONS_KEY, JSON.stringify(normalizeReactionKeys(quickReactions)));
+  }, [quickReactions]);
+
+  const handleOpenChatLink = useCallback((linkTarget) => {
+    const path = String(linkTarget?.path || '').trim();
+    const url = String(linkTarget?.url || '').trim();
+    const title = String(linkTarget?.title || linkTarget?.buttonLabel || 'Open link').trim() || 'Open link';
+
+    if (path) {
+      navigate(path);
+      return;
+    }
+
+    if (!url) return;
+
+    if (openLinksExternally) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (parseYouTubeUrl(url).videoId) {
+      setYoutubeModalState({
+        open: true,
+        title,
+        url,
+      });
+      return;
+    }
+
+    setEmbeddedBrowserState({
+      open: true,
+      title,
+      url,
+    });
+  }, [navigate, openLinksExternally]);
 
   const ensureChartKeyMap = useCallback(async () => {
     if (chartKeyMapRef.current) return chartKeyMapRef.current;
@@ -1743,10 +2442,12 @@ export default function MessagesPage() {
       loading: false,
       error: '',
       readonly: false,
+      sourceUserId: '',
+      initialIndex: 0,
     });
   }, []);
 
-  const handleOpenHighlightStory = useCallback(async (circle) => {
+  const openStoryForCircle = useCallback(async (circle, readonly = false, initialIndex = 0) => {
     if (!circle?.user?.id) return;
     setStoryViewerState({
       open: true,
@@ -1754,17 +2455,25 @@ export default function MessagesPage() {
       stories: [],
       loading: true,
       error: '',
-      readonly: false,
+      readonly,
+      sourceUserId: circle.user.id,
+      initialIndex,
     });
     try {
       const payload = await getMessageStory(circle.user.id);
+      const nextStories = Array.isArray(payload?.stories) ? payload.stories : [];
+      const resolvedInitialIndex = initialIndex < 0
+        ? Math.max(0, nextStories.length - 1)
+        : Math.max(0, Math.min(initialIndex, Math.max(0, nextStories.length - 1)));
       setStoryViewerState({
         open: true,
         user: payload?.user || circle.user,
-        stories: Array.isArray(payload?.stories) ? payload.stories : [],
+        stories: nextStories,
         loading: false,
         error: '',
-        readonly: false,
+        readonly,
+        sourceUserId: circle.user.id,
+        initialIndex: resolvedInitialIndex,
       });
     } catch (err) {
       setStoryViewerState({
@@ -1773,10 +2482,16 @@ export default function MessagesPage() {
         stories: [],
         loading: false,
         error: 'Story unavailable right now.',
-        readonly: false,
+        readonly,
+        sourceUserId: circle.user.id,
+        initialIndex: 0,
       });
     }
   }, []);
+
+  const handleOpenHighlightStory = useCallback(async (circle) => {
+    await openStoryForCircle(circle, false);
+  }, [openStoryForCircle]);
 
   const handleOpenStoryArchive = useCallback(async () => {
     setStoryArchiveOpen(true);
@@ -1800,8 +2515,36 @@ export default function MessagesPage() {
       loading: false,
       error: '',
       readonly: true,
+      sourceUserId: story?.user?.id || highlights?.me?.user?.id || '',
+      initialIndex: 0,
     });
   }, [highlights?.me?.user]);
+
+  const handleStoryViewerNavigateUser = useCallback(async (direction) => {
+    const currentUserId = String(storyViewerState.sourceUserId || storyViewerState.user?.id || '').trim();
+    if (!currentUserId || storyViewerState.readonly) return;
+    const currentIndex = orderedStoryCircles.findIndex((circle) => String(circle?.user?.id || '').trim() === currentUserId);
+    if (currentIndex === -1) return;
+    const nextCircle = orderedStoryCircles[currentIndex + direction];
+    if (!nextCircle) return;
+    await openStoryForCircle(nextCircle, false, direction < 0 ? -1 : 0);
+  }, [openStoryForCircle, orderedStoryCircles, storyViewerState.readonly, storyViewerState.sourceUserId, storyViewerState.user?.id]);
+
+  const handleReactToMessage = useCallback(async (message, reactionKey) => {
+    if (!conversationId || !message?.id) return;
+    const normalizedKey = sanitizeReactionKey(reactionKey);
+    if (!normalizedKey) return;
+    try {
+      const payload = await setMessageConversationReaction(conversationId, message.id, normalizedKey);
+      if (payload?.message?.id) {
+        setMessages((prev) => prev.map((entry) => (
+          entry.id === payload.message.id ? payload.message : entry
+        )));
+      }
+    } catch (err) {
+      setActionError(err?.message || 'Failed to react to message.');
+    }
+  }, [conversationId]);
 
   const handleStoryViewerStoriesChange = useCallback((nextStories) => {
     setStoryViewerState((prev) => ({
@@ -2025,6 +2768,10 @@ export default function MessagesPage() {
           replyingMessageId={replyingMessageId}
           sending={sending}
           onOpenThread={handleOpenMessageThread}
+          onOpenLink={handleOpenChatLink}
+          defaultReaction={defaultReaction}
+          availableReactions={quickReactions}
+          onReact={handleReactToMessage}
         />
       ) : (
         <InboxView
@@ -2038,6 +2785,7 @@ export default function MessagesPage() {
           onOpenHighlightNote={handleOpenHighlightNote}
           onOpenStoryComposer={handleOpenStoryComposer}
           onOpenStoryArchive={handleOpenStoryArchive}
+          onOpenChatSettings={() => setChatSettingsOpen(true)}
           onStompConversation={handleConversationStomp}
           stompCelebrationConversationId={stompCelebrationConversationId}
           stompingConversationId={stompingConversationId}
@@ -2059,8 +2807,13 @@ export default function MessagesPage() {
         loading={storyViewerState.loading}
         error={storyViewerState.error}
         readonly={storyViewerState.readonly}
+        initialIndex={storyViewerState.initialIndex}
         onStoriesChange={handleStoryViewerStoriesChange}
         onArchiveChange={handleStoryArchiveChange}
+        hasPreviousUser={!storyViewerState.readonly && orderedStoryCircles.findIndex((circle) => circle?.user?.id === storyViewerState.sourceUserId) > 0}
+        hasNextUser={!storyViewerState.readonly && orderedStoryCircles.findIndex((circle) => circle?.user?.id === storyViewerState.sourceUserId) < orderedStoryCircles.length - 1}
+        onNavigatePreviousUser={() => handleStoryViewerNavigateUser(-1)}
+        onNavigateNextUser={() => handleStoryViewerNavigateUser(1)}
         onClose={closeStoryViewer}
       />
 
@@ -2076,6 +2829,30 @@ export default function MessagesPage() {
           {storyArchiveError}
         </div>
       ) : null}
+
+      <ChatSettingsModal
+        open={chatSettingsOpen}
+        openLinksExternally={openLinksExternally}
+        onToggleOpenLinksExternally={setOpenLinksExternally}
+        defaultReaction={defaultReaction}
+        quickReactions={quickReactions}
+        onDefaultReactionChange={setDefaultReaction}
+        onQuickReactionsChange={setQuickReactions}
+        onClose={() => setChatSettingsOpen(false)}
+      />
+
+      <InAppBrowserModal
+        open={embeddedBrowserState.open}
+        title={embeddedBrowserState.title}
+        url={embeddedBrowserState.url}
+        onClose={() => setEmbeddedBrowserState({ open: false, title: '', url: '' })}
+      />
+
+      <YouTubeReplayModal
+        url={youtubeModalState.open ? youtubeModalState.url : ''}
+        title={youtubeModalState.title || 'YouTube video'}
+        onClose={() => setYoutubeModalState({ open: false, title: '', url: '' })}
+      />
 
       <NoteComposerModal
         open={noteComposerOpen}

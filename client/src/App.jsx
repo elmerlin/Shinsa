@@ -965,7 +965,7 @@ export default function App() {
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
   const isLiveOverlay = /^\/live\/[^/]+\/overlay(?:\/|$)/.test(location.pathname);
-  const isMessagesInboxRoute = location.pathname === '/messages';
+  const isMessagesInboxRoute = /^\/messages\/?$/.test(location.pathname);
   const isMessagesConversationRoute = /^\/messages\/[^/]+(?:\/|$)/.test(location.pathname);
   const hideMobileHeader = isMessagesInboxRoute || isMessagesConversationRoute;
   const hideMobileBottomNav = isMessagesConversationRoute;
@@ -1320,7 +1320,6 @@ export default function App() {
           <Route path="/login/approve" element={<QrLoginApprovePage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-          <Route path="/:username" element={<ProfilePage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/account" element={<MyAccountPage />} />
         <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
@@ -1360,6 +1359,7 @@ export default function App() {
           <Route path="/dojo" element={<Navigate to="/membership" replace />} />
           <Route path="/dojoadmin" element={<DojoPage />} />
           <Route path="/leaderboards" element={<LeaderboardsPage />} />
+          <Route path="/:username" element={<ProfilePage />} />
         </Routes>
       </main>
 

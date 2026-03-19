@@ -12,6 +12,7 @@ const {
   normalizeConversationInput,
   normalizeConversationMessage,
   normalizeConversationRow,
+  sanitizeReactionKey,
 } = require('../lib/directMessages');
 const {
   NOTE_TTL_HOURS,
@@ -447,6 +448,53 @@ function getConversationMessages(db, conversationId) {
   `).all(conversationId);
 }
 
+function getConversationMessageReactionState(db, messageIds = [], viewerUserId = '') {
+  const ids = Array.from(new Set((Array.isArray(messageIds) ? messageIds : []).map((value) => String(value || '').trim()).filter(Boolean)));
+  if (ids.length === 0) return {};
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT message_id, user_id, reaction_key
+    FROM conversation_message_reactions
+    WHERE message_id IN (${placeholders})
+  `).all(...ids);
+
+  const next = {};
+  for (const row of rows) {
+    const messageId = String(row.message_id || '').trim();
+    const reactionKey = sanitizeReactionKey(row.reaction_key);
+    if (!messageId || !reactionKey) continue;
+    if (!next[messageId]) {
+      next[messageId] = { reactions: [], viewerReaction: '' };
+    }
+    next[messageId].reactions.push({ reaction_key: reactionKey, count: 1 });
+    if (viewerUserId && String(row.user_id || '').trim() === String(viewerUserId || '').trim()) {
+      next[messageId].viewerReaction = reactionKey;
+    }
+  }
+
+  return next;
+}
+
+function getConversationMessageForUser(db, conversationId, messageId, viewerUserId) {
+  const row = db.prepare(`
+    SELECT
+      m.*,
+      u.username AS sender_username,
+      u.avatar AS sender_avatar,
+      u.avatar_v AS sender_avatar_v
+    FROM conversation_messages m
+    JOIN users u ON u.id = m.sender_user_id
+    WHERE m.id = ?
+      AND m.conversation_id = ?
+      AND m.deleted_at = ''
+    LIMIT 1
+  `).get(messageId, conversationId);
+  if (!row) return null;
+  const reactionState = getConversationMessageReactionState(db, [messageId], viewerUserId);
+  return normalizeConversationMessage(row, viewerUserId, reactionState[messageId] || null);
+}
+
 function markConversationRead(db, conversationId, userId, now = toSqliteDateTime()) {
   db.prepare(`
     UPDATE conversation_members
@@ -487,6 +535,52 @@ function insertConversationMessage(db, conversationId, senderUser, input, create
   markConversationRead(db, conversationId, senderUser.id, createdAt);
 
   return getMessageRowById(db, messageId);
+}
+
+function toggleConversationMessageReaction(db, conversationId, messageId, userId, reactionKey, now = toSqliteDateTime()) {
+  const normalizedKey = sanitizeReactionKey(reactionKey);
+  if (!normalizedKey) {
+    throw new Error('A valid reaction is required');
+  }
+
+  const messageRow = db.prepare(`
+    SELECT id
+    FROM conversation_messages
+    WHERE id = ?
+      AND conversation_id = ?
+      AND deleted_at = ''
+    LIMIT 1
+  `).get(messageId, conversationId);
+  if (!messageRow) return null;
+
+  const existing = db.prepare(`
+    SELECT reaction_key
+    FROM conversation_message_reactions
+    WHERE message_id = ? AND user_id = ?
+    LIMIT 1
+  `).get(messageId, userId);
+
+  if (existing && sanitizeReactionKey(existing.reaction_key) === normalizedKey) {
+    db.prepare(`
+      DELETE FROM conversation_message_reactions
+      WHERE message_id = ? AND user_id = ?
+    `).run(messageId, userId);
+  } else if (existing) {
+    db.prepare(`
+      UPDATE conversation_message_reactions
+      SET reaction_key = ?, updated_at = ?
+      WHERE message_id = ? AND user_id = ?
+    `).run(normalizedKey, now, messageId, userId);
+  } else {
+    db.prepare(`
+      INSERT INTO conversation_message_reactions (
+        message_id, user_id, reaction_key, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `).run(messageId, userId, normalizedKey, now, now);
+  }
+
+  return getConversationMessageForUser(db, conversationId, messageId, userId);
 }
 
 function getOrCreateDirectConversation(db, currentUserId, otherUserId) {
@@ -1039,13 +1133,41 @@ router.get('/conversations/:id', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Conversation not found' });
   }
 
-  const messages = getConversationMessages(db, conversationId).map((row) => normalizeConversationMessage(row, req.user.id));
+  const messageRows = getConversationMessages(db, conversationId);
+  const reactionState = getConversationMessageReactionState(db, messageRows.map((row) => row.id), req.user.id);
+  const messages = messageRows.map((row) => normalizeConversationMessage(row, req.user.id, reactionState[row.id] || null));
   markConversationRead(db, conversationId, req.user.id);
 
   const conversation = normalizeConversationRow(conversationRow);
   if (conversation) conversation.unread_count = 0;
 
   res.json({ conversation, messages });
+});
+
+router.post('/conversations/:id/messages/:messageId/reactions', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const messageId = String(req.params.messageId || '').trim();
+  if (!conversationId || !messageId) {
+    return res.status(400).json({ error: 'Conversation and message are required' });
+  }
+
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const reactionKey = sanitizeReactionKey(req.body?.reaction || req.body?.reaction_key || '');
+  if (!reactionKey) {
+    return res.status(400).json({ error: 'A valid reaction is required' });
+  }
+
+  const message = toggleConversationMessageReaction(db, conversationId, messageId, req.user.id, reactionKey);
+  if (!message) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+
+  res.json({ message });
 });
 
 router.post('/conversations/:id/read', requireAuth, (req, res) => {
@@ -1130,7 +1252,7 @@ router.post('/conversations/:id/messages', requireAuth, (req, res) => {
 
   res.status(201).json({
     conversation,
-    message: normalizeConversationMessage(messageRow, req.user.id),
+    message: normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' }),
   });
 });
 
@@ -1157,7 +1279,7 @@ router.post('/direct/:userId', requireAuth, (req, res) => {
   if (!input.error) {
     const messageRow = insertConversationMessage(db, conversationId, senderUser, input);
     notifyRecipients(db, conversationId, senderUser, [targetUserId], input);
-    message = normalizeConversationMessage(messageRow, req.user.id);
+    message = normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' });
   } else if (req.body && (
     String(req.body.content || '').trim()
     || req.body.session_share

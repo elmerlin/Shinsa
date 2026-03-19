@@ -55,6 +55,7 @@ function renderLinkButton(link, className = '') {
       <Link
         to={link.path}
         className={className}
+        data-story-interactive="true"
         onClick={stopStoryAdvance}
         onMouseDown={stopStoryAdvance}
         onTouchStart={stopStoryAdvance}
@@ -69,6 +70,7 @@ function renderLinkButton(link, className = '') {
       target="_blank"
       rel="noreferrer"
       className={className}
+      data-story-interactive="true"
       onClick={stopStoryAdvance}
       onMouseDown={stopStoryAdvance}
       onTouchStart={stopStoryAdvance}
@@ -174,7 +176,9 @@ function HighlightNoteBubble({ note, isSelf = false, onClick = null }) {
     <button
       type="button"
       onClick={onClick}
-      className={`absolute left-1/2 top-0 z-10 flex min-h-[2.35rem] w-max max-w-[5.7rem] -translate-x-1/2 items-center rounded-[1.15rem] px-2.5 py-1.5 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
+      className={`absolute top-0 z-10 flex min-h-[2.35rem] w-max max-w-[6.5rem] items-center rounded-[1.15rem] px-2.5 py-1.5 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
+        isSelf ? 'left-0 translate-x-0' : 'left-1/2 -translate-x-1/2'
+      } ${
         content
           ? 'bg-[#343945] text-white hover:bg-[#3b4150]'
           : 'border border-dashed border-white/12 bg-[#262b35] text-gray-300 hover:bg-[#2c313c]'
@@ -208,7 +212,7 @@ function HighlightCircle({
 
   return (
     <div className="flex w-[4.4rem] shrink-0 flex-col items-center pt-1.5">
-      <div className="relative pt-[2.05rem]">
+      <div className="relative pt-[2.55rem]">
         <HighlightNoteBubble
           note={note}
           isSelf={circle?.is_self}
@@ -469,12 +473,12 @@ function StoryCard({ story }) {
   );
 }
 
-function OverlayShell({ open, onClose, children, padded = true }) {
+function OverlayShell({ open, onClose, children, padded = true, fullscreen = false }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center">
+    <div className={`fixed inset-0 z-[160] flex justify-center bg-black/80 backdrop-blur-sm ${fullscreen ? 'items-stretch' : 'items-end sm:items-center'}`}>
       <button type="button" aria-label="Close overlay" className="absolute inset-0" onClick={onClose} />
-      <div className={`relative z-10 w-full rounded-t-[1.9rem] border border-white/10 bg-[#060a12] shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:max-w-2xl sm:rounded-[2rem] ${padded ? 'p-4 sm:p-6' : ''}`}>
+      <div className={`relative z-10 w-full border border-white/10 bg-[#060a12] shadow-[0_24px_70px_rgba(0,0,0,0.45)] ${fullscreen ? 'h-full max-w-none rounded-none' : 'rounded-t-[1.9rem] sm:max-w-2xl sm:rounded-[2rem]'} ${padded ? 'p-4 sm:p-6' : ''}`}>
         {children}
       </div>
     </div>
@@ -712,6 +716,11 @@ export function StoryViewerModal({
   onStoriesChange,
   onArchiveChange,
   readonly = false,
+  initialIndex = 0,
+  hasPreviousUser = false,
+  hasNextUser = false,
+  onNavigatePreviousUser,
+  onNavigateNextUser,
 }) {
   const { user: authUser } = useAuth();
   const [index, setIndex] = useState(0);
@@ -725,6 +734,8 @@ export function StoryViewerModal({
   const [commentsState, setCommentsState] = useState({ loading: false, items: [], draft: '', sending: false, error: '' });
   const [statsState, setStatsState] = useState({ loading: false, data: null, error: '' });
   const frameRef = useRef(0);
+  const touchStartXRef = useRef(null);
+  const swipeHandledRef = useRef(false);
 
   const story = stories[index] || null;
   const ownerUserId = String(user?.id || '');
@@ -739,10 +750,16 @@ export function StoryViewerModal({
       preview_comments: [],
     })
     : { pump_count: 0, comment_count: 0, view_count: 0, user_pumped: false, preview_comments: [] };
+  const canGoBack = index > 0;
+  const canGoForward = index < stories.length - 1;
+  const previewComments = Array.isArray(activeEngagement?.preview_comments) ? activeEngagement.preview_comments : [];
+  const previewComment = previewComments.length > 0
+    ? previewComments[commentPreviewIndex % previewComments.length]
+    : null;
 
   useEffect(() => {
     if (!open) return;
-    setIndex(0);
+    setIndex(Math.max(0, initialIndex));
     setProgress(0);
     setMenuOpen(false);
     setCommentsOpen(false);
@@ -750,7 +767,7 @@ export function StoryViewerModal({
     setSharePickerOpen(false);
     setCommentsState({ loading: false, items: [], draft: '', sending: false, error: '' });
     setStatsState({ loading: false, data: null, error: '' });
-  }, [open, user?.id]);
+  }, [open, user?.id, initialIndex]);
 
   useEffect(() => {
     const nextMap = {};
@@ -787,6 +804,10 @@ export function StoryViewerModal({
           setIndex((current) => Math.min(stories.length - 1, current + 1));
           return;
         }
+        if (hasNextUser) {
+          onNavigateNextUser?.();
+          return;
+        }
         onClose?.();
         return;
       }
@@ -797,7 +818,7 @@ export function StoryViewerModal({
     return () => {
       if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
     };
-  }, [open, story?.id, loading, error, isPaused, index, stories.length, onClose, readonly]);
+  }, [open, story?.id, loading, error, isPaused, index, stories.length, onClose, readonly, hasNextUser, onNavigateNextUser]);
 
   useEffect(() => {
     if (!open || !story?.id || !ownerUserId || readonly) return undefined;
@@ -833,16 +854,31 @@ export function StoryViewerModal({
     return () => window.clearInterval(interval);
   }, [open, story?.id, activeEngagement?.preview_comments, commentsOpen]);
 
-  const canGoBack = index > 0;
-  const canGoForward = index < stories.length - 1;
-  const previewComments = Array.isArray(activeEngagement?.preview_comments) ? activeEngagement.preview_comments : [];
-  const previewComment = previewComments.length > 0
-    ? previewComments[commentPreviewIndex % previewComments.length]
-    : null;
-
   const setStoryEngagement = (storyId, engagement) => {
     if (!storyId || !engagement) return;
     setEngagementById((prev) => ({ ...prev, [storyId]: engagement }));
+  };
+
+  const goPrevious = () => {
+    if (canGoBack) {
+      setIndex((current) => Math.max(0, current - 1));
+      return;
+    }
+    if (hasPreviousUser) {
+      onNavigatePreviousUser?.();
+    }
+  };
+
+  const goNext = () => {
+    if (canGoForward) {
+      setIndex((current) => Math.min(stories.length - 1, current + 1));
+      return;
+    }
+    if (hasNextUser) {
+      onNavigateNextUser?.();
+      return;
+    }
+    onClose?.();
   };
 
   const openComments = async () => {
@@ -961,11 +997,54 @@ export function StoryViewerModal({
     } catch {}
   };
 
+  const handleViewerClick = (event) => {
+    if (swipeHandledRef.current) {
+      swipeHandledRef.current = false;
+      return;
+    }
+    if (loading || error || !story || isPaused) return;
+    if (event?.target?.closest?.('[data-story-interactive="true"],button,a,input,textarea,select,iframe')) return;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const clickX = Number(event?.clientX || 0);
+    if (!viewportWidth || clickX < viewportWidth / 2) {
+      goPrevious();
+      return;
+    }
+    goNext();
+  };
+
+  const handleTouchStart = (event) => {
+    if (event?.target?.closest?.('[data-story-interactive="true"],button,a,input,textarea,select,iframe')) {
+      touchStartXRef.current = null;
+      return;
+    }
+    touchStartXRef.current = Number(event.touches?.[0]?.clientX || 0);
+  };
+
+  const handleTouchEnd = (event) => {
+    if (touchStartXRef.current === null) return;
+    const endX = Number(event.changedTouches?.[0]?.clientX || 0);
+    const deltaX = endX - touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (Math.abs(deltaX) < 56) return;
+    swipeHandledRef.current = true;
+    if (deltaX < 0) {
+      goNext();
+      return;
+    }
+    goPrevious();
+  };
+
   return (
     <>
-      <OverlayShell open={open} onClose={onClose} padded={false}>
-        <div className="relative min-h-[75vh] overflow-hidden rounded-t-[1.9rem] sm:rounded-[2rem]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_38%),linear-gradient(180deg,#070b13,#0d1320_42%,#080b12)]" />
+      <OverlayShell open={open} onClose={onClose} padded={false} fullscreen>
+        <div
+          className="relative h-[100dvh] overflow-hidden"
+          onClick={handleViewerClick}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_38%),linear-gradient(180deg,#04070d,#0a1220_46%,#04070d)]" />
           <div className="relative z-30 flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex gap-1.5">
@@ -991,6 +1070,7 @@ export function StoryViewerModal({
                 <div className="relative">
                   <button
                     type="button"
+                    data-story-interactive="true"
                     onClick={(event) => {
                       stopStoryEvent(event);
                       setMenuOpen((current) => !current);
@@ -1000,16 +1080,17 @@ export function StoryViewerModal({
                     <span className="text-lg leading-none">...</span>
                   </button>
                   {menuOpen ? (
-                    <div className="absolute right-0 top-12 w-44 overflow-hidden rounded-[1.1rem] border border-white/10 bg-[#0d1320] shadow-[0_18px_42px_rgba(0,0,0,0.32)]">
-                      <button type="button" onClick={openStats} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Story stats</button>
-                      <button type="button" onClick={handleArchiveStory} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Archive story</button>
-                      <button type="button" onClick={handleDeleteStory} className="w-full px-4 py-3 text-left text-sm text-rose-200 hover:bg-rose-500/10">Delete story</button>
+                    <div data-story-interactive="true" className="absolute right-0 top-12 w-44 overflow-hidden rounded-[1.1rem] border border-white/10 bg-[#0d1320] shadow-[0_18px_42px_rgba(0,0,0,0.32)]">
+                      <button data-story-interactive="true" type="button" onClick={openStats} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Story stats</button>
+                      <button data-story-interactive="true" type="button" onClick={handleArchiveStory} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Archive story</button>
+                      <button data-story-interactive="true" type="button" onClick={handleDeleteStory} className="w-full px-4 py-3 text-left text-sm text-rose-200 hover:bg-rose-500/10">Delete story</button>
                     </div>
                   ) : null}
                 </div>
               ) : null}
               <button
                 type="button"
+                data-story-interactive="true"
                 onClick={onClose}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/8 text-lg text-white hover:bg-white/12"
               >
@@ -1018,7 +1099,7 @@ export function StoryViewerModal({
             </div>
           </div>
 
-          <div className="relative z-30 flex min-h-[calc(75vh-5rem)] items-center justify-center px-4 pb-28 pt-2 sm:px-6">
+          <div className="relative z-30 flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 pb-20 pt-2 sm:px-6">
             {loading ? (
               <p className="text-sm text-gray-400">Loading story...</p>
             ) : error ? (
@@ -1033,11 +1114,12 @@ export function StoryViewerModal({
           {previewComment ? (
             <button
               type="button"
+              data-story-interactive="true"
               onClick={(event) => {
                 stopStoryEvent(event);
                 openComments();
               }}
-              className="absolute bottom-24 left-4 z-40 max-w-[70%] rounded-[1.4rem] border border-white/12 bg-black/45 px-3 py-2 text-left shadow-[0_12px_30px_rgba(0,0,0,0.25)] backdrop-blur-md"
+              className="absolute bottom-16 left-4 z-40 max-w-[68%] rounded-[1.2rem] border border-white/12 bg-black/45 px-3 py-2 text-left shadow-[0_12px_30px_rgba(0,0,0,0.25)] backdrop-blur-md"
             >
               <div className="flex items-center gap-2">
                 {previewComment.user?.avatar ? (
@@ -1054,24 +1136,34 @@ export function StoryViewerModal({
           ) : null}
 
           {!readonly && story ? (
-            <div className="absolute bottom-5 left-1/2 z-40 flex w-[calc(100%-2rem)] max-w-[26rem] -translate-x-1/2 items-center justify-between gap-2 rounded-full border border-white/12 bg-black/45 px-3 py-2.5 shadow-[0_18px_42px_rgba(0,0,0,0.3)] backdrop-blur-md">
+            <div
+              data-story-interactive="true"
+              className="absolute bottom-4 left-1/2 z-40 flex w-[calc(100%-1.4rem)] max-w-[24rem] -translate-x-1/2 items-center justify-between gap-1.5 rounded-full border border-white/12 bg-black/48 px-2 py-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.3)] backdrop-blur-md"
+            >
               <button
                 type="button"
                 onClick={handleTogglePump}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-display font-black transition-colors ${
+                data-story-interactive="true"
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-display font-black transition-colors ${
                   activeEngagement.user_pumped ? 'bg-cyan-500/18 text-cyan-100' : 'text-white hover:bg-white/8'
                 }`}
               >
+                <img
+                  src={activeEngagement.user_pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+                  alt=""
+                  className="h-4 w-4 object-contain"
+                />
                 <span>Pumps</span>
-                <span className="text-xs text-cyan-100/90">{activeEngagement.pump_count || 0}</span>
+                <span className="text-[11px] text-cyan-100/90">{activeEngagement.pump_count || 0}</span>
               </button>
               <button
                 type="button"
+                data-story-interactive="true"
                 onClick={(event) => {
                   stopStoryEvent(event);
                   setSharePickerOpen(true);
                 }}
-                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-display font-black text-white transition-colors hover:bg-white/8"
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-display font-black text-white transition-colors hover:bg-white/8"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l10-7-3 14-4-5-3-2z" />
@@ -1080,36 +1172,20 @@ export function StoryViewerModal({
               </button>
               <button
                 type="button"
+                data-story-interactive="true"
                 onClick={(event) => {
                   stopStoryEvent(event);
                   openComments();
                 }}
-                className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-display font-black text-white transition-colors hover:bg-white/8"
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-display font-black text-white transition-colors hover:bg-white/8"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-6 7l-3-3V6a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H9l-2 3z" />
                 </svg>
                 <span>Comment</span>
-                <span className="text-xs text-cyan-100/90">{activeEngagement.comment_count || 0}</span>
+                <span className="text-[11px] text-cyan-100/90">{activeEngagement.comment_count || 0}</span>
               </button>
             </div>
-          ) : null}
-
-          {stories.length > 1 ? (
-            <>
-              <button
-                type="button"
-                onClick={() => canGoBack && setIndex((current) => Math.max(0, current - 1))}
-                className="absolute bottom-0 left-0 top-24 z-10 w-1/2"
-                aria-label="Previous story"
-              />
-              <button
-                type="button"
-                onClick={() => canGoForward && setIndex((current) => Math.min(stories.length - 1, current + 1))}
-                className="absolute bottom-0 right-0 top-24 z-10 w-1/2"
-                aria-label="Next story"
-              />
-            </>
           ) : null}
         </div>
       </OverlayShell>
@@ -1545,7 +1621,7 @@ export default function InboxHighlightsStrip({
   return (
       <div className="border-b border-piu-border/25 bg-[linear-gradient(180deg,rgba(7,12,21,0.92),rgba(7,12,21,0.58))] px-4 pb-3 pt-2.5 sm:px-5">
         {loading ? (
-        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="scrollbar-none flex gap-2 overflow-x-auto px-1 pb-1 pt-2.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[0, 1, 2, 3].map((index) => (
             <div key={index} className="flex w-[4.4rem] shrink-0 flex-col items-center pt-1.5">
               <div className="relative pt-[2.05rem]">
@@ -1557,7 +1633,7 @@ export default function InboxHighlightsStrip({
           ))}
         </div>
       ) : (
-        <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="scrollbar-none flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {orderedCircles.map((circle) => (
             <HighlightCircle
               key={circle.user.id}

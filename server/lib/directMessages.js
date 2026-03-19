@@ -140,6 +140,22 @@ function sanitizeAbsoluteUrl(value) {
   return raw;
 }
 
+function sanitizeLinkShareItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .slice(0, 3)
+    .map((item) => ({
+      songTitle: String(item?.songTitle || item?.song_title || '').trim().slice(0, 120),
+      mode: String(item?.mode || '').trim().slice(0, 24),
+      level: toInt(item?.level),
+      score: toInt(item?.score),
+      grade: String(item?.grade || '').trim().slice(0, 24),
+      jacketUrl: String(item?.jacketUrl || item?.jacket_url || '').trim().slice(0, MAX_LINK_LENGTH),
+      scoreDelta: toInt(item?.scoreDelta || item?.score_delta),
+    }))
+    .filter((item) => item.songTitle || item.score > 0 || item.grade || item.jacketUrl);
+}
+
 function sanitizeLinkSharePayload(linkShare) {
   if (!linkShare || typeof linkShare !== 'object') return null;
   const src = linkShare || {};
@@ -187,6 +203,9 @@ function sanitizeLinkSharePayload(linkShare) {
     sourceMessageId: String(src.sourceMessageId || src.source_message_id || '').trim().slice(0, 80),
     statusKind: String(src.statusKind || src.status_kind || '').trim().slice(0, 24),
     statusLabel: String(src.statusLabel || src.status_label || '').trim().slice(0, 120),
+    previewItems: sanitizeLinkShareItems(src.previewItems || src.preview_items),
+    totalItemCount: toInt(src.totalItemCount || src.total_item_count),
+    extraItemCount: toInt(src.extraItemCount || src.extra_item_count),
   };
 }
 
@@ -251,6 +270,32 @@ function sanitizeNoteThreadPayload(noteThread) {
     linkPath: sanitizeRelativePath(src.linkPath || src.link_path),
     linkUrl: sanitizeAbsoluteUrl(src.linkUrl || src.link_url),
     linkLabel: String(src.linkLabel || src.link_label || '').trim().slice(0, 48),
+  };
+}
+
+function sanitizeReactionKey(value) {
+  const key = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .slice(0, 32);
+  return key || '';
+}
+
+function normalizeMessageReactions(rawReactions = [], viewerReaction = '') {
+  const tally = new Map();
+  for (const entry of Array.isArray(rawReactions) ? rawReactions : []) {
+    const key = sanitizeReactionKey(entry?.reaction_key || entry?.reactionKey);
+    if (!key) continue;
+    const current = tally.get(key) || 0;
+    tally.set(key, current + Math.max(1, toInt(entry?.count) || 1));
+  }
+
+  return {
+    reactions: Array.from(tally.entries())
+      .map(([key, count]) => ({ key, count }))
+      .sort((left, right) => right.count - left.count || left.key.localeCompare(right.key)),
+    viewerReaction: sanitizeReactionKey(viewerReaction),
   };
 }
 
@@ -447,13 +492,17 @@ function normalizeConversationRow(row) {
   };
 }
 
-function normalizeConversationMessage(row, viewerUserId = '') {
+function normalizeConversationMessage(row, viewerUserId = '', reactionPayload = null) {
   const metadata = parseMessageMetadata(row?.metadata_json);
   const share = sanitizeSessionSharePayload(metadata.share);
   const linkShare = sanitizeLinkSharePayload(metadata.link_share);
   const challengeCard = sanitizeChallengeCardPayload(metadata.challenge_card);
   const noteThread = sanitizeNoteThreadPayload(metadata.note_thread);
   const senderUserId = String(row?.sender_user_id || '').trim();
+  const normalizedReactions = normalizeMessageReactions(
+    reactionPayload?.reactions || row?.reactions || [],
+    reactionPayload?.viewerReaction || row?.viewer_reaction || ''
+  );
 
   return {
     id: row?.id || '',
@@ -472,6 +521,8 @@ function normalizeConversationMessage(row, viewerUserId = '') {
       avatar: normalizeUserAvatarForList(row?.sender_avatar, senderUserId, 40, row?.sender_avatar_v),
     },
     is_own: !!viewerUserId && senderUserId === String(viewerUserId || '').trim(),
+    reactions: normalizedReactions.reactions,
+    viewer_reaction: normalizedReactions.viewerReaction,
   };
 }
 
@@ -516,6 +567,7 @@ module.exports = {
   normalizeConversationMessage,
   normalizeConversationRow,
   parseMessageMetadata,
+  sanitizeReactionKey,
   sanitizeChallengeCardPayload,
   sanitizeLinkSharePayload,
   sanitizeNoteThreadPayload,

@@ -26,6 +26,57 @@ function formatDelta(value) {
   return Number.isFinite(numeric) && numeric > 0 ? `+${numeric.toLocaleString()}` : '';
 }
 
+function normalizePreviewItem(entry, kind = 'clear') {
+  if (!entry || typeof entry !== 'object') return null;
+
+  const resolvedKind = String(kind || '').trim().toLowerCase() === 'upscore' ? 'upscore' : 'clear';
+  const score = resolvedKind === 'upscore'
+    ? Number(entry.new_score ?? entry.score) || 0
+    : Number(entry.score) || 0;
+  const oldScore = resolvedKind === 'upscore' ? Number(entry.old_score) || 0 : 0;
+  const scoreDelta = resolvedKind === 'upscore'
+    ? (Number(entry.scoreDelta) || Math.max(0, score - oldScore))
+    : 0;
+
+  const item = {
+    songTitle: compactText(entry.song_title || entry.songTitle, 80),
+    mode: String(entry.mode || '').trim(),
+    level: Number(entry.level) || 0,
+    score,
+    grade: compactText(
+      resolvedKind === 'upscore'
+        ? (entry.new_grade || entry.grade)
+        : entry.grade,
+      20
+    ),
+    jacketUrl: String(entry._jacketUrl || entry.jacket_url || entry.background_url || '').trim(),
+    scoreDelta,
+  };
+
+  return item.songTitle || item.score > 0 || item.grade || item.jacketUrl ? item : null;
+}
+
+function buildPreviewItems(rows, kind = 'clear') {
+  const normalizedKind = String(kind || '').trim().toLowerCase() === 'upscore' ? 'upscore' : 'clear';
+  const sourceRows = normalizedKind === 'clear'
+    ? (() => {
+        const playable = rows.filter((entry) => String(entry?.entry_type || '').trim().toLowerCase() !== 'title_unlock');
+        return playable.length > 0 ? playable : rows;
+      })()
+    : rows;
+
+  const previewItems = sourceRows
+    .map((entry) => normalizePreviewItem(entry, normalizedKind))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  return {
+    previewItems,
+    totalItemCount: sourceRows.length,
+    extraItemCount: Math.max(0, sourceRows.length - previewItems.length),
+  };
+}
+
 function buildCompareOutcome({ best, targetScore = 0, challengeKind = '' }) {
   if (!best || typeof best !== 'object') {
     return {
@@ -228,6 +279,7 @@ export function buildUpscoreLinkShare({
     if (!best) return { entry, gain };
     return gain > best.gain ? { entry, gain } : best;
   }, null);
+  const { previewItems, totalItemCount, extraItemCount } = buildPreviewItems(rows, 'upscore');
 
   return {
     kind: 'upscore',
@@ -241,6 +293,9 @@ export function buildUpscoreLinkShare({
     mode: String(bestGainEntry?.entry?.mode || ''),
     level: Number(bestGainEntry?.entry?.level) || 0,
     targetScore: Number(bestGainEntry?.entry?.new_score) || 0,
+    previewItems,
+    totalItemCount,
+    extraItemCount,
   };
 }
 
@@ -365,6 +420,7 @@ export function buildClearLinkShare({
   }
 
   const leadLabel = formatLeadClearLabel(rows[0]);
+  const { previewItems, totalItemCount, extraItemCount } = buildPreviewItems(rows, 'clear');
   return {
     kind: 'clear',
     path: `/clear/${id}`,
@@ -375,6 +431,9 @@ export function buildClearLinkShare({
     mode: String(rows[0]?.mode || ''),
     level: Number(rows[0]?.level) || 0,
     targetScore: Number(rows[0]?.score) || 0,
+    previewItems,
+    totalItemCount,
+    extraItemCount,
   };
 }
 
