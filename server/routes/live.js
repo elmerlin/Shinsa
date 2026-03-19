@@ -40,6 +40,7 @@ const {
   buildYoutubeTimestampPayload,
   upsertManagedYoutubeChaptersBlock,
 } = require('../lib/youtubeTimestamps');
+const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const piugameRoutes = require('./piugame');
 const socialRoutes = require('./social');
 
@@ -992,6 +993,52 @@ function getSessionParticipants(db, sessionOrId, options = {}) {
   return rows
     .map((row) => normalizeLiveParticipantRow(row, session.host_user_id, options.currentUserId || ''))
     .filter(Boolean);
+}
+
+function getLiveMentionCandidates(db, sessionOrId) {
+  const session = typeof sessionOrId === 'string'
+    ? getLiveSession(db, sessionOrId)
+    : sessionOrId;
+  if (!session?.id) return [];
+
+  const rows = db.prepare(`
+    SELECT DISTINCT
+      u.id,
+      u.username,
+      COALESCE(u.avatar, '') AS avatar,
+      COALESCE(u.avatar_v, 0) AS avatar_v
+    FROM users u
+    JOIN (
+      SELECT p.user_id
+      FROM live_session_participants p
+      WHERE p.live_session_id = ?
+        AND p.status = ?
+      UNION
+      SELECT pr.user_id
+      FROM live_session_presence pr
+      WHERE pr.live_session_id = ?
+        AND pr.last_seen >= datetime('now', ?)
+    ) active_users ON active_users.user_id = u.id
+    ORDER BY LOWER(u.username) ASC
+  `).all(
+    session.id,
+    LIVE_PARTICIPANT_STATUS_ACTIVE,
+    session.id,
+    `-${PRESENCE_TTL_SECONDS} seconds`
+  );
+
+  return rows
+    .map((row) => ({
+      id: row.id,
+      username: row.username || '',
+      avatar: normalizeUserAvatarForList(row.avatar, row.id, 40, row.avatar_v),
+    }))
+    .filter((row) => row.id && row.username);
+}
+
+function findMentionedLiveUsers(db, sessionOrId, text) {
+  const allowedIds = new Set(getLiveMentionCandidates(db, sessionOrId).map((entry) => String(entry.id || '').trim()).filter(Boolean));
+  return findMentionedUsers(db, text).filter((user) => allowedIds.has(String(user.id || '').trim()));
 }
 
 function getSessionParticipantRecord(db, sessionOrId, userId, options = {}) {
@@ -4632,6 +4679,21 @@ router.get('/sessions/:id/messages', requireAuth, (req, res) => {
   }
 });
 
+router.get('/sessions/:id/mentions', requireAuth, (req, res) => {
+  try {
+    const db = getDb();
+    const session = requireLiveSession(db, req.params.id);
+    const query = String(req.query?.q || '').trim().toLowerCase();
+    const users = getLiveMentionCandidates(db, session)
+      .filter((entry) => String(entry?.id || '') !== String(req.user.id || ''))
+      .filter((entry) => !query || String(entry?.username || '').toLowerCase().includes(query))
+      .slice(0, 8);
+    res.json({ users });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message });
+  }
+});
+
 router.post('/sessions/:id/messages', requireAuth, (req, res) => {
   try {
     const db = getDb();
@@ -4660,6 +4722,15 @@ router.post('/sessions/:id/messages', requireAuth, (req, res) => {
       INSERT INTO live_session_messages (id, live_session_id, user_id, username, avatar, message, message_type, metadata_json)
       VALUES (?, ?, ?, ?, ?, ?, 'chat', '{}')
     `).run(id, session.id, user.id, user.username || req.user.username || 'User', avatar, message);
+    notifyMentionedUsers(db, {
+      mentionedUsers: findMentionedLiveUsers(db, session, message),
+      actorUserId: user.id,
+      actorUsername: user.username || req.user.username || 'Someone',
+      type: 'live_session_mention',
+      title: `${user.username || req.user.username || 'Someone'} mentioned you in ${session.title || (isHourOfPowerSession(session) ? 'Hour of Power' : 'a live session')}`,
+      message: `${user.username || req.user.username || 'Someone'} mentioned you in ${session.title || (isHourOfPowerSession(session) ? 'Hour of Power' : 'a live session')}`,
+      link: `/live/${session.id}`,
+    });
 
     const normalizedMessage = getNormalizedLiveMessage(db, id, req.user.id);
     broadcastLiveMessageAdded(session.id, normalizedMessage, 'message');

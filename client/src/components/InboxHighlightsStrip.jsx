@@ -6,6 +6,7 @@ import ScoreSnapshotCard from './ScoreSnapshotCard';
 import SessionSummaryCard from './SessionSummaryCard';
 import SessionShareCard from './SessionShareCard';
 import LiveSessionCard from './LiveSessionCard';
+import MentionSuggestionsPanel from './MentionSuggestionsPanel';
 import SessionPlanCard from './SessionPlanCard';
 import StickerAsset from './StickerAsset';
 import UserPickerDialog from './UserPickerDialog';
@@ -22,9 +23,11 @@ import {
   getMessageStoryStats,
   getOrCreateDirectConversation,
   markMessageStoryViewed,
+  searchUsers,
   sendConversationMessage,
   toggleMessageStoryPump,
 } from '../utils/api';
+import { useMentionComposer } from '../hooks/useMentionComposer';
 import { splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent } from '../utils/sessionShareMarker';
 import { mergeLiveSessionSummary, splitLiveSessionContent } from '../utils/liveSessionMarker';
@@ -536,6 +539,30 @@ function StoryCommentsModal({
   onDraftChange,
   onSend,
 }) {
+  const { user: authUser } = useAuth();
+  const draftInputRef = useRef(null);
+  const {
+    mentionUsers,
+    mentionLoading,
+    showMentions,
+    updateMentionState,
+    applyMention,
+    handleKeyDown: handleMentionKeyDown,
+    clearMentions,
+  } = useMentionComposer({
+    value: draft,
+    setValue: (nextValue) => onDraftChange?.(nextValue),
+    inputRef: draftInputRef,
+    enabled: open,
+    searchMentions: searchUsers,
+    excludeUserIds: [authUser?.id].filter(Boolean),
+  });
+
+  useEffect(() => {
+    if (open) return;
+    clearMentions();
+  }, [clearMentions, open]);
+
   return (
     <OverlayShell open={open} onClose={onClose}>
       <div className="space-y-4">
@@ -577,15 +604,29 @@ function StoryCommentsModal({
         </div>
 
         <div className="space-y-2">
-          <textarea
-            value={draft}
-            onChange={(event) => onDraftChange?.(event.target.value)}
-            rows={2}
-            maxLength={280}
-            placeholder={`Comment on ${ownerUser?.username || 'this story'}...`}
-            className={`resize-none ${MODAL_INPUT_CLASS}`}
-            style={MODAL_INPUT_STYLE}
-          />
+          <div className="relative">
+            <MentionSuggestionsPanel
+              open={showMentions || mentionLoading}
+              loading={mentionLoading}
+              users={mentionUsers}
+              onSelect={applyMention}
+            />
+            <textarea
+              ref={draftInputRef}
+              value={draft}
+              onChange={(event) => {
+                onDraftChange?.(event.target.value);
+                updateMentionState(event.target.value, event.target.selectionStart);
+              }}
+              onClick={(event) => updateMentionState(draft, event.currentTarget.selectionStart)}
+              onKeyDown={handleMentionKeyDown}
+              rows={2}
+              maxLength={280}
+              placeholder={`Comment on ${ownerUser?.username || 'this story'}...`}
+              className={`resize-none ${MODAL_INPUT_CLASS}`}
+              style={MODAL_INPUT_STYLE}
+            />
+          </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-gray-500">{draft.trim().length}/280</span>
             <button
@@ -1237,12 +1278,35 @@ export function NoteComposerModal({
   onSubmit,
   onClear,
 }) {
+  const { user: authUser } = useAuth();
   const [draft, setDraft] = useState('');
+  const draftInputRef = useRef(null);
+  const {
+    mentionUsers,
+    mentionLoading,
+    showMentions,
+    updateMentionState,
+    applyMention,
+    handleKeyDown: handleMentionKeyDown,
+    clearMentions,
+  } = useMentionComposer({
+    value: draft,
+    setValue: setDraft,
+    inputRef: draftInputRef,
+    enabled: open,
+    searchMentions: searchUsers,
+    excludeUserIds: [authUser?.id].filter(Boolean),
+  });
 
   useEffect(() => {
     if (!open) return;
     setDraft(note?.content || '');
   }, [open, note?.id, note?.content]);
+
+  useEffect(() => {
+    if (open) return;
+    clearMentions();
+  }, [clearMentions, open]);
 
   return (
     <OverlayShell open={open} onClose={onClose}>
@@ -1254,15 +1318,29 @@ export function NoteComposerModal({
           </div>
           <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
         </div>
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          maxLength={120}
-          rows={4}
-          placeholder="What are you up to?"
-          className={`resize-none ${MODAL_INPUT_CLASS}`}
-          style={MODAL_INPUT_STYLE}
-        />
+        <div className="relative">
+          <MentionSuggestionsPanel
+            open={showMentions || mentionLoading}
+            loading={mentionLoading}
+            users={mentionUsers}
+            onSelect={applyMention}
+          />
+          <textarea
+            ref={draftInputRef}
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
+              updateMentionState(event.target.value, event.target.selectionStart);
+            }}
+            onClick={(event) => updateMentionState(draft, event.currentTarget.selectionStart)}
+            onKeyDown={handleMentionKeyDown}
+            maxLength={120}
+            rows={4}
+            placeholder="What are you up to?"
+            className={`resize-none ${MODAL_INPUT_CLASS}`}
+            style={MODAL_INPUT_STYLE}
+          />
+        </div>
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span>Notes last 24 hours and start a fresh reply thread when changed.</span>
           <span>{draft.trim().length}/120</span>
@@ -1305,6 +1383,24 @@ export function StoryComposerModal({
   const [stickerTokens, setStickerTokens] = useState([]);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
+  const { user: authUser } = useAuth();
+  const captionInputRef = useRef(null);
+  const {
+    mentionUsers,
+    mentionLoading,
+    showMentions,
+    updateMentionState,
+    applyMention,
+    handleKeyDown: handleMentionKeyDown,
+    clearMentions,
+  } = useMentionComposer({
+    value: caption,
+    setValue: setCaption,
+    inputRef: captionInputRef,
+    enabled: open,
+    searchMentions: searchUsers,
+    excludeUserIds: [authUser?.id].filter(Boolean),
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -1326,6 +1422,11 @@ export function StoryComposerModal({
     setImagePreview(nextUrl);
     return () => URL.revokeObjectURL(nextUrl);
   }, [imageFile]);
+
+  useEffect(() => {
+    if (open) return;
+    clearMentions();
+  }, [clearMentions, open]);
 
   const selectedScore = scoreOptions.find((option) => option.value === selectedSource) || null;
 
@@ -1444,15 +1545,29 @@ export function StoryComposerModal({
           )
         ) : null}
 
-        <textarea
-          value={caption}
-          onChange={(event) => setCaption(event.target.value)}
-          maxLength={420}
-          rows={4}
-          placeholder={storyType === 'score_snapshot' ? 'Add a caption to your score snapshot' : 'Add a caption'}
-          className={`resize-none ${MODAL_INPUT_CLASS}`}
-          style={MODAL_INPUT_STYLE}
-        />
+        <div className="relative">
+          <MentionSuggestionsPanel
+            open={showMentions || mentionLoading}
+            loading={mentionLoading}
+            users={mentionUsers}
+            onSelect={applyMention}
+          />
+          <textarea
+            ref={captionInputRef}
+            value={caption}
+            onChange={(event) => {
+              setCaption(event.target.value);
+              updateMentionState(event.target.value, event.target.selectionStart);
+            }}
+            onClick={(event) => updateMentionState(caption, event.currentTarget.selectionStart)}
+            onKeyDown={handleMentionKeyDown}
+            maxLength={420}
+            rows={4}
+            placeholder={storyType === 'score_snapshot' ? 'Add a caption to your score snapshot' : 'Add a caption'}
+            className={`resize-none ${MODAL_INPUT_CLASS}`}
+            style={MODAL_INPUT_STYLE}
+          />
+        </div>
 
         <div className="flex items-center justify-between gap-3">
           <DojoCatStickerPicker

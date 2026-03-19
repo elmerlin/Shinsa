@@ -22,6 +22,7 @@ import {
   pumpLiveMessage,
   removeLiveSessionCohost,
   searchUsers,
+  searchLiveSessionMentions,
   sendLiveMessage,
   sendLivePresence,
   sendLiveRequest,
@@ -34,6 +35,7 @@ import {
 import LiveEmote from '../components/LiveEmote';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import LiveHeaderStatusStrip from '../components/LiveHeaderStatusStrip';
+import MentionSuggestionsPanel from '../components/MentionSuggestionsPanel';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import { HourOfPowerLogo, HourOfPowerWordmark } from '../components/HourOfPowerBrand';
@@ -50,6 +52,7 @@ import {
 import { renderFormattedText } from '../utils/formatText';
 import { isStickerOnlyMessage, STICKER_GROUPS } from '../utils/stickers';
 import { buildLiveSessionLinkShare, buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
+import { useMentionComposer } from '../hooks/useMentionComposer';
 import {
   getLiveOverlaySceneOptions,
   getLiveOverlayOutputSpec,
@@ -3022,6 +3025,26 @@ export default function LivePage() {
   const requestPolicySummary = formatRequestPolicySummary(requestModeFilter, requestMaxLevel);
   const requests = Array.isArray(snapshot?.requests) ? snapshot.requests : [];
   const viewerState = snapshot?.viewer_state || { chat_muted: false, requests_blocked: false };
+  const liveMentionSearch = React.useCallback(async (query) => {
+    if (!activeSessionId || live?.status !== 'live') return [];
+    return searchLiveSessionMentions(activeSessionId, query);
+  }, [activeSessionId, live?.status]);
+  const {
+    mentionUsers: liveMentionUsers,
+    mentionLoading: liveMentionLoading,
+    showMentions: showLiveMentions,
+    updateMentionState: updateLiveMentionState,
+    applyMention: applyLiveMention,
+    handleKeyDown: handleLiveMentionKeyDown,
+    clearMentions: clearLiveMentions,
+  } = useMentionComposer({
+    value: chatInput,
+    setValue: setChatInput,
+    inputRef: chatInputRef,
+    enabled: live?.status === 'live' && !viewerState.chat_muted,
+    searchMentions: liveMentionSearch,
+    excludeUserIds: [user?.id].filter(Boolean),
+  });
   const isHost = !!live?.is_host;
   const isParticipant = !!live?.is_participant;
   const showCohostControl = isHost && live?.status === 'live' && !isHopSession;
@@ -4406,6 +4429,7 @@ export default function LivePage() {
       const data = await sendLiveMessage(activeSessionId, { message: trimmed });
       appendLiveMessage(data.message, { markMessagesSeen: true });
       setChatInput('');
+      clearLiveMentions();
       const reaction = getLiveReactionPayload(trimmed);
       if (reaction) showFloatingReaction(reaction);
     } catch (err) {
@@ -5805,15 +5829,28 @@ export default function LivePage() {
 
       {live?.status === 'live' ? (
         <form onSubmit={handleSendChat} className="mt-3 flex gap-2">
-          <input
-            ref={chatInputRef}
-            value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
-            className={`input-field flex-1 ${isMobileChatLayout ? 'text-base' : ''}`}
-            placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message or use :shinsa_hype:'}
-            maxLength={500}
-            disabled={viewerState.chat_muted}
-          />
+          <div className="relative flex-1">
+            <MentionSuggestionsPanel
+              open={showLiveMentions || liveMentionLoading}
+              loading={liveMentionLoading}
+              users={liveMentionUsers}
+              onSelect={applyLiveMention}
+            />
+            <input
+              ref={chatInputRef}
+              value={chatInput}
+              onChange={(e) => {
+                setChatInput(e.target.value);
+                updateLiveMentionState(e.target.value, e.target.selectionStart);
+              }}
+              onClick={(e) => updateLiveMentionState(chatInput, e.currentTarget.selectionStart)}
+              onKeyDown={handleLiveMentionKeyDown}
+              className={`input-field w-full ${isMobileChatLayout ? 'text-base' : ''}`}
+              placeholder={viewerState.chat_muted ? 'Host has muted your chat' : 'Send a message or use :shinsa_hype:'}
+              maxLength={500}
+              disabled={viewerState.chat_muted}
+            />
+          </div>
           {isMobileChatLayout ? (
             <button
               type="button"

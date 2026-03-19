@@ -18,6 +18,7 @@ import {
   getOrCreateDirectConversation,
   getSongChartDetail,
   getUpscore,
+  searchConversationMentions,
   setMessageConversationReaction,
   sendMessageConversationStomp,
   sendConversationMessage,
@@ -46,10 +47,12 @@ import InboxHighlightsStrip, {
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
 import SquadComposerModal from '../components/SquadComposerModal';
+import MentionSuggestionsPanel from '../components/MentionSuggestionsPanel';
 import SquadSettingsModal from '../components/SquadSettingsModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
+import { useMentionComposer } from '../hooks/useMentionComposer';
 
 const LINK_SHARE_BADGES = {
   live_session: 'Live session',
@@ -1842,6 +1845,11 @@ function ConversationView({
   onDraftChange,
   onComposerKeyDown,
   onSend,
+  mentionUsers,
+  mentionLoading,
+  showMentions,
+  onApplyMention,
+  onRefreshMentions,
   onInsertSticker,
   onReplyWithBest,
   canReplyWithBest,
@@ -2012,17 +2020,29 @@ function ConversationView({
               panelClassName="w-[min(21rem,calc(100vw-1rem))]"
               align="left"
             />
-            <textarea
-              ref={draftInputRef}
-              value={draft}
-              onChange={(event) => onDraftChange(event.target.value)}
-              onKeyDown={onComposerKeyDown}
-              rows={1}
-              maxLength={4000}
-              placeholder={`Message ${headerTitle || 'chat'}...`}
-              className="min-h-[2.75rem] max-h-40 flex-1 resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
-              disabled={sending || !activeConversation}
-            />
+            <div className="relative flex-1">
+              <MentionSuggestionsPanel
+                open={showMentions || mentionLoading}
+                loading={mentionLoading}
+                users={mentionUsers}
+                onSelect={onApplyMention}
+              />
+              <textarea
+                ref={draftInputRef}
+                value={draft}
+                onChange={(event) => {
+                  onDraftChange(event.target.value);
+                  onRefreshMentions(event.target.value, event.target.selectionStart);
+                }}
+                onClick={(event) => onRefreshMentions(draft, event.currentTarget.selectionStart)}
+                onKeyDown={onComposerKeyDown}
+                rows={1}
+                maxLength={4000}
+                placeholder={`Message ${headerTitle || 'chat'}...`}
+                className="min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
+                disabled={sending || !activeConversation}
+              />
+            </div>
             <button
               type="button"
               onClick={onSend}
@@ -2139,6 +2159,26 @@ export default function MessagesPage() {
 
   const activePartner = activeConversation?.partner || null;
   const activeSquad = activeConversation?.kind === 'squad' ? activeConversation : null;
+  const conversationMentionSearch = useCallback(async (query) => {
+    if (!activeConversation?.id || activeConversation?.kind !== 'squad') return [];
+    return searchConversationMentions(activeConversation.id, query);
+  }, [activeConversation?.id, activeConversation?.kind]);
+  const {
+    mentionUsers,
+    mentionLoading,
+    showMentions,
+    updateMentionState,
+    applyMention,
+    handleKeyDown: handleMentionKeyDown,
+    clearMentions,
+  } = useMentionComposer({
+    value: draft,
+    setValue: setDraft,
+    inputRef: draftInputRef,
+    enabled: activeConversation?.kind === 'squad',
+    searchMentions: conversationMentionSearch,
+    excludeUserIds: [user?.id].filter(Boolean),
+  });
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
   const orderedStoryCircles = useMemo(() => {
     const circles = [];
@@ -2554,6 +2594,7 @@ export default function MessagesPage() {
 
   useEffect(() => {
     setDraft('');
+    clearMentions();
     setActionError('');
     setSquadSettingsOpen(false);
     setReplyingMessageId('');
@@ -2562,7 +2603,7 @@ export default function MessagesPage() {
     setExpiringMessageId('');
     lastAutoScrollKeyRef.current = '';
     initialConversationScrollRef.current = '';
-  }, [conversationId]);
+  }, [clearMentions, conversationId]);
 
   useEffect(() => {
     if (!conversationId || typeof window === 'undefined' || window.innerWidth >= 640) {
@@ -2650,6 +2691,7 @@ export default function MessagesPage() {
     try {
       const payload = await sendConversationMessage(conversationId, { content: trimmedDraft });
       setDraft('');
+      clearMentions();
       if (payload?.message) {
         setMessages((prev) => [...prev, payload.message]);
       }
@@ -2665,6 +2707,7 @@ export default function MessagesPage() {
   };
 
   const handleComposerKeyDown = (event) => {
+    if (handleMentionKeyDown(event)) return;
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       handleSend();
@@ -3207,6 +3250,11 @@ export default function MessagesPage() {
           onDraftChange={setDraft}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={handleSend}
+          mentionUsers={mentionUsers}
+          mentionLoading={mentionLoading}
+          showMentions={showMentions}
+          onApplyMention={applyMention}
+          onRefreshMentions={updateMentionState}
           onInsertSticker={handleInsertSticker}
           onReplyWithBest={handleReplyWithBest}
           canReplyWithBest={canReplyWithBest}

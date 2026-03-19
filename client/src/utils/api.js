@@ -656,6 +656,9 @@ export const setMessageConversationReaction = (conversationId, messageId, reacti
     body: JSON.stringify({ reaction }),
   }
 );
+export const searchConversationMentions = (conversationId, q) => request(
+  `/messages/conversations/${encodeURIComponent(conversationId)}/mentions?q=${encodeURIComponent(q)}`
+).then((payload) => (Array.isArray(payload?.users) ? payload.users : []));
 export const sendConversationMessage = (conversationId, data) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
   method: 'POST',
   body: JSON.stringify(data),
@@ -693,6 +696,9 @@ export const createMessageNote = (data) => request('/messages/highlights/note', 
 export const clearMessageNote = () => request('/messages/highlights/note', {
   method: 'DELETE',
 });
+export const searchLiveSessionMentions = (sessionId, q) => request(
+  `/live/sessions/${encodeURIComponent(sessionId)}/mentions?q=${encodeURIComponent(q)}`
+).then((payload) => (Array.isArray(payload?.users) ? payload.users : []));
 export async function createMessageStoryItem({
   storyType = 'image',
   caption = '',

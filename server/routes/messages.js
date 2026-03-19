@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth } = require('./auth');
 const { createUserNotification } = require('../lib/notifications');
-const { findMentionedUsers } = require('../lib/mentions');
+const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const {
   buildDirectConversationKey,
   buildNotificationBody,
@@ -659,6 +659,84 @@ function getSquadMemberRow(db, conversationId, userId) {
   `).get(conversationId, userId);
 }
 
+function getConversationMentionCandidates(db, conversationId, viewerUserId = '') {
+  return db.prepare(`
+    SELECT
+      u.id,
+      u.username,
+      u.avatar,
+      u.avatar_v,
+      cm.role
+    FROM conversation_members cm
+    JOIN users u ON u.id = cm.user_id
+    WHERE cm.conversation_id = ?
+      AND cm.is_hidden = 0
+      AND (? = '' OR cm.user_id != ?)
+    ORDER BY
+      CASE cm.role
+        WHEN 'creator' THEN 0
+        WHEN 'moderator' THEN 1
+        ELSE 2
+      END,
+      LOWER(u.username) ASC
+  `).all(conversationId, viewerUserId, viewerUserId).map((row) => normalizeSquadMemberUser(row)).filter(Boolean);
+}
+
+function filterMentionedUsersByInboxVisibility(db, ownerUserId, mentionedUsers = []) {
+  return (Array.isArray(mentionedUsers) ? mentionedUsers : []).filter((user) => (
+    user?.id && isFollowingOrSelf(db, user.id, ownerUserId)
+  ));
+}
+
+function notifyInboxNoteMentions(db, actorUser, content) {
+  const actorUserId = String(actorUser?.id || '').trim();
+  if (!actorUserId || !content) return 0;
+  const mentionedUsers = filterMentionedUsersByInboxVisibility(db, actorUserId, findMentionedUsers(db, content));
+  return notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId,
+    actorUsername: actorUser?.username || 'Someone',
+    type: 'note_mention',
+    title: `${actorUser?.username || 'Someone'} mentioned you in a note`,
+    message: `${actorUser?.username || 'Someone'} mentioned you in their note`,
+    link: '/messages',
+  });
+}
+
+function notifyStoryMentions(db, actorUser, ownerUserId, content, storyTitle = '') {
+  const actorUserId = String(actorUser?.id || '').trim();
+  const ownerId = String(ownerUserId || '').trim();
+  if (!actorUserId || !ownerId || !content) return 0;
+  const mentionedUsers = filterMentionedUsersByInboxVisibility(db, ownerId, findMentionedUsers(db, content));
+  const label = storyTitle || 'a story';
+  return notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId,
+    actorUsername: actorUser?.username || 'Someone',
+    type: 'story_mention',
+    title: `${actorUser?.username || 'Someone'} mentioned you in ${label}`,
+    message: `${actorUser?.username || 'Someone'} mentioned you in ${label}`,
+    link: '/messages',
+  });
+}
+
+function notifyStoryCommentMentions(db, actorUser, ownerUserId, ownerUsername, content) {
+  const actorUserId = String(actorUser?.id || '').trim();
+  const ownerId = String(ownerUserId || '').trim();
+  if (!actorUserId || !ownerId || !content) return 0;
+  const mentionedUsers = filterMentionedUsersByInboxVisibility(db, ownerId, findMentionedUsers(db, content));
+  const storyOwnerLabel = ownerUsername ? `${ownerUsername}'s story` : 'a story';
+  return notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId,
+    actorUsername: actorUser?.username || 'Someone',
+    type: 'story_comment_mention',
+    title: `${actorUser?.username || 'Someone'} mentioned you in ${storyOwnerLabel}`,
+    message: `${actorUser?.username || 'Someone'} mentioned you in ${storyOwnerLabel}`,
+    link: '/messages',
+  });
+}
+
 function canManageSquadMembers(member) {
   const role = String(member?.role || '').trim();
   return role === 'creator' || role === 'moderator';
@@ -1191,6 +1269,7 @@ router.post('/highlights/note', requireAuth, (req, res) => {
   });
 
   transaction();
+  notifyInboxNoteMentions(db, user, input.content);
 
   res.status(201).json({
     note: normalizeNotePayload({
@@ -1300,6 +1379,7 @@ router.post('/highlights/story', requireAuth, highlightUpload.single('image'), a
       avatar: normalizeStoryUser(user, 72)?.avatar || '',
     });
     const story = stories.find((item) => item.id === `story:${storyId}`) || null;
+    notifyStoryMentions(db, user, req.user.id, caption, metadata.title || story?.title || 'your story');
     res.status(201).json({ story });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to add story item' });
@@ -1437,6 +1517,7 @@ router.post('/highlights/:userId/story/:storyId/comments', requireAuth, (req, re
     INSERT INTO user_story_comments (id, owner_user_id, story_id, user_id, content, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(commentId, ownerUserId, storyId, req.user.id, content, nowSql);
+  notifyStoryCommentMentions(db, req.user, ownerUserId, match?.user?.username || '', content);
 
   res.status(201).json({
     comments: listStoryComments(db, ownerUserId, storyId),
@@ -1584,6 +1665,24 @@ router.get('/conversations/:id/squad', requireAuth, (req, res) => {
   if (access.error) return res.status(access.status || 404).json({ error: access.error });
 
   res.json(buildSquadResponse(db, conversationId, req.user.id));
+});
+
+router.get('/conversations/:id/mentions', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  if (!conversationId) return res.status(400).json({ error: 'Conversation id is required' });
+
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const query = String(req.query?.q || '').trim().toLowerCase();
+  const users = getConversationMentionCandidates(db, conversationId, req.user.id)
+    .filter((entry) => !query || String(entry?.username || '').toLowerCase().includes(query))
+    .slice(0, 8);
+
+  res.json({ users });
 });
 
 router.put('/conversations/:id/squad', requireAuth, (req, res) => {
