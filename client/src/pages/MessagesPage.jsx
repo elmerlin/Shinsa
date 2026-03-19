@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import {
+  createMessageSquad,
   clearMessageNote,
   createMessageNote,
   createMessageStoryItem,
@@ -44,6 +45,8 @@ import InboxHighlightsStrip, {
 } from '../components/InboxHighlightsStrip';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
+import SquadComposerModal from '../components/SquadComposerModal';
+import SquadSettingsModal from '../components/SquadSettingsModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
@@ -1522,6 +1525,7 @@ function MessageBubble({
 
 function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
   const partner = conversation?.partner;
+  const isSquad = conversation?.kind === 'squad';
   const timeLabel = formatConversationTime(conversation.last_message_at);
   const previewText = conversation?.last_message?.preview || 'Started a conversation';
   const stompState = conversation?.stomp || null;
@@ -1536,18 +1540,27 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
       to={`/messages/${conversation.id}`}
       className="flex items-center gap-3 border-b border-piu-border/20 px-4 py-3.5 transition-colors hover:bg-piu-dark/35 sm:px-5"
     >
-      {partner?.avatar ? (
-        <img src={partner.avatar} alt="" className="h-11 w-11 rounded-full object-cover" />
+      {conversation?.avatar ? (
+        <img
+          src={conversation.avatar}
+          alt=""
+          className={`h-11 w-11 object-cover ${isSquad ? 'rounded-[1rem]' : 'rounded-full'}`}
+        />
       ) : (
-        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
-          {(partner?.username || 'U').slice(0, 1).toUpperCase()}
+        <div className={`flex h-11 w-11 items-center justify-center bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white ${isSquad ? 'rounded-[1rem]' : 'rounded-full'}`}>
+          {(conversation?.title || partner?.username || 'U').slice(0, 1).toUpperCase()}
         </div>
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className={`truncate text-sm font-display font-black ${conversation.unread_count > 0 ? 'text-white' : 'text-gray-200'}`}>
-            {partner?.username || 'Unknown player'}
+            {conversation?.title || partner?.username || 'Unknown player'}
           </p>
+          {isSquad ? (
+            <span className="rounded-full border border-white/10 bg-white/6 px-2 py-0.5 text-[9px] font-display font-black uppercase tracking-[0.16em] text-cyan-100">
+              Squad
+            </span>
+          ) : null}
           {conversation.unread_count > 0 ? (
             <span className="flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-cyan-500 px-1 text-[9px] font-display font-black text-white">
               {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
@@ -1555,38 +1568,52 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
           ) : null}
         </div>
         <p className={`mt-1 truncate text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
+          {isSquad && conversation?.subtitle ? (
+            <>
+              <span className="text-gray-400">{conversation.subtitle}</span>
+              <span className="text-gray-600"> {'\u2022'} </span>
+            </>
+          ) : null}
           {previewText}
           {timeLabel ? <span className="text-gray-600"> {'\u2022'} </span> : null}
           {timeLabel ? <span className="text-[10px] text-gray-500">{timeLabel}</span> : null}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (stompDisabled || !onStomp) return;
-          onStomp(conversation);
-        }}
-        disabled={stompDisabled}
-        aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
-        title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-        className={`group relative flex h-[2.45rem] min-w-[5.1rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border px-3 transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
-      >
-        <span
-          aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 rounded-[0.95rem] bg-cyan-300/20 transition duration-500 ${stomping || isCelebrating ? 'animate-ping opacity-100' : 'opacity-0'}`}
-        />
-        <span
-          aria-hidden="true"
-          className={`pointer-events-none absolute inset-[3px] rounded-[0.8rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
-        />
-        <span
-          className={`relative z-[1] select-none text-sm font-display font-black uppercase tracking-[0.18em] text-cyan-50 [text-shadow:0_0_10px_rgba(103,232,249,0.18)] transition-transform duration-300 ${stompDisabled ? 'text-gray-300' : 'group-hover:scale-[1.04]'} ${stomping ? 'scale-110 rotate-[-5deg]' : ''} ${isCelebrating ? 'scale-[1.08] rotate-[4deg]' : ''}`}
-        >
-          STOMP
+      {isSquad ? (
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-400">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
         </span>
-      </button>
+      ) : (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (stompDisabled || !onStomp) return;
+            onStomp(conversation);
+          }}
+          disabled={stompDisabled}
+          aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
+          title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
+          className={`group relative flex h-[2.45rem] min-w-[5.1rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border px-3 transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
+        >
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-0 rounded-[0.95rem] bg-cyan-300/20 transition duration-500 ${stomping || isCelebrating ? 'animate-ping opacity-100' : 'opacity-0'}`}
+          />
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-[3px] rounded-[0.8rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
+          />
+          <span
+            className={`relative z-[1] select-none text-sm font-display font-black uppercase tracking-[0.18em] text-cyan-50 [text-shadow:0_0_10px_rgba(103,232,249,0.18)] transition-transform duration-300 ${stompDisabled ? 'text-gray-300' : 'group-hover:scale-[1.04]'} ${stomping ? 'scale-110 rotate-[-5deg]' : ''} ${isCelebrating ? 'scale-[1.08] rotate-[4deg]' : ''}`}
+          >
+            STOMP
+          </span>
+        </button>
+      )}
     </Link>
   );
 }
@@ -1607,6 +1634,7 @@ function InboxView({
   stompCelebrationConversationId,
   stompingConversationId,
   onStartChat,
+  onStartSquad,
 }) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const optionsRef = useRef(null);
@@ -1676,6 +1704,25 @@ function InboxView({
                     type="button"
                     onClick={() => {
                       setOptionsOpen(false);
+                      onStartSquad?.();
+                    }}
+                    className="mt-1 flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left transition-colors hover:bg-white/6"
+                  >
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5V9l-5 11zM17 20H7M17 20l-2.5-5M7 20H2V9l5 11zm0 0l2.5-5m0 0h5" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM6.5 8.5a2 2 0 110 4 2 2 0 010-4zm11 0a2 2 0 110 4 2 2 0 010-4z" />
+                      </svg>
+                    </span>
+                    <span>
+                      <p className="text-sm font-display font-black text-white">New squad</p>
+                      <p className="text-[11px] text-gray-400">Start a group chat</p>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOptionsOpen(false);
                       onOpenChatSettings?.();
                     }}
                     className="mt-1 flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left transition-colors hover:bg-white/6"
@@ -1732,6 +1779,13 @@ function InboxView({
               >
                 Start new chat
               </button>
+              <button
+                type="button"
+                onClick={onStartSquad}
+                className="mt-3 rounded-xl border border-white/12 bg-white/6 px-4 py-2 text-sm font-display font-bold text-gray-200 transition-colors hover:border-cyan-300/25 hover:text-white"
+              >
+                Create a squad
+              </button>
             </div>
           ) : (
             conversations.map((conversation) => (
@@ -1784,10 +1838,20 @@ function ConversationView({
   sending,
   onOpenThread,
   onOpenLink,
+  onOpenSquadSettings,
   defaultReaction,
   availableReactions,
   onReact,
 }) {
+  const isSquad = activeConversation?.kind === 'squad';
+  const headerTitle = isSquad
+    ? (activeConversation?.title || 'Squad')
+    : (activePartner?.username || 'Unknown player');
+  const headerSubtitle = isSquad
+    ? (activeConversation?.subtitle || `${activeConversation?.member_count || 0} members`)
+    : 'Private chat';
+  const headerAvatar = isSquad ? activeConversation?.avatar : activePartner?.avatar;
+
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
@@ -1814,26 +1878,56 @@ function ConversationView({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
               </svg>
             </Link>
-            {activePartner?.avatar ? (
-              <img src={activePartner.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+            {isSquad ? (
+              <button
+                type="button"
+                onClick={onOpenSquadSettings}
+                className="flex min-w-0 items-center gap-3 rounded-[1rem] px-1 py-1 text-left transition-colors hover:bg-white/6"
+              >
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="h-10 w-10 rounded-[0.95rem] object-cover" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[0.95rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
+                    {headerTitle.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h1 className="truncate text-lg font-display font-black text-white">{headerTitle}</h1>
+                  <p className="mt-0.5 text-[11px] text-gray-500">{headerSubtitle}</p>
+                </div>
+              </button>
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
-                {(activePartner?.username || 'U').slice(0, 1).toUpperCase()}
-              </div>
+              <>
+                {headerAvatar ? (
+                  <img src={headerAvatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
+                    {headerTitle.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h1 className="truncate text-lg font-display font-black text-white">{headerTitle}</h1>
+                  <p className="mt-0.5 text-[11px] text-gray-500">{headerSubtitle}</p>
+                </div>
+              </>
             )}
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-display font-black text-white">{activePartner?.username || 'Unknown player'}</h1>
-              <p className="mt-0.5 text-[11px] text-gray-500">Private chat</p>
-            </div>
           </div>
-          {activePartner?.id ? (
+          {isSquad ? (
+            <button
+              type="button"
+              onClick={onOpenSquadSettings}
+              className="hidden rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white sm:inline-flex"
+            >
+              Squad settings
+            </button>
+          ) : activePartner?.id ? (
             <Link
               to={getProfilePath(activePartner.id, activePartner.username)}
               className="hidden rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white sm:inline-flex"
             >
               View profile
             </Link>
-            ) : null}
+          ) : null}
         </div>
 
         <div ref={messagesViewportRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
@@ -1905,7 +1999,7 @@ function ConversationView({
               onKeyDown={onComposerKeyDown}
               rows={1}
               maxLength={4000}
-              placeholder={`Message ${activePartner?.username || 'player'}...`}
+              placeholder={`Message ${headerTitle || 'chat'}...`}
               className="min-h-[2.75rem] max-h-40 flex-1 resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
               disabled={sending || !activeConversation}
             />
@@ -1959,6 +2053,9 @@ export default function MessagesPage() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [squadComposerOpen, setSquadComposerOpen] = useState(false);
+  const [creatingSquad, setCreatingSquad] = useState(false);
+  const [squadSettingsOpen, setSquadSettingsOpen] = useState(false);
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [noteSubmitting, setNoteSubmitting] = useState(false);
   const [noteComposerError, setNoteComposerError] = useState('');
@@ -2021,6 +2118,7 @@ export default function MessagesPage() {
   });
 
   const activePartner = activeConversation?.partner || null;
+  const activeSquad = activeConversation?.kind === 'squad' ? activeConversation : null;
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
   const orderedStoryCircles = useMemo(() => {
     const circles = [];
@@ -2437,6 +2535,7 @@ export default function MessagesPage() {
   useEffect(() => {
     setDraft('');
     setActionError('');
+    setSquadSettingsOpen(false);
     setReplyingMessageId('');
     setRematchingMessageId('');
     setAcceptingMessageId('');
@@ -2737,6 +2836,37 @@ export default function MessagesPage() {
       navigate(`/messages/${payload.conversation.id}`);
     }
   };
+
+  const handleCreateSquad = useCallback(async ({ title, avatar, memberIds }) => {
+    setCreatingSquad(true);
+    try {
+      const payload = await createMessageSquad({
+        title,
+        avatar,
+        member_ids: memberIds,
+      });
+      setSquadComposerOpen(false);
+      await loadConversations();
+      if (payload?.conversation?.id) {
+        navigate(`/messages/${payload.conversation.id}`);
+      }
+    } finally {
+      setCreatingSquad(false);
+    }
+  }, [loadConversations, navigate]);
+
+  const handleSquadConversationUpdated = useCallback((nextConversation) => {
+    if (!nextConversation?.id) return;
+    setActiveConversation((prev) => (
+      prev?.id === nextConversation.id
+        ? { ...prev, ...nextConversation }
+        : prev
+    ));
+    setConversations((prev) => prev.map((entry) => (
+      entry.id === nextConversation.id ? { ...entry, ...nextConversation } : entry
+    )));
+    loadConversations();
+  }, [loadConversations]);
 
   const closeStoryViewer = useCallback(() => {
     setStoryViewerState({
@@ -3073,6 +3203,7 @@ export default function MessagesPage() {
           sending={sending}
           onOpenThread={handleOpenMessageThread}
           onOpenLink={handleOpenChatLink}
+          onOpenSquadSettings={() => setSquadSettingsOpen(true)}
           defaultReaction={defaultReaction}
           availableReactions={quickReactions}
           onReact={handleReactToMessage}
@@ -3094,6 +3225,7 @@ export default function MessagesPage() {
           stompCelebrationConversationId={stompCelebrationConversationId}
           stompingConversationId={stompingConversationId}
           onStartChat={() => setPickerOpen(true)}
+          onStartSquad={() => setSquadComposerOpen(true)}
         />
       )}
 
@@ -3102,6 +3234,27 @@ export default function MessagesPage() {
         onClose={() => setPickerOpen(false)}
         onSelect={handleStartConversation}
         excludeUserIds={excludeUserIds}
+      />
+
+      <SquadComposerModal
+        open={squadComposerOpen}
+        currentUserId={user?.id || ''}
+        submitting={creatingSquad}
+        onClose={() => {
+          if (creatingSquad) return;
+          setSquadComposerOpen(false);
+        }}
+        onSubmit={handleCreateSquad}
+      />
+
+      <SquadSettingsModal
+        open={squadSettingsOpen}
+        conversation={activeSquad}
+        messages={messages}
+        currentUserId={user?.id || ''}
+        onClose={() => setSquadSettingsOpen(false)}
+        onConversationUpdated={handleSquadConversationUpdated}
+        onOpenLink={handleOpenChatLink}
       />
 
       <StoryViewerModal

@@ -1442,6 +1442,7 @@ function initializeDb() {
       direct_key TEXT NOT NULL UNIQUE,
       created_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
       title TEXT DEFAULT '',
+      avatar TEXT DEFAULT '',
       last_message_id TEXT DEFAULT '',
       last_message_at TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
@@ -1451,9 +1452,13 @@ function initializeDb() {
     CREATE TABLE IF NOT EXISTS conversation_members (
       conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'member',
+      added_by_user_id TEXT DEFAULT '',
       joined_at TEXT DEFAULT (datetime('now')),
       last_read_at TEXT DEFAULT '',
       is_hidden INTEGER NOT NULL DEFAULT 0,
+      notifications_enabled INTEGER NOT NULL DEFAULT 1,
+      notify_mentions INTEGER NOT NULL DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (conversation_id, user_id)
@@ -2689,6 +2694,60 @@ function initializeDb() {
           ELSE last_proximity_status
         END
     WHERE checked_out_at IS NULL
+  `);
+
+  const conversationCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
+  const conversationMigrations = [
+    ['avatar', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of conversationMigrations) {
+    if (!conversationCols.includes(col)) {
+      db.exec(`ALTER TABLE conversations ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  const conversationMemberCols = db.prepare("PRAGMA table_info(conversation_members)").all().map(c => c.name);
+  const conversationMemberMigrations = [
+    ['role', "TEXT NOT NULL DEFAULT 'member'"],
+    ['added_by_user_id', "TEXT DEFAULT ''"],
+    ['notifications_enabled', 'INTEGER NOT NULL DEFAULT 1'],
+    ['notify_mentions', 'INTEGER NOT NULL DEFAULT 1'],
+  ];
+  for (const [col, type] of conversationMemberMigrations) {
+    if (!conversationMemberCols.includes(col)) {
+      db.exec(`ALTER TABLE conversation_members ADD COLUMN ${col} ${type}`);
+    }
+  }
+
+  db.exec(`
+    UPDATE conversations
+    SET direct_key = CASE
+      WHEN kind = 'squad' AND TRIM(COALESCE(direct_key, '')) = '' THEN 'squad:' || id
+      ELSE direct_key
+    END
+    WHERE TRIM(COALESCE(direct_key, '')) = ''
+  `);
+
+  db.exec(`
+    UPDATE conversation_members
+    SET role = CASE
+      WHEN conversation_id IN (
+        SELECT id
+        FROM conversations
+        WHERE created_by_user_id = conversation_members.user_id
+          AND kind = 'squad'
+      ) THEN 'creator'
+      WHEN TRIM(COALESCE(role, '')) = '' THEN 'member'
+      ELSE role
+    END,
+        notifications_enabled = CASE
+          WHEN notifications_enabled IS NULL THEN 1
+          ELSE notifications_enabled
+        END,
+        notify_mentions = CASE
+          WHEN notify_mentions IS NULL THEN 1
+          ELSE notify_mentions
+        END
   `);
 
   bootstrapSongsFromJsonIfEmpty();

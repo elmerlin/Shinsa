@@ -610,6 +610,39 @@ export const removePushSubscription = (endpoint) => request('/auth/push/subscrib
 // Direct Messages
 export const getMessageConversations = () => request('/messages/conversations');
 export const getMessageConversation = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}`);
+export const createMessageSquad = (data) => request('/messages/squads', {
+  method: 'POST',
+  body: JSON.stringify(data || {}),
+});
+export const getMessageSquad = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/squad`);
+export const updateMessageSquad = (conversationId, data) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/squad`, {
+  method: 'PUT',
+  body: JSON.stringify(data || {}),
+});
+export const addMessageSquadMember = (conversationId, userId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/squad/members`, {
+  method: 'POST',
+  body: JSON.stringify({ user_id: userId }),
+});
+export const removeMessageSquadMember = (conversationId, userId) => request(
+  `/messages/conversations/${encodeURIComponent(conversationId)}/squad/members/${encodeURIComponent(userId)}`,
+  {
+    method: 'DELETE',
+  }
+);
+export const setMessageSquadMemberRole = (conversationId, userId, role) => request(
+  `/messages/conversations/${encodeURIComponent(conversationId)}/squad/members/${encodeURIComponent(userId)}/role`,
+  {
+    method: 'PUT',
+    body: JSON.stringify({ role }),
+  }
+);
+export const updateMessageSquadNotifications = (conversationId, data) => request(
+  `/messages/conversations/${encodeURIComponent(conversationId)}/squad/notifications`,
+  {
+    method: 'PUT',
+    body: JSON.stringify(data || {}),
+  }
+);
 export const markMessageConversationRead = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/read`, {
   method: 'POST',
 });

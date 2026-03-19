@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth } = require('./auth');
 const { createUserNotification } = require('../lib/notifications');
+const { findMentionedUsers } = require('../lib/mentions');
 const {
   buildDirectConversationKey,
   buildNotificationBody,
@@ -45,11 +46,28 @@ function toSqliteDateTime(date = new Date()) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
+function normalizeSquadTitle(value) {
+  return normalizeText(value || '', 60);
+}
+
+function sanitizeSquadAvatar(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\/avatars\/[A-Za-z0-9._/-]+$/i.test(raw)) return raw;
+  if (/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(raw)) {
+    return raw.slice(0, 2_000_000);
+  }
+  return '';
+}
+
 function getConversationListRows(db, userId) {
   return db.prepare(`
     SELECT
       c.id,
       c.kind,
+      c.title AS conversation_title,
+      c.avatar AS conversation_avatar,
+      c.created_by_user_id AS conversation_created_by_user_id,
       c.created_at,
       c.updated_at,
       c.last_message_at,
@@ -58,23 +76,71 @@ function getConversationListRows(db, userId) {
       lm.message_type AS last_message_type,
       lm.content AS last_message_content,
       lm.metadata_json AS last_message_metadata_json,
-      partner.id AS partner_user_id,
-      partner.username AS partner_username,
-      partner.avatar AS partner_avatar,
-      partner.avatar_v AS partner_avatar_v,
-      (
+      cm.role AS viewer_role,
+      cm.notifications_enabled AS viewer_notifications_enabled,
+      cm.notify_mentions AS viewer_notify_mentions,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.id
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE '' END AS partner_user_id,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.username
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE '' END AS partner_username,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.avatar
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE '' END AS partner_avatar,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.avatar_v
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE 0 END AS partner_avatar_v,
+      CASE WHEN c.kind = 'direct' THEN (
         SELECT stomp_out.created_at
         FROM user_message_stomps stomp_out
         WHERE stomp_out.sender_user_id = ?
-          AND stomp_out.recipient_user_id = partner.id
+          AND stomp_out.recipient_user_id = (
+            SELECT other_cm.user_id
+            FROM conversation_members other_cm
+            WHERE other_cm.conversation_id = c.id
+              AND other_cm.user_id != ?
+            LIMIT 1
+          )
         LIMIT 1
-      ) AS stomp_sent_at,
-      EXISTS(
+      ) ELSE '' END AS stomp_sent_at,
+      CASE WHEN c.kind = 'direct' THEN EXISTS(
         SELECT 1
         FROM user_message_stomps stomp_in
-        WHERE stomp_in.sender_user_id = partner.id
+        WHERE stomp_in.sender_user_id = (
+            SELECT other_cm.user_id
+            FROM conversation_members other_cm
+            WHERE other_cm.conversation_id = c.id
+              AND other_cm.user_id != ?
+            LIMIT 1
+          )
           AND stomp_in.recipient_user_id = ?
-      ) AS has_incoming_stomp,
+      ) ELSE 0 END AS has_incoming_stomp,
+      (
+        SELECT COUNT(*)
+        FROM conversation_members members
+        WHERE members.conversation_id = c.id
+      ) AS member_count,
       (
         SELECT COUNT(*)
         FROM conversation_messages unread
@@ -91,13 +157,9 @@ function getConversationListRows(db, userId) {
       ON cm.conversation_id = c.id
       AND cm.user_id = ?
     LEFT JOIN conversation_messages lm ON lm.id = c.last_message_id
-    LEFT JOIN conversation_members other_cm
-      ON other_cm.conversation_id = c.id
-      AND other_cm.user_id != ?
-    LEFT JOIN users partner ON partner.id = other_cm.user_id
     WHERE cm.is_hidden = 0
     ORDER BY datetime(COALESCE(NULLIF(c.last_message_at, ''), c.created_at)) DESC, c.id DESC
-  `).all(userId, userId, userId, userId, userId);
+  `).all(userId, userId, userId, userId, userId, userId, userId, userId, userId, userId);
 }
 
 function getConversationRowForUser(db, conversationId, userId) {
@@ -105,6 +167,9 @@ function getConversationRowForUser(db, conversationId, userId) {
     SELECT
       c.id,
       c.kind,
+      c.title AS conversation_title,
+      c.avatar AS conversation_avatar,
+      c.created_by_user_id AS conversation_created_by_user_id,
       c.created_at,
       c.updated_at,
       c.last_message_at,
@@ -113,23 +178,71 @@ function getConversationRowForUser(db, conversationId, userId) {
       lm.message_type AS last_message_type,
       lm.content AS last_message_content,
       lm.metadata_json AS last_message_metadata_json,
-      partner.id AS partner_user_id,
-      partner.username AS partner_username,
-      partner.avatar AS partner_avatar,
-      partner.avatar_v AS partner_avatar_v,
-      (
+      cm.role AS viewer_role,
+      cm.notifications_enabled AS viewer_notifications_enabled,
+      cm.notify_mentions AS viewer_notify_mentions,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.id
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE '' END AS partner_user_id,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.username
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE '' END AS partner_username,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.avatar
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE '' END AS partner_avatar,
+      CASE WHEN c.kind = 'direct' THEN (
+        SELECT u.avatar_v
+        FROM conversation_members other_cm
+        JOIN users u ON u.id = other_cm.user_id
+        WHERE other_cm.conversation_id = c.id
+          AND other_cm.user_id != ?
+        LIMIT 1
+      ) ELSE 0 END AS partner_avatar_v,
+      CASE WHEN c.kind = 'direct' THEN (
         SELECT stomp_out.created_at
         FROM user_message_stomps stomp_out
         WHERE stomp_out.sender_user_id = ?
-          AND stomp_out.recipient_user_id = partner.id
+          AND stomp_out.recipient_user_id = (
+            SELECT other_cm.user_id
+            FROM conversation_members other_cm
+            WHERE other_cm.conversation_id = c.id
+              AND other_cm.user_id != ?
+            LIMIT 1
+          )
         LIMIT 1
-      ) AS stomp_sent_at,
-      EXISTS(
+      ) ELSE '' END AS stomp_sent_at,
+      CASE WHEN c.kind = 'direct' THEN EXISTS(
         SELECT 1
         FROM user_message_stomps stomp_in
-        WHERE stomp_in.sender_user_id = partner.id
+        WHERE stomp_in.sender_user_id = (
+            SELECT other_cm.user_id
+            FROM conversation_members other_cm
+            WHERE other_cm.conversation_id = c.id
+              AND other_cm.user_id != ?
+            LIMIT 1
+          )
           AND stomp_in.recipient_user_id = ?
-      ) AS has_incoming_stomp,
+      ) ELSE 0 END AS has_incoming_stomp,
+      (
+        SELECT COUNT(*)
+        FROM conversation_members members
+        WHERE members.conversation_id = c.id
+      ) AS member_count,
       (
         SELECT COUNT(*)
         FROM conversation_messages unread
@@ -146,14 +259,10 @@ function getConversationRowForUser(db, conversationId, userId) {
       ON cm.conversation_id = c.id
       AND cm.user_id = ?
     LEFT JOIN conversation_messages lm ON lm.id = c.last_message_id
-    LEFT JOIN conversation_members other_cm
-      ON other_cm.conversation_id = c.id
-      AND other_cm.user_id != ?
-    LEFT JOIN users partner ON partner.id = other_cm.user_id
     WHERE c.id = ?
       AND cm.is_hidden = 0
     LIMIT 1
-  `).get(userId, userId, userId, userId, userId, conversationId);
+  `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, conversationId);
 }
 
 function getUserIdentity(db, userId) {
@@ -172,6 +281,17 @@ function getHighlightUserRow(db, userId) {
     WHERE id = ?
     LIMIT 1
   `).get(userId);
+}
+
+function normalizeSquadMemberUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username || '',
+    avatar: row.avatar || '',
+    avatar_v: row.avatar_v || 0,
+    playing_status: row.playing_status || '',
+  };
 }
 
 function isFollowingOrSelf(db, viewerUserId, targetUserId) {
@@ -397,7 +517,15 @@ function buildStorySharePayload(story, ownerUser) {
 
 function getConversationMember(db, conversationId, userId) {
   return db.prepare(`
-    SELECT conversation_id, user_id, last_read_at, is_hidden
+    SELECT
+      conversation_id,
+      user_id,
+      role,
+      added_by_user_id,
+      last_read_at,
+      is_hidden,
+      notifications_enabled,
+      notify_mentions
     FROM conversation_members
     WHERE conversation_id = ? AND user_id = ?
     LIMIT 1
@@ -412,6 +540,116 @@ function getConversationRecipientIds(db, conversationId, senderUserId) {
       AND user_id != ?
       AND is_hidden = 0
   `).all(conversationId, senderUserId).map((row) => row.user_id).filter(Boolean);
+}
+
+function getConversationCore(db, conversationId) {
+  return db.prepare(`
+    SELECT id, kind, title, avatar, created_by_user_id
+    FROM conversations
+    WHERE id = ?
+    LIMIT 1
+  `).get(conversationId);
+}
+
+function isSquadConversation(db, conversationId) {
+  return String(getConversationCore(db, conversationId)?.kind || '') === 'squad';
+}
+
+function getSquadMembers(db, conversationId) {
+  return db.prepare(`
+    SELECT
+      cm.user_id,
+      cm.role,
+      cm.joined_at,
+      cm.added_by_user_id,
+      cm.notifications_enabled,
+      cm.notify_mentions,
+      u.username,
+      u.avatar,
+      u.avatar_v,
+      u.playing_status
+    FROM conversation_members cm
+    JOIN users u ON u.id = cm.user_id
+    WHERE cm.conversation_id = ?
+      AND cm.is_hidden = 0
+    ORDER BY
+      CASE cm.role
+        WHEN 'creator' THEN 0
+        WHEN 'moderator' THEN 1
+        ELSE 2
+      END,
+      LOWER(u.username) ASC
+  `).all(conversationId).map((row) => ({
+    user_id: row.user_id,
+    role: String(row.role || 'member'),
+    joined_at: row.joined_at || '',
+    added_by_user_id: row.added_by_user_id || '',
+    notifications_enabled: Number(row.notifications_enabled) !== 0,
+    notify_mentions: Number(row.notify_mentions) !== 0,
+    user: normalizeSquadMemberUser({
+      id: row.user_id,
+      username: row.username,
+      avatar: row.avatar,
+      avatar_v: row.avatar_v,
+      playing_status: row.playing_status,
+    }),
+  }));
+}
+
+function getSquadMemberRow(db, conversationId, userId) {
+  return db.prepare(`
+    SELECT conversation_id, user_id, role, added_by_user_id, joined_at, notifications_enabled, notify_mentions, is_hidden
+    FROM conversation_members
+    WHERE conversation_id = ? AND user_id = ?
+    LIMIT 1
+  `).get(conversationId, userId);
+}
+
+function canManageSquadMembers(member) {
+  const role = String(member?.role || '').trim();
+  return role === 'creator' || role === 'moderator';
+}
+
+function canRemoveSquadMember(actorMember, targetMember) {
+  const actorRole = String(actorMember?.role || '').trim();
+  const targetRole = String(targetMember?.role || '').trim();
+  if (actorRole === 'creator') return targetRole !== 'creator';
+  if (actorRole === 'moderator') return targetRole === 'member';
+  return false;
+}
+
+function buildSquadPermissions(member) {
+  const role = String(member?.role || '').trim();
+  return {
+    can_manage_members: role === 'creator' || role === 'moderator',
+    can_manage_roles: role === 'creator',
+    can_edit_identity: role === 'creator',
+  };
+}
+
+function buildSquadResponse(db, conversationId, viewerUserId) {
+  const member = getSquadMemberRow(db, conversationId, viewerUserId);
+  const conversation = normalizeConversationRow(getConversationRowForUser(db, conversationId, viewerUserId));
+  const members = getSquadMembers(db, conversationId);
+  return {
+    conversation,
+    members,
+    viewer_membership: member ? {
+      role: String(member.role || 'member'),
+      notifications_enabled: Number(member.notifications_enabled) !== 0,
+      notify_mentions: Number(member.notify_mentions) !== 0,
+      permissions: buildSquadPermissions(member),
+    } : null,
+  };
+}
+
+function requireSquadMembership(db, conversationId, userId) {
+  const conversation = getConversationCore(db, conversationId);
+  const member = getConversationMember(db, conversationId, userId);
+  if (!conversation || conversation.kind !== 'squad' || !member || member.is_hidden) {
+    return { error: 'Squad not found', status: 404 };
+  }
+  return { conversation, member };
 }
 
 function getMessageRowById(db, messageId) {
@@ -607,11 +845,14 @@ function getOrCreateDirectConversation(db, currentUserId, otherUserId) {
       `).run(conversationId, directKey, currentUserId, now, now);
 
       const insertMember = db.prepare(`
-        INSERT INTO conversation_members (conversation_id, user_id, joined_at, last_read_at, is_hidden, created_at, updated_at)
-        VALUES (?, ?, ?, '', 0, ?, ?)
+        INSERT INTO conversation_members (
+          conversation_id, user_id, role, added_by_user_id, joined_at, last_read_at, is_hidden,
+          notifications_enabled, notify_mentions, created_at, updated_at
+        )
+        VALUES (?, ?, 'member', ?, ?, '', 0, 1, 1, ?, ?)
       `);
-      insertMember.run(conversationId, currentUserId, now, now, now);
-      insertMember.run(conversationId, otherUserId, now, now, now);
+      insertMember.run(conversationId, currentUserId, currentUserId, now, now, now);
+      insertMember.run(conversationId, otherUserId, currentUserId, now, now, now);
     });
     transaction();
     return conversationId;
@@ -626,7 +867,107 @@ function getOrCreateDirectConversation(db, currentUserId, otherUserId) {
   }
 }
 
+function createSquadConversation(db, ownerUserId, options = {}) {
+  const title = normalizeSquadTitle(options.title);
+  const avatar = sanitizeSquadAvatar(options.avatar);
+  const memberIds = Array.from(new Set(
+    (Array.isArray(options.memberIds) ? options.memberIds : [])
+      .map((value) => String(value || '').trim())
+      .filter((value) => value && value !== String(ownerUserId || '').trim())
+  ));
+
+  if (!title) {
+    throw new Error('Squad name is required');
+  }
+  if (memberIds.length === 0) {
+    throw new Error('Add at least one player to create a squad');
+  }
+
+  const userRows = db.prepare(`
+    SELECT id
+    FROM users
+    WHERE id IN (${memberIds.map(() => '?').join(', ')})
+  `).all(...memberIds);
+  const foundIds = new Set(userRows.map((row) => String(row.id || '').trim()).filter(Boolean));
+  const missingIds = memberIds.filter((id) => !foundIds.has(id));
+  if (missingIds.length > 0) {
+    throw new Error('One or more selected players could not be found');
+  }
+
+  const now = toSqliteDateTime();
+  const conversationId = uuidv4();
+  const directKey = `squad:${conversationId}`;
+
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO conversations (
+        id, kind, direct_key, created_by_user_id, title, avatar, last_message_id, last_message_at, created_at, updated_at
+      )
+      VALUES (?, 'squad', ?, ?, ?, ?, '', '', ?, ?)
+    `).run(conversationId, directKey, ownerUserId, title, avatar, now, now);
+
+    const insertMember = db.prepare(`
+      INSERT INTO conversation_members (
+        conversation_id, user_id, role, added_by_user_id, joined_at, last_read_at, is_hidden,
+        notifications_enabled, notify_mentions, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, '', 0, 1, 1, ?, ?)
+    `);
+
+    insertMember.run(conversationId, ownerUserId, 'creator', ownerUserId, now, now, now);
+    for (const memberId of memberIds) {
+      insertMember.run(conversationId, memberId, 'member', ownerUserId, now, now, now);
+    }
+  });
+
+  transaction();
+  return conversationId;
+}
+
 function notifyRecipients(db, conversationId, senderUser, recipientIds, input) {
+  const conversation = getConversationCore(db, conversationId);
+  if (!conversation) return;
+
+  if (conversation.kind === 'squad') {
+    const recipientSet = new Set(recipientIds.map((value) => String(value || '').trim()).filter(Boolean));
+    const mentionedUsers = findMentionedUsers(db, input.content || '')
+      .filter((user) => recipientSet.has(String(user.id || '').trim()));
+    const mentionedUserIds = new Set(mentionedUsers.map((user) => String(user.id || '').trim()).filter(Boolean));
+
+    for (const userId of recipientSet) {
+      const member = getSquadMemberRow(db, conversationId, userId);
+      if (!member || member.is_hidden) continue;
+
+      const notificationsEnabled = Number(member.notifications_enabled) !== 0;
+      const notifyMentions = Number(member.notify_mentions) !== 0;
+      const isMentioned = mentionedUserIds.has(userId);
+
+      if (isMentioned && notifyMentions) {
+        createUserNotification(
+          db,
+          userId,
+          'squad_mention',
+          `${senderUser?.username || 'Someone'} mentioned you in ${conversation.title || 'a squad'}`,
+          buildNotificationBody(input.content, input.messageType, input.share, input.linkShare, input.challengeCard),
+          `/messages/${conversationId}`
+        );
+        continue;
+      }
+
+      if (!notificationsEnabled) continue;
+
+      createUserNotification(
+        db,
+        userId,
+        'squad_message',
+        `${senderUser?.username || 'Someone'} posted in ${conversation.title || 'your squad'}`,
+        buildNotificationBody(input.content, input.messageType, input.share, input.linkShare, input.challengeCard),
+        `/messages/${conversationId}`
+      );
+    }
+    return;
+  }
+
   for (const userId of recipientIds) {
     createUserNotification(
       db,
@@ -1110,6 +1451,37 @@ router.delete('/highlights/:userId/story/:storyId', requireAuth, (req, res) => {
   });
 });
 
+router.post('/squads', requireAuth, (req, res) => {
+  const db = getDb();
+  const title = req.body?.title;
+  const avatar = req.body?.avatar;
+  const memberIds = req.body?.member_ids || req.body?.memberIds || [];
+  const creator = getUserIdentity(db, req.user.id);
+  if (!creator) return res.status(404).json({ error: 'Creator not found' });
+
+  try {
+    const conversationId = createSquadConversation(db, req.user.id, { title, avatar, memberIds });
+    const squad = buildSquadResponse(db, conversationId, req.user.id);
+
+    for (const member of squad.members) {
+      const memberUserId = String(member?.user?.id || '').trim();
+      if (!memberUserId || memberUserId === String(req.user.id || '').trim()) continue;
+      createUserNotification(
+        db,
+        memberUserId,
+        'squad_invite',
+        `${creator.username || 'Someone'} added you to ${squad.conversation?.title || 'a squad'}`,
+        'Open the squad chat to jump in.',
+        `/messages/${conversationId}`
+      );
+    }
+
+    res.status(201).json(squad);
+  } catch (err) {
+    res.status(400).json({ error: err?.message || 'Failed to create squad' });
+  }
+});
+
 router.get('/conversations', requireAuth, (req, res) => {
   const db = getDb();
   const rows = getConversationListRows(db, req.user.id);
@@ -1142,6 +1514,213 @@ router.get('/conversations/:id', requireAuth, (req, res) => {
   if (conversation) conversation.unread_count = 0;
 
   res.json({ conversation, messages });
+});
+
+router.get('/conversations/:id/squad', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  if (!conversationId) return res.status(400).json({ error: 'Conversation id is required' });
+
+  const access = requireSquadMembership(db, conversationId, req.user.id);
+  if (access.error) return res.status(access.status || 404).json({ error: access.error });
+
+  res.json(buildSquadResponse(db, conversationId, req.user.id));
+});
+
+router.put('/conversations/:id/squad', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const access = requireSquadMembership(db, conversationId, req.user.id);
+  if (access.error) return res.status(access.status || 404).json({ error: access.error });
+  if (String(access.member.role || '') !== 'creator') {
+    return res.status(403).json({ error: 'Only the creator can edit this squad' });
+  }
+
+  const updates = [];
+  const params = [];
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'title')) {
+    const title = normalizeSquadTitle(req.body?.title);
+    if (!title) return res.status(400).json({ error: 'Squad name is required' });
+    updates.push('title = ?');
+    params.push(title);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'avatar')) {
+    updates.push('avatar = ?');
+    params.push(sanitizeSquadAvatar(req.body?.avatar));
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No squad changes were provided' });
+  }
+
+  updates.push('updated_at = ?');
+  params.push(toSqliteDateTime(), conversationId);
+
+  db.prepare(`
+    UPDATE conversations
+    SET ${updates.join(', ')}
+    WHERE id = ?
+  `).run(...params);
+
+  res.json(buildSquadResponse(db, conversationId, req.user.id));
+});
+
+router.post('/conversations/:id/squad/members', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const targetUserId = String(req.body?.user_id || req.body?.userId || '').trim();
+  if (!targetUserId) return res.status(400).json({ error: 'User is required' });
+
+  const access = requireSquadMembership(db, conversationId, req.user.id);
+  if (access.error) return res.status(access.status || 404).json({ error: access.error });
+  if (!canManageSquadMembers(access.member)) {
+    return res.status(403).json({ error: 'You cannot add players to this squad' });
+  }
+
+  const targetUser = getUserIdentity(db, targetUserId);
+  if (!targetUser) return res.status(404).json({ error: 'Player not found' });
+  const existingMember = getConversationMember(db, conversationId, targetUserId);
+  if (existingMember && !existingMember.is_hidden) {
+    return res.status(409).json({ error: 'That player is already in the squad' });
+  }
+
+  const now = toSqliteDateTime();
+  db.prepare(`
+    INSERT INTO conversation_members (
+      conversation_id, user_id, role, added_by_user_id, joined_at, last_read_at, is_hidden,
+      notifications_enabled, notify_mentions, created_at, updated_at
+    )
+    VALUES (?, ?, 'member', ?, ?, '', 0, 1, 1, ?, ?)
+    ON CONFLICT(conversation_id, user_id) DO UPDATE SET
+      role = 'member',
+      added_by_user_id = excluded.added_by_user_id,
+      joined_at = excluded.joined_at,
+      is_hidden = 0,
+      notifications_enabled = 1,
+      notify_mentions = 1,
+      updated_at = excluded.updated_at
+  `).run(conversationId, targetUserId, req.user.id, now, now, now);
+
+  db.prepare(`
+    UPDATE conversations
+    SET updated_at = ?
+    WHERE id = ?
+  `).run(now, conversationId);
+
+  createUserNotification(
+    db,
+    targetUserId,
+    'squad_invite',
+    `${req.user.username || 'Someone'} added you to ${access.conversation.title || 'a squad'}`,
+    'Open the squad chat to jump in.',
+    `/messages/${conversationId}`
+  );
+
+  res.status(201).json(buildSquadResponse(db, conversationId, req.user.id));
+});
+
+router.delete('/conversations/:id/squad/members/:userId', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const targetUserId = String(req.params.userId || '').trim();
+  if (!targetUserId) return res.status(400).json({ error: 'User is required' });
+
+  const access = requireSquadMembership(db, conversationId, req.user.id);
+  if (access.error) return res.status(access.status || 404).json({ error: access.error });
+  const targetMember = getConversationMember(db, conversationId, targetUserId);
+  if (!targetMember || targetMember.is_hidden) {
+    return res.status(404).json({ error: 'Squad member not found' });
+  }
+  if (targetUserId === String(req.user.id || '').trim()) {
+    return res.status(400).json({ error: 'Leave controls are not supported here yet' });
+  }
+  if (!canRemoveSquadMember(access.member, targetMember)) {
+    return res.status(403).json({ error: 'You cannot remove that player' });
+  }
+
+  db.prepare(`
+    DELETE FROM conversation_members
+    WHERE conversation_id = ? AND user_id = ?
+  `).run(conversationId, targetUserId);
+
+  db.prepare(`
+    UPDATE conversations
+    SET updated_at = ?
+    WHERE id = ?
+  `).run(toSqliteDateTime(), conversationId);
+
+  res.json(buildSquadResponse(db, conversationId, req.user.id));
+});
+
+router.put('/conversations/:id/squad/members/:userId/role', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const targetUserId = String(req.params.userId || '').trim();
+  const nextRole = String(req.body?.role || '').trim().toLowerCase();
+  if (!['member', 'moderator'].includes(nextRole)) {
+    return res.status(400).json({ error: 'Role must be member or moderator' });
+  }
+
+  const access = requireSquadMembership(db, conversationId, req.user.id);
+  if (access.error) return res.status(access.status || 404).json({ error: access.error });
+  if (String(access.member.role || '') !== 'creator') {
+    return res.status(403).json({ error: 'Only the creator can manage moderators' });
+  }
+
+  const targetMember = getConversationMember(db, conversationId, targetUserId);
+  if (!targetMember || targetMember.is_hidden) {
+    return res.status(404).json({ error: 'Squad member not found' });
+  }
+  if (String(targetMember.role || '') === 'creator') {
+    return res.status(400).json({ error: 'The creator role cannot be changed' });
+  }
+
+  db.prepare(`
+    UPDATE conversation_members
+    SET role = ?, updated_at = ?
+    WHERE conversation_id = ? AND user_id = ?
+  `).run(nextRole, toSqliteDateTime(), conversationId, targetUserId);
+
+  res.json(buildSquadResponse(db, conversationId, req.user.id));
+});
+
+router.put('/conversations/:id/squad/notifications', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const access = requireSquadMembership(db, conversationId, req.user.id);
+  if (access.error) return res.status(access.status || 404).json({ error: access.error });
+
+  const updates = [];
+  const params = [];
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'notifications_enabled')
+    || Object.prototype.hasOwnProperty.call(req.body || {}, 'enabled')) {
+    updates.push('notifications_enabled = ?');
+    params.push(req.body?.notifications_enabled ?? req.body?.enabled ? 1 : 0);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'notify_mentions')
+    || Object.prototype.hasOwnProperty.call(req.body || {}, 'mentions')) {
+    updates.push('notify_mentions = ?');
+    params.push(req.body?.notify_mentions ?? req.body?.mentions ? 1 : 0);
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No notification settings were provided' });
+  }
+
+  updates.push('updated_at = ?');
+  params.push(toSqliteDateTime(), conversationId, req.user.id);
+
+  db.prepare(`
+    UPDATE conversation_members
+    SET ${updates.join(', ')}
+    WHERE conversation_id = ? AND user_id = ?
+  `).run(...params);
+
+  res.json(buildSquadResponse(db, conversationId, req.user.id));
 });
 
 router.post('/conversations/:id/messages/:messageId/reactions', requireAuth, (req, res) => {

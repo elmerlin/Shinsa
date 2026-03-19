@@ -462,15 +462,30 @@ function normalizeConversationRow(row) {
   const content = String(row.last_message_content || '');
   const stompSentAt = String(row.stomp_sent_at || '').trim();
   const hasIncomingStomp = toInt(row.has_incoming_stomp) > 0;
+  const kind = String(row.kind || 'direct').trim() || 'direct';
+  const isSquad = kind === 'squad';
+  const partner = normalizeConversationPartner(row, 56);
+  const title = isSquad
+    ? (String(row.conversation_title || '').trim() || 'Untitled squad')
+    : (partner?.username || String(row.conversation_title || '').trim() || 'Unknown player');
+  const avatar = isSquad ? String(row.conversation_avatar || '').trim() : (partner?.avatar || '');
+  const memberCount = Math.max(toInt(row.member_count), partner ? 2 : 1);
+  const viewerRole = String(row.viewer_role || '').trim() || 'member';
+  const notificationsEnabled = toInt(row.viewer_notifications_enabled) !== 0;
+  const notifyMentions = toInt(row.viewer_notify_mentions) !== 0;
 
   return {
     id: row.id,
-    kind: row.kind || 'direct',
+    kind,
+    title,
+    avatar,
     created_at: row.created_at || '',
     updated_at: row.updated_at || '',
     last_message_at: row.last_message_at || row.created_at || '',
     unread_count: toInt(row.unread_count),
-    partner: normalizeConversationPartner(row, 56),
+    member_count: memberCount,
+    subtitle: isSquad ? `${memberCount} ${memberCount === 1 ? 'member' : 'members'}` : 'Private chat',
+    partner,
     last_message: row.last_message_id ? {
       id: row.last_message_id,
       sender_user_id: row.last_message_sender_user_id || '',
@@ -483,11 +498,27 @@ function normalizeConversationRow(row) {
       created_at: row.last_message_at || '',
       preview: buildMessagePreview(messageType, content, share, linkShare, challengeCard),
     } : null,
-    stomp: row.partner_user_id ? {
+    stomp: !isSquad && row.partner_user_id ? {
       can_send: !stompSentAt,
       is_waiting: !!stompSentAt,
       sent_at: stompSentAt,
       has_incoming: hasIncomingStomp,
+    } : null,
+    squad: isSquad ? {
+      title,
+      avatar,
+      member_count: memberCount,
+      created_by_user_id: String(row.conversation_created_by_user_id || '').trim(),
+      viewer_role: viewerRole,
+      notifications: {
+        enabled: notificationsEnabled,
+        mentions: notifyMentions,
+      },
+      permissions: {
+        can_manage_members: viewerRole === 'creator' || viewerRole === 'moderator',
+        can_manage_roles: viewerRole === 'creator',
+        can_edit_identity: viewerRole === 'creator',
+      },
     } : null,
   };
 }
