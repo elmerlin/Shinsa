@@ -1262,7 +1262,7 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
         disabled={stompDisabled}
         aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
         title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-        className={`group relative flex h-11 w-[4.4rem] shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
+        className={`group relative flex h-10 w-[4.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border px-1 transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
       >
         <span
           aria-hidden="true"
@@ -1272,15 +1272,12 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
           aria-hidden="true"
           className={`pointer-events-none absolute inset-[3px] rounded-[0.8rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
         />
-        <div className="relative z-[1] flex items-center gap-1">
+        <div className="relative z-[1] flex items-center justify-center">
           <img
             src={STOMP_ICON_PATH}
             alt=""
-            className={`h-6 w-6 object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-110'} ${stomping ? 'scale-110 rotate-[-8deg]' : ''} ${isCelebrating ? 'scale-[1.16] rotate-[8deg]' : ''}`}
+            className={`h-7 w-[3.9rem] object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-[1.06]'} ${stomping ? 'scale-110 rotate-[-6deg]' : ''} ${isCelebrating ? 'scale-[1.12] rotate-[6deg]' : ''}`}
           />
-          <span className="text-[10px] font-display font-black tracking-[0.18em] text-cyan-50">
-            STOMP
-          </span>
         </div>
       </button>
     </Link>
@@ -1348,7 +1345,7 @@ function InboxView({
                 </svg>
               </ActionIconButton>
               {optionsOpen ? (
-                <div className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-56 overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#091421]/96 p-2 shadow-[0_22px_50px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+                <div className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-56 overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#0a1220] p-2 shadow-[0_22px_50px_rgba(0,0,0,0.42)]">
                   <button
                     type="button"
                     onClick={() => {

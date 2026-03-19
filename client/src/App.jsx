@@ -66,6 +66,7 @@ const DOJO_NEARBY_RADIUS_METERS = 3000;
 const DOJO_CHECKOUT_REMINDER_COOLDOWN_MS = 30 * 60 * 1000;
 const DOJO_GEO_TIMEOUT_MS = 10000;
 const DOJO_GEO_MAX_AGE_MS = 120000;
+const MESSAGE_ROUTE_RESTORE_KEY = 'shinsa.messages.restore-route';
 const DOJO_GEOFENCE = {
   name: 'London Pump Dojo',
   address: 'Unit 5, 2 Wadsworth Rd, Perivale, Greenford UB6 7JD',
@@ -979,6 +980,32 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const currentPath = `${location.pathname || '/'}${location.search || ''}${location.hash || ''}`;
+    if (isMessagesInboxRoute || isMessagesConversationRoute) {
+      window.sessionStorage.setItem(MESSAGE_ROUTE_RESTORE_KEY, currentPath);
+      return;
+    }
+    window.sessionStorage.removeItem(MESSAGE_ROUTE_RESTORE_KEY);
+  }, [isMessagesConversationRoute, isMessagesInboxRoute, location.hash, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (location.pathname !== '/') return;
+
+    const restorePath = window.sessionStorage.getItem(MESSAGE_ROUTE_RESTORE_KEY);
+    if (!restorePath || !/^\/messages(?:\/|$|\?)/.test(restorePath)) return;
+
+    const navigationEntry = performance.getEntriesByType?.('navigation')?.[0];
+    const isReload = navigationEntry?.type === 'reload'
+      || (performance?.navigation && performance.navigation.type === 1);
+    if (!isReload) return;
+
+    window.sessionStorage.removeItem(MESSAGE_ROUTE_RESTORE_KEY);
+    navigate(restorePath, { replace: true });
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     if (!user?.id) {
