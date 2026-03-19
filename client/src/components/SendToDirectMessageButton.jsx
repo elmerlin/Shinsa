@@ -49,7 +49,8 @@ export default function SendToDirectMessageButton({
     return Object.keys(nextPayload).length > 0 ? nextPayload : null;
   }, [challengeCard, content, linkShare, messageData, selectedChallengeCard, share]);
 
-  if (!user || !payload) return null;
+  const hasChallengePickerFlow = selectableChallengeOptions.length > 0;
+  if (!user || (!payload && !hasChallengePickerFlow)) return null;
 
   const toneClassName = tone === 'amber'
     ? 'border-amber-400/30 bg-amber-500/10 text-amber-100'

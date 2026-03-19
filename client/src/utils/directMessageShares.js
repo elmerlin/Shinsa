@@ -663,6 +663,58 @@ export function buildRematchChallengeCard({
   };
 }
 
+export function buildChartChallengeCard({
+  chartId,
+  chartTitle,
+  mode,
+  level,
+  challengerName,
+  best = null,
+}) {
+  const id = String(chartId || '').trim();
+  if (!id) return null;
+
+  const challenger = String(challengerName || 'Player').trim() || 'Player';
+  const chartLabel = formatChartLabel(chartTitle, mode, level);
+  const score = Number(best?.score) || 0;
+  const grade = compactText(best?.grade, 20);
+  const isStageBreak = !!best?.is_stage_break;
+
+  if (best && score > 0 && !isStageBreak) {
+    return {
+      kind: 'beat_score',
+      path: `/songs/chart/${id}`,
+      title: 'Beat this score',
+      subtitle: `${challenger} challenged you on ${chartLabel}`,
+      targetLabel: `Target ${formatScore(score)}`,
+      detailLabel: [grade, `From current best`].filter(Boolean).join(' • '),
+      buttonLabel: 'Open chart',
+      songTitle: String(chartTitle || ''),
+      mode: String(mode || ''),
+      level: Number(level) || 0,
+      targetScore: score,
+      targetGrade: grade,
+      originUsername: challenger,
+    };
+  }
+
+  return {
+    kind: 'clear_chart',
+    path: `/songs/chart/${id}`,
+    title: 'Clear this chart',
+    subtitle: `${challenger} challenged you on ${chartLabel}`,
+    targetLabel: chartLabel,
+    detailLabel: grade || '',
+    buttonLabel: 'Open chart',
+    songTitle: String(chartTitle || ''),
+    mode: String(mode || ''),
+    level: Number(level) || 0,
+    targetScore: score,
+    targetGrade: grade,
+    originUsername: challenger,
+  };
+}
+
 export function buildChallengeLifecycleCard({
   challengeCard,
   actorName,

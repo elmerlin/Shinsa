@@ -12,9 +12,11 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import Over20Top100Modal from '../components/Over20Top100Modal';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import { getSongChartDetail, getUserLists, addListItem, createList, setChartYoutubeLink, removeChartYoutubeLink, getOver20ChartTop100 } from '../utils/api';
 import { buildReplayModalTitle } from '../utils/replayTitle';
+import { buildChartChallengeCard } from '../utils/directMessageShares';
 
 const GRADE_THRESHOLDS = [
   { min: 0,      grade: 'F' },
@@ -549,6 +551,14 @@ export default function SongChartPage() {
   const userSummary = detail.user_summary || null;
   const personalBest = userSummary?.best || null;
   const personalBestGrade = personalBest?.grade || getRank(personalBest?.score).label;
+  const chartChallengeCard = buildChartChallengeCard({
+    chartId: chart.chart_id,
+    chartTitle: chart.title,
+    mode: chart.mode,
+    level: chart.level,
+    challengerName: user?.username,
+    best: personalBest,
+  });
   const overTop100Link = (() => {
     if (!overTop100Chart?.chart_key) return '';
     const params = new URLSearchParams();
@@ -564,49 +574,79 @@ export default function SongChartPage() {
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Link to="/songs" className="text-sm text-piu-accent hover:underline">Back to Songs</Link>
-        {user && (
-          <div ref={listMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setShowListMenu(prev => !prev)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-700 border border-violet-200/30 text-white font-display font-bold text-xs tracking-wide shadow-lg shadow-violet-900/30 hover:brightness-110 transition-all whitespace-nowrap"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Add to List
-            </button>
-            {showListMenu && (
-              <div className="absolute right-0 z-30 mt-1 w-56 rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden">
-                {userLists.map(list => {
-                  const alreadyIn = (list.items || []).some(i => i.chartId === chart.chart_id);
-                  return (
-                    <button
-                      key={list.id}
-                      type="button"
-                      onClick={() => !alreadyIn && handleAddToList(list.id, list.name)}
-                      disabled={alreadyIn}
-                      className={`w-full text-left px-3 py-2 text-sm font-display border-b border-piu-border/20 last:border-0 transition-colors ${
-                        alreadyIn
-                          ? 'text-gray-500 cursor-not-allowed'
-                          : 'hover:bg-piu-dark/70 text-white'
-                      }`}
-                    >
-                      <span className="truncate block">{list.name}</span>
-                      {alreadyIn && <span className="text-[10px] text-gray-600">Already added</span>}
-                    </button>
-                  );
-                })}
-                {/* Inline create new list */}
-                <div className="border-t border-piu-border/30 px-2 py-2">
-                  {showInlineCreate ? (
-                    <div className="flex gap-1.5">
-                      <input
-                        type="text"
-                        value={inlineCreateName}
-                        onChange={e => setInlineCreateName(e.target.value)}
-                        onKeyDown={async e => {
-                          if (e.key === 'Enter' && inlineCreateName.trim()) {
+        {user ? (
+          <div className="flex items-center gap-2">
+            {chartChallengeCard ? (
+              <SendToDirectMessageButton
+                challengeCard={chartChallengeCard}
+                variant="button"
+                tone="amber"
+                label="Challenge Player"
+                title="Challenge a player"
+                description="Choose a player to send this chart challenge to."
+              />
+            ) : null}
+            <div ref={listMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setShowListMenu(prev => !prev)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-violet-500 to-purple-700 border border-violet-200/30 text-white font-display font-bold text-xs tracking-wide shadow-lg shadow-violet-900/30 hover:brightness-110 transition-all whitespace-nowrap"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Add to List
+              </button>
+              {showListMenu && (
+                <div className="absolute right-0 z-30 mt-1 w-56 rounded-lg border border-piu-border bg-[#0b1324] shadow-xl overflow-hidden">
+                  {userLists.map(list => {
+                    const alreadyIn = (list.items || []).some(i => i.chartId === chart.chart_id);
+                    return (
+                      <button
+                        key={list.id}
+                        type="button"
+                        onClick={() => !alreadyIn && handleAddToList(list.id, list.name)}
+                        disabled={alreadyIn}
+                        className={`w-full text-left px-3 py-2 text-sm font-display border-b border-piu-border/20 last:border-0 transition-colors ${
+                          alreadyIn
+                            ? 'text-gray-500 cursor-not-allowed'
+                            : 'hover:bg-piu-dark/70 text-white'
+                        }`}
+                      >
+                        <span className="truncate block">{list.name}</span>
+                        {alreadyIn && <span className="text-[10px] text-gray-600">Already added</span>}
+                      </button>
+                    );
+                  })}
+                  {/* Inline create new list */}
+                  <div className="border-t border-piu-border/30 px-2 py-2">
+                    {showInlineCreate ? (
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={inlineCreateName}
+                          onChange={e => setInlineCreateName(e.target.value)}
+                          onKeyDown={async e => {
+                            if (e.key === 'Enter' && inlineCreateName.trim()) {
+                              try {
+                                const newList = await createList(inlineCreateName.trim());
+                                setUserLists(prev => [...prev, { ...newList, items: newList.items || [] }]);
+                                setInlineCreateName('');
+                                setShowInlineCreate(false);
+                                handleAddToList(newList.id, newList.name);
+                              } catch { /* ignore */ }
+                            }
+                            if (e.key === 'Escape') { setShowInlineCreate(false); setInlineCreateName(''); }
+                          }}
+                          placeholder="List name..."
+                          className="bg-piu-dark border border-piu-border rounded text-xs py-1 px-2 text-gray-200 focus:outline-none focus:border-violet-400/50 flex-1 min-w-0"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          disabled={!inlineCreateName.trim()}
+                          onClick={async () => {
+                            if (!inlineCreateName.trim()) return;
                             try {
                               const newList = await createList(inlineCreateName.trim());
                               setUserLists(prev => [...prev, { ...newList, items: newList.items || [] }]);
@@ -614,48 +654,30 @@ export default function SongChartPage() {
                               setShowInlineCreate(false);
                               handleAddToList(newList.id, newList.name);
                             } catch { /* ignore */ }
-                          }
-                          if (e.key === 'Escape') { setShowInlineCreate(false); setInlineCreateName(''); }
-                        }}
-                        placeholder="List name..."
-                        className="bg-piu-dark border border-piu-border rounded text-xs py-1 px-2 text-gray-200 focus:outline-none focus:border-violet-400/50 flex-1 min-w-0"
-                        autoFocus
-                      />
+                          }}
+                          className="text-[11px] font-display font-bold text-violet-400 hover:text-violet-300 disabled:opacity-40 px-1"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        disabled={!inlineCreateName.trim()}
-                        onClick={async () => {
-                          if (!inlineCreateName.trim()) return;
-                          try {
-                            const newList = await createList(inlineCreateName.trim());
-                            setUserLists(prev => [...prev, { ...newList, items: newList.items || [] }]);
-                            setInlineCreateName('');
-                            setShowInlineCreate(false);
-                            handleAddToList(newList.id, newList.name);
-                          } catch { /* ignore */ }
-                        }}
-                        className="text-[11px] font-display font-bold text-violet-400 hover:text-violet-300 disabled:opacity-40 px-1"
+                        onClick={() => setShowInlineCreate(true)}
+                        className="w-full text-left text-xs font-display text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1.5"
                       >
-                        Add
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        New list
                       </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowInlineCreate(true)}
-                      className="w-full text-left text-xs font-display text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1.5"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                      </svg>
-                      New list
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        )}
+        ) : null}
       </div>
       {addedToast && (
         <div className="fixed top-4 right-4 z-50 rounded-lg bg-violet-600 text-white text-sm font-display px-4 py-2 shadow-lg animate-fade-in">
