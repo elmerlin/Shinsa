@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createMessageStoryItem } from '../utils/api';
 import SendToDirectMessageButton from './SendToDirectMessageButton';
 import ScoreSnapshotCard from './ScoreSnapshotCard';
+import YouTubeReplayModal from './YouTubeReplayModal';
+import { buildReplayModalTitle } from '../utils/replayTitle';
 
 function compactText(value, max = 120) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
@@ -178,6 +180,7 @@ export default function ScoreSnapshotModal({
   const [storySubmitting, setStorySubmitting] = useState(false);
   const [storyError, setStoryError] = useState('');
   const [storySuccess, setStorySuccess] = useState(false);
+  const [replayOpen, setReplayOpen] = useState(false);
 
   const storyDraft = useMemo(
     () => (score ? buildStoryDraft(score, jacketUrl, chartLink, directMessageLinkShare) : null),
@@ -191,9 +194,20 @@ export default function ScoreSnapshotModal({
     setStorySubmitting(false);
     setStoryError('');
     setStorySuccess(false);
+    setReplayOpen(false);
   }, [score]);
 
   if (!score) return null;
+
+  const replayUrl = String(
+    directMessageLinkShare?.replayUrl
+    || score?.replayUrl
+    || score?.replay_url
+    || score?.replayEmbedUrl
+    || score?.replay_embed_url
+    || ''
+  ).trim();
+  const replayTitle = buildReplayModalTitle(score);
 
   const openStoryComposer = () => {
     setStoryError('');
@@ -278,6 +292,9 @@ export default function ScoreSnapshotModal({
             score={score}
             jacketUrl={jacketUrl}
             chartLink={chartLink}
+            replayUrl={replayUrl}
+            replayTitle={replayTitle}
+            onOpenReplay={replayUrl ? () => setReplayOpen(true) : null}
           />
         </div>
       </div>
@@ -293,6 +310,13 @@ export default function ScoreSnapshotModal({
         onClose={closeStoryComposer}
         onSubmit={handleAddStory}
       />
+      {replayOpen && replayUrl ? (
+        <YouTubeReplayModal
+          url={replayUrl}
+          title={replayTitle}
+          onClose={() => setReplayOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

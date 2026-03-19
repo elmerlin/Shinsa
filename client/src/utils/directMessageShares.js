@@ -331,6 +331,13 @@ export function buildScoreSnapshotLinkShare({
   const grade = compactText(row.new_grade || row.grade, 20);
   const playedAt = String(row.date_played || row.playedAt || '').trim();
   const summaryLabel = normalizedKind === 'clear' ? 'clear' : 'score';
+  const replayUrl = String(
+    row.replayUrl
+    || row.replay_url
+    || row.replayEmbedUrl
+    || row.replay_embed_url
+    || ''
+  ).trim();
 
   return {
     kind: normalizedKind,
@@ -371,6 +378,10 @@ export function buildScoreSnapshotLinkShare({
     good: Number(row.good) || 0,
     bad: Number(row.bad) || 0,
     miss: Number(row.miss) || 0,
+    replayUrl,
+    replayVideoId: String(row.replayVideoId || row.replay_video_id || '').trim(),
+    replayStartSeconds: Number(row.replayStartSeconds ?? row.replay_start_seconds) || 0,
+    replayEndSeconds: Number(row.replayEndSeconds ?? row.replay_end_seconds) || 0,
   };
 }
 

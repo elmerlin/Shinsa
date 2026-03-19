@@ -53,6 +53,7 @@ import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import { useMentionComposer } from '../hooks/useMentionComposer';
+import { buildReplayModalTitle } from '../utils/replayTitle';
 
 const LINK_SHARE_BADGES = {
   live_session: 'Live session',
@@ -952,6 +953,24 @@ function MessageLinkCard({
     && resolvedLinkShare.previewItems.length > 0;
   const isYouTubeShare = !resolvedLinkShare.path && !!parseYouTubeUrl(resolvedLinkShare.url).videoId;
   const handlePrimaryOpen = () => onOpenLink?.(resolvedLinkShare);
+  const replayUrl = String(resolvedLinkShare.replayUrl || '').trim();
+  const replayTitle = buildReplayModalTitle({
+    song_title: resolvedLinkShare.songTitle,
+    mode: resolvedLinkShare.mode,
+    level: resolvedLinkShare.level,
+    grade: resolvedLinkShare.grade,
+    new_grade: resolvedLinkShare.grade,
+    score: resolvedLinkShare.score,
+    new_score: resolvedLinkShare.score,
+  });
+  const handleOpenReplay = () => {
+    if (!replayUrl) return;
+    onOpenLink?.({
+      url: replayUrl,
+      title: replayTitle,
+      forceEmbed: true,
+    });
+  };
 
   if (isScoreSnapshot) {
     const snapshotScore = {
@@ -977,6 +996,9 @@ function MessageLinkCard({
       playerRoleLabel: resolvedLinkShare.playerRoleLabel,
       contextLabel: resolvedLinkShare.contextLabel,
       date_played: resolvedLinkShare.playedAt,
+      replayUrl,
+      replay_start_seconds: resolvedLinkShare.replayStartSeconds,
+      replay_end_seconds: resolvedLinkShare.replayEndSeconds,
     };
 
     return (
@@ -986,6 +1008,9 @@ function MessageLinkCard({
           score={snapshotScore}
           jacketUrl={resolvedLinkShare.jacketUrl}
           chartLink={resolvedLinkShare.chartPath || ''}
+          replayUrl={replayUrl}
+          replayTitle={replayTitle}
+          onOpenReplay={replayUrl ? handleOpenReplay : null}
         />
         {responseStatus ? (
           <div className="flex flex-wrap items-center gap-2 px-1">
@@ -2216,6 +2241,7 @@ export default function MessagesPage() {
     const path = String(linkTarget?.path || '').trim();
     const url = String(linkTarget?.url || '').trim();
     const title = String(linkTarget?.title || linkTarget?.buttonLabel || 'Open link').trim() || 'Open link';
+    const forceEmbed = !!linkTarget?.forceEmbed;
 
     if (path) {
       navigate(path);
@@ -2223,6 +2249,15 @@ export default function MessagesPage() {
     }
 
     if (!url) return;
+
+    if (forceEmbed && parseYouTubeUrl(url).videoId) {
+      setYoutubeModalState({
+        open: true,
+        title,
+        url,
+      });
+      return;
+    }
 
     if (openLinksExternally) {
       window.open(url, '_blank', 'noopener,noreferrer');

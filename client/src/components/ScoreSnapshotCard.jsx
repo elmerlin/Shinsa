@@ -132,6 +132,14 @@ function normalizeMetaBadges(badges = []) {
     .filter(Boolean);
 }
 
+function ReplayIcon({ className = '' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
 export default function ScoreSnapshotCard({
   score,
   jacketUrl = '',
@@ -142,6 +150,9 @@ export default function ScoreSnapshotCard({
   roleLabel = '',
   contextLabel = '',
   metaBadges = [],
+  replayUrl = '',
+  replayTitle = '',
+  onOpenReplay = null,
 }) {
   if (!score) return null;
 
@@ -193,6 +204,8 @@ export default function ScoreSnapshotCard({
     labelClass,
     value: parseInt(score?.[field], 10) || 0,
   }));
+  const resolvedReplayUrl = String(replayUrl || score.replayUrl || score.replay_url || score.replayEmbedUrl || score.replay_embed_url || '').trim();
+  const hasReplay = !!resolvedReplayUrl && typeof onOpenReplay === 'function';
   const titleNode = chartLink ? (
     <Link to={chartLink} className="line-clamp-2 font-display text-[1.05rem] font-black leading-tight text-white hover:text-cyan-100">
       {songTitle}
@@ -249,11 +262,29 @@ export default function ScoreSnapshotCard({
               </div>
             ) : null}
           </div>
-          {level > 0 ? (
-            <span className={`inline-flex h-10 min-w-[42px] shrink-0 items-center justify-center rounded-full border px-2 font-display text-lg font-black ${getModeBadgeClasses(mode)}`}>
-              {level}
-            </span>
-          ) : null}
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {hasReplay ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenReplay();
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-sky-300/28 bg-sky-500/10 px-2.5 py-1 text-[10px] font-display font-bold text-sky-100 transition-colors hover:border-sky-300/42 hover:bg-sky-500/16 hover:text-white"
+                title={replayTitle || 'Open replay clip'}
+                aria-label={replayTitle || 'Open replay clip'}
+              >
+                <ReplayIcon className="h-3.5 w-3.5 text-sky-300" />
+                <span>Replay</span>
+              </button>
+            ) : null}
+            {level > 0 ? (
+              <span className={`inline-flex h-10 min-w-[42px] shrink-0 items-center justify-center rounded-full border px-2 font-display text-lg font-black ${getModeBadgeClasses(mode)}`}>
+                {level}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         <div className="mt-3 flex items-end justify-between gap-3">
