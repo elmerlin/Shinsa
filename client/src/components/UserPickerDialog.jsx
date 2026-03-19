@@ -7,6 +7,7 @@ export default function UserPickerDialog({
   open = false,
   title = 'Start a conversation',
   description = '',
+  eyebrowLabel = 'Direct Messages',
   selectLabel = 'Message',
   onClose,
   onSelect,
@@ -127,8 +128,11 @@ export default function UserPickerDialog({
       >
         <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
           <div>
-            <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">Direct Messages</p>
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-cyan-300">{eyebrowLabel}</p>
             <h3 className="mt-1 text-lg font-display font-black text-white">{title}</h3>
+            {description ? (
+              <p className="mt-1 text-xs leading-5 text-gray-400">{description}</p>
+            ) : null}
           </div>
           <button
             type="button"
