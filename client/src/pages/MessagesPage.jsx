@@ -192,31 +192,31 @@ function formatReactionCount(value) {
 const COMPARE_STATUS_META = {
   beat_target: {
     fallbackLabel: 'Beat target',
-    className: 'border-emerald-300/35 bg-emerald-500/15 text-emerald-100',
+    className: 'border-emerald-300/28 bg-[#10221c] text-emerald-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
   },
   pass_earned: {
     fallbackLabel: 'Pass earned',
-    className: 'border-emerald-300/35 bg-emerald-500/15 text-emerald-100',
+    className: 'border-emerald-300/28 bg-[#10221c] text-emerald-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
   },
   chasing_target: {
     fallbackLabel: 'Still chasing',
-    className: 'border-amber-300/35 bg-amber-500/15 text-amber-100',
+    className: 'border-amber-300/28 bg-[#261b10] text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
   },
   still_breaking: {
     fallbackLabel: 'Still breaking',
-    className: 'border-rose-300/35 bg-rose-500/15 text-rose-100',
+    className: 'border-rose-300/28 bg-[#261218] text-rose-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
   },
   shared_best: {
     fallbackLabel: 'Current best',
-    className: 'border-cyan-300/35 bg-cyan-500/15 text-cyan-100',
+    className: 'border-cyan-300/28 bg-[#10202b] text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
   },
   accepted: {
     fallbackLabel: 'Accepted',
-    className: 'border-sky-300/35 bg-sky-500/15 text-sky-100',
+    className: 'border-sky-300/28 bg-[#112133] text-sky-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
   },
   expired: {
     fallbackLabel: 'Expired',
-    className: 'border-gray-300/25 bg-gray-500/10 text-gray-200',
+    className: 'border-white/12 bg-[#171c29] text-gray-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
   },
 };
 
@@ -719,7 +719,7 @@ function getCompareStatusInfo(statusKind, statusLabel) {
 function CompareStatusPill({ statusKind = '', statusLabel = '', prefix = '' }) {
   const info = getCompareStatusInfo(statusKind, statusLabel);
   return (
-    <p className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-display font-bold ${info.className}`}>
+    <p className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-display font-black tracking-[0.08em] ${info.className}`}>
       {prefix ? `${prefix}: ${info.label}` : info.label}
     </p>
   );
@@ -1158,74 +1158,98 @@ function MessageChallengeCard({
     ? `${String(challengeCard.originUsername || '').trim()} challenged you`
     : subtitle;
   const captionLine = subtitle && subtitle !== contextLine ? subtitle : '';
+  const isClearChallenge = challengeCard.kind === 'clear_chart';
+  const theme = isClearChallenge
+    ? {
+      badgeClass: 'text-amber-100/85',
+      titleGlow: 'bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.18),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.08),transparent_36%)]',
+      targetClass: 'border-amber-300/24 bg-[#221a13] text-amber-50 shadow-[0_10px_22px_rgba(245,158,11,0.08)]',
+      railClass: 'from-amber-300/55 via-amber-200/16 to-transparent',
+      actionClass: 'border-amber-300/24 bg-[#15131d] text-amber-50 hover:border-amber-200/38 hover:bg-[#1d1820]',
+      responseClass: 'border-emerald-300/24 bg-[#13201b] text-emerald-100 hover:border-emerald-200/38 hover:bg-[#182821]',
+      lifecycleClass: 'border-cyan-300/24 bg-[#121b28] text-cyan-50 hover:border-cyan-200/38 hover:bg-[#172334]',
+    }
+    : {
+      badgeClass: 'text-cyan-100/82',
+      titleGlow: 'bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.08),transparent_38%)]',
+      targetClass: 'border-cyan-300/24 bg-[#121f2c] text-cyan-50 shadow-[0_10px_22px_rgba(34,211,238,0.08)]',
+      railClass: 'from-cyan-300/55 via-cyan-200/18 to-transparent',
+      actionClass: 'border-cyan-300/24 bg-[#15131d] text-cyan-50 hover:border-cyan-200/38 hover:bg-[#182031]',
+      responseClass: 'border-emerald-300/24 bg-[#13201b] text-emerald-100 hover:border-emerald-200/38 hover:bg-[#182821]',
+      lifecycleClass: 'border-sky-300/24 bg-[#121b28] text-sky-50 hover:border-sky-200/38 hover:bg-[#172334]',
+    };
 
   return (
-    <div className="relative w-full overflow-hidden rounded-[1.35rem] border border-piu-border/65 bg-piu-card/85 px-3 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.22)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.12),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(34,211,238,0.08),transparent_36%)]" />
+    <div className="relative isolate w-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,#111526_0%,#0a0f1d_100%)] px-3.5 py-3.5 shadow-[0_22px_44px_rgba(0,0,0,0.28)]">
+      <div className={`pointer-events-none absolute inset-0 ${theme.titleGlow}`} />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+      <div className={`pointer-events-none absolute inset-y-5 left-0 w-24 bg-gradient-to-r ${theme.railClass}`} />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[9px] font-display font-bold uppercase tracking-[0.2em] text-amber-200/85">{badge}</p>
-          <p className="mt-1 text-[16px] font-display font-black leading-tight text-white">{title}</p>
+          <p className={`text-[10px] font-display font-black uppercase tracking-[0.28em] ${theme.badgeClass}`}>{badge}</p>
+          <p className="mt-2 text-[1.95rem] leading-none font-display font-black text-white sm:text-[2.15rem]">{title}</p>
         </div>
         {targetLabel ? (
-          <span className="shrink-0 rounded-full border border-amber-300/25 bg-amber-500/12 px-3 py-1.5 text-[10px] font-display font-black tracking-[0.14em] text-amber-100 shadow-[0_8px_18px_rgba(245,158,11,0.14)]">
+          <span className={`shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-display font-black tracking-[0.16em] ${theme.targetClass}`}>
             {targetLabel}
           </span>
         ) : null}
       </div>
-      <div className="relative mt-3 flex items-center gap-3 rounded-[1.05rem] border border-white/10 bg-piu-dark/45 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-        <PiuChartJacket
-          title={challengeSongTitle || title}
-          mode={challengeMode}
-          level={challengeLevel}
-          jacketUrl={resolvedChallengeJacketUrl}
-          size="wide"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-display font-black text-white">
-            {challengeSongTitle || title}
-          </p>
-          {metadataBits.length ? (
-            <p className="mt-0.5 text-[11px] text-cyan-100/75">{metadataBits.join(' • ')}</p>
-          ) : null}
-          {contextLine ? (
-            <p className="mt-1 text-[12px] leading-5 text-gray-300">{contextLine}</p>
-          ) : null}
-          {captionLine ? (
-            <p className="mt-0.5 text-[11px] leading-5 text-gray-400">{captionLine}</p>
-          ) : null}
+      <div className="relative mt-4 rounded-[1.3rem] border border-white/8 bg-[#0c1120]/96 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-3">
+          <div className="rounded-[1rem] border border-white/8 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <PiuChartJacket
+              title={challengeSongTitle || title}
+              mode={challengeMode}
+              level={challengeLevel}
+              jacketUrl={resolvedChallengeJacketUrl}
+              size="wide"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-display font-black text-white sm:text-[16px]">
+              {challengeSongTitle || title}
+            </p>
+            {metadataBits.length ? (
+              <p className="mt-1 text-[12px] font-display font-bold tracking-[0.04em] text-cyan-100/70">{metadataBits.join(' • ')}</p>
+            ) : null}
+            {contextLine ? (
+              <p className="mt-2 text-[14px] leading-6 text-gray-200">{contextLine}</p>
+            ) : null}
+            {captionLine ? (
+              <p className="mt-1 text-[12px] leading-5 text-gray-500">{captionLine}</p>
+            ) : null}
+          </div>
         </div>
       </div>
-      {hasLifecycleStatus ? (
-        <div className="relative mt-3">
+      <div className="relative mt-3 flex flex-wrap items-center gap-2">
+        {hasLifecycleStatus ? (
           <CompareStatusPill statusKind={challengeCard.statusKind} statusLabel={challengeCard.statusLabel} />
-        </div>
-      ) : null}
+        ) : null}
+        {responseStatus ? (
+          <CompareStatusPill
+            statusKind={responseStatus.statusKind}
+            statusLabel={responseStatus.statusLabel}
+            prefix={getResponseStatusPrefix(responseStatus)}
+          />
+        ) : null}
+      </div>
       {detailBits.length ? (
-        <div className="relative mt-3 flex flex-wrap gap-1.5">
+        <div className="relative mt-3 flex flex-wrap gap-2">
           {detailBits.map((bit) => (
             <span
               key={bit}
-              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-display font-bold tracking-[0.12em] text-gray-200"
+              className="inline-flex items-center rounded-full border border-white/10 bg-[#171d2d] px-3 py-1.5 text-[10px] font-display font-black tracking-[0.16em] text-gray-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
             >
               {bit}
             </span>
           ))}
         </div>
       ) : null}
-      {responseStatus ? (
-        <div className="relative mt-3 flex flex-wrap items-center gap-2">
-          <CompareStatusPill
-            statusKind={responseStatus.statusKind}
-            statusLabel={responseStatus.statusLabel}
-            prefix={getResponseStatusPrefix(responseStatus)}
-          />
-        </div>
-      ) : null}
-      <div className="relative mt-3 flex flex-wrap gap-1.5">
+      <div className="relative mt-4 flex flex-wrap gap-2">
         <Link
           to={challengeCard.path}
-          className="inline-flex rounded-md border border-piu-border/70 bg-piu-dark/45 px-2.5 py-1.5 text-[10px] font-display font-bold text-amber-100 transition-colors hover:border-amber-300/35 hover:text-white"
+          className={`inline-flex min-h-10 items-center justify-center rounded-[0.95rem] border px-3.5 py-2 text-[11px] font-display font-black tracking-[0.05em] transition-colors ${theme.actionClass}`}
         >
           {buttonLabel}
         </Link>
@@ -1234,7 +1258,7 @@ function MessageChallengeCard({
             type="button"
             onClick={compareAction}
             disabled={compareLoading}
-            className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className={`inline-flex min-h-10 items-center justify-center rounded-[0.95rem] border px-3.5 py-2 text-[11px] font-display font-black tracking-[0.05em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${theme.responseClass}`}
           >
             {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
@@ -1244,7 +1268,7 @@ function MessageChallengeCard({
             type="button"
             onClick={lifecycleAction}
             disabled={lifecycleLoading}
-            className="inline-flex rounded-md border border-sky-300/35 bg-sky-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-sky-100 transition-colors hover:border-sky-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className={`inline-flex min-h-10 items-center justify-center rounded-[0.95rem] border px-3.5 py-2 text-[11px] font-display font-black tracking-[0.05em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${theme.lifecycleClass}`}
           >
             {lifecycleLoading ? 'Sending...' : lifecycleLabel}
           </button>
@@ -1315,10 +1339,10 @@ function MessageBubble({
           triggerReaction(reactionKey);
           closeTray();
         }}
-        className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full border px-2 transition-colors ${
+        className={`inline-flex h-9 min-w-[2.35rem] items-center justify-center rounded-full border px-2.5 transition-colors ${
           selected
-            ? 'border-cyan-300/35 bg-cyan-400/14'
-            : 'border-transparent bg-white/0 hover:border-white/12 hover:bg-white/10'
+            ? 'border-cyan-300/40 bg-cyan-400/18 shadow-[0_10px_18px_rgba(34,211,238,0.14)]'
+            : 'border-white/10 bg-[#141c2b] hover:border-white/14 hover:bg-[#1a2436]'
         }`}
         aria-label={`React with ${getReactionOption(reactionKey).label}`}
       >
@@ -1328,7 +1352,7 @@ function MessageBubble({
   });
 
   const trayBody = (
-    <div className="flex items-center gap-1 rounded-full border border-white/12 bg-[#07101c]/92 px-1.5 py-1 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-md">
+    <div className="flex items-center gap-1 rounded-[1.15rem] border border-white/12 bg-[#090f1c] px-2 py-1.5 shadow-[0_18px_36px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.05)]">
       {trayButtons}
     </div>
   );
@@ -1403,12 +1427,12 @@ function MessageBubble({
       {mobileTrayMounted ? (
         <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.65rem)] z-[90] sm:hidden">
           <div
-            className={`mx-auto flex min-h-[3.8rem] max-w-[26rem] items-center justify-center rounded-[1.6rem] border border-white/12 bg-[#07101c]/98 px-3 py-2 shadow-[0_20px_42px_rgba(0,0,0,0.42)] transition-all duration-200 ${
+            className={`mx-auto flex min-h-[4.1rem] max-w-[26rem] items-center justify-center rounded-[1.6rem] border border-white/12 bg-[#070c16] px-3 py-2.5 shadow-[0_24px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 ${
               trayOpen ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
             }`}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex w-full items-center justify-center gap-1.5">
+            <div className="flex w-full items-center justify-center gap-1.5 rounded-[1.2rem] bg-[#0c1221] px-2 py-1.5">
               {trayButtons}
             </div>
           </div>
