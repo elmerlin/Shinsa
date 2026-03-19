@@ -835,11 +835,11 @@ router.post('/highlights/:userId/story/:storyId/view', requireAuth, (req, res) =
 
   if (String(req.user.id || '').trim() !== ownerUserId) {
     db.prepare(`
-      INSERT INTO user_story_views (id, owner_user_id, story_id, viewer_user_id, viewed_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(owner_user_id, story_id, viewer_user_id) DO UPDATE SET
+      INSERT INTO user_story_views (owner_user_id, story_id, viewer_user_id, viewed_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(story_id, viewer_user_id) DO UPDATE SET
         viewed_at = excluded.viewed_at
-    `).run(uuidv4(), ownerUserId, storyId, req.user.id, toInboxSqliteDateTime(new Date()));
+    `).run(ownerUserId, storyId, req.user.id, toInboxSqliteDateTime(new Date()));
   }
 
   res.json({
