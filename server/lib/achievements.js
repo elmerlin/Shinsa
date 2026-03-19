@@ -1,6 +1,8 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STREAK_SERIES_ID = 'builtin-achievement-series-streak';
 const STREAK_SERIES_KEY = 'streak';
+const AUTO_POST_SERIES_KEYS = new Set(['pumps_received', STREAK_SERIES_KEY]);
+const { buildProfilePath, notifyActivitySubscribers } = require('./activitySubscriptions');
 
 function escapeXml(value) {
   return String(value || '')
@@ -367,17 +369,97 @@ function getUserLongestPlayStreak(db, userId) {
   return computeLongestStreakFromOrdinals(ordinals);
 }
 
+function shouldGenerateAchievementPost(seriesKey) {
+  return AUTO_POST_SERIES_KEYS.has(String(seriesKey || '').trim().toLowerCase());
+}
+
+function buildAchievementPostContent({ seriesKey = '', seriesName = '', tierName = '', threshold = 0, description = '' } = {}) {
+  const normalizedSeriesKey = String(seriesKey || '').trim().toLowerCase();
+  const cleanTierName = String(tierName || 'New badge').trim() || 'New badge';
+  const cleanSeriesName = String(seriesName || 'Achievement').trim() || 'Achievement';
+  const cleanDescription = String(description || '').trim();
+  const numericThreshold = parseInt(threshold, 10) || 0;
+
+  if (normalizedSeriesKey === 'pumps_received') {
+    return [
+      `New badge unlocked: ${cleanTierName}`,
+      numericThreshold > 0
+        ? `${numericThreshold.toLocaleString()} pumps received on Shinsa.`
+        : 'Pumps received milestone reached on Shinsa.',
+    ].filter(Boolean).join('\n\n');
+  }
+
+  if (normalizedSeriesKey === STREAK_SERIES_KEY) {
+    return [
+      `New badge unlocked: ${cleanTierName}`,
+      numericThreshold > 0
+        ? `${numericThreshold}-day streak reached on Shinsa.`
+        : 'New streak milestone reached on Shinsa.',
+    ].filter(Boolean).join('\n\n');
+  }
+
+  return [
+    `New ${cleanSeriesName} badge unlocked: ${cleanTierName}`,
+    cleanDescription || 'Earned on Shinsa.',
+  ].filter(Boolean).join('\n\n');
+}
+
+function createAchievementAwardPost(db, user, tier = {}) {
+  if (!db || !user?.id || !shouldGenerateAchievementPost(tier.series_key)) return null;
+
+  const images = tier.image_data ? JSON.stringify([tier.image_data]) : '[]';
+  const content = buildAchievementPostContent({
+    seriesKey: tier.series_key,
+    seriesName: tier.series_name,
+    tierName: tier.name,
+    threshold: tier.threshold,
+    description: tier.description,
+  });
+  const result = db.prepare(`
+    INSERT INTO user_posts (user_id, content, images, youtube_url, comments_disabled, created_at)
+    VALUES (?, ?, ?, '', 0, datetime('now'))
+  `).run(user.id, content, images);
+
+  const postId = result?.lastInsertRowid || 0;
+  const actorUsername = String(user.username || 'Someone').trim() || 'Someone';
+  const tierLabel = String(tier.name || 'new badge').trim() || 'new badge';
+  notifyActivitySubscribers(db, {
+    actorUserId: user.id,
+    actorUsername,
+    activityType: 'posts',
+    notificationType: 'followed_user_post',
+    title: 'New Badge',
+    message: `${actorUsername} earned a new badge: ${tierLabel}`,
+    link: postId ? `/post/${postId}` : (buildProfilePath(actorUsername) || `/profile/${user.id}`),
+  });
+
+  return postId;
+}
+
 function awardTiersForValue(db, seriesKey, userId, value) {
-  const series = db.prepare('SELECT id FROM achievement_series WHERE key = ?').get(seriesKey);
+  const series = db.prepare('SELECT id, key, name FROM achievement_series WHERE key = ?').get(seriesKey);
   if (!series) return 0;
 
   const tiers = db.prepare(`
-    SELECT id, threshold
+    SELECT
+      t.id,
+      t.threshold,
+      t.name,
+      t.description,
+      t.image_data,
+      s.key AS series_key,
+      s.name AS series_name
     FROM achievement_tiers
-    WHERE series_id = ?
+    t
+    JOIN achievement_series s ON s.id = t.series_id
+    WHERE t.series_id = ?
     ORDER BY threshold ASC
   `).all(series.id);
   if (!tiers.length) return 0;
+
+  const user = shouldGenerateAchievementPost(series.key)
+    ? db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId)
+    : null;
 
   const insertAward = db.prepare(`
     INSERT OR IGNORE INTO achievement_awards (tier_id, user_id, awarded_at)
@@ -387,7 +469,11 @@ function awardTiersForValue(db, seriesKey, userId, value) {
   let awarded = 0;
   for (const tier of tiers) {
     if (value >= (parseInt(tier.threshold, 10) || 0)) {
-      awarded += insertAward.run(tier.id, userId).changes;
+      const changes = insertAward.run(tier.id, userId).changes;
+      awarded += changes;
+      if (changes > 0 && user) {
+        createAchievementAwardPost(db, user, tier);
+      }
     }
   }
   return awarded;
