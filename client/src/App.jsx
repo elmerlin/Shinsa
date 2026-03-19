@@ -988,6 +988,9 @@ export default function App() {
       window.sessionStorage.setItem(MESSAGE_ROUTE_RESTORE_KEY, currentPath);
       return;
     }
+    if (location.pathname === '/') {
+      return;
+    }
     window.sessionStorage.removeItem(MESSAGE_ROUTE_RESTORE_KEY);
   }, [isMessagesConversationRoute, isMessagesInboxRoute, location.hash, location.pathname, location.search]);
 

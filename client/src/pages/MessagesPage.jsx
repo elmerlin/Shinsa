@@ -21,10 +21,12 @@ import {
   sendConversationMessage,
 } from '../utils/api';
 import {
+  buildClearLinkShare,
   buildChartCompareLinkShare,
   buildChallengeLifecycleCard,
   buildClearChallengeCard,
   buildRematchChallengeCard,
+  buildUpscoreLinkShare,
   buildUpscoreChallengeCard,
 } from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
@@ -754,11 +756,85 @@ function MessageLinkCard({
 }) {
   if (!linkShare) return null;
 
-  const title = String(linkShare.title || '').trim() || 'Open link';
-  const subtitle = String(linkShare.subtitle || '').trim();
-  const badge = LINK_SHARE_BADGES[linkShare.kind] || 'Link';
-  const buttonLabel = String(linkShare.buttonLabel || '').trim() || 'Open';
-  const isCompare = linkShare.kind === 'chart_compare';
+  const [hydratedLinkShare, setHydratedLinkShare] = useState(null);
+  const needsRichHydration = !hasScoreSnapshotLinkShare(linkShare)
+    && ['upscore', 'clear'].includes(linkShare.kind)
+    && (!Array.isArray(linkShare.previewItems) || linkShare.previewItems.length === 0);
+
+  useEffect(() => {
+    let active = true;
+    if (!needsRichHydration) {
+      setHydratedLinkShare(null);
+      return undefined;
+    }
+
+    const resourceId = parseResourceIdFromPath(linkShare.path, linkShare.kind);
+    if (!resourceId) {
+      setHydratedLinkShare(null);
+      return undefined;
+    }
+
+    (async () => {
+      try {
+        if (linkShare.kind === 'clear') {
+          const clearItem = await getNewClear(resourceId);
+          const rebuilt = buildClearLinkShare({
+            clearId: resourceId,
+            username: clearItem?.username || linkShare.playerName || '',
+            clears: getClearItems(clearItem),
+          });
+          if (!active || !rebuilt?.previewItems?.length) return;
+          setHydratedLinkShare({
+            ...rebuilt,
+            ...linkShare,
+            previewItems: rebuilt.previewItems,
+            totalItemCount: rebuilt.totalItemCount,
+            extraItemCount: rebuilt.extraItemCount,
+            title: rebuilt.title || linkShare.title,
+            subtitle: rebuilt.subtitle || linkShare.subtitle,
+            buttonLabel: linkShare.buttonLabel || rebuilt.buttonLabel,
+            path: linkShare.path || rebuilt.path,
+            url: linkShare.url || rebuilt.url,
+          });
+          return;
+        }
+
+        const upscoreItem = await getUpscore(resourceId);
+        const rebuilt = buildUpscoreLinkShare({
+          upscoreId: resourceId,
+          username: upscoreItem?.username || linkShare.playerName || '',
+          upscores: parseUpscoreItems(upscoreItem),
+        });
+        if (!active || !rebuilt?.previewItems?.length) return;
+        setHydratedLinkShare({
+          ...rebuilt,
+          ...linkShare,
+          previewItems: rebuilt.previewItems,
+          totalItemCount: rebuilt.totalItemCount,
+          extraItemCount: rebuilt.extraItemCount,
+          title: rebuilt.title || linkShare.title,
+          subtitle: rebuilt.subtitle || linkShare.subtitle,
+          buttonLabel: linkShare.buttonLabel || rebuilt.buttonLabel,
+          path: linkShare.path || rebuilt.path,
+          url: linkShare.url || rebuilt.url,
+        });
+      } catch {
+        if (active) setHydratedLinkShare(null);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [linkShare, needsRichHydration]);
+
+  const resolvedLinkShare = hydratedLinkShare?.previewItems?.length ? hydratedLinkShare : linkShare;
+
+  const title = String(resolvedLinkShare.title || '').trim() || 'Open link';
+  const subtitle = String(resolvedLinkShare.subtitle || '').trim();
+  const badge = LINK_SHARE_BADGES[resolvedLinkShare.kind] || 'Link';
+  const buttonLabel = String(resolvedLinkShare.buttonLabel || '').trim() || 'Open';
+  const isCompare = resolvedLinkShare.kind === 'chart_compare';
   const frameClass = isCompare
     ? 'border-emerald-300/25 bg-emerald-500/10'
     : 'border-piu-border/60 bg-piu-card/70';
@@ -767,38 +843,38 @@ function MessageLinkCard({
     ? 'border-emerald-300/30 bg-emerald-500/12 text-emerald-100 hover:border-emerald-200/40 hover:text-white'
     : 'border-piu-border/70 bg-piu-dark/40 text-cyan-100 hover:border-cyan-300/35 hover:text-white';
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
-  const isScoreSnapshot = hasScoreSnapshotLinkShare(linkShare);
+  const isScoreSnapshot = hasScoreSnapshotLinkShare(resolvedLinkShare);
   const isMultiScoreShare = !isScoreSnapshot
-    && ['upscore', 'clear'].includes(linkShare.kind)
-    && Array.isArray(linkShare.previewItems)
-    && linkShare.previewItems.length > 0;
-  const isYouTubeShare = !linkShare.path && !!parseYouTubeUrl(linkShare.url).videoId;
-  const handlePrimaryOpen = () => onOpenLink?.(linkShare);
+    && ['upscore', 'clear'].includes(resolvedLinkShare.kind)
+    && Array.isArray(resolvedLinkShare.previewItems)
+    && resolvedLinkShare.previewItems.length > 0;
+  const isYouTubeShare = !resolvedLinkShare.path && !!parseYouTubeUrl(resolvedLinkShare.url).videoId;
+  const handlePrimaryOpen = () => onOpenLink?.(resolvedLinkShare);
 
   if (isScoreSnapshot) {
     const snapshotScore = {
-      song_title: linkShare.songTitle,
-      mode: linkShare.mode,
-      level: linkShare.level,
-      score: linkShare.score,
-      grade: linkShare.grade,
-      is_stage_break: linkShare.isStageBreak,
-      old_score: linkShare.oldScore,
-      old_grade: linkShare.oldGrade,
-      scoreDelta: linkShare.scoreDelta,
-      over_top100_rank: linkShare.overTop100Rank,
-      plate: linkShare.plate,
-      perfect: linkShare.perfect,
-      great: linkShare.great,
-      good: linkShare.good,
-      bad: linkShare.bad,
-      miss: linkShare.miss,
-      username: linkShare.playerName,
-      playerAvatar: linkShare.playerAvatar,
-      playerSkillTitle: linkShare.playerSkillTitle,
-      playerRoleLabel: linkShare.playerRoleLabel,
-      contextLabel: linkShare.contextLabel,
-      date_played: linkShare.playedAt,
+      song_title: resolvedLinkShare.songTitle,
+      mode: resolvedLinkShare.mode,
+      level: resolvedLinkShare.level,
+      score: resolvedLinkShare.score,
+      grade: resolvedLinkShare.grade,
+      is_stage_break: resolvedLinkShare.isStageBreak,
+      old_score: resolvedLinkShare.oldScore,
+      old_grade: resolvedLinkShare.oldGrade,
+      scoreDelta: resolvedLinkShare.scoreDelta,
+      over_top100_rank: resolvedLinkShare.overTop100Rank,
+      plate: resolvedLinkShare.plate,
+      perfect: resolvedLinkShare.perfect,
+      great: resolvedLinkShare.great,
+      good: resolvedLinkShare.good,
+      bad: resolvedLinkShare.bad,
+      miss: resolvedLinkShare.miss,
+      username: resolvedLinkShare.playerName,
+      playerAvatar: resolvedLinkShare.playerAvatar,
+      playerSkillTitle: resolvedLinkShare.playerSkillTitle,
+      playerRoleLabel: resolvedLinkShare.playerRoleLabel,
+      contextLabel: resolvedLinkShare.contextLabel,
+      date_played: resolvedLinkShare.playedAt,
     };
 
     return (
@@ -806,8 +882,8 @@ function MessageLinkCard({
         <p className="px-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/75">{badge}</p>
         <ScoreSnapshotCard
           score={snapshotScore}
-          jacketUrl={linkShare.jacketUrl}
-          chartLink={linkShare.chartPath || ''}
+          jacketUrl={resolvedLinkShare.jacketUrl}
+          chartLink={resolvedLinkShare.chartPath || ''}
         />
         {responseStatus ? (
           <div className="flex flex-wrap items-center gap-2 px-1">
@@ -854,7 +930,7 @@ function MessageLinkCard({
   if (isMultiScoreShare) {
     return (
       <MultiScorePreviewCard
-        linkShare={linkShare}
+        linkShare={resolvedLinkShare}
         badge={badge}
         buttonClass={buttonClass}
         onOpenLink={handlePrimaryOpen}
@@ -869,12 +945,12 @@ function MessageLinkCard({
       {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
       {isYouTubeShare ? (
         <div className="mt-3">
-          <YouTubeMessagePreviewCard url={linkShare.url} onOpen={handlePrimaryOpen} />
+          <YouTubeMessagePreviewCard url={resolvedLinkShare.url} onOpen={handlePrimaryOpen} />
         </div>
       ) : null}
-      {isCompare && linkShare.statusLabel ? (
+      {isCompare && resolvedLinkShare.statusLabel ? (
         <div className="mt-2.5">
-          <CompareStatusPill statusKind={linkShare.statusKind} statusLabel={linkShare.statusLabel} />
+          <CompareStatusPill statusKind={resolvedLinkShare.statusKind} statusLabel={resolvedLinkShare.statusLabel} />
         </div>
       ) : null}
       {!isCompare && responseStatus ? (
@@ -1262,7 +1338,7 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
         disabled={stompDisabled}
         aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
         title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-        className={`group relative flex h-10 w-[4.8rem] shrink-0 items-center justify-center overflow-hidden rounded-[1rem] border px-1 transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
+        className={`group relative flex h-[2.35rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border px-[0.45rem] transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
       >
         <span
           aria-hidden="true"
@@ -1276,7 +1352,7 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
           <img
             src={STOMP_ICON_PATH}
             alt=""
-            className={`h-7 w-[3.9rem] object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-[1.06]'} ${stomping ? 'scale-110 rotate-[-6deg]' : ''} ${isCelebrating ? 'scale-[1.12] rotate-[6deg]' : ''}`}
+            className={`h-[1.05rem] w-[3.5rem] object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-[1.06]'} ${stomping ? 'scale-110 rotate-[-6deg]' : ''} ${isCelebrating ? 'scale-[1.12] rotate-[6deg]' : ''}`}
           />
         </div>
       </button>
@@ -1375,8 +1451,8 @@ function InboxView({
                   >
                     <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h3m-7.286 3.857l2.122-.707a7.5 7.5 0 001.163 1.163l-.707 2.122 1.8 1.04 1.415-1.71c.53.08 1.07.08 1.6 0l1.414 1.71 1.8-1.04-.707-2.122a7.497 7.497 0 001.163-1.163l2.122.707 1.04-1.8-1.71-1.415a7.44 7.44 0 000-1.6l1.71-1.414-1.04-1.8-2.122.707A7.496 7.496 0 0016.85 3.55l.707-2.122-1.8-1.04-1.414 1.71a7.44 7.44 0 00-1.6 0L11.33.388l-1.8 1.04.707 2.122A7.496 7.496 0 008.713 4.713l-2.122-.707-1.04 1.8 1.71 1.414a7.44 7.44 0 000 1.6l-1.71 1.415 1.04 1.8z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.983 3.5c.59 0 1.068.478 1.068 1.068v.714c.45.123.875.3 1.264.524l.506-.506a1.068 1.068 0 011.511 0l1.39 1.39a1.068 1.068 0 010 1.512l-.505.505c.223.389.4.814.523 1.264h.715a1.068 1.068 0 011.068 1.068v1.965a1.068 1.068 0 01-1.068 1.068h-.715a5.42 5.42 0 01-.523 1.264l.505.505a1.068 1.068 0 010 1.512l-1.39 1.39a1.068 1.068 0 01-1.511 0l-.506-.506a5.42 5.42 0 01-1.264.524v.714a1.068 1.068 0 01-1.068 1.068h-1.965a1.068 1.068 0 01-1.068-1.068v-.714a5.42 5.42 0 01-1.264-.524l-.505.506a1.068 1.068 0 01-1.512 0l-1.39-1.39a1.068 1.068 0 010-1.512l.506-.505a5.421 5.421 0 01-.524-1.264h-.714A1.068 1.068 0 012.5 13.502v-1.965c0-.59.478-1.068 1.068-1.068h.714c.123-.45.3-.875.524-1.264L4.3 8.7a1.068 1.068 0 010-1.512l1.39-1.39a1.068 1.068 0 011.512 0l.505.506c.389-.224.814-.401 1.264-.524v-.714c0-.59.478-1.068 1.068-1.068h1.944z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.25A3.25 3.25 0 1112 15.75 3.25 3.25 0 0112 9.25z" />
                       </svg>
                     </span>
                     <span>
