@@ -67,6 +67,7 @@ const DOJO_CHECKOUT_REMINDER_COOLDOWN_MS = 30 * 60 * 1000;
 const DOJO_GEO_TIMEOUT_MS = 10000;
 const DOJO_GEO_MAX_AGE_MS = 120000;
 const MESSAGE_ROUTE_RESTORE_KEY = 'shinsa.messages.restore-route';
+const MESSAGE_ROUTE_RESTORE_MAX_AGE_MS = 2 * 60 * 1000;
 const DOJO_GEOFENCE = {
   name: 'London Pump Dojo',
   address: 'Unit 5, 2 Wadsworth Rd, Perivale, Greenford UB6 7JD',
@@ -805,10 +806,68 @@ function GroupLoginPopupModal({ popup, slideIndex, onSlideChange, onClose }) {
   );
 }
 
+function setMessageRouteRestore(path) {
+  if (typeof window === 'undefined') return;
+  const nextPath = String(path || '').trim();
+  if (!/^\/messages(?:\/|$|\?)/.test(nextPath)) return;
+  const payload = JSON.stringify({
+    path: nextPath,
+    savedAt: Date.now(),
+  });
+  try {
+    window.sessionStorage.setItem(MESSAGE_ROUTE_RESTORE_KEY, payload);
+  } catch {
+    // Ignore storage failures.
+  }
+  try {
+    window.localStorage.setItem(MESSAGE_ROUTE_RESTORE_KEY, payload);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readMessageRouteRestore() {
+  if (typeof window === 'undefined') return '';
+
+  const readPayload = (storage) => {
+    try {
+      return storage.getItem(MESSAGE_ROUTE_RESTORE_KEY) || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const parsePayload = (raw) => {
+    if (!raw) return '';
+    try {
+      const parsed = JSON.parse(raw);
+      const path = String(parsed?.path || '').trim();
+      const savedAt = Number(parsed?.savedAt) || 0;
+      if (!/^\/messages(?:\/|$|\?)/.test(path)) return '';
+      if (!savedAt || Date.now() - savedAt > MESSAGE_ROUTE_RESTORE_MAX_AGE_MS) return '';
+      return path;
+    } catch {
+      return /^\/messages(?:\/|$|\?)/.test(raw) ? raw : '';
+    }
+  };
+
+  const sessionPath = parsePayload(readPayload(window.sessionStorage));
+  if (sessionPath) return sessionPath;
+  const localPath = parsePayload(readPayload(window.localStorage));
+  if (localPath) return localPath;
+  clearMessageRouteRestore();
+  return '';
+}
+
 function clearMessageRouteRestore() {
   if (typeof window === 'undefined') return;
   try {
     window.sessionStorage.removeItem(MESSAGE_ROUTE_RESTORE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+  try {
+    window.localStorage.removeItem(MESSAGE_ROUTE_RESTORE_KEY);
   } catch {
     // Ignore storage failures.
   }
@@ -994,23 +1053,23 @@ export default function App() {
     if (typeof window === 'undefined') return;
     const currentPath = `${location.pathname || '/'}${location.search || ''}${location.hash || ''}`;
     if (isMessagesInboxRoute || isMessagesConversationRoute) {
-      window.sessionStorage.setItem(MESSAGE_ROUTE_RESTORE_KEY, currentPath);
+      setMessageRouteRestore(currentPath);
       return;
     }
     if (location.pathname === '/') {
       return;
     }
-    window.sessionStorage.removeItem(MESSAGE_ROUTE_RESTORE_KEY);
+    clearMessageRouteRestore();
   }, [isMessagesConversationRoute, isMessagesInboxRoute, location.hash, location.pathname, location.search]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (location.pathname !== '/') return;
 
-    const restorePath = window.sessionStorage.getItem(MESSAGE_ROUTE_RESTORE_KEY);
-    if (!restorePath || !/^\/messages(?:\/|$|\?)/.test(restorePath)) return;
+    const restorePath = readMessageRouteRestore();
+    if (!restorePath) return;
 
-    window.sessionStorage.removeItem(MESSAGE_ROUTE_RESTORE_KEY);
+    clearMessageRouteRestore();
     navigate(restorePath, { replace: true });
   }, [location.pathname, navigate]);
 

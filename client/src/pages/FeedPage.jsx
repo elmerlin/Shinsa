@@ -17,10 +17,10 @@ import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 import {
-  buildClearChallengeCard,
+  buildClearChallengeOptions,
   buildClearLinkShare,
   buildScoreSnapshotLinkShare,
-  buildUpscoreChallengeCard,
+  buildUpscoreChallengeOptions,
   buildUpscoreLinkShare,
 } from '../utils/directMessageShares';
 
@@ -459,7 +459,7 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
     username: item.username,
     upscores,
   });
-  const upscoreChallengeCard = buildUpscoreChallengeCard({
+  const upscoreChallengeOptions = buildUpscoreChallengeOptions({
     upscoreId: item.id,
     username: item.username,
     upscores,
@@ -636,10 +636,11 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
             title="Send upscore"
           />
           <SendToDirectMessageButton
-            challengeCard={upscoreChallengeCard}
+            challengeOptions={upscoreChallengeOptions}
             variant="icon"
             tone="amber"
             title="Challenge a player"
+            description="Choose the player to challenge on this chart."
           />
         </div>
       </div>
@@ -873,7 +874,7 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
     username: item.username,
     clears,
   });
-  const clearChallengeCard = buildClearChallengeCard({
+  const clearChallengeOptions = buildClearChallengeOptions({
     clearId: item.id,
     username: item.username,
     clears,
@@ -1072,10 +1073,11 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
           />
           {!isTitleUnlockPost ? (
             <SendToDirectMessageButton
-              challengeCard={clearChallengeCard}
+              challengeOptions={clearChallengeOptions}
               variant="icon"
               tone="amber"
               title="Challenge a player"
+              description="Choose the player to challenge on this chart."
             />
           ) : null}
         </div>

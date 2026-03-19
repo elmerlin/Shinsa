@@ -22,10 +22,10 @@ import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 import {
-  buildClearChallengeCard,
+  buildClearChallengeOptions,
   buildClearLinkShare,
   buildScoreSnapshotLinkShare,
-  buildUpscoreChallengeCard,
+  buildUpscoreChallengeOptions,
   buildUpscoreLinkShare,
 } from '../utils/directMessageShares';
 
@@ -503,7 +503,7 @@ export function SingleUpscorePage() {
     username: item.username,
     upscores,
   });
-  const upscoreChallengeCard = buildUpscoreChallengeCard({
+  const upscoreChallengeOptions = buildUpscoreChallengeOptions({
     upscoreId: item.id,
     username: item.username,
     upscores,
@@ -668,10 +668,11 @@ export function SingleUpscorePage() {
               title="Send upscore"
             />
             <SendToDirectMessageButton
-              challengeCard={upscoreChallengeCard}
+              challengeOptions={upscoreChallengeOptions}
               variant="icon"
               tone="amber"
               title="Challenge a player"
+              description="Choose the player to challenge on this chart."
             />
           </div>
         </div>
@@ -719,7 +720,7 @@ export function SingleClearPage() {
     username: item.username,
     clears,
   });
-  const clearChallengeCard = buildClearChallengeCard({
+  const clearChallengeOptions = buildClearChallengeOptions({
     clearId: item.id,
     username: item.username,
     clears,
@@ -875,10 +876,11 @@ export function SingleClearPage() {
             />
             {!isTitleUnlockPost ? (
               <SendToDirectMessageButton
-                challengeCard={clearChallengeCard}
+                challengeOptions={clearChallengeOptions}
                 variant="icon"
                 tone="amber"
                 title="Challenge a player"
+                description="Choose the player to challenge on this chart."
               />
             ) : null}
           </div>

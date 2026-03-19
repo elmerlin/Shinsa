@@ -1045,7 +1045,7 @@ export function StoryViewerModal({
           onTouchEnd={handleTouchEnd}
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_38%),linear-gradient(180deg,#04070d,#0a1220_46%,#04070d)]" />
-          <div className="relative z-30 flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
+          <div className="relative z-50 flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5">
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex gap-1.5">
                 {(stories.length > 0 ? stories : [null]).map((entry, entryIndex) => {
@@ -1065,7 +1065,7 @@ export function StoryViewerModal({
                 </div>
               </div>
             </div>
-            <div className="relative z-30 flex items-center gap-2">
+            <div className="relative z-50 flex items-center gap-2">
               {isOwner ? (
                 <div className="relative">
                   <button
@@ -1080,7 +1080,7 @@ export function StoryViewerModal({
                     <span className="text-lg leading-none">...</span>
                   </button>
                   {menuOpen ? (
-                    <div data-story-interactive="true" className="absolute right-0 top-12 w-44 overflow-hidden rounded-[1.1rem] border border-white/10 bg-[#0d1320] shadow-[0_18px_42px_rgba(0,0,0,0.32)]">
+                    <div data-story-interactive="true" className="absolute right-0 top-12 z-[70] w-44 overflow-hidden rounded-[1.1rem] border border-white/10 bg-[#0d1320] shadow-[0_18px_42px_rgba(0,0,0,0.32)]">
                       <button data-story-interactive="true" type="button" onClick={openStats} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Story stats</button>
                       <button data-story-interactive="true" type="button" onClick={handleArchiveStory} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Archive story</button>
                       <button data-story-interactive="true" type="button" onClick={handleDeleteStory} className="w-full px-4 py-3 text-left text-sm text-rose-200 hover:bg-rose-500/10">Delete story</button>
@@ -1099,7 +1099,7 @@ export function StoryViewerModal({
             </div>
           </div>
 
-          <div className="relative z-30 flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 pb-20 pt-2 sm:px-6">
+          <div className="relative z-20 flex min-h-[calc(100dvh-5rem)] items-center justify-center px-4 pb-20 pt-2 sm:px-6">
             {loading ? (
               <p className="text-sm text-gray-400">Loading story...</p>
             ) : error ? (

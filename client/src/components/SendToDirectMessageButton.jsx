@@ -9,6 +9,7 @@ export default function SendToDirectMessageButton({
   share,
   linkShare,
   challengeCard,
+  challengeOptions = null,
   messageData = null,
   content = '',
   label = 'Send to DM',
@@ -22,8 +23,14 @@ export default function SendToDirectMessageButton({
   const { user } = useAuth();
   const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [challengePickerOpen, setChallengePickerOpen] = useState(false);
+  const [selectedChallengeCard, setSelectedChallengeCard] = useState(null);
 
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
+  const selectableChallengeOptions = useMemo(
+    () => (Array.isArray(challengeOptions) ? challengeOptions.filter((option) => option?.challengeCard) : []),
+    [challengeOptions],
+  );
   const payload = useMemo(() => {
     if (messageData && typeof messageData === 'object') {
       return Object.keys(messageData).length > 0 ? messageData : null;
@@ -34,13 +41,13 @@ export default function SendToDirectMessageButton({
     if (normalizedContent) nextPayload.content = normalizedContent;
     if (share) {
       nextPayload.session_share = share;
-    } else if (challengeCard) {
-      nextPayload.challenge_card = challengeCard;
+    } else if (selectedChallengeCard || challengeCard) {
+      nextPayload.challenge_card = selectedChallengeCard || challengeCard;
     } else if (linkShare) {
       nextPayload.link_share = linkShare;
     }
     return Object.keys(nextPayload).length > 0 ? nextPayload : null;
-  }, [challengeCard, content, linkShare, messageData, share]);
+  }, [challengeCard, content, linkShare, messageData, selectedChallengeCard, share]);
 
   if (!user || !payload) return null;
 
@@ -50,13 +57,28 @@ export default function SendToDirectMessageButton({
   const isIcon = variant === 'icon';
   const selectLabel = tone === 'amber' ? 'Challenge' : 'Send';
 
+  const resetPickers = () => {
+    setPickerOpen(false);
+    setChallengePickerOpen(false);
+    setSelectedChallengeCard(null);
+  };
+
+  const beginSendFlow = () => {
+    if (selectableChallengeOptions.length > 0) {
+      setChallengePickerOpen(true);
+      return;
+    }
+    setSelectedChallengeCard(null);
+    setPickerOpen(true);
+  };
+
   const handleSelect = async (selectedUser) => {
     const response = await getOrCreateDirectConversation(selectedUser.id, payload);
     const conversationId = String(response?.conversation?.id || '').trim();
     if (!conversationId) {
       throw new Error('Failed to open conversation.');
     }
-    setPickerOpen(false);
+    resetPickers();
     if (navigateAfterSend) {
       navigate(`/messages/${conversationId}`);
     }
@@ -66,9 +88,7 @@ export default function SendToDirectMessageButton({
     <>
       {isIcon ? (
         <ActionIconButton
-          onClick={() => {
-            setPickerOpen(true);
-          }}
+          onClick={beginSendFlow}
           title={title}
           ariaLabel={title}
           tone={tone === 'amber' ? 'amber' : 'neutral'}
@@ -89,9 +109,7 @@ export default function SendToDirectMessageButton({
       ) : (
         <button
           type="button"
-          onClick={() => {
-            setPickerOpen(true);
-          }}
+          onClick={beginSendFlow}
           className={`rounded-md border px-3 py-1.5 text-[11px] font-display font-bold transition-colors hover:text-white ${toneClassName} ${className}`.trim()}
           aria-label={title}
           title={title}
@@ -100,14 +118,63 @@ export default function SendToDirectMessageButton({
         </button>
       )}
 
+      {selectableChallengeOptions.length > 0 ? (
+        <div className={challengePickerOpen ? 'block' : 'hidden'}>
+          <div className="fixed inset-0 z-[85] bg-black/80 px-4 py-6 backdrop-blur-sm" onClick={resetPickers}>
+            <div
+              className="mx-auto w-full max-w-lg rounded-2xl border border-piu-border bg-piu-card shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-piu-border/50 px-4 py-3">
+                <div>
+                  <p className="text-[10px] font-display font-bold uppercase tracking-[0.24em] text-amber-300">Challenge</p>
+                  <h3 className="mt-1 text-lg font-display font-black text-white">Choose a chart</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={resetPickers}
+                  className="rounded-md border border-piu-border/60 bg-piu-dark/70 px-3 py-1 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="max-h-[70vh] overflow-y-auto p-4">
+                <p className="mb-3 text-sm text-gray-400">Pick the song from this post that you want to challenge someone on.</p>
+                <div className="space-y-2">
+                  {selectableChallengeOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedChallengeCard(option.challengeCard);
+                        setChallengePickerOpen(false);
+                        setPickerOpen(true);
+                      }}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-piu-border/50 bg-piu-dark/45 px-3 py-3 text-left transition-colors hover:border-amber-400/35 hover:bg-piu-dark/65"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-display font-black text-white">{option.title || 'Challenge chart'}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-400">{option.subtitle || 'Choose this chart'}</p>
+                      </div>
+                      <span className="shrink-0 rounded-md border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-amber-100">
+                        Select
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <UserPickerDialog
         open={pickerOpen}
         title={title}
         description={description}
         selectLabel={selectLabel}
-        onClose={() => {
-          setPickerOpen(false);
-        }}
+        onClose={resetPickers}
         onSelect={handleSelect}
         excludeUserIds={excludeUserIds}
       />

@@ -440,12 +440,13 @@ export function buildUpscoreChallengeCard({
   upscoreId,
   username,
   upscores,
+  selectedEntry = null,
 }) {
   const id = String(upscoreId || '').trim();
   if (!id) return null;
 
   const rows = Array.isArray(upscores) ? upscores.filter(Boolean) : [];
-  const entry = pickUpscoreChallengeEntry(rows);
+  const entry = selectedEntry && typeof selectedEntry === 'object' ? selectedEntry : pickUpscoreChallengeEntry(rows);
   if (!entry) return null;
 
   const authorName = String(username || 'Player').trim() || 'Player';
@@ -479,12 +480,13 @@ export function buildClearChallengeCard({
   clearId,
   username,
   clears,
+  selectedEntry = null,
 }) {
   const id = String(clearId || '').trim();
   if (!id) return null;
 
   const rows = Array.isArray(clears) ? clears.filter(Boolean) : [];
-  const entry = pickClearChallengeEntry(rows);
+  const entry = selectedEntry && typeof selectedEntry === 'object' ? selectedEntry : pickClearChallengeEntry(rows);
   if (!entry) return null;
 
   const authorName = String(username || 'Player').trim() || 'Player';
@@ -511,6 +513,72 @@ export function buildClearChallengeCard({
     targetGrade: String(entry?.grade || ''),
     originUsername: authorName,
   };
+}
+
+export function buildUpscoreChallengeOptions({
+  upscoreId,
+  username,
+  upscores,
+}) {
+  const id = String(upscoreId || '').trim();
+  if (!id) return [];
+
+  const rows = Array.isArray(upscores) ? upscores.filter(Boolean) : [];
+  return rows.map((entry, index) => {
+    const challengeCard = buildUpscoreChallengeCard({
+      upscoreId: id,
+      username,
+      upscores: rows,
+      selectedEntry: entry,
+    });
+    if (!challengeCard) return null;
+
+    const targetScore = Number(entry?.new_score) || 0;
+    const scoreGain = targetScore - (Number(entry?.old_score) || 0);
+    return {
+      id: `upscore-${id}-${index}-${String(entry?.song_title || '').trim()}-${String(entry?.mode || '').trim()}-${Number(entry?.level) || 0}`,
+      title: formatChartLabel(entry?.song_title, entry?.mode, entry?.level),
+      subtitle: [
+        targetScore > 0 ? formatScore(targetScore) : '',
+        compactText(entry?.new_grade, 20),
+        scoreGain > 0 ? formatDelta(scoreGain) : '',
+      ].filter(Boolean).join(' • '),
+      challengeCard,
+    };
+  }).filter(Boolean);
+}
+
+export function buildClearChallengeOptions({
+  clearId,
+  username,
+  clears,
+}) {
+  const id = String(clearId || '').trim();
+  if (!id) return [];
+
+  const rows = Array.isArray(clears)
+    ? clears.filter((entry) => String(entry?.entry_type || '').trim().toLowerCase() !== 'title_unlock')
+    : [];
+
+  return rows.map((entry, index) => {
+    const challengeCard = buildClearChallengeCard({
+      clearId: id,
+      username,
+      clears: rows,
+      selectedEntry: entry,
+    });
+    if (!challengeCard) return null;
+
+    return {
+      id: `clear-${id}-${index}-${String(entry?.song_title || '').trim()}-${String(entry?.mode || '').trim()}-${Number(entry?.level) || 0}`,
+      title: formatChartLabel(entry?.song_title, entry?.mode, entry?.level),
+      subtitle: [
+        compactText(entry?.grade, 20),
+        (Number(entry?.score) || 0) > 0 ? formatScore(entry.score) : '',
+      ].filter(Boolean).join(' • '),
+      challengeCard,
+    };
+  }).filter(Boolean);
 }
 
 export function buildChartCompareLinkShare({
