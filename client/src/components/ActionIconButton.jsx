@@ -36,7 +36,7 @@ export default function ActionIconButton({
       disabled={disabled}
       title={title || ariaLabel}
       aria-label={ariaLabel || title}
-      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-display font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${getToneClasses(tone, active)} ${className}`.trim()}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-display font-bold outline-none ring-0 transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 ${getToneClasses(tone, active)} ${className}`.trim()}
     >
       <span className="shrink-0 [&>svg]:h-[18px] [&>svg]:w-[18px]">
         {children}

@@ -46,7 +46,7 @@ import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
-import { resolveChartJacketUrl } from '../components/PiuChartJacket';
+import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 
 const LINK_SHARE_BADGES = {
   live_session: 'Live session',
@@ -1100,6 +1100,39 @@ function MessageChallengeCard({
   lifecycleLoading = false,
   lifecycleLabel = 'Accept',
 }) {
+  const [challengeJacketLookup, setChallengeJacketLookup] = useState(null);
+  const challengeSongTitle = String(challengeCard?.songTitle || '').trim();
+  const challengeMode = String(challengeCard?.mode || '').trim();
+  const challengeLevel = Number(challengeCard?.level) || 0;
+  const challengeJacketUrl = String(challengeCard?.jacketUrl || '').trim();
+  const needsChallengeJacketLookup = !!challengeSongTitle && !challengeJacketUrl;
+
+  useEffect(() => {
+    let active = true;
+    if (!needsChallengeJacketLookup) {
+      setChallengeJacketLookup(null);
+      return undefined;
+    }
+    getJacketMap()
+      .then((payload) => {
+        if (active) setChallengeJacketLookup(payload && typeof payload === 'object' ? payload : {});
+      })
+      .catch(() => {
+        if (active) setChallengeJacketLookup({});
+      });
+    return () => {
+      active = false;
+    };
+  }, [needsChallengeJacketLookup, challengeLevel, challengeMode, challengeSongTitle]);
+
+  const resolvedChallengeJacketUrl = useMemo(() => resolveChartJacketUrl({
+    title: challengeSongTitle,
+    mode: challengeMode,
+    level: challengeLevel,
+    jacketLookup: challengeJacketLookup || {},
+    jacketUrl: challengeJacketUrl,
+  }), [challengeJacketLookup, challengeJacketUrl, challengeLevel, challengeMode, challengeSongTitle]);
+
   if (!challengeCard) return null;
 
   const badge = CHALLENGE_BADGES[challengeCard.kind] || 'Challenge';
@@ -1110,25 +1143,75 @@ function MessageChallengeCard({
   const buttonLabel = String(challengeCard.buttonLabel || '').trim() || 'Open challenge';
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
   const hasLifecycleStatus = !!String(challengeCard.statusKind || '').trim();
+  const detailBits = detailLabel
+    .split('•')
+    .map((bit) => bit.trim())
+    .filter(Boolean);
+  const metadataBits = [
+    challengeMode,
+    challengeLevel > 0 ? `Level ${challengeLevel}` : '',
+  ].filter(Boolean);
+  const contextLine = String(challengeCard.originUsername || '').trim()
+    ? `${String(challengeCard.originUsername || '').trim()} challenged you`
+    : subtitle;
+  const captionLine = subtitle && subtitle !== contextLine ? subtitle : '';
 
   return (
-    <div className="w-full rounded-[1.2rem] border border-piu-border/65 bg-piu-card/80 px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
-      <p className="text-[9px] font-display font-bold uppercase tracking-[0.18em] text-amber-200/85">{badge}</p>
-      <p className="mt-1 text-[15px] font-display font-black leading-tight text-white">{title}</p>
-      {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
+    <div className="relative w-full overflow-hidden rounded-[1.35rem] border border-piu-border/65 bg-piu-card/85 px-3 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.22)]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.12),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(34,211,238,0.08),transparent_36%)]" />
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[9px] font-display font-bold uppercase tracking-[0.2em] text-amber-200/85">{badge}</p>
+          <p className="mt-1 text-[16px] font-display font-black leading-tight text-white">{title}</p>
+        </div>
+        {targetLabel ? (
+          <span className="shrink-0 rounded-full border border-amber-300/25 bg-amber-500/12 px-3 py-1.5 text-[10px] font-display font-black tracking-[0.14em] text-amber-100 shadow-[0_8px_18px_rgba(245,158,11,0.14)]">
+            {targetLabel}
+          </span>
+        ) : null}
+      </div>
+      <div className="relative mt-3 flex items-center gap-3 rounded-[1.05rem] border border-white/10 bg-piu-dark/45 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+        <PiuChartJacket
+          title={challengeSongTitle || title}
+          mode={challengeMode}
+          level={challengeLevel}
+          jacketUrl={resolvedChallengeJacketUrl}
+          size="wide"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-display font-black text-white">
+            {challengeSongTitle || title}
+          </p>
+          {metadataBits.length ? (
+            <p className="mt-0.5 text-[11px] text-cyan-100/75">{metadataBits.join(' • ')}</p>
+          ) : null}
+          {contextLine ? (
+            <p className="mt-1 text-[12px] leading-5 text-gray-300">{contextLine}</p>
+          ) : null}
+          {captionLine ? (
+            <p className="mt-0.5 text-[11px] leading-5 text-gray-400">{captionLine}</p>
+          ) : null}
+        </div>
+      </div>
       {hasLifecycleStatus ? (
-        <div className="mt-2.5">
+        <div className="relative mt-3">
           <CompareStatusPill statusKind={challengeCard.statusKind} statusLabel={challengeCard.statusLabel} />
         </div>
       ) : null}
-      {targetLabel ? (
-        <p className="mt-2.5 inline-flex rounded-md border border-amber-300/20 bg-amber-500/10 px-2.5 py-1 text-[10px] font-display font-bold text-amber-100">
-          {targetLabel}
-        </p>
+      {detailBits.length ? (
+        <div className="relative mt-3 flex flex-wrap gap-1.5">
+          {detailBits.map((bit) => (
+            <span
+              key={bit}
+              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-display font-bold tracking-[0.12em] text-gray-200"
+            >
+              {bit}
+            </span>
+          ))}
+        </div>
       ) : null}
-      {detailLabel ? <p className="mt-2 text-[12px] leading-5 text-gray-300">{detailLabel}</p> : null}
       {responseStatus ? (
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <div className="relative mt-3 flex flex-wrap items-center gap-2">
           <CompareStatusPill
             statusKind={responseStatus.statusKind}
             statusLabel={responseStatus.statusLabel}
@@ -1136,7 +1219,7 @@ function MessageChallengeCard({
           />
         </div>
       ) : null}
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
+      <div className="relative mt-3 flex flex-wrap gap-1.5">
         <Link
           to={challengeCard.path}
           className="inline-flex rounded-md border border-piu-border/70 bg-piu-dark/45 px-2.5 py-1.5 text-[10px] font-display font-bold text-amber-100 transition-colors hover:border-amber-300/35 hover:text-white"
