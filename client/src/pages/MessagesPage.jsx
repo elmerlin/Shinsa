@@ -719,7 +719,7 @@ function getCompareStatusInfo(statusKind, statusLabel) {
 function CompareStatusPill({ statusKind = '', statusLabel = '', prefix = '' }) {
   const info = getCompareStatusInfo(statusKind, statusLabel);
   return (
-    <p className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-display font-black tracking-[0.08em] ${info.className}`}>
+    <p className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-display font-bold ${info.className}`}>
       {prefix ? `${prefix}: ${info.label}` : info.label}
     </p>
   );
@@ -1161,68 +1161,64 @@ function MessageChallengeCard({
   const isClearChallenge = challengeCard.kind === 'clear_chart';
   const theme = isClearChallenge
     ? {
-      badgeClass: 'text-amber-100/85',
-      titleGlow: 'bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.18),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.08),transparent_36%)]',
-      targetClass: 'border-amber-300/24 bg-[#221a13] text-amber-50 shadow-[0_10px_22px_rgba(245,158,11,0.08)]',
-      railClass: 'from-amber-300/55 via-amber-200/16 to-transparent',
-      actionClass: 'border-amber-300/24 bg-[#15131d] text-amber-50 hover:border-amber-200/38 hover:bg-[#1d1820]',
-      responseClass: 'border-emerald-300/24 bg-[#13201b] text-emerald-100 hover:border-emerald-200/38 hover:bg-[#182821]',
-      lifecycleClass: 'border-cyan-300/24 bg-[#121b28] text-cyan-50 hover:border-cyan-200/38 hover:bg-[#172334]',
+      badgeClass: 'text-amber-200/78',
+      glowClass: 'bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.14),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.05),transparent_36%)]',
+      targetClass: 'border-amber-300/18 bg-amber-500/8 text-amber-50',
+      actionClass: 'border-amber-300/20 bg-[#121624] text-amber-100 hover:border-amber-300/28 hover:bg-[#161c2c]',
+      responseClass: 'border-emerald-300/20 bg-[#121925] text-emerald-100 hover:border-emerald-300/28 hover:bg-[#162033]',
+      lifecycleClass: 'border-cyan-300/20 bg-[#121925] text-cyan-50 hover:border-cyan-300/28 hover:bg-[#172033]',
+      metaClass: 'text-amber-100/72',
     }
     : {
-      badgeClass: 'text-cyan-100/82',
-      titleGlow: 'bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.08),transparent_38%)]',
-      targetClass: 'border-cyan-300/24 bg-[#121f2c] text-cyan-50 shadow-[0_10px_22px_rgba(34,211,238,0.08)]',
-      railClass: 'from-cyan-300/55 via-cyan-200/18 to-transparent',
-      actionClass: 'border-cyan-300/24 bg-[#15131d] text-cyan-50 hover:border-cyan-200/38 hover:bg-[#182031]',
-      responseClass: 'border-emerald-300/24 bg-[#13201b] text-emerald-100 hover:border-emerald-200/38 hover:bg-[#182821]',
-      lifecycleClass: 'border-sky-300/24 bg-[#121b28] text-sky-50 hover:border-sky-200/38 hover:bg-[#172334]',
+      badgeClass: 'text-cyan-200/78',
+      glowClass: 'bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.12),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(167,139,250,0.05),transparent_38%)]',
+      targetClass: 'border-cyan-300/18 bg-cyan-500/8 text-cyan-50',
+      actionClass: 'border-cyan-300/20 bg-[#121624] text-cyan-100 hover:border-cyan-300/28 hover:bg-[#161c2c]',
+      responseClass: 'border-emerald-300/20 bg-[#121925] text-emerald-100 hover:border-emerald-300/28 hover:bg-[#162033]',
+      lifecycleClass: 'border-sky-300/20 bg-[#121925] text-sky-50 hover:border-sky-300/28 hover:bg-[#172033]',
+      metaClass: 'text-cyan-100/72',
     };
 
   return (
-    <div className="relative isolate w-full overflow-hidden rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,#111526_0%,#0a0f1d_100%)] px-3.5 py-3.5 shadow-[0_22px_44px_rgba(0,0,0,0.28)]">
-      <div className={`pointer-events-none absolute inset-0 ${theme.titleGlow}`} />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-      <div className={`pointer-events-none absolute inset-y-5 left-0 w-24 bg-gradient-to-r ${theme.railClass}`} />
+    <div className="relative isolate w-full overflow-hidden rounded-[1.4rem] border border-piu-border/65 bg-[linear-gradient(180deg,#111525_0%,#0c1120_100%)] px-3 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.22)]">
+      <div className={`pointer-events-none absolute inset-0 ${theme.glowClass}`} />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className={`text-[10px] font-display font-black uppercase tracking-[0.28em] ${theme.badgeClass}`}>{badge}</p>
-          <p className="mt-2 text-[1.95rem] leading-none font-display font-black text-white sm:text-[2.15rem]">{title}</p>
+          <p className={`text-[9px] font-display font-bold uppercase tracking-[0.22em] ${theme.badgeClass}`}>{badge}</p>
+          <p className="mt-1.5 text-[17px] font-display font-black leading-tight text-white sm:text-[19px]">{title}</p>
         </div>
         {targetLabel ? (
-          <span className={`shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-display font-black tracking-[0.16em] ${theme.targetClass}`}>
+          <span className={`shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-display font-black tracking-[0.12em] ${theme.targetClass}`}>
             {targetLabel}
           </span>
         ) : null}
       </div>
-      <div className="relative mt-4 rounded-[1.3rem] border border-white/8 bg-[#0c1120]/96 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+      <div className="relative mt-3 rounded-[1.2rem] border border-white/10 bg-piu-dark/50 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
         <div className="flex items-center gap-3">
-          <div className="rounded-[1rem] border border-white/8 bg-black/20 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-            <PiuChartJacket
-              title={challengeSongTitle || title}
-              mode={challengeMode}
-              level={challengeLevel}
-              jacketUrl={resolvedChallengeJacketUrl}
-              size="wide"
-            />
-          </div>
+          <PiuChartJacket
+            title={challengeSongTitle || title}
+            mode={challengeMode}
+            level={challengeLevel}
+            jacketUrl={resolvedChallengeJacketUrl}
+            size="wide"
+          />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-display font-black text-white sm:text-[16px]">
+            <p className="truncate text-[15px] font-display font-black text-white">
               {challengeSongTitle || title}
             </p>
             {metadataBits.length ? (
-              <p className="mt-1 text-[12px] font-display font-bold tracking-[0.04em] text-cyan-100/70">{metadataBits.join(' • ')}</p>
+              <p className={`mt-0.5 text-[11px] font-display font-bold ${theme.metaClass}`}>{metadataBits.join(' • ')}</p>
             ) : null}
             {contextLine ? (
-              <p className="mt-2 text-[14px] leading-6 text-gray-200">{contextLine}</p>
+              <p className="mt-1 text-[12px] leading-5 text-gray-300">{contextLine}</p>
             ) : null}
             {captionLine ? (
-              <p className="mt-1 text-[12px] leading-5 text-gray-500">{captionLine}</p>
+              <p className="mt-0.5 text-[11px] leading-5 text-gray-400">{captionLine}</p>
             ) : null}
           </div>
         </div>
       </div>
-      <div className="relative mt-3 flex flex-wrap items-center gap-2">
+      <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
         {hasLifecycleStatus ? (
           <CompareStatusPill statusKind={challengeCard.statusKind} statusLabel={challengeCard.statusLabel} />
         ) : null}
@@ -1235,21 +1231,21 @@ function MessageChallengeCard({
         ) : null}
       </div>
       {detailBits.length ? (
-        <div className="relative mt-3 flex flex-wrap gap-2">
+        <div className="relative mt-3 flex flex-wrap gap-1.5">
           {detailBits.map((bit) => (
             <span
               key={bit}
-              className="inline-flex items-center rounded-full border border-white/10 bg-[#171d2d] px-3 py-1.5 text-[10px] font-display font-black tracking-[0.16em] text-gray-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-display font-bold tracking-[0.12em] text-gray-200"
             >
               {bit}
             </span>
           ))}
         </div>
       ) : null}
-      <div className="relative mt-4 flex flex-wrap gap-2">
+      <div className="relative mt-3 flex flex-wrap gap-1.5">
         <Link
           to={challengeCard.path}
-          className={`inline-flex min-h-10 items-center justify-center rounded-[0.95rem] border px-3.5 py-2 text-[11px] font-display font-black tracking-[0.05em] transition-colors ${theme.actionClass}`}
+          className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${theme.actionClass}`}
         >
           {buttonLabel}
         </Link>
@@ -1258,7 +1254,7 @@ function MessageChallengeCard({
             type="button"
             onClick={compareAction}
             disabled={compareLoading}
-            className={`inline-flex min-h-10 items-center justify-center rounded-[0.95rem] border px-3.5 py-2 text-[11px] font-display font-black tracking-[0.05em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${theme.responseClass}`}
+            className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${theme.responseClass}`}
           >
             {compareLoading ? 'Sending...' : compareButtonLabel}
           </button>
@@ -1268,7 +1264,7 @@ function MessageChallengeCard({
             type="button"
             onClick={lifecycleAction}
             disabled={lifecycleLoading}
-            className={`inline-flex min-h-10 items-center justify-center rounded-[0.95rem] border px-3.5 py-2 text-[11px] font-display font-black tracking-[0.05em] transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${theme.lifecycleClass}`}
+            className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${theme.lifecycleClass}`}
           >
             {lifecycleLoading ? 'Sending...' : lifecycleLabel}
           </button>
