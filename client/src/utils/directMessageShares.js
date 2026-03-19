@@ -68,12 +68,11 @@ function buildPreviewItems(rows, kind = 'clear') {
   const previewItems = sourceRows
     .map((entry) => normalizePreviewItem(entry, normalizedKind))
     .filter(Boolean)
-    .slice(0, 3);
 
   return {
     previewItems,
     totalItemCount: sourceRows.length,
-    extraItemCount: Math.max(0, sourceRows.length - previewItems.length),
+    extraItemCount: Math.max(0, sourceRows.length - 3),
   };
 }
 

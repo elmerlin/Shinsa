@@ -7,6 +7,7 @@ import {
   createMessageNote,
   createMessageStoryItem,
   getChartKeyMap,
+  getJacketMap,
   getMessageHighlights,
   getMessageStoryArchive,
   getMessageStory,
@@ -45,6 +46,7 @@ import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
+import { resolveChartJacketUrl } from '../components/PiuChartJacket';
 
 const LINK_SHARE_BADGES = {
   live_session: 'Live session',
@@ -63,10 +65,10 @@ const CHALLENGE_BADGES = {
 const MESSAGE_LINK_PREFERENCE_KEY = 'shinsa.messages.open-links-externally';
 const CHAT_DEFAULT_REACTION_KEY = 'shinsa.messages.default-reaction';
 const CHAT_QUICK_REACTIONS_KEY = 'shinsa.messages.quick-reactions';
-const STOMP_ICON_PATH = '/fun-assets/stomp_png.png';
 const PUMP_ICON_ACTIVE_PATH = '/piu/stomp-yellow.svg';
 const PUMP_ICON_INACTIVE_PATH = '/piu/stomp-gray.svg';
 const EXTERNAL_URL_REGEX = /https?:\/\/[^\s<>()]+/ig;
+const SCORE_SHARE_PAGE_SIZE = 3;
 const REACTION_OPTIONS = [
   { key: 'pump', label: 'Pumps', icon: PUMP_ICON_ACTIVE_PATH },
   { key: 'fire', label: 'Fire', emoji: '🔥' },
@@ -122,6 +124,20 @@ function getLevelBadgeLabel(mode, level) {
       ? 'S'
       : modeLabel.slice(0, 1).toUpperCase();
   return `${prefix}${levelValue || ''}`;
+}
+
+function enrichPreviewItemsWithJackets(items, jacketLookup = {}) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  return items.map((item) => ({
+    ...item,
+    jacketUrl: resolveChartJacketUrl({
+      title: item?.songTitle || '',
+      mode: item?.mode || '',
+      level: item?.level || '',
+      jacketLookup,
+      jacketUrl: item?.jacketUrl || '',
+    }),
+  }));
 }
 
 function getExternalHostLabel(url) {
@@ -346,13 +362,27 @@ function formatConversationTime(value) {
 }
 
 function MultiScorePreviewCard({ linkShare, badge, buttonClass, onOpenLink }) {
-  const previewItems = Array.isArray(linkShare?.previewItems) ? linkShare.previewItems.filter(Boolean).slice(0, 3) : [];
+  const previewItems = Array.isArray(linkShare?.previewItems) ? linkShare.previewItems.filter(Boolean) : [];
   const extraItemCount = Math.max(0, Number(linkShare?.extraItemCount) || 0);
   const title = String(linkShare?.title || '').trim() || 'Shared charts';
   const subtitle = String(linkShare?.subtitle || '').trim();
   const buttonLabel = String(linkShare?.buttonLabel || '').trim() || 'Open';
+  const totalItemCount = Math.max(Number(linkShare?.totalItemCount) || 0, previewItems.length);
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(previewItems.length / SCORE_SHARE_PAGE_SIZE));
+  const pageStart = pageIndex * SCORE_SHARE_PAGE_SIZE;
+  const visibleItems = previewItems.slice(pageStart, pageStart + SCORE_SHARE_PAGE_SIZE);
+  const visibleEnd = Math.min(pageStart + visibleItems.length, totalItemCount || previewItems.length);
 
-  if (previewItems.length === 0) return null;
+  useEffect(() => {
+    setPageIndex(0);
+  }, [linkShare?.path, linkShare?.title, previewItems.length]);
+
+  useEffect(() => {
+    setPageIndex((current) => Math.min(current, Math.max(0, pageCount - 1)));
+  }, [pageCount]);
+
+  if (visibleItems.length === 0) return null;
 
   return (
     <div className="w-full rounded-[1.2rem] border border-piu-border/60 bg-piu-card/75 px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
@@ -362,16 +392,16 @@ function MultiScorePreviewCard({ linkShare, badge, buttonClass, onOpenLink }) {
           <p className="mt-1 text-[15px] font-display font-black leading-tight text-white">{title}</p>
           {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
         </div>
-        {Number(linkShare?.totalItemCount) > previewItems.length ? (
+        {totalItemCount > 0 ? (
           <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-display font-black tracking-[0.18em] text-cyan-100">
-            {previewItems.length}/{Number(linkShare.totalItemCount)}
+            {pageStart + 1}-{visibleEnd}/{totalItemCount}
           </span>
         ) : null}
       </div>
       <div className="mt-3 space-y-2">
-        {previewItems.map((item, index) => (
+        {visibleItems.map((item, index) => (
           <div
-            key={`${item.songTitle || 'song'}-${index}`}
+            key={`${item.songTitle || 'song'}-${pageStart + index}`}
             className="flex items-center gap-2.5 rounded-[1rem] border border-white/10 bg-piu-dark/45 px-2.5 py-2.5"
           >
             <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[0.95rem] border border-white/10 bg-black/30">
@@ -405,9 +435,36 @@ function MultiScorePreviewCard({ linkShare, badge, buttonClass, onOpenLink }) {
         ))}
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
-        {extraItemCount > 0 ? (
-          <p className="text-[11px] font-display font-bold tracking-[0.14em] text-gray-400">+ {extraItemCount} more</p>
-        ) : <span />}
+        <div className="flex min-w-0 items-center gap-2">
+          {extraItemCount > 0 ? (
+            <p className="text-[11px] font-display font-bold tracking-[0.14em] text-gray-400">+ {extraItemCount} more</p>
+          ) : <span />}
+          {pageCount > 1 ? (
+            <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+                disabled={pageIndex <= 0}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label="Show previous shared scores"
+              >
+                &#8249;
+              </button>
+              <span className="px-1 text-[10px] font-display font-black tracking-[0.16em] text-gray-300">
+                {pageIndex + 1}/{pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + 1))}
+                disabled={pageIndex >= pageCount - 1}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label="Show next shared scores"
+              >
+                &#8250;
+              </button>
+            </div>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={onOpenLink}
@@ -757,9 +814,30 @@ function MessageLinkCard({
   if (!linkShare) return null;
 
   const [hydratedLinkShare, setHydratedLinkShare] = useState(null);
+  const [jacketLookup, setJacketLookup] = useState(null);
   const needsRichHydration = !hasScoreSnapshotLinkShare(linkShare)
     && ['upscore', 'clear'].includes(linkShare.kind)
     && (!Array.isArray(linkShare.previewItems) || linkShare.previewItems.length === 0);
+  const needsJacketLookup = Array.isArray(linkShare?.previewItems)
+    && linkShare.previewItems.some((item) => item?.songTitle && !item?.jacketUrl);
+
+  useEffect(() => {
+    let active = true;
+    if (!needsRichHydration && !needsJacketLookup) {
+      setJacketLookup(null);
+      return undefined;
+    }
+    getJacketMap()
+      .then((payload) => {
+        if (active) setJacketLookup(payload && typeof payload === 'object' ? payload : {});
+      })
+      .catch(() => {
+        if (active) setJacketLookup({});
+      });
+    return () => {
+      active = false;
+    };
+  }, [needsJacketLookup, needsRichHydration]);
 
   useEffect(() => {
     let active = true;
@@ -777,7 +855,10 @@ function MessageLinkCard({
     (async () => {
       try {
         if (linkShare.kind === 'clear') {
-          const clearItem = await getNewClear(resourceId);
+          const [clearItem, lookup] = await Promise.all([
+            getNewClear(resourceId),
+            jacketLookup ? Promise.resolve(jacketLookup) : getJacketMap().catch(() => ({})),
+          ]);
           const rebuilt = buildClearLinkShare({
             clearId: resourceId,
             username: clearItem?.username || linkShare.playerName || '',
@@ -787,7 +868,7 @@ function MessageLinkCard({
           setHydratedLinkShare({
             ...rebuilt,
             ...linkShare,
-            previewItems: rebuilt.previewItems,
+            previewItems: enrichPreviewItemsWithJackets(rebuilt.previewItems, lookup),
             totalItemCount: rebuilt.totalItemCount,
             extraItemCount: rebuilt.extraItemCount,
             title: rebuilt.title || linkShare.title,
@@ -799,7 +880,10 @@ function MessageLinkCard({
           return;
         }
 
-        const upscoreItem = await getUpscore(resourceId);
+        const [upscoreItem, lookup] = await Promise.all([
+          getUpscore(resourceId),
+          jacketLookup ? Promise.resolve(jacketLookup) : getJacketMap().catch(() => ({})),
+        ]);
         const rebuilt = buildUpscoreLinkShare({
           upscoreId: resourceId,
           username: upscoreItem?.username || linkShare.playerName || '',
@@ -809,7 +893,7 @@ function MessageLinkCard({
         setHydratedLinkShare({
           ...rebuilt,
           ...linkShare,
-          previewItems: rebuilt.previewItems,
+          previewItems: enrichPreviewItemsWithJackets(rebuilt.previewItems, lookup),
           totalItemCount: rebuilt.totalItemCount,
           extraItemCount: rebuilt.extraItemCount,
           title: rebuilt.title || linkShare.title,
@@ -826,9 +910,21 @@ function MessageLinkCard({
     return () => {
       active = false;
     };
-  }, [linkShare, needsRichHydration]);
+  }, [jacketLookup, linkShare, needsRichHydration]);
 
-  const resolvedLinkShare = hydratedLinkShare?.previewItems?.length ? hydratedLinkShare : linkShare;
+  const resolvedLinkShare = useMemo(() => {
+    const baseShare = hydratedLinkShare?.previewItems?.length ? hydratedLinkShare : linkShare;
+    if (!baseShare || !Array.isArray(baseShare.previewItems) || !baseShare.previewItems.length || !jacketLookup) {
+      return baseShare;
+    }
+    if (!baseShare.previewItems.some((item) => item?.songTitle && !item?.jacketUrl)) {
+      return baseShare;
+    }
+    return {
+      ...baseShare,
+      previewItems: enrichPreviewItemsWithJackets(baseShare.previewItems, jacketLookup),
+    };
+  }, [hydratedLinkShare, jacketLookup, linkShare]);
 
   const title = String(resolvedLinkShare.title || '').trim() || 'Open link';
   const subtitle = String(resolvedLinkShare.subtitle || '').trim();
@@ -1116,12 +1212,69 @@ function MessageBubble({
     : DEFAULT_QUICK_REACTION_KEYS;
   const [trayOpen, setTrayOpen] = useState(false);
   const tapStateRef = useRef({ lastTapAt: 0, timer: null });
+  const mobileTrayTimerRef = useRef(null);
+  const [mobileTrayMounted, setMobileTrayMounted] = useState(false);
+
+  const closeTray = () => {
+    setTrayOpen(false);
+  };
+  const trayButtons = trayKeys.map((reactionKey) => {
+    const selected = viewerReaction === reactionKey;
+    return (
+      <button
+        key={`${message?.id}-${reactionKey}`}
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          triggerReaction(reactionKey);
+          closeTray();
+        }}
+        className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full border px-2 transition-colors ${
+          selected
+            ? 'border-cyan-300/35 bg-cyan-400/14'
+            : 'border-transparent bg-white/0 hover:border-white/12 hover:bg-white/10'
+        }`}
+        aria-label={`React with ${getReactionOption(reactionKey).label}`}
+      >
+        {renderReactionGlyph(reactionKey, 'h-4 w-4', selected)}
+      </button>
+    );
+  });
+
+  const trayBody = (
+    <div className="flex items-center gap-1 rounded-full border border-white/12 bg-[#07101c]/92 px-1.5 py-1 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-md">
+      {trayButtons}
+    </div>
+  );
 
   useEffect(() => () => {
     if (tapStateRef.current.timer) {
       window.clearTimeout(tapStateRef.current.timer);
     }
   }, []);
+
+  useEffect(() => {
+    if (trayOpen) {
+      if (mobileTrayTimerRef.current) {
+        window.clearTimeout(mobileTrayTimerRef.current);
+        mobileTrayTimerRef.current = null;
+      }
+      setMobileTrayMounted(true);
+      return undefined;
+    }
+
+    if (!mobileTrayMounted) return undefined;
+    mobileTrayTimerRef.current = window.setTimeout(() => {
+      setMobileTrayMounted(false);
+      mobileTrayTimerRef.current = null;
+    }, 180);
+    return () => {
+      if (mobileTrayTimerRef.current) {
+        window.clearTimeout(mobileTrayTimerRef.current);
+        mobileTrayTimerRef.current = null;
+      }
+    };
+  }, [mobileTrayMounted, trayOpen]);
 
   const triggerReaction = (reactionKey) => {
     if (!message?.id || !onReact) return;
@@ -1138,7 +1291,7 @@ function MessageBubble({
       }
       tapStateRef.current.lastTapAt = 0;
       triggerReaction(defaultReaction);
-      setTrayOpen(false);
+      closeTray();
       return;
     }
 
@@ -1161,31 +1314,28 @@ function MessageBubble({
           {senderName}
         </p>
       ) : null}
+      {mobileTrayMounted ? (
+        <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.65rem)] z-[90] sm:hidden">
+          <div
+            className={`mx-auto flex min-h-[3.8rem] max-w-[26rem] items-center justify-center rounded-[1.6rem] border border-white/12 bg-[#07101c]/98 px-3 py-2 shadow-[0_20px_42px_rgba(0,0,0,0.42)] transition-all duration-200 ${
+              trayOpen ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
+            }`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex w-full items-center justify-center gap-1.5">
+              {trayButtons}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {trayOpen ? (
-        <div className={`mb-1 flex ${isOwn ? 'justify-end' : 'justify-start'} px-1`}>
-          <div className="flex items-center gap-1 rounded-full border border-white/12 bg-[#07101c]/92 px-1.5 py-1 shadow-[0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-md">
-            {trayKeys.map((reactionKey) => {
-              const selected = viewerReaction === reactionKey;
-              return (
-                <button
-                  key={`${message?.id}-${reactionKey}`}
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    triggerReaction(reactionKey);
-                    setTrayOpen(false);
-                  }}
-                  className={`inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full border px-2 transition-colors ${
-                    selected
-                      ? 'border-cyan-300/35 bg-cyan-400/14'
-                      : 'border-transparent bg-white/0 hover:border-white/12 hover:bg-white/10'
-                  }`}
-                  aria-label={`React with ${getReactionOption(reactionKey).label}`}
-                >
-                  {renderReactionGlyph(reactionKey, 'h-4 w-4', selected)}
-                </button>
-              );
-            })}
+        <div
+          className={`pointer-events-none absolute top-1/2 z-20 hidden -translate-y-1/2 sm:flex ${
+            isOwn ? 'right-full mr-2 justify-end' : 'left-full ml-2 justify-start'
+          }`}
+        >
+          <div className="pointer-events-auto">
+            {trayBody}
           </div>
         </div>
       ) : null}
@@ -1338,7 +1488,7 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
         disabled={stompDisabled}
         aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
         title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-        className={`group relative flex h-[2.35rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border px-[0.45rem] transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
+        className={`group relative flex h-[2.45rem] min-w-[5.1rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border px-3 transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
       >
         <span
           aria-hidden="true"
@@ -1348,13 +1498,11 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
           aria-hidden="true"
           className={`pointer-events-none absolute inset-[3px] rounded-[0.8rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
         />
-        <div className="relative z-[1] flex items-center justify-center">
-          <img
-            src={STOMP_ICON_PATH}
-            alt=""
-            className={`h-[1.05rem] w-[3.5rem] object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-[1.06]'} ${stomping ? 'scale-110 rotate-[-6deg]' : ''} ${isCelebrating ? 'scale-[1.12] rotate-[6deg]' : ''}`}
-          />
-        </div>
+        <span
+          className={`relative z-[1] select-none text-sm font-display font-black uppercase tracking-[0.18em] text-cyan-50 [text-shadow:0_0_10px_rgba(103,232,249,0.18)] transition-transform duration-300 ${stompDisabled ? 'text-gray-300' : 'group-hover:scale-[1.04]'} ${stomping ? 'scale-110 rotate-[-5deg]' : ''} ${isCelebrating ? 'scale-[1.08] rotate-[4deg]' : ''}`}
+        >
+          STOMP
+        </span>
       </button>
     </Link>
   );

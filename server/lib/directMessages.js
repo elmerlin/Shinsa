@@ -143,7 +143,7 @@ function sanitizeAbsoluteUrl(value) {
 function sanitizeLinkShareItems(items) {
   if (!Array.isArray(items)) return [];
   return items
-    .slice(0, 3)
+    .slice(0, 24)
     .map((item) => ({
       songTitle: String(item?.songTitle || item?.song_title || '').trim().slice(0, 120),
       mode: String(item?.mode || '').trim().slice(0, 24),
