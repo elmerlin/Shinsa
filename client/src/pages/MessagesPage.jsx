@@ -230,7 +230,7 @@ function formatConversationTime(value) {
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-const STOMP_ICON_PATH = '/fun-assets/stomp.png';
+const STOMP_ICON_PATH = '/fun-assets/stomp_png.png';
 
 function getCompareStatusInfo(statusKind, statusLabel) {
   const meta = COMPARE_STATUS_META[String(statusKind || '').trim()] || COMPARE_STATUS_META.shared_best;
@@ -679,12 +679,13 @@ function MessageBubble({
   );
 }
 
-function ConversationRow({ conversation, stomping, onStomp }) {
+function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
   const partner = conversation?.partner;
   const timeLabel = formatConversationTime(conversation.last_message_at);
   const previewText = conversation?.last_message?.preview || 'Started a conversation';
   const stompState = conversation?.stomp || null;
   const stompDisabled = Boolean(stomping || (stompState && !stompState.can_send));
+  const isCelebrating = Boolean(celebrate);
   const stompButtonTone = stompState?.has_incoming
     ? 'border-amber-300/40 bg-amber-400/10 shadow-[0_0_0_1px_rgba(251,191,36,0.12)]'
     : 'border-white/10 bg-white/5';
@@ -712,15 +713,11 @@ function ConversationRow({ conversation, stomping, onStomp }) {
             </span>
           ) : null}
         </div>
-        <div className={`mt-1 flex items-center gap-1 text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
-          <span className="min-w-0 flex-1 truncate">{previewText}</span>
-          {timeLabel ? (
-            <span className="shrink-0 text-[10px] text-gray-500">
-              <span className="px-0.5 text-gray-600">•</span>
-              {timeLabel}
-            </span>
-          ) : null}
-        </div>
+        <p className={`mt-1 truncate text-xs ${conversation.unread_count > 0 ? 'text-gray-200' : 'text-gray-500'}`}>
+          {previewText}
+          {timeLabel ? <span className="text-gray-600"> {'\u2022'} </span> : null}
+          {timeLabel ? <span className="text-[10px] text-gray-500">{timeLabel}</span> : null}
+        </p>
       </div>
       <button
         type="button"
@@ -733,13 +730,27 @@ function ConversationRow({ conversation, stomping, onStomp }) {
         disabled={stompDisabled}
         aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
         title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-        className={`group relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'}`}
+        className={`group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
       >
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-0 rounded-2xl bg-cyan-300/20 transition duration-500 ${stomping || isCelebrating ? 'animate-ping opacity-100' : 'opacity-0'}`}
+        />
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-1 rounded-[1rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
+        />
         <img
           src={STOMP_ICON_PATH}
           alt=""
-          className={`h-7 w-7 object-contain transition-transform duration-200 ${stompDisabled ? '' : 'group-hover:scale-105'}`}
+          className={`relative z-[1] h-7 w-7 object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-105'} ${stomping ? 'scale-110 rotate-[-10deg]' : ''} ${isCelebrating ? 'scale-[1.18] rotate-[10deg]' : ''}`}
         />
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute -top-1 right-0 z-[1] rounded-full border border-cyan-200/35 bg-cyan-300/15 px-1.5 py-0.5 text-[8px] font-display font-black tracking-[0.2em] text-cyan-100 transition-all duration-300 ${isCelebrating ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'}`}
+        >
+          STOMP
+        </span>
       </button>
     </Link>
   );
@@ -757,6 +768,7 @@ function InboxView({
   onOpenStoryComposer,
   onOpenStoryArchive,
   onStompConversation,
+  stompCelebrationConversationId,
   stompingConversationId,
   onStartChat,
 }) {
@@ -827,6 +839,7 @@ function InboxView({
               <ConversationRow
                 key={conversation.id}
                 conversation={conversation}
+                celebrate={stompCelebrationConversationId === conversation.id}
                 stomping={stompingConversationId === conversation.id}
                 onStomp={onStompConversation}
               />
@@ -1021,6 +1034,7 @@ export default function MessagesPage() {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [conversationError, setConversationError] = useState('');
   const [stompingConversationId, setStompingConversationId] = useState('');
+  const [stompCelebrationConversationId, setStompCelebrationConversationId] = useState('');
   const [highlights, setHighlights] = useState({ me: null, circles: [] });
   const [loadingHighlights, setLoadingHighlights] = useState(true);
   const [highlightError, setHighlightError] = useState('');
@@ -1346,6 +1360,10 @@ export default function MessagesPage() {
         setConversations((prev) => prev.map((entry) => (
           entry.id === payload.conversation.id ? payload.conversation : entry
         )));
+        setStompCelebrationConversationId(targetConversationId);
+        window.setTimeout(() => {
+          setStompCelebrationConversationId((current) => (current === targetConversationId ? '' : current));
+        }, 900);
       } else {
         await loadConversations();
       }
@@ -2021,6 +2039,7 @@ export default function MessagesPage() {
           onOpenStoryComposer={handleOpenStoryComposer}
           onOpenStoryArchive={handleOpenStoryArchive}
           onStompConversation={handleConversationStomp}
+          stompCelebrationConversationId={stompCelebrationConversationId}
           stompingConversationId={stompingConversationId}
           onStartChat={() => setPickerOpen(true)}
         />
