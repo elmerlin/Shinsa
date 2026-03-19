@@ -159,7 +159,7 @@ function ToggleRow({
   onToggle,
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-[1.15rem] border border-white/8 bg-white/5 px-4 py-3.5">
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-piu-border/60 bg-piu-dark/70 px-4 py-3.5">
       <div className="min-w-0">
         <p className="text-sm font-display font-black text-white">{label}</p>
         <p className="mt-1 text-xs leading-5 text-gray-400">{description}</p>
@@ -169,7 +169,7 @@ function ToggleRow({
         onClick={() => !disabled && onToggle?.(!enabled)}
         disabled={disabled}
         className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border transition-colors ${
-          enabled ? 'border-cyan-300/35 bg-cyan-400/20' : 'border-white/15 bg-white/10'
+          enabled ? 'border-cyan-400/25 bg-cyan-500/12' : 'border-piu-border/60 bg-piu-card/70'
         } ${disabled ? 'cursor-not-allowed opacity-50' : ''}`}
         aria-pressed={enabled}
       >
@@ -333,15 +333,15 @@ export default function SquadSettingsModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-[155] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <div className="fixed inset-0 z-[155] flex items-center justify-center bg-black/84 p-2 backdrop-blur-sm sm:p-4" onClick={onClose}>
         <div
-          className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.8rem] border border-piu-border/70 bg-[#07111f] shadow-[0_30px_90px_rgba(0,0,0,0.48)]"
+          className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[1.35rem] border border-piu-border/60 bg-piu-card/95 shadow-[0_24px_72px_rgba(0,0,0,0.44)] sm:max-h-[calc(100dvh-2rem)]"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-white/8 px-5 py-4">
+          <div className="flex items-start justify-between gap-4 border-b border-piu-border/50 px-5 py-4">
             <div className="min-w-0">
-              <p className="text-[11px] font-display font-bold uppercase tracking-[0.24em] text-cyan-200/70">Squad settings</p>
-              <h2 className="mt-2 truncate text-2xl font-display font-black text-white">
+              <p className="text-sm font-display font-semibold text-gray-300">Squad settings</p>
+              <h2 className="mt-1 truncate text-[1.9rem] font-display font-black text-white">
                 {detail?.conversation?.title || conversation?.title || 'Squad'}
               </h2>
               <p className="mt-2 text-sm text-gray-400">
@@ -351,7 +351,7 @@ export default function SquadSettingsModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-piu-border/60 bg-piu-dark/70 text-gray-300 transition-colors hover:border-cyan-400/30 hover:text-white"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -359,15 +359,15 @@ export default function SquadSettingsModal({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:py-5">
             {loading ? (
-              <div className="rounded-[1.4rem] border border-white/8 bg-white/5 px-4 py-8 text-center text-sm text-gray-400">
+              <div className="rounded-xl border border-piu-border/60 bg-piu-dark/55 px-4 py-8 text-center text-sm text-gray-400">
                 Loading squad settings...
               </div>
             ) : (
               <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
                 <div className="space-y-5">
-                  <section className="rounded-[1.45rem] border border-white/10 bg-white/5 p-4">
+                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-display font-black text-white">Identity</p>
@@ -375,7 +375,7 @@ export default function SquadSettingsModal({
                           The creator can change the squad name and avatar.
                         </p>
                       </div>
-                      <span className="rounded-full border border-cyan-300/18 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-display font-black tracking-[0.18em] text-cyan-100">
+                      <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1 text-[10px] font-display font-black tracking-[0.18em] text-gray-200">
                         {getRoleLabel(viewerRole)}
                       </span>
                     </div>
@@ -390,20 +390,20 @@ export default function SquadSettingsModal({
                             value={identityDraft.title}
                             onChange={(event) => setIdentityDraft((prev) => ({ ...prev, title: event.target.value }))}
                             maxLength={60}
-                            className="mt-2 w-full rounded-[1rem] border border-piu-border/60 bg-piu-dark/45 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none"
+                            className="mt-2 w-full rounded-xl border border-piu-border/60 bg-piu-dark/80 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-400/30 focus:outline-none"
                           />
                         </label>
                         <button
                           type="button"
                           onClick={handleSaveIdentity}
                           disabled={!isIdentityDirty || savingIdentity}
-                          className="rounded-[1rem] border border-cyan-300/30 bg-cyan-500/15 px-4 py-2.5 text-sm font-display font-black text-cyan-50 transition-colors hover:border-cyan-200/45 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-55"
+                          className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2.5 text-sm font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
                         >
                           {savingIdentity ? 'Saving...' : 'Save squad details'}
                         </button>
                       </div>
                     ) : (
-                      <div className="mt-4 flex items-center gap-3 rounded-[1.2rem] border border-white/8 bg-[#04111d]/75 px-3 py-3">
+                      <div className="mt-4 flex items-center gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3">
                         {conversation?.avatar ? (
                           <img src={getAvatarUrl(conversation.avatar)} alt="" className="h-14 w-14 rounded-[1rem] object-cover" />
                         ) : (
@@ -419,7 +419,7 @@ export default function SquadSettingsModal({
                     )}
                   </section>
 
-                  <section className="rounded-[1.45rem] border border-white/10 bg-white/5 p-4">
+                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-display font-black text-white">Members</p>
@@ -431,7 +431,7 @@ export default function SquadSettingsModal({
                         <button
                           type="button"
                           onClick={() => setPickerOpen(true)}
-                          className="rounded-[1rem] border border-cyan-300/25 bg-cyan-500/10 px-3 py-2 text-xs font-display font-black text-cyan-100 transition-colors hover:border-cyan-300/40 hover:text-white"
+                          className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white"
                         >
                           Add player
                         </button>
@@ -453,7 +453,7 @@ export default function SquadSettingsModal({
                         return (
                           <div
                             key={memberUserId || member?.joined_at}
-                            className="flex flex-wrap items-center gap-3 rounded-[1.15rem] border border-white/8 bg-[#04111d]/72 px-3 py-3"
+                            className="flex flex-wrap items-center gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3"
                           >
                             {member?.user?.avatar ? (
                               <img src={getAvatarUrl(member.user.avatar)} alt="" className="h-11 w-11 rounded-full object-cover" />
@@ -468,7 +468,7 @@ export default function SquadSettingsModal({
                                   {member?.user?.username || 'Player'}
                                   {memberUserId === String(currentUserId || '').trim() ? ' (You)' : ''}
                                 </p>
-                                <span className="rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-[10px] font-display font-black uppercase tracking-[0.16em] text-gray-200">
+                                <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2 py-0.5 text-[10px] font-display font-black uppercase tracking-[0.16em] text-gray-200">
                                   {getRoleLabel(member?.role)}
                                 </span>
                               </div>
@@ -481,7 +481,7 @@ export default function SquadSettingsModal({
                                 type="button"
                                 onClick={() => handleRoleToggle(member)}
                                 disabled={isActing}
-                                className="rounded-lg border border-white/12 bg-white/6 px-3 py-2 text-[11px] font-display font-black text-gray-100 transition-colors hover:border-cyan-300/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                                className="rounded-lg border border-piu-border/60 bg-piu-dark/80 px-3 py-2 text-[11px] font-display font-black text-gray-100 transition-colors hover:border-cyan-300/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
                               >
                                 {isActing ? 'Saving...' : (member?.role === 'moderator' ? 'Make member' : 'Make moderator')}
                               </button>
@@ -504,7 +504,7 @@ export default function SquadSettingsModal({
                 </div>
 
                 <div className="space-y-5">
-                  <section className="rounded-[1.45rem] border border-white/10 bg-white/5 p-4">
+                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
                     <p className="text-sm font-display font-black text-white">Notifications</p>
                     <p className="mt-1 text-xs leading-5 text-gray-400">
                       Mention notifications can still reach you even if general squad notifications are off.
@@ -527,7 +527,7 @@ export default function SquadSettingsModal({
                     </div>
                   </section>
 
-                  <section className="rounded-[1.45rem] border border-white/10 bg-white/5 p-4">
+                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-display font-black text-white">Shared activity</p>
@@ -535,15 +535,15 @@ export default function SquadSettingsModal({
                           Linked videos, shared scores/clears, and links from this squad chat.
                         </p>
                       </div>
-                      <div className="inline-flex rounded-full border border-white/10 bg-[#04111d]/75 p-1">
+                      <div className="inline-flex rounded-xl border border-piu-border/60 bg-piu-card/75 p-1">
                         {TAB_OPTIONS.map((option) => (
                           <button
                             key={option.key}
                             type="button"
                             onClick={() => setTab(option.key)}
-                            className={`rounded-full px-3 py-1.5 text-[11px] font-display font-black transition-colors ${
+                            className={`rounded-lg px-3 py-1.5 text-[11px] font-display font-black transition-colors ${
                               tab === option.key
-                                ? 'bg-cyan-400/16 text-cyan-50'
+                                ? 'border border-cyan-400/25 bg-cyan-500/10 text-cyan-100'
                                 : 'text-gray-400 hover:text-white'
                             }`}
                           >
@@ -562,7 +562,7 @@ export default function SquadSettingsModal({
                                 key={item.url}
                                 type="button"
                                 onClick={() => onOpenLink?.({ url: item.url, title: item.title })}
-                                className="flex w-full items-center gap-3 rounded-[1.15rem] border border-white/8 bg-[#04111d]/72 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
+                                className="flex w-full items-center gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
                               >
                                 <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-[0.9rem] bg-black">
                                   {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : null}
@@ -576,7 +576,7 @@ export default function SquadSettingsModal({
                             ))}
                           </div>
                         ) : (
-                          <div className="rounded-[1.15rem] border border-dashed border-white/10 px-4 py-6 text-center text-sm text-gray-500">
+                          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
                             No linked videos yet.
                           </div>
                         )
@@ -590,9 +590,9 @@ export default function SquadSettingsModal({
                                 key={item.id}
                                 type="button"
                                 onClick={() => onOpenLink?.(item.linkTarget)}
-                                className="flex w-full items-start gap-3 rounded-[1.15rem] border border-white/8 bg-[#04111d]/72 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
+                                className="flex w-full items-start gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
                               >
-                                <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-display font-black uppercase tracking-[0.18em] text-cyan-100">
+                                <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1 text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-200">
                                   {item.kind}
                                 </span>
                                 <div className="min-w-0 flex-1">
@@ -605,7 +605,7 @@ export default function SquadSettingsModal({
                             ))}
                           </div>
                         ) : (
-                          <div className="rounded-[1.15rem] border border-dashed border-white/10 px-4 py-6 text-center text-sm text-gray-500">
+                          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
                             No shared scores or clears yet.
                           </div>
                         )
@@ -619,9 +619,9 @@ export default function SquadSettingsModal({
                                 key={item.url}
                                 type="button"
                                 onClick={() => onOpenLink?.({ url: item.url, title: item.title })}
-                                className="flex w-full items-start gap-3 rounded-[1.15rem] border border-white/8 bg-[#04111d]/72 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
+                                className="flex w-full items-start gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
                               >
-                                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/6 text-cyan-100">
+                                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-piu-border/60 bg-piu-dark/80 text-cyan-100">
                                   ↗
                                 </span>
                                 <div className="min-w-0 flex-1">
@@ -633,7 +633,7 @@ export default function SquadSettingsModal({
                             ))}
                           </div>
                         ) : (
-                          <div className="rounded-[1.15rem] border border-dashed border-white/10 px-4 py-6 text-center text-sm text-gray-500">
+                          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
                             No off-app links yet.
                           </div>
                         )
@@ -654,7 +654,9 @@ export default function SquadSettingsModal({
       <UserPickerDialog
         open={pickerOpen}
         title="Add squad player"
+        description="Search for a player to add to this squad."
         selectLabel={actingMemberId ? 'Adding...' : 'Add'}
+        eyebrowLabel="Squads"
         onClose={() => setPickerOpen(false)}
         onSelect={handleAddMember}
         excludeUserIds={excludeUserIds}

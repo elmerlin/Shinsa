@@ -262,10 +262,10 @@ function StoryCard({ story }) {
     const rows = Array.isArray(story.scores) ? story.scores.slice(0, 5) : [];
     return (
       <div className="w-full max-w-sm space-y-3">
-        <div className="overflow-hidden rounded-[1.7rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.14),transparent_44%),linear-gradient(160deg,#0b1019,#141b2a)] px-4 py-4 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
+        <div className="overflow-hidden rounded-[1.5rem] border border-piu-border/60 bg-piu-card/95 px-4 py-4 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">
+              <p className="text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
                 {story.entry_kind === 'clear' ? 'New clears' : 'New upscores'}
               </p>
               <h3 className="mt-1 font-display text-2xl font-black leading-none text-white">
@@ -273,19 +273,19 @@ function StoryCard({ story }) {
               </h3>
               {story.subtitle ? <p className="mt-2 text-xs text-gray-400">{story.subtitle}</p> : null}
             </div>
-            <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-cyan-100">
+            <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-gray-200">
               {rows.length}/{Math.max(rows.length, parseInt(story.total_count, 10) || rows.length)}
             </span>
           </div>
 
           <div className="mt-4 space-y-2.5">
             {rows.map((entry, index) => (
-              <div key={`${story.id || 'story'}:${entry.song_title || 'song'}:${entry.mode || ''}:${entry.level || 0}:${index}`} className="flex items-center gap-3 rounded-[1.15rem] border border-white/8 bg-black/22 px-3 py-2.5">
-                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#0f1522]">
+              <div key={`${story.id || 'story'}:${entry.song_title || 'song'}:${entry.mode || ''}:${entry.level || 0}:${index}`} className="flex items-center gap-3 rounded-xl border border-piu-border/60 bg-piu-dark/75 px-3 py-2.5">
+                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-piu-border/60 bg-[#0f1522]">
                   {entry.jacket_url ? (
                     <img src={entry.jacket_url} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_45%),linear-gradient(160deg,#0a101b,#13192a)] text-[10px] font-display font-bold uppercase tracking-[0.12em] text-gray-400">
+                    <div className="flex h-full w-full items-center justify-center bg-piu-dark/90 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-gray-400">
                       {String(entry.mode || 'PIU').slice(0, 3)}
                     </div>
                   )}
@@ -307,13 +307,13 @@ function StoryCard({ story }) {
         </div>
 
         {story.caption ? (
-          <div className="rounded-[1.4rem] border border-white/10 bg-black/35 px-4 py-3 text-sm leading-6 text-gray-100 shadow-[0_14px_32px_rgba(0,0,0,0.24)]">
+          <div className="rounded-[1.2rem] border border-piu-border/60 bg-piu-dark/80 px-4 py-3 text-sm leading-6 text-gray-100 shadow-[0_14px_32px_rgba(0,0,0,0.24)]">
             {renderFormattedText(story.caption)}
           </div>
         ) : null}
 
         <div className="space-y-3">
-          {renderLinkButton(story.link, 'inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white hover:bg-white/12')}
+          {renderLinkButton(story.link, 'inline-flex rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-display font-bold text-cyan-100 hover:border-cyan-400/35 hover:text-white')}
           <StickerRow tokens={story.sticker_tokens} />
         </div>
       </div>
@@ -322,7 +322,7 @@ function StoryCard({ story }) {
 
   if (story.snapshot) {
     return (
-      <div className="w-full max-w-sm">
+      <div className="w-full max-w-sm space-y-3">
         <ScoreSnapshotCard
           score={story.snapshot}
           jacketUrl={story.snapshot.jacketUrl || story.snapshot.jacket_url || ''}
@@ -330,11 +330,14 @@ function StoryCard({ story }) {
           className="mx-auto"
         />
         {story.caption ? (
-          <div className="mt-4 rounded-[1.4rem] border border-white/10 bg-black/35 px-4 py-3 text-sm leading-6 text-gray-100 shadow-[0_14px_32px_rgba(0,0,0,0.24)]">
+          <div className="rounded-[1.2rem] border border-piu-border/60 bg-piu-dark/80 px-4 py-3 text-sm leading-6 text-gray-100 shadow-[0_14px_32px_rgba(0,0,0,0.24)]">
             {renderFormattedText(story.caption)}
           </div>
         ) : null}
-        <StickerRow tokens={story.sticker_tokens} />
+        <div className="space-y-3">
+          {renderLinkButton(story.link, 'inline-flex rounded-full border border-cyan-400/25 bg-cyan-500/10 px-3 py-1.5 text-xs font-display font-bold text-cyan-100 hover:border-cyan-400/35 hover:text-white')}
+          <StickerRow tokens={story.sticker_tokens} />
+        </div>
       </div>
     );
   }

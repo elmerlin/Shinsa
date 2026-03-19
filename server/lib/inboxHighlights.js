@@ -662,18 +662,33 @@ function buildManualStoryItem(row, user, resolvedSource = null) {
     },
   };
 
-  if (storyType === 'score_snapshot' && resolvedSource) {
+  if (storyType === 'score_snapshot') {
+    const metadataSnapshot = metadata.snapshot && typeof metadata.snapshot === 'object' && !Array.isArray(metadata.snapshot)
+      ? metadata.snapshot
+      : parseJsonObject(metadata.snapshot, {});
+    const snapshot = resolvedSource?.snapshot || (Object.keys(metadataSnapshot).length > 0 ? metadataSnapshot : null);
+    const storyLink = baseLink?.path || baseLink?.url ? baseLink : (resolvedSource?.link || null);
+    if (!snapshot) return null;
+
     return {
-      ...resolvedSource,
-      id: `story:${row.id}`,
-      created_at: row.created_at || resolvedSource.created_at || '',
-      expires_at: row.expires_at || resolvedSource.expires_at || '',
-      caption: normalizeText(row.caption || resolvedSource.caption || '', 420),
-      sticker_tokens: stickerTokens,
-      source: {
-        kind: String(row.source_kind || '').trim(),
-        id: String(row.source_id || '').trim(),
-      },
+      ...(resolvedSource || {}),
+      ...buildSnapshotStoryItem({
+        id: `story:${row.id}`,
+        user,
+        storyType,
+        createdAt: row.created_at || resolvedSource?.created_at || '',
+        expiresAt: row.expires_at || resolvedSource?.expires_at || '',
+        caption: normalizeText(row.caption || resolvedSource?.caption || '', 420),
+        link: storyLink,
+        stickerTokens,
+        source: {
+          kind: String(row.source_kind || '').trim(),
+          id: String(row.source_id || '').trim(),
+        },
+        title: normalizeText(metadata.title || resolvedSource?.title || '', 80),
+        subtitle: normalizeText(metadata.subtitle || resolvedSource?.subtitle || '', 120),
+        snapshot,
+      }),
       manual: true,
     };
   }

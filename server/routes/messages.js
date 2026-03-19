@@ -60,6 +60,60 @@ function sanitizeSquadAvatar(value) {
   return '';
 }
 
+function sanitizeStoryAssetUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return sanitizeAbsoluteUrl(raw, 1000);
+  if (raw.startsWith('/')) return sanitizeRelativePath(raw, 1000);
+  return '';
+}
+
+function sanitizeStorySnapshot(value) {
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : parseJsonObject(value, {});
+
+  const snapshot = {
+    song_title: normalizeText(raw.song_title || raw.songTitle || '', 160),
+    mode: normalizeText(raw.mode || '', 40),
+    level: parseInt(raw.level, 10) || 0,
+    score: parseInt(raw.score ?? raw.new_score, 10) || 0,
+    new_score: parseInt(raw.new_score ?? raw.score, 10) || 0,
+    old_score: parseInt(raw.old_score, 10) || 0,
+    grade: normalizeText(raw.grade || raw.new_grade || '', 24),
+    new_grade: normalizeText(raw.new_grade || raw.grade || '', 24),
+    old_grade: normalizeText(raw.old_grade || '', 24),
+    scoreDelta: parseInt(raw.scoreDelta ?? raw.score_delta, 10) || 0,
+    over_top100_rank: parseInt(raw.over_top100_rank ?? raw.overTop100Rank, 10) || 0,
+    plate: normalizeText(raw.plate || '', 24),
+    perfect: parseInt(raw.perfect, 10) || 0,
+    great: parseInt(raw.great, 10) || 0,
+    good: parseInt(raw.good, 10) || 0,
+    bad: parseInt(raw.bad, 10) || 0,
+    miss: parseInt(raw.miss, 10) || 0,
+    is_stage_break: !!raw.is_stage_break || !!raw.isStageBreak,
+    date_played: normalizeText(raw.date_played || raw.playedAt || '', 80),
+    playerName: normalizeText(raw.playerName || raw.username || '', 80),
+    playerAvatar: sanitizeStoryAssetUrl(raw.playerAvatar || raw.avatar || ''),
+    playerSkillTitle: normalizeText(raw.playerSkillTitle || raw.skill_title || raw.skillTitle || '', 80),
+    playerRoleLabel: normalizeText(raw.playerRoleLabel || raw.roleLabel || '', 40),
+    contextLabel: normalizeText(raw.contextLabel || raw.context_label || '', 60),
+    jacket_url: sanitizeStoryAssetUrl(raw.jacket_url || raw.jacketUrl || raw.background_url || ''),
+  };
+
+  const hasMeaningfulContent = snapshot.song_title
+    || snapshot.mode
+    || snapshot.level > 0
+    || snapshot.score > 0
+    || snapshot.new_score > 0
+    || snapshot.grade
+    || snapshot.new_grade
+    || snapshot.playerName
+    || snapshot.jacket_url;
+
+  return hasMeaningfulContent ? snapshot : null;
+}
+
 function getConversationListRows(db, userId) {
   return db.prepare(`
     SELECT
@@ -1178,6 +1232,7 @@ router.post('/highlights/story', requireAuth, highlightUpload.single('image'), a
     const caption = normalizeText(req.body?.caption || '', 420);
     const sourceKind = String(req.body?.source_kind || req.body?.sourceKind || '').trim().toLowerCase();
     const sourceId = String(req.body?.source_id || req.body?.sourceId || '').trim();
+    const snapshot = sanitizeStorySnapshot(req.body?.snapshot_json || req.body?.snapshot || {});
     const stickerTokens = sanitizeStickerTokens(req.body?.sticker_tokens_json || req.body?.stickerTokens || req.body?.stickers || []);
     const link = normalizeStoryLinkInput(req.body || {});
     const metadata = {};
@@ -1203,9 +1258,13 @@ router.post('/highlights/story', requireAuth, highlightUpload.single('image'), a
     }
 
     if (storyType === 'score_snapshot') {
-      if (!['upscore', 'clear'].includes(sourceKind) || !sourceId) {
+      const hasSource = ['upscore', 'clear'].includes(sourceKind) && !!sourceId;
+      if (!hasSource && !snapshot) {
         return res.status(400).json({ error: 'Choose a recent upscore or clear to share.' });
       }
+      if (snapshot) metadata.snapshot = snapshot;
+      metadata.title = normalizeText(req.body?.title || '', 80);
+      metadata.subtitle = normalizeText(req.body?.subtitle || '', 120);
     }
 
     const now = new Date();

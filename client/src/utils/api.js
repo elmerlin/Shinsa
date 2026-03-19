@@ -698,6 +698,7 @@ export async function createMessageStoryItem({
   caption = '',
   sourceKind = '',
   sourceId = '',
+  snapshot = null,
   title = '',
   subtitle = '',
   linkPath = '',
@@ -711,6 +712,7 @@ export async function createMessageStoryItem({
   if (caption) formData.append('caption', String(caption));
   if (sourceKind) formData.append('source_kind', String(sourceKind));
   if (sourceId) formData.append('source_id', String(sourceId));
+  if (snapshot && typeof snapshot === 'object') formData.append('snapshot_json', JSON.stringify(snapshot));
   if (title) formData.append('title', String(title));
   if (subtitle) formData.append('subtitle', String(subtitle));
   if (linkPath) formData.append('link_path', String(linkPath));
