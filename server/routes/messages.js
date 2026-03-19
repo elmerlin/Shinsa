@@ -208,12 +208,12 @@ function findStoryForUser(db, userId, storyId) {
 
 function hideStoryItem(db, ownerUserId, storyId, hiddenAt, reason = 'hidden') {
   db.prepare(`
-    INSERT INTO user_story_hidden_items (id, owner_user_id, story_id, hidden_at, reason)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(owner_user_id, story_id) DO UPDATE SET
-      hidden_at = excluded.hidden_at,
+    INSERT INTO user_story_hidden_items (story_id, owner_user_id, reason, created_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(story_id) DO UPDATE SET
+      created_at = excluded.created_at,
       reason = excluded.reason
-  `).run(uuidv4(), ownerUserId, storyId, hiddenAt, reason);
+  `).run(storyId, ownerUserId, reason, hiddenAt);
 }
 
 function listStoryComments(db, ownerUserId, storyId, limit = 0) {
@@ -227,9 +227,10 @@ function listStoryComments(db, ownerUserId, storyId, limit = 0) {
       u.avatar,
       u.avatar_v
     FROM user_story_comments c
-    JOIN users u ON u.id = c.comment_user_id
+    JOIN users u ON u.id = c.user_id
     WHERE c.owner_user_id = ?
       AND c.story_id = ?
+      AND COALESCE(c.deleted_at, '') = ''
     ORDER BY datetime(c.created_at) DESC, c.id DESC
     ${limit > 0 ? `LIMIT ${Math.max(1, parseInt(limit, 10) || 0)}` : ''}
   `;
@@ -260,7 +261,7 @@ function getStoryCounts(db, ownerUserId, storyId, viewerUserId = '') {
   const userPumped = !!viewerUserId && !!db.prepare(`
     SELECT 1
     FROM user_story_pumps
-    WHERE owner_user_id = ? AND story_id = ? AND pumper_user_id = ?
+    WHERE owner_user_id = ? AND story_id = ? AND user_id = ?
     LIMIT 1
   `).get(ownerUserId, storyId, viewerUserId);
 
@@ -291,7 +292,7 @@ function getStoryViewerList(db, ownerUserId, storyId) {
     JOIN users u ON u.id = v.viewer_user_id
     WHERE v.owner_user_id = ?
       AND v.story_id = ?
-    ORDER BY datetime(v.viewed_at) DESC, v.id DESC
+    ORDER BY datetime(v.viewed_at) DESC, v.viewer_user_id DESC
   `).all(ownerUserId, storyId).map((row) => ({
     viewed_at: row.viewed_at || '',
     user: normalizeStoryUser({
@@ -305,23 +306,42 @@ function getStoryViewerList(db, ownerUserId, storyId) {
 
 function createStoryArchive(db, ownerUserId, story, archivedAt) {
   db.prepare(`
-    INSERT INTO user_story_archives (id, owner_user_id, story_id, story_snapshot_json, archived_at)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(owner_user_id, story_id) DO UPDATE SET
-      story_snapshot_json = excluded.story_snapshot_json,
+    INSERT INTO user_story_archives (
+      story_id,
+      owner_user_id,
+      story_type,
+      story_payload_json,
+      original_created_at,
+      expires_at,
+      archived_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(story_id) DO UPDATE SET
+      story_type = excluded.story_type,
+      story_payload_json = excluded.story_payload_json,
+      original_created_at = excluded.original_created_at,
+      expires_at = excluded.expires_at,
       archived_at = excluded.archived_at
-  `).run(uuidv4(), ownerUserId, story.id, JSON.stringify(story), archivedAt);
+  `).run(
+    story.id,
+    ownerUserId,
+    String(story?.story_type || story?.type || ''),
+    JSON.stringify(story),
+    String(story?.created_at || ''),
+    String(story?.expires_at || ''),
+    archivedAt
+  );
 }
 
 function getArchivedStories(db, ownerUserId) {
   return db.prepare(`
-    SELECT story_id, story_snapshot_json, archived_at
+    SELECT story_id, story_payload_json, archived_at
     FROM user_story_archives
     WHERE owner_user_id = ?
-    ORDER BY datetime(archived_at) DESC, id DESC
+    ORDER BY datetime(archived_at) DESC, story_id DESC
     LIMIT 100
   `).all(ownerUserId).map((row) => {
-    const parsed = parseJsonObject(row.story_snapshot_json, {});
+    const parsed = parseJsonObject(row.story_payload_json, {});
     return {
       archived_at: row.archived_at || '',
       story: parsed && typeof parsed === 'object' ? parsed : null,
@@ -858,19 +878,22 @@ router.post('/highlights/:userId/story/:storyId/pump', requireAuth, (req, res) =
   }
 
   const existing = db.prepare(`
-    SELECT id
+    SELECT 1
     FROM user_story_pumps
-    WHERE owner_user_id = ? AND story_id = ? AND pumper_user_id = ?
+    WHERE owner_user_id = ? AND story_id = ? AND user_id = ?
     LIMIT 1
   `).get(ownerUserId, storyId, req.user.id);
 
-  if (existing?.id) {
-    db.prepare('DELETE FROM user_story_pumps WHERE id = ?').run(existing.id);
+  if (existing) {
+    db.prepare(`
+      DELETE FROM user_story_pumps
+      WHERE owner_user_id = ? AND story_id = ? AND user_id = ?
+    `).run(ownerUserId, storyId, req.user.id);
   } else {
     db.prepare(`
-      INSERT INTO user_story_pumps (id, owner_user_id, story_id, pumper_user_id, pumped_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(uuidv4(), ownerUserId, storyId, req.user.id, toInboxSqliteDateTime(new Date()));
+      INSERT INTO user_story_pumps (owner_user_id, story_id, user_id, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(ownerUserId, storyId, req.user.id, toInboxSqliteDateTime(new Date()));
   }
 
   res.json({
@@ -917,7 +940,7 @@ router.post('/highlights/:userId/story/:storyId/comments', requireAuth, (req, re
   const nowSql = toInboxSqliteDateTime(new Date());
   const commentId = uuidv4();
   db.prepare(`
-    INSERT INTO user_story_comments (id, owner_user_id, story_id, comment_user_id, content, created_at)
+    INSERT INTO user_story_comments (id, owner_user_id, story_id, user_id, content, created_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(commentId, ownerUserId, storyId, req.user.id, content, nowSql);
 

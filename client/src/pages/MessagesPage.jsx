@@ -730,24 +730,24 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
         disabled={stompDisabled}
         aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
         title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-        className={`group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
+        className={`group relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[1.05rem] border transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
       >
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 rounded-2xl bg-cyan-300/20 transition duration-500 ${stomping || isCelebrating ? 'animate-ping opacity-100' : 'opacity-0'}`}
+          className={`pointer-events-none absolute inset-0 rounded-[1.05rem] bg-cyan-300/20 transition duration-500 ${stomping || isCelebrating ? 'animate-ping opacity-100' : 'opacity-0'}`}
         />
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-1 rounded-[1rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
+          className={`pointer-events-none absolute inset-[3px] rounded-[0.9rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
         />
         <img
           src={STOMP_ICON_PATH}
           alt=""
-          className={`relative z-[1] h-7 w-7 object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-105'} ${stomping ? 'scale-110 rotate-[-10deg]' : ''} ${isCelebrating ? 'scale-[1.18] rotate-[10deg]' : ''}`}
+          className={`relative z-[1] h-5.5 w-5.5 object-contain transition-transform duration-300 ${stompDisabled ? '' : 'group-hover:scale-105'} ${stomping ? 'scale-110 rotate-[-10deg]' : ''} ${isCelebrating ? 'scale-[1.18] rotate-[10deg]' : ''}`}
         />
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute -top-1 right-0 z-[1] rounded-full border border-cyan-200/35 bg-cyan-300/15 px-1.5 py-0.5 text-[8px] font-display font-black tracking-[0.2em] text-cyan-100 transition-all duration-300 ${isCelebrating ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'}`}
+          className={`pointer-events-none absolute -top-1 right-[-0.15rem] z-[1] rounded-full border border-cyan-200/35 bg-cyan-300/15 px-1.5 py-0.5 text-[9px] font-display font-black tracking-[0.16em] text-cyan-100 transition-all duration-300 ${isCelebrating ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'}`}
         >
           STOMP
         </span>
