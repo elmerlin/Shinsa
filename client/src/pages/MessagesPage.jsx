@@ -1698,6 +1698,7 @@ function MessageBubble({
   const hasLinkShare = !!message?.link_share;
   const hasChallengeCard = !!message?.challenge_card;
   const hasRichAttachment = hasShare || hasLinkShare || hasChallengeCard;
+  const coarsePointerDevice = isCoarsePointerDevice();
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
   const bubbleTone = isOwn
     ? 'border-cyan-400/20 bg-cyan-500/10'
@@ -1723,9 +1724,13 @@ function MessageBubble({
   const isReplyTarget = String(activeReplyMessageId || '').trim() !== '' && String(message?.id || '') === String(activeReplyMessageId);
   const [trayOpen, setTrayOpen] = useState(false);
   const tapStateRef = useRef({ lastTapAt: 0, timer: null });
-  const mobileTrayTimerRef = useRef(null);
-  const [mobileTrayMounted, setMobileTrayMounted] = useState(false);
+  const interactionLockUntilRef = useRef(0);
+  const bubbleRef = useRef(null);
+  const mobileTrayRef = useRef(null);
   const [replyFlashActive, setReplyFlashActive] = useState(false);
+  const [mobileTrayStyle, setMobileTrayStyle] = useState({ left: 12, top: 12 });
+  const [mobileTrayPlacement, setMobileTrayPlacement] = useState('above');
+  const [mobileTrayReady, setMobileTrayReady] = useState(false);
   const swipeStateRef = useRef({
     pointerId: null,
     startX: 0,
@@ -1741,10 +1746,31 @@ function MessageBubble({
     !touchInteractionsEnabled
     || (Number(touchInteractionsBlockedUntil) > 0 && Date.now() < Number(touchInteractionsBlockedUntil))
   );
+  const isInteractionLocked = () => Date.now() < Number(interactionLockUntilRef.current || 0);
+  const clearTapTimer = useCallback(() => {
+    if (tapStateRef.current.timer) {
+      window.clearTimeout(tapStateRef.current.timer);
+      tapStateRef.current.timer = null;
+    }
+  }, []);
+  const armInteractionLock = useCallback((durationMs = 320) => {
+    interactionLockUntilRef.current = Date.now() + durationMs;
+  }, []);
 
-  const closeTray = () => {
+  const closeTray = useCallback(() => {
     setTrayOpen(false);
-  };
+  }, []);
+  const triggerReaction = useCallback((reactionKey) => {
+    if (!message?.id || !onReact) return;
+    onReact(message, reactionKey);
+  }, [message, onReact]);
+  const handleTrayReactionSelect = useCallback((reactionKey) => {
+    clearTapTimer();
+    tapStateRef.current.lastTapAt = 0;
+    armInteractionLock();
+    triggerReaction(reactionKey);
+    closeTray();
+  }, [armInteractionLock, clearTapTimer, closeTray, triggerReaction]);
   const trayButtons = trayKeys.map((reactionKey) => {
     const selected = viewerReaction === reactionKey;
     return (
@@ -1753,8 +1779,7 @@ function MessageBubble({
         type="button"
         onClick={(event) => {
           event.stopPropagation();
-          triggerReaction(reactionKey);
-          closeTray();
+          handleTrayReactionSelect(reactionKey);
         }}
         className={`inline-flex h-9 min-w-[2.35rem] items-center justify-center rounded-full border px-2.5 transition-colors ${
           selected
@@ -1773,35 +1798,66 @@ function MessageBubble({
       {trayButtons}
     </div>
   );
+  const mobileTrayOpen = trayOpen && coarsePointerDevice;
 
   useEffect(() => () => {
-    if (tapStateRef.current.timer) {
-      window.clearTimeout(tapStateRef.current.timer);
-    }
-  }, []);
+    clearTapTimer();
+  }, [clearTapTimer]);
 
   useEffect(() => {
-    if (trayOpen) {
-      if (mobileTrayTimerRef.current) {
-        window.clearTimeout(mobileTrayTimerRef.current);
-        mobileTrayTimerRef.current = null;
-      }
-      setMobileTrayMounted(true);
-      return undefined;
-    }
+    if (!mobileTrayOpen || typeof window === 'undefined') return undefined;
+    setMobileTrayReady(false);
 
-    if (!mobileTrayMounted) return undefined;
-    mobileTrayTimerRef.current = window.setTimeout(() => {
-      setMobileTrayMounted(false);
-      mobileTrayTimerRef.current = null;
-    }, 180);
-    return () => {
-      if (mobileTrayTimerRef.current) {
-        window.clearTimeout(mobileTrayTimerRef.current);
-        mobileTrayTimerRef.current = null;
-      }
+    const updatePosition = () => {
+      const bubbleRect = bubbleRef.current?.getBoundingClientRect();
+      const trayRect = mobileTrayRef.current?.getBoundingClientRect();
+      if (!bubbleRect || !trayRect) return;
+
+      const viewportPadding = 12;
+      const trayGap = 10;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const preferredLeft = bubbleRect.left + (bubbleRect.width / 2) - (trayRect.width / 2);
+      const maxLeft = Math.max(viewportPadding, viewportWidth - trayRect.width - viewportPadding);
+      const nextLeft = Math.max(viewportPadding, Math.min(maxLeft, preferredLeft));
+
+      const aboveTop = bubbleRect.top - trayRect.height - trayGap;
+      const belowTop = bubbleRect.bottom + trayGap;
+      const fitsAbove = aboveTop >= viewportPadding;
+      const fitsBelow = belowTop + trayRect.height <= viewportHeight - viewportPadding;
+      const nextPlacement = fitsAbove || !fitsBelow ? 'above' : 'below';
+      const preferredTop = nextPlacement === 'above' ? aboveTop : belowTop;
+      const maxTop = Math.max(viewportPadding, viewportHeight - trayRect.height - viewportPadding);
+      const nextTop = Math.max(viewportPadding, Math.min(maxTop, preferredTop));
+
+      setMobileTrayPlacement(nextPlacement);
+      setMobileTrayStyle({
+        left: Math.round(nextLeft),
+        top: Math.round(nextTop),
+      });
+      setMobileTrayReady(true);
     };
-  }, [mobileTrayMounted, trayOpen]);
+
+    const animationFrameId = window.requestAnimationFrame(updatePosition);
+    const handleOutsidePointerDown = (event) => {
+      const target = event.target;
+      if (mobileTrayRef.current?.contains(target) || bubbleRef.current?.contains(target)) return;
+      closeTray();
+    };
+    const handleScroll = () => closeTray();
+    const handleResize = () => window.requestAnimationFrame(updatePosition);
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown, true);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [closeTray, mobileTrayOpen]);
 
   useEffect(() => {
     if (!isReplyTarget || !replyHighlightVersion) return undefined;
@@ -1811,11 +1867,6 @@ function MessageBubble({
     }, 700);
     return () => window.clearTimeout(timeoutId);
   }, [isReplyTarget, replyHighlightVersion]);
-
-  const triggerReaction = (reactionKey) => {
-    if (!message?.id || !onReact) return;
-    onReact(message, reactionKey);
-  };
 
   const resetReplySwipe = useCallback(() => {
     swipeStateRef.current.pointerId = null;
@@ -1829,16 +1880,12 @@ function MessageBubble({
 
   useEffect(() => {
     if (!areTouchInteractionsBlocked()) return undefined;
-    if (tapStateRef.current.timer) {
-      window.clearTimeout(tapStateRef.current.timer);
-      tapStateRef.current.timer = null;
-    }
+    clearTapTimer();
     tapStateRef.current.lastTapAt = 0;
     setTrayOpen(false);
-    setMobileTrayMounted(false);
     resetReplySwipe();
     return undefined;
-  }, [resetReplySwipe, touchInteractionsBlockedUntil, touchInteractionsEnabled]);
+  }, [clearTapTimer, resetReplySwipe, touchInteractionsBlockedUntil, touchInteractionsEnabled]);
 
   const triggerReply = useCallback(() => {
     if (!message?.id || !onReply) return;
@@ -1848,6 +1895,7 @@ function MessageBubble({
   const handlePointerDown = (event) => {
     if (event.pointerType !== 'touch') return;
     if (areTouchInteractionsBlocked()) return;
+    if (isInteractionLocked()) return;
     if (event?.target?.closest?.('button,a,textarea,input,select')) return;
     swipeStateRef.current.pointerId = event.pointerId;
     swipeStateRef.current.startX = event.clientX;
@@ -1895,27 +1943,50 @@ function MessageBubble({
         resetReplySwipe();
         return;
       }
+      if (isInteractionLocked()) {
+        resetReplySwipe();
+        return;
+      }
       const shouldReply = replySwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET;
       const shouldTreatAsTap = swipeStateRef.current.active && !swipeStateRef.current.moved && replySwipeOffset < 8;
       if (shouldReply) {
+        clearTapTimer();
+        tapStateRef.current.lastTapAt = 0;
         triggerReply();
+        closeTray();
       } else if (shouldTreatAsTap && !event?.target?.closest?.('button,a,textarea,input,select')) {
-        const now = Date.now();
-        if (now - tapStateRef.current.lastTapAt < 260) {
-          if (tapStateRef.current.timer) {
-            window.clearTimeout(tapStateRef.current.timer);
-            tapStateRef.current.timer = null;
+        if (coarsePointerDevice) {
+          const now = Date.now();
+          if (now - tapStateRef.current.lastTapAt < 260) {
+            clearTapTimer();
+            tapStateRef.current.lastTapAt = 0;
+            armInteractionLock();
+            triggerReaction(defaultReaction);
+            closeTray();
+          } else {
+            tapStateRef.current.lastTapAt = now;
+            clearTapTimer();
+            tapStateRef.current.timer = window.setTimeout(() => {
+              setTrayOpen(true);
+              tapStateRef.current.lastTapAt = 0;
+              tapStateRef.current.timer = null;
+            }, 220);
           }
-          tapStateRef.current.lastTapAt = 0;
-          triggerReaction(defaultReaction);
-          closeTray();
         } else {
-          tapStateRef.current.lastTapAt = now;
-          if (tapStateRef.current.timer) window.clearTimeout(tapStateRef.current.timer);
-          tapStateRef.current.timer = window.setTimeout(() => {
-            setTrayOpen((current) => !current);
-            tapStateRef.current.timer = null;
-          }, 210);
+          const now = Date.now();
+          if (now - tapStateRef.current.lastTapAt < 260) {
+            clearTapTimer();
+            tapStateRef.current.lastTapAt = 0;
+            triggerReaction(defaultReaction);
+            closeTray();
+          } else {
+            tapStateRef.current.lastTapAt = now;
+            clearTapTimer();
+            tapStateRef.current.timer = window.setTimeout(() => {
+              setTrayOpen((current) => !current);
+              tapStateRef.current.timer = null;
+            }, 210);
+          }
         }
       }
       if (event.currentTarget?.releasePointerCapture) {
@@ -1931,6 +2002,8 @@ function MessageBubble({
   };
 
   const handleBubbleClick = (event) => {
+    if (coarsePointerDevice) return;
+    if (isInteractionLocked()) return;
     if (event?.nativeEvent?.pointerType === 'touch') return;
     if (window.matchMedia && !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     if (event?.target?.closest?.('button,a,textarea,input,select')) return;
@@ -1940,10 +2013,7 @@ function MessageBubble({
     }
     const now = Date.now();
     if (now - tapStateRef.current.lastTapAt < 260) {
-      if (tapStateRef.current.timer) {
-        window.clearTimeout(tapStateRef.current.timer);
-        tapStateRef.current.timer = null;
-      }
+      clearTapTimer();
       tapStateRef.current.lastTapAt = 0;
       triggerReaction(defaultReaction);
       closeTray();
@@ -1951,7 +2021,7 @@ function MessageBubble({
     }
 
     tapStateRef.current.lastTapAt = now;
-    if (tapStateRef.current.timer) window.clearTimeout(tapStateRef.current.timer);
+    clearTapTimer();
     tapStateRef.current.timer = window.setTimeout(() => {
       setTrayOpen((current) => !current);
       tapStateRef.current.timer = null;
@@ -1975,13 +2045,25 @@ function MessageBubble({
           {senderName}
         </p>
       ) : null}
-      {touchInteractionsEnabled && mobileTrayMounted ? (
-        <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.65rem)] z-[90] sm:hidden">
+      {touchInteractionsEnabled && mobileTrayOpen ? (
+        <div
+          ref={mobileTrayRef}
+          className="fixed z-[95] sm:hidden"
+          style={{
+            left: `${mobileTrayStyle.left}px`,
+            top: `${mobileTrayStyle.top}px`,
+            maxWidth: 'calc(100vw - 1.5rem)',
+            opacity: mobileTrayReady ? 1 : 0,
+            pointerEvents: mobileTrayReady ? 'auto' : 'none',
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
           <div
-            className={`mx-auto flex min-h-[4.1rem] max-w-[26rem] items-center justify-center rounded-[1.6rem] border border-white/12 bg-[#070c16] px-3 py-2.5 shadow-[0_24px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 ${
-              trayOpen ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'
+            className={`flex min-h-[3.7rem] items-center justify-center rounded-[1.5rem] border border-white/12 bg-[#070c16] px-3 py-2.5 shadow-[0_24px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-150 ${
+              mobileTrayPlacement === 'below'
+                ? 'origin-top translate-y-0'
+                : 'origin-bottom translate-y-0'
             }`}
-            onClick={(event) => event.stopPropagation()}
           >
             <div className="flex w-full items-center justify-center gap-1.5 rounded-[1.2rem] bg-[#0c1221] px-2 py-1.5">
               {trayButtons}
@@ -2015,6 +2097,7 @@ function MessageBubble({
           </svg>
         </div>
         <div
+          ref={bubbleRef}
           className={`${bubbleClass} ${isReplyTarget ? 'ring-1 ring-cyan-300/18 shadow-[0_0_0_1px_rgba(103,232,249,0.08),0_14px_28px_rgba(8,145,178,0.12)]' : ''} ${replyFlashActive ? 'animate-pulse' : ''}`}
           style={{
             transform: replySwipeOffset > 0 ? `translateX(${replySwipeOffset}px)` : 'translateX(0px)',
@@ -2565,7 +2648,13 @@ function ConversationView({
           ) : null}
         </div>
 
-        <div ref={messagesViewportRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+        <div ref={messagesViewportRef} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+          {!touchInteractionsEnabled ? (
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 z-10 sm:hidden"
+            />
+          ) : null}
           {loadingMessages && messages.length === 0 ? (
             <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading conversation...</div>
           ) : messageError ? (
@@ -2588,7 +2677,7 @@ function ConversationView({
             <div className="space-y-3 pb-1">
               {messages.map((message) => (
                 <MessageBubble
-                  key={message.id}
+                  key={`${conversationId || 'conversation'}:${message.id}`}
                   message={message}
                   conversationId={conversationId}
                   onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
