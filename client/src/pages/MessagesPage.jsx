@@ -3384,7 +3384,7 @@ function ConversationView({
                       availableReactions={availableReactions}
                       onReact={onReact}
                     />
-                    {readers?.length > 0 ? (
+                    {readers?.length > 0 && (isSquad || message.is_own) ? (
                       <div className={`flex ${message.is_own ? 'justify-end' : 'justify-start'} px-3 -mt-1.5`}>
                         {isSquad ? (
                           <div className="flex -space-x-1.5">
