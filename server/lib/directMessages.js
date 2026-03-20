@@ -3,6 +3,7 @@ const { normalizeUserAvatarForList } = require('./avatarProxy');
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_SHARE_ROWS = 200;
 const MAX_LINK_LENGTH = 500;
+const MAX_EMBEDDED_ASSET_LENGTH = 500000;
 const MAX_CHALLENGE_TEXT_LENGTH = 220;
 const LINK_SHARE_KIND_LABELS = {
   live_session: 'Live session',
@@ -140,6 +141,15 @@ function sanitizeAbsoluteUrl(value) {
   return raw;
 }
 
+function sanitizeLinkShareAsset(value, maxDataLength = MAX_EMBEDDED_ASSET_LENGTH) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(raw)) {
+    return raw.slice(0, maxDataLength);
+  }
+  return raw.slice(0, MAX_LINK_LENGTH);
+}
+
 function sanitizeLinkShareItems(items) {
   if (!Array.isArray(items)) return [];
   return items
@@ -150,7 +160,7 @@ function sanitizeLinkShareItems(items) {
       level: toInt(item?.level),
       score: toInt(item?.score),
       grade: String(item?.grade || '').trim().slice(0, 24),
-      jacketUrl: String(item?.jacketUrl || item?.jacket_url || '').trim().slice(0, MAX_LINK_LENGTH),
+      jacketUrl: sanitizeLinkShareAsset(item?.jacketUrl || item?.jacket_url || ''),
       scoreDelta: toInt(item?.scoreDelta || item?.score_delta),
     }))
     .filter((item) => item.songTitle || item.score > 0 || item.grade || item.jacketUrl);
@@ -182,12 +192,12 @@ function sanitizeLinkSharePayload(linkShare) {
     grade: String(src.grade || '').trim().slice(0, 24),
     isStageBreak: toBoolean(src.isStageBreak || src.is_stage_break),
     playerName: String(src.playerName || src.player_name || '').trim().slice(0, 80),
-    playerAvatar: String(src.playerAvatar || src.player_avatar || '').trim().slice(0, MAX_LINK_LENGTH),
+    playerAvatar: sanitizeLinkShareAsset(src.playerAvatar || src.player_avatar || ''),
     playerSkillTitle: String(src.playerSkillTitle || src.player_skill_title || '').trim().slice(0, 48),
     playerRoleLabel: String(src.playerRoleLabel || src.player_role_label || '').trim().slice(0, 24),
     contextLabel: String(src.contextLabel || src.context_label || '').trim().slice(0, 48),
     playedAt: String(src.playedAt || src.played_at || '').trim().slice(0, 40),
-    jacketUrl: String(src.jacketUrl || src.jacket_url || '').trim().slice(0, MAX_LINK_LENGTH),
+    jacketUrl: sanitizeLinkShareAsset(src.jacketUrl || src.jacket_url || ''),
     oldScore: toInt(src.oldScore || src.old_score),
     oldGrade: String(src.oldGrade || src.old_grade || '').trim().slice(0, 24),
     scoreDelta: toInt(src.scoreDelta || src.score_delta),
@@ -210,12 +220,12 @@ function sanitizeLinkSharePayload(linkShare) {
     storyId: String(src.storyId || src.story_id || '').trim().slice(0, 80),
     storyOwnerId: String(src.storyOwnerId || src.story_owner_id || '').trim().slice(0, 80),
     storyOwnerUsername: String(src.storyOwnerUsername || src.story_owner_username || '').trim().slice(0, 80),
-    storyOwnerAvatar: String(src.storyOwnerAvatar || src.story_owner_avatar || '').trim().slice(0, MAX_LINK_LENGTH),
+    storyOwnerAvatar: sanitizeLinkShareAsset(src.storyOwnerAvatar || src.story_owner_avatar || ''),
     storyType: String(src.storyType || src.story_type || '').trim().slice(0, 32),
     storySourceKind: String(src.storySourceKind || src.story_source_kind || '').trim().slice(0, 32),
     storyCaption: String(src.storyCaption || src.story_caption || '').trim().slice(0, 420),
     storyCreatedAt: String(src.storyCreatedAt || src.story_created_at || '').trim().slice(0, 40),
-    storyMediaUrl: String(src.storyMediaUrl || src.story_media_url || '').trim().slice(0, MAX_LINK_LENGTH),
+    storyMediaUrl: sanitizeLinkShareAsset(src.storyMediaUrl || src.story_media_url || ''),
     storyFallbackPath: sanitizeRelativePath(src.storyFallbackPath || src.story_fallback_path),
     storyFallbackUrl: sanitizeAbsoluteUrl(src.storyFallbackUrl || src.story_fallback_url),
     previewItems: sanitizeLinkShareItems(src.previewItems || src.preview_items),

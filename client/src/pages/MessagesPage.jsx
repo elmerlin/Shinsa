@@ -599,7 +599,7 @@ function buildStoryFromLinkShare(linkShare) {
   };
 }
 
-function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink }) {
+function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink, conversationId = '' }) {
   const [sharedStoryState, setSharedStoryState] = useState({
     story: null,
     user: null,
@@ -613,7 +613,7 @@ function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink }) {
       setSharedStoryState({ story: null, user: null });
       return undefined;
     }
-    getSharedMessageStory(storyOwnerId, storyId)
+    getSharedMessageStory(storyOwnerId, storyId, conversationId ? { conversationId } : undefined)
       .then((payload) => {
         if (!active) return;
         setSharedStoryState({
@@ -628,7 +628,7 @@ function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink }) {
     return () => {
       active = false;
     };
-  }, [storyId, storyOwnerId]);
+  }, [conversationId, storyId, storyOwnerId]);
 
   const story = sharedStoryState.story || buildStoryFromLinkShare(linkShare);
   const owner = sharedStoryState.user || story?.user || null;
@@ -1165,6 +1165,7 @@ function hasScoreSnapshotLinkShare(linkShare) {
 
 function MessageLinkCard({
   linkShare,
+  conversationId = '',
   compareAction = null,
   compareLoading = false,
   responseStatus = null,
@@ -1427,6 +1428,7 @@ function MessageLinkCard({
         linkShare={resolvedLinkShare}
         buttonClass={buttonClass}
         onOpenLink={handlePrimaryOpen}
+        conversationId={conversationId}
       />
     );
   }
@@ -1670,6 +1672,7 @@ function MessageChallengeCard({
 
 function MessageBubble({
   message,
+  conversationId = '',
   onReplyWithBest = null,
   compareLoading = false,
   responseStatus = null,
@@ -2088,6 +2091,7 @@ function MessageBubble({
           <div className={hasContent || hasShare ? 'mt-3' : ''}>
             <MessageLinkCard
               linkShare={message.link_share}
+              conversationId={conversationId}
               compareAction={onReplyWithBest}
               compareLoading={compareLoading}
               responseStatus={responseStatus}
@@ -2425,6 +2429,7 @@ function InboxView({
 }
 
 function ConversationView({
+  conversationId,
   activeConversation,
   activePartner,
   loadingMessages,
@@ -2585,6 +2590,7 @@ function ConversationView({
                 <MessageBubble
                   key={message.id}
                   message={message}
+                  conversationId={conversationId}
                   onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
                   compareLoading={replyingMessageId === message.id}
                   responseStatus={getMessageStatus(message) || null}
@@ -2876,7 +2882,7 @@ export default function MessagesPage() {
     });
 
     try {
-      const payload = await getSharedMessageStory(storyOwnerId, storyId);
+      const payload = await getSharedMessageStory(storyOwnerId, storyId, conversationId ? { conversationId } : undefined);
       const sharedStory = payload?.story || null;
       if (!sharedStory) throw new Error('Story not found');
       setStoryViewerState({
@@ -3992,6 +3998,7 @@ export default function MessagesPage() {
     <>
       {conversationId ? (
         <ConversationView
+          conversationId={conversationId}
           activeConversation={activeConversation}
           activePartner={activePartner}
           loadingMessages={loadingMessages}

@@ -384,9 +384,40 @@ function hasDirectConversationAccess(db, viewerUserId, targetUserId) {
   `).get(viewer, target, directKey);
 }
 
-function canAccessSharedStory(db, viewerUserId, ownerUserId) {
+function hasConversationStoryShareAccess(db, viewerUserId, ownerUserId, storyId, conversationId) {
+  const viewer = String(viewerUserId || '').trim();
+  const owner = String(ownerUserId || '').trim();
+  const story = String(storyId || '').trim();
+  const conversation = String(conversationId || '').trim();
+  if (!viewer || !owner || !story || !conversation) return false;
+
+  const member = getConversationMember(db, conversation, viewer);
+  if (!member || member.is_hidden) return false;
+
+  const rows = db.prepare(`
+    SELECT metadata_json
+    FROM conversation_messages
+    WHERE conversation_id = ?
+      AND message_type = 'link_share'
+      AND COALESCE(deleted_at, '') = ''
+    ORDER BY datetime(created_at) DESC, id DESC
+  `).all(conversation);
+
+  return rows.some((row) => {
+    const metadata = parseJsonObject(row?.metadata_json, {});
+    const linkShare = metadata?.link_share && typeof metadata.link_share === 'object' && !Array.isArray(metadata.link_share)
+      ? metadata.link_share
+      : parseJsonObject(metadata?.link_share, {});
+    return String(linkShare?.kind || '').trim().toLowerCase() === 'story'
+      && String(linkShare?.storyOwnerId || linkShare?.story_owner_id || '').trim() === owner
+      && String(linkShare?.storyId || linkShare?.story_id || '').trim() === story;
+  });
+}
+
+function canAccessSharedStory(db, viewerUserId, ownerUserId, storyId = '', conversationId = '') {
   return isFollowingOrSelf(db, viewerUserId, ownerUserId)
-    || hasDirectConversationAccess(db, viewerUserId, ownerUserId);
+    || hasDirectConversationAccess(db, viewerUserId, ownerUserId)
+    || hasConversationStoryShareAccess(db, viewerUserId, ownerUserId, storyId, conversationId);
 }
 
 function getStoryBundleForUser(db, userId) {
@@ -1296,8 +1327,9 @@ router.get('/highlights/:userId/story/:storyId/shared', requireAuth, (req, res) 
   const db = getDb();
   const ownerUserId = String(req.params.userId || '').trim();
   const storyId = String(req.params.storyId || '').trim();
+  const conversationId = String(req.query.conversationId || '').trim();
   if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
-  if (!canAccessSharedStory(db, req.user.id, ownerUserId)) {
+  if (!canAccessSharedStory(db, req.user.id, ownerUserId, storyId, conversationId)) {
     return res.status(404).json({ error: 'Story not found' });
   }
 

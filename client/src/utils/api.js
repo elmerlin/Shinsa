@@ -669,7 +669,13 @@ export const getOrCreateDirectConversation = (userId, data = null) => request(`/
 });
 export const getMessageHighlights = () => request('/messages/highlights');
 export const getMessageStory = (userId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story`);
-export const getSharedMessageStory = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/shared`);
+export const getSharedMessageStory = (userId, storyId, options = {}) => {
+  const params = new URLSearchParams();
+  const conversationId = String(options?.conversationId || '').trim();
+  if (conversationId) params.set('conversationId', conversationId);
+  const qs = params.toString();
+  return request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/shared${qs ? `?${qs}` : ''}`);
+};
 export const getMessageStoryArchive = () => request('/messages/highlights/archive');
 export const markMessageStoryViewed = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/view`, {
   method: 'POST',
