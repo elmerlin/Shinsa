@@ -1703,6 +1703,7 @@ function MessageBubble({
   const shareLabel = getMessageLabel(message);
   const noteThread = message?.note_thread || null;
   const replyTo = message?.reply_to || null;
+  const hasLongUnbrokenToken = /\S{24,}/.test(String(message?.content || ''));
   const inlineYouTubeUrl = !hasShare && !hasLinkShare && !hasChallengeCard
     ? extractFirstYouTubeUrl(message?.content || '')
     : '';
@@ -1710,7 +1711,7 @@ function MessageBubble({
   const isAttachmentOnly = (hasRichAttachment && !hasContent) || (!hasRichAttachment && suppressRawUrlContent);
   const bubbleClass = isAttachmentOnly
     ? 'w-full max-w-[19.25rem] sm:max-w-[22.5rem]'
-    : `w-fit max-w-[81%] sm:max-w-[30rem] rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
+    : `inline-flex max-w-[85%] flex-col rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)] sm:max-w-[30rem]`;
   const reactionItems = Array.isArray(message?.reactions) ? message.reactions : [];
   const viewerReaction = sanitizeReactionKey(message?.viewer_reaction);
   const trayKeys = normalizeReactionKeys(availableReactions).length > 0
@@ -2061,7 +2062,7 @@ function MessageBubble({
           </button>
         ) : null}
         {hasContent && !suppressRawUrlContent ? (
-          <div className="whitespace-pre-wrap break-words text-sm leading-5 text-gray-100">
+          <div className={`whitespace-pre-wrap text-sm leading-5 text-gray-100 ${hasLongUnbrokenToken ? 'break-words' : 'break-normal'}`}>
             {renderFormattedText(message.content)}
           </div>
         ) : null}
@@ -2479,6 +2480,7 @@ function ConversationView({
     ? (activeConversation?.subtitle || `${activeConversation?.member_count || 0} members`)
     : 'Private chat';
   const headerAvatar = isSquad ? activeConversation?.avatar : activePartner?.avatar;
+  const composerPlaceholder = isSquad ? 'Message Squad' : `Message ${headerTitle || 'chat'}...`;
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
@@ -2667,8 +2669,9 @@ function ConversationView({
                 onKeyDown={onComposerKeyDown}
                 rows={1}
                 maxLength={4000}
-                placeholder={`Message ${headerTitle || 'chat'}...`}
+                placeholder={composerPlaceholder}
                 className="min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
+                style={{ whiteSpace: draft ? 'pre-wrap' : 'nowrap' }}
                 disabled={sending || !activeConversation}
               />
             </div>
