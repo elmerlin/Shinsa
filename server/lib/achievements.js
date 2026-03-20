@@ -892,10 +892,19 @@ function ensureBuiltInAchievementSeries(db) {
   seedTxn();
 }
 
+function getSeriesProgressValue(db, seriesKey, userId) {
+  const key = String(seriesKey || '').trim().toLowerCase();
+  if (key === 'pumps_received') return getTotalPumpsForUser(db, userId);
+  if (key === STREAK_SERIES_KEY) return getUserLongestPlayStreak(db, userId);
+  if (key === SSS_SERIES_KEY) return getUserSssBestScoreCount(db, userId);
+  return 0;
+}
+
 module.exports = {
   checkPumpAchievements,
   checkSssAchievements,
   checkStreakAchievements,
   ensureBuiltInAchievementSeries,
   evaluateAchievementSeries,
+  getSeriesProgressValue,
 };

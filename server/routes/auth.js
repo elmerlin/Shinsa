@@ -10,7 +10,7 @@ const { getDb } = require('../db/schema');
 const { addNotificationClient } = require('../lib/notificationHub');
 const { getPublicVapidKey, isWebPushConfigured } = require('../lib/webPush');
 const { isInlineDataAvatar, normalizeUserAvatarForList } = require('../lib/avatarProxy');
-const { evaluateAchievementSeries } = require('../lib/achievements');
+const { evaluateAchievementSeries, getSeriesProgressValue } = require('../lib/achievements');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
@@ -154,17 +154,57 @@ function getUserAchievementBadges(db, userId) {
     ORDER BY s.name COLLATE NOCASE ASC, t.sort_order ASC
   `).all(userId);
 
-  return rows.map((row) => ({
-    tier_id: row.tier_id,
-    series_id: row.series_id,
-    series_key: row.series_key,
-    series_name: row.series_name,
-    name: row.name || '',
-    description: row.description || '',
-    image: row.image_data || '',
-    threshold: row.threshold,
-    awarded_at: row.awarded_at || '',
-  }));
+  // Build per-series progress: current value + next unearned tier
+  const earnedBySeriesId = {};
+  for (const row of rows) {
+    if (!earnedBySeriesId[row.series_id]) earnedBySeriesId[row.series_id] = new Set();
+    earnedBySeriesId[row.series_id].add(row.tier_id);
+  }
+
+  const seriesProgressCache = {};
+  const getProgress = (seriesId, seriesKey) => {
+    if (seriesProgressCache[seriesId]) return seriesProgressCache[seriesId];
+    // Get all tiers for this series ordered by threshold
+    const allTiers = db.prepare(`
+      SELECT id, name, description, image_data, threshold, sort_order
+      FROM achievement_tiers
+      WHERE series_id = ?
+      ORDER BY threshold ASC
+    `).all(seriesId);
+    const earned = earnedBySeriesId[seriesId] || new Set();
+    const nextTier = allTiers.find((t) => !earned.has(t.id));
+    let currentValue = null;
+    try {
+      currentValue = getSeriesProgressValue(db, seriesKey, userId);
+    } catch { /* ignore */ }
+    seriesProgressCache[seriesId] = {
+      current_value: currentValue,
+      next_tier: nextTier ? {
+        name: nextTier.name || '',
+        description: nextTier.description || '',
+        image: nextTier.image_data || '',
+        threshold: nextTier.threshold,
+      } : null,
+    };
+    return seriesProgressCache[seriesId];
+  };
+
+  return rows.map((row) => {
+    const progress = getProgress(row.series_id, row.series_key);
+    return {
+      tier_id: row.tier_id,
+      series_id: row.series_id,
+      series_key: row.series_key,
+      series_name: row.series_name,
+      name: row.name || '',
+      description: row.description || '',
+      image: row.image_data || '',
+      threshold: row.threshold,
+      awarded_at: row.awarded_at || '',
+      current_value: progress.current_value,
+      next_tier: progress.next_tier,
+    };
+  });
 }
 
 function getUserGroups(db, userId) {

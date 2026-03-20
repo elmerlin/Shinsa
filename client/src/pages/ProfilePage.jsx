@@ -4161,6 +4161,48 @@ export default function ProfilePage() {
                 {selectedAchievementBadge.description || 'No description provided.'}
               </p>
             </div>
+            {/* Next tier progress */}
+            {selectedAchievementBadge.next_tier && selectedAchievementBadge.current_value != null && (() => {
+              const current = selectedAchievementBadge.current_value;
+              const nextThreshold = selectedAchievementBadge.next_tier.threshold;
+              const highestEarned = selectedAchievementBadge.threshold;
+              const progressRange = nextThreshold - highestEarned;
+              const progressValue = current - highestEarned;
+              const pct = progressRange > 0 ? Math.min(100, Math.max(0, Math.round((progressValue / progressRange) * 100))) : 0;
+              return (
+                <div className="mt-4 pt-3 border-t border-piu-gold/15">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-2">Next Tier</p>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 shrink-0 rounded-md border border-white/10 bg-piu-dark/55 flex items-center justify-center overflow-hidden opacity-50">
+                      {selectedAchievementBadge.next_tier.image ? (
+                        <img src={selectedAchievementBadge.next_tier.image} alt={selectedAchievementBadge.next_tier.name || 'Next'} className="w-full h-full object-contain p-0.5" />
+                      ) : (
+                        <span className="text-xs font-display font-bold text-gray-500">?</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-display font-semibold text-gray-300 truncate">{selectedAchievementBadge.next_tier.name}</p>
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-piu-gold/70 to-piu-gold transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-gray-500">
+                        {current.toLocaleString()} / {nextThreshold.toLocaleString()}
+                        {pct > 0 && <span className="ml-1 text-piu-gold/70">({pct}%)</span>}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            {/* All badges completed */}
+            {!selectedAchievementBadge.next_tier && selectedAchievementBadge.current_value != null && (
+              <div className="mt-4 pt-3 border-t border-piu-gold/15">
+                <p className="text-center text-[10px] text-piu-gold/60 font-display uppercase tracking-wide">All tiers earned ✦</p>
+              </div>
+            )}
             {selectedAchievementBadge.allTiers && selectedAchievementBadge.allTiers.length > 1 && (
               <div className="mt-4 pt-3 border-t border-piu-gold/15">
                 <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-2">Earned Tiers</p>
