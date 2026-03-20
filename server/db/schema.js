@@ -2270,6 +2270,7 @@ function initializeDb() {
       request_mode_filter TEXT NOT NULL DEFAULT 'All',
       request_max_level INTEGER NOT NULL DEFAULT 30,
       request_show_scores INTEGER NOT NULL DEFAULT 1,
+      is_unlisted INTEGER NOT NULL DEFAULT 0,
       is_hidden_from_profile INTEGER NOT NULL DEFAULT 0,
       deleted_at TEXT DEFAULT '',
       session_type TEXT NOT NULL DEFAULT 'live',
@@ -3103,6 +3104,9 @@ function initializeDb() {
   }
   if (!liveSessionCols.includes('request_show_scores')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN request_show_scores INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!liveSessionCols.includes('is_unlisted')) {
+    db.exec("ALTER TABLE live_sessions ADD COLUMN is_unlisted INTEGER NOT NULL DEFAULT 0");
   }
   if (!liveSessionCols.includes('is_hidden_from_profile')) {
     db.exec("ALTER TABLE live_sessions ADD COLUMN is_hidden_from_profile INTEGER NOT NULL DEFAULT 0");

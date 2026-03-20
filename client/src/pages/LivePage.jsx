@@ -1736,6 +1736,7 @@ function CreateSessionCard({
   selectedBroadcastId,
   sessionType,
   statusText,
+  isUnlisted,
   creating,
   onConnectYoutube,
   onRefreshYoutube,
@@ -1744,6 +1745,7 @@ function CreateSessionCard({
   onTitleChange,
   onStreamUrlChange,
   onStatusTextChange,
+  onUnlistedChange,
   onSubmit,
 }) {
   const isHopMode = sessionType === 'hop';
@@ -1825,6 +1827,51 @@ function CreateSessionCard({
             Warmup and countdown status are controlled automatically for HoP.
           </div>
         )}
+        {!isHopMode ? (
+          <div className={`overflow-hidden rounded-[1.15rem] border p-4 transition-colors ${
+            isUnlisted
+              ? 'border-cyan-300/30 bg-[linear-gradient(145deg,rgba(18,43,63,0.48),rgba(8,16,30,0.96))]'
+              : 'border-piu-border/60 bg-[linear-gradient(145deg,rgba(15,22,36,0.92),rgba(8,12,24,0.98))]'
+          }`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-display font-black text-white">Unlisted room</p>
+                  <span className={`rounded-full border px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-[0.18em] ${
+                    isUnlisted
+                      ? 'border-cyan-300/35 bg-cyan-400/12 text-cyan-100'
+                      : 'border-white/10 bg-white/5 text-gray-400'
+                  }`}>
+                    {isUnlisted ? 'Invite only' : 'Public'}
+                  </span>
+                </div>
+                <p className="mt-2 text-[12px] leading-5 text-gray-300">
+                  Keep it out of the Live directory and skip follower notifications. Anyone with the room link can still join, and it will still appear in your Live tab after it ends.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-gray-300">
+                    Hidden from directory
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-gray-300">
+                    No follower ping
+                  </span>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-gray-300">
+                    Share by link or DM
+                  </span>
+                </div>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center self-center">
+                <input
+                  type="checkbox"
+                  checked={isUnlisted}
+                  onChange={(e) => onUnlistedChange(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="h-6 w-11 rounded-full bg-piu-dark transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-cyan-500/80 peer-checked:after:translate-x-full" />
+              </label>
+            </div>
+          </div>
+        ) : null}
       </div>
       <button type="button" onClick={onSubmit} disabled={creating} className="btn-primary mt-4 w-full py-2.5">
         {creating ? 'Starting...' : isHopMode ? 'Launch Hour of Power' : 'Launch Shinsa Live'}
@@ -2877,6 +2924,7 @@ export default function LivePage() {
   const [createYoutubeBroadcastId, setCreateYoutubeBroadcastId] = useState('');
   const [createSessionType, setCreateSessionType] = useState('live');
   const [createStatusText, setCreateStatusText] = useState('');
+  const [createIsUnlisted, setCreateIsUnlisted] = useState(false);
   const [editStreamUrl, setEditStreamUrl] = useState('');
   const [editYoutubeBroadcastId, setEditYoutubeBroadcastId] = useState('');
   const [editStatusText, setEditStatusText] = useState('');
@@ -2997,9 +3045,14 @@ export default function LivePage() {
     liveId: live?.id,
     title: live?.title,
     hostUsername: live?.host?.username,
+    hostAvatar: live?.host?.avatar,
+    hostSkillTitle: live?.host?.skill_title,
     isHopSession,
+    isUnlisted: live?.is_unlisted,
     status: live?.status,
-  }), [isHopSession, live?.host?.username, live?.id, live?.status, live?.title]);
+    youtubeVideoId: live?.youtube_video_id,
+    streamUrl: live?.stream_url,
+  }), [isHopSession, live?.host?.avatar, live?.host?.skill_title, live?.host?.username, live?.id, live?.is_unlisted, live?.status, live?.stream_url, live?.title, live?.youtube_video_id]);
   const participants = Array.isArray(live?.participants) ? live.participants : [];
   const activeParticipants = useMemo(
     () => participants.filter((participant) => String(participant?.status || 'active').trim() !== 'left'),
@@ -4336,10 +4389,13 @@ export default function LivePage() {
         youtube_broadcast_id: createYoutubeBroadcastId,
         session_type: createSessionType,
         status_text: createStatusText,
+        is_unlisted: createIsUnlisted,
       });
       seenMessageIdsRef.current = new Set((data?.messages || []).map((msg) => msg.id));
       applySnapshot(data, { markMessagesSeen: true });
-      if ((parseInt(data?.notified_followers, 10) || 0) > 0) {
+      if (data?.session?.is_unlisted) {
+        setStatusNote('Unlisted room created. Share the link or send it by DM to invite people in.');
+      } else if ((parseInt(data?.notified_followers, 10) || 0) > 0) {
         setStatusNote(`${data.notified_followers} follower${data.notified_followers === 1 ? '' : 's'} notified.`);
       }
       if (data?.session?.id) navigate(`/live/${data.session.id}`, { replace: true });
@@ -4349,6 +4405,13 @@ export default function LivePage() {
       setCreating(false);
     }
   };
+
+  const handleCreateSessionTypeChange = useCallback((nextType) => {
+    setCreateSessionType(nextType);
+    if (nextType === 'hop') {
+      setCreateIsUnlisted(false);
+    }
+  }, []);
 
   const handleUpdateStatusText = async () => {
     if (!activeSessionId || !isHost) return;
@@ -5914,14 +5977,16 @@ export default function LivePage() {
             selectedBroadcastId={createYoutubeBroadcastId}
             sessionType={createSessionType}
             statusText={createStatusText}
+            isUnlisted={createIsUnlisted}
             creating={creating}
             onConnectYoutube={handleConnectYoutube}
             onRefreshYoutube={loadYoutubeBroadcastOptions}
             onSelectBroadcast={setCreateYoutubeBroadcastId}
-            onSessionTypeChange={setCreateSessionType}
+            onSessionTypeChange={handleCreateSessionTypeChange}
             onTitleChange={setCreateTitle}
             onStreamUrlChange={setCreateStreamUrl}
             onStatusTextChange={setCreateStatusText}
+            onUnlistedChange={setCreateIsUnlisted}
             onSubmit={handleCreate}
           />
 

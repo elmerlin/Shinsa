@@ -1,3 +1,5 @@
+import { parseYouTubeUrl } from './youtube';
+
 function compactText(value, max = 120) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   if (!text) return '';
@@ -232,26 +234,46 @@ export function buildLiveSessionLinkShare({
   liveId,
   title,
   hostUsername,
+  hostAvatar = '',
+  hostSkillTitle = '',
   isHopSession = false,
+  isUnlisted = false,
   status = '',
+  youtubeVideoId = '',
+  streamUrl = '',
 }) {
   const id = String(liveId || '').trim();
   if (!id) return null;
 
   const hostLabel = String(hostUsername || '').trim();
+  const statusText = String(status || '').trim().toLowerCase();
+  const resolvedVideoId = String(youtubeVideoId || '').trim() || parseYouTubeUrl(streamUrl).videoId;
   const sessionTitle = String(title || '').trim()
     || (hostLabel ? `${hostLabel}'s live session` : 'Shinsa Live session');
-  const statusLabel = String(status || '').trim().toLowerCase();
-  const baseSubtitle = isHopSession
-    ? (hostLabel ? `Hour of Power live room hosted by ${hostLabel}` : 'Hour of Power live room')
-    : (hostLabel ? `Live room hosted by ${hostLabel}` : 'Shinsa Live room');
+  const contextLabel = isHopSession ? 'Hour of Power' : 'Shinsa Live';
+  const statusLabel = isUnlisted
+    ? 'Invite only'
+    : (statusText === 'live' ? 'Live now' : (statusText ? compactText(statusText, 40) : 'Live room'));
+  const baseSubtitle = isUnlisted
+    ? (hostLabel ? `Share this room directly to invite people into ${hostLabel}'s session.` : 'Share this room directly to invite people in.')
+    : (hostLabel ? `Join ${hostLabel}'s live room on Shinsa.` : 'Join this live room on Shinsa.');
 
   return {
     kind: 'live_session',
     path: `/live/${id}`,
     title: sessionTitle,
-    subtitle: statusLabel ? `${baseSubtitle} • ${statusLabel}` : baseSubtitle,
+    subtitle: baseSubtitle,
     buttonLabel: isHopSession ? 'Open HoP room' : 'Open room',
+    contextLabel,
+    statusLabel,
+    liveSessionType: isHopSession ? 'hop' : 'live',
+    isUnlisted,
+    playerName: hostLabel,
+    playerAvatar: String(hostAvatar || '').trim(),
+    playerSkillTitle: String(hostSkillTitle || '').trim(),
+    playerRoleLabel: 'Host',
+    youtubeVideoId: resolvedVideoId,
+    previewImage: resolvedVideoId ? `https://i.ytimg.com/vi/${resolvedVideoId}/hqdefault.jpg` : '',
   };
 }
 

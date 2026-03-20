@@ -15,6 +15,7 @@ import {
   getSharedMessageStory,
   getNewClear,
   getPost,
+  getLiveSession,
   getMessageConversation,
   getMessageConversations,
   getOrCreateDirectConversation,
@@ -32,6 +33,7 @@ import {
   buildChartCompareLinkShare,
   buildChallengeLifecycleCard,
   buildClearChallengeCard,
+  buildLiveSessionLinkShare,
   buildRematchChallengeCard,
   buildUpscoreLinkShare,
   buildUpscoreChallengeCard,
@@ -879,6 +881,174 @@ function AchievementBadgeSharePreviewCard({ linkShare, buttonClass, onOpenLink }
   );
 }
 
+function YouTubePlayBadge({ className = '' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
+function getLiveSessionSharePreview(linkShare) {
+  if (!linkShare || String(linkShare.kind || '').trim() !== 'live_session') return null;
+
+  const liveSessionType = String(linkShare.liveSessionType || '').trim().toLowerCase() === 'hop' ? 'hop' : 'live';
+  const isHopSession = liveSessionType === 'hop';
+  const isUnlisted = Boolean(linkShare.isUnlisted)
+    || String(linkShare.statusLabel || '').trim().toLowerCase() === 'invite only';
+  const hostName = String(linkShare.playerName || '').trim() || 'Player';
+  const previewImage = String(linkShare.previewImage || '').trim();
+  const rawHostAvatar = String(linkShare.playerAvatar || '').trim();
+  const hostAvatar = rawHostAvatar ? getAvatarUrl(rawHostAvatar) : '';
+  const title = String(linkShare.title || '').trim() || (hostName ? `${hostName}'s live session` : 'Shinsa Live room');
+  const subtitle = String(linkShare.subtitle || '').trim();
+  const statusLabel = String(linkShare.statusLabel || '').trim() || (isUnlisted ? 'Invite only' : 'Live now');
+  const contextLabel = String(linkShare.contextLabel || '').trim() || (isHopSession ? 'Hour of Power' : 'Shinsa Live');
+
+  return {
+    isHopSession,
+    isUnlisted,
+    hostName,
+    hostAvatar,
+    hostSkillTitle: String(linkShare.playerSkillTitle || '').trim(),
+    previewImage,
+    title,
+    subtitle,
+    statusLabel,
+    contextLabel,
+  };
+}
+
+function LiveSessionSharePreviewCard({ linkShare, buttonClass, onOpenLink }) {
+  const preview = getLiveSessionSharePreview(linkShare);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [preview?.previewImage]);
+
+  if (!preview) return null;
+
+  const buttonLabel = String(linkShare?.buttonLabel || '').trim() || (preview.isHopSession ? 'Open HoP room' : 'Open room');
+  const handleOpen = () => onOpenLink?.(linkShare);
+  const showPreviewImage = !!preview.previewImage && !imageFailed;
+
+  return (
+    <div className="w-full overflow-hidden rounded-[1.35rem] border border-cyan-300/16 bg-[linear-gradient(160deg,rgba(8,14,28,0.98),rgba(6,10,20,0.98))] shadow-[0_14px_34px_rgba(0,0,0,0.24)]">
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="group block w-full text-left"
+        title={`Open ${preview.title}`}
+      >
+        <div className="relative overflow-hidden border-b border-cyan-300/12 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),rgba(10,18,34,0.94)_52%,rgba(5,8,18,0.98))] px-4 pb-4 pt-3">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(125,211,252,0.08),transparent_35%,rgba(3,7,18,0.24))]" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-cyan-300/22 bg-cyan-400/10 px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-cyan-100/82">
+                  {preview.contextLabel}
+                </span>
+                <span className={`rounded-full border px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-[0.18em] ${
+                  preview.isUnlisted
+                    ? 'border-amber-300/24 bg-amber-400/10 text-amber-100'
+                    : 'border-rose-300/24 bg-rose-400/10 text-rose-100'
+                }`}>
+                  {preview.statusLabel}
+                </span>
+              </div>
+              <p className="mt-2 text-[17px] font-display font-black leading-tight text-white">{preview.title}</p>
+              <p className="mt-2 text-[12px] leading-5 text-slate-300">
+                {preview.subtitle || (preview.isUnlisted
+                  ? 'This room stays off the Live directory and skips follower notifications until you share it.'
+                  : 'Jump in live, chat with the host, and follow the session as it happens.')}
+              </p>
+            </div>
+            <div className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.2em] text-slate-200">
+              Room invite
+            </div>
+          </div>
+
+          <div className="relative mt-3 overflow-hidden rounded-[1.15rem] border border-white/8 bg-[#070b16]">
+            {showPreviewImage ? (
+              <div className="relative">
+                <img
+                  src={preview.previewImage}
+                  alt={preview.title}
+                  className="h-[13.75rem] w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                  onError={() => setImageFailed(true)}
+                />
+                <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(4,8,16,0.04),rgba(4,8,16,0.52)_72%,rgba(4,8,16,0.92))]" />
+                <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-white/12 bg-black/40 px-3 py-1.5 backdrop-blur">
+                  <YouTubePlayBadge className="h-4 w-4 text-rose-300" />
+                  <span className="text-[10px] font-display font-bold uppercase tracking-[0.18em] text-white/88">YouTube live</span>
+                </div>
+              </div>
+            ) : (
+              <div className="relative h-[13.75rem] overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(14,116,144,0.45),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(234,88,12,0.24),transparent_32%),linear-gradient(145deg,#08111d,#050814_62%,#091120)]">
+                <div className="absolute inset-0 bg-[linear-gradient(130deg,transparent_0%,rgba(125,211,252,0.06)_45%,transparent_100%)]" />
+                <div className="absolute -right-10 top-4 h-28 w-28 rounded-full border border-cyan-300/12 bg-cyan-300/6 blur-xl" />
+                <div className="absolute bottom-0 left-0 right-0 top-0 flex flex-col justify-between p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="rounded-full border border-white/12 bg-black/26 px-3 py-1 text-[9px] font-display font-bold uppercase tracking-[0.2em] text-cyan-100/82">
+                      Invite link
+                    </div>
+                    <div className="flex items-center gap-2 rounded-full border border-white/12 bg-black/28 px-3 py-1.5">
+                      <YouTubePlayBadge className="h-4 w-4 text-rose-300" />
+                      <span className="text-[10px] font-display font-bold uppercase tracking-[0.18em] text-white/82">YouTube</span>
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-cyan-100/72">{preview.contextLabel}</p>
+                      <p className="mt-2 max-w-[14rem] text-[20px] font-display font-black leading-[1.05] text-white">{preview.title}</p>
+                    </div>
+                    {preview.hostAvatar ? (
+                      <img src={preview.hostAvatar} alt="" className="h-16 w-16 shrink-0 rounded-[1.1rem] border border-white/16 object-cover shadow-[0_10px_26px_rgba(0,0,0,0.3)]" />
+                    ) : (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.1rem] border border-cyan-300/22 bg-cyan-500/14 text-[24px] font-display font-black text-cyan-100 shadow-[0_10px_26px_rgba(0,0,0,0.3)]">
+                        {preview.hostName.slice(0, 1).toUpperCase() || 'S'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-4 pb-4 pt-3">
+          <div className="flex items-center gap-3">
+            {preview.hostAvatar ? (
+              <img src={preview.hostAvatar} alt="" className="h-10 w-10 rounded-full border border-white/10 object-cover" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-500/10 font-display text-sm font-black text-cyan-100">
+                {preview.hostName.slice(0, 1).toUpperCase() || 'S'}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[14px] font-display font-black text-white">{preview.hostName}</p>
+              <p className="truncate text-[11px] text-slate-400">
+                {preview.hostSkillTitle || (preview.isUnlisted ? 'Share privately to invite players in.' : 'Hosted on Shinsa Live')}
+              </p>
+            </div>
+          </div>
+        </div>
+      </button>
+
+      <div className="px-4 pb-4">
+        <button
+          type="button"
+          onClick={handleOpen}
+          className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function YouTubeMessagePreviewCard({ url, onOpen }) {
   const [meta, setMeta] = useState({ title: '', authorName: '' });
   const videoId = parseYouTubeUrl(url).videoId;
@@ -1332,6 +1502,12 @@ function MessageLinkCard({
     && ['upscore', 'clear'].includes(linkShare.kind)
     && (!Array.isArray(linkShare.previewItems) || linkShare.previewItems.length === 0);
   const needsPostHydration = linkShare.kind === 'post' && !embeddedAchievementShare;
+  const needsLiveHydration = linkShare.kind === 'live_session' && (
+    !String(linkShare.previewImage || '').trim()
+    || !String(linkShare.playerName || '').trim()
+    || !String(linkShare.contextLabel || '').trim()
+    || !String(linkShare.statusLabel || '').trim()
+  );
   const needsJacketLookup = Array.isArray(linkShare?.previewItems)
     && linkShare.previewItems.some((item) => item?.songTitle && !item?.jacketUrl);
 
@@ -1352,6 +1528,50 @@ function MessageLinkCard({
       active = false;
     };
   }, [needsJacketLookup, needsRichHydration]);
+
+  useEffect(() => {
+    let active = true;
+    if (!needsLiveHydration) {
+      return undefined;
+    }
+
+    const resourceId = parseResourceIdFromPath(linkShare.path, 'live');
+    if (!resourceId) return undefined;
+
+    (async () => {
+      try {
+        const payload = await getLiveSession(resourceId);
+        const session = payload?.session || null;
+        const rebuilt = buildLiveSessionLinkShare({
+          liveId: session?.id || resourceId,
+          title: session?.title || linkShare.title,
+          hostUsername: session?.host?.username || linkShare.playerName,
+          hostAvatar: session?.host?.avatar || linkShare.playerAvatar,
+          hostSkillTitle: session?.host?.skill_title || linkShare.playerSkillTitle,
+          isHopSession: session?.session_type === 'hop',
+          isUnlisted: session?.is_unlisted,
+          status: session?.status || '',
+          youtubeVideoId: session?.youtube_video_id || linkShare.youtubeVideoId,
+          streamUrl: session?.stream_url || '',
+        });
+        if (!active) return;
+        if (!rebuilt) {
+          setHydratedLinkShare(null);
+          return;
+        }
+        setHydratedLinkShare({
+          ...linkShare,
+          ...rebuilt,
+        });
+      } catch {
+        if (active) setHydratedLinkShare(null);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [linkShare, needsLiveHydration]);
 
   useEffect(() => {
     let active = true;
@@ -1506,6 +1726,7 @@ function MessageLinkCard({
     && Array.isArray(resolvedLinkShare.previewItems)
     && resolvedLinkShare.previewItems.length > 0;
   const isStoryShare = resolvedLinkShare.kind === 'story';
+  const isLiveSessionShare = !!getLiveSessionSharePreview(resolvedLinkShare);
   const isAchievementBadgeShare = !!getAchievementBadgePreview(resolvedLinkShare);
   const isYouTubeShare = !resolvedLinkShare.path && !!parseYouTubeUrl(resolvedLinkShare.url).videoId;
   const handlePrimaryOpen = () => onOpenLink?.(resolvedLinkShare);
@@ -1628,6 +1849,16 @@ function MessageLinkCard({
         buttonClass={buttonClass}
         onOpenLink={handlePrimaryOpen}
         conversationId={conversationId}
+      />
+    );
+  }
+
+  if (isLiveSessionShare) {
+    return (
+      <LiveSessionSharePreviewCard
+        linkShare={resolvedLinkShare}
+        buttonClass={buttonClass}
+        onOpenLink={handlePrimaryOpen}
       />
     );
   }

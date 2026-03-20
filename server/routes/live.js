@@ -2616,6 +2616,7 @@ function normalizeSessionPayload(session, host, viewerCount, currentUserId, part
     request_mode_filter: normalizeRequestModeFilter(session.request_mode_filter),
     request_max_level: normalizeRequestMaxLevel(session.request_max_level),
     request_show_scores: toInt(session.request_show_scores) !== 0,
+    is_unlisted: toInt(session.is_unlisted) !== 0,
     is_hidden_from_profile: toInt(session.is_hidden_from_profile) !== 0,
     session_type: normalizeSessionType(session.session_type),
     status: session.status || 'live',
@@ -3083,6 +3084,7 @@ function getDirectorySessions(db, currentUserId = '', limit = 18) {
     JOIN users u ON u.id = s.host_user_id
     WHERE s.status = 'live'
       AND COALESCE(s.deleted_at, '') = ''
+      AND COALESCE(s.is_unlisted, 0) = 0
     ORDER BY s.started_at DESC, s.id DESC
     LIMIT ?
   `).all(currentUserId || '', Math.max(1, Math.min(36, toInt(limit) || 18)));
@@ -4006,8 +4008,11 @@ router.get('/profile/:userId', (req, res) => {
     if (!hostExists) return res.status(404).json({ error: 'User not found' });
 
     const activeSession = getActiveSessionForHost(db, userId);
+    const canViewActiveSession = activeSession && (
+      String(currentUserId || '') === userId || toInt(activeSession.is_unlisted) === 0
+    );
     res.json({
-      active_session: buildProfileActiveSessionPayload(db, activeSession, currentUserId),
+      active_session: canViewActiveSession ? buildProfileActiveSessionPayload(db, activeSession, currentUserId) : null,
       ended_sessions: getProfileEndedSessions(db, userId, currentUserId, 12),
     });
   } catch (err) {
@@ -4034,6 +4039,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
     const statusText = sessionType === HOP_SESSION_TYPE
       ? ''
       : normalizeText(req.body?.status_text, 160);
+    const isUnlisted = sessionType === HOP_SESSION_TYPE ? false : Boolean(req.body?.is_unlisted);
     const defaultRequestMaxLevel = getDefaultRequestMaxLevelForUser(db, req.user.id);
     const streamSelection = await resolveLiveStreamSelection(db, req.user.id, req.body || {}, null);
     const streamUrl = streamSelection.streamUrl;
@@ -4063,14 +4069,14 @@ router.post('/sessions', requireAuth, async (req, res) => {
         id, host_user_id, title, stream_url, youtube_broadcast_id, youtube_video_id, youtube_channel_id,
         youtube_stream_title, youtube_lifecycle_status, youtube_scheduled_start_time, youtube_actual_start_time,
         status_text, requests_enabled, request_mode_filter, request_max_level, request_show_scores,
-        is_hidden_from_profile, deleted_at, session_type, hop_warmup_started_at, hop_started_at, hop_ends_at,
+        is_unlisted, is_hidden_from_profile, deleted_at, session_type, hop_warmup_started_at, hop_started_at, hop_ends_at,
         hop_warmup_seconds, hop_window_seconds, status, recent_anchor_id, last_recent_row_id,
         last_sync_at, last_sync_status, viewer_peak, created_at, started_at, ended_at, updated_at
       ) VALUES (
         @id, @host_user_id, @title, @stream_url, @youtube_broadcast_id, @youtube_video_id, @youtube_channel_id,
         @youtube_stream_title, @youtube_lifecycle_status, @youtube_scheduled_start_time, @youtube_actual_start_time,
         @status_text, @requests_enabled, @request_mode_filter, @request_max_level, @request_show_scores,
-        @is_hidden_from_profile, @deleted_at, @session_type, @hop_warmup_started_at, @hop_started_at, @hop_ends_at,
+        @is_unlisted, @is_hidden_from_profile, @deleted_at, @session_type, @hop_warmup_started_at, @hop_started_at, @hop_ends_at,
         @hop_warmup_seconds, @hop_window_seconds, @status, @recent_anchor_id, @last_recent_row_id,
         @last_sync_at, @last_sync_status, @viewer_peak, @created_at, @started_at, @ended_at, @updated_at
       )
@@ -4091,6 +4097,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
       request_mode_filter: 'All',
       request_max_level: defaultRequestMaxLevel,
       request_show_scores: 1,
+      is_unlisted: isUnlisted ? 1 : 0,
       is_hidden_from_profile: 0,
       deleted_at: '',
       session_type: sessionType,
@@ -4136,7 +4143,7 @@ router.post('/sessions', requireAuth, async (req, res) => {
       }
     );
     const host = getHostProfile(db, req.user.id) || { id: req.user.id, username: req.user.username || 'Player' };
-    const notifiedFollowers = notifyFollowersLive(db, id, host, title);
+    const notifiedFollowers = isUnlisted ? 0 : notifyFollowersLive(db, id, host, title);
     ensureLiveSyncTimer(db, id);
 
     res.status(201).json({
