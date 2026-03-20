@@ -2778,7 +2778,7 @@ function ConversationView({
           </div>
         </div>
 
-        <div ref={messagesViewportRef} className={`relative min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4 ${chatTheme.viewportBg} ${chatTheme.extraViewportClass}`} style={chatTheme.viewportStyle}>
+        <div ref={messagesViewportRef} className={`relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-5 sm:py-4 ${chatTheme.viewportBg} ${chatTheme.extraViewportClass}`} style={chatTheme.viewportStyle}>
           {chatTheme.decorOverlay}
           {!touchInteractionsEnabled ? (
             <div
@@ -2894,11 +2894,10 @@ function ConversationView({
                 }}
                 onClick={(event) => onRefreshMentions(draft, event.currentTarget.selectionStart)}
                 onKeyDown={onComposerKeyDown}
-                rows={1}
                 maxLength={4000}
                 placeholder={composerPlaceholder}
-                className={`max-h-40 w-full resize-none overflow-hidden rounded-[1.4rem] border border-piu-border/70 px-4 text-sm focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
-                style={{ height: 44, minHeight: 44, paddingTop: 11, paddingBottom: 11, whiteSpace: draft ? 'pre-wrap' : 'nowrap', lineHeight: '20px' }}
+                className={`w-full resize-none overflow-hidden rounded-[1.4rem] border border-piu-border/70 px-4 text-sm focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
+                style={{ display: 'block', boxSizing: 'border-box', height: 44, maxHeight: 160, paddingTop: 12, paddingBottom: 12, whiteSpace: draft ? 'pre-wrap' : 'nowrap', lineHeight: '20px', verticalAlign: 'bottom' }}
                 disabled={sending || !activeConversation}
               />
             </div>

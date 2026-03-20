@@ -133,7 +133,7 @@ export default function DojoCatStickerPicker({
 
       {open && !isMobileSheet ? (
         <div
-          className={`absolute top-full mt-2 z-50 w-[min(20rem,calc(100vw-1.5rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-piu-border bg-piu-card p-3 shadow-2xl ${align === 'right' ? 'right-0' : 'left-0'} ${panelClassName}`.trim()}
+          className={`absolute bottom-full mb-2 z-50 w-[min(20rem,calc(100vw-1.5rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-piu-border bg-piu-card p-3 shadow-2xl ${align === 'right' ? 'right-0' : 'left-0'} ${panelClassName}`.trim()}
         >
           {pickerContent}
         </div>
