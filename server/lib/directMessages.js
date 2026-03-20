@@ -277,6 +277,21 @@ function sanitizeNoteThreadPayload(noteThread) {
   };
 }
 
+function sanitizeReplyTargetPayload(replyTarget) {
+  if (!replyTarget || typeof replyTarget !== 'object') return null;
+  const src = replyTarget || {};
+  const messageId = String(src.messageId || src.message_id || '').trim().slice(0, 80);
+  if (!messageId) return null;
+
+  return {
+    messageId,
+    senderUserId: String(src.senderUserId || src.sender_user_id || '').trim().slice(0, 80),
+    senderUsername: String(src.senderUsername || src.sender_username || '').trim().slice(0, 60),
+    messageType: String(src.messageType || src.message_type || 'text').trim().slice(0, 40) || 'text',
+    previewText: normalizeMessageText(src.previewText || src.preview_text || src.snippet || '', 180),
+  };
+}
+
 function sanitizeReactionKey(value) {
   const key = String(value || '')
     .trim()
@@ -533,6 +548,7 @@ function normalizeConversationMessage(row, viewerUserId = '', reactionPayload = 
   const linkShare = sanitizeLinkSharePayload(metadata.link_share);
   const challengeCard = sanitizeChallengeCardPayload(metadata.challenge_card);
   const noteThread = sanitizeNoteThreadPayload(metadata.note_thread);
+  const replyTo = sanitizeReplyTargetPayload(metadata.reply_to);
   const senderUserId = String(row?.sender_user_id || '').trim();
   const normalizedReactions = normalizeMessageReactions(
     reactionPayload?.reactions || row?.reactions || [],
@@ -548,6 +564,7 @@ function normalizeConversationMessage(row, viewerUserId = '', reactionPayload = 
     link_share: linkShare,
     challenge_card: challengeCard,
     note_thread: noteThread,
+    reply_to: replyTo,
     created_at: row?.created_at || '',
     updated_at: row?.updated_at || '',
     sender: {
@@ -567,6 +584,7 @@ function normalizeConversationInput(raw = {}) {
   const linkShare = sanitizeLinkSharePayload(raw.link_share || raw.linkShare || raw.link || null);
   const challengeCard = sanitizeChallengeCardPayload(raw.challenge_card || raw.challengeCard || raw.challenge || null);
   const noteThread = sanitizeNoteThreadPayload(raw.note_thread || raw.noteThread || null);
+  const replyToMessageId = String(raw.reply_to_message_id || raw.replyToMessageId || '').trim().slice(0, 80);
   const messageType = share
     ? 'session_share'
     : (challengeCard ? 'challenge_card' : (linkShare ? 'link_share' : 'text'));
@@ -588,14 +606,39 @@ function normalizeConversationInput(raw = {}) {
     linkShare,
     challengeCard,
     noteThread,
+    replyToMessageId,
     metadata,
   };
+}
+
+function buildReplyTargetPayloadFromRow(row) {
+  if (!row) return null;
+  const metadata = parseMessageMetadata(row?.metadata_json);
+  const share = sanitizeSessionSharePayload(metadata.share);
+  const linkShare = sanitizeLinkSharePayload(metadata.link_share);
+  const challengeCard = sanitizeChallengeCardPayload(metadata.challenge_card);
+  const previewText = buildMessagePreview(
+    row?.message_type || 'text',
+    row?.content || '',
+    share,
+    linkShare,
+    challengeCard
+  );
+
+  return sanitizeReplyTargetPayload({
+    messageId: row?.id,
+    senderUserId: row?.sender_user_id,
+    senderUsername: row?.sender_username || '',
+    messageType: row?.message_type || 'text',
+    previewText,
+  });
 }
 
 module.exports = {
   MAX_MESSAGE_LENGTH,
   buildDirectConversationKey,
   buildMessagePreview,
+  buildReplyTargetPayloadFromRow,
   buildNotificationBody,
   buildNotificationTitle,
   normalizeConversationInput,
@@ -606,6 +649,7 @@ module.exports = {
   sanitizeChallengeCardPayload,
   sanitizeLinkSharePayload,
   sanitizeNoteThreadPayload,
+  sanitizeReplyTargetPayload,
   sanitizeSessionSharePayload,
   textSnippet,
 };

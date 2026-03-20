@@ -85,6 +85,8 @@ const REACTION_OPTIONS = [
   { key: 'sleepy', label: 'Sleepy', emoji: '😴' },
 ];
 const DEFAULT_QUICK_REACTION_KEYS = ['pump', 'fire', 'heart', 'clap'];
+const REPLY_SWIPE_MAX_OFFSET = 72;
+const REPLY_SWIPE_TRIGGER_OFFSET = 54;
 
 function formatCompactScore(value) {
   const numeric = Number(value);
@@ -789,6 +791,65 @@ function getMessageLabel(message) {
   return '';
 }
 
+function compactReplyPreviewText(value, max = 160) {
+  const compact = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!compact) return '';
+  return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+}
+
+function buildReplyPreviewText(message) {
+  if (!message) return 'Message';
+
+  const contentSnippet = compactReplyPreviewText(message.content);
+  if (contentSnippet) return contentSnippet;
+
+  if (message.share?.sessionTitle) {
+    return compactReplyPreviewText(message.share.sessionTitle);
+  }
+
+  if (message.link_share?.subtitle) {
+    return compactReplyPreviewText(message.link_share.subtitle);
+  }
+
+  if (message.link_share?.title) {
+    return compactReplyPreviewText(message.link_share.title);
+  }
+
+  if (message.link_share?.songTitle) {
+    return compactReplyPreviewText(message.link_share.songTitle);
+  }
+
+  if (message.challenge_card?.statusLabel) {
+    return compactReplyPreviewText(message.challenge_card.statusLabel);
+  }
+
+  if (message.challenge_card?.targetLabel) {
+    return compactReplyPreviewText(message.challenge_card.targetLabel);
+  }
+
+  if (message.challenge_card?.subtitle) {
+    return compactReplyPreviewText(message.challenge_card.subtitle);
+  }
+
+  if (message.note_thread?.noteText) {
+    return compactReplyPreviewText(message.note_thread.noteText);
+  }
+
+  const messageLabel = getMessageLabel(message);
+  return messageLabel || 'Message';
+}
+
+function buildReplyDraftTarget(message) {
+  if (!message?.id) return null;
+  return {
+    messageId: String(message.id),
+    senderUserId: String(message?.sender?.id || ''),
+    senderUsername: String(message?.sender?.username || '').trim() || 'Someone',
+    messageType: String(message?.message_type || 'text'),
+    previewText: buildReplyPreviewText(message),
+  };
+}
+
 function hasScoreSnapshotLinkShare(linkShare) {
   if (!linkShare || !['upscore', 'clear', 'score_snapshot'].includes(linkShare.kind)) return false;
   return !!(
@@ -1314,6 +1375,9 @@ function MessageBubble({
   lifecycleLabel = 'Accept',
   onOpenThread = null,
   onOpenLink = null,
+  onReply = null,
+  activeReplyMessageId = '',
+  replyHighlightVersion = 0,
   availableReactions = DEFAULT_QUICK_REACTION_KEYS,
   defaultReaction = 'pump',
   onReact = null,
@@ -1331,6 +1395,7 @@ function MessageBubble({
   const senderName = message?.sender?.username || 'Unknown';
   const shareLabel = getMessageLabel(message);
   const noteThread = message?.note_thread || null;
+  const replyTo = message?.reply_to || null;
   const inlineYouTubeUrl = !hasShare && !hasLinkShare && !hasChallengeCard
     ? extractFirstYouTubeUrl(message?.content || '')
     : '';
@@ -1344,10 +1409,21 @@ function MessageBubble({
   const trayKeys = normalizeReactionKeys(availableReactions).length > 0
     ? normalizeReactionKeys(availableReactions)
     : DEFAULT_QUICK_REACTION_KEYS;
+  const isReplyTarget = String(activeReplyMessageId || '').trim() !== '' && String(message?.id || '') === String(activeReplyMessageId);
   const [trayOpen, setTrayOpen] = useState(false);
   const tapStateRef = useRef({ lastTapAt: 0, timer: null });
   const mobileTrayTimerRef = useRef(null);
   const [mobileTrayMounted, setMobileTrayMounted] = useState(false);
+  const [replyFlashActive, setReplyFlashActive] = useState(false);
+  const swipeStateRef = useRef({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    active: false,
+    ignoreClick: false,
+  });
+  const [replySwipeOffset, setReplySwipeOffset] = useState(0);
+  const [replySwipeDragging, setReplySwipeDragging] = useState(false);
 
   const closeTray = () => {
     setTrayOpen(false);
@@ -1410,13 +1486,91 @@ function MessageBubble({
     };
   }, [mobileTrayMounted, trayOpen]);
 
+  useEffect(() => {
+    if (!isReplyTarget || !replyHighlightVersion) return undefined;
+    setReplyFlashActive(true);
+    const timeoutId = window.setTimeout(() => {
+      setReplyFlashActive(false);
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [isReplyTarget, replyHighlightVersion]);
+
   const triggerReaction = (reactionKey) => {
     if (!message?.id || !onReact) return;
     onReact(message, reactionKey);
   };
 
+  const resetReplySwipe = useCallback(() => {
+    swipeStateRef.current.pointerId = null;
+    swipeStateRef.current.startX = 0;
+    swipeStateRef.current.startY = 0;
+    swipeStateRef.current.active = false;
+    setReplySwipeOffset(0);
+    setReplySwipeDragging(false);
+  }, []);
+
+  const triggerReply = useCallback(() => {
+    if (!message?.id || !onReply) return;
+    onReply(message);
+  }, [message, onReply]);
+
+  const handlePointerDown = (event) => {
+    if (event.pointerType !== 'touch') return;
+    if (event?.target?.closest?.('button,a,textarea,input,select')) return;
+    swipeStateRef.current.pointerId = event.pointerId;
+    swipeStateRef.current.startX = event.clientX;
+    swipeStateRef.current.startY = event.clientY;
+    swipeStateRef.current.active = true;
+    if (event.currentTarget?.setPointerCapture) {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {}
+    }
+  };
+
+  const handlePointerMove = (event) => {
+    if (event.pointerType !== 'touch') return;
+    if (!swipeStateRef.current.active || swipeStateRef.current.pointerId !== event.pointerId) return;
+
+    const dx = event.clientX - swipeStateRef.current.startX;
+    const dy = event.clientY - swipeStateRef.current.startY;
+
+    if (Math.abs(dy) > 32 && Math.abs(dy) > Math.abs(dx)) {
+      resetReplySwipe();
+      return;
+    }
+
+    const offset = Math.max(0, Math.min(REPLY_SWIPE_MAX_OFFSET, dx));
+    if (offset <= 0) return;
+
+    swipeStateRef.current.ignoreClick = true;
+    setReplySwipeDragging(true);
+    setReplySwipeOffset(offset);
+  };
+
+  const handlePointerUp = (event) => {
+    if (event.pointerType === 'touch' && swipeStateRef.current.pointerId === event.pointerId) {
+      if (replySwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET) {
+        triggerReply();
+      }
+      if (event.currentTarget?.releasePointerCapture) {
+        try {
+          event.currentTarget.releasePointerCapture(event.pointerId);
+        } catch {}
+      }
+      window.setTimeout(() => {
+        swipeStateRef.current.ignoreClick = false;
+      }, 120);
+      resetReplySwipe();
+    }
+  };
+
   const handleBubbleClick = (event) => {
     if (event?.target?.closest?.('button,a,textarea,input,select')) return;
+    if (swipeStateRef.current.ignoreClick) {
+      swipeStateRef.current.ignoreClick = false;
+      return;
+    }
     const now = Date.now();
     if (now - tapStateRef.current.lastTapAt < 260) {
       if (tapStateRef.current.timer) {
@@ -1479,10 +1633,54 @@ function MessageBubble({
           </div>
         </div>
       ) : null}
-      <div
-        className={bubbleClass}
-        onClick={handleBubbleClick}
-      >
+      <div className="relative" style={{ touchAction: 'pan-y' }}>
+        <div
+          className={`pointer-events-none absolute left-0 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100 shadow-[0_10px_24px_rgba(34,211,238,0.16)] transition-all duration-200 ${
+            replySwipeOffset > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+          }`}
+          style={{
+            transform: `translateY(-50%) scale(${0.75 + Math.min(0.25, replySwipeOffset / REPLY_SWIPE_TRIGGER_OFFSET * 0.25)})`,
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 9 5 12l5 3" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h9a5 5 0 0 1 5 5" />
+          </svg>
+        </div>
+        <div
+          className={`${bubbleClass} ${isReplyTarget ? 'ring-1 ring-cyan-300/18 shadow-[0_0_0_1px_rgba(103,232,249,0.08),0_14px_28px_rgba(8,145,178,0.12)]' : ''} ${replyFlashActive ? 'animate-pulse' : ''}`}
+          style={{
+            transform: replySwipeOffset > 0 ? `translateX(${replySwipeOffset}px)` : 'translateX(0px)',
+            transition: replySwipeDragging ? 'none' : 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onClick={handleBubbleClick}
+        >
+          {isReplyTarget ? (
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-display font-black uppercase tracking-[0.16em] text-cyan-100/82">
+              <span className={`h-2 w-2 rounded-full bg-cyan-300 ${replyFlashActive ? 'animate-pulse' : ''}`} />
+              Reply target
+            </div>
+          ) : null}
+        {replyTo ? (
+          <div
+            className={`mb-2 rounded-[0.95rem] border px-3 py-2 ${
+              isOwn
+                ? 'border-cyan-300/18 bg-black/18'
+                : 'border-white/10 bg-black/20'
+            }`}
+          >
+            <p className="text-[10px] font-display font-bold tracking-[0.16em] text-cyan-100/80">
+              {isOwn ? `You replied to ${replyTo.senderUsername || 'someone'}` : `Replied to ${replyTo.senderUsername || 'someone'}`}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-gray-300">
+              {compactReplyPreviewText(replyTo.previewText || 'Message', 140)}
+            </p>
+          </div>
+        ) : null}
         {noteThread ? (
           <button
             type="button"
@@ -1548,6 +1746,7 @@ function MessageBubble({
             />
           </div>
         ) : null}
+        </div>
       </div>
       {reactionItems.length > 0 ? (
         <div className={`mt-1 flex flex-wrap gap-1 px-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -1873,9 +2072,14 @@ function ConversationView({
   messagesEndRef,
   draft,
   draftInputRef,
+  replyTarget,
+  activeReplyMessageId,
+  replyHighlightVersion,
   onDraftChange,
   onComposerKeyDown,
   onSend,
+  onReply,
+  onCancelReply,
   mentionUsers,
   mentionLoading,
   showMentions,
@@ -2028,6 +2232,9 @@ function ConversationView({
                   lifecycleLabel={canAcceptChallenge(message) ? 'Accept' : 'Expire'}
                   onOpenThread={message?.note_thread?.threadKey ? () => onOpenThread?.(message) : null}
                   onOpenLink={onOpenLink}
+                  onReply={onReply}
+                  activeReplyMessageId={activeReplyMessageId}
+                  replyHighlightVersion={replyHighlightVersion}
                   defaultReaction={defaultReaction}
                   availableReactions={availableReactions}
                   onReact={onReact}
@@ -2052,6 +2259,30 @@ function ConversationView({
               align="left"
             />
             <div className="relative flex-1">
+              {replyTarget ? (
+                <div className="mb-2 rounded-[1.15rem] border border-cyan-300/18 bg-[#0a1322] px-3 py-2.5 shadow-[0_10px_26px_rgba(0,0,0,0.18)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-display font-black uppercase tracking-[0.18em] text-cyan-100/80">
+                        Replying to {replyTarget.senderUsername || 'someone'}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-gray-300">
+                        {compactReplyPreviewText(replyTarget.previewText || 'Message', 160)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onCancelReply}
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-400 transition-colors hover:text-white"
+                      aria-label="Cancel reply"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               <MentionSuggestionsPanel
                 open={showMentions || mentionLoading}
                 loading={mentionLoading}
@@ -2122,6 +2353,8 @@ export default function MessagesPage() {
   const [expiringMessageId, setExpiringMessageId] = useState('');
 
   const [draft, setDraft] = useState('');
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [replyHighlightVersion, setReplyHighlightVersion] = useState(0);
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [squadComposerOpen, setSquadComposerOpen] = useState(false);
@@ -2635,6 +2868,8 @@ export default function MessagesPage() {
 
   useEffect(() => {
     setDraft('');
+    setReplyTarget(null);
+    setReplyHighlightVersion(0);
     clearMentions();
     setActionError('');
     setSquadSettingsOpen(false);
@@ -2730,8 +2965,14 @@ export default function MessagesPage() {
     setActionError('');
     setSending(true);
     try {
-      const payload = await sendConversationMessage(conversationId, { content: trimmedDraft });
+      const replyMessageId = replyTarget?.messageId || '';
+      const payload = await sendConversationMessage(conversationId, {
+        content: trimmedDraft,
+        reply_to_message_id: replyMessageId,
+      });
       setDraft('');
+      setReplyTarget(null);
+      setReplyHighlightVersion(0);
       clearMentions();
       if (payload?.message) {
         setMessages((prev) => [...prev, payload.message]);
@@ -2746,6 +2987,20 @@ export default function MessagesPage() {
       setSending(false);
     }
   };
+
+  const handleBeginReply = useCallback((message) => {
+    const nextTarget = buildReplyDraftTarget(message);
+    if (!nextTarget) return;
+    setReplyTarget(nextTarget);
+    setReplyHighlightVersion((prev) => prev + 1);
+    window.requestAnimationFrame(() => {
+      const input = draftInputRef.current;
+      if (!input) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
+    });
+  }, []);
 
   const handleComposerKeyDown = (event) => {
     if (handleMentionKeyDown(event)) return;
@@ -3288,9 +3543,17 @@ export default function MessagesPage() {
           messagesEndRef={messagesEndRef}
           draft={draft}
           draftInputRef={draftInputRef}
+          replyTarget={replyTarget}
+          activeReplyMessageId={replyTarget?.messageId || ''}
+          replyHighlightVersion={replyHighlightVersion}
           onDraftChange={setDraft}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={handleSend}
+          onReply={handleBeginReply}
+          onCancelReply={() => {
+            setReplyTarget(null);
+            setReplyHighlightVersion(0);
+          }}
           mentionUsers={mentionUsers}
           mentionLoading={mentionLoading}
           showMentions={showMentions}

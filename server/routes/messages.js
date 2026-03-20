@@ -7,6 +7,7 @@ const { requireAuth } = require('./auth');
 const { createUserNotification } = require('../lib/notifications');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const {
+  buildReplyTargetPayloadFromRow,
   buildDirectConversationKey,
   buildNotificationBody,
   buildNotificationTitle,
@@ -796,6 +797,22 @@ function getMessageRowById(db, messageId) {
     WHERE m.id = ?
     LIMIT 1
   `).get(messageId);
+}
+
+function getConversationReplyTargetRow(db, conversationId, messageId) {
+  return db.prepare(`
+    SELECT
+      m.*,
+      u.username AS sender_username,
+      u.avatar AS sender_avatar,
+      u.avatar_v AS sender_avatar_v
+    FROM conversation_messages m
+    JOIN users u ON u.id = m.sender_user_id
+    WHERE m.id = ?
+      AND m.conversation_id = ?
+      AND m.deleted_at = ''
+    LIMIT 1
+  `).get(messageId, conversationId);
 }
 
 function getConversationMessages(db, conversationId) {
@@ -1980,6 +1997,17 @@ router.post('/conversations/:id/messages', requireAuth, (req, res) => {
   const senderUser = getUserIdentity(db, req.user.id);
   if (!senderUser) return res.status(404).json({ error: 'Sender not found' });
 
+  if (input.replyToMessageId) {
+    const replyTargetRow = getConversationReplyTargetRow(db, conversationId, input.replyToMessageId);
+    if (!replyTargetRow) {
+      return res.status(400).json({ error: 'Reply target not found' });
+    }
+    const replyTarget = buildReplyTargetPayloadFromRow(replyTargetRow);
+    if (replyTarget) {
+      input.metadata.reply_to = replyTarget;
+    }
+  }
+
   const messageRow = insertConversationMessage(db, conversationId, senderUser, input);
   const recipientIds = getConversationRecipientIds(db, conversationId, req.user.id);
   notifyRecipients(db, conversationId, senderUser, recipientIds, input);
@@ -2014,6 +2042,16 @@ router.post('/direct/:userId', requireAuth, (req, res) => {
   let message = null;
   const input = normalizeConversationInput(req.body || {});
   if (!input.error) {
+    if (input.replyToMessageId) {
+      const replyTargetRow = getConversationReplyTargetRow(db, conversationId, input.replyToMessageId);
+      if (!replyTargetRow) {
+        return res.status(400).json({ error: 'Reply target not found' });
+      }
+      const replyTarget = buildReplyTargetPayloadFromRow(replyTargetRow);
+      if (replyTarget) {
+        input.metadata.reply_to = replyTarget;
+      }
+    }
     const messageRow = insertConversationMessage(db, conversationId, senderUser, input);
     notifyRecipients(db, conversationId, senderUser, [targetUserId], input);
     message = normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' });
