@@ -18,6 +18,18 @@ function addHours(date, hours) {
   return new Date(base.getTime() + (Math.max(0, Number(hours) || 0) * 3600000));
 }
 
+function normalizeTimestamp(value) {
+  return String(value || '').trim();
+}
+
+function getLatestTimestamp(...values) {
+  return values
+    .map((value) => normalizeTimestamp(value))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+    .pop() || '';
+}
+
 function normalizeText(value, max = 240) {
   return String(value || '')
     .replace(/\r\n?/g, '\n')
@@ -853,7 +865,7 @@ function getStoryItemsForUser(db, user) {
 
 function getHighlightUsers(db, viewerUserId) {
   return db.prepare(`
-    SELECT id, username, avatar, avatar_v, playing_status
+    SELECT id, username, avatar, avatar_v, playing_status, updated_at
     FROM users
     WHERE id = ?
        OR id IN (
@@ -877,7 +889,7 @@ function getInboxHighlights(db, viewerUserId) {
       avatar: row.avatar || '',
       avatar_v: row.avatar_v || 0,
       playing_status: row.playing_status || '',
-      updated_at: '',
+      updated_at: row.updated_at || '',
     }));
 
   const circles = [];
@@ -885,7 +897,9 @@ function getInboxHighlights(db, viewerUserId) {
   for (const user of users) {
     const note = getEffectiveNote(db, user);
     const stories = getStoryItemsForUser(db, user);
-    const lastActivityAt = stories[stories.length - 1]?.created_at || note?.created_at || '';
+    const lastStoryAt = stories[stories.length - 1]?.created_at || '';
+    const lastNoteAt = getLatestTimestamp(note?.updated_at, note?.created_at);
+    const lastActivityAt = getLatestTimestamp(lastStoryAt, lastNoteAt);
     const isSelf = String(user.id || '') === String(viewerUserId || '');
     if (!isSelf && !note && stories.length === 0) continue;
     circles.push({
@@ -901,6 +915,15 @@ function getInboxHighlights(db, viewerUserId) {
       is_self: isSelf,
     });
   }
+
+  circles.sort((a, b) => {
+    if (Boolean(a?.is_self) !== Boolean(b?.is_self)) {
+      return a?.is_self ? -1 : 1;
+    }
+    const activityDiff = String(b?.last_activity_at || '').localeCompare(String(a?.last_activity_at || ''));
+    if (activityDiff !== 0) return activityDiff;
+    return String(a?.user?.username || '').localeCompare(String(b?.user?.username || ''), undefined, { sensitivity: 'base' });
+  });
 
   const me = circles.find((circle) => circle.is_self) || null;
   return {
