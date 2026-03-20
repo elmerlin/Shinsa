@@ -22,6 +22,7 @@ import {
   searchConversationMentions,
   setMessageConversationReaction,
   sendMessageConversationStomp,
+  sendMessageConversationNudge,
   sendConversationMessage,
   pinMessageConversation,
 } from '../utils/api';
@@ -1091,6 +1092,9 @@ function getMessageLabel(message) {
   if (message.message_type === 'stomp') {
     return 'Stomp';
   }
+  if (message.message_type === 'nudge') {
+    return 'Nudge';
+  }
   return '';
 }
 
@@ -2083,6 +2087,39 @@ function MessageBubble({
     }, 210);
   };
 
+  if (message?.message_type === 'nudge') {
+    const nudgeSenderName = message?.sender?.username || 'Someone';
+    return (
+      <div className="flex w-full flex-col items-center py-2">
+        <div
+          className="group relative flex items-center gap-3 rounded-2xl border border-purple-400/25 bg-gradient-to-r from-purple-500/8 via-fuchsia-400/12 to-purple-500/8 px-5 py-3 shadow-[0_4px_24px_rgba(168,85,247,0.08)] transition-all duration-500 hover:border-purple-400/40 hover:shadow-[0_4px_32px_rgba(168,85,247,0.18)]"
+          style={{ animation: 'nudge-shake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both' }}
+        >
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+            <span
+              className="text-2xl drop-shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+              style={{ animation: 'nudge-buzz 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both' }}
+            >
+              📳
+            </span>
+            <span
+              className="pointer-events-none absolute inset-0 rounded-full bg-purple-400/20"
+              style={{ animation: 'nudge-ring 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both' }}
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-display font-black text-purple-100/90">
+              <span className="text-purple-300">{nudgeSenderName}</span>
+              {' '}
+              <span className="text-gray-300">{message.content || 'sent a nudge!'}</span>
+            </p>
+          </div>
+        </div>
+        <p className="mt-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
+      </div>
+    );
+  }
+
   if (message?.message_type === 'stomp') {
     const stompSenderName = message?.sender?.username || 'Someone';
     return (
@@ -2674,6 +2711,8 @@ function ConversationView({
   availableReactions,
   onReact,
   readReceipts = [],
+  onNudge,
+  nudging = false,
 }) {
   const isSquad = activeConversation?.kind === 'squad';
   const headerTitle = isSquad
@@ -2764,6 +2803,19 @@ function ConversationView({
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onNudge}
+              disabled={nudging}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-black/30 text-gray-400 transition-colors hover:border-purple-400/30 hover:bg-purple-500/10 hover:text-purple-300 disabled:opacity-50"
+              aria-label="Nudge"
+              title="Nudge"
+              style={nudging ? { animation: 'nudge-shake 0.4s ease both' } : undefined}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-[1.125rem] w-[1.125rem]">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+              </svg>
+            </button>
             <button
               type="button"
               onClick={onPinConversation}
@@ -2965,6 +3017,7 @@ export default function MessagesPage() {
   const draftInputRef = useRef(null);
   const lastAutoScrollKeyRef = useRef('');
   const initialConversationScrollRef = useRef('');
+  const lastSeenNudgeIdRef = useRef('');
   const chartKeyMapRef = useRef(null);
   const chartKeyMapPromiseRef = useRef(null);
 
@@ -3719,6 +3772,35 @@ export default function MessagesPage() {
     });
   }, [messages, conversationId]);
 
+  // Detect new nudge messages and trigger the shake + haptic effect
+  useEffect(() => {
+    if (!messages.length || !conversationId) return;
+    const nudges = messages.filter((m) => m.message_type === 'nudge' && !m.is_own);
+    if (nudges.length === 0) {
+      lastSeenNudgeIdRef.current = '';
+      return;
+    }
+    const latestNudge = nudges[nudges.length - 1];
+    if (latestNudge.id === lastSeenNudgeIdRef.current) return;
+    const isFirstLoad = !lastSeenNudgeIdRef.current;
+    lastSeenNudgeIdRef.current = latestNudge.id;
+    // Trigger effect — on first load (experience on join) or when a new nudge arrives
+    const delay = isFirstLoad ? 600 : 100;
+    const timer = setTimeout(() => {
+      const viewport = messagesViewportRef.current;
+      if (viewport) {
+        viewport.style.animation = 'none';
+        viewport.offsetHeight;
+        viewport.style.animation = 'nudge-viewport-shake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both';
+        setTimeout(() => { viewport.style.animation = ''; }, 700);
+      }
+      if (navigator.vibrate) {
+        navigator.vibrate([50, 30, 80, 30, 50, 30, 40, 20, 30]);
+      }
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [messages, conversationId]);
+
   const handleSend = async () => {
     if (!conversationId || sending) return;
     const trimmedDraft = draft.trim();
@@ -3751,6 +3833,41 @@ export default function MessagesPage() {
       setSending(false);
     }
   };
+
+  const [nudging, setNudging] = useState(false);
+  const handleNudge = async () => {
+    if (!conversationId || nudging || sending) return;
+    setNudging(true);
+    setActionError('');
+    try {
+      const payload = await sendMessageConversationNudge(conversationId);
+      if (payload?.message) {
+        setMessages((prev) => [...prev, payload.message]);
+      }
+      if (payload?.conversation) {
+        setActiveConversation(payload.conversation);
+      }
+      loadConversations();
+      triggerNudgeEffect();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to nudge.');
+    } finally {
+      setNudging(false);
+    }
+  };
+
+  const triggerNudgeEffect = useCallback(() => {
+    const viewport = messagesViewportRef.current;
+    if (viewport) {
+      viewport.style.animation = 'none';
+      viewport.offsetHeight;
+      viewport.style.animation = 'nudge-viewport-shake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both';
+      setTimeout(() => { viewport.style.animation = ''; }, 700);
+    }
+    if (navigator.vibrate) {
+      navigator.vibrate([50, 30, 80, 30, 50, 30, 40, 20, 30]);
+    }
+  }, []);
 
   const handleBeginReply = useCallback((message) => {
     const nextTarget = buildReplyDraftTarget(message);
@@ -4372,6 +4489,8 @@ export default function MessagesPage() {
           availableReactions={quickReactions}
           onReact={handleReactToMessage}
           readReceipts={readReceipts}
+          onNudge={handleNudge}
+          nudging={nudging}
         />
       ) : (
         <InboxView

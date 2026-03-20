@@ -2299,6 +2299,58 @@ router.post('/conversations/:id/stomp', requireAuth, (req, res) => {
   });
 });
 
+router.post('/conversations/:id/nudge', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const senderUser = getUserIdentity(db, req.user.id);
+  if (!senderUser) return res.status(404).json({ error: 'Sender not found' });
+
+  const NUDGE_FLAVORS = [
+    'sent a nudge! 💥',
+    'nudged the chat! 🔔',
+    'wants your attention! 👋',
+    'is buzzing you! ⚡',
+    'shook the conversation! 🫨',
+  ];
+  const nudgeText = NUDGE_FLAVORS[Math.floor(Math.random() * NUDGE_FLAVORS.length)];
+
+  const nudgeInput = {
+    messageType: 'nudge',
+    content: nudgeText,
+    metadata: { nudge: { sender_user_id: req.user.id } },
+    replyToMessageId: '',
+  };
+
+  const messageRow = insertConversationMessage(db, conversationId, senderUser, nudgeInput);
+  const recipientIds = getConversationRecipientIds(db, conversationId, req.user.id);
+  for (const recipientId of recipientIds) {
+    createUserNotification(
+      db,
+      recipientId,
+      'message_nudge',
+      `${senderUser.username || 'Someone'} nudged you`,
+      'Open the conversation to feel it!',
+      `/messages/${conversationId}`
+    );
+  }
+
+  markConversationRead(db, conversationId, req.user.id);
+  const conversationRow = getConversationRowForUser(db, conversationId, req.user.id);
+  const conversation = normalizeConversationRow(conversationRow);
+  if (conversation) conversation.unread_count = 0;
+
+  res.status(201).json({
+    success: true,
+    conversation,
+    message: normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' }),
+  });
+});
+
 router.post('/conversations/:id/messages', requireAuth, (req, res) => {
   const db = getDb();
   const conversationId = String(req.params.id || '').trim();

@@ -657,6 +657,9 @@ export const pinMessageConversation = (conversationId, pinned) => request(`/mess
 export const sendMessageConversationStomp = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/stomp`, {
   method: 'POST',
 });
+export const sendMessageConversationNudge = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/nudge`, {
+  method: 'POST',
+});
 export const setMessageConversationReaction = (conversationId, messageId, reaction) => request(
   `/messages/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
   {
