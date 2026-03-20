@@ -362,6 +362,33 @@ function isFollowingOrSelf(db, viewerUserId, targetUserId) {
   `).get(viewer, target);
 }
 
+function hasDirectConversationAccess(db, viewerUserId, targetUserId) {
+  const viewer = String(viewerUserId || '').trim();
+  const target = String(targetUserId || '').trim();
+  if (!viewer || !target || viewer === target) return false;
+  const directKey = buildDirectConversationKey(viewer, target);
+  if (!directKey) return false;
+  return !!db.prepare(`
+    SELECT 1
+    FROM conversations c
+    JOIN conversation_members viewer_member
+      ON viewer_member.conversation_id = c.id
+     AND viewer_member.user_id = ?
+     AND viewer_member.is_hidden = 0
+    JOIN conversation_members target_member
+      ON target_member.conversation_id = c.id
+     AND target_member.user_id = ?
+     AND target_member.is_hidden = 0
+    WHERE c.direct_key = ?
+    LIMIT 1
+  `).get(viewer, target, directKey);
+}
+
+function canAccessSharedStory(db, viewerUserId, ownerUserId) {
+  return isFollowingOrSelf(db, viewerUserId, ownerUserId)
+    || hasDirectConversationAccess(db, viewerUserId, ownerUserId);
+}
+
 function getStoryBundleForUser(db, userId) {
   const user = getHighlightUserRow(db, userId);
   if (!user) return null;
@@ -1262,6 +1289,38 @@ router.get('/highlights/:userId/story', requireAuth, (req, res) => {
       engagement: buildStoryEngagementPayload(db, targetUserId, story.id, req.user.id),
     })),
     is_owner: String(req.user.id || '').trim() === targetUserId,
+  });
+});
+
+router.get('/highlights/:userId/story/:storyId/shared', requireAuth, (req, res) => {
+  const db = getDb();
+  const ownerUserId = String(req.params.userId || '').trim();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!ownerUserId || !storyId) return res.status(400).json({ error: 'Story is required' });
+  if (!canAccessSharedStory(db, req.user.id, ownerUserId)) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const match = findStoryForUser(db, ownerUserId, storyId);
+  if (!match?.story) {
+    return res.status(404).json({ error: 'Story not found' });
+  }
+
+  const interactive = isFollowingOrSelf(db, req.user.id, ownerUserId);
+  res.json({
+    user: normalizeStoryUser(match.user, 72),
+    story: {
+      ...match.story,
+      engagement: interactive
+        ? buildStoryEngagementPayload(db, ownerUserId, storyId, req.user.id)
+        : (match.story.engagement || {
+          pump_count: 0,
+          comment_count: 0,
+          user_pumped: false,
+          preview_comments: [],
+        }),
+    },
+    readonly: !interactive,
   });
 });
 
