@@ -32,7 +32,7 @@ import React from 'react';
 //   decorOverlay     – optional JSX overlay rendered inside the viewport
 // ---------------------------------------------------------------------------
 
-export const THEME_KEYS = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq', 'nxa'];
+export const THEME_KEYS = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq', 'nxa', 'kakao', 'line'];
 
 export const THEME_META = {
   '': { label: 'Default', description: 'Shinsa dark theme', preview: 'bg-piu-card border-piu-border/60' },
@@ -47,6 +47,8 @@ export const THEME_META = {
   discord: { label: 'Discord', description: 'Server vibes', preview: 'bg-[#313338] border-[#5865f2]' },
   qq: { label: 'QQ', description: 'Tencent QQ', preview: 'bg-[#edf2fa] border-[#12b7f5]' },
   nxa: { label: 'NXA', description: 'Pump It Up NX Absolute', preview: 'bg-[#0a0e14] border-[#88ccff]/50' },
+  kakao: { label: 'KakaoTalk', description: '카카오톡', preview: 'bg-[#b2c7d9] border-[#fee500]' },
+  line: { label: 'LINE', description: 'ライン messaging', preview: 'bg-[#7b96a8] border-[#06c755]' },
 };
 
 const BASE = {
@@ -402,7 +404,59 @@ const nxa = buildTheme({
   ),
 });
 
-const THEMES = { '': BASE, cli, aim, yahoo, msn, skype, winamp, icq, wechat, discord, qq, nxa };
+// ── KakaoTalk ─────────────────────────────────────────────────────────────
+const kakao = buildTheme({
+  fontFamily: "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif",
+  viewportBg: 'bg-[#b2c7d9]',
+  viewportStyle: {},
+  headerBg: 'bg-[#3e4a56]',
+  headerText: 'text-white',
+  headerBorder: 'border-[#343e48]',
+  composerBg: 'bg-[#eff1f2]',
+  composerBorder: 'border-[#d5d8db]',
+  composerInputBg: 'bg-white',
+  composerInputText: 'text-[#1e1e1e] placeholder:text-gray-400',
+  ownBubbleBg: 'bg-[#fee500]',
+  ownBubbleBorder: 'border-[#ebd400]',
+  ownBubbleText: 'text-[#1e1e1e]',
+  otherBubbleBg: 'bg-white',
+  otherBubbleBorder: 'border-[#e5e5e5]',
+  otherBubbleText: 'text-[#1e1e1e]',
+  bubbleRadius: '1rem',
+  senderNameClass: 'text-[11px] font-semibold text-[#333]',
+  showAvatars: true,
+  shadow: '0 1px 2px rgba(0,0,0,0.06)',
+  extraBubbleClass: '',
+});
+
+// ── LINE ──────────────────────────────────────────────────────────────────
+const line = buildTheme({
+  fontFamily: "'Noto Sans KR', 'Helvetica Neue', 'Arial', sans-serif",
+  viewportBg: 'bg-[#7b96a8]',
+  viewportStyle: {
+    backgroundImage: 'linear-gradient(180deg, #7b96a8 0%, #8fa5b5 100%)',
+  },
+  headerBg: 'bg-[#4a5d6b]',
+  headerText: 'text-white',
+  headerBorder: 'border-[#3f505c]',
+  composerBg: 'bg-[#f7f8f9]',
+  composerBorder: 'border-[#dfe3e6]',
+  composerInputBg: 'bg-white',
+  composerInputText: 'text-[#1e1e1e] placeholder:text-gray-400',
+  ownBubbleBg: 'bg-[#06c755]',
+  ownBubbleBorder: 'border-[#05b34c]',
+  ownBubbleText: 'text-white',
+  otherBubbleBg: 'bg-white',
+  otherBubbleBorder: 'border-[#e5e8ea]',
+  otherBubbleText: 'text-[#1e1e1e]',
+  bubbleRadius: '1.1rem',
+  senderNameClass: 'text-[10px] font-semibold text-[#f0f0f0]',
+  showAvatars: true,
+  shadow: '0 1px 3px rgba(0,0,0,0.1)',
+  extraBubbleClass: '',
+});
+
+const THEMES = { '': BASE, cli, aim, yahoo, msn, skype, winamp, icq, wechat, discord, qq, nxa, kakao, line };
 
 export function getTheme(key) {
   return THEMES[String(key || '').trim().toLowerCase()] || BASE;

@@ -1952,7 +1952,7 @@ router.put('/conversations/:id/squad', requireAuth, (req, res) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'theme')) {
-    const VALID_THEMES = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq', 'nxa'];
+    const VALID_THEMES = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq', 'nxa', 'kakao', 'line'];
     const requestedTheme = String(req.body?.theme || '').trim().toLowerCase();
     if (!VALID_THEMES.includes(requestedTheme)) {
       return res.status(400).json({ error: 'Invalid theme' });
@@ -2189,7 +2189,7 @@ router.put('/conversations/:id/theme', requireAuth, (req, res) => {
     }
   }
 
-  const VALID_THEMES = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq', 'nxa'];
+  const VALID_THEMES = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq', 'nxa', 'kakao', 'line'];
   const requestedTheme = String(req.body?.theme || '').trim().toLowerCase();
   if (!VALID_THEMES.includes(requestedTheme)) {
     return res.status(400).json({ error: 'Invalid theme' });
