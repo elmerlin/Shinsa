@@ -1715,7 +1715,7 @@ function MessageBubble({
   const isAttachmentOnly = (hasRichAttachment && !hasContent) || (!hasRichAttachment && suppressRawUrlContent);
   const bubbleClass = isAttachmentOnly
     ? 'w-full max-w-[19.25rem] sm:max-w-[22.5rem]'
-    : `w-fit max-w-[85%] rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
+    : `inline-block max-w-[85%] rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
   const reactionItems = Array.isArray(message?.reactions) ? message.reactions : [];
   const viewerReaction = sanitizeReactionKey(message?.viewer_reaction);
   const trayKeys = normalizeReactionKeys(availableReactions).length > 0
@@ -2082,7 +2082,7 @@ function MessageBubble({
           </div>
         </div>
       ) : null}
-      <div className="relative" style={{ touchAction: 'pan-y' }}>
+      <div className="relative max-w-full" style={{ touchAction: 'pan-y', width: 'fit-content' }}>
         <div
           className={`pointer-events-none absolute left-0 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100 shadow-[0_10px_24px_rgba(34,211,238,0.16)] transition-all duration-200 ${
             replySwipeOffset > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
