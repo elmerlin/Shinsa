@@ -8,6 +8,7 @@ import {
   updateMessageSquadNotifications,
 } from '../utils/api';
 import { parseYouTubeUrl } from '../utils/youtube';
+import { parseGrade } from '../utils/grades';
 import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
 import UserPickerDialog from './UserPickerDialog';
 
@@ -40,6 +41,49 @@ function getRoleLabel(role) {
   if (role === 'creator') return 'Creator';
   if (role === 'moderator') return 'Moderator';
   return 'Member';
+}
+
+function getRank(score) {
+  const s = parseInt(score, 10) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
+  return { label: 'F', color: 'text-gray-600' };
+}
+
+function getGradeColor(grade, score = 0) {
+  const normalized = parseGrade(grade).normalized;
+  if (normalized) {
+    if (normalized.includes('SSS')) return 'text-sky-300';
+    if (normalized.includes('SS')) return 'text-piu-gold';
+    if (normalized.includes('S')) return 'text-amber-400';
+    if (normalized.includes('AAA')) return 'text-piu-silver';
+    if (normalized.includes('AA')) return 'text-piu-bronze';
+    if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
+  }
+  return getRank(score).color;
+}
+
+function getModeBadgeClasses(mode) {
+  if (String(mode || '').trim() === 'Single') {
+    return 'border-red-300/60 bg-gradient-to-b from-red-500 to-red-800 text-white';
+  }
+  if (String(mode || '').trim() === 'Double') {
+    return 'border-emerald-300/60 bg-gradient-to-b from-emerald-500 to-emerald-800 text-white';
+  }
+  return 'border-sky-300/50 bg-gradient-to-b from-sky-500 to-sky-800 text-white';
 }
 
 function getHostLabel(url) {
@@ -123,11 +167,12 @@ function buildSquadResources(messages = []) {
           id: message.id,
           kind: SHARE_KIND_LABELS[linkShare.kind],
           title: linkShare.title || linkShare.songTitle || 'Shared play',
-          subtitle: linkShare.subtitle || [linkShare.mode, Number(linkShare.level) > 0 ? `Level ${linkShare.level}` : ''].filter(Boolean).join(' • '),
-          detail: [
-            Number(linkShare.score) > 0 ? Number(linkShare.score).toLocaleString() : '',
-            String(linkShare.grade || '').trim(),
-          ].filter(Boolean).join(' • '),
+          songTitle: linkShare.songTitle || linkShare.title || '',
+          mode: String(linkShare.mode || '').trim(),
+          level: parseInt(linkShare.level, 10) || 0,
+          score: parseInt(linkShare.score, 10) || 0,
+          grade: String(linkShare.grade || '').trim(),
+          jacketUrl: String(linkShare.jacketUrl || '').trim(),
           senderName: message?.sender?.username || 'Player',
           createdAt: message?.created_at || '',
           linkTarget: {
@@ -613,24 +658,58 @@ export default function SquadSettingsModal({
                 {tab === 'shares' ? (
                   resources.shares.length > 0 ? (
                     <div className="space-y-2">
-                      {resources.shares.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => onOpenLink?.(item.linkTarget)}
-                          className="flex w-full items-start gap-2.5 rounded-xl border border-piu-border/60 bg-piu-card/75 px-2.5 py-2.5 text-left transition-colors hover:border-cyan-300/30"
-                        >
-                          <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2 py-0.5 text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-200">
-                            {item.kind}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-display font-black text-white">{item.title}</p>
-                            {item.subtitle ? <p className="mt-0.5 text-xs text-gray-400">{item.subtitle}</p> : null}
-                            {item.detail ? <p className="mt-0.5 text-xs text-cyan-100">{item.detail}</p> : null}
-                            <p className="mt-0.5 text-[11px] text-gray-500">Shared by {item.senderName}</p>
-                          </div>
-                        </button>
-                      ))}
+                      {resources.shares.map((item) => {
+                        const displayScore = item.score || 0;
+                        const rank = getRank(displayScore);
+                        const parsedGrade = parseGrade(item.grade, rank.label);
+                        const gradeDisplay = parsedGrade.display || rank.label;
+                        const gradeColorClass = getGradeColor(item.grade, displayScore);
+
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => onOpenLink?.(item.linkTarget)}
+                            className="relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-2.5 text-left transition-colors hover:border-cyan-300/30"
+                          >
+                            <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg">
+                              {item.jacketUrl ? (
+                                <img src={item.jacketUrl} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#152238] to-[#090d18]">
+                                  <span className="text-[8px] font-display font-black text-gray-500">PIU</span>
+                                </div>
+                              )}
+                              {item.level > 0 ? (
+                                <span className={`absolute -bottom-0.5 -right-0.5 inline-flex min-w-[18px] items-center justify-center rounded-full border px-0.5 text-[8px] font-display font-black leading-[16px] ${getModeBadgeClasses(item.mode)}`}>
+                                  {item.level}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-1.5 py-px text-[8px] font-display font-black uppercase tracking-[0.14em] text-gray-300">
+                                  {item.kind}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 truncate text-sm font-display font-black text-white">
+                                {item.songTitle || item.title}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-gray-500">Shared by {item.senderName}</p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              {displayScore > 0 ? (
+                                <p className="font-display text-sm font-black text-white">{displayScore.toLocaleString()}</p>
+                              ) : null}
+                              {gradeDisplay ? (
+                                <p className={`font-display text-lg font-black leading-tight ${gradeColorClass} ${parsedGrade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>
+                                  {gradeDisplay}
+                                </p>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
