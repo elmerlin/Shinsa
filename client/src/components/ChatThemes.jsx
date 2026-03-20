@@ -32,7 +32,7 @@ import React from 'react';
 //   decorOverlay     – optional JSX overlay rendered inside the viewport
 // ---------------------------------------------------------------------------
 
-export const THEME_KEYS = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq'];
+export const THEME_KEYS = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq', 'nxa'];
 
 export const THEME_META = {
   '': { label: 'Default', description: 'Shinsa dark theme', preview: 'bg-piu-card border-piu-border/60' },
@@ -46,6 +46,7 @@ export const THEME_META = {
   wechat: { label: 'WeChat', description: 'Weixin messaging', preview: 'bg-[#ededed] border-[#07c160]' },
   discord: { label: 'Discord', description: 'Server vibes', preview: 'bg-[#313338] border-[#5865f2]' },
   qq: { label: 'QQ', description: 'Tencent QQ', preview: 'bg-[#edf2fa] border-[#12b7f5]' },
+  nxa: { label: 'NXA', description: 'Pump It Up NX Absolute', preview: 'bg-[#0a0e14] border-[#88ccff]/50' },
 };
 
 const BASE = {
@@ -358,7 +359,50 @@ const qq = buildTheme({
   extraBubbleClass: '',
 });
 
-const THEMES = { '': BASE, cli, aim, yahoo, msn, skype, winamp, icq, wechat, discord, qq };
+// ── NXA (Pump It Up NX Absolute) ───────────────────────────────────────────
+const nxa = buildTheme({
+  fontFamily: "'Exo 2', 'Rajdhani', 'Share Tech', 'Arial', sans-serif",
+  viewportBg: 'bg-[#0a0e14]',
+  viewportStyle: {
+    backgroundImage: 'radial-gradient(ellipse at 50% 0%, rgba(136,204,255,0.06) 0%, transparent 55%), radial-gradient(ellipse at 50% 100%, rgba(255,204,0,0.03) 0%, transparent 40%)',
+  },
+  headerBg: 'bg-gradient-to-r from-[#0c1018] via-[#0f1a2a] to-[#0c1018]',
+  headerText: 'text-[#88ccff]',
+  headerBorder: 'border-[#88ccff]/20',
+  composerBg: 'bg-[#0c1018]',
+  composerBorder: 'border-[#88ccff]/15',
+  composerInputBg: 'bg-[#080c12]',
+  composerInputText: 'text-[#c8dfef] placeholder:text-[#88ccff]/25',
+  ownBubbleBg: 'bg-[#88ccff]/8',
+  ownBubbleBorder: 'border-[#88ccff]/20',
+  ownBubbleText: 'text-[#d0e8ff]',
+  otherBubbleBg: 'bg-[#ffcc00]/5',
+  otherBubbleBorder: 'border-[#ffcc00]/15',
+  otherBubbleText: 'text-[#e8dcc0]',
+  bubbleRadius: '0.35rem',
+  senderNameClass: 'text-[10px] font-bold uppercase tracking-[0.2em] text-[#ffcc00]/80',
+  showAvatars: true,
+  timestampClass: '',
+  shadow: '0 0 12px rgba(136,204,255,0.06)',
+  extraViewportClass: '',
+  extraBubbleClass: '',
+  decorOverlay: (
+    <>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-24 opacity-30" style={{
+        backgroundImage: 'linear-gradient(to bottom, rgba(136,204,255,0.08), transparent)',
+      }} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-16 opacity-20" style={{
+        backgroundImage: 'linear-gradient(to top, rgba(255,204,0,0.06), transparent)',
+      }} />
+      <div className="pointer-events-none absolute inset-0 z-[1] opacity-[0.015]" style={{
+        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(136,204,255,0.2) 2px, rgba(136,204,255,0.2) 3px)',
+        backgroundSize: '100% 4px',
+      }} />
+    </>
+  ),
+});
+
+const THEMES = { '': BASE, cli, aim, yahoo, msn, skype, winamp, icq, wechat, discord, qq, nxa };
 
 export function getTheme(key) {
   return THEMES[String(key || '').trim().toLowerCase()] || BASE;
