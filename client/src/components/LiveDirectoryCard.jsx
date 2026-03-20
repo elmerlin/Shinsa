@@ -105,150 +105,114 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
   return (
     <Link
       to={session.live_url || `/live/${session.id}`}
-      className={`group block overflow-hidden border p-4 transition-all hover:-translate-y-0.5 ${outerRadiusClass} ${cardClass} ${className}`.trim()}
+      className={`group block overflow-hidden border p-3 transition-all hover:-translate-y-0.5 ${outerRadiusClass} ${cardClass} ${className}`.trim()}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2.5">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-emerald-200">
-              Live now
-            </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
             {isHopSession ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-yellow-400/30 bg-yellow-500/10 px-2 py-1 text-[10px] font-display font-bold uppercase tracking-[0.24em] text-yellow-100">
-                <HourOfPowerLogo className="h-5 w-4 rounded-md" imageClassName="p-0" />
-                Hour of Power
+              <span className="inline-flex items-center gap-1 rounded-full border border-yellow-400/25 bg-yellow-500/8 px-1.5 py-0.5 text-[9px] font-display font-bold uppercase tracking-[0.2em] text-yellow-100">
+                <HourOfPowerLogo className="h-4 w-3 rounded-sm" imageClassName="p-0" />
+                HoP
               </span>
             ) : null}
             {item.is_following ? (
-              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${followingBadgeClass}`}>
+              <span className={`rounded-full border px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide ${followingBadgeClass}`}>
                 Following
               </span>
             ) : null}
             {streamHost ? (
-              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide ${streamHostBadgeClass}`}>
+              <span className={`rounded-full border px-2 py-0.5 text-[9px] font-display font-bold uppercase tracking-wide ${streamHostBadgeClass}`}>
                 {streamHost}
               </span>
             ) : null}
           </div>
-          <h3 className={`mt-3 truncate font-display text-xl font-black text-white transition-colors ${hoverTitleClass}`}>
+          <h3 className={`mt-1.5 truncate font-display text-[15px] font-black leading-tight text-white transition-colors ${hoverTitleClass}`}>
             {session.title || `${host.username || 'Player'} live`}
           </h3>
-          <div className="mt-2 flex min-w-0 items-center gap-3">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden border border-piu-border bg-piu-dark text-sm font-display font-bold text-white ${avatarRadiusClass}`}>
-              {host.avatar ? (
-                <img src={host.avatar} alt={host.username || 'Host'} className="h-full w-full object-cover" />
-              ) : (
-                <span>{String(host.username || 'P').trim().charAt(0).toUpperCase() || 'P'}</span>
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-display font-bold text-white">
-                {host.nationality ? <span className="mr-1">{getCountryFlag(host.nationality)}</span> : null}
-                {host.username || 'Player'}
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
-                {host.skill_title ? (
-                  <span className={`rounded-full border px-2 py-0.5 font-display font-bold uppercase tracking-wide ${skillBadgeClass}`}>
-                    {host.skill_title}
-                  </span>
-                ) : null}
-                <span>{formatSessionAge(session.started_at)}</span>
-                <span>Peak {session.viewer_peak || 0}</span>
-              </div>
-            </div>
-          </div>
         </div>
-
-        <div className={`shrink-0 border border-piu-border/70 px-3 py-2 text-right ${panelRadiusClass} ${viewerPanelClass}`}>
-          <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Watching</p>
-          <p className={`text-xl font-display font-black ${viewerValueClass}`}>{session.viewer_count || 0}</p>
+        <div className="shrink-0 text-right">
+          <p className={`text-lg font-display font-black leading-none ${viewerValueClass}`}>{session.viewer_count || 0}</p>
+          <p className="mt-0.5 text-[9px] font-display uppercase tracking-wide text-gray-500">watching</p>
         </div>
       </div>
 
-      <div className={`mt-4 grid gap-3 ${compact ? 'md:grid-cols-[1fr]' : 'md:grid-cols-[minmax(0,1fr)_220px]'}`}>
-        <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
-          <p className="text-[10px] font-display uppercase tracking-[0.22em] text-gray-500">Now Playing</p>
-          {lastPlay ? (
-            <div className="mt-2 flex items-center gap-3">
-              <PiuChartJacket title={lastPlay.song_title} mode={lastPlay.mode} level={lastPlay.level} jacketUrl={lastPlay.background_url} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-display font-bold text-white">{lastPlay.song_title}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
-                  <span>{modeShort(lastPlay.mode)}{lastPlay.level}</span>
-                  <span className={`font-display font-bold ${gradeClass}`} data-grade={displayLastPlayGrade}>
-                    {displayLastPlayGrade}
-                  </span>
-                  <span>{lastPlayScore.toLocaleString()}</span>
-                  {isHopSession && lastPlay?.hop_rating_points_earned > 0 ? (
-                    <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-display font-bold text-emerald-200">
-                      +{lastPlay.hop_rating_points_earned} HoP
-                    </span>
-                  ) : null}
-                  {isHopSession && lastPlay?.hop_status_label ? (
-                    <span className="rounded-full border border-yellow-400/25 bg-yellow-500/10 px-2 py-0.5 font-display font-bold text-yellow-100">
-                      {lastPlay.hop_status_label}
-                    </span>
-                  ) : null}
-                  {lastPlay.pumbility_gain > 0 ? (
-                    <span className="rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 font-display font-bold text-emerald-200">
-                      +{lastPlay.pumbility_gain} p
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
+      <div className="mt-2.5 flex min-w-0 items-center gap-2.5">
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden border border-piu-border bg-piu-dark text-xs font-display font-bold text-white ${avatarRadiusClass}`}>
+          {host.avatar ? (
+            <img src={host.avatar} alt={host.username || 'Host'} className="h-full w-full object-cover" />
           ) : (
-            <p className="mt-2 text-sm text-gray-500">Waiting for the first chart to land.</p>
+            <span>{String(host.username || 'P').trim().charAt(0).toUpperCase() || 'P'}</span>
           )}
         </div>
-
-        {!compact ? (
-          <div className="grid grid-cols-2 gap-3">
-            {isHopSession ? (
-              <>
-                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
-                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">HoP Total</p>
-                  <p className="mt-2 text-lg font-display font-black text-white">{hop?.total_rating_points || 0}</p>
-                  <p className="text-[11px] text-gray-400">{hop?.counted_clear_count || 0} clears</p>
-                </div>
-                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
-                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Status</p>
-                  <p className="mt-2 text-sm font-display font-black text-white">{getHopPhaseLabel(hop)}</p>
-                  <p className="text-[11px] text-gray-400">
-                    Avg {Number(hop?.average_rating_points || 0).toFixed(1)} pts • Lv.{Number(hop?.average_level || 0).toFixed(1)}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
-                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Requests</p>
-                  <p className="mt-2 text-lg font-display font-black text-white">{requestCounts.open || 0}</p>
-                  <p className="text-[11px] text-gray-400">open • {requestCounts.queued || 0} queued</p>
-                </div>
-                <div className={`border border-piu-border/80 p-3 ${panelRadiusClass} ${surfaceClass}`}>
-                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Vote</p>
-                  {activeVote ? (
-                    <>
-                      <p className="mt-2 text-sm font-display font-black text-white">
-                        {activeVote.mode_filter} Lv.{activeVote.min_level}{activeVote.max_level !== activeVote.min_level ? `-${activeVote.max_level}` : ''}
-                      </p>
-                      <p className="text-[11px] text-gray-400">
-                        {activeVote.status === 'active' ? `${activeVote.total_votes || 0} ballots live` : 'Vote locked'}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="mt-2 text-lg font-display font-black text-white">Idle</p>
-                      <p className="text-[11px] text-gray-400">No vote running</p>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-display font-bold text-white">
+            {host.nationality ? <span className="mr-1">{getCountryFlag(host.nationality)}</span> : null}
+            {host.username || 'Player'}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-gray-400">
+            {host.skill_title ? (
+              <span className={`rounded-full border px-1.5 py-px font-display font-bold uppercase tracking-wide ${skillBadgeClass}`}>
+                {host.skill_title}
+              </span>
+            ) : null}
+            <span>{formatSessionAge(session.started_at)}</span>
           </div>
-        ) : null}
+        </div>
       </div>
+
+      <div className={`mt-2.5 ${panelRadiusClass} border border-piu-border/80 p-2.5 ${surfaceClass}`}>
+        {lastPlay ? (
+          <div className="flex items-center gap-2.5">
+            <PiuChartJacket title={lastPlay.song_title} mode={lastPlay.mode} level={lastPlay.level} jacketUrl={lastPlay.background_url} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-display font-bold text-white">{lastPlay.song_title}</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-gray-400">
+                <span>{modeShort(lastPlay.mode)}{lastPlay.level}</span>
+                <span className={`font-display font-bold ${gradeClass}`} data-grade={displayLastPlayGrade}>
+                  {displayLastPlayGrade}
+                </span>
+                <span>{lastPlayScore.toLocaleString()}</span>
+                {isHopSession && lastPlay?.hop_rating_points_earned > 0 ? (
+                  <span className="font-display font-bold text-emerald-300">
+                    +{lastPlay.hop_rating_points_earned}
+                  </span>
+                ) : null}
+                {lastPlay.pumbility_gain > 0 ? (
+                  <span className="font-display font-bold text-emerald-300">+{lastPlay.pumbility_gain}p</span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[11px] text-gray-500">Waiting for the first chart...</p>
+        )}
+      </div>
+
+      {!compact ? (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-gray-400">
+          {isHopSession ? (
+            <>
+              <span><span className="font-display font-bold text-white">{hop?.total_rating_points || 0}</span> HoP pts</span>
+              <span>{hop?.counted_clear_count || 0} clears</span>
+              <span className="font-display font-bold text-gray-300">{getHopPhaseLabel(hop)}</span>
+            </>
+          ) : (
+            <>
+              {(requestCounts.open || 0) > 0 || (requestCounts.queued || 0) > 0 ? (
+                <span><span className="font-display font-bold text-white">{requestCounts.open || 0}</span> requests{requestCounts.queued > 0 ? ` • ${requestCounts.queued} queued` : ''}</span>
+              ) : null}
+              {activeVote ? (
+                <span className="font-display font-bold text-gray-300">
+                  Vote: {activeVote.mode_filter} Lv.{activeVote.min_level}–{activeVote.max_level}
+                  {activeVote.status === 'active' ? ` (${activeVote.total_votes || 0})` : ' locked'}
+                </span>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
     </Link>
   );
 }

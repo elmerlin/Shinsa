@@ -2097,18 +2097,13 @@ function YoutubeTimestampsCard({
   );
 }
 
-function DirectorySection({ title, subtitle, sessions }) {
+function DirectorySection({ title, sessions }) {
   if (!Array.isArray(sessions) || sessions.length === 0) return null;
 
   return (
     <section>
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-base font-display font-semibold text-white">{title}</p>
-          {subtitle ? <p className="mt-1 text-sm text-gray-400">{subtitle}</p> : null}
-        </div>
-      </div>
-      <div className="grid gap-4 xl:grid-cols-2">
+      <p className="mb-3 text-sm font-display font-bold uppercase tracking-[0.18em] text-gray-400">{title}</p>
+      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
         {sessions.map((item) => (
           <LiveDirectoryCard key={item?.session?.id || item?.session?.host_user_id || 'live-directory'} item={item} />
         ))}
@@ -5965,80 +5960,79 @@ export default function LivePage() {
 
   if (!live && !sessionId) {
     return (
-      <div className="mx-auto max-w-[1280px] space-y-5 px-4 py-6 sm:px-8 xl:px-10">
-        {error ? <p className="mb-4 text-sm text-red-300">{error}</p> : null}
-        <div className="grid gap-4 xl:grid-cols-[minmax(340px,0.85fr)_minmax(0,1.15fr)]">
-          <CreateSessionCard
-            title={createTitle}
-            streamUrl={createStreamUrl}
-            youtubeConnection={youtubeConnection}
-            youtubeBroadcasts={youtubeBroadcasts}
-            youtubeLoading={youtubeStatusLoading || youtubeBroadcastsLoading}
-            selectedBroadcastId={createYoutubeBroadcastId}
-            sessionType={createSessionType}
-            statusText={createStatusText}
-            isUnlisted={createIsUnlisted}
-            creating={creating}
-            onConnectYoutube={handleConnectYoutube}
-            onRefreshYoutube={loadYoutubeBroadcastOptions}
-            onSelectBroadcast={setCreateYoutubeBroadcastId}
-            onSessionTypeChange={handleCreateSessionTypeChange}
-            onTitleChange={setCreateTitle}
-            onStreamUrlChange={setCreateStreamUrl}
-            onStatusTextChange={setCreateStatusText}
-            onUnlistedChange={setCreateIsUnlisted}
-            onSubmit={handleCreate}
-          />
+      <div className="mx-auto max-w-[1600px] space-y-4 px-4 py-4 sm:px-8 xl:px-10 2xl:px-14">
+        {error ? <p className="mb-3 text-sm text-red-300">{error}</p> : null}
 
-          <div className="rounded-xl border border-piu-border/60 bg-piu-card/95 p-5 shadow-[0_8px_24px_rgba(0,0,0,0.2)]">
-            <p className="text-sm font-display font-semibold text-gray-300">Live directory</p>
-            <h2 className="mt-2 text-2xl font-display font-black text-white">
-              {directorySessions.length > 0 ? `${directorySessions.length} room${directorySessions.length === 1 ? '' : 's'} live right now` : 'No live rooms at the moment'}
-            </h2>
-            <p className="mt-2 text-sm text-gray-400">
-              Followed players float to the top, viewer counts stay fresh, and each card shows the latest chart, requests, and vote state before you join.
-            </p>
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/70 p-3">
-                <p className="text-[11px] font-display font-semibold text-gray-400">Following live</p>
-                <p className="mt-1 text-2xl font-display font-black text-rose-100">{followedDirectorySessions.length}</p>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+          <div className="xl:min-w-[380px] xl:max-w-[440px] xl:shrink-0">
+            <CreateSessionCard
+              title={createTitle}
+              streamUrl={createStreamUrl}
+              youtubeConnection={youtubeConnection}
+              youtubeBroadcasts={youtubeBroadcasts}
+              youtubeLoading={youtubeStatusLoading || youtubeBroadcastsLoading}
+              selectedBroadcastId={createYoutubeBroadcastId}
+              sessionType={createSessionType}
+              statusText={createStatusText}
+              isUnlisted={createIsUnlisted}
+              creating={creating}
+              onConnectYoutube={handleConnectYoutube}
+              onRefreshYoutube={loadYoutubeBroadcastOptions}
+              onSelectBroadcast={setCreateYoutubeBroadcastId}
+              onSessionTypeChange={handleCreateSessionTypeChange}
+              onTitleChange={setCreateTitle}
+              onStreamUrlChange={setCreateStreamUrl}
+              onStatusTextChange={setCreateStatusText}
+              onUnlistedChange={setCreateIsUnlisted}
+              onSubmit={handleCreate}
+            />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-piu-border/60 bg-piu-card/95 px-5 py-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.15)]">
+              <h2 className="mr-auto text-lg font-display font-black text-white">
+                {directorySessions.length > 0
+                  ? `${directorySessions.length} room${directorySessions.length === 1 ? '' : 's'} live`
+                  : 'No rooms live'}
+              </h2>
+              <div className="flex items-center gap-4 text-[11px] font-display font-bold uppercase tracking-[0.16em]">
+                {followedDirectorySessions.length > 0 ? (
+                  <span className="flex items-center gap-1.5 text-rose-200">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-400" />
+                    {followedDirectorySessions.length} following
+                  </span>
+                ) : null}
+                <span className="text-gray-300">
+                  {directorySessions.reduce((sum, item) => sum + (parseInt(item?.session?.viewer_count, 10) || 0), 0)} viewers
+                </span>
               </div>
-              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/70 p-3">
-                <p className="text-[11px] font-display font-semibold text-gray-400">Open sessions</p>
-                <p className="mt-1 text-2xl font-display font-black text-white">{directorySessions.length}</p>
+              {directoryLoading ? <span className="text-[11px] text-gray-500">Refreshing...</span> : null}
+              {directoryError ? <span className="text-[11px] text-red-300">{directoryError}</span> : null}
+            </div>
+
+            {followedDirectorySessions.length > 0 ? (
+              <div className="mt-4">
+                <DirectorySection title="Following" sessions={followedDirectorySessions} />
               </div>
-              <div className="rounded-lg border border-piu-border/60 bg-piu-dark/70 p-3">
-                <p className="text-[11px] font-display font-semibold text-gray-400">Viewer accounts</p>
-                <p className="mt-1 text-2xl font-display font-black text-amber-100">
-                  {directorySessions.reduce((sum, item) => sum + (parseInt(item?.session?.viewer_count, 10) || 0), 0)}
+            ) : null}
+
+            <div className="mt-4">
+              <DirectorySection
+                title={followedDirectorySessions.length > 0 ? 'All Rooms' : 'Live Now'}
+                sessions={followedDirectorySessions.length > 0 ? otherDirectorySessions : directorySessions}
+              />
+            </div>
+
+            {!directoryLoading && directorySessions.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-piu-border/60 bg-piu-card/95 px-5 py-6 text-center">
+                <p className="text-base font-display font-black text-white">Be the first room on the board</p>
+                <p className="mt-1.5 text-sm text-gray-400">
+                  Start a session and your followers get a live notification.
                 </p>
               </div>
-            </div>
-            {directoryLoading ? <p className="mt-4 text-sm text-gray-500">Refreshing live rooms...</p> : null}
-            {directoryError ? <p className="mt-4 text-sm text-red-300">{directoryError}</p> : null}
+            ) : null}
           </div>
         </div>
-
-        <DirectorySection
-          title="Following Live"
-          subtitle="Players you already follow are surfaced first so you can jump straight into rooms you care about."
-          sessions={followedDirectorySessions}
-        />
-
-        <DirectorySection
-          title={followedDirectorySessions.length > 0 ? 'More Live Rooms' : 'Live Now'}
-          subtitle="Browse every active Shinsa Live room, sorted by follow state and audience."
-          sessions={followedDirectorySessions.length > 0 ? otherDirectorySessions : directorySessions}
-        />
-
-        {!directoryLoading && directorySessions.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-card/95 px-5 py-8 text-center">
-            <p className="text-lg font-display font-black text-white">Be the first room on the board.</p>
-            <p className="mt-2 text-sm text-gray-400">
-              Start a Shinsa Live session and your followers will get a go-live notification with a direct link into the room.
-            </p>
-          </div>
-        ) : null}
       </div>
     );
   }
