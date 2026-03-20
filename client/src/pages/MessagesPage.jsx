@@ -2166,18 +2166,18 @@ function MessageBubble({
           </div>
         </div>
       ) : null}
-      {trayOpen ? (
-        <div
-          className={`pointer-events-none absolute top-1/2 z-20 hidden -translate-y-1/2 sm:flex ${
-            isOwn ? 'right-full mr-2 justify-end' : 'left-full ml-2 justify-start'
-          }`}
-        >
-          <div className="pointer-events-auto">
-            {trayBody}
-          </div>
-        </div>
-      ) : null}
       <div className="relative max-w-[85%]" style={{ touchAction: 'pan-y', width: 'fit-content' }}>
+        {trayOpen ? (
+          <div
+            className={`pointer-events-none absolute top-1/2 z-20 hidden -translate-y-1/2 sm:flex ${
+              isOwn ? 'right-full mr-2 justify-end' : 'left-full ml-2 justify-start'
+            }`}
+          >
+            <div className="pointer-events-auto">
+              {trayBody}
+            </div>
+          </div>
+        ) : null}
         <div
           className={`pointer-events-none absolute left-0 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100 shadow-[0_10px_24px_rgba(34,211,238,0.16)] transition-all duration-200 ${
             replySwipeOffset > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
