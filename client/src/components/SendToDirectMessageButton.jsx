@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getOrCreateDirectConversation } from '../utils/api';
+import { sendDirectPayloadToRecipients } from '../utils/directMessageDelivery';
 import ActionIconButton from './ActionIconButton';
 import UserPickerDialog from './UserPickerDialog';
 
@@ -16,9 +16,10 @@ export default function SendToDirectMessageButton({
   tone = 'cyan',
   variant = 'button',
   className = '',
-  title = 'Send to a player',
+  title = 'Send to players',
   description = '',
   navigateAfterSend = true,
+  multiSelect = true,
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -74,14 +75,18 @@ export default function SendToDirectMessageButton({
   };
 
   const handleSelect = async (selectedUser) => {
-    const response = await getOrCreateDirectConversation(selectedUser.id, payload);
-    const conversationId = String(response?.conversation?.id || '').trim();
-    if (!conversationId) {
-      throw new Error('Failed to open conversation.');
-    }
+    const delivery = await sendDirectPayloadToRecipients([selectedUser], payload);
     resetPickers();
     if (navigateAfterSend) {
-      navigate(`/messages/${conversationId}`);
+      navigate(`/messages/${delivery.lastConversationId}`);
+    }
+  };
+
+  const handleSubmit = async (selectedUsers) => {
+    const delivery = await sendDirectPayloadToRecipients(selectedUsers, payload);
+    resetPickers();
+    if (navigateAfterSend && delivery.count === 1 && delivery.lastConversationId) {
+      navigate(`/messages/${delivery.lastConversationId}`);
     }
   };
 
@@ -175,9 +180,12 @@ export default function SendToDirectMessageButton({
         title={title}
         description={description}
         selectLabel={selectLabel}
+        submitLabel={selectLabel}
         onClose={resetPickers}
         onSelect={handleSelect}
+        onSubmit={handleSubmit}
         excludeUserIds={excludeUserIds}
+        multiSelect={multiSelect}
       />
     </>
   );

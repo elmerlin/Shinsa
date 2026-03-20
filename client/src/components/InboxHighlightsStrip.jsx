@@ -21,12 +21,11 @@ import {
   getMessageStoryComments,
   getMessageStoryEngagement,
   getMessageStoryStats,
-  getOrCreateDirectConversation,
   markMessageStoryViewed,
   searchUsers,
-  sendConversationMessage,
   toggleMessageStoryPump,
 } from '../utils/api';
+import { sendDirectPayloadToRecipients } from '../utils/directMessageDelivery';
 import { useMentionComposer } from '../hooks/useMentionComposer';
 import { splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent } from '../utils/sessionShareMarker';
@@ -998,12 +997,9 @@ export function StoryViewerModal({
     } catch {}
   };
 
-  const handleShareToDm = async (selectedUser) => {
-    if (!story || !selectedUser?.id) return;
-    const directPayload = await getOrCreateDirectConversation(selectedUser.id);
-    const conversationId = directPayload?.conversation?.id || '';
-    if (!conversationId) throw new Error('Could not open a DM for this share.');
-    await sendConversationMessage(conversationId, {
+  const handleShareToDm = async (selectedUsers) => {
+    if (!story || !Array.isArray(selectedUsers) || selectedUsers.length === 0) return;
+    await sendDirectPayloadToRecipients(selectedUsers, {
       link_share: buildStorySharePayload(story, user),
     });
     setSharePickerOpen(false);
@@ -1258,12 +1254,15 @@ export function StoryViewerModal({
 
       <UserPickerDialog
         open={sharePickerOpen}
-        title="Send story"
-        description="Pick someone on Shinsa to share this story with."
+        title="Share story"
+        description="Select one or more players on Shinsa to send this story to."
         selectLabel="Send"
+        submitLabel="Share"
         excludeUserIds={[authUser?.id].filter(Boolean)}
         onClose={() => setSharePickerOpen(false)}
-        onSelect={handleShareToDm}
+        onSubmit={handleShareToDm}
+        multiSelect
+        zIndexClass="z-[220]"
       />
     </>
   );
