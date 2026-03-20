@@ -925,6 +925,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const visibleContent = currentLive && rawVisibleContent.trim().startsWith('🔴 **Shinsa Live Recap**')
     ? ''
     : rawVisibleContent;
+  const images = (() => {
+    try { return JSON.parse(post.images || '[]'); } catch { return []; }
+  })();
   const postLinkShare = useMemo(() => buildPostLinkShare({
     postId: post.id,
     username: post.username,
@@ -932,10 +935,6 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
     images,
     shareType: currentShare?.shareType || '',
   }), [currentShare?.shareType, images, post.id, post.username, visibleContent]);
-
-  const images = (() => {
-    try { return JSON.parse(post.images || '[]'); } catch { return []; }
-  })();
   const achievementBadgePost = parseAchievementBadgePost(visibleContent, images);
 
   const flag = showAuthor ? getCountryFlag(post.nationality) : null;
