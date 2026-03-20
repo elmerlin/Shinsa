@@ -1427,6 +1427,7 @@ export default function ProfilePage() {
         getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
         getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
         getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
+        getSongAnalytics(profileId).then((data) => setSongAnalytics(data || null)).catch(() => {});
         if (overviewRecentlyPlayed) {
           getPiugameRecentlyPlayed(profileId, { year: overviewHeatmapYear, sort: 'desc' })
             .then(setOverviewRecentlyPlayed)

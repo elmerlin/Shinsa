@@ -1074,9 +1074,8 @@ function formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, pas
   const computedPumbility = ratedEntriesAll.slice(0, 50).reduce((sum, row) => sum + (row.rating || 0), 0);
   const singlesPumbility = ratedEntriesSingle.slice(0, 50).reduce((sum, row) => sum + (row.rating || 0), 0);
 
-  const pumbility = (syncRow?.pumbility_value || 0) > 0
-    ? parseInt(syncRow.pumbility_value, 10)
-    : computedPumbility;
+  const officialPumbility = parseInt(syncRow?.pumbility_value, 10) || 0;
+  const pumbility = Math.max(officialPumbility, computedPumbility);
 
   return {
     user_id: userId,
