@@ -36,6 +36,8 @@ import {
 } from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
 import { renderFormattedText } from '../utils/formatText';
+import { getStickerEmoji, STICKER_TOKEN_REGEX } from '../utils/stickers';
+import StickerAsset from '../components/StickerAsset';
 import { parseYouTubeUrl } from '../utils/youtube';
 import ActionIconButton from '../components/ActionIconButton';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
@@ -1095,6 +1097,47 @@ function compactReplyPreviewText(value, max = 160) {
   const compact = String(value || '').replace(/\s+/g, ' ').trim();
   if (!compact) return '';
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+}
+
+function renderReplyPreview(text, max = 140) {
+  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!compact) return 'Message';
+  const truncated = compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
+
+  // Check if text contains any sticker tokens
+  const testRegex = new RegExp(STICKER_TOKEN_REGEX.source, 'gi');
+  if (!testRegex.test(truncated)) return truncated;
+
+  // Split text around sticker tokens and render stickers inline
+  const parts = [];
+  let lastIndex = 0;
+  const splitRegex = new RegExp(STICKER_TOKEN_REGEX.source, 'gi');
+  let match = splitRegex.exec(truncated);
+  while (match) {
+    if (match.index > lastIndex) {
+      parts.push(truncated.slice(lastIndex, match.index));
+    }
+    const sticker = getStickerEmoji(match[0]);
+    if (sticker) {
+      parts.push(
+        <StickerAsset
+          key={`reply-sticker-${match.index}`}
+          sticker={sticker}
+          alt={sticker.label}
+          title={sticker.label}
+          className="inline-block h-6 w-6 align-middle"
+        />,
+      );
+    } else {
+      parts.push(match[0]);
+    }
+    lastIndex = match.index + match[0].length;
+    match = splitRegex.exec(truncated);
+  }
+  if (lastIndex < truncated.length) {
+    parts.push(truncated.slice(lastIndex));
+  }
+  return parts;
 }
 
 function buildReplyPreviewText(message) {
@@ -2170,7 +2213,7 @@ function MessageBubble({
               {isOwn ? `You replied to ${replyTo.senderUsername || 'someone'}` : `Replied to ${replyTo.senderUsername || 'someone'}`}
             </p>
             <p className={`mt-1 text-xs leading-5 ${bubbleTextClass ? 'opacity-60' : 'text-gray-300'}`}>
-              {compactReplyPreviewText(replyTo.previewText || 'Message', 140)}
+              {renderReplyPreview(replyTo.previewText || 'Message', 140)}
             </p>
           </div>
         ) : null}
@@ -2810,7 +2853,7 @@ function ConversationView({
                         Replying to {replyTarget.senderUsername || 'someone'}
                       </p>
                       <p className="mt-1 text-xs leading-5 text-gray-300">
-                        {compactReplyPreviewText(replyTarget.previewText || 'Message', 160)}
+                        {renderReplyPreview(replyTarget.previewText || 'Message', 160)}
                       </p>
                     </div>
                     <button
@@ -2844,7 +2887,7 @@ function ConversationView({
                 rows={1}
                 maxLength={4000}
                 placeholder={composerPlaceholder}
-                className={`min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 px-4 py-3 text-sm focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
+                className={`min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 px-4 py-[0.6rem] text-sm leading-6 focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
                 style={{ whiteSpace: draft ? 'pre-wrap' : 'nowrap' }}
                 disabled={sending || !activeConversation}
               />
