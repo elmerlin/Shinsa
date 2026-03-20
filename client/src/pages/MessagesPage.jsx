@@ -1084,6 +1084,9 @@ function getMessageLabel(message) {
   if (message.message_type === 'link_share') {
     return 'Shared link';
   }
+  if (message.message_type === 'stomp') {
+    return 'Stomp';
+  }
   return '';
 }
 
@@ -2030,6 +2033,38 @@ function MessageBubble({
     }, 210);
   };
 
+  if (message?.message_type === 'stomp') {
+    const stompSenderName = message?.sender?.username || 'Someone';
+    return (
+      <div className="flex w-full flex-col items-center py-2">
+        <div className="group relative flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-gradient-to-r from-amber-500/8 via-amber-400/12 to-amber-500/8 px-5 py-3 shadow-[0_4px_24px_rgba(251,191,36,0.08)] transition-all duration-500 hover:border-amber-300/35 hover:shadow-[0_4px_32px_rgba(251,191,36,0.14)]"
+          style={{ animation: 'stomp-land 0.5s cubic-bezier(0.22, 1, 0.36, 1) both' }}
+        >
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+            <img
+              src="/piu/stomp-yellow.svg"
+              alt=""
+              className="h-8 w-8 drop-shadow-[0_0_8px_rgba(251,191,36,0.4)] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-[-8deg]"
+              style={{ animation: 'stomp-bounce 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both' }}
+            />
+            <span
+              className="pointer-events-none absolute inset-0 rounded-full bg-amber-300/15"
+              style={{ animation: 'stomp-ripple 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both' }}
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-display font-black text-amber-100/90">
+              <span className="text-amber-300">{stompSenderName}</span>
+              {' '}
+              <span className="text-gray-300">{message.content || 'stomped you'}</span>
+            </p>
+          </div>
+        </div>
+        <p className="mt-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`relative flex flex-col ${alignmentClass}`}
@@ -2308,18 +2343,27 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
           disabled={stompDisabled}
           aria-label={stompDisabled ? `Waiting for ${partner?.username || 'this user'} to stomp back` : `Stomp ${partner?.username || 'this user'}`}
           title={stompDisabled ? 'Waiting for a stomp back' : 'Stomp this user'}
-          className={`group relative flex h-[2.45rem] min-w-[5.1rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border px-3 transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? 'scale-[0.96]' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12 shadow-[0_0_24px_rgba(34,211,238,0.2)]' : ''}`}
+          className={`group relative flex h-[2.45rem] min-w-[5.1rem] shrink-0 items-center justify-center overflow-hidden rounded-[0.95rem] border px-3 transition-all duration-200 ${stompButtonTone} ${stompDisabled ? 'cursor-not-allowed opacity-45 grayscale' : 'hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-cyan-400/10 active:translate-y-0'} ${stomping ? '' : ''} ${isCelebrating ? 'border-cyan-300/50 bg-cyan-400/12' : ''}`}
+          style={stomping ? { animation: 'stomp-press 0.45s cubic-bezier(0.22, 1, 0.36, 1) both' } : isCelebrating ? { animation: 'stomp-press 0.45s cubic-bezier(0.22, 1, 0.36, 1) both' } : undefined}
         >
+          {isCelebrating ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-[0.95rem]"
+              style={{ animation: 'stomp-shockwave 0.7s cubic-bezier(0.16, 1, 0.3, 1) both' }}
+            />
+          ) : null}
           <span
             aria-hidden="true"
-            className={`pointer-events-none absolute inset-0 rounded-[0.95rem] bg-cyan-300/20 transition duration-500 ${stomping || isCelebrating ? 'animate-ping opacity-100' : 'opacity-0'}`}
+            className={`pointer-events-none absolute inset-0 rounded-[0.95rem] bg-cyan-300/20 transition duration-500 ${stomping ? 'opacity-100 scale-110' : 'opacity-0 scale-100'}`}
           />
           <span
             aria-hidden="true"
             className={`pointer-events-none absolute inset-[3px] rounded-[0.8rem] border border-cyan-200/35 transition duration-500 ${isCelebrating ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
           />
           <span
-            className={`relative z-[1] select-none text-sm font-display font-black uppercase tracking-[0.18em] text-cyan-50 [text-shadow:0_0_10px_rgba(103,232,249,0.18)] transition-transform duration-300 ${stompDisabled ? 'text-gray-300' : 'group-hover:scale-[1.04]'} ${stomping ? 'scale-110 rotate-[-5deg]' : ''} ${isCelebrating ? 'scale-[1.08] rotate-[4deg]' : ''}`}
+            className={`relative z-[1] select-none text-sm font-display font-black uppercase text-cyan-50 [text-shadow:0_0_10px_rgba(103,232,249,0.18)] ${stompDisabled ? 'tracking-[0.18em] text-gray-300' : 'tracking-[0.18em] group-hover:scale-[1.04]'}`}
+            style={isCelebrating ? { animation: 'stomp-text-slam 0.5s cubic-bezier(0.22, 1, 0.36, 1) both' } : stomping ? { transform: 'scale(1.1) rotate(-5deg)', transition: 'transform 0.15s cubic-bezier(0.22, 1, 0.36, 1)' } : { transition: 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)' }}
           >
             STOMP
           </span>

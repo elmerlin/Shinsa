@@ -2173,14 +2173,37 @@ router.post('/conversations/:id/stomp', requireAuth, (req, res) => {
   }
 
   const stompResult = sendConversationStomp(db, conversationId, req.user.id, partnerUserId);
-  const normalizedConversation = normalizeConversationRow(getConversationRowForUser(db, conversationId, req.user.id));
 
   if (stompResult.alreadyWaiting) {
+    const normalizedConversation = normalizeConversationRow(getConversationRowForUser(db, conversationId, req.user.id));
     return res.status(409).json({
       error: 'Wait for them to stomp you back first.',
       conversation: normalizedConversation,
     });
   }
+
+  const stompFlavors = [
+    'stomped you 👣',
+    'just stomped on your pad 👟',
+    'hit you with a stomp 💥',
+    'dropped a stomp on you 🦶',
+    'came through with a stomp 👊',
+    'stomped your arrow 🎯',
+    'left a footprint on your screen 👣',
+    'wants your attention 👀',
+    'is calling you out 🔥',
+    'gave you a love tap 💫',
+  ];
+  const stompText = stompFlavors[Math.floor(Math.random() * stompFlavors.length)];
+
+  const stompInput = {
+    messageType: 'stomp',
+    content: stompText,
+    metadata: { stomp: { sender_user_id: req.user.id, recipient_user_id: partnerUserId } },
+  };
+  insertConversationMessage(db, conversationId, senderUser, stompInput);
+
+  const normalizedConversation = normalizeConversationRow(getConversationRowForUser(db, conversationId, req.user.id));
 
   createUserNotification(
     db,

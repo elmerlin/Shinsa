@@ -1212,3 +1212,99 @@
   border-color: rgba(203, 213, 225, 0.7);
   color: #e2e8f0;
 }
+
+/* Stomp message animations */
+@keyframes stomp-land {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) translateY(-12px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes stomp-bounce {
+  0% {
+    transform: scale(0.4) rotate(12deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(-6deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes stomp-ripple {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes stomp-press {
+  0% { transform: scale(1); }
+  15% { transform: scale(0.88) rotate(-2deg); }
+  40% { transform: scale(1.08) rotate(1deg); }
+  60% { transform: scale(0.97); }
+  80% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+@keyframes stomp-shockwave {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+    box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4);
+  }
+  50% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+    box-shadow: 0 0 0 8px rgba(34, 211, 238, 0);
+  }
+}
+
+@keyframes stomp-text-slam {
+  0% {
+    transform: scale(1.6) rotate(-8deg);
+    opacity: 0;
+    letter-spacing: 0.3em;
+  }
+  40% {
+    transform: scale(0.92) rotate(2deg);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1.06) rotate(-1deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    letter-spacing: 0.18em;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes stomp-land { 0%, 100% { opacity: 1; transform: none; } }
+  @keyframes stomp-bounce { 0%, 100% { opacity: 1; transform: none; } }
+  @keyframes stomp-ripple { 0%, 100% { opacity: 0; } }
+  @keyframes stomp-press { 0%, 100% { transform: none; } }
+  @keyframes stomp-shockwave { 0%, 100% { opacity: 0; } }
+  @keyframes stomp-text-slam { 0%, 100% { opacity: 1; transform: none; } }
+}
