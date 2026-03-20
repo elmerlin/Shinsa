@@ -1440,8 +1440,14 @@ function MessageBubble({
   return (
     <div
       className={`relative flex flex-col ${alignmentClass}`}
-      onMouseEnter={() => setTrayOpen(true)}
-      onMouseLeave={() => setTrayOpen(false)}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== 'mouse') return;
+        setTrayOpen(true);
+      }}
+      onPointerLeave={(event) => {
+        if (event.pointerType !== 'mouse') return;
+        setTrayOpen(false);
+      }}
     >
       {!isOwn ? (
         <p className="mb-1 px-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
