@@ -1420,6 +1420,7 @@ function MessageBubble({
     startX: 0,
     startY: 0,
     active: false,
+    moved: false,
     ignoreClick: false,
   });
   const [replySwipeOffset, setReplySwipeOffset] = useState(0);
@@ -1505,6 +1506,7 @@ function MessageBubble({
     swipeStateRef.current.startX = 0;
     swipeStateRef.current.startY = 0;
     swipeStateRef.current.active = false;
+    swipeStateRef.current.moved = false;
     setReplySwipeOffset(0);
     setReplySwipeDragging(false);
   }, []);
@@ -1521,6 +1523,7 @@ function MessageBubble({
     swipeStateRef.current.startX = event.clientX;
     swipeStateRef.current.startY = event.clientY;
     swipeStateRef.current.active = true;
+    swipeStateRef.current.moved = false;
     if (event.currentTarget?.setPointerCapture) {
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -1534,6 +1537,10 @@ function MessageBubble({
 
     const dx = event.clientX - swipeStateRef.current.startX;
     const dy = event.clientY - swipeStateRef.current.startY;
+
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+      swipeStateRef.current.moved = true;
+    }
 
     if (Math.abs(dy) > 32 && Math.abs(dy) > Math.abs(dx)) {
       resetReplySwipe();
@@ -1550,8 +1557,28 @@ function MessageBubble({
 
   const handlePointerUp = (event) => {
     if (event.pointerType === 'touch' && swipeStateRef.current.pointerId === event.pointerId) {
-      if (replySwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET) {
+      const shouldReply = replySwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET;
+      const shouldTreatAsTap = swipeStateRef.current.active && !swipeStateRef.current.moved && replySwipeOffset < 8;
+      if (shouldReply) {
         triggerReply();
+      } else if (shouldTreatAsTap && !event?.target?.closest?.('button,a,textarea,input,select')) {
+        const now = Date.now();
+        if (now - tapStateRef.current.lastTapAt < 260) {
+          if (tapStateRef.current.timer) {
+            window.clearTimeout(tapStateRef.current.timer);
+            tapStateRef.current.timer = null;
+          }
+          tapStateRef.current.lastTapAt = 0;
+          triggerReaction(defaultReaction);
+          closeTray();
+        } else {
+          tapStateRef.current.lastTapAt = now;
+          if (tapStateRef.current.timer) window.clearTimeout(tapStateRef.current.timer);
+          tapStateRef.current.timer = window.setTimeout(() => {
+            setTrayOpen((current) => !current);
+            tapStateRef.current.timer = null;
+          }, 210);
+        }
       }
       if (event.currentTarget?.releasePointerCapture) {
         try {
@@ -1566,6 +1593,8 @@ function MessageBubble({
   };
 
   const handleBubbleClick = (event) => {
+    if (event?.nativeEvent?.pointerType === 'touch') return;
+    if (window.matchMedia && !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
     if (event?.target?.closest?.('button,a,textarea,input,select')) return;
     if (swipeStateRef.current.ignoreClick) {
       swipeStateRef.current.ignoreClick = false;
