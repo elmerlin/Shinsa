@@ -54,6 +54,7 @@ export const THEME_META = {
 const BASE = {
   fontFamily: '',
   monospace: false,
+  isLight: false,
   viewportBg: '',
   viewportStyle: {},
   headerBg: 'bg-piu-card/92 backdrop-blur-md',
@@ -120,6 +121,7 @@ const cli = buildTheme({
 // ── AIM ─────────────────────────────────────────────────────────────────────
 const aim = buildTheme({
   fontFamily: "'Trebuchet MS', 'Arial', sans-serif",
+  isLight: true,
   viewportBg: 'bg-white',
   viewportStyle: {},
   headerBg: 'bg-[#ffde00]',
@@ -172,6 +174,7 @@ const yahoo = buildTheme({
 // ── MSN Messenger ───────────────────────────────────────────────────────────
 const msn = buildTheme({
   fontFamily: "'Segoe UI', 'Tahoma', 'Verdana', sans-serif",
+  isLight: true,
   viewportBg: 'bg-[#d6e9f8]',
   viewportStyle: {
     backgroundImage: 'linear-gradient(180deg, #d6e9f8 0%, #eaf3fb 100%)',
@@ -199,6 +202,7 @@ const msn = buildTheme({
 // ── Skype ───────────────────────────────────────────────────────────────────
 const skype = buildTheme({
   fontFamily: "'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif",
+  isLight: true,
   viewportBg: 'bg-[#e4f0f8]',
   viewportStyle: {},
   headerBg: 'bg-[#00aff0]',
@@ -259,6 +263,7 @@ const winamp = buildTheme({
 // ── ICQ ────────────────────────────────────────────────────────────────────
 const icq = buildTheme({
   fontFamily: "'Tahoma', 'Verdana', 'Arial', sans-serif",
+  isLight: true,
   viewportBg: 'bg-[#eef5e6]',
   viewportStyle: {
     backgroundImage: 'linear-gradient(180deg, #eef5e6 0%, #f8fbf4 100%)',
@@ -286,6 +291,7 @@ const icq = buildTheme({
 // ── WeChat ─────────────────────────────────────────────────────────────────
 const wechat = buildTheme({
   fontFamily: "'PingFang SC', 'Helvetica Neue', 'Arial', sans-serif",
+  isLight: true,
   viewportBg: 'bg-[#ededed]',
   viewportStyle: {},
   headerBg: 'bg-[#ededed]',
@@ -337,6 +343,7 @@ const discord = buildTheme({
 // ── QQ ─────────────────────────────────────────────────────────────────────
 const qq = buildTheme({
   fontFamily: "'Microsoft YaHei', 'PingFang SC', 'Arial', sans-serif",
+  isLight: true,
   viewportBg: 'bg-[#edf2fa]',
   viewportStyle: {
     backgroundImage: 'linear-gradient(180deg, #edf2fa 0%, #f5f8fd 100%)',
@@ -407,6 +414,7 @@ const nxa = buildTheme({
 // ── KakaoTalk ─────────────────────────────────────────────────────────────
 const kakao = buildTheme({
   fontFamily: "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif",
+  isLight: true,
   viewportBg: 'bg-[#b2c7d9]',
   viewportStyle: {},
   headerBg: 'bg-[#3e4a56]',

@@ -2475,10 +2475,15 @@ function MessageBubble({
 
   if (message?.message_type === 'nudge') {
     const nudgeSenderName = message?.sender?.username || 'Someone';
+    const isLight = chatTheme?.isLight;
     return (
       <div className="flex w-full flex-col items-center py-2">
         <div
-          className="group relative flex items-center gap-3 rounded-2xl border border-purple-400/25 bg-gradient-to-r from-purple-500/8 via-fuchsia-400/12 to-purple-500/8 px-5 py-3 shadow-[0_4px_24px_rgba(168,85,247,0.08)] transition-all duration-500 hover:border-purple-400/40 hover:shadow-[0_4px_32px_rgba(168,85,247,0.18)]"
+          className={`group relative flex items-center gap-3 rounded-2xl border px-5 py-3 transition-all duration-500 ${
+            isLight
+              ? 'border-purple-500/30 bg-gradient-to-r from-purple-500/15 via-fuchsia-400/20 to-purple-500/15 shadow-[0_4px_24px_rgba(168,85,247,0.12)] hover:border-purple-500/50 hover:shadow-[0_4px_32px_rgba(168,85,247,0.22)]'
+              : 'border-purple-400/25 bg-gradient-to-r from-purple-500/8 via-fuchsia-400/12 to-purple-500/8 shadow-[0_4px_24px_rgba(168,85,247,0.08)] hover:border-purple-400/40 hover:shadow-[0_4px_32px_rgba(168,85,247,0.18)]'
+          }`}
           style={{ animation: 'nudge-shake 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) both' }}
         >
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
@@ -2489,28 +2494,33 @@ function MessageBubble({
               📳
             </span>
             <span
-              className="pointer-events-none absolute inset-0 rounded-full bg-purple-400/20"
+              className={`pointer-events-none absolute inset-0 rounded-full ${isLight ? 'bg-purple-400/25' : 'bg-purple-400/20'}`}
               style={{ animation: 'nudge-ring 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both' }}
             />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-display font-black text-purple-100/90">
-              <span className="text-purple-300">{nudgeSenderName}</span>
+            <p className={`text-sm font-display font-black ${isLight ? 'text-purple-800/90' : 'text-purple-100/90'}`}>
+              <span className={isLight ? 'text-purple-700' : 'text-purple-300'}>{nudgeSenderName}</span>
               {' '}
-              <span className="text-gray-300">{message.content || 'sent a nudge!'}</span>
+              <span className={isLight ? 'text-purple-900/70' : 'text-gray-300'}>{message.content || 'sent a nudge!'}</span>
             </p>
           </div>
         </div>
-        <p className="mt-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
+        <p className={`mt-1 text-[10px] ${isLight ? 'text-gray-600' : 'text-gray-500'}`}>{formatConversationTime(message?.created_at)}</p>
       </div>
     );
   }
 
   if (message?.message_type === 'stomp') {
     const stompSenderName = message?.sender?.username || 'Someone';
+    const isLight = chatTheme?.isLight;
     return (
       <div className="flex w-full flex-col items-center py-2">
-        <div className="group relative flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-gradient-to-r from-amber-500/8 via-amber-400/12 to-amber-500/8 px-5 py-3 shadow-[0_4px_24px_rgba(251,191,36,0.08)] transition-all duration-500 hover:border-amber-300/35 hover:shadow-[0_4px_32px_rgba(251,191,36,0.14)]"
+        <div className={`group relative flex items-center gap-3 rounded-2xl border px-5 py-3 transition-all duration-500 ${
+            isLight
+              ? 'border-amber-500/30 bg-gradient-to-r from-amber-500/15 via-amber-400/20 to-amber-500/15 shadow-[0_4px_24px_rgba(251,191,36,0.12)] hover:border-amber-500/50 hover:shadow-[0_4px_32px_rgba(251,191,36,0.22)]'
+              : 'border-amber-300/20 bg-gradient-to-r from-amber-500/8 via-amber-400/12 to-amber-500/8 shadow-[0_4px_24px_rgba(251,191,36,0.08)] hover:border-amber-300/35 hover:shadow-[0_4px_32px_rgba(251,191,36,0.14)]'
+          }`}
           style={{ animation: 'stomp-land 0.5s cubic-bezier(0.22, 1, 0.36, 1) both' }}
         >
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
@@ -2521,19 +2531,19 @@ function MessageBubble({
               style={{ animation: 'stomp-bounce 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both' }}
             />
             <span
-              className="pointer-events-none absolute inset-0 rounded-full bg-amber-300/15"
+              className={`pointer-events-none absolute inset-0 rounded-full ${isLight ? 'bg-amber-400/20' : 'bg-amber-300/15'}`}
               style={{ animation: 'stomp-ripple 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both' }}
             />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-display font-black text-amber-100/90">
-              <span className="text-amber-300">{stompSenderName}</span>
+            <p className={`text-sm font-display font-black ${isLight ? 'text-amber-800/90' : 'text-amber-100/90'}`}>
+              <span className={isLight ? 'text-amber-700' : 'text-amber-300'}>{stompSenderName}</span>
               {' '}
-              <span className="text-gray-300">{message.content || 'stomped you'}</span>
+              <span className={isLight ? 'text-amber-900/70' : 'text-gray-300'}>{message.content || 'stomped you'}</span>
             </p>
           </div>
         </div>
-        <p className="mt-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
+        <p className={`mt-1 text-[10px] ${isLight ? 'text-gray-600' : 'text-gray-500'}`}>{formatConversationTime(message?.created_at)}</p>
       </div>
     );
   }
