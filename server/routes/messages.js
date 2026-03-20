@@ -1026,11 +1026,34 @@ function getConversationMessageForUser(db, conversationId, messageId, viewerUser
 }
 
 function markConversationRead(db, conversationId, userId, now = toSqliteDateTime()) {
+  const lastMsg = db.prepare(`
+    SELECT id FROM conversation_messages
+    WHERE conversation_id = ? AND COALESCE(deleted_at, '') = ''
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT 1
+  `).get(conversationId);
   db.prepare(`
     UPDATE conversation_members
-    SET last_read_at = ?, updated_at = ?
+    SET last_read_at = ?, last_read_message_id = ?, updated_at = ?
     WHERE conversation_id = ? AND user_id = ?
-  `).run(now, now, conversationId, userId);
+  `).run(now, lastMsg?.id || '', now, conversationId, userId);
+}
+
+function getConversationReadReceipts(db, conversationId, viewerUserId) {
+  return db.prepare(`
+    SELECT
+      cm.user_id,
+      cm.last_read_message_id,
+      u.username,
+      u.avatar,
+      u.avatar_v
+    FROM conversation_members cm
+    JOIN users u ON u.id = cm.user_id
+    WHERE cm.conversation_id = ?
+      AND cm.user_id != ?
+      AND cm.is_hidden = 0
+      AND COALESCE(cm.last_read_message_id, '') != ''
+  `).all(conversationId, viewerUserId);
 }
 
 function insertConversationMessage(db, conversationId, senderUser, input, createdAt = toSqliteDateTime()) {
@@ -1864,7 +1887,15 @@ router.get('/conversations/:id', requireAuth, (req, res) => {
   const conversation = normalizeConversationRow(conversationRow);
   if (conversation) conversation.unread_count = 0;
 
-  res.json({ conversation, messages });
+  const rawReceipts = getConversationReadReceipts(db, conversationId, req.user.id);
+  const readReceipts = rawReceipts.map((r) => ({
+    user_id: r.user_id,
+    last_read_message_id: r.last_read_message_id,
+    username: r.username || '',
+    avatar: r.avatar || '',
+  }));
+
+  res.json({ conversation, messages, read_receipts: readReceipts });
 });
 
 router.get('/conversations/:id/squad', requireAuth, (req, res) => {

@@ -38,6 +38,7 @@ import { getProfilePath } from '../utils/profile';
 import { renderFormattedText } from '../utils/formatText';
 import { getStickerEmoji, STICKER_TOKEN_REGEX } from '../utils/stickers';
 import StickerAsset from '../components/StickerAsset';
+import { getAvatarUrl } from '../components/AvatarPicker';
 import { parseYouTubeUrl } from '../utils/youtube';
 import ActionIconButton from '../components/ActionIconButton';
 import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
@@ -2672,6 +2673,7 @@ function ConversationView({
   defaultReaction,
   availableReactions,
   onReact,
+  readReceipts = [],
 }) {
   const isSquad = activeConversation?.kind === 'squad';
   const headerTitle = isSquad
@@ -2683,6 +2685,17 @@ function ConversationView({
   const headerAvatar = isSquad ? activeConversation?.avatar : activePartner?.avatar;
   const composerPlaceholder = isSquad ? 'Message Squad' : `Message ${headerTitle || 'chat'}...`;
   const chatTheme = useMemo(() => getTheme(activeConversation?.theme), [activeConversation?.theme]);
+
+  const readReceiptMap = useMemo(() => {
+    const map = {};
+    for (const receipt of readReceipts) {
+      const mid = receipt?.last_read_message_id;
+      if (!mid) continue;
+      if (!map[mid]) map[mid] = [];
+      map[mid].push(receipt);
+    }
+    return map;
+  }, [readReceipts]);
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6" style={chatTheme.fontFamily ? { fontFamily: chatTheme.fontFamily } : undefined}>
@@ -2806,36 +2819,62 @@ function ConversationView({
             <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet. Say hello.</div>
           ) : (
             <div className="space-y-3 pb-1">
-              {messages.map((message) => (
-                <MessageBubble
-                  key={`${conversationId || 'conversation'}:${message.id}`}
-                  message={message}
-                  conversationId={conversationId}
-                  chatTheme={chatTheme}
-                  onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
-                  compareLoading={replyingMessageId === message.id}
-                  responseStatus={getMessageStatus(message) || null}
-                  onFollowUp={canSendRematch(message) ? () => onSendRematch(message) : null}
-                  followUpLoading={rematchingMessageId === message.id}
-                  lifecycleAction={
-                    canAcceptChallenge(message)
-                      ? () => onAcceptChallenge(message)
-                      : (canExpireChallenge(message) ? () => onExpireChallenge(message) : null)
-                  }
-                  lifecycleLoading={acceptingMessageId === message.id || expiringMessageId === message.id}
-                  lifecycleLabel={canAcceptChallenge(message) ? 'Accept' : 'Expire'}
-                  onOpenThread={message?.note_thread?.threadKey ? () => onOpenThread?.(message) : null}
-                  onOpenLink={onOpenLink}
-                  onReply={onReply}
-                  activeReplyMessageId={activeReplyMessageId}
-                  replyHighlightVersion={replyHighlightVersion}
-                  touchInteractionsEnabled={touchInteractionsEnabled}
-                  touchInteractionsBlockedUntil={touchInteractionsBlockedUntil}
-                  defaultReaction={defaultReaction}
-                  availableReactions={availableReactions}
-                  onReact={onReact}
-                />
-              ))}
+              {messages.map((message) => {
+                const readers = readReceiptMap[message.id];
+                return (
+                  <React.Fragment key={`${conversationId || 'conversation'}:${message.id}`}>
+                    <MessageBubble
+                      message={message}
+                      conversationId={conversationId}
+                      chatTheme={chatTheme}
+                      onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
+                      compareLoading={replyingMessageId === message.id}
+                      responseStatus={getMessageStatus(message) || null}
+                      onFollowUp={canSendRematch(message) ? () => onSendRematch(message) : null}
+                      followUpLoading={rematchingMessageId === message.id}
+                      lifecycleAction={
+                        canAcceptChallenge(message)
+                          ? () => onAcceptChallenge(message)
+                          : (canExpireChallenge(message) ? () => onExpireChallenge(message) : null)
+                      }
+                      lifecycleLoading={acceptingMessageId === message.id || expiringMessageId === message.id}
+                      lifecycleLabel={canAcceptChallenge(message) ? 'Accept' : 'Expire'}
+                      onOpenThread={message?.note_thread?.threadKey ? () => onOpenThread?.(message) : null}
+                      onOpenLink={onOpenLink}
+                      onReply={onReply}
+                      activeReplyMessageId={activeReplyMessageId}
+                      replyHighlightVersion={replyHighlightVersion}
+                      touchInteractionsEnabled={touchInteractionsEnabled}
+                      touchInteractionsBlockedUntil={touchInteractionsBlockedUntil}
+                      defaultReaction={defaultReaction}
+                      availableReactions={availableReactions}
+                      onReact={onReact}
+                    />
+                    {readers?.length > 0 ? (
+                      <div className={`flex ${message.is_own ? 'justify-end' : 'justify-start'} px-3 -mt-1.5`}>
+                        {isSquad ? (
+                          <div className="flex -space-x-1.5">
+                            {readers.slice(0, 8).map((r) => (
+                              r.avatar ? (
+                                <img key={r.user_id} src={getAvatarUrl(r.avatar)} alt={r.username} title={r.username} className="h-4 w-4 rounded-full object-cover ring-1 ring-black/40" />
+                              ) : (
+                                <div key={r.user_id} title={r.username} className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-500/30 text-[7px] font-bold text-gray-300 ring-1 ring-black/40">
+                                  {(r.username || '?').slice(0, 1).toUpperCase()}
+                                </div>
+                              )
+                            ))}
+                            {readers.length > 8 ? (
+                              <div className="flex h-4 items-center pl-1 text-[9px] text-gray-500">+{readers.length - 8}</div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-gray-500">Seen</span>
+                        )}
+                      </div>
+                    ) : null}
+                  </React.Fragment>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -2940,6 +2979,7 @@ export default function MessagesPage() {
 
   const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [readReceipts, setReadReceipts] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageError, setMessageError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -3489,6 +3529,7 @@ export default function MessagesPage() {
     try {
       const payload = await getMessageConversation(targetConversationId);
       setActiveConversation(payload?.conversation || null);
+      setReadReceipts(Array.isArray(payload?.read_receipts) ? payload.read_receipts : []);
       const nextMessages = normalizeConversationMessages(payload?.messages);
       if (silent) {
         setMessages((prev) => {
@@ -3508,6 +3549,7 @@ export default function MessagesPage() {
       if (!silent) {
         setActiveConversation(null);
         setMessages([]);
+        setReadReceipts([]);
         setMessageError(err?.message || 'Failed to load conversation.');
       }
     } finally {
@@ -3542,10 +3584,12 @@ export default function MessagesPage() {
     if (!conversationId) {
       setActiveConversation(null);
       setMessages([]);
+      setReadReceipts([]);
       setMessageError('');
       return undefined;
     }
     setMessages([]);
+    setReadReceipts([]);
     setActiveConversation(null);
     loadConversation(conversationId);
     const interval = setInterval(() => loadConversation(conversationId, { silent: true }), 5000);
@@ -4327,6 +4371,7 @@ export default function MessagesPage() {
           defaultReaction={defaultReaction}
           availableReactions={quickReactions}
           onReact={handleReactToMessage}
+          readReceipts={readReceipts}
         />
       ) : (
         <InboxView

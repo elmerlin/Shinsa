@@ -2715,6 +2715,7 @@ function initializeDb() {
     ['notifications_enabled', 'INTEGER NOT NULL DEFAULT 1'],
     ['notify_mentions', 'INTEGER NOT NULL DEFAULT 1'],
     ['is_pinned', 'INTEGER NOT NULL DEFAULT 0'],
+    ['last_read_message_id', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of conversationMemberMigrations) {
     if (!conversationMemberCols.includes(col)) {
