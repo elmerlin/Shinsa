@@ -514,12 +514,14 @@ function normalizeConversationRow(row) {
   const notificationsEnabled = toInt(row.viewer_notifications_enabled) !== 0;
   const notifyMentions = toInt(row.viewer_notify_mentions) !== 0;
   const isPinned = toInt(row.is_pinned) !== 0;
+  const theme = String(row.conversation_theme || '').trim();
 
   return {
     id: row.id,
     kind,
     title,
     avatar,
+    theme,
     is_pinned: isPinned,
     created_at: row.created_at || '',
     updated_at: row.updated_at || '',

@@ -52,6 +52,7 @@ import SquadComposerModal from '../components/SquadComposerModal';
 import MentionSuggestionsPanel from '../components/MentionSuggestionsPanel';
 import SquadSettingsModal from '../components/SquadSettingsModal';
 import ConversationSettingsModal from '../components/ConversationSettingsModal';
+import { getTheme } from '../components/ChatThemes';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
@@ -1678,6 +1679,7 @@ function MessageChallengeCard({
 function MessageBubble({
   message,
   conversationId = '',
+  chatTheme = null,
   onReplyWithBest = null,
   compareLoading = false,
   responseStatus = null,
@@ -1705,9 +1707,10 @@ function MessageBubble({
   const hasRichAttachment = hasShare || hasLinkShare || hasChallengeCard;
   const coarsePointerDevice = isCoarsePointerDevice();
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
-  const bubbleTone = isOwn
-    ? 'border-cyan-400/20 bg-cyan-500/10'
-    : 'border-piu-border/60 bg-piu-dark/55';
+  const themedOwnBg = chatTheme ? `${chatTheme.ownBubbleBorder} ${chatTheme.ownBubbleBg}` : 'border-cyan-400/20 bg-cyan-500/10';
+  const themedOtherBg = chatTheme ? `${chatTheme.otherBubbleBorder} ${chatTheme.otherBubbleBg}` : 'border-piu-border/60 bg-piu-dark/55';
+  const bubbleTone = isOwn ? themedOwnBg : themedOtherBg;
+  const bubbleTextClass = chatTheme ? (isOwn ? chatTheme.ownBubbleText : chatTheme.otherBubbleText) : '';
   const senderName = message?.sender?.username || 'Unknown';
   const shareLabel = getMessageLabel(message);
   const noteThread = message?.note_thread || null;
@@ -1718,9 +1721,11 @@ function MessageBubble({
     : '';
   const suppressRawUrlContent = !!inlineYouTubeUrl && isStandaloneUrlMessage(message?.content || '', inlineYouTubeUrl);
   const isAttachmentOnly = (hasRichAttachment && !hasContent) || (!hasRichAttachment && suppressRawUrlContent);
+  const themeRadius = chatTheme?.bubbleRadius || '1.25rem';
+  const themeShadow = chatTheme?.shadow ?? '0 8px 20px rgba(0,0,0,0.14)';
   const bubbleClass = isAttachmentOnly
     ? 'w-full max-w-[19.25rem] sm:max-w-[22.5rem]'
-    : `rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
+    : `border ${bubbleTone} px-2.5 py-2 ${chatTheme?.extraBubbleClass || ''} ${bubbleTextClass}`.trim();
   const reactionItems = Array.isArray(message?.reactions) ? message.reactions : [];
   const viewerReaction = sanitizeReactionKey(message?.viewer_reaction);
   const trayKeys = normalizeReactionKeys(availableReactions).length > 0
@@ -2078,7 +2083,7 @@ function MessageBubble({
       }}
     >
       {!isOwn ? (
-        <p className="mb-1 px-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
+        <p className={`mb-1 px-1 ${chatTheme?.senderNameClass || 'text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500'}`}>
           {senderName}
         </p>
       ) : null}
@@ -2139,6 +2144,7 @@ function MessageBubble({
           style={{
             transform: replySwipeOffset > 0 ? `translateX(${replySwipeOffset}px)` : 'translateX(0px)',
             transition: replySwipeDragging ? 'none' : 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+            ...(!isAttachmentOnly ? { borderRadius: themeRadius, boxShadow: themeShadow !== 'none' ? themeShadow : undefined } : {}),
           }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -2623,12 +2629,13 @@ function ConversationView({
     : 'Private chat';
   const headerAvatar = isSquad ? activeConversation?.avatar : activePartner?.avatar;
   const composerPlaceholder = isSquad ? 'Message Squad' : `Message ${headerTitle || 'chat'}...`;
+  const chatTheme = useMemo(() => getTheme(activeConversation?.theme), [activeConversation?.theme]);
 
   return (
-    <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6">
+    <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6" style={chatTheme.fontFamily ? { fontFamily: chatTheme.fontFamily } : undefined}>
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
         <div
-          className="z-10 shrink-0 flex items-center justify-between gap-3 border-b border-piu-border/40 bg-piu-card/92 px-4 pb-2.5 pt-3.5 backdrop-blur-md sm:px-5 sm:pt-4"
+          className={`z-10 shrink-0 flex items-center justify-between gap-3 border-b ${chatTheme.headerBorder} ${chatTheme.headerBg} px-4 pb-2.5 pt-3.5 sm:px-5 sm:pt-4`}
           style={{ paddingTop: 'max(env(safe-area-inset-top), 0.75rem)' }}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -2664,8 +2671,8 @@ function ConversationView({
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h1 className="truncate text-lg font-display font-black text-white">{headerTitle}</h1>
-                  <p className="mt-0.5 text-[11px] text-gray-500">{headerSubtitle}</p>
+                  <h1 className={`truncate text-lg font-display font-black ${chatTheme.headerText}`}>{headerTitle}</h1>
+                  <p className="mt-0.5 text-[11px] opacity-60">{headerSubtitle}</p>
                 </div>
               </button>
             ) : (
@@ -2718,7 +2725,8 @@ function ConversationView({
           </div>
         </div>
 
-        <div ref={messagesViewportRef} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+        <div ref={messagesViewportRef} className={`relative min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4 ${chatTheme.viewportBg} ${chatTheme.extraViewportClass}`} style={chatTheme.viewportStyle}>
+          {chatTheme.decorOverlay}
           {!touchInteractionsEnabled ? (
             <div
               aria-hidden="true"
@@ -2750,6 +2758,7 @@ function ConversationView({
                   key={`${conversationId || 'conversation'}:${message.id}`}
                   message={message}
                   conversationId={conversationId}
+                  chatTheme={chatTheme}
                   onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
                   compareLoading={replyingMessageId === message.id}
                   responseStatus={getMessageStatus(message) || null}
@@ -2780,7 +2789,7 @@ function ConversationView({
         </div>
 
         <div
-          className="z-10 shrink-0 border-t border-piu-border/40 bg-piu-card/94 px-3 pb-2.5 pt-2.5 backdrop-blur-md sm:px-5 sm:pb-3 sm:pt-3"
+          className={`z-10 shrink-0 border-t ${chatTheme.composerBorder} ${chatTheme.composerBg} px-3 pb-2.5 pt-2.5 sm:px-5 sm:pb-3 sm:pt-3`}
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.6rem)' }}
         >
           {actionError ? <p className="mb-3 text-sm text-red-300">{actionError}</p> : null}
@@ -2835,7 +2844,7 @@ function ConversationView({
                 rows={1}
                 maxLength={4000}
                 placeholder={composerPlaceholder}
-                className="min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 bg-piu-dark/55 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-300/35 focus:outline-none focus:ring-0"
+                className={`min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 px-4 py-3 text-sm focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
                 style={{ whiteSpace: draft ? 'pre-wrap' : 'nowrap' }}
                 disabled={sending || !activeConversation}
               />
@@ -4316,9 +4325,14 @@ export default function MessagesPage() {
       <ConversationSettingsModal
         open={personSettingsOpen}
         partner={activePartner}
+        conversation={activeConversation}
         messages={messages}
         onClose={() => setPersonSettingsOpen(false)}
         onOpenLink={handleOpenChatLink}
+        onConversationUpdated={(updated) => {
+          setActiveConversation((prev) => prev?.id === updated.id ? { ...prev, ...updated } : prev);
+          setConversations((prev) => prev.map((entry) => entry.id === updated.id ? { ...entry, ...updated } : entry));
+        }}
       />
 
       <StoryViewerModal

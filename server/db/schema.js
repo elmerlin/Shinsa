@@ -2700,6 +2700,7 @@ function initializeDb() {
   const conversationCols = db.prepare("PRAGMA table_info(conversations)").all().map(c => c.name);
   const conversationMigrations = [
     ['avatar', "TEXT DEFAULT ''"],
+    ['theme', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of conversationMigrations) {
     if (!conversationCols.includes(col)) {

@@ -4,6 +4,8 @@ import { getProfilePath } from '../utils/profile';
 import { parseYouTubeUrl } from '../utils/youtube';
 import { parseGrade } from '../utils/grades';
 import { getAvatarUrl } from './AvatarPicker';
+import { setMessageConversationTheme } from '../utils/api';
+import ThemePicker from './ChatThemes';
 
 const EXTERNAL_URL_REGEX = /https?:\/\/[^\s<>()]+/ig;
 const SHARE_KIND_LABELS = {
@@ -63,6 +65,7 @@ const ACTIVITY_TABS = [
 const SETTINGS_TABS = [
   { key: 'profile', label: 'Profile' },
   { key: 'search', label: 'Search' },
+  { key: 'theme', label: 'Theme' },
   { key: 'activity', label: 'Activity' },
 ];
 
@@ -184,14 +187,17 @@ function buildConversationResources(messages = []) {
 export default function ConversationSettingsModal({
   open = false,
   partner = null,
+  conversation = null,
   messages = [],
   onClose,
   onOpenLink,
+  onConversationUpdated,
 }) {
   const [settingsTab, setSettingsTab] = useState('profile');
   const [activityTab, setActivityTab] = useState('videos');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = React.useRef(null);
+  const [savingTheme, setSavingTheme] = useState(false);
 
   const resources = useMemo(() => buildConversationResources(messages), [messages]);
 
@@ -216,6 +222,21 @@ export default function ConversationSettingsModal({
       window.requestAnimationFrame(() => searchInputRef.current?.focus());
     }
   }, [open, settingsTab]);
+
+  const handleThemeChange = async (themeKey) => {
+    if (savingTheme || !conversation?.id) return;
+    setSavingTheme(true);
+    try {
+      const payload = await setMessageConversationTheme(conversation.id, themeKey);
+      if (payload?.conversation) {
+        onConversationUpdated?.(payload.conversation);
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setSavingTheme(false);
+    }
+  };
 
   if (!open || !partner) return null;
 
@@ -370,6 +391,20 @@ export default function ConversationSettingsModal({
                   No messages found.
                 </div>
               )}
+            </div>
+          ) : null}
+
+          {/* Theme Tab */}
+          {settingsTab === 'theme' ? (
+            <div className="space-y-3">
+              <ThemePicker
+                value={conversation?.theme || ''}
+                onChange={handleThemeChange}
+                disabled={savingTheme}
+              />
+              {savingTheme ? (
+                <p className="text-xs text-gray-400">Saving theme...</p>
+              ) : null}
             </div>
           ) : null}
 

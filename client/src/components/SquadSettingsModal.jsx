@@ -6,7 +6,9 @@ import {
   setMessageSquadMemberRole,
   updateMessageSquad,
   updateMessageSquadNotifications,
+  setMessageConversationTheme,
 } from '../utils/api';
+import ThemePicker from './ChatThemes';
 import { parseYouTubeUrl } from '../utils/youtube';
 import { parseGrade } from '../utils/grades';
 import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
@@ -26,6 +28,7 @@ const TAB_OPTIONS = [
 ];
 const SETTINGS_TABS = [
   { key: 'members', label: 'Members' },
+  { key: 'theme', label: 'Theme' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'activity', label: 'Activity' },
 ];
@@ -255,6 +258,7 @@ export default function SquadSettingsModal({
   const titleInputRef = React.useRef(null);
   const [updatingNotifications, setUpdatingNotifications] = useState(false);
   const [actingMemberId, setActingMemberId] = useState('');
+  const [savingTheme, setSavingTheme] = useState(false);
 
   const conversationId = String(conversation?.id || '').trim();
 
@@ -342,6 +346,21 @@ export default function SquadSettingsModal({
       setError(err?.message || 'Failed to save squad details.');
     } finally {
       setSavingIdentity(false);
+    }
+  };
+
+  const handleThemeChange = async (themeKey) => {
+    if (savingTheme) return;
+    setSavingTheme(true);
+    try {
+      const payload = await setMessageConversationTheme(conversationId, themeKey);
+      if (payload?.conversation) {
+        onConversationUpdated?.(payload.conversation);
+      }
+    } catch (err) {
+      setError(err?.message || 'Failed to update theme.');
+    } finally {
+      setSavingTheme(false);
     }
   };
 
@@ -582,6 +601,17 @@ export default function SquadSettingsModal({
                     })}
                   </div>
                 </section>
+              </div>
+            ) : settingsTab === 'theme' ? (
+              <div className="space-y-3">
+                <ThemePicker
+                  value={conversation?.theme || ''}
+                  onChange={handleThemeChange}
+                  disabled={savingTheme || (!canEditIdentity && viewerRole !== 'moderator')}
+                />
+                {savingTheme ? (
+                  <p className="text-xs text-gray-400">Saving theme...</p>
+                ) : null}
               </div>
             ) : settingsTab === 'notifications' ? (
               <div className="space-y-3">

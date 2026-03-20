@@ -122,6 +122,7 @@ function getConversationListRows(db, userId) {
       c.kind,
       c.title AS conversation_title,
       c.avatar AS conversation_avatar,
+      c.theme AS conversation_theme,
       c.created_by_user_id AS conversation_created_by_user_id,
       c.created_at,
       c.updated_at,
@@ -225,6 +226,7 @@ function getConversationRowForUser(db, conversationId, userId) {
       c.kind,
       c.title AS conversation_title,
       c.avatar AS conversation_avatar,
+      c.theme AS conversation_theme,
       c.created_by_user_id AS conversation_created_by_user_id,
       c.created_at,
       c.updated_at,
@@ -1918,6 +1920,16 @@ router.put('/conversations/:id/squad', requireAuth, (req, res) => {
     params.push(sanitizeSquadAvatar(req.body?.avatar));
   }
 
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'theme')) {
+    const VALID_THEMES = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp'];
+    const requestedTheme = String(req.body?.theme || '').trim().toLowerCase();
+    if (!VALID_THEMES.includes(requestedTheme)) {
+      return res.status(400).json({ error: 'Invalid theme' });
+    }
+    updates.push('theme = ?');
+    params.push(requestedTheme);
+  }
+
   if (updates.length === 0) {
     return res.status(400).json({ error: 'No squad changes were provided' });
   }
@@ -2125,6 +2137,42 @@ router.post('/conversations/:id/read', requireAuth, (req, res) => {
   }
   markConversationRead(db, conversationId, req.user.id);
   res.json({ success: true });
+});
+
+router.put('/conversations/:id/theme', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  if (!conversationId) return res.status(400).json({ error: 'Conversation id is required' });
+
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  // For squads, only creator/moderator can change theme. For DMs, either party can.
+  const conversation = getConversationCore(db, conversationId);
+  if (conversation?.kind === 'squad') {
+    const role = String(member.role || '').trim();
+    if (role !== 'creator' && role !== 'moderator') {
+      return res.status(403).json({ error: 'Only creators or moderators can change the theme' });
+    }
+  }
+
+  const VALID_THEMES = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp'];
+  const requestedTheme = String(req.body?.theme || '').trim().toLowerCase();
+  if (!VALID_THEMES.includes(requestedTheme)) {
+    return res.status(400).json({ error: 'Invalid theme' });
+  }
+
+  const now = toSqliteDateTime();
+  db.prepare(`
+    UPDATE conversations
+    SET theme = ?, updated_at = ?
+    WHERE id = ?
+  `).run(requestedTheme, now, conversationId);
+
+  const conversationRow = getConversationRowForUser(db, conversationId, req.user.id);
+  res.json({ conversation: normalizeConversationRow(conversationRow) });
 });
 
 router.put('/conversations/:id/pin', requireAuth, (req, res) => {
