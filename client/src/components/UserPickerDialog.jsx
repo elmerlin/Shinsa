@@ -12,15 +12,18 @@ export default function UserPickerDialog({
   submitLabel = 'Share',
   onClose,
   onSelect,
+  onSelectConversation = null,
   onSubmit = null,
   excludeUserIds = [],
   multiSelect = false,
+  showSquads = false,
   zIndexClass = 'z-[200]',
   searchPlaceholder = 'Search players',
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [recentUsers, setRecentUsers] = useState([]);
+  const [squadConversations, setSquadConversations] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -40,6 +43,7 @@ export default function UserPickerDialog({
     setQuery('');
     setResults([]);
     setRecentUsers([]);
+    setSquadConversations([]);
     setError('');
     setSelectingId('');
     setSubmitting(false);
@@ -55,6 +59,7 @@ export default function UserPickerDialog({
         if (cancelled) return;
         const conversations = Array.isArray(payload?.conversations) ? payload.conversations : [];
         const partners = conversations
+          .filter((c) => c?.kind !== 'squad')
           .map((conversation) => conversation?.partner || null)
           .filter((partner) => {
             const userId = String(partner?.id || '').trim();
@@ -65,10 +70,17 @@ export default function UserPickerDialog({
           ))
           .slice(0, 8);
         setRecentUsers(partners);
+        if (showSquads) {
+          const squads = conversations
+            .filter((c) => c?.kind === 'squad')
+            .slice(0, 12);
+          setSquadConversations(squads);
+        }
       })
       .catch(() => {
         if (!cancelled) {
           setRecentUsers([]);
+          setSquadConversations([]);
         }
       })
       .finally(() => {
@@ -78,7 +90,7 @@ export default function UserPickerDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, excludedIds]);
+  }, [open, excludedIds, showSquads]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -112,12 +124,32 @@ export default function UserPickerDialog({
     };
   }, [open, query, excludedIds]);
 
+  const handleSelectConversation = async (conversation) => {
+    if (!conversation?.id || !onSelectConversation) return;
+    if (selectingId || submitting) return;
+    setSelectingId(`conv-${conversation.id}`);
+    setError('');
+    try {
+      await onSelectConversation(conversation);
+    } catch (err) {
+      setError(err?.message || 'Failed to send.');
+    } finally {
+      setSelectingId('');
+    }
+  };
+
   if (!open) return null;
 
   const showSearchResults = query.trim().length >= 2;
   const visibleUsers = showSearchResults ? results : recentUsers;
+  const queryLower = query.trim().toLowerCase();
+  const filteredSquads = showSquads
+    ? (showSearchResults
+      ? squadConversations.filter((c) => (c?.title || '').toLowerCase().includes(queryLower))
+      : squadConversations)
+    : [];
   const emptyState = showSearchResults
-    ? 'No matching players found.'
+    ? 'No matching results found.'
     : (loadingRecent ? 'Loading recent conversations...' : 'No recent conversations yet.');
 
   const handleSelect = async (user) => {
@@ -242,16 +274,54 @@ export default function UserPickerDialog({
           ) : null}
 
           <div className="mt-3 space-y-2">
+            {filteredSquads.length > 0 ? (
+              <>
+                <div className="px-1 pb-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
+                  Squads
+                </div>
+                {filteredSquads.map((conv) => {
+                  const convId = String(conv?.id || '').trim();
+                  const isSelecting = selectingId === `conv-${convId}`;
+                  const squadAvatar = conv?.avatar ? getAvatarUrl(conv.avatar) : '';
+                  return (
+                    <button
+                      key={`squad-${convId}`}
+                      type="button"
+                      onClick={() => handleSelectConversation(conv)}
+                      disabled={!!selectingId || submitting}
+                      className="flex w-full items-center gap-3 rounded-xl border border-piu-border/50 bg-piu-dark/45 px-3 py-3 text-left transition-colors disabled:opacity-60 hover:border-cyan-400/35 hover:bg-piu-dark/65"
+                    >
+                      {squadAvatar ? (
+                        <img src={squadAvatar} alt="" className="h-11 w-11 rounded-xl object-cover" />
+                      ) : (
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 font-display font-black text-sm text-white">
+                          {(conv?.title || 'S').slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-display font-black text-white">{conv?.title || 'Untitled squad'}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-500">
+                          {conv?.member_count ? `${conv.member_count} member${conv.member_count === 1 ? '' : 's'}` : 'Squad'}
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-md border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-cyan-100">
+                        {isSelecting ? 'Sending...' : selectLabel}
+                      </span>
+                    </button>
+                  );
+                })}
+              </>
+            ) : null}
             {!showSearchResults && recentUsers.length > 0 ? (
               <div className="px-1 pb-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
-                Recent
+                {filteredSquads.length > 0 ? 'Players' : 'Recent'}
               </div>
             ) : null}
             {showSearchResults && loading ? (
               <div className="rounded-xl border border-piu-border/50 bg-piu-dark/40 px-4 py-5 text-center text-sm text-gray-400">
                 Searching players...
               </div>
-            ) : visibleUsers.length === 0 ? (
+            ) : visibleUsers.length === 0 && filteredSquads.length === 0 ? (
               <div className="rounded-xl border border-piu-border/50 bg-piu-dark/40 px-4 py-5 text-center text-sm text-gray-500">
                 {emptyState}
               </div>

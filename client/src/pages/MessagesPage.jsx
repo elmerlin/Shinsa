@@ -3698,6 +3698,9 @@ export default function MessagesPage() {
         setActiveConversation(payload.conversation);
       }
       loadConversations();
+      window.requestAnimationFrame(() => {
+        draftInputRef.current?.focus();
+      });
     } catch (err) {
       setActionError(err?.message || 'Failed to send message.');
     } finally {

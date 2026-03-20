@@ -1,4 +1,4 @@
-import { getOrCreateDirectConversation } from './api';
+import { getOrCreateDirectConversation, sendConversationMessage } from './api';
 
 export async function sendDirectPayloadToRecipients(recipients, payload = {}) {
   const users = Array.isArray(recipients) ? recipients.filter(Boolean) : [];
@@ -34,5 +34,28 @@ export async function sendDirectPayloadToRecipients(recipients, payload = {}) {
     count: results.length,
     results,
     lastConversationId: results[results.length - 1]?.conversationId || '',
+  };
+}
+
+export async function sendPayloadToConversation(conversation, payload = {}) {
+  const conversationId = String(conversation?.id || '').trim();
+  if (!conversationId) {
+    throw new Error('No conversation selected.');
+  }
+
+  const data = { ...(payload || {}) };
+  if (!data.content && !data.session_share && !data.challenge_card && !data.link_share) {
+    throw new Error('Nothing to send.');
+  }
+
+  const response = await sendConversationMessage(conversationId, data);
+  return {
+    count: 1,
+    results: [{
+      conversation,
+      conversationId,
+      message: response?.message || null,
+    }],
+    lastConversationId: conversationId,
   };
 }

@@ -32,7 +32,7 @@ import React from 'react';
 //   decorOverlay     – optional JSX overlay rendered inside the viewport
 // ---------------------------------------------------------------------------
 
-export const THEME_KEYS = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp'];
+export const THEME_KEYS = ['', 'cli', 'aim', 'yahoo', 'msn', 'skype', 'winamp', 'icq', 'wechat', 'discord', 'qq'];
 
 export const THEME_META = {
   '': { label: 'Default', description: 'Shinsa dark theme', preview: 'bg-piu-card border-piu-border/60' },
@@ -42,6 +42,10 @@ export const THEME_META = {
   msn: { label: 'MSN', description: 'MSN Messenger', preview: 'bg-[#d6e9f8] border-[#0078d4]' },
   skype: { label: 'Skype', description: 'Skype messaging', preview: 'bg-[#e4f0f8] border-[#00aff0]' },
   winamp: { label: 'Winamp', description: 'It really whips…', preview: 'bg-[#29292e] border-[#00e000]/50' },
+  icq: { label: 'ICQ', description: 'Uh oh!', preview: 'bg-[#eef5e6] border-[#6fb43e]' },
+  wechat: { label: 'WeChat', description: 'Weixin messaging', preview: 'bg-[#ededed] border-[#07c160]' },
+  discord: { label: 'Discord', description: 'Server vibes', preview: 'bg-[#313338] border-[#5865f2]' },
+  qq: { label: 'QQ', description: 'Tencent QQ', preview: 'bg-[#edf2fa] border-[#12b7f5]' },
 };
 
 const BASE = {
@@ -249,7 +253,112 @@ const winamp = buildTheme({
   ),
 });
 
-const THEMES = { '': BASE, cli, aim, yahoo, msn, skype, winamp };
+// ── ICQ ────────────────────────────────────────────────────────────────────
+const icq = buildTheme({
+  fontFamily: "'Tahoma', 'Verdana', 'Arial', sans-serif",
+  viewportBg: 'bg-[#eef5e6]',
+  viewportStyle: {
+    backgroundImage: 'linear-gradient(180deg, #eef5e6 0%, #f8fbf4 100%)',
+  },
+  headerBg: 'bg-gradient-to-r from-[#4dac2b] to-[#6fb43e]',
+  headerText: 'text-white',
+  headerBorder: 'border-[#3d8a22]',
+  composerBg: 'bg-[#f0f4ea]',
+  composerBorder: 'border-[#c4d6a8]',
+  composerInputBg: 'bg-white',
+  composerInputText: 'text-gray-900 placeholder:text-gray-400',
+  ownBubbleBg: 'bg-[#d4edbc]',
+  ownBubbleBorder: 'border-[#a8d48a]',
+  ownBubbleText: 'text-[#2a4a18]',
+  otherBubbleBg: 'bg-white',
+  otherBubbleBorder: 'border-[#d2dcc6]',
+  otherBubbleText: 'text-[#2a4a18]',
+  bubbleRadius: '0.65rem',
+  senderNameClass: 'text-[11px] font-bold text-[#4dac2b]',
+  showAvatars: true,
+  shadow: '0 1px 3px rgba(0,0,0,0.08)',
+  extraBubbleClass: '',
+});
+
+// ── WeChat ─────────────────────────────────────────────────────────────────
+const wechat = buildTheme({
+  fontFamily: "'PingFang SC', 'Helvetica Neue', 'Arial', sans-serif",
+  viewportBg: 'bg-[#ededed]',
+  viewportStyle: {},
+  headerBg: 'bg-[#ededed]',
+  headerText: 'text-[#191919]',
+  headerBorder: 'border-[#d6d6d6]',
+  composerBg: 'bg-[#f7f7f7]',
+  composerBorder: 'border-[#e0e0e0]',
+  composerInputBg: 'bg-white',
+  composerInputText: 'text-[#191919] placeholder:text-gray-400',
+  ownBubbleBg: 'bg-[#95ec69]',
+  ownBubbleBorder: 'border-[#87d85a]',
+  ownBubbleText: 'text-[#191919]',
+  otherBubbleBg: 'bg-white',
+  otherBubbleBorder: 'border-[#e0e0e0]',
+  otherBubbleText: 'text-[#191919]',
+  bubbleRadius: '0.5rem',
+  senderNameClass: 'text-[10px] font-semibold text-[#808080]',
+  showAvatars: true,
+  shadow: 'none',
+  extraBubbleClass: '',
+});
+
+// ── Discord ────────────────────────────────────────────────────────────────
+const discord = buildTheme({
+  fontFamily: "'gg sans', 'Helvetica Neue', 'Helvetica', 'Arial', sans-serif",
+  viewportBg: 'bg-[#313338]',
+  viewportStyle: {},
+  headerBg: 'bg-[#313338]',
+  headerText: 'text-white',
+  headerBorder: 'border-[#1e1f22]',
+  composerBg: 'bg-[#313338]',
+  composerBorder: 'border-[#1e1f22]',
+  composerInputBg: 'bg-[#383a40]',
+  composerInputText: 'text-[#dbdee1] placeholder:text-[#6d6f78]',
+  ownBubbleBg: 'bg-transparent',
+  ownBubbleBorder: 'border-transparent',
+  ownBubbleText: 'text-[#dbdee1]',
+  otherBubbleBg: 'bg-transparent',
+  otherBubbleBorder: 'border-transparent',
+  otherBubbleText: 'text-[#dbdee1]',
+  bubbleRadius: '0',
+  senderNameClass: 'text-[13px] font-semibold text-[#f2f3f5]',
+  showAvatars: true,
+  shadow: 'none',
+  extraViewportClass: '',
+  extraBubbleClass: '',
+});
+
+// ── QQ ─────────────────────────────────────────────────────────────────────
+const qq = buildTheme({
+  fontFamily: "'Microsoft YaHei', 'PingFang SC', 'Arial', sans-serif",
+  viewportBg: 'bg-[#edf2fa]',
+  viewportStyle: {
+    backgroundImage: 'linear-gradient(180deg, #edf2fa 0%, #f5f8fd 100%)',
+  },
+  headerBg: 'bg-gradient-to-r from-[#12b7f5] to-[#4fc3f7]',
+  headerText: 'text-white',
+  headerBorder: 'border-[#0ea2db]',
+  composerBg: 'bg-white',
+  composerBorder: 'border-[#d8e3f0]',
+  composerInputBg: 'bg-[#f5f8fd]',
+  composerInputText: 'text-[#1a2a3a] placeholder:text-gray-400',
+  ownBubbleBg: 'bg-[#12b7f5]',
+  ownBubbleBorder: 'border-[#12b7f5]',
+  ownBubbleText: 'text-white',
+  otherBubbleBg: 'bg-white',
+  otherBubbleBorder: 'border-[#e0e8f0]',
+  otherBubbleText: 'text-[#1a2a3a]',
+  bubbleRadius: '1rem',
+  senderNameClass: 'text-[10px] font-semibold text-[#12b7f5]',
+  showAvatars: true,
+  shadow: '0 1px 4px rgba(18,183,245,0.1)',
+  extraBubbleClass: '',
+});
+
+const THEMES = { '': BASE, cli, aim, yahoo, msn, skype, winamp, icq, wechat, discord, qq };
 
 export function getTheme(key) {
   return THEMES[String(key || '').trim().toLowerCase()] || BASE;
@@ -265,7 +374,7 @@ export default function ThemePicker({ value, onChange, disabled }) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-400">Choose a chat theme that everyone in the conversation will see.</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {THEME_KEYS.map((key) => {
           const meta = THEME_META[key];
           const isActive = current === key;

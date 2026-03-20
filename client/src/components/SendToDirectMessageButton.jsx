@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { sendDirectPayloadToRecipients } from '../utils/directMessageDelivery';
+import { sendDirectPayloadToRecipients, sendPayloadToConversation } from '../utils/directMessageDelivery';
 import ActionIconButton from './ActionIconButton';
 import UserPickerDialog from './UserPickerDialog';
 
@@ -12,7 +12,7 @@ export default function SendToDirectMessageButton({
   challengeOptions = null,
   messageData = null,
   content = '',
-  label = 'Send to DM',
+  label = 'Share',
   tone = 'cyan',
   variant = 'button',
   className = '',
@@ -86,6 +86,14 @@ export default function SendToDirectMessageButton({
     const delivery = await sendDirectPayloadToRecipients(selectedUsers, payload);
     resetPickers();
     if (navigateAfterSend && delivery.count === 1 && delivery.lastConversationId) {
+      navigate(`/messages/${delivery.lastConversationId}`);
+    }
+  };
+
+  const handleSelectConversation = async (conversation) => {
+    const delivery = await sendPayloadToConversation(conversation, payload);
+    resetPickers();
+    if (navigateAfterSend && delivery.lastConversationId) {
       navigate(`/messages/${delivery.lastConversationId}`);
     }
   };
@@ -179,13 +187,17 @@ export default function SendToDirectMessageButton({
         open={pickerOpen}
         title={title}
         description={description}
+        eyebrowLabel="Send to"
         selectLabel={selectLabel}
         submitLabel={selectLabel}
+        searchPlaceholder="Search players or squads"
         onClose={resetPickers}
         onSelect={handleSelect}
+        onSelectConversation={handleSelectConversation}
         onSubmit={handleSubmit}
         excludeUserIds={excludeUserIds}
         multiSelect={multiSelect}
+        showSquads
       />
     </>
   );
