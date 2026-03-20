@@ -3007,6 +3007,7 @@ function initializeDb() {
     ['location_lng', 'REAL DEFAULT NULL'],
     ['avatar_v', 'INT DEFAULT 0'],
     ['playing_status', "TEXT DEFAULT ''"],
+    ['updated_at', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of userMigrations) {
     if (!userCols.includes(col)) {

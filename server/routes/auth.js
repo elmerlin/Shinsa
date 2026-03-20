@@ -1908,7 +1908,8 @@ router.put('/me', requireAuth, (req, res) => {
       location_country_code = COALESCE(?, location_country_code),
       location_city = COALESCE(?, location_city),
       location_lat = COALESCE(?, location_lat),
-      location_lng = COALESCE(?, location_lng)
+      location_lng = COALESCE(?, location_lng),
+      updated_at = datetime('now')
     WHERE id = ?
   `).run(
     email,

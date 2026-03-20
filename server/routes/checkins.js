@@ -103,7 +103,7 @@ function runAutoCheckoutSweep(db) {
         checkout_reason = 'proximity_away_timeout'
     WHERE id = ? AND checked_out_at IS NULL
   `);
-  const clearPlayingStatus = db.prepare("UPDATE users SET playing_status = '' WHERE id = ?");
+  const clearPlayingStatus = db.prepare("UPDATE users SET playing_status = '', updated_at = datetime('now') WHERE id = ?");
 
   const autoCheckedOut = [];
   for (const row of activeAwayRows) {
@@ -471,7 +471,7 @@ router.post('/checkin', requireAuth, requireCheckinFeature, (req, res) => {
 
   // Set playing status
   const status = `Playing at ${machine.name}`;
-  db.prepare("UPDATE users SET playing_status = ? WHERE id = ?").run(status, userId);
+  db.prepare("UPDATE users SET playing_status = ?, updated_at = datetime('now') WHERE id = ?").run(status, userId);
 
   const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   notifyUsersAboutCheckinEvent(db, {
@@ -510,7 +510,7 @@ router.post('/checkout', requireAuth, requireCheckinFeature, (req, res) => {
         checkout_reason = 'manual'
     WHERE id = ?
   `).run(active.id);
-  db.prepare("UPDATE users SET playing_status = '' WHERE id = ?").run(userId);
+  db.prepare("UPDATE users SET playing_status = '', updated_at = datetime('now') WHERE id = ?").run(userId);
 
   const actor = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   notifyUsersAboutCheckinEvent(db, {
@@ -1213,14 +1213,14 @@ router.get('/user/:userId/history', requireAuth, requireCheckinFeature, (req, re
 router.put('/playing-status', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
   const status = String(req.body.status || '').trim().slice(0, 100);
-  db.prepare("UPDATE users SET playing_status = ? WHERE id = ?").run(status, req.user.id);
+  db.prepare("UPDATE users SET playing_status = ?, updated_at = datetime('now') WHERE id = ?").run(status, req.user.id);
   res.json({ playing_status: status });
 });
 
 // DELETE /api/checkins/playing-status — clear playing status
 router.delete('/playing-status', requireAuth, requireCheckinFeature, (req, res) => {
   const db = getDb();
-  db.prepare("UPDATE users SET playing_status = '' WHERE id = ?").run(req.user.id);
+  db.prepare("UPDATE users SET playing_status = '', updated_at = datetime('now') WHERE id = ?").run(req.user.id);
   res.json({ playing_status: '' });
 });
 
