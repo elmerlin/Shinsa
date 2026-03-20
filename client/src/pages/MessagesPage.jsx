@@ -1715,7 +1715,7 @@ function MessageBubble({
   const isAttachmentOnly = (hasRichAttachment && !hasContent) || (!hasRichAttachment && suppressRawUrlContent);
   const bubbleClass = isAttachmentOnly
     ? 'w-full max-w-[19.25rem] sm:max-w-[22.5rem]'
-    : `inline-flex max-w-[85%] flex-col rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)] sm:max-w-[30rem]`;
+    : `inline-flex max-w-[85%] flex-col rounded-[1.25rem] border ${bubbleTone} px-2.5 py-2 shadow-[0_8px_20px_rgba(0,0,0,0.14)]`;
   const reactionItems = Array.isArray(message?.reactions) ? message.reactions : [];
   const viewerReaction = sanitizeReactionKey(message?.viewer_reaction);
   const trayKeys = normalizeReactionKeys(availableReactions).length > 0

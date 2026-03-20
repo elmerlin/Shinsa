@@ -23,6 +23,11 @@ const TAB_OPTIONS = [
   { key: 'shares', label: 'Scores/Clears' },
   { key: 'links', label: 'Off-app links' },
 ];
+const SETTINGS_TABS = [
+  { key: 'members', label: 'Members' },
+  { key: 'notifications', label: 'Notifications' },
+  { key: 'activity', label: 'Activity' },
+];
 
 function getInitials(value) {
   const text = String(value || '').trim();
@@ -192,6 +197,7 @@ export default function SquadSettingsModal({
   onConversationUpdated,
   onOpenLink,
 }) {
+  const [settingsTab, setSettingsTab] = useState('members');
   const [tab, setTab] = useState('videos');
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -231,6 +237,7 @@ export default function SquadSettingsModal({
 
   useEffect(() => {
     if (!open || !conversationId) return;
+    setSettingsTab('members');
     setTab('videos');
     setError('');
     setPickerOpen(false);
@@ -359,290 +366,300 @@ export default function SquadSettingsModal({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:py-5">
+          <div className="flex gap-1 border-b border-piu-border/50 px-4">
+            {SETTINGS_TABS.map((sTab) => (
+              <button
+                key={sTab.key}
+                type="button"
+                onClick={() => setSettingsTab(sTab.key)}
+                className={`px-3 py-2.5 text-xs font-display font-black transition-colors ${
+                  settingsTab === sTab.key
+                    ? 'border-b-2 border-cyan-400 text-cyan-100'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {sTab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
             {loading ? (
               <div className="rounded-xl border border-piu-border/60 bg-piu-dark/55 px-4 py-8 text-center text-sm text-gray-400">
                 Loading squad settings...
               </div>
-            ) : (
-              <div className="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-                <div className="space-y-5">
-                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-display font-black text-white">Identity</p>
-                        <p className="mt-1 text-xs leading-5 text-gray-400">
-                          The creator can change the squad name and avatar.
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1 text-[10px] font-display font-black tracking-[0.18em] text-gray-200">
-                        {getRoleLabel(viewerRole)}
-                      </span>
+            ) : settingsTab === 'members' ? (
+              <div className="space-y-3">
+                <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-display font-black text-white">Identity</p>
+                      <p className="mt-0.5 text-xs leading-5 text-gray-400">
+                        The creator can change the squad name and avatar.
+                      </p>
                     </div>
+                    <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2 py-0.5 text-[10px] font-display font-black tracking-[0.18em] text-gray-200">
+                      {getRoleLabel(viewerRole)}
+                    </span>
+                  </div>
 
-                    {canEditIdentity ? (
-                      <div className="mt-4 space-y-4">
-                        <AvatarPicker value={identityDraft.avatar} onChange={(value) => setIdentityDraft((prev) => ({ ...prev, avatar: value }))} size="md" />
-                        <label className="block">
-                          <p className="text-xs font-display font-bold uppercase tracking-[0.18em] text-gray-400">Name</p>
-                          <input
-                            type="text"
-                            value={identityDraft.title}
-                            onChange={(event) => setIdentityDraft((prev) => ({ ...prev, title: event.target.value }))}
-                            maxLength={60}
-                            className="mt-2 w-full rounded-xl border border-piu-border/60 bg-piu-dark/80 px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:border-cyan-400/30 focus:outline-none"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={handleSaveIdentity}
-                          disabled={!isIdentityDirty || savingIdentity}
-                          className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2.5 text-sm font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                        >
-                          {savingIdentity ? 'Saving...' : 'Save squad details'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="mt-4 flex items-center gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3">
-                        {conversation?.avatar ? (
-                          <img src={getAvatarUrl(conversation.avatar)} alt="" className="h-14 w-14 rounded-[1rem] object-cover" />
-                        ) : (
-                          <div className="flex h-14 w-14 items-center justify-center rounded-[1rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-base text-white">
-                            {getInitials(conversation?.title)}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <p className="truncate text-base font-display font-black text-white">{conversation?.title || 'Squad'}</p>
-                          <p className="mt-1 text-xs text-gray-400">Only the creator can edit this.</p>
+                  {canEditIdentity ? (
+                    <div className="mt-3 space-y-3">
+                      <AvatarPicker value={identityDraft.avatar} onChange={(value) => setIdentityDraft((prev) => ({ ...prev, avatar: value }))} size="md" />
+                      <label className="block">
+                        <p className="text-xs font-display font-bold uppercase tracking-[0.18em] text-gray-400">Name</p>
+                        <input
+                          type="text"
+                          value={identityDraft.title}
+                          onChange={(event) => setIdentityDraft((prev) => ({ ...prev, title: event.target.value }))}
+                          maxLength={60}
+                          className="mt-1.5 w-full rounded-xl border border-piu-border/60 bg-piu-dark/80 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-cyan-400/30 focus:outline-none"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleSaveIdentity}
+                        disabled={!isIdentityDirty || savingIdentity}
+                        className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-sm font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        {savingIdentity ? 'Saving...' : 'Save squad details'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-piu-border/60 bg-piu-card/75 px-2.5 py-2.5">
+                      {conversation?.avatar ? (
+                        <img src={getAvatarUrl(conversation.avatar)} alt="" className="h-11 w-11 rounded-[0.85rem] object-cover" />
+                      ) : (
+                        <div className="flex h-11 w-11 items-center justify-center rounded-[0.85rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
+                          {getInitials(conversation?.title)}
                         </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-display font-black text-white">{conversation?.title || 'Squad'}</p>
+                        <p className="mt-0.5 text-xs text-gray-400">Only the creator can edit this.</p>
                       </div>
-                    )}
-                  </section>
-
-                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-display font-black text-white">Members</p>
-                        <p className="mt-1 text-xs leading-5 text-gray-400">
-                          Moderators can add or kick players. Only the creator can promote moderators.
-                        </p>
-                      </div>
-                      {canManageMembers ? (
-                        <button
-                          type="button"
-                          onClick={() => setPickerOpen(true)}
-                          className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white"
-                        >
-                          Add player
-                        </button>
-                      ) : null}
                     </div>
+                  )}
+                </section>
 
-                    <div className="mt-4 space-y-3">
-                      {members.map((member) => {
-                        const memberUserId = String(member?.user?.id || member?.user_id || '').trim();
-                        const canToggleRole = viewerRole === 'creator' && member?.role !== 'creator';
-                        const canKick = memberUserId !== String(currentUserId || '').trim()
-                          && (
-                            viewerRole === 'creator'
-                              ? member?.role !== 'creator'
-                              : (viewerRole === 'moderator' && member?.role === 'member')
-                          );
-                        const isActing = actingMemberId === memberUserId;
+                <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-display font-black text-white">Members</p>
+                      <p className="mt-0.5 text-xs leading-5 text-gray-400">
+                        Moderators can add or kick players. Only the creator can promote moderators.
+                      </p>
+                    </div>
+                    {canManageMembers ? (
+                      <button
+                        type="button"
+                        onClick={() => setPickerOpen(true)}
+                        className="shrink-0 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1.5 text-xs font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white"
+                      >
+                        Add player
+                      </button>
+                    ) : null}
+                  </div>
 
-                        return (
-                          <div
-                            key={memberUserId || member?.joined_at}
-                            className="flex flex-wrap items-center gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3"
-                          >
-                            {member?.user?.avatar ? (
-                              <img src={getAvatarUrl(member.user.avatar)} alt="" className="h-11 w-11 rounded-full object-cover" />
-                            ) : (
-                              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
-                                {getInitials(member?.user?.username)}
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="truncate text-sm font-display font-black text-white">
-                                  {member?.user?.username || 'Player'}
-                                  {memberUserId === String(currentUserId || '').trim() ? ' (You)' : ''}
-                                </p>
-                                <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2 py-0.5 text-[10px] font-display font-black uppercase tracking-[0.16em] text-gray-200">
-                                  {getRoleLabel(member?.role)}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-xs text-gray-500">
-                                Joined {member?.joined_at ? new Date(`${String(member.joined_at).replace(' ', 'T')}Z`).toLocaleDateString() : 'recently'}
-                              </p>
-                            </div>
-                            {canToggleRole ? (
-                              <button
-                                type="button"
-                                onClick={() => handleRoleToggle(member)}
-                                disabled={isActing}
-                                className="rounded-lg border border-piu-border/60 bg-piu-dark/80 px-3 py-2 text-[11px] font-display font-black text-gray-100 transition-colors hover:border-cyan-300/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                              >
-                                {isActing ? 'Saving...' : (member?.role === 'moderator' ? 'Make member' : 'Make moderator')}
-                              </button>
-                            ) : null}
-                            {canKick ? (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveMember(member)}
-                                disabled={isActing}
-                                className="rounded-lg border border-red-300/20 bg-red-500/10 px-3 py-2 text-[11px] font-display font-black text-red-100 transition-colors hover:border-red-300/35 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-55"
-                              >
-                                {isActing ? 'Removing...' : 'Kick'}
-                              </button>
-                            ) : null}
-                          </div>
+                  <div className="mt-3 space-y-2">
+                    {members.map((member) => {
+                      const memberUserId = String(member?.user?.id || member?.user_id || '').trim();
+                      const canToggleRole = viewerRole === 'creator' && member?.role !== 'creator';
+                      const canKick = memberUserId !== String(currentUserId || '').trim()
+                        && (
+                          viewerRole === 'creator'
+                            ? member?.role !== 'creator'
+                            : (viewerRole === 'moderator' && member?.role === 'member')
                         );
-                      })}
-                    </div>
-                  </section>
-                </div>
+                      const isActing = actingMemberId === memberUserId;
+                      const hasActions = canToggleRole || canKick;
 
-                <div className="space-y-5">
-                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
-                    <p className="text-sm font-display font-black text-white">Notifications</p>
-                    <p className="mt-1 text-xs leading-5 text-gray-400">
-                      Mention notifications can still reach you even if general squad notifications are off.
-                    </p>
-                    <div className="mt-4 space-y-3">
-                      <ToggleRow
-                        label="Notifications"
-                        description="Turn general squad message notifications on or off."
-                        enabled={!!notificationsEnabled}
-                        disabled={updatingNotifications}
-                        onToggle={(enabled) => toggleNotifications({ enabled })}
-                      />
-                      <ToggleRow
-                        label="@mentions"
-                        description="If this is on, mentions will still notify you even when general notifications are off."
-                        enabled={!!notifyMentions}
-                        disabled={updatingNotifications}
-                        onToggle={(mentions) => toggleNotifications({ mentions })}
-                      />
-                    </div>
-                  </section>
-
-                  <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-display font-black text-white">Shared activity</p>
-                        <p className="mt-1 text-xs leading-5 text-gray-400">
-                          Linked videos, shared scores/clears, and links from this squad chat.
-                        </p>
-                      </div>
-                      <div className="inline-flex rounded-xl border border-piu-border/60 bg-piu-card/75 p-1">
-                        {TAB_OPTIONS.map((option) => (
-                          <button
-                            key={option.key}
-                            type="button"
-                            onClick={() => setTab(option.key)}
-                            className={`rounded-lg px-3 py-1.5 text-[11px] font-display font-black transition-colors ${
-                              tab === option.key
-                                ? 'border border-cyan-400/25 bg-cyan-500/10 text-cyan-100'
-                                : 'text-gray-400 hover:text-white'
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      {tab === 'videos' ? (
-                        resources.videos.length > 0 ? (
-                          <div className="space-y-3">
-                            {resources.videos.map((item) => (
-                              <button
-                                key={item.url}
-                                type="button"
-                                onClick={() => onOpenLink?.({ url: item.url, title: item.title })}
-                                className="flex w-full items-center gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
-                              >
-                                <div className="relative h-16 w-24 shrink-0 overflow-hidden rounded-[0.9rem] bg-black">
-                                  {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : null}
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="line-clamp-2 text-sm font-display font-black text-white">{item.title}</p>
-                                  <p className="mt-1 text-xs text-gray-400">{item.subtitle}</p>
-                                </div>
-                              </button>
-                            ))}
+                      return (
+                        <div
+                          key={memberUserId || member?.joined_at}
+                          className="flex items-center gap-2.5 rounded-xl border border-piu-border/60 bg-piu-card/75 px-2.5 py-2"
+                        >
+                          {member?.user?.avatar ? (
+                            <img src={getAvatarUrl(member.user.avatar)} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                          ) : (
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-xs text-white">
+                              {getInitials(member?.user?.username)}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="truncate text-sm font-display font-black text-white">
+                                {member?.user?.username || 'Player'}
+                                {memberUserId === String(currentUserId || '').trim() ? ' (You)' : ''}
+                              </p>
+                              <span className="shrink-0 rounded-full border border-piu-border/60 bg-piu-dark/80 px-1.5 py-px text-[9px] font-display font-black uppercase tracking-[0.14em] text-gray-200">
+                                {getRoleLabel(member?.role)}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-gray-500">
+                              Joined {member?.joined_at ? new Date(`${String(member.joined_at).replace(' ', 'T')}Z`).toLocaleDateString() : 'recently'}
+                            </p>
                           </div>
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
-                            No linked videos yet.
-                          </div>
-                        )
-                      ) : null}
-
-                      {tab === 'shares' ? (
-                        resources.shares.length > 0 ? (
-                          <div className="space-y-3">
-                            {resources.shares.map((item) => (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => onOpenLink?.(item.linkTarget)}
-                                className="flex w-full items-start gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
-                              >
-                                <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2.5 py-1 text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-200">
-                                  {item.kind}
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-display font-black text-white">{item.title}</p>
-                                  {item.subtitle ? <p className="mt-1 text-xs text-gray-400">{item.subtitle}</p> : null}
-                                  {item.detail ? <p className="mt-1 text-xs text-cyan-100">{item.detail}</p> : null}
-                                  <p className="mt-1 text-[11px] text-gray-500">Shared by {item.senderName}</p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
-                            No shared scores or clears yet.
-                          </div>
-                        )
-                      ) : null}
-
-                      {tab === 'links' ? (
-                        resources.links.length > 0 ? (
-                          <div className="space-y-3">
-                            {resources.links.map((item) => (
-                              <button
-                                key={item.url}
-                                type="button"
-                                onClick={() => onOpenLink?.({ url: item.url, title: item.title })}
-                                className="flex w-full items-start gap-3 rounded-xl border border-piu-border/60 bg-piu-card/75 px-3 py-3 text-left transition-colors hover:border-cyan-300/30"
-                              >
-                                <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-piu-border/60 bg-piu-dark/80 text-cyan-100">
-                                  ↗
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-display font-black text-white">{item.title}</p>
-                                  <p className="mt-1 text-xs text-gray-400">{item.subtitle}</p>
-                                  <p className="mt-1 truncate text-[11px] text-gray-500">{item.url}</p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
-                            No off-app links yet.
-                          </div>
-                        )
-                      ) : null}
-                    </div>
-                  </section>
-                </div>
+                          {hasActions ? (
+                            <div className="flex shrink-0 flex-col gap-1">
+                              {canToggleRole ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRoleToggle(member)}
+                                  disabled={isActing}
+                                  className="rounded-lg border border-piu-border/60 bg-piu-dark/80 px-2 py-1 text-[10px] font-display font-black text-gray-100 transition-colors hover:border-cyan-300/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
+                                >
+                                  {isActing ? '...' : (member?.role === 'moderator' ? 'Make member' : 'Make mod')}
+                                </button>
+                              ) : null}
+                              {canKick ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMember(member)}
+                                  disabled={isActing}
+                                  className="rounded-lg border border-red-300/20 bg-red-500/10 px-2 py-1 text-[10px] font-display font-black text-red-100 transition-colors hover:border-red-300/35 hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-55"
+                                >
+                                  {isActing ? '...' : 'Kick'}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
               </div>
-            )}
+            ) : settingsTab === 'notifications' ? (
+              <div className="space-y-3">
+                <p className="text-xs leading-5 text-gray-400">
+                  Mention notifications can still reach you even if general squad notifications are off.
+                </p>
+                <ToggleRow
+                  label="Notifications"
+                  description="Turn general squad message notifications on or off."
+                  enabled={!!notificationsEnabled}
+                  disabled={updatingNotifications}
+                  onToggle={(enabled) => toggleNotifications({ enabled })}
+                />
+                <ToggleRow
+                  label="@mentions"
+                  description="If this is on, mentions will still notify you even when general notifications are off."
+                  enabled={!!notifyMentions}
+                  disabled={updatingNotifications}
+                  onToggle={(mentions) => toggleNotifications({ mentions })}
+                />
+              </div>
+            ) : settingsTab === 'activity' ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs leading-5 text-gray-400">
+                    Linked videos, shared scores/clears, and links from this squad chat.
+                  </p>
+                  <div className="inline-flex rounded-xl border border-piu-border/60 bg-piu-card/75 p-1">
+                    {TAB_OPTIONS.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setTab(option.key)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-display font-black transition-colors ${
+                          tab === option.key
+                            ? 'border border-cyan-400/25 bg-cyan-500/10 text-cyan-100'
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {tab === 'videos' ? (
+                  resources.videos.length > 0 ? (
+                    <div className="space-y-2">
+                      {resources.videos.map((item) => (
+                        <button
+                          key={item.url}
+                          type="button"
+                          onClick={() => onOpenLink?.({ url: item.url, title: item.title })}
+                          className="flex w-full items-center gap-2.5 rounded-xl border border-piu-border/60 bg-piu-card/75 px-2.5 py-2.5 text-left transition-colors hover:border-cyan-300/30"
+                        >
+                          <div className="relative h-14 w-20 shrink-0 overflow-hidden rounded-[0.75rem] bg-black">
+                            {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover" /> : null}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-2 text-sm font-display font-black text-white">{item.title}</p>
+                            <p className="mt-0.5 text-xs text-gray-400">{item.subtitle}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
+                      No linked videos yet.
+                    </div>
+                  )
+                ) : null}
+
+                {tab === 'shares' ? (
+                  resources.shares.length > 0 ? (
+                    <div className="space-y-2">
+                      {resources.shares.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => onOpenLink?.(item.linkTarget)}
+                          className="flex w-full items-start gap-2.5 rounded-xl border border-piu-border/60 bg-piu-card/75 px-2.5 py-2.5 text-left transition-colors hover:border-cyan-300/30"
+                        >
+                          <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2 py-0.5 text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-200">
+                            {item.kind}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-display font-black text-white">{item.title}</p>
+                            {item.subtitle ? <p className="mt-0.5 text-xs text-gray-400">{item.subtitle}</p> : null}
+                            {item.detail ? <p className="mt-0.5 text-xs text-cyan-100">{item.detail}</p> : null}
+                            <p className="mt-0.5 text-[11px] text-gray-500">Shared by {item.senderName}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
+                      No shared scores or clears yet.
+                    </div>
+                  )
+                ) : null}
+
+                {tab === 'links' ? (
+                  resources.links.length > 0 ? (
+                    <div className="space-y-2">
+                      {resources.links.map((item) => (
+                        <button
+                          key={item.url}
+                          type="button"
+                          onClick={() => onOpenLink?.({ url: item.url, title: item.title })}
+                          className="flex w-full items-start gap-2.5 rounded-xl border border-piu-border/60 bg-piu-card/75 px-2.5 py-2.5 text-left transition-colors hover:border-cyan-300/30"
+                        >
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-piu-border/60 bg-piu-dark/80 text-sm text-cyan-100">
+                            ↗
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-display font-black text-white">{item.title}</p>
+                            <p className="mt-0.5 text-xs text-gray-400">{item.subtitle}</p>
+                            <p className="mt-0.5 truncate text-[11px] text-gray-500">{item.url}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-piu-border/60 bg-piu-dark/70 px-4 py-6 text-center text-sm text-gray-500">
+                      No off-app links yet.
+                    </div>
+                  )
+                ) : null}
+              </div>
+            ) : null}
 
             {error ? (
               <p className="mt-4 text-sm text-red-300">{error}</p>
