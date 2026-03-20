@@ -134,6 +134,7 @@ function getConversationListRows(db, userId) {
       cm.role AS viewer_role,
       cm.notifications_enabled AS viewer_notifications_enabled,
       cm.notify_mentions AS viewer_notify_mentions,
+      cm.is_pinned AS is_pinned,
       CASE WHEN c.kind = 'direct' THEN (
         SELECT u.id
         FROM conversation_members other_cm
@@ -213,7 +214,7 @@ function getConversationListRows(db, userId) {
       AND cm.user_id = ?
     LEFT JOIN conversation_messages lm ON lm.id = c.last_message_id
     WHERE cm.is_hidden = 0
-    ORDER BY datetime(COALESCE(NULLIF(c.last_message_at, ''), c.created_at)) DESC, c.id DESC
+    ORDER BY cm.is_pinned DESC, datetime(COALESCE(NULLIF(c.last_message_at, ''), c.created_at)) DESC, c.id DESC
   `).all(userId, userId, userId, userId, userId, userId, userId, userId, userId, userId);
 }
 
@@ -236,6 +237,7 @@ function getConversationRowForUser(db, conversationId, userId) {
       cm.role AS viewer_role,
       cm.notifications_enabled AS viewer_notifications_enabled,
       cm.notify_mentions AS viewer_notify_mentions,
+      cm.is_pinned AS is_pinned,
       CASE WHEN c.kind = 'direct' THEN (
         SELECT u.id
         FROM conversation_members other_cm
@@ -2123,6 +2125,28 @@ router.post('/conversations/:id/read', requireAuth, (req, res) => {
   }
   markConversationRead(db, conversationId, req.user.id);
   res.json({ success: true });
+});
+
+router.put('/conversations/:id/pin', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  if (!conversationId) return res.status(400).json({ error: 'Conversation id is required' });
+
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const pinned = req.body.pinned ? 1 : 0;
+  const now = toSqliteDateTime();
+  db.prepare(`
+    UPDATE conversation_members
+    SET is_pinned = ?, updated_at = ?
+    WHERE conversation_id = ? AND user_id = ?
+  `).run(pinned, now, conversationId, req.user.id);
+
+  const conversationRow = getConversationRowForUser(db, conversationId, req.user.id);
+  res.json({ conversation: normalizeConversationRow(conversationRow) });
 });
 
 router.post('/conversations/:id/stomp', requireAuth, (req, res) => {

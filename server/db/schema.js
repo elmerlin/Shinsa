@@ -1457,6 +1457,7 @@ function initializeDb() {
       joined_at TEXT DEFAULT (datetime('now')),
       last_read_at TEXT DEFAULT '',
       is_hidden INTEGER NOT NULL DEFAULT 0,
+      is_pinned INTEGER NOT NULL DEFAULT 0,
       notifications_enabled INTEGER NOT NULL DEFAULT 1,
       notify_mentions INTEGER NOT NULL DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
@@ -2712,6 +2713,7 @@ function initializeDb() {
     ['added_by_user_id', "TEXT DEFAULT ''"],
     ['notifications_enabled', 'INTEGER NOT NULL DEFAULT 1'],
     ['notify_mentions', 'INTEGER NOT NULL DEFAULT 1'],
+    ['is_pinned', 'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, type] of conversationMemberMigrations) {
     if (!conversationMemberCols.includes(col)) {

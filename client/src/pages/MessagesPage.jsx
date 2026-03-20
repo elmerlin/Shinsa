@@ -23,6 +23,7 @@ import {
   setMessageConversationReaction,
   sendMessageConversationStomp,
   sendConversationMessage,
+  pinMessageConversation,
 } from '../utils/api';
 import {
   buildClearLinkShare,
@@ -50,6 +51,7 @@ import SessionShareCard from '../components/SessionShareCard';
 import SquadComposerModal from '../components/SquadComposerModal';
 import MentionSuggestionsPanel from '../components/MentionSuggestionsPanel';
 import SquadSettingsModal from '../components/SquadSettingsModal';
+import ConversationSettingsModal from '../components/ConversationSettingsModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
@@ -2260,6 +2262,11 @@ function ConversationRow({ conversation, stomping, celebrate, onStomp }) {
           <p className={`truncate text-sm font-display font-black ${conversation.unread_count > 0 ? 'text-white' : 'text-gray-200'}`}>
             {conversation?.title || partner?.username || 'Unknown player'}
           </p>
+          {conversation.is_pinned ? (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 shrink-0 text-cyan-400/70">
+              <path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5H8.5v5.5a.5.5 0 0 1-1 0V10H3.5a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354" />
+            </svg>
+          ) : null}
           {isSquad ? (
             <span className="rounded-full border border-white/10 bg-white/6 px-2 py-0.5 text-[9px] font-display font-black uppercase tracking-[0.16em] text-cyan-100">
               Squad
@@ -2556,6 +2563,9 @@ function ConversationView({
   onOpenThread,
   onOpenLink,
   onOpenSquadSettings,
+  onOpenPersonSettings,
+  onPinConversation,
+  isPinned,
   defaultReaction,
   availableReactions,
   onReact,
@@ -2615,7 +2625,11 @@ function ConversationView({
                 </div>
               </button>
             ) : (
-              <>
+              <button
+                type="button"
+                onClick={onOpenPersonSettings}
+                className="flex min-w-0 items-center gap-3 rounded-[1rem] px-1 py-1 text-left transition-colors hover:bg-white/6"
+              >
                 {headerAvatar ? (
                   <img src={headerAvatar} alt="" className="h-10 w-10 rounded-full object-cover" />
                 ) : (
@@ -2624,28 +2638,42 @@ function ConversationView({
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h1 className="truncate text-lg font-display font-black text-white">{headerTitle}</h1>
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="truncate text-lg font-display font-black text-white">{headerTitle}</h1>
+                  </div>
                   <p className="mt-0.5 text-[11px] text-gray-500">{headerSubtitle}</p>
                 </div>
-              </>
+              </button>
             )}
           </div>
-          {isSquad ? (
-            <button
-              type="button"
-              onClick={onOpenSquadSettings}
-              className="hidden rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white sm:inline-flex"
-            >
-              Squad settings
-            </button>
-          ) : activePartner?.id ? (
-            <Link
-              to={getProfilePath(activePartner.id, activePartner.username)}
-              className="hidden rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white sm:inline-flex"
-            >
-              View profile
-            </Link>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {!isSquad ? (
+              <button
+                type="button"
+                onClick={onPinConversation}
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
+                  isPinned
+                    ? 'border-cyan-400/30 bg-cyan-500/15 text-cyan-300'
+                    : 'border-white/12 bg-black/30 text-gray-400 hover:border-cyan-300/25 hover:text-white'
+                }`}
+                aria-label={isPinned ? 'Unpin conversation' : 'Pin conversation'}
+                title={isPinned ? 'Unpin conversation' : 'Pin conversation'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-[1.125rem] w-[1.125rem]" style={{ opacity: isPinned ? 1 : 0.7 }}>
+                  <path d="M4.146.146A.5.5 0 0 1 4.5 0h7a.5.5 0 0 1 .5.5c0 .68-.342 1.174-.646 1.479-.126.125-.25.224-.354.298v4.431l.078.048c.203.127.476.314.751.555C12.36 7.775 13 8.527 13 9.5a.5.5 0 0 1-.5.5H8.5v5.5a.5.5 0 0 1-1 0V10H3.5a.5.5 0 0 1-.5-.5c0-.973.64-1.725 1.17-2.189A6 6 0 0 1 5 6.708V2.277a3 3 0 0 1-.354-.298C4.342 1.674 4 1.179 4 .5a.5.5 0 0 1 .146-.354" />
+                </svg>
+              </button>
+            ) : null}
+            {isSquad ? (
+              <button
+                type="button"
+                onClick={onOpenSquadSettings}
+                className="hidden rounded-lg border border-piu-border/60 bg-piu-dark/70 px-3 py-1.5 text-xs font-display font-bold text-gray-300 transition-colors hover:text-white sm:inline-flex"
+              >
+                Squad settings
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div ref={messagesViewportRef} className="relative min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
@@ -2828,6 +2856,8 @@ export default function MessagesPage() {
   const [squadComposerOpen, setSquadComposerOpen] = useState(false);
   const [creatingSquad, setCreatingSquad] = useState(false);
   const [squadSettingsOpen, setSquadSettingsOpen] = useState(false);
+  const [personSettingsOpen, setPersonSettingsOpen] = useState(false);
+  const [pinningConversation, setPinningConversation] = useState(false);
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [noteSubmitting, setNoteSubmitting] = useState(false);
   const [noteComposerError, setNoteComposerError] = useState('');
@@ -3811,6 +3841,28 @@ export default function MessagesPage() {
     loadConversations();
   }, [loadConversations]);
 
+  const handlePinConversation = useCallback(async () => {
+    if (!activeConversation?.id || pinningConversation) return;
+    const nextPinned = !activeConversation.is_pinned;
+    setPinningConversation(true);
+    try {
+      const payload = await pinMessageConversation(activeConversation.id, nextPinned);
+      if (payload?.conversation) {
+        setActiveConversation((prev) => (
+          prev?.id === payload.conversation.id ? { ...prev, ...payload.conversation } : prev
+        ));
+        setConversations((prev) => prev.map((entry) => (
+          entry.id === payload.conversation.id ? { ...entry, ...payload.conversation } : entry
+        )));
+        loadConversations();
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setPinningConversation(false);
+    }
+  }, [activeConversation?.id, activeConversation?.is_pinned, pinningConversation, loadConversations]);
+
   const closeStoryViewer = useCallback(() => {
     setStoryViewerState({
       open: false,
@@ -4163,6 +4215,9 @@ export default function MessagesPage() {
           onOpenThread={handleOpenMessageThread}
           onOpenLink={handleOpenChatLink}
           onOpenSquadSettings={() => setSquadSettingsOpen(true)}
+          onOpenPersonSettings={() => setPersonSettingsOpen(true)}
+          onPinConversation={handlePinConversation}
+          isPinned={!!activeConversation?.is_pinned}
           defaultReaction={defaultReaction}
           availableReactions={quickReactions}
           onReact={handleReactToMessage}
@@ -4213,6 +4268,14 @@ export default function MessagesPage() {
         currentUserId={user?.id || ''}
         onClose={() => setSquadSettingsOpen(false)}
         onConversationUpdated={handleSquadConversationUpdated}
+        onOpenLink={handleOpenChatLink}
+      />
+
+      <ConversationSettingsModal
+        open={personSettingsOpen}
+        partner={activePartner}
+        messages={messages}
+        onClose={() => setPersonSettingsOpen(false)}
         onOpenLink={handleOpenChatLink}
       />
 

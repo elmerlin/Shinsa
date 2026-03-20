@@ -646,6 +646,10 @@ export const updateMessageSquadNotifications = (conversationId, data) => request
 export const markMessageConversationRead = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/read`, {
   method: 'POST',
 });
+export const pinMessageConversation = (conversationId, pinned) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/pin`, {
+  method: 'PUT',
+  body: JSON.stringify({ pinned }),
+});
 export const sendMessageConversationStomp = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/stomp`, {
   method: 'POST',
 });
