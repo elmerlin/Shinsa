@@ -19,7 +19,7 @@ import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/
 import { mergeLiveSessionSummary, splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 import { buildYouTubeEmbedSrc } from '../utils/youtube';
-import { buildPostLinkShare } from '../utils/directMessageShares';
+import { buildPostLinkShare, parseAchievementBadgePost } from '../utils/directMessageShares';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -122,28 +122,6 @@ function ImageGrid({ images, onImageClick }) {
       ))}
     </div>
   );
-}
-
-function getAchievementBadgePost(content, images) {
-  if (!Array.isArray(images) || images.length !== 1) return null;
-  const trimmedContent = String(content || '').trim();
-  if (!trimmedContent) return null;
-
-  const lines = trimmedContent
-    .split(/\n+/)
-    .map(line => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return null;
-
-  const headingMatch = lines[0].match(/^New badge unlocked:\s*(.+)$/i);
-  if (!headingMatch) return null;
-
-  return {
-    badgeName: headingMatch[1].trim() || 'New badge',
-    supportingCopy: lines.slice(1).join('\n\n').trim(),
-    image: images[0],
-  };
 }
 
 function AchievementBadgePost({ badgeName, supportingCopy, image, onImageClick }) {
@@ -951,13 +929,14 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
     postId: post.id,
     username: post.username,
     text: visibleContent,
+    images,
     shareType: currentShare?.shareType || '',
-  }), [currentShare?.shareType, post.id, post.username, visibleContent]);
+  }), [currentShare?.shareType, images, post.id, post.username, visibleContent]);
 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }
   })();
-  const achievementBadgePost = getAchievementBadgePost(visibleContent, images);
+  const achievementBadgePost = parseAchievementBadgePost(visibleContent, images);
 
   const flag = showAuthor ? getCountryFlag(post.nationality) : null;
   const canEdit = user && user.id === post.user_id;

@@ -14,6 +14,7 @@ import {
   getMessageStory,
   getSharedMessageStory,
   getNewClear,
+  getPost,
   getMessageConversation,
   getMessageConversations,
   getOrCreateDirectConversation,
@@ -34,6 +35,7 @@ import {
   buildRematchChallengeCard,
   buildUpscoreLinkShare,
   buildUpscoreChallengeCard,
+  parseAchievementBadgePost,
 } from '../utils/directMessageShares';
 import { getProfilePath } from '../utils/profile';
 import { renderFormattedText } from '../utils/formatText';
@@ -784,6 +786,99 @@ function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink, conversatio
   );
 }
 
+function getAchievementBadgePreview(linkShare) {
+  if (!linkShare || String(linkShare.kind || '').trim() !== 'post') return null;
+  if (String(linkShare.postType || '').trim() !== 'achievement_badge') return null;
+
+  const badgeName = String(linkShare.achievementBadgeName || '').trim();
+  const supportingCopy = String(linkShare.achievementSupportingCopy || '').trim();
+  const image = String(linkShare.previewImage || '').trim();
+
+  if (!badgeName && !supportingCopy && !image) return null;
+
+  return {
+    badgeName: badgeName || 'Achievement unlocked',
+    supportingCopy,
+    image,
+  };
+}
+
+function AchievementBadgeSharePreviewCard({ linkShare, buttonClass, onOpenLink }) {
+  const preview = getAchievementBadgePreview(linkShare);
+  if (!preview) return null;
+
+  const buttonLabel = String(linkShare?.buttonLabel || '').trim() || 'Open post';
+  const handleOpen = () => onOpenLink?.(linkShare);
+  const title = String(linkShare?.title || '').trim() || 'Badge unlocked';
+  const supportingCopy = String(preview.supportingCopy || '').trim();
+  const badgeTag = preview.badgeName.toLowerCase().includes('sss') ? 'SSS Mastery' : 'Badge unlock';
+
+  return (
+    <div className="w-full overflow-hidden rounded-[1.35rem] border border-cyan-300/18 bg-[linear-gradient(160deg,rgba(8,14,28,0.98),rgba(7,10,22,0.98))] shadow-[0_14px_34px_rgba(0,0,0,0.24)]">
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="group block w-full text-left"
+        title={`Open ${preview.badgeName}`}
+      >
+        <div className="relative overflow-hidden border-b border-cyan-300/14 bg-[radial-gradient(circle_at_top,rgba(125,211,252,0.2),rgba(10,18,34,0.94)_56%,rgba(6,9,20,0.98))] px-4 pb-4 pt-3">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(125,211,252,0.1),transparent_34%,rgba(8,12,24,0.18))]" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-display font-bold uppercase tracking-[0.24em] text-cyan-100/76">{badgeTag}</p>
+              <p className="mt-1 text-[16px] font-display font-black leading-tight text-white/92">{title}</p>
+              <p className="mt-2 text-[21px] font-display font-black leading-[1.05] text-white">{preview.badgeName}</p>
+            </div>
+            <span className="shrink-0 rounded-full border border-sky-300/26 bg-sky-400/14 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.2em] text-sky-100">
+              New badge
+            </span>
+          </div>
+
+          {preview.image ? (
+            <div className="relative mt-3 overflow-hidden rounded-[1.15rem] border border-cyan-200/16 bg-[linear-gradient(180deg,rgba(9,13,27,0.7),rgba(6,9,18,0.94))] px-3 py-4">
+              <div className="pointer-events-none absolute inset-x-6 top-0 h-14 rounded-full bg-sky-300/10 blur-2xl transition-opacity duration-300 group-hover:opacity-100 opacity-70" />
+              <div className="relative flex items-center justify-center">
+                <img
+                  src={preview.image}
+                  alt={preview.badgeName}
+                  className="max-h-[15rem] w-auto max-w-full object-contain drop-shadow-[0_10px_30px_rgba(14,165,233,0.22)] transition-transform duration-300 group-hover:scale-[1.03]"
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="px-4 pb-4 pt-3">
+          {supportingCopy ? (
+            <div className="text-[12px] leading-5 text-slate-300 whitespace-pre-wrap break-words">
+              {renderFormattedText(supportingCopy)}
+            </div>
+          ) : null}
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <span className="inline-flex rounded-full border border-cyan-300/16 bg-cyan-400/8 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-cyan-100/78">
+              Achievement post
+            </span>
+            <span className="inline-flex rounded-full border border-white/8 bg-white/5 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-slate-300">
+              Shinsa
+            </span>
+          </div>
+        </div>
+      </button>
+
+      <div className="px-4 pb-4">
+        <button
+          type="button"
+          onClick={handleOpen}
+          className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function YouTubeMessagePreviewCard({ url, onOpen }) {
   const [meta, setMeta] = useState({ title: '', authorName: '' });
   const videoId = parseYouTubeUrl(url).videoId;
@@ -1232,9 +1327,11 @@ function MessageLinkCard({
 
   const [hydratedLinkShare, setHydratedLinkShare] = useState(null);
   const [jacketLookup, setJacketLookup] = useState(null);
+  const embeddedAchievementShare = useMemo(() => getAchievementBadgePreview(linkShare), [linkShare]);
   const needsRichHydration = !hasScoreSnapshotLinkShare(linkShare)
     && ['upscore', 'clear'].includes(linkShare.kind)
     && (!Array.isArray(linkShare.previewItems) || linkShare.previewItems.length === 0);
+  const needsPostHydration = linkShare.kind === 'post' && !embeddedAchievementShare;
   const needsJacketLookup = Array.isArray(linkShare?.previewItems)
     && linkShare.previewItems.some((item) => item?.songTitle && !item?.jacketUrl);
 
@@ -1258,8 +1355,52 @@ function MessageLinkCard({
 
   useEffect(() => {
     let active = true;
+    if (!needsPostHydration) {
+      return undefined;
+    }
+
+    const resourceId = parseResourceIdFromPath(linkShare.path, 'post');
+    if (!resourceId) return undefined;
+
+    (async () => {
+      try {
+        const post = await getPost(resourceId);
+        const images = (() => {
+          try {
+            const parsed = JSON.parse(post?.images || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })();
+        const achievementBadge = parseAchievementBadgePost(post?.content || '', images);
+        if (!active) return;
+        if (!achievementBadge) {
+          setHydratedLinkShare(null);
+          return;
+        }
+        setHydratedLinkShare({
+          ...linkShare,
+          postType: 'achievement_badge',
+          title: `${post?.username || linkShare.playerName || 'Player'}'s achievement`,
+          subtitle: achievementBadge.supportingCopy || linkShare.subtitle || '',
+          achievementBadgeName: achievementBadge.badgeName,
+          achievementSupportingCopy: achievementBadge.supportingCopy,
+          previewImage: achievementBadge.image,
+        });
+      } catch {
+        if (active) setHydratedLinkShare(null);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [embeddedAchievementShare, linkShare, needsPostHydration]);
+
+  useEffect(() => {
+    let active = true;
     if (!needsRichHydration) {
-      setHydratedLinkShare(null);
       return undefined;
     }
 
@@ -1330,7 +1471,10 @@ function MessageLinkCard({
   }, [jacketLookup, linkShare, needsRichHydration]);
 
   const resolvedLinkShare = useMemo(() => {
-    const baseShare = hydratedLinkShare?.previewItems?.length ? hydratedLinkShare : linkShare;
+    const canUseHydratedShare = hydratedLinkShare
+      && hydratedLinkShare.kind === linkShare.kind
+      && String(hydratedLinkShare.path || '').trim() === String(linkShare.path || '').trim();
+    const baseShare = canUseHydratedShare ? hydratedLinkShare : linkShare;
     if (!baseShare || !Array.isArray(baseShare.previewItems) || !baseShare.previewItems.length || !jacketLookup) {
       return baseShare;
     }
@@ -1362,6 +1506,7 @@ function MessageLinkCard({
     && Array.isArray(resolvedLinkShare.previewItems)
     && resolvedLinkShare.previewItems.length > 0;
   const isStoryShare = resolvedLinkShare.kind === 'story';
+  const isAchievementBadgeShare = !!getAchievementBadgePreview(resolvedLinkShare);
   const isYouTubeShare = !resolvedLinkShare.path && !!parseYouTubeUrl(resolvedLinkShare.url).videoId;
   const handlePrimaryOpen = () => onOpenLink?.(resolvedLinkShare);
   const replayUrl = String(resolvedLinkShare.replayUrl || '').trim();
@@ -1483,6 +1628,16 @@ function MessageLinkCard({
         buttonClass={buttonClass}
         onOpenLink={handlePrimaryOpen}
         conversationId={conversationId}
+      />
+    );
+  }
+
+  if (isAchievementBadgeShare) {
+    return (
+      <AchievementBadgeSharePreviewCard
+        linkShare={resolvedLinkShare}
+        buttonClass={buttonClass}
+        onOpenLink={handlePrimaryOpen}
       />
     );
   }

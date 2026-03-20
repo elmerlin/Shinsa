@@ -4,6 +4,28 @@ function compactText(value, max = 120) {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
+export function parseAchievementBadgePost(content, images) {
+  if (!Array.isArray(images) || images.length !== 1) return null;
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return null;
+
+  const lines = trimmedContent
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  const headingMatch = lines[0].match(/^New badge unlocked:\s*(.+)$/i);
+  if (!headingMatch) return null;
+
+  return {
+    badgeName: headingMatch[1].trim() || 'New badge',
+    supportingCopy: lines.slice(1).join('\n\n').trim(),
+    image: String(images[0] || '').trim(),
+  };
+}
+
 function formatChartLabel(songTitle, mode, level) {
   const title = compactText(songTitle, 80);
   const modeLabel = String(mode || '').trim();
@@ -176,6 +198,7 @@ export function buildPostLinkShare({
   postId,
   username,
   text,
+  images = [],
   shareType = '',
 }) {
   const id = String(postId || '').trim();
@@ -188,13 +211,20 @@ export function buildPostLinkShare({
     : normalizedShareType === 'session_share'
       ? `${authorName}'s session share`
       : `${authorName}'s post`;
+  const achievementBadge = parseAchievementBadgePost(text, images);
 
   return {
     kind: 'post',
     path: `/post/${id}`,
-    title,
-    subtitle: compactText(text, 140) || 'Open this post on Shinsa.',
+    title: achievementBadge ? `${authorName}'s achievement` : title,
+    subtitle: achievementBadge
+      ? compactText(achievementBadge.supportingCopy, 160) || `${achievementBadge.badgeName} unlocked on Shinsa.`
+      : (compactText(text, 140) || 'Open this post on Shinsa.'),
     buttonLabel: 'Open post',
+    postType: achievementBadge ? 'achievement_badge' : '',
+    achievementBadgeName: achievementBadge?.badgeName || '',
+    achievementSupportingCopy: achievementBadge?.supportingCopy || '',
+    previewImage: achievementBadge?.image || '',
   };
 }
 
