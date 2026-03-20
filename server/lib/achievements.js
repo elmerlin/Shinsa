@@ -3,7 +3,8 @@ const STREAK_SERIES_ID = 'builtin-achievement-series-streak';
 const STREAK_SERIES_KEY = 'streak';
 const SSS_SERIES_ID = 'builtin-achievement-series-sss-mastery';
 const SSS_SERIES_KEY = 'sss_mastery';
-const AUTO_POST_SERIES_KEYS = new Set(['pumps_received', STREAK_SERIES_KEY]);
+const AUTO_POST_SERIES_KEYS = new Set(['pumps_received', STREAK_SERIES_KEY, SSS_SERIES_KEY]);
+const LATEST_TIER_POST_ONLY_SERIES_KEYS = new Set([SSS_SERIES_KEY]);
 const { buildProfilePath, notifyActivitySubscribers } = require('./activitySubscriptions');
 const { gradeFromScore, normalizeGrade } = require('./titleProgress');
 
@@ -596,6 +597,15 @@ function buildAchievementPostContent({ seriesKey = '', seriesName = '', tierName
     ].filter(Boolean).join('\n\n');
   }
 
+  if (normalizedSeriesKey === SSS_SERIES_KEY) {
+    return [
+      `New badge unlocked: ${cleanTierName}`,
+      numericThreshold > 0
+        ? `${numericThreshold.toLocaleString()} charts with SSS or better on Shinsa.`
+        : 'New SSS mastery milestone reached on Shinsa.',
+    ].filter(Boolean).join('\n\n');
+  }
+
   return [
     `New ${cleanSeriesName} badge unlocked: ${cleanTierName}`,
     cleanDescription || 'Earned on Shinsa.',
@@ -665,13 +675,21 @@ function awardTiersForValue(db, seriesKey, userId, value) {
   `);
 
   let awarded = 0;
+  const newlyAwardedTiers = [];
   for (const tier of tiers) {
     if (value >= (parseInt(tier.threshold, 10) || 0)) {
       const changes = insertAward.run(tier.id, userId).changes;
       awarded += changes;
-      if (changes > 0 && user) {
-        createAchievementAwardPost(db, user, tier);
-      }
+      if (changes > 0) newlyAwardedTiers.push(tier);
+    }
+  }
+
+  if (user && newlyAwardedTiers.length > 0) {
+    const tiersToPost = LATEST_TIER_POST_ONLY_SERIES_KEYS.has(series.key)
+      ? [newlyAwardedTiers[newlyAwardedTiers.length - 1]]
+      : newlyAwardedTiers;
+    for (const tier of tiersToPost) {
+      createAchievementAwardPost(db, user, tier);
     }
   }
   return awarded;
