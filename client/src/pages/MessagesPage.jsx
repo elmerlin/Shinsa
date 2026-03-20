@@ -3350,21 +3350,35 @@ export default function MessagesPage() {
     }
   }, [loadConversations]);
 
-  const loadConversation = useCallback(async (targetConversationId) => {
+  const loadConversation = useCallback(async (targetConversationId, { silent = false } = {}) => {
     if (!user || !targetConversationId) return;
-    setLoadingMessages(true);
+    if (!silent) setLoadingMessages(true);
     try {
       const payload = await getMessageConversation(targetConversationId);
       setActiveConversation(payload?.conversation || null);
-      setMessages(normalizeConversationMessages(payload?.messages));
+      const nextMessages = normalizeConversationMessages(payload?.messages);
+      if (silent) {
+        setMessages((prev) => {
+          if (prev.length === nextMessages.length && prev.length > 0) {
+            const prevLastId = prev[prev.length - 1]?.id;
+            const nextLastId = nextMessages[nextMessages.length - 1]?.id;
+            if (prevLastId === nextLastId) return prev;
+          }
+          return nextMessages;
+        });
+      } else {
+        setMessages(nextMessages);
+      }
       setMessageError('');
       refreshMessageUnread();
     } catch (err) {
-      setActiveConversation(null);
-      setMessages([]);
-      setMessageError(err?.message || 'Failed to load conversation.');
+      if (!silent) {
+        setActiveConversation(null);
+        setMessages([]);
+        setMessageError(err?.message || 'Failed to load conversation.');
+      }
     } finally {
-      setLoadingMessages(false);
+      if (!silent) setLoadingMessages(false);
     }
   }, [user, refreshMessageUnread]);
 
@@ -3399,7 +3413,7 @@ export default function MessagesPage() {
       return undefined;
     }
     loadConversation(conversationId);
-    const interval = setInterval(() => loadConversation(conversationId), 5000);
+    const interval = setInterval(() => loadConversation(conversationId, { silent: true }), 5000);
     return () => clearInterval(interval);
   }, [user, conversationId, loadConversation]);
 
