@@ -563,6 +563,7 @@ function StoryCommentsModal({
 }) {
   const { user: authUser } = useAuth();
   const draftInputRef = useRef(null);
+  const commentsEndRef = useRef(null);
   const {
     mentionUsers,
     mentionLoading,
@@ -585,47 +586,67 @@ function StoryCommentsModal({
     clearMentions();
   }, [clearMentions, open]);
 
+  useEffect(() => {
+    if (open && comments.length > 0) {
+      requestAnimationFrame(() => commentsEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' }));
+    }
+  }, [open, comments.length]);
+
   return (
     <OverlayShell open={open} onClose={onClose}>
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Story comments</p>
-            <h2 className="mt-1 font-display text-2xl font-black text-white">{ownerUser?.username || 'Story'}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-300/70">Comments</p>
+            <h2 className="mt-0.5 truncate font-display text-xl font-black text-white">{ownerUser?.username || 'Story'}</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/6 text-gray-400 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-95"
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+          </button>
         </div>
 
-        <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
+        <div className="relative max-h-[22rem] space-y-2.5 overflow-y-auto overscroll-contain pr-1">
           {loading ? (
-            <p className="text-sm text-gray-400">Loading comments...</p>
+            <div className="flex items-center gap-2 py-6 text-sm text-gray-500">
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-cyan-400" />
+              Loading comments...
+            </div>
           ) : comments.length === 0 ? (
-            <p className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
-              No comments yet. Start the thread.
-            </p>
+            <div className="flex flex-col items-center gap-2 rounded-[1.3rem] border border-dashed border-white/8 py-8 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="h-7 w-7 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0m-12-3.75h.008v.015H4.5V8.25zm0 3.75h.008v.015H4.5V12zm0 3.75h.008v.015H4.5v-.015zM7.5 15h9M7.5 12h9m-9-3.75h9" /></svg>
+              <p className="text-sm text-gray-500">No comments yet. Be the first.</p>
+            </div>
           ) : (
             comments.map((comment) => (
-              <div key={comment.id} className="flex gap-3 rounded-[1.3rem] border border-white/10 bg-white/6 px-3 py-3">
+              <div key={comment.id} className="flex gap-2.5 rounded-[1.2rem] border border-white/8 bg-white/[0.04] px-3 py-2.5">
                 {comment.user?.avatar ? (
-                  <img src={comment.user.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                  <img src={comment.user.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-display font-black text-white">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-display font-black text-white">
                     {(comment.user?.username || 'U').slice(0, 1).toUpperCase()}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-display font-black text-white">{comment.user?.username || 'Player'}</p>
-                    <span className="shrink-0 text-[10px] text-gray-500">{formatRelativeTime(comment.created_at)}</span>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="truncate text-[13px] font-display font-black text-white">{comment.user?.username || 'Player'}</p>
+                    <span className="shrink-0 text-[10px] text-gray-600">{formatRelativeTime(comment.created_at)}</span>
                   </div>
-                  <div className="mt-1 text-sm leading-6 text-gray-100">{renderFormattedText(comment.content)}</div>
+                  <div className="mt-0.5 text-[13px] leading-[1.45] text-gray-200">{renderFormattedText(comment.content)}</div>
                 </div>
               </div>
             ))
           )}
+          <div ref={commentsEndRef} />
         </div>
 
-        <div className="space-y-2">
+        {error ? <p className="text-[13px] text-red-300">{error}</p> : null}
+
+        <div className="space-y-2.5">
           <div className="relative">
             <MentionSuggestionsPanel
               open={showMentions || mentionLoading}
@@ -650,17 +671,16 @@ function StoryCommentsModal({
             />
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-gray-500">{draft.trim().length}/280</span>
+            <span className="text-[11px] tabular-nums text-gray-600">{draft.trim().length}<span className="text-gray-700">/280</span></span>
             <button
               type="button"
               onClick={onSend}
               disabled={sending || !draft.trim()}
-              className="rounded-full bg-cyan-500 px-4 py-2 text-sm font-display font-black text-white hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-display font-black text-white shadow-[0_2px_8px_rgba(6,182,212,0.25)] transition-all hover:bg-cyan-400 hover:shadow-[0_4px_14px_rgba(6,182,212,0.3)] active:scale-[0.97] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               {sending ? 'Sending...' : 'Send comment'}
             </button>
           </div>
-          {error ? <p className="text-sm text-red-300">{error}</p> : null}
         </div>
       </div>
     </OverlayShell>
@@ -671,46 +691,57 @@ function StoryStatsModal({ open, onClose, ownerUser, stats = null, loading = fal
   return (
     <OverlayShell open={open} onClose={onClose}>
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Story stats</p>
-            <h2 className="mt-1 font-display text-2xl font-black text-white">{ownerUser?.username || 'Your story'}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-300/70">Story stats</p>
+            <h2 className="mt-0.5 truncate font-display text-xl font-black text-white">{ownerUser?.username || 'Your story'}</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/6 text-gray-400 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-95"
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+          </button>
         </div>
 
         {loading ? (
-          <p className="text-sm text-gray-400">Loading views...</p>
+          <div className="flex items-center gap-2 py-6 text-sm text-gray-500">
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-cyan-400" />
+            Loading views...
+          </div>
         ) : error ? (
-          <p className="text-sm text-red-300">{error}</p>
+          <p className="text-[13px] text-red-300">{error}</p>
         ) : (
           <>
-            <div className="rounded-[1.4rem] border border-white/10 bg-white/6 px-4 py-4">
-              <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-gray-400">Views</p>
-              <p className="mt-2 font-display text-3xl font-black text-white">{stats?.view_count || 0}</p>
+            <div className="rounded-[1.4rem] border border-white/8 bg-white/[0.04] px-4 py-4">
+              <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-gray-500">Views</p>
+              <p className="mt-1.5 font-display text-3xl font-black tabular-nums text-white">{stats?.view_count || 0}</p>
             </div>
 
-            <div className="max-h-[22rem] space-y-3 overflow-y-auto pr-1">
+            <div className="max-h-[22rem] space-y-2.5 overflow-y-auto overscroll-contain pr-1">
               {Array.isArray(stats?.viewers) && stats.viewers.length > 0 ? (
                 stats.viewers.map((entry, index) => (
-                  <div key={`${entry?.user?.id || 'viewer'}-${index}`} className="flex items-center gap-3 rounded-[1.2rem] border border-white/10 bg-white/6 px-3 py-3">
+                  <div key={`${entry?.user?.id || 'viewer'}-${index}`} className="flex items-center gap-2.5 rounded-[1.2rem] border border-white/8 bg-white/[0.04] px-3 py-2.5">
                     {entry.user?.avatar ? (
-                      <img src={entry.user.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                      <img src={entry.user.avatar} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
                     ) : (
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-display font-black text-white">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-display font-black text-white">
                         {(entry.user?.username || 'U').slice(0, 1).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-display font-black text-white">{entry.user?.username || 'Player'}</p>
-                      <p className="text-xs text-gray-500">Seen {formatRelativeTime(entry.viewed_at)} ago</p>
+                      <p className="truncate text-[13px] font-display font-black text-white">{entry.user?.username || 'Player'}</p>
+                      <p className="text-[11px] text-gray-600">{formatRelativeTime(entry.viewed_at)} ago</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
-                  No views yet from other players.
-                </p>
+                <div className="flex flex-col items-center gap-2 rounded-[1.3rem] border border-dashed border-white/8 py-8 text-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="h-7 w-7 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <p className="text-sm text-gray-500">No views yet from other players.</p>
+                </div>
               )}
             </div>
           </>
@@ -724,18 +755,26 @@ export function StoryArchiveModal({ open, onClose, stories = [], onOpenStory }) 
   return (
     <OverlayShell open={open} onClose={onClose}>
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Story archive</p>
-            <h2 className="mt-1 font-display text-2xl font-black text-white">Past stories</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-300/70">Archive</p>
+            <h2 className="mt-0.5 truncate font-display text-xl font-black text-white">Past stories</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/6 text-gray-400 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-95"
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+          </button>
         </div>
 
         {stories.length === 0 ? (
-          <p className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
-            No archived stories yet.
-          </p>
+          <div className="flex flex-col items-center gap-2 rounded-[1.3rem] border border-dashed border-white/8 py-8 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="h-7 w-7 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+            <p className="text-sm text-gray-500">No archived stories yet.</p>
+          </div>
         ) : (
           <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
             {stories.map((entry) => {
@@ -1651,77 +1690,103 @@ export function NoteThreadModal({
   onSend,
   onOpenConversation,
 }) {
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (open && messages.length > 0) {
+      requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'end' }));
+    }
+  }, [open, messages.length]);
+
   return (
     <OverlayShell open={open} onClose={onClose}>
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Thread</p>
-            <h2 className="mt-1 font-display text-2xl font-black text-white">{note?.user?.username || 'Note replies'}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-300/70">Thread</p>
+            <h2 className="mt-0.5 truncate font-display text-xl font-black text-white">{note?.user?.username || 'Note replies'}</h2>
           </div>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/6 text-gray-400 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-95"
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+          </button>
         </div>
 
-        <div className="rounded-[1.5rem] border border-white/10 bg-white/6 px-4 py-4">
-          <p className="text-sm leading-6 text-white">{note?.content || 'This note is no longer active.'}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {note?.link ? renderLinkButton(note.link, 'inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white hover:bg-white/12') : null}
-            {conversation?.id ? (
-              <button
-                type="button"
-                onClick={onOpenConversation}
-                className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-gray-100 hover:bg-white/12"
-              >
-                Open DM
-              </button>
-            ) : null}
-          </div>
+        <div className="rounded-[1.4rem] border border-cyan-300/10 bg-cyan-500/[0.04] px-4 py-3.5">
+          <p className="text-[13px] leading-[1.5] text-white">{note?.content || 'This note is no longer active.'}</p>
+          {(note?.link || conversation?.id) ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {note?.link ? renderLinkButton(note.link, 'inline-flex rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3.5 py-1.5 text-xs font-display font-bold text-cyan-50 transition-colors hover:bg-cyan-500/18') : null}
+              {conversation?.id ? (
+                <button
+                  type="button"
+                  onClick={onOpenConversation}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-3.5 py-1.5 text-xs font-display font-bold text-gray-200 transition-colors hover:bg-white/10 hover:text-white active:scale-[0.97]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 opacity-60"><path d="M1 8.74c0 .983.713 1.825 1.69 1.943.764.092 1.534.164 2.31.216v2.351a.75.75 0 001.28.53l2.51-2.51c.182-.181.427-.283.684-.283h.767c2.695 0 4.509-1.374 4.753-3.242A28.015 28.015 0 0015 6.99c0-2.352-2.179-4.24-4.906-4.24H5.906C3.179 2.75 1 4.638 1 6.99v1.75z" /></svg>
+                  Open DM
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
-        <div className="max-h-[18rem] space-y-3 overflow-y-auto pr-1">
+        <div className="relative max-h-[18rem] space-y-2 overflow-y-auto overscroll-contain pr-1">
           {loading ? (
-            <p className="text-sm text-gray-400">Loading replies...</p>
+            <div className="flex items-center gap-2 py-6 text-sm text-gray-500">
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-600 border-t-cyan-400" />
+              Loading replies...
+            </div>
           ) : messages.length === 0 ? (
-            <p className="rounded-[1.2rem] border border-dashed border-white/10 bg-white/5 px-4 py-4 text-sm text-gray-400">
-              No replies yet. Start the thread.
-            </p>
+            <div className="flex flex-col items-center gap-2 rounded-[1.3rem] border border-dashed border-white/8 py-8 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.2} stroke="currentColor" className="h-7 w-7 text-gray-600"><path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" /></svg>
+              <p className="text-sm text-gray-500">No replies yet. Start the thread.</p>
+            </div>
           ) : (
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`max-w-[85%] rounded-[1.25rem] border px-3 py-2.5 text-sm leading-6 shadow-[0_10px_24px_rgba(0,0,0,0.16)] ${
+                className={`max-w-[85%] rounded-[1.2rem] border px-3.5 py-2.5 text-[13px] leading-[1.5] ${
                   message.is_own
-                    ? 'ml-auto border-cyan-300/20 bg-cyan-500/12 text-white'
-                    : 'border-white/10 bg-white/6 text-gray-100'
+                    ? 'ml-auto border-cyan-300/15 bg-cyan-500/10 text-white'
+                    : 'border-white/8 bg-white/[0.04] text-gray-100'
                 }`}
               >
                 {!message.is_own ? <p className="mb-1 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">{message.sender?.username}</p> : null}
                 <div>{renderFormattedText(message.content)}</div>
-                <p className="mt-2 text-[10px] text-gray-500">{formatRelativeTime(message.created_at)}</p>
+                <p className={`mt-1.5 text-[10px] ${message.is_own ? 'text-cyan-300/40' : 'text-gray-600'}`}>{formatRelativeTime(message.created_at)}</p>
               </div>
             ))
           )}
+          <div ref={messagesEndRef} />
         </div>
 
-        {error ? <p className="text-sm text-red-300">{error}</p> : null}
-        <div className="flex items-end gap-2">
+        {error ? <p className="text-[13px] text-red-300">{error}</p> : null}
+
+        <div className="space-y-2.5">
           <textarea
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             rows={2}
             maxLength={4000}
             placeholder={`Reply to ${note?.user?.username || 'this note'}...`}
-            className={`min-h-[3.2rem] flex-1 resize-none ${MODAL_INPUT_CLASS}`}
+            className={`resize-none ${MODAL_INPUT_CLASS}`}
             style={MODAL_INPUT_STYLE}
           />
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={sending || !draft.trim()}
-            className="rounded-full bg-cyan-500 px-4 py-3 text-sm font-display font-black text-white hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {sending ? 'Sending...' : 'Send'}
-          </button>
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={sending || !draft.trim()}
+              className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-display font-black text-white shadow-[0_2px_8px_rgba(6,182,212,0.25)] transition-all hover:bg-cyan-400 hover:shadow-[0_4px_14px_rgba(6,182,212,0.3)] active:scale-[0.97] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            >
+              {sending ? 'Sending...' : 'Reply'}
+            </button>
+          </div>
         </div>
       </div>
     </OverlayShell>
