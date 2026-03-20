@@ -763,10 +763,34 @@ function getConversationMentionCandidates(db, conversationId, viewerUserId = '')
   `).all(conversationId, viewerUserId, viewerUserId).map((row) => normalizeSquadMemberUser(row)).filter(Boolean);
 }
 
+function ensureConversationVisibleForUsers(db, conversationId, userIds = [], updatedAt = toSqliteDateTime()) {
+  const normalizedUserIds = Array.from(new Set(
+    (Array.isArray(userIds) ? userIds : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+  ));
+  if (!conversationId || normalizedUserIds.length === 0) return;
+
+  db.prepare(`
+    UPDATE conversation_members
+    SET is_hidden = 0,
+        updated_at = ?
+    WHERE conversation_id = ?
+      AND user_id IN (${normalizedUserIds.map(() => '?').join(', ')})
+  `).run(updatedAt, conversationId, ...normalizedUserIds);
+}
+
 function filterMentionedUsersByInboxVisibility(db, ownerUserId, mentionedUsers = []) {
   return (Array.isArray(mentionedUsers) ? mentionedUsers : []).filter((user) => (
     user?.id && isFollowingOrSelf(db, user.id, ownerUserId)
   ));
+}
+
+function getVisibleStoryMentionedUsers(db, ownerUserId, content) {
+  const ownerId = String(ownerUserId || '').trim();
+  const text = String(content || '').trim();
+  if (!ownerId || !text) return [];
+  return filterMentionedUsersByInboxVisibility(db, ownerId, findMentionedUsers(db, text));
 }
 
 function notifyInboxNoteMentions(db, actorUser, content) {
@@ -784,14 +808,16 @@ function notifyInboxNoteMentions(db, actorUser, content) {
   });
 }
 
-function notifyStoryMentions(db, actorUser, ownerUserId, content, storyTitle = '') {
+function notifyStoryMentions(db, actorUser, ownerUserId, content, storyTitle = '', mentionedUsers = null) {
   const actorUserId = String(actorUser?.id || '').trim();
   const ownerId = String(ownerUserId || '').trim();
   if (!actorUserId || !ownerId || !content) return 0;
-  const mentionedUsers = filterMentionedUsersByInboxVisibility(db, ownerId, findMentionedUsers(db, content));
+  const resolvedMentionedUsers = Array.isArray(mentionedUsers)
+    ? mentionedUsers
+    : getVisibleStoryMentionedUsers(db, ownerId, content);
   const label = storyTitle || 'a story';
   return notifyMentionedUsers(db, {
-    mentionedUsers,
+    mentionedUsers: resolvedMentionedUsers,
     actorUserId,
     actorUsername: actorUser?.username || 'Someone',
     type: 'story_mention',
@@ -799,6 +825,39 @@ function notifyStoryMentions(db, actorUser, ownerUserId, content, storyTitle = '
     message: `${actorUser?.username || 'Someone'} mentioned you in ${label}`,
     link: '/messages',
   });
+}
+
+function autoShareStoryWithMentionedUsers(db, actorUser, story, mentionedUsers = []) {
+  const actorUserId = String(actorUser?.id || '').trim();
+  if (!actorUserId || !story || !Array.isArray(mentionedUsers) || mentionedUsers.length === 0) return [];
+
+  const storyOwner = {
+    id: actorUserId,
+    username: String(actorUser?.username || story?.user?.username || '').trim(),
+    avatar: String(story?.user?.avatar || normalizeStoryUser(actorUser, 72)?.avatar || actorUser?.avatar || '').trim(),
+  };
+  const storySharePayload = buildStorySharePayload(story, storyOwner);
+  const input = normalizeConversationInput({ link_share: storySharePayload });
+  if (input.error) return [];
+
+  const deliveredConversationIds = [];
+  const deliveredUserIds = new Set();
+  for (const mentionedUser of mentionedUsers) {
+    const targetUserId = String(mentionedUser?.id || '').trim();
+    if (!targetUserId || targetUserId === actorUserId || deliveredUserIds.has(targetUserId)) continue;
+
+    const conversationId = getOrCreateDirectConversation(db, actorUserId, targetUserId);
+    if (!conversationId) continue;
+
+    ensureConversationVisibleForUsers(db, conversationId, [actorUserId, targetUserId]);
+    insertConversationMessage(db, conversationId, storyOwner, input);
+    notifyRecipients(db, conversationId, storyOwner, [targetUserId], input);
+
+    deliveredUserIds.add(targetUserId);
+    deliveredConversationIds.push(conversationId);
+  }
+
+  return deliveredConversationIds;
 }
 
 function notifyStoryCommentMentions(db, actorUser, ownerUserId, ownerUsername, content) {
@@ -1481,35 +1540,53 @@ router.post('/highlights/story', requireAuth, highlightUpload.single('image'), a
     const expiresAt = toInboxSqliteDateTime(addHours(now, STORY_TTL_HOURS));
     const storyId = uuidv4();
 
-    db.prepare(`
-      INSERT INTO user_story_items (
-        id, user_id, story_type, source_kind, source_id, caption, media_url, link_path, link_url, link_label,
-        sticker_tokens_json, metadata_json, created_at, expires_at, deleted_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
-    `).run(
-      storyId,
-      req.user.id,
-      storyType,
-      sourceKind,
-      sourceId,
-      caption,
-      mediaUrl,
-      link.path,
-      link.url,
-      link.label,
-      JSON.stringify(stickerTokens),
-      JSON.stringify(metadata),
-      nowSql,
-      expiresAt
-    );
+    const story = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO user_story_items (
+          id, user_id, story_type, source_kind, source_id, caption, media_url, link_path, link_url, link_label,
+          sticker_tokens_json, metadata_json, created_at, expires_at, deleted_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+      `).run(
+        storyId,
+        req.user.id,
+        storyType,
+        sourceKind,
+        sourceId,
+        caption,
+        mediaUrl,
+        link.path,
+        link.url,
+        link.label,
+        JSON.stringify(stickerTokens),
+        JSON.stringify(metadata),
+        nowSql,
+        expiresAt
+      );
 
-    const stories = getStoryItemsForUser(db, {
-      ...user,
-      avatar: normalizeStoryUser(user, 72)?.avatar || '',
-    });
-    const story = stories.find((item) => item.id === `story:${storyId}`) || null;
-    notifyStoryMentions(db, user, req.user.id, caption, metadata.title || story?.title || 'your story');
+      const stories = getStoryItemsForUser(db, {
+        ...user,
+        avatar: normalizeStoryUser(user, 72)?.avatar || '',
+      });
+      const createdStory = stories.find((item) => item.id === `story:${storyId}`) || null;
+      if (!createdStory) {
+        throw new Error('Failed to load the created story');
+      }
+
+      const mentionedUsers = getVisibleStoryMentionedUsers(db, req.user.id, caption);
+      autoShareStoryWithMentionedUsers(db, user, createdStory, mentionedUsers);
+      notifyStoryMentions(
+        db,
+        user,
+        req.user.id,
+        caption,
+        metadata.title || createdStory.title || 'your story',
+        mentionedUsers
+      );
+
+      return createdStory;
+    })();
+
     res.status(201).json({ story });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to add story item' });
