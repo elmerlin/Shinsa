@@ -2185,6 +2185,7 @@ function MessageBubble({
     active: false,
     moved: false,
     ignoreClick: false,
+    startedOnInteractive: false,
   });
   const [replySwipeOffset, setReplySwipeOffset] = useState(0);
   const [replySwipeDragging, setReplySwipeDragging] = useState(false);
@@ -2323,6 +2324,7 @@ function MessageBubble({
     swipeStateRef.current.startY = 0;
     swipeStateRef.current.active = false;
     swipeStateRef.current.moved = false;
+    swipeStateRef.current.startedOnInteractive = false;
     setReplySwipeOffset(0);
     setReplySwipeDragging(false);
     setUnsendSwipeOffset(0);
@@ -2352,12 +2354,12 @@ function MessageBubble({
     if (event.pointerType !== 'touch') return;
     if (areTouchInteractionsBlocked()) return;
     if (isInteractionLocked()) return;
-    if (event?.target?.closest?.('button,a,textarea,input,select')) return;
     swipeStateRef.current.pointerId = event.pointerId;
     swipeStateRef.current.startX = event.clientX;
     swipeStateRef.current.startY = event.clientY;
     swipeStateRef.current.active = true;
     swipeStateRef.current.moved = false;
+    swipeStateRef.current.startedOnInteractive = !!event?.target?.closest?.('button,a,textarea,input,select');
     if (event.currentTarget?.setPointerCapture) {
       try {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -2393,6 +2395,9 @@ function MessageBubble({
     if (replyOffset <= 0 && unsendOffset <= 0) return;
 
     swipeStateRef.current.ignoreClick = true;
+    if (swipeStateRef.current.startedOnInteractive) {
+      event.preventDefault();
+    }
     if (replyOffset > 0) {
       setReplySwipeDragging(true);
       setReplySwipeOffset(replyOffset);
@@ -2418,7 +2423,7 @@ function MessageBubble({
       }
       const shouldReply = replySwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET;
       const shouldUnsend = unsendSwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET;
-      const shouldTreatAsTap = swipeStateRef.current.active && !swipeStateRef.current.moved && replySwipeOffset < 8 && unsendSwipeOffset < 8;
+      const shouldTreatAsTap = swipeStateRef.current.active && !swipeStateRef.current.moved && !swipeStateRef.current.startedOnInteractive && replySwipeOffset < 8 && unsendSwipeOffset < 8;
       if (shouldUnsend) {
         clearTapTimer();
         tapStateRef.current.lastTapAt = 0;
