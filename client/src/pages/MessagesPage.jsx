@@ -87,6 +87,7 @@ const REACTION_OPTIONS = [
 const DEFAULT_QUICK_REACTION_KEYS = ['pump', 'fire', 'heart', 'clap'];
 const REPLY_SWIPE_MAX_OFFSET = 72;
 const REPLY_SWIPE_TRIGGER_OFFSET = 54;
+const MOBILE_MESSAGE_INTERACTION_ARM_DELAY_MS = 520;
 
 function formatCompactScore(value) {
   const numeric = Number(value);
@@ -1378,6 +1379,7 @@ function MessageBubble({
   onReply = null,
   activeReplyMessageId = '',
   replyHighlightVersion = 0,
+  touchInteractionsEnabled = true,
   availableReactions = DEFAULT_QUICK_REACTION_KEYS,
   defaultReaction = 'pump',
   onReact = null,
@@ -1511,6 +1513,19 @@ function MessageBubble({
     setReplySwipeDragging(false);
   }, []);
 
+  useEffect(() => {
+    if (touchInteractionsEnabled) return undefined;
+    if (tapStateRef.current.timer) {
+      window.clearTimeout(tapStateRef.current.timer);
+      tapStateRef.current.timer = null;
+    }
+    tapStateRef.current.lastTapAt = 0;
+    setTrayOpen(false);
+    setMobileTrayMounted(false);
+    resetReplySwipe();
+    return undefined;
+  }, [resetReplySwipe, touchInteractionsEnabled]);
+
   const triggerReply = useCallback(() => {
     if (!message?.id || !onReply) return;
     onReply(message);
@@ -1518,6 +1533,7 @@ function MessageBubble({
 
   const handlePointerDown = (event) => {
     if (event.pointerType !== 'touch') return;
+    if (!touchInteractionsEnabled) return;
     if (event?.target?.closest?.('button,a,textarea,input,select')) return;
     swipeStateRef.current.pointerId = event.pointerId;
     swipeStateRef.current.startX = event.clientX;
@@ -1533,6 +1549,10 @@ function MessageBubble({
 
   const handlePointerMove = (event) => {
     if (event.pointerType !== 'touch') return;
+    if (!touchInteractionsEnabled) {
+      resetReplySwipe();
+      return;
+    }
     if (!swipeStateRef.current.active || swipeStateRef.current.pointerId !== event.pointerId) return;
 
     const dx = event.clientX - swipeStateRef.current.startX;
@@ -1557,6 +1577,10 @@ function MessageBubble({
 
   const handlePointerUp = (event) => {
     if (event.pointerType === 'touch' && swipeStateRef.current.pointerId === event.pointerId) {
+      if (!touchInteractionsEnabled) {
+        resetReplySwipe();
+        return;
+      }
       const shouldReply = replySwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET;
       const shouldTreatAsTap = swipeStateRef.current.active && !swipeStateRef.current.moved && replySwipeOffset < 8;
       if (shouldReply) {
@@ -1637,7 +1661,7 @@ function MessageBubble({
           {senderName}
         </p>
       ) : null}
-      {mobileTrayMounted ? (
+      {touchInteractionsEnabled && mobileTrayMounted ? (
         <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.65rem)] z-[90] sm:hidden">
           <div
             className={`mx-auto flex min-h-[4.1rem] max-w-[26rem] items-center justify-center rounded-[1.6rem] border border-white/12 bg-[#070c16] px-3 py-2.5 shadow-[0_24px_50px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 ${
@@ -2104,6 +2128,7 @@ function ConversationView({
   replyTarget,
   activeReplyMessageId,
   replyHighlightVersion,
+  touchInteractionsEnabled,
   onDraftChange,
   onComposerKeyDown,
   onSend,
@@ -2264,6 +2289,7 @@ function ConversationView({
                   onReply={onReply}
                   activeReplyMessageId={activeReplyMessageId}
                   replyHighlightVersion={replyHighlightVersion}
+                  touchInteractionsEnabled={touchInteractionsEnabled}
                   defaultReaction={defaultReaction}
                   availableReactions={availableReactions}
                   onReact={onReact}
@@ -2384,6 +2410,7 @@ export default function MessagesPage() {
   const [draft, setDraft] = useState('');
   const [replyTarget, setReplyTarget] = useState(null);
   const [replyHighlightVersion, setReplyHighlightVersion] = useState(0);
+  const [touchInteractionsEnabled, setTouchInteractionsEnabled] = useState(true);
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [squadComposerOpen, setSquadComposerOpen] = useState(false);
@@ -2909,6 +2936,28 @@ export default function MessagesPage() {
     lastAutoScrollKeyRef.current = '';
     initialConversationScrollRef.current = '';
   }, [clearMentions, conversationId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !conversationId) {
+      setTouchInteractionsEnabled(true);
+      return undefined;
+    }
+
+    const coarsePointer = window.matchMedia
+      ? window.matchMedia('(hover: none) and (pointer: coarse)').matches
+      : (window.innerWidth < 640 && Number(window.navigator?.maxTouchPoints || 0) > 0);
+
+    if (!coarsePointer) {
+      setTouchInteractionsEnabled(true);
+      return undefined;
+    }
+
+    setTouchInteractionsEnabled(false);
+    const timeoutId = window.setTimeout(() => {
+      setTouchInteractionsEnabled(true);
+    }, MOBILE_MESSAGE_INTERACTION_ARM_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [conversationId]);
 
   useEffect(() => {
     if (!conversationId || typeof window === 'undefined' || window.innerWidth >= 640) {
@@ -3575,6 +3624,7 @@ export default function MessagesPage() {
           replyTarget={replyTarget}
           activeReplyMessageId={replyTarget?.messageId || ''}
           replyHighlightVersion={replyHighlightVersion}
+          touchInteractionsEnabled={touchInteractionsEnabled}
           onDraftChange={setDraft}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={handleSend}
