@@ -2153,7 +2153,7 @@ function MessageBubble({
           onClick={handleBubbleClick}
         >
           {isReplyTarget ? (
-            <div className="mb-2 flex items-center gap-2 text-[10px] font-display font-black uppercase tracking-[0.16em] text-cyan-100/82">
+            <div className={`mb-2 flex items-center gap-2 text-[10px] font-display font-black uppercase tracking-[0.16em] ${bubbleTextClass ? 'opacity-70' : 'text-cyan-100/82'}`}>
               <span className={`h-2 w-2 rounded-full bg-cyan-300 ${replyFlashActive ? 'animate-pulse' : ''}`} />
               Reply target
             </div>
@@ -2161,15 +2161,15 @@ function MessageBubble({
         {replyTo ? (
           <div
             className={`mb-2 rounded-[0.95rem] border px-3 py-2 ${
-              isOwn
-                ? 'border-cyan-300/18 bg-black/18'
-                : 'border-white/10 bg-black/20'
+              bubbleTextClass
+                ? (isOwn ? 'border-current/15 bg-current/5' : 'border-current/10 bg-current/5')
+                : (isOwn ? 'border-cyan-300/18 bg-black/18' : 'border-white/10 bg-black/20')
             }`}
           >
-            <p className="text-[10px] font-display font-bold tracking-[0.16em] text-cyan-100/80">
+            <p className={`text-[10px] font-display font-bold tracking-[0.16em] ${bubbleTextClass ? 'opacity-70' : 'text-cyan-100/80'}`}>
               {isOwn ? `You replied to ${replyTo.senderUsername || 'someone'}` : `Replied to ${replyTo.senderUsername || 'someone'}`}
             </p>
-            <p className="mt-1 text-xs leading-5 text-gray-300">
+            <p className={`mt-1 text-xs leading-5 ${bubbleTextClass ? 'opacity-60' : 'text-gray-300'}`}>
               {compactReplyPreviewText(replyTo.previewText || 'Message', 140)}
             </p>
           </div>
@@ -2184,10 +2184,10 @@ function MessageBubble({
                 : 'border-white/10 bg-black/20 hover:bg-black/30'
             }`}
           >
-            <p className="text-[10px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">
+            <p className={`text-[10px] font-display font-bold uppercase tracking-[0.18em] ${bubbleTextClass ? 'opacity-70' : 'text-cyan-200/80'}`}>
               {noteThread.ownerUsername ? `${noteThread.ownerUsername}'s note` : 'Note thread'}
             </p>
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-200">{noteThread.noteText || 'Open thread'}</p>
+            <p className={`mt-1 line-clamp-2 text-xs leading-5 ${bubbleTextClass ? 'opacity-60' : 'text-gray-200'}`}>{noteThread.noteText || 'Open thread'}</p>
           </button>
         ) : null}
         {hasContent && !suppressRawUrlContent ? (
@@ -2206,7 +2206,7 @@ function MessageBubble({
         {hasShare ? (
           <div className={hasContent ? 'mt-3' : ''}>
             {shareLabel && !isAttachmentOnly ? (
-              <p className="mb-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-200/80">
+              <p className={`mb-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] ${bubbleTextClass ? 'opacity-70' : 'text-cyan-200/80'}`}>
                 {shareLabel}
               </p>
             ) : null}
