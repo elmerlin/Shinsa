@@ -149,31 +149,31 @@ function getAchievementBadgePost(content, images) {
 function AchievementBadgePost({ badgeName, supportingCopy, image, onImageClick }) {
   return (
     <div className="mb-3 rounded-[24px] border border-piu-border/40 bg-[linear-gradient(135deg,rgba(12,18,34,0.96),rgba(7,10,24,0.98))] p-4 sm:p-5 shadow-[0_18px_40px_rgba(0,0,0,0.24)]">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0 flex-1">
-          <div className="inline-flex items-center rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-[0.32em] text-piu-accent/90">
+          <div className="inline-flex items-center rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-1 text-[9px] font-display font-bold uppercase tracking-[0.3em] text-piu-accent/90">
             Achievement unlocked
           </div>
-          <div className="mt-3 min-w-0">
-            <h3 className="font-display text-[1.9rem] leading-[0.94] text-white sm:text-[2.15rem]">
+          <div className="mt-2.5 min-w-0">
+            <h3 className="font-display text-[1.6rem] leading-[0.96] text-white sm:text-[1.95rem]">
               {badgeName}
             </h3>
             {supportingCopy && (
-              <div className="mt-2 text-sm text-gray-300 whitespace-pre-wrap break-words leading-relaxed">
+              <div className="mt-1.5 text-[0.97rem] text-gray-300 whitespace-pre-wrap break-words leading-[1.45] sm:text-[1.02rem]">
                 {renderFormattedText(supportingCopy)}
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end sm:shrink-0">
+        <div className="flex shrink-0 justify-end self-end sm:self-center">
           <button
             type="button"
             onClick={() => onImageClick(0)}
-            className="group rounded-[22px] border border-piu-border/55 bg-piu-dark/80 p-2.5 transition-transform duration-200 hover:-translate-y-0.5"
+            className="group rounded-[20px] border border-piu-border/55 bg-piu-dark/80 p-2 transition-transform duration-200 hover:-translate-y-0.5"
             title={`Open ${badgeName} badge`}
           >
-            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[18px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.16),rgba(8,12,28,0.92)_72%)] sm:h-28 sm:w-28">
+            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[16px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.16),rgba(8,12,28,0.92)_72%)] sm:h-24 sm:w-24">
               <img
                 src={image}
                 alt={badgeName}
