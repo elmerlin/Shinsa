@@ -3208,14 +3208,36 @@ function ConversationView({
 
   const readReceiptMap = useMemo(() => {
     const map = {};
-    for (const receipt of readReceipts) {
-      const mid = receipt?.last_read_message_id;
-      if (!mid) continue;
-      if (!map[mid]) map[mid] = [];
-      map[mid].push(receipt);
+    if (isSquad) {
+      // Squads: attach receipt to the exact last_read_message_id
+      for (const receipt of readReceipts) {
+        const mid = receipt?.last_read_message_id;
+        if (!mid) continue;
+        if (!map[mid]) map[mid] = [];
+        map[mid].push(receipt);
+      }
+    } else {
+      // DMs: attach receipt to the viewer's last own message that was read
+      // The other person's last_read_message_id tells us how far they've read.
+      // We want "Seen" under OUR last message at or before that point.
+      for (const receipt of readReceipts) {
+        const readUpTo = receipt?.last_read_message_id;
+        if (!readUpTo) continue;
+        const readUpToIdx = messages.findIndex((m) => m.id === readUpTo);
+        if (readUpToIdx < 0) continue;
+        // Find the last own message at or before the read-up-to position
+        let targetId = null;
+        for (let i = readUpToIdx; i >= 0; i--) {
+          if (messages[i]?.is_own) { targetId = messages[i].id; break; }
+        }
+        if (targetId) {
+          if (!map[targetId]) map[targetId] = [];
+          map[targetId].push(receipt);
+        }
+      }
     }
     return map;
-  }, [readReceipts]);
+  }, [readReceipts, isSquad, messages]);
 
   return (
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6" style={chatTheme.fontFamily ? { fontFamily: chatTheme.fontFamily } : undefined}>
