@@ -31,7 +31,6 @@ import { splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
 import { splitSessionShareContent } from '../utils/sessionShareMarker';
 import { mergeLiveSessionSummary, splitLiveSessionContent } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent } from '../utils/sessionPlanMarker';
-import { getProfilePath } from '../utils/profile';
 
 function formatRelativeTime(value) {
   const raw = String(value || '').trim();
@@ -496,33 +495,57 @@ function stopStoryEvent(event) {
 }
 
 function buildStorySharePayload(story, ownerUser) {
-  const profilePath = getProfilePath(ownerUser?.id || '', ownerUser?.username || '');
-  const kind = String(
-    story?.type === 'score_roundup'
-      ? (story?.entry_kind === 'clear' ? 'clear' : 'upscore')
-      : story?.type === 'live_session'
-        ? 'live_session'
-        : story?.type === 'hour_of_power'
-          ? 'hour_of_power'
-          : story?.source?.kind || 'story'
-  ).trim().toLowerCase() || 'story';
+  const previewItems = Array.isArray(story?.scores)
+    ? story.scores
+      .slice(0, 3)
+      .map((entry) => ({
+        songTitle: String(entry?.song_title || '').trim(),
+        mode: String(entry?.mode || '').trim(),
+        level: parseInt(entry?.level, 10) || 0,
+        score: parseInt(entry?.score, 10) || 0,
+        grade: String(entry?.grade || '').trim(),
+        jacketUrl: String(entry?.jacket_url || '').trim(),
+      }))
+      .filter((entry) => entry.songTitle || entry.score > 0 || entry.grade || entry.jacketUrl)
+    : [];
+  const totalItemCount = Math.max(parseInt(story?.total_count, 10) || 0, previewItems.length);
+  const storyPath = String(story?.link?.path || '').trim();
+  const storyUrl = String(story?.link?.url || '').trim();
+  const fallbackPath = storyPath || '/messages';
+  const storyOwnerId = String(ownerUser?.id || story?.user?.id || '').trim();
+  const storyOwnerUsername = String(ownerUser?.username || story?.user?.username || '').trim();
+  const storyOwnerAvatar = String(ownerUser?.avatar || story?.user?.avatar || '').trim();
 
   return {
-    kind,
-    path: story?.link?.path || profilePath || '/messages',
-    url: story?.link?.url || '',
+    kind: 'story',
+    path: fallbackPath,
+    url: storyUrl,
+    storyId: String(story?.id || '').trim(),
+    storyOwnerId,
+    storyOwnerUsername,
+    storyOwnerAvatar,
+    storyType: String(story?.type || '').trim(),
+    storySourceKind: String(story?.source?.kind || '').trim(),
+    storyCaption: String(story?.caption || '').trim().slice(0, 420),
+    storyCreatedAt: String(story?.created_at || '').trim(),
+    storyMediaUrl: String(story?.media_url || story?.post?.images?.[0] || '').trim(),
+    storyFallbackPath: storyPath,
+    storyFallbackUrl: storyUrl,
     title: String(story?.title || `${ownerUser?.username || 'Player'} story`).trim().slice(0, 160),
     subtitle: String(story?.subtitle || story?.caption || '').trim().slice(0, 220),
-    buttonLabel: String(story?.link?.label || 'Open story').trim().slice(0, 48),
+    buttonLabel: 'Open story',
     songTitle: story?.snapshot?.song_title || story?.scores?.[0]?.song_title || '',
     mode: story?.snapshot?.mode || story?.scores?.[0]?.mode || '',
     level: parseInt(story?.snapshot?.level ?? story?.scores?.[0]?.level, 10) || 0,
     score: parseInt(story?.snapshot?.score ?? story?.scores?.[0]?.score, 10) || 0,
     grade: String(story?.snapshot?.grade || story?.scores?.[0]?.grade || '').trim(),
     jacketUrl: String(story?.snapshot?.jacket_url || story?.scores?.[0]?.jacket_url || '').trim(),
-    playerName: ownerUser?.username || '',
-    playerAvatar: ownerUser?.avatar || '',
+    playerName: storyOwnerUsername,
+    playerAvatar: storyOwnerAvatar,
     contextLabel: 'Story',
+    previewItems,
+    totalItemCount,
+    extraItemCount: Math.max(0, totalItemCount - previewItems.length),
   };
 }
 

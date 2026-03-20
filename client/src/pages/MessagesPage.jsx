@@ -63,6 +63,7 @@ const LINK_SHARE_BADGES = {
   score_snapshot: 'Score',
   chart_compare: 'Compare',
   hour_of_power: 'Hour of Power',
+  story: 'Story',
   link: 'Link',
 };
 const CHALLENGE_BADGES = {
@@ -487,6 +488,169 @@ function MultiScorePreviewCard({ linkShare, badge, buttonClass, onOpenLink }) {
   );
 }
 
+function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink }) {
+  const previewItems = Array.isArray(linkShare?.previewItems) ? linkShare.previewItems.filter(Boolean).slice(0, 3) : [];
+  const totalItemCount = Math.max(Number(linkShare?.totalItemCount) || 0, previewItems.length);
+  const extraItemCount = Math.max(0, Number(linkShare?.extraItemCount) || Math.max(0, totalItemCount - previewItems.length));
+  const ownerName = String(linkShare?.storyOwnerUsername || linkShare?.playerName || '').trim() || 'Player';
+  const ownerAvatar = String(linkShare?.storyOwnerAvatar || linkShare?.playerAvatar || '').trim();
+  const mediaUrl = String(linkShare?.storyMediaUrl || '').trim();
+  const title = String(linkShare?.title || '').trim() || 'Story';
+  const subtitle = String(linkShare?.subtitle || '').trim();
+  const caption = String(linkShare?.storyCaption || '').trim();
+  const createdLabel = formatConversationTime(linkShare?.storyCreatedAt);
+  const storyType = String(linkShare?.storyType || '').trim().toLowerCase();
+  const buttonLabel = String(linkShare?.buttonLabel || '').trim() || 'Open story';
+  const hasPreviewItems = previewItems.length > 0;
+  const hasSnapshot = !hasPreviewItems
+    && !!(
+      linkShare?.songTitle
+      && linkShare?.mode
+      && Number(linkShare?.level) > 0
+      && (Number(linkShare?.score) > 0 || linkShare?.grade || linkShare?.jacketUrl)
+    );
+  const storyToneLabel = storyType === 'score_roundup'
+    ? 'Score story'
+    : storyType === 'score_snapshot'
+      ? 'Score story'
+      : storyType === 'post'
+        ? 'Feed story'
+        : storyType === 'image'
+          ? 'Photo story'
+          : storyType === 'link'
+            ? 'Link story'
+            : 'Story';
+  const summaryText = compactReplyPreviewText(caption || subtitle, 150);
+  const handleOpen = () => onOpenLink?.(linkShare);
+
+  return (
+    <div className="w-full rounded-[1.25rem] border border-piu-border/60 bg-[linear-gradient(160deg,rgba(15,22,36,0.98),rgba(10,14,25,0.94))] p-3 shadow-[0_12px_28px_rgba(0,0,0,0.22)]">
+      <div className="flex items-center gap-2.5">
+        {ownerAvatar ? (
+          <img src={ownerAvatar} alt="" className="h-9 w-9 rounded-full border border-white/10 object-cover" />
+        ) : (
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-500/10 font-display text-sm font-black text-cyan-100">
+            {ownerName.slice(0, 1).toUpperCase() || 'S'}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/72">Story</p>
+          <p className="truncate text-[13px] font-display font-black text-white">{ownerName}</p>
+        </div>
+        {createdLabel ? (
+          <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-display font-bold text-gray-300">
+            {createdLabel}
+          </span>
+        ) : null}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="mt-3 block w-full overflow-hidden rounded-[1.15rem] border border-white/8 bg-piu-dark/78 text-left transition-colors hover:border-cyan-300/25 hover:bg-piu-dark/86"
+      >
+        {mediaUrl ? (
+          <div className="overflow-hidden border-b border-white/8 bg-black/25">
+            <img src={mediaUrl} alt={title || 'Shared story'} className="max-h-[14rem] w-full object-cover" />
+          </div>
+        ) : null}
+
+        {hasPreviewItems ? (
+          <div className="space-y-2 px-3.5 py-3.5">
+            {previewItems.slice(0, 2).map((item, index) => (
+              <div key={`${item.songTitle || 'story'}:${item.mode || ''}:${item.level || 0}:${index}`} className="flex items-center gap-3 rounded-[1rem] border border-piu-border/55 bg-[#0f1624]/92 px-3 py-2.5">
+                <PiuChartJacket
+                  title={item.songTitle}
+                  mode={item.mode}
+                  level={item.level}
+                  jacketUrl={item.jacketUrl}
+                  size="wide"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-display font-black text-white">{item.songTitle || 'Song'}</p>
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {item.mode || 'Mode'}
+                    {item.level ? ` • ${getLevelBadgeLabel(item.mode, item.level)}` : ''}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[13px] font-display font-black text-white">{formatCompactScore(item.score) || 'Shared'}</p>
+                  {item.grade ? <p className="mt-1 text-[10px] font-display font-bold text-cyan-100/90">{item.grade}</p> : null}
+                </div>
+              </div>
+            ))}
+            {totalItemCount > previewItems.length ? (
+              <div className="inline-flex rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-cyan-100/90">
+                {`+${Math.max(extraItemCount, totalItemCount - previewItems.length)} more`}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {hasSnapshot ? (
+          <div className="flex items-center gap-3 px-3.5 py-3.5">
+            <PiuChartJacket
+              title={linkShare.songTitle}
+              mode={linkShare.mode}
+              level={linkShare.level}
+              jacketUrl={linkShare.jacketUrl}
+              size="wide"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-display font-black text-white">{linkShare.songTitle || 'Song'}</p>
+              <p className="mt-1 text-[11px] text-gray-400">
+                {linkShare.mode || 'Mode'}
+                {linkShare.level ? ` • ${getLevelBadgeLabel(linkShare.mode, linkShare.level)}` : ''}
+              </p>
+              <p className="mt-2 text-[15px] font-display font-black text-white">{formatCompactScore(linkShare.score) || 'Shared score'}</p>
+            </div>
+            {linkShare.grade ? (
+              <div className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-display font-black text-cyan-100">
+                {linkShare.grade}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {!mediaUrl && !hasPreviewItems && !hasSnapshot ? (
+          <div className="flex min-h-[8.5rem] items-end bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_42%),linear-gradient(160deg,#101726,#0a0f19)] px-3.5 py-3.5">
+            <span className="rounded-full border border-white/10 bg-white/6 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-cyan-100/90">
+              {storyToneLabel}
+            </span>
+          </div>
+        ) : null}
+
+        <div className="px-3.5 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[15px] font-display font-black text-white">{title}</p>
+              {subtitle && subtitle !== title ? (
+                <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-gray-300">{subtitle}</p>
+              ) : null}
+              {summaryText && summaryText !== subtitle ? (
+                <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-gray-400">{summaryText}</p>
+              ) : null}
+            </div>
+            <span className="shrink-0 rounded-full border border-white/10 bg-white/6 px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-gray-200">
+              {storyToneLabel}
+            </span>
+          </div>
+        </div>
+      </button>
+
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={handleOpen}
+          className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors ${buttonClass}`}
+        >
+          {buttonLabel}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function YouTubeMessagePreviewCard({ url, onOpen }) {
   const [meta, setMeta] = useState({ title: '', authorName: '' });
   const videoId = parseYouTubeUrl(url).videoId;
@@ -773,6 +937,9 @@ function getMessageLabel(message) {
   if (message.message_type === 'link_share' && message.link_share?.kind === 'chart_compare') {
     return 'Compare reply';
   }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'story') {
+    return 'Shared story';
+  }
   if (message.message_type === 'challenge_card' && message.challenge_card?.kind === 'beat_score') {
     if (message.challenge_card?.statusKind === 'accepted') return 'Challenge accepted';
     if (message.challenge_card?.statusKind === 'expired') return 'Challenge expired';
@@ -1013,6 +1180,7 @@ function MessageLinkCard({
     && ['upscore', 'clear'].includes(resolvedLinkShare.kind)
     && Array.isArray(resolvedLinkShare.previewItems)
     && resolvedLinkShare.previewItems.length > 0;
+  const isStoryShare = resolvedLinkShare.kind === 'story';
   const isYouTubeShare = !resolvedLinkShare.path && !!parseYouTubeUrl(resolvedLinkShare.url).videoId;
   const handlePrimaryOpen = () => onOpenLink?.(resolvedLinkShare);
   const replayUrl = String(resolvedLinkShare.replayUrl || '').trim();
@@ -1121,6 +1289,16 @@ function MessageLinkCard({
       <MultiScorePreviewCard
         linkShare={resolvedLinkShare}
         badge={badge}
+        buttonClass={buttonClass}
+        onOpenLink={handlePrimaryOpen}
+      />
+    );
+  }
+
+  if (isStoryShare) {
+    return (
+      <StorySharePreviewCard
+        linkShare={resolvedLinkShare}
         buttonClass={buttonClass}
         onOpenLink={handlePrimaryOpen}
       />
@@ -2532,11 +2710,93 @@ export default function MessagesPage() {
     localStorage.setItem(CHAT_QUICK_REACTIONS_KEY, JSON.stringify(normalizeReactionKeys(quickReactions)));
   }, [quickReactions]);
 
-  const handleOpenChatLink = useCallback((linkTarget) => {
-    const path = String(linkTarget?.path || '').trim();
-    const url = String(linkTarget?.url || '').trim();
+  async function openSharedStoryLinkTarget(linkTarget) {
+    const storyId = String(linkTarget?.storyId || '').trim();
+    const storyOwnerId = String(linkTarget?.storyOwnerId || '').trim();
+    if (!storyId || !storyOwnerId) return 'skip';
+
+    const fallbackUser = {
+      id: storyOwnerId,
+      username: String(linkTarget?.storyOwnerUsername || '').trim(),
+      avatar: String(linkTarget?.storyOwnerAvatar || '').trim(),
+    };
+
+    setStoryViewerState({
+      open: true,
+      user: fallbackUser,
+      stories: [],
+      loading: true,
+      error: '',
+      readonly: false,
+      sourceUserId: storyOwnerId,
+      initialIndex: 0,
+    });
+
+    try {
+      const payload = await getMessageStory(storyOwnerId);
+      const nextStories = Array.isArray(payload?.stories) ? payload.stories : [];
+      const targetIndex = nextStories.findIndex((story) => String(story?.id || '').trim() === storyId);
+      if (targetIndex === -1) throw new Error('Story not found');
+
+      setStoryViewerState({
+        open: true,
+        user: payload?.user || fallbackUser,
+        stories: nextStories,
+        loading: false,
+        error: '',
+        readonly: false,
+        sourceUserId: storyOwnerId,
+        initialIndex: targetIndex,
+      });
+      return 'opened';
+    } catch {
+      const fallbackPath = String(linkTarget?.storyFallbackPath || '').trim();
+      const fallbackUrl = String(linkTarget?.storyFallbackUrl || '').trim();
+      if (fallbackPath || fallbackUrl) {
+        setStoryViewerState({
+          open: false,
+          user: null,
+          stories: [],
+          loading: false,
+          error: '',
+          readonly: false,
+          sourceUserId: '',
+          initialIndex: 0,
+        });
+        return 'fallback';
+      }
+
+      setStoryViewerState({
+        open: true,
+        user: fallbackUser,
+        stories: [],
+        loading: false,
+        error: 'Story unavailable right now.',
+        readonly: true,
+        sourceUserId: storyOwnerId,
+        initialIndex: 0,
+      });
+      return 'error';
+    }
+  }
+
+  async function handleOpenChatLink(linkTarget) {
+    const kind = String(linkTarget?.kind || '').trim().toLowerCase();
+    const canOpenSharedStory = kind === 'story'
+      && !!String(linkTarget?.storyId || '').trim()
+      && !!String(linkTarget?.storyOwnerId || '').trim();
     const title = String(linkTarget?.title || linkTarget?.buttonLabel || 'Open link').trim() || 'Open link';
     const forceEmbed = !!linkTarget?.forceEmbed;
+
+    if (canOpenSharedStory) {
+      const storyOpenResult = await openSharedStoryLinkTarget(linkTarget);
+      if (storyOpenResult === 'opened' || storyOpenResult === 'error') {
+        return;
+      }
+    }
+
+    const path = String((canOpenSharedStory ? linkTarget?.storyFallbackPath : linkTarget?.path) || '').trim();
+    const url = String((canOpenSharedStory ? linkTarget?.storyFallbackUrl : linkTarget?.url) || '').trim();
 
     if (path) {
       navigate(path);
@@ -2573,7 +2833,7 @@ export default function MessagesPage() {
       title,
       url,
     });
-  }, [navigate, openLinksExternally]);
+  }
 
   const ensureChartKeyMap = useCallback(async () => {
     if (chartKeyMapRef.current) return chartKeyMapRef.current;
