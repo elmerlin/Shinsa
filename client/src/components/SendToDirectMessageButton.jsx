@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { sendDirectPayloadToRecipients, sendPayloadToConversation } from '../utils/directMessageDelivery';
 import ActionIconButton from './ActionIconButton';
@@ -18,14 +17,13 @@ export default function SendToDirectMessageButton({
   className = '',
   title = 'Send to players',
   description = '',
-  navigateAfterSend = true,
   multiSelect = true,
 }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [challengePickerOpen, setChallengePickerOpen] = useState(false);
   const [selectedChallengeCard, setSelectedChallengeCard] = useState(null);
+  const [sentResults, setSentResults] = useState(null);
 
   const excludeUserIds = useMemo(() => [user?.id].filter(Boolean), [user?.id]);
   const selectableChallengeOptions = useMemo(
@@ -63,6 +61,7 @@ export default function SendToDirectMessageButton({
     setPickerOpen(false);
     setChallengePickerOpen(false);
     setSelectedChallengeCard(null);
+    setSentResults(null);
   };
 
   const beginSendFlow = () => {
@@ -75,27 +74,27 @@ export default function SendToDirectMessageButton({
   };
 
   const handleSelect = async (selectedUser) => {
-    const delivery = await sendDirectPayloadToRecipients([selectedUser], payload);
-    resetPickers();
-    if (navigateAfterSend) {
-      navigate(`/messages/${delivery.lastConversationId}`);
-    }
+    await sendDirectPayloadToRecipients([selectedUser], payload);
+    setSentResults({ users: [selectedUser], squads: [] });
   };
 
-  const handleSubmit = async (selectedUsers) => {
-    const delivery = await sendDirectPayloadToRecipients(selectedUsers, payload);
-    resetPickers();
-    if (navigateAfterSend && delivery.count === 1 && delivery.lastConversationId) {
-      navigate(`/messages/${delivery.lastConversationId}`);
+  const handleSubmit = async (selectedUsers, selectedSquads) => {
+    const users = Array.isArray(selectedUsers) ? selectedUsers : [];
+    const squads = Array.isArray(selectedSquads) ? selectedSquads : [];
+
+    if (users.length > 0) {
+      await sendDirectPayloadToRecipients(users, payload);
     }
+    for (const squad of squads) {
+      await sendPayloadToConversation(squad, payload);
+    }
+
+    setSentResults({ users, squads });
   };
 
   const handleSelectConversation = async (conversation) => {
-    const delivery = await sendPayloadToConversation(conversation, payload);
-    resetPickers();
-    if (navigateAfterSend && delivery.lastConversationId) {
-      navigate(`/messages/${delivery.lastConversationId}`);
-    }
+    await sendPayloadToConversation(conversation, payload);
+    setSentResults({ users: [], squads: [conversation] });
   };
 
   return (
@@ -198,6 +197,7 @@ export default function SendToDirectMessageButton({
         excludeUserIds={excludeUserIds}
         multiSelect={multiSelect}
         showSquads
+        sentResults={sentResults}
       />
     </>
   );
