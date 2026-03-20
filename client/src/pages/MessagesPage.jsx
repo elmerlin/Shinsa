@@ -90,6 +90,15 @@ const REPLY_SWIPE_MAX_OFFSET = 72;
 const REPLY_SWIPE_TRIGGER_OFFSET = 54;
 const MOBILE_MESSAGE_INTERACTION_ARM_DELAY_MS = 520;
 
+function isCoarsePointerDevice() {
+  if (typeof window === 'undefined') return false;
+  if (window.matchMedia) {
+    if (window.matchMedia('(pointer: coarse)').matches) return true;
+    if (window.matchMedia('(hover: none)').matches && Number(window.navigator?.maxTouchPoints || 0) > 0) return true;
+  }
+  return Number(window.navigator?.maxTouchPoints || 0) > 0 && window.innerWidth < 1024;
+}
+
 function formatCompactScore(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric.toLocaleString() : '';
@@ -1558,6 +1567,7 @@ function MessageBubble({
   activeReplyMessageId = '',
   replyHighlightVersion = 0,
   touchInteractionsEnabled = true,
+  touchInteractionsBlockedUntil = 0,
   availableReactions = DEFAULT_QUICK_REACTION_KEYS,
   defaultReaction = 'pump',
   onReact = null,
@@ -1605,6 +1615,11 @@ function MessageBubble({
   });
   const [replySwipeOffset, setReplySwipeOffset] = useState(0);
   const [replySwipeDragging, setReplySwipeDragging] = useState(false);
+
+  const areTouchInteractionsBlocked = () => (
+    !touchInteractionsEnabled
+    || (Number(touchInteractionsBlockedUntil) > 0 && Date.now() < Number(touchInteractionsBlockedUntil))
+  );
 
   const closeTray = () => {
     setTrayOpen(false);
@@ -1692,7 +1707,7 @@ function MessageBubble({
   }, []);
 
   useEffect(() => {
-    if (touchInteractionsEnabled) return undefined;
+    if (!areTouchInteractionsBlocked()) return undefined;
     if (tapStateRef.current.timer) {
       window.clearTimeout(tapStateRef.current.timer);
       tapStateRef.current.timer = null;
@@ -1702,7 +1717,7 @@ function MessageBubble({
     setMobileTrayMounted(false);
     resetReplySwipe();
     return undefined;
-  }, [resetReplySwipe, touchInteractionsEnabled]);
+  }, [resetReplySwipe, touchInteractionsBlockedUntil, touchInteractionsEnabled]);
 
   const triggerReply = useCallback(() => {
     if (!message?.id || !onReply) return;
@@ -1711,7 +1726,7 @@ function MessageBubble({
 
   const handlePointerDown = (event) => {
     if (event.pointerType !== 'touch') return;
-    if (!touchInteractionsEnabled) return;
+    if (areTouchInteractionsBlocked()) return;
     if (event?.target?.closest?.('button,a,textarea,input,select')) return;
     swipeStateRef.current.pointerId = event.pointerId;
     swipeStateRef.current.startX = event.clientX;
@@ -1727,7 +1742,7 @@ function MessageBubble({
 
   const handlePointerMove = (event) => {
     if (event.pointerType !== 'touch') return;
-    if (!touchInteractionsEnabled) {
+    if (areTouchInteractionsBlocked()) {
       resetReplySwipe();
       return;
     }
@@ -1755,7 +1770,7 @@ function MessageBubble({
 
   const handlePointerUp = (event) => {
     if (event.pointerType === 'touch' && swipeStateRef.current.pointerId === event.pointerId) {
-      if (!touchInteractionsEnabled) {
+      if (areTouchInteractionsBlocked()) {
         resetReplySwipe();
         return;
       }
@@ -2307,6 +2322,7 @@ function ConversationView({
   activeReplyMessageId,
   replyHighlightVersion,
   touchInteractionsEnabled,
+  touchInteractionsBlockedUntil,
   onDraftChange,
   onComposerKeyDown,
   onSend,
@@ -2468,6 +2484,7 @@ function ConversationView({
                   activeReplyMessageId={activeReplyMessageId}
                   replyHighlightVersion={replyHighlightVersion}
                   touchInteractionsEnabled={touchInteractionsEnabled}
+                  touchInteractionsBlockedUntil={touchInteractionsBlockedUntil}
                   defaultReaction={defaultReaction}
                   availableReactions={availableReactions}
                   onReact={onReact}
@@ -2588,7 +2605,9 @@ export default function MessagesPage() {
   const [draft, setDraft] = useState('');
   const [replyTarget, setReplyTarget] = useState(null);
   const [replyHighlightVersion, setReplyHighlightVersion] = useState(0);
-  const [touchInteractionsEnabled, setTouchInteractionsEnabled] = useState(true);
+  const [touchInteractionsEnabled, setTouchInteractionsEnabled] = useState(() => (
+    !conversationId || !isCoarsePointerDevice()
+  ));
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [squadComposerOpen, setSquadComposerOpen] = useState(false);
@@ -2694,6 +2713,10 @@ export default function MessagesPage() {
     }
     return circles.filter((circle) => circle?.has_story && circle?.user?.id);
   }, [highlights]);
+  const touchInteractionsBlockedUntil = useMemo(() => {
+    if (!conversationId || !isCoarsePointerDevice()) return 0;
+    return Date.now() + MOBILE_MESSAGE_INTERACTION_ARM_DELAY_MS;
+  }, [conversationId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -3203,11 +3226,7 @@ export default function MessagesPage() {
       return undefined;
     }
 
-    const coarsePointer = window.matchMedia
-      ? window.matchMedia('(hover: none) and (pointer: coarse)').matches
-      : (window.innerWidth < 640 && Number(window.navigator?.maxTouchPoints || 0) > 0);
-
-    if (!coarsePointer) {
+    if (!isCoarsePointerDevice()) {
       setTouchInteractionsEnabled(true);
       return undefined;
     }
@@ -3215,9 +3234,9 @@ export default function MessagesPage() {
     setTouchInteractionsEnabled(false);
     const timeoutId = window.setTimeout(() => {
       setTouchInteractionsEnabled(true);
-    }, MOBILE_MESSAGE_INTERACTION_ARM_DELAY_MS);
+    }, Math.max(0, touchInteractionsBlockedUntil - Date.now()));
     return () => window.clearTimeout(timeoutId);
-  }, [conversationId]);
+  }, [conversationId, touchInteractionsBlockedUntil]);
 
   useEffect(() => {
     if (!conversationId || typeof window === 'undefined' || window.innerWidth >= 640) {
@@ -3885,6 +3904,7 @@ export default function MessagesPage() {
           activeReplyMessageId={replyTarget?.messageId || ''}
           replyHighlightVersion={replyHighlightVersion}
           touchInteractionsEnabled={touchInteractionsEnabled}
+          touchInteractionsBlockedUntil={touchInteractionsBlockedUntil}
           onDraftChange={setDraft}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={handleSend}
