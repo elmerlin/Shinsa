@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getMessageConversations, searchUsers } from '../utils/api';
 import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from './PlayerRegistration';
@@ -248,8 +249,9 @@ export default function UserPickerDialog({
             >
               Close
             </button>
-            <a
-              href="/messages"
+            <Link
+              to="/messages"
+              onClick={onClose}
               className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-4 py-2.5 text-sm font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 opacity-70">
@@ -257,7 +259,7 @@ export default function UserPickerDialog({
                 <path d="M14 6c.762 0 1.52.02 2.272.062C17.226 6.175 18 7.049 18 8.068v2.652c0 1.02-.773 1.893-1.728 2.006A39.41 39.41 0 0114 12.792v3.458a.75.75 0 01-1.28.53l-2.073-2.073A40.606 40.606 0 018.5 14.5v-2.24C8.5 10.516 10.016 9 11.852 8.936 12.554 8.913 13.272 8.9 14 8.9V6z" />
               </svg>
               Go to inbox
-            </a>
+            </Link>
           </div>
         </div>
       </div>
