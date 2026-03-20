@@ -587,26 +587,29 @@ function normalizeConversationMessage(row, viewerUserId = '', reactionPayload = 
     reactionPayload?.viewerReaction || row?.viewer_reaction || ''
   );
 
+  const isUnsent = !!String(row?.deleted_at || '').trim();
+
   return {
     id: row?.id || '',
     conversation_id: row?.conversation_id || '',
-    message_type: row?.message_type || 'text',
-    content: String(row?.content || ''),
-    share,
-    link_share: linkShare,
-    challenge_card: challengeCard,
-    note_thread: noteThread,
-    reply_to: replyTo,
+    message_type: isUnsent ? 'unsent' : (row?.message_type || 'text'),
+    content: isUnsent ? '' : String(row?.content || ''),
+    share: isUnsent ? null : share,
+    link_share: isUnsent ? null : linkShare,
+    challenge_card: isUnsent ? null : challengeCard,
+    note_thread: isUnsent ? null : noteThread,
+    reply_to: isUnsent ? null : replyTo,
     created_at: row?.created_at || '',
     updated_at: row?.updated_at || '',
+    is_unsent: isUnsent,
     sender: {
       id: senderUserId,
       username: row?.sender_username || '',
       avatar: normalizeUserAvatarForList(row?.sender_avatar, senderUserId, 40, row?.sender_avatar_v),
     },
     is_own: !!viewerUserId && senderUserId === String(viewerUserId || '').trim(),
-    reactions: normalizedReactions.reactions,
-    viewer_reaction: normalizedReactions.viewerReaction,
+    reactions: isUnsent ? [] : normalizedReactions.reactions,
+    viewer_reaction: isUnsent ? '' : normalizedReactions.viewerReaction,
   };
 }
 

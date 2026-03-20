@@ -26,6 +26,7 @@ import {
   sendMessageConversationStomp,
   sendMessageConversationNudge,
   sendConversationMessage,
+  unsendConversationMessage,
   pinMessageConversation,
 } from '../utils/api';
 import {
@@ -2125,6 +2126,7 @@ function MessageBubble({
   onOpenThread = null,
   onOpenLink = null,
   onReply = null,
+  onUnsend = null,
   activeReplyMessageId = '',
   replyHighlightVersion = 0,
   touchInteractionsEnabled = true,
@@ -2186,6 +2188,8 @@ function MessageBubble({
   });
   const [replySwipeOffset, setReplySwipeOffset] = useState(0);
   const [replySwipeDragging, setReplySwipeDragging] = useState(false);
+  const [unsendSwipeOffset, setUnsendSwipeOffset] = useState(0);
+  const [unsendSwipeDragging, setUnsendSwipeDragging] = useState(false);
 
   const areTouchInteractionsBlocked = () => (
     !touchInteractionsEnabled
@@ -2321,6 +2325,8 @@ function MessageBubble({
     swipeStateRef.current.moved = false;
     setReplySwipeOffset(0);
     setReplySwipeDragging(false);
+    setUnsendSwipeOffset(0);
+    setUnsendSwipeDragging(false);
   }, []);
 
   useEffect(() => {
@@ -2336,6 +2342,11 @@ function MessageBubble({
     if (!message?.id || !onReply) return;
     onReply(message);
   }, [message, onReply]);
+
+  const triggerUnsend = useCallback(() => {
+    if (!message?.id || !onUnsend || !isOwn) return;
+    onUnsend(message);
+  }, [message, onUnsend, isOwn]);
 
   const handlePointerDown = (event) => {
     if (event.pointerType !== 'touch') return;
@@ -2374,12 +2385,25 @@ function MessageBubble({
       return;
     }
 
-    const offset = Math.max(0, Math.min(REPLY_SWIPE_MAX_OFFSET, dx));
-    if (offset <= 0) return;
+    // Right swipe → reply
+    const replyOffset = Math.max(0, Math.min(REPLY_SWIPE_MAX_OFFSET, dx));
+    // Left swipe → unsend (own messages only)
+    const unsendOffset = isOwn && onUnsend ? Math.max(0, Math.min(REPLY_SWIPE_MAX_OFFSET, -dx)) : 0;
+
+    if (replyOffset <= 0 && unsendOffset <= 0) return;
 
     swipeStateRef.current.ignoreClick = true;
-    setReplySwipeDragging(true);
-    setReplySwipeOffset(offset);
+    if (replyOffset > 0) {
+      setReplySwipeDragging(true);
+      setReplySwipeOffset(replyOffset);
+      setUnsendSwipeOffset(0);
+      setUnsendSwipeDragging(false);
+    } else if (unsendOffset > 0) {
+      setUnsendSwipeDragging(true);
+      setUnsendSwipeOffset(unsendOffset);
+      setReplySwipeOffset(0);
+      setReplySwipeDragging(false);
+    }
   };
 
   const handlePointerUp = (event) => {
@@ -2393,8 +2417,14 @@ function MessageBubble({
         return;
       }
       const shouldReply = replySwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET;
-      const shouldTreatAsTap = swipeStateRef.current.active && !swipeStateRef.current.moved && replySwipeOffset < 8;
-      if (shouldReply) {
+      const shouldUnsend = unsendSwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET;
+      const shouldTreatAsTap = swipeStateRef.current.active && !swipeStateRef.current.moved && replySwipeOffset < 8 && unsendSwipeOffset < 8;
+      if (shouldUnsend) {
+        clearTapTimer();
+        tapStateRef.current.lastTapAt = 0;
+        triggerUnsend();
+        closeTray();
+      } else if (shouldReply) {
         clearTapTimer();
         tapStateRef.current.lastTapAt = 0;
         triggerReply();
@@ -2548,6 +2578,39 @@ function MessageBubble({
     );
   }
 
+  if (message?.is_unsent || message?.message_type === 'unsent') {
+    return (
+      <div className={`relative flex flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
+        {!isOwn ? (
+          <div className="mb-1 flex items-center gap-1.5 px-1">
+            {chatTheme?.showAvatars && senderAvatar ? (
+              <img src={senderAvatar} alt="" className="h-5 w-5 rounded-full object-cover" />
+            ) : chatTheme?.showAvatars ? (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-400/20 text-[9px] font-bold text-gray-400">
+                {senderName.slice(0, 1).toUpperCase()}
+              </div>
+            ) : null}
+            <p className={chatTheme?.senderNameClass || 'text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500'}>
+              {senderName}
+            </p>
+          </div>
+        ) : null}
+        <div
+          className="rounded-2xl border border-dashed border-white/10 px-3 py-2"
+          style={{ borderRadius: chatTheme?.bubbleRadius || '1.25rem' }}
+        >
+          <div className="flex items-center gap-2 text-xs italic text-gray-500">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-3.5 w-3.5 shrink-0 opacity-60">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+            {isOwn ? 'You unsent a message' : `${senderName} unsent a message`}
+          </div>
+        </div>
+        <p className="mt-0.5 px-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`relative flex flex-col ${alignmentClass}`}
@@ -2625,12 +2688,28 @@ function MessageBubble({
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h9a5 5 0 0 1 5 5" />
           </svg>
         </div>
+        {isOwn && onUnsend ? (
+          <div
+            className={`pointer-events-none absolute right-0 top-1/2 z-[1] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border transition-all duration-200 ${
+              unsendSwipeOffset >= REPLY_SWIPE_TRIGGER_OFFSET
+                ? 'border-red-400/35 bg-red-500/18 text-red-300 shadow-[0_10px_24px_rgba(239,68,68,0.2)]'
+                : 'border-red-400/20 bg-red-500/10 text-red-300/80 shadow-[0_10px_24px_rgba(239,68,68,0.12)]'
+            } ${unsendSwipeOffset > 0 ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}
+            style={{
+              transform: `translateY(-50%) scale(${0.75 + Math.min(0.25, unsendSwipeOffset / REPLY_SWIPE_TRIGGER_OFFSET * 0.25)})`,
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+            </svg>
+          </div>
+        ) : null}
         <div
           ref={bubbleRef}
           className={`${bubbleClass} ${isReplyTarget ? 'ring-1 ring-cyan-300/18 shadow-[0_0_0_1px_rgba(103,232,249,0.08),0_14px_28px_rgba(8,145,178,0.12)]' : ''} ${replyFlashActive ? 'animate-pulse' : ''}`}
           style={{
-            transform: replySwipeOffset > 0 ? `translateX(${replySwipeOffset}px)` : 'translateX(0px)',
-            transition: replySwipeDragging ? 'none' : 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+            transform: replySwipeOffset > 0 ? `translateX(${replySwipeOffset}px)` : (unsendSwipeOffset > 0 ? `translateX(${-unsendSwipeOffset}px)` : 'translateX(0px)'),
+            transition: (replySwipeDragging || unsendSwipeDragging) ? 'none' : 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
             ...(!isAttachmentOnly ? { borderRadius: themeRadius, boxShadow: themeShadow !== 'none' ? themeShadow : undefined } : {}),
           }}
           onPointerDown={handlePointerDown}
@@ -3106,6 +3185,7 @@ function ConversationView({
   defaultReaction,
   availableReactions,
   onReact,
+  onUnsend = null,
   readReceipts = [],
   onNudge,
   nudging = false,
@@ -3290,6 +3370,7 @@ function ConversationView({
                       onOpenThread={message?.note_thread?.threadKey ? () => onOpenThread?.(message) : null}
                       onOpenLink={onOpenLink}
                       onReply={onReply}
+                      onUnsend={onUnsend}
                       activeReplyMessageId={activeReplyMessageId}
                       replyHighlightVersion={replyHighlightVersion}
                       touchInteractionsEnabled={touchInteractionsEnabled}
@@ -4230,6 +4311,21 @@ export default function MessagesPage() {
     }
   };
 
+  const handleUnsend = async (message) => {
+    if (!conversationId || !message?.id) return;
+    try {
+      await unsendConversationMessage(conversationId, message.id);
+      setMessages((prev) => prev.map((m) => (
+        m.id === message.id
+          ? { ...m, message_type: 'unsent', is_unsent: true, content: '', share: null, link_share: null, challenge_card: null, note_thread: null, reply_to: null, reactions: [], viewer_reaction: '' }
+          : m
+      )));
+      loadConversations();
+    } catch (err) {
+      setActionError(err?.message || 'Failed to unsend message.');
+    }
+  };
+
   const [nudging, setNudging] = useState(false);
   const handleNudge = async () => {
     if (!conversationId || nudging || sending) return;
@@ -4884,6 +4980,7 @@ export default function MessagesPage() {
           defaultReaction={defaultReaction}
           availableReactions={quickReactions}
           onReact={handleReactToMessage}
+          onUnsend={handleUnsend}
           readReceipts={readReceipts}
           onNudge={handleNudge}
           nudging={nudging}

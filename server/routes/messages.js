@@ -970,7 +970,6 @@ function getConversationMessages(db, conversationId) {
       FROM conversation_messages m
       JOIN users u ON u.id = m.sender_user_id
       WHERE m.conversation_id = ?
-        AND m.deleted_at = ''
       ORDER BY datetime(m.created_at) DESC, m.id DESC
       LIMIT 200
     ) recent
@@ -2349,6 +2348,40 @@ router.post('/conversations/:id/nudge', requireAuth, (req, res) => {
     conversation,
     message: normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' }),
   });
+});
+
+router.delete('/conversations/:id/messages/:messageId', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const messageId = String(req.params.messageId || '').trim();
+  if (!conversationId || !messageId) {
+    return res.status(400).json({ error: 'Conversation and message are required' });
+  }
+
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const row = db.prepare(`
+    SELECT id, sender_user_id FROM conversation_messages
+    WHERE id = ? AND conversation_id = ? AND deleted_at = ''
+    LIMIT 1
+  `).get(messageId, conversationId);
+  if (!row) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+  if (String(row.sender_user_id || '').trim() !== String(req.user.id || '').trim()) {
+    return res.status(403).json({ error: 'You can only unsend your own messages' });
+  }
+
+  db.prepare(`
+    UPDATE conversation_messages
+    SET deleted_at = ?, content = '', metadata_json = '{}'
+    WHERE id = ? AND conversation_id = ?
+  `).run(toSqliteDateTime(), messageId, conversationId);
+
+  res.json({ success: true, messageId });
 });
 
 router.post('/conversations/:id/messages', requireAuth, (req, res) => {

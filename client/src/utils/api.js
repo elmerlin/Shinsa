@@ -674,6 +674,9 @@ export const sendConversationMessage = (conversationId, data) => request(`/messa
   method: 'POST',
   body: JSON.stringify(data),
 });
+export const unsendConversationMessage = (conversationId, messageId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`, {
+  method: 'DELETE',
+});
 export const getOrCreateDirectConversation = (userId, data = null) => request(`/messages/direct/${encodeURIComponent(userId)}`, {
   method: 'POST',
   body: JSON.stringify(data || {}),
