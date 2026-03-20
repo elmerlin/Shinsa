@@ -124,6 +124,69 @@ function ImageGrid({ images, onImageClick }) {
   );
 }
 
+function getAchievementBadgePost(content, images) {
+  if (!Array.isArray(images) || images.length !== 1) return null;
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return null;
+
+  const lines = trimmedContent
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  const headingMatch = lines[0].match(/^New badge unlocked:\s*(.+)$/i);
+  if (!headingMatch) return null;
+
+  return {
+    badgeName: headingMatch[1].trim() || 'New badge',
+    supportingCopy: lines.slice(1).join('\n\n').trim(),
+    image: images[0],
+  };
+}
+
+function AchievementBadgePost({ badgeName, supportingCopy, image, onImageClick }) {
+  return (
+    <div className="mb-3 rounded-[24px] border border-piu-border/40 bg-[linear-gradient(135deg,rgba(12,18,34,0.96),rgba(7,10,24,0.98))] p-4 sm:p-5 shadow-[0_18px_40px_rgba(0,0,0,0.24)]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="inline-flex items-center rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-1 text-[10px] font-display font-bold uppercase tracking-[0.32em] text-piu-accent/90">
+            Achievement unlocked
+          </div>
+          <div className="mt-3 min-w-0">
+            <h3 className="font-display text-[1.9rem] leading-[0.94] text-white sm:text-[2.15rem]">
+              {badgeName}
+            </h3>
+            {supportingCopy && (
+              <div className="mt-2 text-sm text-gray-300 whitespace-pre-wrap break-words leading-relaxed">
+                {renderFormattedText(supportingCopy)}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end sm:shrink-0">
+          <button
+            type="button"
+            onClick={() => onImageClick(0)}
+            className="group rounded-[22px] border border-piu-border/55 bg-piu-dark/80 p-2.5 transition-transform duration-200 hover:-translate-y-0.5"
+            title={`Open ${badgeName} badge`}
+          >
+            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[18px] border border-white/8 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.16),rgba(8,12,28,0.92)_72%)] sm:h-28 sm:w-28">
+              <img
+                src={image}
+                alt={badgeName}
+                className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.03]"
+              />
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Lightbox for fullscreen image viewing with smooth sliding
 function Lightbox({ images, index, onClose }) {
   const [current, setCurrent] = useState(index);
@@ -894,6 +957,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const images = (() => {
     try { return JSON.parse(post.images || '[]'); } catch { return []; }
   })();
+  const achievementBadgePost = getAchievementBadgePost(visibleContent, images);
 
   const flag = showAuthor ? getCountryFlag(post.nationality) : null;
   const canEdit = user && user.id === post.user_id;
@@ -1027,33 +1091,44 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
         </div>
       ) : (
         <>
-          {visibleContent && (
-            <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
-              {renderFormattedText(visibleContent)}
-            </div>
-          )}
-          {currentSummary && (
-            <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
-          )}
-          {currentShare && (
-            <SessionShareCard
-              share={currentShare}
-              title={currentShare?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'}
-              className="mb-3"
-              actions={user ? (
-                <SendToDirectMessageButton
-                  share={currentShare}
-                  title={currentShare?.shareType === 'hour_of_power' ? 'Send Hour of Power recap' : 'Send session share'}
-                  description="Choose a player to send this recap to."
-                />
-              ) : null}
+          {achievementBadgePost ? (
+            <AchievementBadgePost
+              badgeName={achievementBadgePost.badgeName}
+              supportingCopy={achievementBadgePost.supportingCopy}
+              image={achievementBadgePost.image}
+              onImageClick={setLightboxIndex}
             />
-          )}
-          {currentLive && (
-            <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" />
-          )}
-          {currentPlan && (
-            <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} />
+          ) : (
+            <>
+              {visibleContent && (
+                <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
+                  {renderFormattedText(visibleContent)}
+                </div>
+              )}
+              {currentSummary && (
+                <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
+              )}
+              {currentShare && (
+                <SessionShareCard
+                  share={currentShare}
+                  title={currentShare?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'}
+                  className="mb-3"
+                  actions={user ? (
+                    <SendToDirectMessageButton
+                      share={currentShare}
+                      title={currentShare?.shareType === 'hour_of_power' ? 'Send Hour of Power recap' : 'Send session share'}
+                      description="Choose a player to send this recap to."
+                    />
+                  ) : null}
+                />
+              )}
+              {currentLive && (
+                <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" />
+              )}
+              {currentPlan && (
+                <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} />
+              )}
+            </>
           )}
         </>
       )}
@@ -1062,7 +1137,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
       {!editing && currentYoutubeUrl && <YouTubeEmbed url={currentYoutubeUrl} />}
 
       {/* Images */}
-      <ImageGrid images={images} onImageClick={setLightboxIndex} />
+      {!achievementBadgePost && <ImageGrid images={images} onImageClick={setLightboxIndex} />}
 
       {/* Lightbox */}
       {lightboxIndex !== null && (
