@@ -3412,6 +3412,8 @@ export default function MessagesPage() {
       setMessageError('');
       return undefined;
     }
+    setMessages([]);
+    setActiveConversation(null);
     loadConversation(conversationId);
     const interval = setInterval(() => loadConversation(conversationId, { silent: true }), 5000);
     return () => clearInterval(interval);
@@ -3506,24 +3508,22 @@ export default function MessagesPage() {
 
   useEffect(() => {
     const viewport = messagesViewportRef.current;
-    if (!viewport) return;
+    if (!viewport || !conversationId || messages.length === 0) return;
 
     const lastMessage = messages[messages.length - 1] || null;
-    const nextKey = conversationId
-      ? `${conversationId}:${messages.length}:${lastMessage?.id || 'empty'}`
-      : '';
+    const nextKey = `${conversationId}:${messages.length}:${lastMessage?.id || 'empty'}`;
     const previousKey = lastAutoScrollKeyRef.current;
-    const isConversationChange = !previousKey || !previousKey.startsWith(`${conversationId}:`);
+
+    if (!previousKey || !previousKey.startsWith(`${conversationId}:`)) return;
+    if (nextKey === previousKey) return;
+
     const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
     const isNearBottom = distanceFromBottom < 120;
-    const shouldScroll = isConversationChange || (nextKey !== previousKey && (isNearBottom || lastMessage?.is_own));
-
-    if (!shouldScroll) return;
+    if (!isNearBottom && !lastMessage?.is_own) return;
 
     lastAutoScrollKeyRef.current = nextKey;
-    const behavior = isConversationChange ? 'auto' : 'smooth';
     window.requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     });
   }, [messages, conversationId]);
 
