@@ -1755,6 +1755,7 @@ function MessageBubble({
   const bubbleTone = isOwn ? themedOwnBg : themedOtherBg;
   const bubbleTextClass = chatTheme ? (isOwn ? chatTheme.ownBubbleText : chatTheme.otherBubbleText) : '';
   const senderName = message?.sender?.username || 'Unknown';
+  const senderAvatar = message?.sender?.avatar || '';
   const shareLabel = getMessageLabel(message);
   const noteThread = message?.note_thread || null;
   const replyTo = message?.reply_to || null;
@@ -2126,9 +2127,18 @@ function MessageBubble({
       }}
     >
       {!isOwn ? (
-        <p className={`mb-1 px-1 ${chatTheme?.senderNameClass || 'text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500'}`}>
-          {senderName}
-        </p>
+        <div className={`mb-1 flex items-center gap-1.5 px-1 ${chatTheme?.showAvatars ? '' : ''}`}>
+          {chatTheme?.showAvatars && senderAvatar ? (
+            <img src={senderAvatar} alt="" className="h-5 w-5 rounded-full object-cover" />
+          ) : chatTheme?.showAvatars ? (
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-400/20 text-[9px] font-bold text-gray-400">
+              {senderName.slice(0, 1).toUpperCase()}
+            </div>
+          ) : null}
+          <p className={chatTheme?.senderNameClass || 'text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500'}>
+            {senderName}
+          </p>
+        </div>
       ) : null}
       {touchInteractionsEnabled && mobileTrayOpen ? (
         <div
@@ -2887,8 +2897,8 @@ function ConversationView({
                 rows={1}
                 maxLength={4000}
                 placeholder={composerPlaceholder}
-                className={`min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 px-4 py-[0.6rem] text-sm leading-6 focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
-                style={{ whiteSpace: draft ? 'pre-wrap' : 'nowrap' }}
+                className={`h-11 min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 px-4 text-sm focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
+                style={{ whiteSpace: draft ? 'pre-wrap' : 'nowrap', paddingTop: '0.55rem', paddingBottom: '0.55rem' }}
                 disabled={sending || !activeConversation}
               />
             </div>
