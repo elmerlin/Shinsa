@@ -2191,7 +2191,7 @@ function MessageBubble({
           </button>
         ) : null}
         {hasContent && !suppressRawUrlContent ? (
-          <div className={`whitespace-pre-wrap text-sm leading-5 text-gray-100 ${hasLongUnbrokenToken ? 'break-words' : 'break-normal'}`}>
+          <div className={`whitespace-pre-wrap text-sm leading-5 ${bubbleTextClass || 'text-gray-100'} ${hasLongUnbrokenToken ? 'break-words' : 'break-normal'}`}>
             {renderFormattedText(message.content)}
           </div>
         ) : null}
