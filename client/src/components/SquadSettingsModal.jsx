@@ -205,6 +205,9 @@ export default function SquadSettingsModal({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [identityDraft, setIdentityDraft] = useState({ title: '', avatar: '' });
   const [savingIdentity, setSavingIdentity] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [avatarDrawerOpen, setAvatarDrawerOpen] = useState(false);
+  const titleInputRef = React.useRef(null);
   const [updatingNotifications, setUpdatingNotifications] = useState(false);
   const [actingMemberId, setActingMemberId] = useState('');
 
@@ -241,6 +244,8 @@ export default function SquadSettingsModal({
     setTab('videos');
     setError('');
     setPickerOpen(false);
+    setEditingTitle(false);
+    setAvatarDrawerOpen(false);
     loadDetail();
   }, [conversationId, loadDetail, open]);
 
@@ -345,22 +350,77 @@ export default function SquadSettingsModal({
           className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[1.35rem] border border-piu-border/60 bg-piu-card/95 shadow-[0_24px_72px_rgba(0,0,0,0.44)] sm:max-h-[calc(100dvh-2rem)]"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-piu-border/50 px-5 py-4">
-            <div className="min-w-0">
-              <p className="text-sm font-display font-semibold text-gray-300">Squad settings</p>
-              <h2 className="mt-1 truncate text-[1.9rem] font-display font-black text-white">
-                {detail?.conversation?.title || conversation?.title || 'Squad'}
-              </h2>
-              <p className="mt-2 text-sm text-gray-400">
+          <div className="flex items-center gap-3 border-b border-piu-border/50 px-4 py-3 sm:px-5">
+            <button
+              type="button"
+              onClick={() => canEditIdentity ? setAvatarDrawerOpen(true) : undefined}
+              className={`relative shrink-0 ${canEditIdentity ? 'cursor-pointer group' : ''}`}
+            >
+              {(identityDraft.avatar || conversation?.avatar) ? (
+                <img
+                  src={getAvatarUrl(identityDraft.avatar || conversation?.avatar)}
+                  alt=""
+                  className="h-12 w-12 rounded-[0.85rem] object-cover"
+                />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-[0.85rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
+                  {getInitials(identityDraft.title || conversation?.title)}
+                </div>
+              )}
+              {canEditIdentity ? (
+                <div className="absolute inset-0 flex items-center justify-center rounded-[0.85rem] bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="h-4 w-4 text-white">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z" />
+                  </svg>
+                </div>
+              ) : null}
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-display font-semibold uppercase tracking-[0.16em] text-gray-400">Squad settings</p>
+              {editingTitle && canEditIdentity ? (
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  value={identityDraft.title}
+                  onChange={(event) => setIdentityDraft((prev) => ({ ...prev, title: event.target.value }))}
+                  onBlur={() => {
+                    setEditingTitle(false);
+                    if (isIdentityDirty) handleSaveIdentity();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      event.target.blur();
+                    }
+                  }}
+                  maxLength={60}
+                  autoFocus
+                  className="mt-0.5 w-full truncate rounded-lg border border-cyan-400/30 bg-piu-dark/80 px-2 py-1 text-lg font-display font-black text-white focus:outline-none"
+                />
+              ) : (
+                <h2
+                  className={`mt-0.5 truncate text-lg font-display font-black text-white ${canEditIdentity ? 'cursor-pointer rounded-lg px-2 py-1 transition-colors hover:bg-white/5' : ''}`}
+                  onClick={() => {
+                    if (!canEditIdentity) return;
+                    setEditingTitle(true);
+                    window.requestAnimationFrame(() => titleInputRef.current?.focus());
+                  }}
+                >
+                  {identityDraft.title || conversation?.title || 'Squad'}
+                  {savingIdentity ? <span className="ml-2 text-xs font-normal text-gray-400">saving...</span> : null}
+                </h2>
+              )}
+              <p className="mt-0.5 text-xs text-gray-400">
                 {members.length || conversation?.member_count || 0} members
               </p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-piu-border/60 bg-piu-dark/70 text-gray-300 transition-colors hover:border-cyan-400/30 hover:text-white"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-piu-border/60 bg-piu-dark/70 text-gray-300 transition-colors hover:border-cyan-400/30 hover:text-white"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -390,58 +450,6 @@ export default function SquadSettingsModal({
               </div>
             ) : settingsTab === 'members' ? (
               <div className="space-y-3">
-                <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-display font-black text-white">Identity</p>
-                      <p className="mt-0.5 text-xs leading-5 text-gray-400">
-                        The creator can change the squad name and avatar.
-                      </p>
-                    </div>
-                    <span className="rounded-full border border-piu-border/60 bg-piu-dark/80 px-2 py-0.5 text-[10px] font-display font-black tracking-[0.18em] text-gray-200">
-                      {getRoleLabel(viewerRole)}
-                    </span>
-                  </div>
-
-                  {canEditIdentity ? (
-                    <div className="mt-3 space-y-3">
-                      <AvatarPicker value={identityDraft.avatar} onChange={(value) => setIdentityDraft((prev) => ({ ...prev, avatar: value }))} size="md" />
-                      <label className="block">
-                        <p className="text-xs font-display font-bold uppercase tracking-[0.18em] text-gray-400">Name</p>
-                        <input
-                          type="text"
-                          value={identityDraft.title}
-                          onChange={(event) => setIdentityDraft((prev) => ({ ...prev, title: event.target.value }))}
-                          maxLength={60}
-                          className="mt-1.5 w-full rounded-xl border border-piu-border/60 bg-piu-dark/80 px-3 py-2.5 text-sm text-white placeholder:text-gray-500 focus:border-cyan-400/30 focus:outline-none"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleSaveIdentity}
-                        disabled={!isIdentityDirty || savingIdentity}
-                        className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-sm font-display font-black text-cyan-100 transition-colors hover:border-cyan-400/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55"
-                      >
-                        {savingIdentity ? 'Saving...' : 'Save squad details'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-piu-border/60 bg-piu-card/75 px-2.5 py-2.5">
-                      {conversation?.avatar ? (
-                        <img src={getAvatarUrl(conversation.avatar)} alt="" className="h-11 w-11 rounded-[0.85rem] object-cover" />
-                      ) : (
-                        <div className="flex h-11 w-11 items-center justify-center rounded-[0.85rem] bg-gradient-to-br from-cyan-500 to-emerald-500 font-display font-black text-sm text-white">
-                          {getInitials(conversation?.title)}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-display font-black text-white">{conversation?.title || 'Squad'}</p>
-                        <p className="mt-0.5 text-xs text-gray-400">Only the creator can edit this.</p>
-                      </div>
-                    </div>
-                  )}
-                </section>
-
                 <section className="rounded-xl border border-piu-border/60 bg-piu-dark/55 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -678,6 +686,54 @@ export default function SquadSettingsModal({
         onSelect={handleAddMember}
         excludeUserIds={excludeUserIds}
       />
+
+      {avatarDrawerOpen ? (
+        <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/70 backdrop-blur-sm" onClick={() => setAvatarDrawerOpen(false)}>
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-t-[1.35rem] border border-b-0 border-piu-border/60 bg-piu-card shadow-[0_-12px_40px_rgba(0,0,0,0.4)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-piu-border/50 px-4 py-3">
+              <p className="text-sm font-display font-black text-white">Choose avatar</p>
+              <button
+                type="button"
+                onClick={() => setAvatarDrawerOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-piu-border/60 bg-piu-dark/70 text-gray-300 transition-colors hover:text-white"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="max-h-[60dvh] overflow-y-auto px-4 py-3">
+              <AvatarPicker
+                value={identityDraft.avatar}
+                onChange={async (value) => {
+                  setIdentityDraft((prev) => ({ ...prev, avatar: value }));
+                  setAvatarDrawerOpen(false);
+                  if (!canEditIdentity || savingIdentity) return;
+                  const avatarChanged = String(value || '').trim() !== String(detail?.conversation?.avatar || conversation?.avatar || '').trim();
+                  if (!avatarChanged) return;
+                  setSavingIdentity(true);
+                  try {
+                    const payload = await updateMessageSquad(conversationId, {
+                      title: String(identityDraft.title || '').trim(),
+                      avatar: value || '',
+                    });
+                    applyPayload(payload);
+                  } catch (err) {
+                    setError(err?.message || 'Failed to save avatar.');
+                  } finally {
+                    setSavingIdentity(false);
+                  }
+                }}
+                shape="square"
+                size="md"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
