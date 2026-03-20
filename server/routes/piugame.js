@@ -19,7 +19,7 @@ const {
 const { createUserNotification } = require('../lib/notifications');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
-const { checkStreakAchievements } = require('../lib/achievements');
+const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
@@ -2861,6 +2861,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   }
 
   checkStreakAchievements(db, userId);
+  checkSssAchievements(db, userId);
   const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
   const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
   const titleUnlockRows = buildTitleUnlockClearRows(newlyUnlockedTitles);
@@ -3153,6 +3154,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         );
       });
       txn();
+      checkSssAchievements(db, userId);
       const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
       const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
       const titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles);

@@ -1,8 +1,11 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STREAK_SERIES_ID = 'builtin-achievement-series-streak';
 const STREAK_SERIES_KEY = 'streak';
+const SSS_SERIES_ID = 'builtin-achievement-series-sss-mastery';
+const SSS_SERIES_KEY = 'sss_mastery';
 const AUTO_POST_SERIES_KEYS = new Set(['pumps_received', STREAK_SERIES_KEY]);
 const { buildProfilePath, notifyActivitySubscribers } = require('./activitySubscriptions');
+const { gradeFromScore, normalizeGrade } = require('./titleProgress');
 
 function escapeXml(value) {
   return String(value || '')
@@ -146,6 +149,149 @@ function buildStreakBadgeSvg({ days, title, palette, stars }) {
   return svgDataUrl(svg);
 }
 
+function buildSssMasteryBadgeSvg({ threshold, title, sortOrder }) {
+  const rank = Math.max(0, parseInt(sortOrder, 10) || 0);
+  const sparkleCount = Math.min(8, 3 + Math.floor(rank / 2));
+  const shardCount = Math.min(14, 4 + rank);
+  const shardRadius = 98 + Math.min(18, rank * 2);
+  const accentAlpha = Math.min(0.36, 0.16 + rank * 0.011);
+  const haloRadius = 92 + Math.min(16, rank);
+  const countFontSize = threshold >= 1000 ? 56 : threshold >= 100 ? 72 : 88;
+  const badgeId = `sss-${threshold}`;
+
+  const sparkleMarkup = Array.from({ length: sparkleCount }, (_, index) => {
+    const angle = (-78 + (index * 156) / Math.max(1, sparkleCount - 1)) * (Math.PI / 180);
+    const cx = 150 + Math.cos(angle) * 104;
+    const cy = 98 + Math.sin(angle) * 26;
+    const radius = 5.6 + (index % 2) * 1.8;
+    return `
+      <polygon
+        points="${makeStarPoints(cx, cy, radius, radius * 0.42, 4)}"
+        fill="#d8f3ff"
+        opacity="${(0.7 + ((index % 3) * 0.08)).toFixed(2)}"
+      />
+    `;
+  }).join('');
+
+  const shardMarkup = Array.from({ length: shardCount }, (_, index) => {
+    const angle = ((index / shardCount) * Math.PI * 2) - (Math.PI / 2);
+    const inner = shardRadius - (index % 2 === 0 ? 18 : 8);
+    const outer = shardRadius + (index % 3 === 0 ? 10 : 2);
+    const width = index % 2 === 0 ? 8 : 6;
+    const tipX = 150 + Math.cos(angle) * outer;
+    const tipY = 150 + Math.sin(angle) * outer;
+    const baseX = 150 + Math.cos(angle) * inner;
+    const baseY = 150 + Math.sin(angle) * inner;
+    const perpAngle = angle + (Math.PI / 2);
+    const leftX = baseX + Math.cos(perpAngle) * width;
+    const leftY = baseY + Math.sin(perpAngle) * width;
+    const rightX = baseX - Math.cos(perpAngle) * width;
+    const rightY = baseY - Math.sin(perpAngle) * width;
+    const fill = index % 3 === 0 ? '#d8f3ff' : '#67e8f9';
+    return `
+      <polygon
+        points="${tipX.toFixed(2)},${tipY.toFixed(2)} ${leftX.toFixed(2)},${leftY.toFixed(2)} ${rightX.toFixed(2)},${rightY.toFixed(2)}"
+        fill="${fill}"
+        opacity="${(0.34 + ((index % 4) * 0.07)).toFixed(2)}"
+      />
+    `;
+  }).join('');
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-label="${escapeXml(threshold)} SSS mastery badge">
+      <defs>
+        <radialGradient id="sss-bg-${badgeId}" cx="50%" cy="30%" r="74%">
+          <stop offset="0%" stop-color="#103b5c" />
+          <stop offset="54%" stop-color="#0b2742" />
+          <stop offset="100%" stop-color="#050b16" />
+        </radialGradient>
+        <linearGradient id="sss-ring-${badgeId}" x1="12%" y1="10%" x2="88%" y2="92%">
+          <stop offset="0%" stop-color="#67e8f9" />
+          <stop offset="45%" stop-color="#7dd3fc" />
+          <stop offset="100%" stop-color="#d8f3ff" />
+        </linearGradient>
+        <linearGradient id="sss-plate-${badgeId}" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#0f3b57" />
+          <stop offset="100%" stop-color="#081d2d" />
+        </linearGradient>
+        <filter id="sss-shadow-${badgeId}" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0ea5e9" flood-opacity="0.34" />
+        </filter>
+        <filter id="sss-glow-${badgeId}" x="-60%" y="-60%" width="220%" height="220%">
+          <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#7dd3fc" flood-opacity="0.65" />
+        </filter>
+      </defs>
+
+      <rect width="300" height="300" rx="52" fill="#020611" />
+      <rect x="12" y="12" width="276" height="276" rx="46" fill="url(#sss-bg-${badgeId})" stroke="url(#sss-ring-${badgeId})" stroke-width="2.5" />
+      <circle cx="150" cy="150" r="118" fill="rgba(7,20,34,0.92)" stroke="url(#sss-ring-${badgeId})" stroke-width="15" filter="url(#sss-shadow-${badgeId})" />
+      <circle cx="150" cy="150" r="96" fill="#07101d" stroke="rgba(125,211,252,0.42)" stroke-width="2" />
+      <circle cx="150" cy="150" r="${haloRadius}" fill="rgba(125,211,252,${accentAlpha.toFixed(3)})" opacity="0.36" />
+      <g>${shardMarkup}</g>
+      <g>${sparkleMarkup}</g>
+      <polygon
+        points="150,58 227,102 227,190 150,234 73,190 73,102"
+        fill="rgba(14,165,233,0.08)"
+        stroke="rgba(125,211,252,0.32)"
+        stroke-width="2"
+      />
+      <path d="M94 126 H206" stroke="rgba(125,211,252,0.18)" stroke-width="2" stroke-linecap="round" />
+      <path d="M96 206 H204" stroke="rgba(125,211,252,0.22)" stroke-width="2" stroke-linecap="round" />
+      <g text-anchor="middle">
+        <text
+          x="150"
+          y="70"
+          fill="#d8f3ff"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="17"
+          font-weight="700"
+          letter-spacing="5"
+        >PERFECT</text>
+        <text
+          x="150"
+          y="130"
+          fill="#7dd3fc"
+          font-family="Arial Black, Arial, Helvetica, sans-serif"
+          font-size="58"
+          font-weight="900"
+          letter-spacing="4"
+          filter="url(#sss-glow-${badgeId})"
+        >SSS</text>
+        <text
+          x="150"
+          y="192"
+          fill="#eff8ff"
+          font-family="Arial Black, Arial, Helvetica, sans-serif"
+          font-size="${countFontSize}"
+          font-weight="900"
+          letter-spacing="${threshold >= 1000 ? 1 : 2}"
+        >${escapeXml(threshold)}</text>
+        <text
+          x="150"
+          y="220"
+          fill="#a5f3fc"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="18"
+          font-weight="700"
+          letter-spacing="4"
+        >CHARTS</text>
+        <rect x="77" y="238" width="146" height="24" rx="12" fill="url(#sss-plate-${badgeId})" opacity="0.96" />
+        <text
+          x="150"
+          y="255"
+          fill="#e0f2fe"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="14"
+          font-weight="700"
+          letter-spacing="2"
+        >${escapeXml(String(title || '').toUpperCase())}</text>
+      </g>
+    </svg>
+  `;
+
+  return svgDataUrl(svg);
+}
+
 function createStreakTierDefinition(days, title, palette, stars, sortOrder) {
   return {
     id: `builtin-achievement-tier-streak-${days}`,
@@ -154,6 +300,17 @@ function createStreakTierDefinition(days, title, palette, stars, sortOrder) {
     name: `${days}-Day Streak`,
     description: `Reach a longest recorded streak of ${days} consecutive play days.`,
     image_data: buildStreakBadgeSvg({ days, title, palette, stars }),
+  };
+}
+
+function createSssTierDefinition(threshold, title, sortOrder) {
+  return {
+    id: `builtin-achievement-tier-sss-mastery-${threshold}`,
+    threshold,
+    sort_order: sortOrder,
+    name: `${threshold} SSS Charts`,
+    description: `Hold SSS or SSS+ grades on ${threshold.toLocaleString()} synced best-score charts.`,
+    image_data: buildSssMasteryBadgeSvg({ threshold, title, sortOrder }),
   };
 }
 
@@ -299,6 +456,31 @@ const BUILT_IN_ACHIEVEMENT_SERIES = [
       }, 7, 6),
     ],
   },
+  {
+    id: SSS_SERIES_ID,
+    key: SSS_SERIES_KEY,
+    name: 'SSS Mastery',
+    description: 'Awarded for the number of synced best-score charts where your current best grade is SSS or SSS+.',
+    tiers: [
+      createSssTierDefinition(10, 'Spark', 0),
+      createSssTierDefinition(25, 'Glint', 1),
+      createSssTierDefinition(50, 'Gleam', 2),
+      createSssTierDefinition(75, 'Flare', 3),
+      createSssTierDefinition(100, 'Prism', 4),
+      createSssTierDefinition(150, 'Halo', 5),
+      createSssTierDefinition(200, 'Luster', 6),
+      createSssTierDefinition(250, 'Crest', 7),
+      createSssTierDefinition(300, 'Nova', 8),
+      createSssTierDefinition(400, 'Zenith', 9),
+      createSssTierDefinition(500, 'Aurora', 10),
+      createSssTierDefinition(750, 'Aether', 11),
+      createSssTierDefinition(1000, 'Polaris', 12),
+      createSssTierDefinition(1500, 'Ascendant', 13),
+      createSssTierDefinition(2000, 'Infinite', 14),
+      createSssTierDefinition(2500, 'Paragon', 15),
+      createSssTierDefinition(3000, 'Crown', 16),
+    ],
+  },
 ];
 
 function parseDateMs(value) {
@@ -367,6 +549,22 @@ function getUserLongestPlayStreak(db, userId) {
     .filter((value) => value !== null);
 
   return computeLongestStreakFromOrdinals(ordinals);
+}
+
+function hasSssOrBetterGrade(record) {
+  const normalized = normalizeGrade(record?.grade) || gradeFromScore(record?.score);
+  return normalized === 'SSS' || normalized === 'SSS+';
+}
+
+function getUserSssBestScoreCount(db, userId) {
+  const rows = db.prepare(`
+    SELECT score, grade
+    FROM user_best_scores
+    WHERE user_id = ?
+      AND score > 0
+  `).all(userId);
+
+  return rows.reduce((total, row) => total + (hasSssOrBetterGrade(row) ? 1 : 0), 0);
 }
 
 function shouldGenerateAchievementPost(seriesKey) {
@@ -527,6 +725,16 @@ function checkStreakAchievements(db, userId) {
   }
 }
 
+function checkSssAchievements(db, userId) {
+  try {
+    const total = getUserSssBestScoreCount(db, userId);
+    if (total <= 0) return 0;
+    return awardTiersForValue(db, SSS_SERIES_KEY, userId, total);
+  } catch {
+    return 0;
+  }
+}
+
 function evaluatePumpAchievements(db) {
   const users = db.prepare('SELECT id FROM users').all();
   let awarded = 0;
@@ -563,12 +771,31 @@ function evaluateStreakAchievements(db) {
   return awarded;
 }
 
+function evaluateSssAchievements(db) {
+  const users = db.prepare(`
+    SELECT DISTINCT user_id
+    FROM user_best_scores
+    WHERE score > 0
+  `).all();
+
+  let awarded = 0;
+  for (const row of users) {
+    const total = getUserSssBestScoreCount(db, row.user_id);
+    if (total > 0) {
+      awarded += awardTiersForValue(db, SSS_SERIES_KEY, row.user_id, total);
+    }
+  }
+  return awarded;
+}
+
 function evaluateAchievementSeries(db, seriesKey) {
   switch (String(seriesKey || '').trim().toLowerCase()) {
     case 'pumps_received':
       return evaluatePumpAchievements(db);
     case STREAK_SERIES_KEY:
       return evaluateStreakAchievements(db);
+    case SSS_SERIES_KEY:
+      return evaluateSssAchievements(db);
     default:
       return 0;
   }
@@ -649,6 +876,7 @@ function ensureBuiltInAchievementSeries(db) {
 
 module.exports = {
   checkPumpAchievements,
+  checkSssAchievements,
   checkStreakAchievements,
   ensureBuiltInAchievementSeries,
   evaluateAchievementSeries,
