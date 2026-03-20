@@ -3485,25 +3485,40 @@ export default function MessagesPage() {
   }, [draft, conversationId]);
 
   useEffect(() => {
-    if (!conversationId || loadingMessages || messages.length === 0) return;
-    if (initialConversationScrollRef.current === conversationId) return;
+    if (!conversationId || loadingMessages || messages.length === 0) return undefined;
+    if (initialConversationScrollRef.current === conversationId) return undefined;
 
     initialConversationScrollRef.current = conversationId;
     const lastMessage = messages[messages.length - 1] || null;
     lastAutoScrollKeyRef.current = `${conversationId}:${messages.length}:${lastMessage?.id || 'empty'}`;
 
-    const scrollToLatest = () => {
+    const viewport = messagesViewportRef.current;
+    const scrollToBottom = () => {
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
       messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
-      const viewport = messagesViewportRef.current;
-      if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight;
-      }
     };
 
-    window.requestAnimationFrame(() => {
-      scrollToLatest();
-      window.requestAnimationFrame(scrollToLatest);
+    scrollToBottom();
+    window.requestAnimationFrame(scrollToBottom);
+
+    // Keep scroll pinned to bottom for 2s after entering a conversation.
+    // This catches any DOM changes (images loading, re-renders) that shift content.
+    if (!viewport) return undefined;
+    let pinActive = true;
+    const observer = new MutationObserver(() => {
+      if (pinActive) scrollToBottom();
     });
+    observer.observe(viewport, { childList: true, subtree: true, attributes: true });
+    const pinTimeout = window.setTimeout(() => {
+      pinActive = false;
+      observer.disconnect();
+    }, 2000);
+
+    return () => {
+      pinActive = false;
+      observer.disconnect();
+      window.clearTimeout(pinTimeout);
+    };
   }, [conversationId, loadingMessages, messages]);
 
   useEffect(() => {
