@@ -688,7 +688,7 @@ export default function SquadSettingsModal({
       />
 
       {avatarDrawerOpen ? (
-        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6" onClick={() => setAvatarDrawerOpen(false)}>
+        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6" onClick={(event) => { event.stopPropagation(); setAvatarDrawerOpen(false); }}>
           <div
             className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-[1.35rem] border border-piu-border/60 bg-piu-card/95 shadow-[0_24px_72px_rgba(0,0,0,0.5)] sm:max-h-[calc(100dvh-3rem)]"
             onClick={(event) => event.stopPropagation()}
