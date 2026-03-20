@@ -2850,11 +2850,11 @@ function ConversationView({
             <DojoCatStickerPicker
               compact
               onSelect={onInsertSticker}
-              buttonClassName="h-11 w-11 rounded-full border border-piu-border/65 bg-piu-dark/55 text-lg text-gray-300 hover:border-cyan-300/35 hover:bg-piu-dark/80 hover:text-white"
+              buttonClassName="h-11 w-11 shrink-0 rounded-full border border-piu-border/65 bg-piu-dark/55 text-lg text-gray-300 hover:border-cyan-300/35 hover:bg-piu-dark/80 hover:text-white"
               panelClassName="w-[min(21rem,calc(100vw-1rem))]"
               align="left"
             />
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               {replyTarget ? (
                 <div className="mb-2 rounded-[1.15rem] border border-cyan-300/18 bg-[#0a1322] px-3 py-2.5 shadow-[0_10px_26px_rgba(0,0,0,0.18)]">
                   <div className="flex items-start justify-between gap-3">
@@ -2897,8 +2897,8 @@ function ConversationView({
                 rows={1}
                 maxLength={4000}
                 placeholder={composerPlaceholder}
-                className={`h-11 min-h-[2.75rem] max-h-40 w-full resize-none overflow-y-hidden rounded-[1.4rem] border border-piu-border/70 px-4 text-sm focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
-                style={{ whiteSpace: draft ? 'pre-wrap' : 'nowrap', paddingTop: '0.55rem', paddingBottom: '0.55rem' }}
+                className={`max-h-40 w-full resize-none overflow-hidden rounded-[1.4rem] border border-piu-border/70 px-4 text-sm focus:outline-none focus:ring-0 ${chatTheme.composerInputBg || 'bg-piu-dark/55'} ${chatTheme.composerInputText || 'text-white placeholder:text-gray-500'} focus:border-cyan-300/35`}
+                style={{ height: 44, minHeight: 44, paddingTop: 11, paddingBottom: 11, whiteSpace: draft ? 'pre-wrap' : 'nowrap', lineHeight: '20px' }}
                 disabled={sending || !activeConversation}
               />
             </div>
