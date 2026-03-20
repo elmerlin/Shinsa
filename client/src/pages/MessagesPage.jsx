@@ -2725,7 +2725,7 @@ function ConversationView({
                 )}
                 <div className="min-w-0">
                   <h1 className={`truncate text-lg font-display font-black ${chatTheme.headerText}`}>{headerTitle}</h1>
-                  <p className="mt-0.5 text-[11px] opacity-60">{headerSubtitle}</p>
+                  <p className={`mt-0.5 text-[11px] ${chatTheme.headerText} opacity-70`}>{headerSubtitle}</p>
                 </div>
               </button>
             ) : (
