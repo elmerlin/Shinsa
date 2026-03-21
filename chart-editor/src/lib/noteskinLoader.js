@@ -2,13 +2,12 @@
  * Loads pump noteskin sprite assets and provides draw helpers.
  * Assets are from hanubeki/noteskin-hanubeki (Apache 2.0).
  *
- * Sprite sheets:
- *  - Tap notes: 2x16 grid (128x128 per frame at doubleres)
- *  - Hold/roll bodies & caps: 2x1 grid (128x128 per frame)
- *  - Mine: 2x1 grid (128x128 per frame)
- *  - Receptors & glow: single 128x128 images
+ * PIU color convention:
+ *   DL, DR = Blue
+ *   UL, UR = Red (original upleft sprites)
+ *   Center = Yellow (original center sprites)
  *
- * Panel mapping: UpLeft base asset is rotated for DL(270°), UR(90°), DR(180°).
+ * Blue variants are generated at load time by hue-shifting the red UL assets.
  */
 
 const BASE = import.meta.env.BASE_URL + 'noteskin/';
@@ -31,22 +30,60 @@ const ASSETS = {
   'mine': BASE + 'mine.png',
 };
 
+// Assets that need a blue variant for DL/DR
+const BLUE_VARIANTS = [
+  'tap', 'receptor', 'glow', 'hold-body', 'hold-topcap', 'hold-bottomcap', 'roll-body',
+];
+
 // Column index (mod 5) → rotation in degrees and base asset key prefix
-// DL=0, UL=1, Center=2, UR=3, DR=4
+// DL=0 (blue), UL=1 (red), Center=2 (yellow), UR=3 (red), DR=4 (blue)
 const PANEL_MAP = [
-  { base: 'upleft', rotation: 270 },  // DL
-  { base: 'upleft', rotation: 0 },    // UL
-  { base: 'center', rotation: 0 },    // Center
-  { base: 'upleft', rotation: 90 },   // UR
-  { base: 'upleft', rotation: 180 },  // DR
+  { base: 'downleft', rotation: 270 },   // DL - blue
+  { base: 'upleft', rotation: 0 },       // UL - red (original)
+  { base: 'center', rotation: 0 },       // Center - yellow (original)
+  { base: 'upleft', rotation: 90 },      // UR - red (rotated)
+  { base: 'downleft', rotation: 180 },   // DR - blue (rotated)
 ];
 
 let images = null;
 let loadPromise = null;
 
 /**
+ * Shift red pixels to blue by swapping R and B channels
+ * and adjusting to get a nice PIU blue.
+ */
+function createBlueVariant(sourceImg) {
+  const canvas = document.createElement('canvas');
+  canvas.width = sourceImg.naturalWidth;
+  canvas.height = sourceImg.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(sourceImg, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    // Shift hue: swap red channel to blue, reduce red
+    // Red-dominant pixels become blue-dominant
+    data[i] = Math.min(255, Math.floor(b * 0.4 + g * 0.2));       // R
+    data[i + 1] = Math.min(255, Math.floor(g * 0.6 + b * 0.3));   // G
+    data[i + 2] = Math.min(255, Math.floor(r * 0.9 + b * 0.3));   // B
+    // Alpha unchanged
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  // Convert canvas to image
+  const blueImg = new Image();
+  blueImg.src = canvas.toDataURL();
+  return blueImg;
+}
+
+/**
  * Load all noteskin images. Returns a promise that resolves when all loaded.
- * Caches results — safe to call multiple times.
  */
 export function loadNoteskin() {
   if (images) return Promise.resolve(images);
@@ -65,7 +102,18 @@ export function loadNoteskin() {
       })
     )
   ).then(entries => {
-    images = Object.fromEntries(entries);
+    const imgs = Object.fromEntries(entries);
+
+    // Generate blue variants for DL/DR from the red UL assets
+    for (const type of BLUE_VARIANTS) {
+      const redKey = `upleft-${type}`;
+      const blueKey = `downleft-${type}`;
+      if (imgs[redKey]) {
+        imgs[blueKey] = createBlueVariant(imgs[redKey]);
+      }
+    }
+
+    images = imgs;
     return images;
   });
 
