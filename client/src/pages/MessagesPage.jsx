@@ -3240,6 +3240,9 @@ function ConversationView({
   onNudge,
   nudging = false,
   typingUsers = [],
+  loadingOlder = false,
+  hasMoreMessages = false,
+  onLoadOlder = null,
 }) {
   const isSquad = activeConversation?.kind === 'squad';
   const headerTitle = isSquad
@@ -3264,19 +3267,21 @@ function ConversationView({
         map[mid].push(receipt);
       }
     } else {
-      // DMs: attach receipt to the viewer's last own message that was read
-      // The other person's last_read_message_id tells us how far they've read.
-      // We want "Seen" under OUR last message at or before that point.
+      // DMs: attach receipt to the viewer's last own message that was read.
+      // Build index once, then O(1) lookup per receipt.
+      const idxById = {};
+      for (let i = 0; i < messages.length; i++) idxById[messages[i]?.id] = i;
+      // Pre-compute last own message ID at or before each index
+      const lastOwnAtOrBefore = new Array(messages.length);
+      let lastOwn = null;
+      for (let i = 0; i < messages.length; i++) {
+        if (messages[i]?.is_own) lastOwn = messages[i].id;
+        lastOwnAtOrBefore[i] = lastOwn;
+      }
       for (const receipt of readReceipts) {
         const readUpTo = receipt?.last_read_message_id;
-        if (!readUpTo) continue;
-        const readUpToIdx = messages.findIndex((m) => m.id === readUpTo);
-        if (readUpToIdx < 0) continue;
-        // Find the last own message at or before the read-up-to position
-        let targetId = null;
-        for (let i = readUpToIdx; i >= 0; i--) {
-          if (messages[i]?.is_own) { targetId = messages[i].id; break; }
-        }
+        if (!readUpTo || idxById[readUpTo] === undefined) continue;
+        const targetId = lastOwnAtOrBefore[idxById[readUpTo]];
         if (targetId) {
           if (!map[targetId]) map[targetId] = [];
           map[targetId].push(receipt);
@@ -3429,6 +3434,18 @@ function ConversationView({
             <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet. Say hello.</div>
           ) : (
             <div className="space-y-3 pb-1">
+              {hasMoreMessages ? (
+                <div className="flex justify-center py-2">
+                  <button
+                    type="button"
+                    onClick={onLoadOlder}
+                    disabled={loadingOlder}
+                    className="rounded-full border border-piu-border/40 bg-piu-dark/60 px-4 py-1.5 text-[11px] font-display font-bold text-gray-400 transition-colors hover:text-white disabled:opacity-50"
+                  >
+                    {loadingOlder ? 'Loading...' : 'Load older messages'}
+                  </button>
+                </div>
+              ) : null}
               {messages.map((message, msgIdx) => {
                 const readers = readReceiptMap[message.id];
                 const isNew = !renderedMessageIds.current.has(message.id);
@@ -3590,7 +3607,7 @@ function ConversationView({
 
 export default function MessagesPage() {
   const { user } = useAuth();
-  const { refreshMessageUnread, subscribeTyping } = useNotifications();
+  const { refreshMessageUnread, subscribeTyping, subscribeNewMessage } = useNotifications();
   const navigate = useNavigate();
   const { conversationId = '' } = useParams();
   const messagesEndRef = useRef(null);
@@ -3615,6 +3632,8 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState([]);
   const [readReceipts, setReadReceipts] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [messageError, setMessageError] = useState('');
   const [actionError, setActionError] = useState('');
   const [replyingMessageId, setReplyingMessageId] = useState('');
@@ -4167,6 +4186,7 @@ export default function MessagesPage() {
       const payload = await getMessageConversation(targetConversationId);
       setActiveConversation(payload?.conversation || null);
       setReadReceipts(Array.isArray(payload?.read_receipts) ? payload.read_receipts : []);
+      setHasMoreMessages(!!payload?.has_more);
       const nextMessages = normalizeConversationMessages(payload?.messages);
       if (silent) {
         setMessages((prev) => {
@@ -4193,6 +4213,25 @@ export default function MessagesPage() {
       if (!silent) setLoadingMessages(false);
     }
   }, [user, refreshMessageUnread]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (!user || !conversationId || loadingOlder || !hasMoreMessages) return;
+    const oldestMsg = messages[0];
+    if (!oldestMsg?.id) return;
+    setLoadingOlder(true);
+    try {
+      const payload = await getMessageConversation(conversationId, { before: oldestMsg.id });
+      const olderMessages = normalizeConversationMessages(payload?.messages);
+      setHasMoreMessages(!!payload?.has_more);
+      if (olderMessages.length > 0) {
+        setMessages((prev) => [...olderMessages, ...prev]);
+      }
+    } catch {
+      // silently fail — user can retry by scrolling up again
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [user, conversationId, loadingOlder, hasMoreMessages, messages]);
 
   useEffect(() => {
     if (!user) {
@@ -4228,8 +4267,10 @@ export default function MessagesPage() {
     setMessages([]);
     setReadReceipts([]);
     setActiveConversation(null);
+    setHasMoreMessages(false);
     loadConversation(conversationId);
-    const interval = setInterval(() => loadConversation(conversationId, { silent: true }), 5000);
+    // Poll less frequently — SSE delivers new messages in real-time
+    const interval = setInterval(() => loadConversation(conversationId, { silent: true }), 30000);
     return () => clearInterval(interval);
   }, [user, conversationId, loadConversation]);
 
@@ -4273,6 +4314,28 @@ export default function MessagesPage() {
       typingTimersRef.current = {};
     };
   }, [subscribeTyping, conversationId, user?.id]);
+
+  // ── SSE new message listener (replaces frequent polling) ──
+  useEffect(() => {
+    if (!subscribeNewMessage || !conversationId) return undefined;
+    const unsubscribe = subscribeNewMessage((data) => {
+      if (data.conversationId !== conversationId || !data.message) return;
+      const normalized = normalizeConversationMessages([data.message]);
+      if (normalized.length === 0) return;
+      const newMsg = normalized[0];
+      setMessages((prev) => {
+        // deduplicate — don't add if already present
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [...prev, newMsg];
+      });
+      // clear typing indicator for this sender
+      const senderId = String(newMsg.sender?.id || '');
+      if (senderId) {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== senderId));
+      }
+    });
+    return unsubscribe;
+  }, [subscribeNewMessage, conversationId]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !conversationId) {
@@ -5064,6 +5127,9 @@ export default function MessagesPage() {
           activeConversation={activeConversation}
           activePartner={activePartner}
           loadingMessages={loadingMessages}
+          loadingOlder={loadingOlder}
+          hasMoreMessages={hasMoreMessages}
+          onLoadOlder={loadOlderMessages}
           messageError={messageError}
           actionError={actionError}
           messages={messages}

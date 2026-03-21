@@ -609,7 +609,13 @@ export const removePushSubscription = (endpoint) => request('/auth/push/subscrib
 
 // Direct Messages
 export const getMessageConversations = () => request('/messages/conversations');
-export const getMessageConversation = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}`);
+export const getMessageConversation = (conversationId, { before = '', limit = 50 } = {}) => {
+  const params = new URLSearchParams();
+  if (before) params.set('before', before);
+  if (limit !== 50) params.set('limit', String(limit));
+  const qs = params.toString();
+  return request(`/messages/conversations/${encodeURIComponent(conversationId)}${qs ? `?${qs}` : ''}`);
+};
 export const createMessageSquad = (data) => request('/messages/squads', {
   method: 'POST',
   body: JSON.stringify(data || {}),

@@ -1681,6 +1681,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_conversation_members_user ON conversation_members(user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation_time ON conversation_messages(conversation_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_sender ON conversation_messages(sender_user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_conversation_messages_active ON conversation_messages(conversation_id, deleted_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_conversation_messages_unread ON conversation_messages(conversation_id, deleted_at, sender_user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_user_message_stomps_recipient ON user_message_stomps(recipient_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_message_stomps_conversation ON user_message_stomps(conversation_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_conversation_message_reactions_message ON conversation_message_reactions(message_id, updated_at DESC);

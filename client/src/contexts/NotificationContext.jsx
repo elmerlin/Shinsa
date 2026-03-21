@@ -39,6 +39,7 @@ export function NotificationProvider({ children }) {
   const webPushActiveRef = useRef(false);
   const permissionPromptAttachedRef = useRef(false);
   const typingListenersRef = useRef(new Set());
+  const newMessageListenersRef = useRef(new Set());
 
   const parseNotificationDate = (value) => {
     const raw = String(value || '');
@@ -241,6 +242,16 @@ export function NotificationProvider({ children }) {
         } catch {}
       });
 
+      source.addEventListener('new_message', (event) => {
+        try {
+          const data = JSON.parse(event.data || '{}');
+          for (const listener of newMessageListenersRef.current) {
+            listener(data);
+          }
+          refreshMessageUnread();
+        } catch {}
+      });
+
       source.onerror = () => {
         source.close();
         if (closed) return;
@@ -285,8 +296,13 @@ export function NotificationProvider({ children }) {
     return () => typingListenersRef.current.delete(listener);
   }, []);
 
+  const subscribeNewMessage = useCallback((listener) => {
+    newMessageListenersRef.current.add(listener);
+    return () => newMessageListenersRef.current.delete(listener);
+  }, []);
+
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, refresh, refreshMessageUnread, markRead, markAllRead, dismiss, subscribeTyping }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, refresh, refreshMessageUnread, markRead, markAllRead, dismiss, subscribeTyping, subscribeNewMessage }}>
       {children}
     </NotificationContext.Provider>
   );

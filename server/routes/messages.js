@@ -959,7 +959,28 @@ function getConversationReplyTargetRow(db, conversationId, messageId) {
   `).get(messageId, conversationId);
 }
 
-function getConversationMessages(db, conversationId) {
+function getConversationMessages(db, conversationId, { before = '', limit = 50 } = {}) {
+  const msgLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  if (before) {
+    return db.prepare(`
+      SELECT *
+      FROM (
+        SELECT
+          m.*,
+          u.username AS sender_username,
+          u.avatar AS sender_avatar,
+          u.avatar_v AS sender_avatar_v
+        FROM conversation_messages m
+        JOIN users u ON u.id = m.sender_user_id
+        WHERE m.conversation_id = ?
+          AND (datetime(m.created_at) < datetime((SELECT created_at FROM conversation_messages WHERE id = ?))
+               OR (datetime(m.created_at) = datetime((SELECT created_at FROM conversation_messages WHERE id = ?)) AND m.id < ?))
+        ORDER BY datetime(m.created_at) DESC, m.id DESC
+        LIMIT ?
+      ) recent
+      ORDER BY datetime(created_at) ASC, id ASC
+    `).all(conversationId, before, before, before, msgLimit);
+  }
   return db.prepare(`
     SELECT *
     FROM (
@@ -972,10 +993,10 @@ function getConversationMessages(db, conversationId) {
       JOIN users u ON u.id = m.sender_user_id
       WHERE m.conversation_id = ?
       ORDER BY datetime(m.created_at) DESC, m.id DESC
-      LIMIT 200
+      LIMIT ?
     ) recent
     ORDER BY datetime(created_at) ASC, id ASC
-  `).all(conversationId);
+  `).all(conversationId, msgLimit);
 }
 
 function getConversationMessageReactionState(db, messageIds = [], viewerUserId = '') {
@@ -1879,13 +1900,17 @@ router.get('/conversations/:id', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Conversation not found' });
   }
 
-  const messageRows = getConversationMessages(db, conversationId);
-  const reactionState = getConversationMessageReactionState(db, messageRows.map((row) => row.id), req.user.id);
-  const messages = messageRows.map((row) => normalizeConversationMessage(row, req.user.id, reactionState[row.id] || null));
-  markConversationRead(db, conversationId, req.user.id);
+  const before = String(req.query.before || '').trim();
+  const limit = parseInt(req.query.limit, 10) || 50;
+  const messageRows = getConversationMessages(db, conversationId, { before, limit: limit + 1 });
+  const hasMore = messageRows.length > limit;
+  const trimmedRows = hasMore ? messageRows.slice(messageRows.length - limit) : messageRows;
+  const reactionState = getConversationMessageReactionState(db, trimmedRows.map((row) => row.id), req.user.id);
+  const messages = trimmedRows.map((row) => normalizeConversationMessage(row, req.user.id, reactionState[row.id] || null));
+  if (!before) markConversationRead(db, conversationId, req.user.id);
 
   const conversation = normalizeConversationRow(conversationRow);
-  if (conversation) conversation.unread_count = 0;
+  if (conversation && !before) conversation.unread_count = 0;
 
   const rawReceipts = getConversationReadReceipts(db, conversationId, req.user.id);
   const readReceipts = rawReceipts.map((r) => ({
@@ -1895,7 +1920,7 @@ router.get('/conversations/:id', requireAuth, (req, res) => {
     avatar: r.avatar || '',
   }));
 
-  res.json({ conversation, messages, read_receipts: readReceipts });
+  res.json({ conversation, messages, read_receipts: readReceipts, has_more: hasMore });
 });
 
 router.get('/conversations/:id/squad', requireAuth, (req, res) => {
@@ -2437,12 +2462,21 @@ router.post('/conversations/:id/messages', requireAuth, (req, res) => {
   const recipientIds = getConversationRecipientIds(db, conversationId, req.user.id);
   notifyRecipients(db, conversationId, senderUser, recipientIds, input);
 
+  // Broadcast new message via SSE so recipients don't need to poll
+  const normalizedMsg = normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' });
+  for (const recipientId of recipientIds) {
+    emitEvent(recipientId, 'new_message', {
+      conversationId,
+      message: normalizeConversationMessage(messageRow, recipientId, { reactions: [], viewerReaction: '' }),
+    });
+  }
+
   const conversation = normalizeConversationRow(getConversationRowForUser(db, conversationId, req.user.id));
   if (conversation) conversation.unread_count = 0;
 
   res.status(201).json({
     conversation,
-    message: normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' }),
+    message: normalizedMsg,
   });
 });
 
