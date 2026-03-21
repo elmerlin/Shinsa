@@ -1172,60 +1172,61 @@ function ChatSettingsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[145] flex items-center justify-center bg-black/75 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[145] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-[1.8rem] border border-piu-border/65 bg-[#07111f] p-5 shadow-[0_28px_70px_rgba(0,0,0,0.42)]"
+        className="w-full max-w-md overflow-y-auto rounded-t-[1.6rem] border-t border-piu-border/40 bg-[#080e1a] px-5 pb-8 pt-5 shadow-[0_-12px_48px_rgba(0,0,0,0.5)] sm:max-h-[85vh] sm:rounded-[1.6rem] sm:border sm:border-piu-border/40 sm:pb-5 sm:shadow-[0_28px_70px_rgba(0,0,0,0.5)]"
+        style={{ maxHeight: 'calc(100dvh - 2rem)' }}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-display font-bold uppercase tracking-[0.24em] text-cyan-200/70">Chat settings</p>
-            <h2 className="mt-2 text-2xl font-display font-black text-white">Chat behavior</h2>
+            <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-cyan-300/60">Chat settings</p>
+            <h2 className="mt-1.5 text-xl font-display font-black text-white">Chat behavior</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white transition-colors hover:border-cyan-300/30 hover:text-cyan-100"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-piu-border/50 bg-piu-dark/60 text-gray-300 transition-colors hover:border-cyan-300/30 hover:text-white"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
-        <div className="mt-5 space-y-4">
-          <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
+        <div className="mt-5 space-y-3">
+          <div className="rounded-xl border border-piu-border/35 bg-gradient-to-br from-white/[0.04] to-transparent p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-sm font-display font-black text-white">Open web links in external browser</p>
-                <p className="mt-1 text-xs leading-5 text-gray-400">
-                  Turn this off to open links inside chat. YouTube videos will play in a modal, and other web links will try to load in-app first.
+                <p className="text-[13px] font-display font-black text-white">External browser links</p>
+                <p className="mt-1 text-[11px] leading-[1.5] text-gray-500">
+                  Off opens links in-app. YouTube plays in a modal.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => onToggleOpenLinksExternally(!openLinksExternally)}
-                className={`relative inline-flex h-8 w-14 shrink-0 rounded-full border transition-colors ${
+                className={`relative inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${
                   openLinksExternally
-                    ? 'border-cyan-300/35 bg-cyan-400/20'
-                    : 'border-white/15 bg-white/10'
+                    ? 'bg-cyan-500'
+                    : 'bg-white/12'
                 }`}
                 aria-pressed={openLinksExternally}
               >
                 <span
-                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_6px_16px_rgba(0,0,0,0.24)] transition-transform ${
-                    openLinksExternally ? 'translate-x-8' : 'translate-x-1'
+                  className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.3)] transition-transform ${
+                    openLinksExternally ? 'translate-x-[1.25rem]' : 'translate-x-0.5'
                   }`}
                 />
               </button>
             </div>
           </div>
 
-          <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
-            <p className="text-sm font-display font-black text-white">Default double-tap reaction</p>
-            <p className="mt-1 text-xs leading-5 text-gray-400">
-              Double-tapping a DM uses this reaction first.
+          <div className="rounded-xl border border-piu-border/35 bg-gradient-to-br from-white/[0.04] to-transparent p-4">
+            <p className="text-[13px] font-display font-black text-white">Default double-tap</p>
+            <p className="mt-1 text-[11px] leading-[1.5] text-gray-500">
+              Double-tapping a message uses this reaction.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {REACTION_OPTIONS.map((option) => {
                 const selected = sanitizeReactionKey(defaultReaction) === option.key;
                 return (
@@ -1233,10 +1234,10 @@ function ChatSettingsModal({
                     key={option.key}
                     type="button"
                     onClick={() => onDefaultReactionChange?.(option.key)}
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-display font-black transition-colors ${
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-display font-bold transition-all ${
                       selected
-                        ? 'border-cyan-300/35 bg-cyan-400/14 text-white'
-                        : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                        ? 'border-cyan-400/40 bg-cyan-500/15 text-white shadow-[0_0_12px_rgba(34,211,238,0.12)]'
+                        : 'border-piu-border/30 bg-white/[0.03] text-gray-400 hover:border-piu-border/50 hover:text-gray-200'
                     }`}
                   >
                     {renderReactionGlyph(option.key, 'h-4 w-4', selected)}
@@ -1247,12 +1248,12 @@ function ChatSettingsModal({
             </div>
           </div>
 
-          <div className="rounded-[1.4rem] border border-white/10 bg-white/5 p-4">
-            <p className="text-sm font-display font-black text-white">Quick reaction tray</p>
-            <p className="mt-1 text-xs leading-5 text-gray-400">
-              Single tap or hover opens this one-line tray. Pick up to 5.
+          <div className="rounded-xl border border-piu-border/35 bg-gradient-to-br from-white/[0.04] to-transparent p-4">
+            <p className="text-[13px] font-display font-black text-white">Quick reaction tray</p>
+            <p className="mt-1 text-[11px] leading-[1.5] text-gray-500">
+              Tap or hover a message to open. Pick up to 5.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {REACTION_OPTIONS.map((option) => {
                 const selected = selectedQuickReactions.includes(option.key);
                 return (
@@ -1260,10 +1261,10 @@ function ChatSettingsModal({
                     key={option.key}
                     type="button"
                     onClick={() => toggleQuickReaction(option.key)}
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-display font-black transition-colors ${
+                    className={`inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-display font-bold transition-all ${
                       selected
-                        ? 'border-cyan-300/35 bg-cyan-400/14 text-white'
-                        : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+                        ? 'border-cyan-400/40 bg-cyan-500/15 text-white shadow-[0_0_12px_rgba(34,211,238,0.12)]'
+                        : 'border-piu-border/30 bg-white/[0.03] text-gray-400 hover:border-piu-border/50 hover:text-gray-200'
                     }`}
                   >
                     {renderReactionGlyph(option.key, 'h-4 w-4', selected)}
@@ -3051,31 +3052,30 @@ function InboxView({
                 ariaLabel="Open messages options"
                 tone="cyan"
                 active={optionsOpen}
-                className="h-10 w-10 justify-center rounded-[1.05rem] border border-white/12 bg-white/6 text-cyan-100 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/35"
+                className="h-10 w-10 justify-center rounded-[1.05rem] border border-piu-border/40 bg-piu-dark/60 text-gray-300 shadow-[0_10px_24px_rgba(0,0,0,0.16)] hover:border-cyan-300/30 hover:text-white"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zm0 6a.75.75 0 110-1.5.75.75 0 010 1.5zm0 6a.75.75 0 110-1.5.75.75 0 010 1.5z" />
                 </svg>
               </ActionIconButton>
               {optionsOpen ? (
-                <div className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-56 overflow-hidden rounded-[1.25rem] border border-white/10 bg-[#0a1220] p-2 shadow-[0_22px_50px_rgba(0,0,0,0.42)]">
+                <div className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-60 overflow-hidden rounded-2xl border border-piu-border/50 bg-[#0b1424]/98 p-1.5 shadow-[0_24px_56px_rgba(0,0,0,0.55)] backdrop-blur-xl">
                   <button
                     type="button"
                     onClick={() => {
                       setOptionsOpen(false);
                       onOpenStoryArchive?.();
                     }}
-                    className="flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left transition-colors hover:bg-white/6"
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-cyan-500/8"
                   >
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v11A2.5 2.5 0 0117.5 21h-11A2.5 2.5 0 014 18.5v-11z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 5v4h8V5" />
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/15 to-cyan-400/5 text-cyan-300 transition-transform group-hover:scale-110">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-[1.1rem] w-[1.1rem]">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H2.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
                       </svg>
                     </span>
                     <span>
                       <p className="text-sm font-display font-black text-white">Archive</p>
-                      <p className="text-[11px] text-gray-400">Open your saved stories</p>
+                      <p className="text-[10px] text-gray-500">Open your saved stories</p>
                     </span>
                   </button>
                   <button
@@ -3084,17 +3084,16 @@ function InboxView({
                       setOptionsOpen(false);
                       onStartSquad?.();
                     }}
-                    className="mt-1 flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left transition-colors hover:bg-white/6"
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-purple-500/8"
                   >
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5V9l-5 11zM17 20H7M17 20l-2.5-5M7 20H2V9l5 11zm0 0l2.5-5m0 0h5" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4a2.5 2.5 0 110 5 2.5 2.5 0 010-5zM6.5 8.5a2 2 0 110 4 2 2 0 010-4zm11 0a2 2 0 110 4 2 2 0 010-4z" />
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/15 to-purple-400/5 text-purple-300 transition-transform group-hover:scale-110">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-[1.1rem] w-[1.1rem]">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
                       </svg>
                     </span>
                     <span>
                       <p className="text-sm font-display font-black text-white">New squad</p>
-                      <p className="text-[11px] text-gray-400">Start a group chat</p>
+                      <p className="text-[10px] text-gray-500">Start a group chat</p>
                     </span>
                   </button>
                   <button
@@ -3103,17 +3102,17 @@ function InboxView({
                       setOptionsOpen(false);
                       onOpenChatSettings?.();
                     }}
-                    className="mt-1 flex w-full items-center gap-3 rounded-[1rem] px-3 py-2.5 text-left transition-colors hover:bg-white/6"
+                    className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all hover:bg-amber-500/8"
                   >
-                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-cyan-300/20 bg-cyan-400/10 text-cyan-100">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11.983 3.5c.59 0 1.068.478 1.068 1.068v.714c.45.123.875.3 1.264.524l.506-.506a1.068 1.068 0 011.511 0l1.39 1.39a1.068 1.068 0 010 1.512l-.505.505c.223.389.4.814.523 1.264h.715a1.068 1.068 0 011.068 1.068v1.965a1.068 1.068 0 01-1.068 1.068h-.715a5.42 5.42 0 01-.523 1.264l.505.505a1.068 1.068 0 010 1.512l-1.39 1.39a1.068 1.068 0 01-1.511 0l-.506-.506a5.42 5.42 0 01-1.264.524v.714a1.068 1.068 0 01-1.068 1.068h-1.965a1.068 1.068 0 01-1.068-1.068v-.714a5.42 5.42 0 01-1.264-.524l-.505.506a1.068 1.068 0 01-1.512 0l-1.39-1.39a1.068 1.068 0 010-1.512l.506-.505a5.421 5.421 0 01-.524-1.264h-.714A1.068 1.068 0 012.5 13.502v-1.965c0-.59.478-1.068 1.068-1.068h.714c.123-.45.3-.875.524-1.264L4.3 8.7a1.068 1.068 0 010-1.512l1.39-1.39a1.068 1.068 0 011.512 0l.505.506c.389-.224.814-.401 1.264-.524v-.714c0-.59.478-1.068 1.068-1.068h1.944z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.25A3.25 3.25 0 1112 15.75 3.25 3.25 0 0112 9.25z" />
+                    <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/15 to-amber-400/5 text-amber-300 transition-transform group-hover:scale-110">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-[1.1rem] w-[1.1rem]">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                       </svg>
                     </span>
                     <span>
                       <p className="text-sm font-display font-black text-white">Chat settings</p>
-                      <p className="text-[11px] text-gray-400">Control how links open</p>
+                      <p className="text-[10px] text-gray-500">Reactions, links &amp; more</p>
                     </span>
                   </button>
                 </div>
