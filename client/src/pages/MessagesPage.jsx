@@ -1494,6 +1494,7 @@ function MessageLinkCard({
   followUpLoading = false,
   followUpLabel = 'Rematch',
   onOpenLink = null,
+  isLight = false,
 }) {
   if (!linkShare) return null;
 
@@ -1717,10 +1718,16 @@ function MessageLinkCard({
   const frameClass = isCompare
     ? 'border-emerald-300/25 bg-emerald-500/10'
     : 'border-piu-border/60 bg-piu-card/70';
-  const badgeClass = isCompare ? 'text-emerald-200/85' : 'text-cyan-200/75';
+  const badgeClass = isCompare
+    ? (isLight ? 'text-emerald-700' : 'text-emerald-200/85')
+    : (isLight ? 'text-cyan-700' : 'text-cyan-200/75');
   const buttonClass = isCompare
-    ? 'border-emerald-300/30 bg-emerald-500/12 text-emerald-100 hover:border-emerald-200/40 hover:text-white'
-    : 'border-piu-border/70 bg-piu-dark/40 text-cyan-100 hover:border-cyan-300/35 hover:text-white';
+    ? (isLight
+      ? 'border-emerald-600/40 bg-emerald-500/15 text-emerald-800 hover:bg-emerald-500/25'
+      : 'border-emerald-300/30 bg-emerald-500/12 text-emerald-100 hover:border-emerald-200/40 hover:text-white')
+    : (isLight
+      ? 'border-gray-400/50 bg-gray-500/10 text-gray-800 hover:bg-gray-500/20'
+      : 'border-piu-border/70 bg-piu-dark/40 text-cyan-100 hover:border-cyan-300/35 hover:text-white');
   const compareButtonLabel = responseStatus ? 'Send updated best' : 'Reply with my best';
   const isScoreSnapshot = hasScoreSnapshotLinkShare(resolvedLinkShare);
   const isMultiScoreShare = !isScoreSnapshot
@@ -1813,7 +1820,11 @@ function MessageLinkCard({
               type="button"
               onClick={compareAction}
               disabled={compareLoading}
-              className="inline-flex rounded-md border border-emerald-300/35 bg-emerald-500/12 px-2.5 py-1.5 text-[10px] font-display font-bold text-emerald-100 transition-colors hover:border-emerald-200/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className={`inline-flex rounded-md border px-2.5 py-1.5 text-[10px] font-display font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                isLight
+                  ? 'border-emerald-600/40 bg-emerald-500/15 text-emerald-800 hover:bg-emerald-500/25'
+                  : 'border-emerald-300/35 bg-emerald-500/12 text-emerald-100 hover:border-emerald-200/45 hover:text-white'
+              }`}
             >
               {compareLoading ? 'Sending...' : compareButtonLabel}
             </button>
@@ -2829,6 +2840,7 @@ function MessageBubble({
               followUpAction={onFollowUp}
               followUpLoading={followUpLoading}
               onOpenLink={onOpenLink}
+              isLight={chatTheme?.isLight}
             />
           </div>
         ) : null}
@@ -2870,7 +2882,7 @@ function MessageBubble({
           })}
         </div>
       ) : null}
-      {!chatTheme?.timestampInline ? <p className="mt-0.5 px-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p> : null}
+      {!chatTheme?.timestampInline ? <p className={`mt-0.5 px-1 text-[10px] ${chatTheme?.isLight ? 'text-gray-500' : 'text-gray-500'}`}>{formatConversationTime(message?.created_at)}</p> : null}
     </div>
   );
 }
@@ -3285,7 +3297,11 @@ function ConversationView({
           <div className="flex min-w-0 items-center gap-3">
             <Link
               to="/messages"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-black/30 text-white shadow-[0_8px_22px_rgba(0,0,0,0.22)] transition-colors hover:border-cyan-300/25 hover:bg-piu-dark/70 hover:text-white"
+              className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
+                chatTheme.isLight
+                  ? 'border-black/12 bg-white/40 text-gray-700 shadow-[0_2px_8px_rgba(0,0,0,0.08)] hover:bg-white/60'
+                  : 'border-white/12 bg-black/30 text-white shadow-[0_8px_22px_rgba(0,0,0,0.22)] hover:border-cyan-300/25 hover:bg-piu-dark/70'
+              }`}
               aria-label="Back to inbox"
             >
               <svg
@@ -3334,9 +3350,9 @@ function ConversationView({
                 )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h1 className="truncate text-lg font-display font-black text-white">{headerTitle}</h1>
+                    <h1 className={`truncate text-lg font-display font-black ${chatTheme.headerText}`}>{headerTitle}</h1>
                   </div>
-                  <p className="mt-0.5 text-[11px] text-gray-500">{headerSubtitle}</p>
+                  <p className={`mt-0.5 text-[11px] ${chatTheme.headerText} opacity-70`}>{headerSubtitle}</p>
                 </div>
               </button>
             )}
@@ -3346,7 +3362,11 @@ function ConversationView({
               type="button"
               onClick={onNudge}
               disabled={nudging}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/12 bg-black/30 text-gray-400 transition-colors hover:border-purple-400/30 hover:bg-purple-500/10 hover:text-purple-300 disabled:opacity-50"
+              className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors disabled:opacity-50 ${
+                chatTheme.isLight
+                  ? 'border-black/12 bg-white/40 text-gray-600 hover:bg-purple-100 hover:text-purple-600'
+                  : 'border-white/12 bg-black/30 text-gray-400 hover:border-purple-400/30 hover:bg-purple-500/10 hover:text-purple-300'
+              }`}
               aria-label="Nudge"
               title="Nudge"
               style={nudging ? { animation: 'nudge-shake 0.4s ease both' } : undefined}
@@ -3360,8 +3380,8 @@ function ConversationView({
               onClick={onPinConversation}
               className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
                 isPinned
-                  ? 'border-cyan-400/30 bg-cyan-500/15 text-cyan-300'
-                  : 'border-white/12 bg-black/30 text-gray-400 hover:border-cyan-300/25 hover:text-white'
+                  ? (chatTheme.isLight ? 'border-cyan-600/30 bg-cyan-500/15 text-cyan-700' : 'border-cyan-400/30 bg-cyan-500/15 text-cyan-300')
+                  : (chatTheme.isLight ? 'border-black/12 bg-white/40 text-gray-600 hover:text-cyan-700' : 'border-white/12 bg-black/30 text-gray-400 hover:border-cyan-300/25 hover:text-white')
               }`}
               aria-label={isPinned ? 'Unpin conversation' : 'Pin conversation'}
               title={isPinned ? 'Unpin conversation' : 'Pin conversation'}
