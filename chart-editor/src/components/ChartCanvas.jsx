@@ -6,8 +6,8 @@ import {
 import { snapBeat } from '../lib/timing.js';
 
 /**
- * Canvas-based note highway with rising arrows.
- * Notes rise upward, receptors at top.
+ * Canvas-based note highway with falling arrows.
+ * Notes scroll downward, receptors at top. Beat 0 starts at top.
  */
 export default function ChartCanvas({
   chart,
@@ -49,15 +49,15 @@ export default function ChartCanvas({
 
     const leftMargin = 60;
 
-    // Convert beat to Y position (rising: higher beats are lower on screen)
+    // Convert beat to Y position (falling: higher beats are lower on screen)
     // Receptor is at RECEPTOR_Y, current beat maps to receptor
     const beatToY = (beat) => {
-      return RECEPTOR_Y - (beat - effectiveBeat) * beatHeight;
+      return RECEPTOR_Y + (beat - effectiveBeat) * beatHeight;
     };
 
     // Visible beat range
-    const topBeat = effectiveBeat + (RECEPTOR_Y / beatHeight);
-    const bottomBeat = effectiveBeat - ((height - RECEPTOR_Y) / beatHeight);
+    const topBeat = effectiveBeat - (RECEPTOR_Y / beatHeight);
+    const bottomBeat = effectiveBeat + ((height - RECEPTOR_Y) / beatHeight);
 
     // Draw column backgrounds (subtle)
     for (let col = 0; col < numColumns; col++) {
@@ -67,8 +67,10 @@ export default function ChartCanvas({
     }
 
     // Draw beat grid lines
-    const gridStart = Math.floor(bottomBeat * snapDivision / 4) * 4 / snapDivision;
-    for (let beat = gridStart; beat <= topBeat; beat += 4 / snapDivision) {
+    const minBeat = Math.min(topBeat, bottomBeat);
+    const maxBeat = Math.max(topBeat, bottomBeat);
+    const gridStart = Math.floor(minBeat * snapDivision / 4) * 4 / snapDivision;
+    for (let beat = gridStart; beat <= maxBeat; beat += 4 / snapDivision) {
       if (beat < 0) continue;
       const y = beatToY(beat);
       if (y < -10 || y > height + 10) continue;
@@ -108,8 +110,8 @@ export default function ChartCanvas({
     // Draw measure numbers
     ctx.font = '12px Inter, sans-serif';
     ctx.fillStyle = '#666688';
-    const measureStart = Math.max(0, Math.floor(bottomBeat / 4));
-    const measureEnd = Math.ceil(topBeat / 4);
+    const measureStart = Math.max(0, Math.floor(minBeat / 4));
+    const measureEnd = Math.ceil(maxBeat / 4);
     for (let m = measureStart; m <= measureEnd; m++) {
       const y = beatToY(m * 4);
       if (y > -20 && y < height + 20) {
@@ -273,7 +275,7 @@ export default function ChartCanvas({
   // Mouse wheel scroll
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -1 : 1;
+    const delta = e.deltaY > 0 ? 1 : -1;
     const scrollAmount = 4 / snapDivision; // scroll by one snap step
     onScrollBeatChange(prev => Math.max(0, prev + delta * scrollAmount));
   }, [snapDivision, onScrollBeatChange]);
@@ -295,8 +297,8 @@ export default function ChartCanvas({
     const col = Math.floor((mx - leftMargin) / COLUMN_WIDTH);
     if (col < 0 || col >= numColumns) return;
 
-    // Convert Y to beat (rising: receptor at top, beats increase downward visually)
-    const beatOffset = (RECEPTOR_Y - my) / beatHeight;
+    // Convert Y to beat (falling: receptor at top, beats increase downward)
+    const beatOffset = (my - RECEPTOR_Y) / beatHeight;
     const rawBeat = scrollBeat + beatOffset;
     const beat = snapBeat(rawBeat, snapDivision);
 
@@ -343,7 +345,7 @@ export default function ChartCanvas({
     if (!isDragging.current) return;
     const dy = e.clientY - lastMouseY.current;
     lastMouseY.current = e.clientY;
-    onScrollBeatChange(prev => Math.max(0, prev + dy / beatHeight));
+    onScrollBeatChange(prev => Math.max(0, prev - dy / beatHeight));
   }, [beatHeight, onScrollBeatChange]);
 
   const handleMouseUp = useCallback(() => {

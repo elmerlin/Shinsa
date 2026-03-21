@@ -127,11 +127,11 @@ export default function App() {
           break;
         case 'ArrowUp':
           e.preventDefault();
-          setScrollBeat(prev => Math.max(0, prev + 4 / snapDivision));
+          setScrollBeat(prev => Math.max(0, prev - 4 / snapDivision));
           break;
         case 'ArrowDown':
           e.preventDefault();
-          setScrollBeat(prev => Math.max(0, prev - 4 / snapDivision));
+          setScrollBeat(prev => Math.max(0, prev + 4 / snapDivision));
           break;
         case 'z':
           if (e.ctrlKey || e.metaKey) {
@@ -208,6 +208,7 @@ export default function App() {
         onRedo={redo}
         dirty={state.dirty}
         onSave={handleSave}
+        fileFormat={fileFormat}
       />
 
       {/* Main area: canvas + metadata panel */}

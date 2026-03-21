@@ -19,6 +19,7 @@ export default function Toolbar({
   onRedo,
   dirty,
   onSave,
+  fileFormat,
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2 bg-piu-card border-b border-piu-border shrink-0 flex-wrap">
@@ -26,13 +27,10 @@ export default function Toolbar({
       <div className="flex items-center gap-2">
         <button
           onClick={onTogglePlay}
-          disabled={!audioLoaded}
           className={`px-3 py-1.5 rounded font-display font-semibold text-sm
             ${playing
               ? 'bg-piu-accent text-white'
-              : audioLoaded
-                ? 'bg-piu-blue text-white hover:bg-blue-500'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              : 'bg-piu-blue text-white hover:bg-blue-500'
             }`}
           title="Space"
         >
@@ -131,7 +129,7 @@ export default function Toolbar({
             : 'bg-piu-dark text-gray-500 border border-piu-border'
           }`}
       >
-        Export .sm
+        Export .{fileFormat || 'sm'}
       </button>
     </div>
   );

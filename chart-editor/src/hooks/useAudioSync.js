@@ -4,6 +4,8 @@ import { timeToBeat, beatToTime } from '../lib/timing.js';
 
 export function useAudioSync(metadata) {
   const engineRef = useRef(null);
+  const timerRef = useRef(null);
+  const lastTickRef = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -16,6 +18,9 @@ export function useAudioSync(metadata) {
     return () => {
       if (engineRef.current) {
         engineRef.current.destroy();
+      }
+      if (timerRef.current) {
+        cancelAnimationFrame(timerRef.current);
       }
     };
   }, []);
@@ -45,38 +50,79 @@ export function useAudioSync(metadata) {
     });
   }, [metadata]);
 
+  // Timer-based beat playback (no audio)
+  const startBeatTimer = useCallback(() => {
+    lastTickRef.current = performance.now();
+    const tick = () => {
+      const now = performance.now();
+      const deltaMs = now - lastTickRef.current;
+      lastTickRef.current = now;
+
+      const bpm = metadata?.bpms?.[0]?.bpm || 120;
+      const beatsPerMs = (bpm * playbackRate) / 60000;
+      const beatDelta = deltaMs * beatsPerMs;
+
+      setCurrentBeat(prev => {
+        const next = prev + beatDelta;
+        setCurrentTime(beatToTime(next, metadata?.bpms || [{ beat: 0, bpm: 120 }], metadata?.stops || []));
+        return next;
+      });
+
+      timerRef.current = requestAnimationFrame(tick);
+    };
+    timerRef.current = requestAnimationFrame(tick);
+  }, [metadata, playbackRate]);
+
+  const stopBeatTimer = useCallback(() => {
+    if (timerRef.current) {
+      cancelAnimationFrame(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
   const togglePlay = useCallback(() => {
-    if (!engineRef.current || !audioLoaded) return;
     if (playing) {
-      engineRef.current.stop();
+      if (audioLoaded) {
+        engineRef.current?.stop();
+      } else {
+        stopBeatTimer();
+      }
       setPlaying(false);
     } else {
-      engineRef.current.play();
+      if (audioLoaded) {
+        engineRef.current?.play();
+      } else {
+        startBeatTimer();
+      }
       setPlaying(true);
     }
-  }, [playing, audioLoaded]);
+  }, [playing, audioLoaded, startBeatTimer, stopBeatTimer]);
 
   const seekToBeat = useCallback((beat) => {
-    if (!engineRef.current || !metadata?.bpms) return;
+    if (!metadata?.bpms) return;
     const time = beatToTime(beat, metadata.bpms, metadata.stops || []) + (metadata.offset || 0);
-    engineRef.current.seek(Math.max(0, time));
+    if (audioLoaded && engineRef.current) {
+      engineRef.current.seek(Math.max(0, time));
+    }
     setCurrentTime(Math.max(0, time));
     setCurrentBeat(beat);
-  }, [metadata]);
+  }, [metadata, audioLoaded]);
 
   const seekToTime = useCallback((time) => {
-    if (!engineRef.current) return;
-    engineRef.current.seek(time);
+    if (audioLoaded && engineRef.current) {
+      engineRef.current.seek(time);
+    }
     setCurrentTime(time);
     if (metadata?.bpms) {
       const songTime = time - (metadata.offset || 0);
       setCurrentBeat(timeToBeat(Math.max(0, songTime), metadata.bpms, metadata.stops || []));
     }
-  }, [metadata]);
+  }, [metadata, audioLoaded]);
 
   const setPlaybackRate = useCallback((rate) => {
-    if (!engineRef.current) return;
-    engineRef.current.setRate(rate);
+    if (engineRef.current) {
+      engineRef.current.setRate(rate);
+    }
     setPlaybackRateState(rate);
   }, []);
 
