@@ -131,6 +131,13 @@ if (!KOREAN_LOCALE_ENABLED) {
   app.head(/^\/kr(?:\/.*)?$/, redirectHiddenKoreanLocale);
 }
 
+// Serve chart editor at /charting/
+const chartEditorBuild = path.join(__dirname, '..', 'chart-editor', 'dist');
+app.use('/charting', express.static(chartEditorBuild));
+app.get('/charting/*', (req, res) => {
+  res.sendFile(path.join(chartEditorBuild, 'index.html'));
+});
+
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
 registerSharePreviewRoutes(app, { clientBuildDir: clientBuild });
