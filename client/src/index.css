@@ -1387,3 +1387,223 @@
 .animate-story-scale-in { animation: story-scale-in 0.4s ease-out both; }
 .animate-story-fade-slide-up { animation: story-fade-slide-up 0.45s ease-out 0.12s both; }
 .animate-story-sticker-float { animation: story-sticker-float 3s ease-in-out infinite; }
+
+/* ── Chat Theme Animations ── */
+
+/* Message entrance animations */
+@keyframes chat-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.chat-entrance-fade-up { animation: chat-fade-up 0.2s ease-out both; }
+
+@keyframes chat-typewriter {
+  from { max-width: 0; }
+  to { max-width: 100%; }
+}
+.chat-entrance-typewriter {
+  overflow: hidden; white-space: nowrap;
+  animation: chat-typewriter 0.4s steps(20) both;
+}
+
+@keyframes chat-aim-pop {
+  0% { opacity: 0; transform: scale(0.8); }
+  60% { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.chat-entrance-aim-pop { animation: chat-aim-pop 0.3s ease-out both; }
+
+@keyframes chat-discord-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.chat-entrance-discord-fade { animation: chat-discord-fade 0.1s ease-out both; }
+
+@keyframes chat-msn-slide {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.chat-entrance-msn-slide { animation: chat-msn-slide 0.25s ease-out both; }
+
+@keyframes chat-slide-right {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.chat-entrance-slide-right { animation: chat-slide-right 0.25s ease-out both; }
+
+@keyframes chat-winamp-slide {
+  from { opacity: 0; transform: translateY(6px) scaleY(0.9); }
+  to { opacity: 1; transform: translateY(0) scaleY(1); }
+}
+.chat-entrance-winamp-slide { animation: chat-winamp-slide 0.2s ease-out both; }
+
+@keyframes chat-icq-flower {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.chat-entrance-icq-flower { animation: chat-icq-flower 0.25s ease-out both; }
+
+@keyframes chat-wechat-pop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.chat-entrance-wechat-pop { animation: chat-wechat-pop 0.15s ease-out both; }
+
+@keyframes chat-qq-bounce {
+  0% { opacity: 0; transform: translateY(10px); }
+  65% { transform: translateY(-3px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.chat-entrance-qq-bounce { animation: chat-qq-bounce 0.3s ease-out both; }
+
+@keyframes chat-nxa-glow {
+  0% { opacity: 0; box-shadow: 0 0 20px rgba(136,204,255,0.3); }
+  50% { opacity: 1; box-shadow: 0 0 12px rgba(136,204,255,0.15); }
+  100% { opacity: 1; box-shadow: none; }
+}
+.chat-entrance-nxa-glow { animation: chat-nxa-glow 0.4s ease-out both; }
+
+@keyframes chat-kakao-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.chat-entrance-kakao-pop { animation: chat-kakao-pop 0.2s ease-out both; }
+
+@keyframes chat-line-slide {
+  0% { opacity: 0; transform: translateY(12px); }
+  70% { transform: translateY(-2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.chat-entrance-line-slide { animation: chat-line-slide 0.3s ease-out both; }
+
+/* Typing indicator animations */
+.chat-typing-dots { display: flex; align-items: center; gap: 2px; padding: 6px 10px; }
+.chat-typing-dots span {
+  display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: currentColor;
+  animation: chat-dot-bounce 1.2s infinite;
+}
+.chat-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.chat-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes chat-dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-6px); opacity: 1; }
+}
+
+.chat-typing-cursor { animation: chat-cursor-blink 1s step-start infinite; }
+@keyframes chat-cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.chat-typing-wave { display: flex; align-items: end; gap: 2px; padding: 6px 10px; height: 28px; }
+.chat-typing-wave span {
+  display: inline-block; width: 3px; height: 14px;
+  border-radius: 2px; background: currentColor;
+  animation: chat-wave 1s ease-in-out infinite;
+}
+.chat-typing-wave span:nth-child(2) { animation-delay: 0.12s; }
+.chat-typing-wave span:nth-child(3) { animation-delay: 0.24s; }
+@keyframes chat-wave {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.3; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+.chat-typing-text { padding: 4px 10px; font-size: 12px; }
+
+/* Background effects */
+.chat-bg-crt-flicker { position: relative; }
+.chat-bg-crt-flicker::after {
+  content: ''; position: absolute; inset: 0; z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,255,65,0.04) 1px, rgba(0,255,65,0.04) 2px);
+  background-size: 100% 3px;
+  animation: chat-crt-scroll 8s linear infinite;
+}
+@keyframes chat-crt-scroll {
+  from { background-position: 0 0; }
+  to { background-position: 0 100px; }
+}
+
+.chat-bg-yahoo-nebula { position: relative; overflow: hidden; }
+.chat-bg-yahoo-nebula::before {
+  content: ''; position: absolute; inset: -50%; z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 30% 20%, rgba(128,0,255,0.1), transparent 50%),
+              radial-gradient(ellipse at 70% 80%, rgba(200,0,255,0.06), transparent 50%);
+  animation: chat-nebula-drift 20s ease-in-out infinite alternate;
+}
+@keyframes chat-nebula-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(5%, 3%) scale(1.05); }
+}
+
+.chat-bg-msn-gradient {
+  background-size: 200% 200% !important;
+  animation: chat-msn-shift 10s ease-in-out infinite;
+}
+@keyframes chat-msn-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.chat-bg-winamp-eq { position: relative; }
+.chat-bg-winamp-eq::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 28px;
+  z-index: 1; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(0,224,0,0.06) 4px, rgba(0,224,0,0.06) 6px);
+  animation: chat-eq-pulse 2s ease-in-out infinite alternate;
+  transform-origin: bottom;
+}
+@keyframes chat-eq-pulse {
+  0% { opacity: 0.3; transform: scaleY(0.4); }
+  100% { opacity: 0.7; transform: scaleY(1); }
+}
+
+.chat-bg-nxa-particles { position: relative; overflow: hidden; }
+.chat-bg-nxa-particles::before {
+  content: ''; position: absolute; inset: 0; z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(1px 1px at 10% 20%, rgba(136,204,255,0.3), transparent),
+                    radial-gradient(1px 1px at 30% 60%, rgba(255,204,0,0.2), transparent),
+                    radial-gradient(1px 1px at 60% 30%, rgba(136,204,255,0.2), transparent),
+                    radial-gradient(1px 1px at 80% 70%, rgba(255,204,0,0.15), transparent),
+                    radial-gradient(1px 1px at 50% 90%, rgba(136,204,255,0.25), transparent),
+                    radial-gradient(1px 1px at 20% 80%, rgba(136,204,255,0.2), transparent),
+                    radial-gradient(1px 1px at 90% 15%, rgba(255,204,0,0.15), transparent);
+  animation: chat-nxa-float 12s ease-in-out infinite alternate;
+}
+@keyframes chat-nxa-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-10px); }
+}
+
+.chat-header-msn-shine {
+  background-size: 200% 100% !important;
+  animation: chat-header-shine 4s ease-in-out infinite;
+}
+@keyframes chat-header-shine {
+  0%, 100% { background-position: 100% 0; }
+  50% { background-position: 0% 0; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  [class^="chat-entrance-"],
+  [class*=" chat-entrance-"],
+  .chat-typing-dots span,
+  .chat-typing-cursor,
+  .chat-typing-wave span,
+  .chat-bg-crt-flicker::after,
+  .chat-bg-yahoo-nebula::before,
+  .chat-bg-msn-gradient,
+  .chat-bg-winamp-eq::after,
+  .chat-bg-nxa-particles::before,
+  .chat-header-msn-shine {
+    animation: none !important;
+  }
+  [class^="chat-entrance-"],
+  [class*=" chat-entrance-"] {
+    opacity: 1 !important; transform: none !important;
+  }
+}

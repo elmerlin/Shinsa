@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { STICKER_GROUPS } from '../utils/stickers';
 import StickerAsset from './StickerAsset';
@@ -9,6 +9,7 @@ export default function DojoCatStickerPicker({
   panelClassName = '',
   compact = false,
   align = 'left',
+  priorityPacks = null,
 }) {
   const [open, setOpen] = useState(false);
   const [isMobileSheet, setIsMobileSheet] = useState(() => (
@@ -53,6 +54,14 @@ export default function DojoCatStickerPicker({
     setOpen(false);
   };
 
+  const orderedGroups = useMemo(() => {
+    if (!priorityPacks?.length) return STICKER_GROUPS;
+    const prioritySet = new Set(priorityPacks);
+    const priority = STICKER_GROUPS.filter((g) => g.emojis[0] && prioritySet.has(g.emojis[0].pack));
+    const rest = STICKER_GROUPS.filter((g) => !g.emojis[0] || !prioritySet.has(g.emojis[0].pack));
+    return [...priority, ...rest];
+  }, [priorityPacks]);
+
   const pickerContent = (
     <>
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -71,7 +80,7 @@ export default function DojoCatStickerPicker({
         ) : null}
       </div>
       <div className="space-y-4">
-        {STICKER_GROUPS.map((group) => (
+        {orderedGroups.map((group) => (
           <div key={group.label}>
             <p className="mb-2 text-[10px] font-display text-gray-400">{group.label}</p>
             <div className={`grid gap-1.5 ${isMobileSheet ? 'grid-cols-4' : 'grid-cols-5 sm:grid-cols-6'}`}>

@@ -78,6 +78,24 @@ const BASE = {
   extraViewportClass: '',
   extraBubbleClass: '',
   decorOverlay: null,
+  // ── extended theme properties ──
+  layoutMode: 'bubbles',
+  msgEntranceClass: 'chat-entrance-fade-up',
+  typingIndicator: 'dots',
+  typingIndicatorClass: 'text-cyan-400',
+  typingText: '{user} is typing...',
+  themeReactions: null,
+  themeStickerPacks: null,
+  sendButtonClass: '',
+  sendButtonLabel: null,
+  composerExtraClass: '',
+  bgAnimationClass: '',
+  headerExtraClass: '',
+  reactionPillClass: '',
+  avatarShape: 'circle',
+  avatarSize: 'sm',
+  senderNameInline: false,
+  timestampInline: false,
 };
 
 function buildTheme(overrides) {
@@ -105,7 +123,7 @@ const cli = buildTheme({
   otherBubbleBg: 'bg-green-500/5',
   otherBubbleBorder: 'border-green-500/15',
   otherBubbleText: 'text-green-400',
-  bubbleRadius: '0.25rem',
+  bubbleRadius: '0',
   senderNameClass: 'text-[10px] font-mono font-bold uppercase tracking-[0.18em] text-green-600',
   showAvatars: false,
   shadow: 'none',
@@ -116,6 +134,18 @@ const cli = buildTheme({
       backgroundSize: '100% 3px',
     }} />
   ),
+  layoutMode: 'terminal',
+  msgEntranceClass: 'chat-entrance-typewriter',
+  typingIndicator: 'cursor',
+  typingIndicatorClass: 'text-green-400 font-mono text-sm',
+  typingText: '{user}@shinsa:~$ █',
+  bgAnimationClass: 'chat-bg-crt-flicker',
+  sendButtonLabel: 'EXEC',
+  sendButtonClass: 'font-mono bg-green-500/20 border border-green-500/40 text-green-400 hover:bg-green-500/30 rounded',
+  senderNameInline: true,
+  reactionPillClass: 'font-mono border-green-500/20 bg-green-500/8 text-green-400',
+  themeStickerPacks: ['devit'],
+  themeReactions: ['pump', 'fire', 'mind_blown'],
 });
 
 // ── AIM ─────────────────────────────────────────────────────────────────────
@@ -142,6 +172,16 @@ const aim = buildTheme({
   showAvatars: true,
   shadow: '0 1px 3px rgba(0,0,0,0.12)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-aim-pop',
+  typingIndicator: 'text',
+  typingText: '{user} is typing...',
+  typingIndicatorClass: 'italic text-[#999] text-xs',
+  sendButtonClass: 'bg-[#ffde00] text-[#333] hover:bg-[#ffe63b] font-bold rounded-md',
+  avatarShape: 'square',
+  avatarSize: 'md',
+  headerExtraClass: 'border-b-2',
+  themeReactions: ['heart', 'fire', 'clap'],
+  themeStickerPacks: ['dojocat', 'heavybreathing_chicken'],
 });
 
 // ── Yahoo Messenger ─────────────────────────────────────────────────────────
@@ -169,6 +209,13 @@ const yahoo = buildTheme({
   showAvatars: true,
   shadow: '0 4px 16px rgba(74,14,120,0.25)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-slide-right',
+  typingIndicator: 'wave',
+  typingIndicatorClass: 'text-purple-300',
+  bgAnimationClass: 'chat-bg-yahoo-nebula',
+  sendButtonClass: 'bg-purple-600 hover:bg-purple-500 text-white rounded-lg',
+  themeStickerPacks: ['mope_flower', 'dojocat_pixiu'],
+  themeReactions: ['heart', 'pump', 'fire'],
 });
 
 // ── MSN Messenger ───────────────────────────────────────────────────────────
@@ -197,6 +244,16 @@ const msn = buildTheme({
   showAvatars: true,
   shadow: '0 1px 4px rgba(27,110,194,0.1)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-msn-slide',
+  typingIndicator: 'text',
+  typingText: '{user} is writing a message...',
+  typingIndicatorClass: 'text-[#1b6ec2] text-xs italic',
+  bgAnimationClass: 'chat-bg-msn-gradient',
+  sendButtonClass: 'bg-[#1b6ec2] hover:bg-[#2a7ed6] text-white rounded',
+  avatarShape: 'rounded',
+  headerExtraClass: 'chat-header-msn-shine',
+  themeStickerPacks: ['buu', 'dojocat'],
+  themeReactions: ['heart', 'clap', 'pump'],
 });
 
 // ── Skype ───────────────────────────────────────────────────────────────────
@@ -223,6 +280,12 @@ const skype = buildTheme({
   showAvatars: true,
   shadow: '0 1px 3px rgba(0,0,0,0.06)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-fade-up',
+  typingIndicator: 'dots',
+  typingIndicatorClass: 'text-[#00aff0]',
+  sendButtonClass: 'bg-[#00aff0] hover:bg-[#33bff3] text-white rounded-full',
+  themeStickerPacks: ['dojocat_pixiu_traditional', 'buuu'],
+  themeReactions: ['heart', 'clap', 'fire'],
 });
 
 // ── Winamp ──────────────────────────────────────────────────────────────────
@@ -258,6 +321,15 @@ const winamp = buildTheme({
       WebkitMaskImage: 'linear-gradient(to top, black, transparent)',
     }} />
   ),
+  msgEntranceClass: 'chat-entrance-winamp-slide',
+  typingIndicator: 'cursor',
+  typingIndicatorClass: 'text-[#00e000] font-mono text-sm',
+  typingText: '█',
+  bgAnimationClass: 'chat-bg-winamp-eq',
+  sendButtonLabel: 'PLAY ▶',
+  sendButtonClass: 'font-mono bg-[#00e000]/15 border border-[#00e000]/30 text-[#00e000] hover:bg-[#00e000]/25 rounded',
+  themeStickerPacks: ['devit', 'vegetacat'],
+  themeReactions: ['pump', 'fire', 'mind_blown'],
 });
 
 // ── ICQ ────────────────────────────────────────────────────────────────────
@@ -286,6 +358,12 @@ const icq = buildTheme({
   showAvatars: true,
   shadow: '0 1px 3px rgba(0,0,0,0.08)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-icq-flower',
+  typingIndicator: 'dots',
+  typingIndicatorClass: 'text-[#4dac2b]',
+  sendButtonClass: 'bg-[#4dac2b] hover:bg-[#5cc038] text-white rounded',
+  themeStickerPacks: ['heavybreathing_chicken', 'dojocat'],
+  themeReactions: ['heart', 'pump', 'clap'],
 });
 
 // ── WeChat ─────────────────────────────────────────────────────────────────
@@ -312,6 +390,14 @@ const wechat = buildTheme({
   showAvatars: true,
   shadow: 'none',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-wechat-pop',
+  typingIndicator: 'text',
+  typingText: '对方正在输入...',
+  typingIndicatorClass: 'text-[#808080] text-xs',
+  sendButtonClass: 'bg-[#07c160] hover:bg-[#06a852] text-white rounded-lg',
+  avatarShape: 'rounded',
+  themeStickerPacks: ['dojocat_pixiu', 'dojocat_pixiu_traditional'],
+  themeReactions: ['heart', 'clap', 'pump'],
 });
 
 // ── Discord ────────────────────────────────────────────────────────────────
@@ -338,6 +424,19 @@ const discord = buildTheme({
   shadow: 'none',
   extraViewportClass: '',
   extraBubbleClass: '',
+  layoutMode: 'feed',
+  msgEntranceClass: 'chat-entrance-discord-fade',
+  typingIndicator: 'dots',
+  typingIndicatorClass: 'text-[#6d6f78]',
+  typingText: '{user} is typing...',
+  senderNameInline: true,
+  timestampInline: true,
+  avatarSize: 'md',
+  reactionPillClass: 'bg-[#2b2d31] border-[#1e1f22] hover:bg-[#383a40] text-[#dbdee1] rounded-md',
+  sendButtonClass: 'bg-[#5865f2] hover:bg-[#4752c4] text-white rounded',
+  headerExtraClass: 'shadow-[0_1px_0_rgba(0,0,0,0.3)]',
+  themeStickerPacks: ['dojocat', 'devit', 'vegetacat'],
+  themeReactions: ['pump', 'fire', 'heart', 'mind_blown'],
 });
 
 // ── QQ ─────────────────────────────────────────────────────────────────────
@@ -366,6 +465,12 @@ const qq = buildTheme({
   showAvatars: true,
   shadow: '0 1px 4px rgba(18,183,245,0.1)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-qq-bounce',
+  typingIndicator: 'dots',
+  typingIndicatorClass: 'text-[#12b7f5]',
+  sendButtonClass: 'bg-[#12b7f5] hover:bg-[#35c5f8] text-white rounded-lg',
+  themeStickerPacks: ['dojocat_pixiu', 'buu'],
+  themeReactions: ['heart', 'pump', 'clap'],
 });
 
 // ── NXA (Pump It Up NX Absolute) ───────────────────────────────────────────
@@ -409,6 +514,14 @@ const nxa = buildTheme({
       }} />
     </>
   ),
+  msgEntranceClass: 'chat-entrance-nxa-glow',
+  typingIndicator: 'wave',
+  typingIndicatorClass: 'text-[#88ccff]',
+  bgAnimationClass: 'chat-bg-nxa-particles',
+  sendButtonLabel: 'SEND ▸',
+  sendButtonClass: 'bg-[#88ccff]/15 border border-[#88ccff]/30 text-[#88ccff] hover:bg-[#88ccff]/25 font-bold uppercase tracking-wider text-xs rounded',
+  themeStickerPacks: ['dojocat', 'dojocat_pixiu', 'buu'],
+  themeReactions: ['pump', 'fire', 'mind_blown', 'heart'],
 });
 
 // ── KakaoTalk ─────────────────────────────────────────────────────────────
@@ -435,6 +548,11 @@ const kakao = buildTheme({
   showAvatars: true,
   shadow: '0 1px 2px rgba(0,0,0,0.06)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-kakao-pop',
+  typingIndicator: null,
+  sendButtonClass: 'bg-[#fee500] hover:bg-[#fff024] text-[#1e1e1e] rounded-full font-bold',
+  themeStickerPacks: ['dojocat_pixiu_traditional', 'mope_flower'],
+  themeReactions: ['heart', 'pump', 'clap'],
 });
 
 // ── LINE ──────────────────────────────────────────────────────────────────
@@ -462,6 +580,12 @@ const line = buildTheme({
   showAvatars: true,
   shadow: '0 1px 3px rgba(0,0,0,0.1)',
   extraBubbleClass: '',
+  msgEntranceClass: 'chat-entrance-line-slide',
+  typingIndicator: 'dots',
+  typingIndicatorClass: 'text-[#06c755]',
+  sendButtonClass: 'bg-[#06c755] hover:bg-[#05b34c] text-white rounded-full',
+  themeStickerPacks: ['mope_flower', 'dojocat_pixiu_traditional'],
+  themeReactions: ['heart', 'pump', 'clap'],
 });
 
 const THEMES = { '': BASE, cli, aim, yahoo, msn, skype, winamp, icq, wechat, discord, qq, nxa, kakao, line };

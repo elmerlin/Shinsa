@@ -2134,8 +2134,12 @@ function MessageBubble({
   availableReactions = DEFAULT_QUICK_REACTION_KEYS,
   defaultReaction = 'pump',
   onReact = null,
+  isNewlyRendered = false,
+  isGrouped = false,
 }) {
   const isOwn = !!message?.is_own;
+  const layoutMode = chatTheme?.layoutMode || 'bubbles';
+  const entranceClass = isNewlyRendered && chatTheme?.msgEntranceClass ? chatTheme.msgEntranceClass : '';
   const hasContent = !!String(message?.content || '').trim();
   const hasShare = !!message?.share;
   const hasLinkShare = !!message?.link_share;
@@ -2165,9 +2169,12 @@ function MessageBubble({
     : `border ${bubbleTone} px-2.5 py-2 ${chatTheme?.extraBubbleClass || ''} ${bubbleTextClass}`.trim();
   const reactionItems = Array.isArray(message?.reactions) ? message.reactions : [];
   const viewerReaction = sanitizeReactionKey(message?.viewer_reaction);
-  const trayKeys = normalizeReactionKeys(availableReactions).length > 0
-    ? normalizeReactionKeys(availableReactions)
-    : DEFAULT_QUICK_REACTION_KEYS;
+  const trayKeys = (() => {
+    const explicit = normalizeReactionKeys(availableReactions);
+    if (explicit.length > 0) return explicit;
+    if (chatTheme?.themeReactions?.length > 0) return normalizeReactionKeys(chatTheme.themeReactions);
+    return DEFAULT_QUICK_REACTION_KEYS;
+  })();
   const isReplyTarget = String(activeReplyMessageId || '').trim() !== '' && String(message?.id || '') === String(activeReplyMessageId);
   const [trayOpen, setTrayOpen] = useState(false);
   const tapStateRef = useRef({ lastTapAt: 0, timer: null });
@@ -2616,9 +2623,34 @@ function MessageBubble({
     );
   }
 
+  // ── terminal layout (CLI) ──
+  if (layoutMode === 'terminal') {
+    const termContent = String(message?.content || '').trim();
+    const prefix = isOwn ? '$ ' : `> ${senderName}: `;
+    return (
+      <div className={`flex flex-col items-start ${entranceClass}`}>
+        <div className={`w-full px-2 py-0.5 font-mono text-sm ${chatTheme?.extraBubbleClass || ''} ${isOwn ? (chatTheme?.ownBubbleText || 'text-green-300') : (chatTheme?.otherBubbleText || 'text-green-400')}`}>
+          <span className="opacity-60">{prefix}</span>{termContent}
+        </div>
+        {reactionItems.length > 0 ? (
+          <div className="flex gap-1.5 px-2 py-0.5">
+            {reactionItems.map((entry) => {
+              const option = getReactionOption(entry.key);
+              return (
+                <button key={entry.key} type="button" onClick={() => onReact?.(message.id, option.key)}
+                  className={`font-mono text-[10px] ${chatTheme?.reactionPillClass || 'text-green-500/60'}`}
+                >[{option.emoji || option.key}:{entry.count}]</button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`relative flex flex-col ${alignmentClass}`}
+      className={`relative flex flex-col ${layoutMode === 'feed' ? 'items-start' : alignmentClass} ${entranceClass}`}
       onPointerEnter={(event) => {
         if (event.pointerType !== 'mouse') return;
         setTrayOpen(true);
@@ -2628,17 +2660,18 @@ function MessageBubble({
         setTrayOpen(false);
       }}
     >
-      {!isOwn ? (
-        <div className={`mb-1 flex items-center gap-1.5 px-1 ${chatTheme?.showAvatars ? '' : ''}`}>
+      {!isOwn && !(isGrouped && layoutMode === 'feed') ? (
+        <div className={`mb-1 flex items-center gap-1.5 px-1`}>
           {chatTheme?.showAvatars && senderAvatar ? (
-            <img src={senderAvatar} alt="" className="h-5 w-5 rounded-full object-cover" />
+            <img src={senderAvatar} alt="" className={`${chatTheme?.avatarSize === 'md' ? 'h-8 w-8' : 'h-5 w-5'} ${chatTheme?.avatarShape === 'square' ? 'rounded' : chatTheme?.avatarShape === 'rounded' ? 'rounded-lg' : 'rounded-full'} object-cover`} />
           ) : chatTheme?.showAvatars ? (
-            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-400/20 text-[9px] font-bold text-gray-400">
+            <div className={`flex items-center justify-center bg-gray-400/20 text-[9px] font-bold text-gray-400 ${chatTheme?.avatarSize === 'md' ? 'h-8 w-8' : 'h-5 w-5'} ${chatTheme?.avatarShape === 'square' ? 'rounded' : chatTheme?.avatarShape === 'rounded' ? 'rounded-lg' : 'rounded-full'}`}>
               {senderName.slice(0, 1).toUpperCase()}
             </div>
           ) : null}
           <p className={chatTheme?.senderNameClass || 'text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500'}>
             {senderName}
+            {chatTheme?.timestampInline ? <span className="ml-2 text-[10px] font-normal text-gray-500">{formatConversationTime(message?.created_at)}</span> : null}
           </p>
         </div>
       ) : null}
@@ -2823,10 +2856,10 @@ function MessageBubble({
                 key={`${message?.id}-${option.key}`}
                 type="button"
                 onClick={() => triggerReaction(option.key)}
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-display font-black transition-colors ${
-                  selected
-                    ? 'border-cyan-300/35 bg-cyan-400/14 text-white'
-                    : 'border-white/12 bg-white/6 text-gray-200 hover:bg-white/10'
+                className={`inline-flex items-center gap-1 border px-2 py-1 text-[10px] font-display font-black transition-colors ${
+                  chatTheme?.reactionPillClass
+                    ? `${chatTheme.reactionPillClass} ${selected ? 'opacity-100 ring-1 ring-current/20' : 'opacity-80'}`
+                    : `rounded-full ${selected ? 'border-cyan-300/35 bg-cyan-400/14 text-white' : 'border-white/12 bg-white/6 text-gray-200 hover:bg-white/10'}`
                 }`}
               >
                 {renderReactionGlyph(option.key, 'h-3.5 w-3.5', selected)}
@@ -2836,7 +2869,7 @@ function MessageBubble({
           })}
         </div>
       ) : null}
-      <p className="mt-0.5 px-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p>
+      {!chatTheme?.timestampInline ? <p className="mt-0.5 px-1 text-[10px] text-gray-500">{formatConversationTime(message?.created_at)}</p> : null}
     </div>
   );
 }
@@ -3205,6 +3238,7 @@ function ConversationView({
   const headerAvatar = isSquad ? activeConversation?.avatar : activePartner?.avatar;
   const composerPlaceholder = isSquad ? 'Message Squad' : `Message ${headerTitle || 'chat'}...`;
   const chatTheme = useMemo(() => getTheme(activeConversation?.theme), [activeConversation?.theme]);
+  const renderedMessageIds = useRef(new Set());
 
   const readReceiptMap = useMemo(() => {
     const map = {};
@@ -3243,7 +3277,7 @@ function ConversationView({
     <div className="flex h-[100dvh] min-h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sm:mx-auto sm:h-[calc(100vh-5rem)] sm:min-h-[40rem] sm:max-h-[calc(100vh-5rem)] sm:w-full sm:max-w-4xl sm:px-4 sm:py-6" style={chatTheme.fontFamily ? { fontFamily: chatTheme.fontFamily } : undefined}>
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent sm:rounded-[1.75rem] sm:border sm:border-piu-border/60 sm:bg-piu-card/75">
         <div
-          className={`z-10 shrink-0 flex items-center justify-between gap-3 border-b ${chatTheme.headerBorder} ${chatTheme.headerBg} px-4 pb-2.5 pt-3.5 sm:px-5 sm:pt-4`}
+          className={`z-10 shrink-0 flex items-center justify-between gap-3 border-b ${chatTheme.headerBorder} ${chatTheme.headerBg} ${chatTheme.headerExtraClass || ''} px-4 pb-2.5 pt-3.5 sm:px-5 sm:pt-4`}
           style={{ paddingTop: 'max(env(safe-area-inset-top), 0.75rem)' }}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -3346,7 +3380,7 @@ function ConversationView({
           </div>
         </div>
 
-        <div ref={messagesViewportRef} className={`relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-5 sm:py-4 ${chatTheme.viewportBg} ${chatTheme.extraViewportClass}`} style={chatTheme.viewportStyle}>
+        <div ref={messagesViewportRef} className={`relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-5 sm:py-4 ${chatTheme.viewportBg} ${chatTheme.extraViewportClass} ${chatTheme.bgAnimationClass || ''}`} style={chatTheme.viewportStyle}>
           {chatTheme.decorOverlay}
           {!touchInteractionsEnabled ? (
             <div
@@ -3374,14 +3408,20 @@ function ConversationView({
             <div className="flex h-full items-center justify-center text-sm text-gray-500">No messages yet. Say hello.</div>
           ) : (
             <div className="space-y-3 pb-1">
-              {messages.map((message) => {
+              {messages.map((message, msgIdx) => {
                 const readers = readReceiptMap[message.id];
+                const isNew = !renderedMessageIds.current.has(message.id);
+                if (isNew) renderedMessageIds.current.add(message.id);
+                const prevMsg = msgIdx > 0 ? messages[msgIdx - 1] : null;
+                const grouped = prevMsg && prevMsg.sender?.id === message.sender?.id && !prevMsg.is_own === !message.is_own;
                 return (
                   <React.Fragment key={`${conversationId || 'conversation'}:${message.id}`}>
                     <MessageBubble
                       message={message}
                       conversationId={conversationId}
                       chatTheme={chatTheme}
+                      isNewlyRendered={isNew}
+                      isGrouped={grouped}
                       onReplyWithBest={canReplyWithBest(message) ? () => onReplyWithBest(message) : null}
                       compareLoading={replyingMessageId === message.id}
                       responseStatus={getMessageStatus(message) || null}
@@ -3431,6 +3471,20 @@ function ConversationView({
                   </React.Fragment>
                 );
               })}
+              {/* Typing indicator (renders when typingUsers is wired up) */}
+              {chatTheme?.typingIndicator !== null && chatTheme?.typingIndicator !== undefined ? (
+                <div className={`px-2 py-1 text-sm ${chatTheme.typingIndicatorClass || 'text-gray-400'}`} style={{ display: 'none' }}>
+                  {chatTheme.typingIndicator === 'cursor' ? (
+                    <span className="chat-typing-cursor">{(chatTheme.typingText || '█').replace('{user}', '')}</span>
+                  ) : chatTheme.typingIndicator === 'wave' ? (
+                    <span className="chat-typing-wave"><span /><span /><span /></span>
+                  ) : chatTheme.typingIndicator === 'text' ? (
+                    <span className="chat-typing-text">{(chatTheme.typingText || '{user} is typing...').replace('{user}', '')}</span>
+                  ) : chatTheme.typingIndicator === 'dots' ? (
+                    <span className="chat-typing-dots"><span /><span /><span /></span>
+                  ) : null}
+                </div>
+              ) : null}
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -3445,6 +3499,7 @@ function ConversationView({
             <DojoCatStickerPicker
               compact
               onSelect={onInsertSticker}
+              priorityPacks={chatTheme?.themeStickerPacks}
               buttonClassName="h-11 w-11 shrink-0 rounded-full border border-piu-border/65 bg-piu-dark/55 text-lg text-gray-300 hover:border-cyan-300/35 hover:bg-piu-dark/80 hover:text-white"
               panelClassName="w-[min(21rem,calc(100vw-1rem))]"
               align="left"
@@ -3500,9 +3555,11 @@ function ConversationView({
               type="button"
               onClick={onSend}
               disabled={sending || !draft.trim() || !activeConversation}
-              className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-cyan-500 px-4 text-sm font-display font-black text-white transition-colors hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`inline-flex h-11 shrink-0 items-center justify-center px-4 text-sm font-display font-black transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                chatTheme?.sendButtonClass || 'rounded-full bg-cyan-500 text-white hover:bg-cyan-400'
+              }`}
             >
-              {sending ? 'Sending...' : 'Send'}
+              {sending ? 'Sending...' : (chatTheme?.sendButtonLabel || 'Send')}
             </button>
           </div>
         </div>
