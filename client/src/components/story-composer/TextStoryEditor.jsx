@@ -79,13 +79,13 @@ export default function TextStoryEditor({ text, onTextChange, style, onStyleChan
 
         {/* gradient / theme pickers */}
         {tab === 'gradient' ? (
-          <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="scrollbar-none flex gap-2.5 overflow-x-auto py-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {GRADIENT_PRESETS.map((g) => (
               <button
                 key={g.id}
                 type="button"
                 onClick={() => onStyleChange({ ...style, gradientId: g.id })}
-                className={`h-9 w-9 shrink-0 rounded-full border-2 transition-transform ${
+                className={`h-10 w-10 shrink-0 rounded-full border-2 transition-transform ${
                   gradientId === g.id ? 'scale-110 border-white' : 'border-transparent hover:scale-105'
                 }`}
                 style={{ background: g.css }}
@@ -95,7 +95,7 @@ export default function TextStoryEditor({ text, onTextChange, style, onStyleChan
             ))}
           </div>
         ) : (
-          <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="scrollbar-none flex gap-2 overflow-x-auto py-1 pr-4 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {THEME_PRESETS.map((t) => (
               <button
                 key={t.id}
