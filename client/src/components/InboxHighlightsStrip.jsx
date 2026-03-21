@@ -177,19 +177,19 @@ function HighlightNoteBubble({ note, isSelf = false, onClick = null }) {
     <button
       type="button"
       onClick={onClick}
-      className={`absolute top-0 z-10 flex min-h-[2.35rem] w-max max-w-[6.5rem] items-center rounded-[1.15rem] px-2.5 py-1.5 text-left shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition-colors ${
+      className={`absolute bottom-full z-10 mb-1.5 flex w-max max-w-[7rem] items-center rounded-lg px-2 py-1 text-left transition-all ${
         isSelf ? 'left-0 translate-x-0' : 'left-1/2 -translate-x-1/2'
       } ${
         content
-          ? 'bg-[#343945] text-white hover:bg-[#3b4150]'
+          ? 'bg-[#343945] text-white shadow-[0_4px_16px_rgba(0,0,0,0.35)] hover:bg-[#3b4150]'
           : 'border border-dashed border-white/12 bg-[#262b35] text-gray-300 hover:bg-[#2c313c]'
       }`}
       aria-label={isSelf ? 'Set your note' : 'Open note thread'}
     >
-      <span className="line-clamp-2 text-[10px] font-medium leading-4">
+      <span className="line-clamp-2 text-[10px] font-medium leading-[1.35]">
         {content || 'Share a note'}
       </span>
-      <span className={`absolute -bottom-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 rounded-[0.2rem] ${content ? 'bg-[#343945]' : 'border-r border-b border-dashed border-white/12 bg-[#262b35]'}`} />
+      <span className={`absolute -bottom-[3px] left-1/2 h-[7px] w-[7px] -translate-x-1/2 rotate-45 rounded-[1px] ${content ? 'bg-[#343945]' : 'border-r border-b border-dashed border-white/12 bg-[#262b35]'}`} />
     </button>
   );
 }
@@ -213,7 +213,7 @@ function HighlightCircle({
 
   return (
     <div className="flex w-[4.4rem] shrink-0 flex-col items-center pt-1.5">
-      <div className="relative pt-[2.55rem]">
+      <div className="relative">
         <HighlightNoteBubble
           note={note}
           isSelf={circle?.is_self}
@@ -1838,7 +1838,7 @@ export default function InboxHighlightsStrip({
           ))}
         </div>
       ) : (
-        <div className="scrollbar-none flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="scrollbar-none flex gap-2 overflow-x-auto px-1 pb-1 pt-9 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {orderedCircles.map((circle) => (
             <HighlightCircle
               key={circle.user.id}
