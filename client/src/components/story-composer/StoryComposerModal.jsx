@@ -232,6 +232,7 @@ export default function StoryComposerModal({
             x: i.x,
             y: i.y,
             color: i.color,
+            bgOpacity: i.bgOpacity || 0,
             fontSize: 64,
           }));
 

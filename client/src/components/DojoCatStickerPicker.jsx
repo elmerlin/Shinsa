@@ -109,7 +109,7 @@ export default function DojoCatStickerPicker({
 
   const mobileSheet = open && isMobileSheet && typeof document !== 'undefined'
     ? createPortal(
-      <div className="fixed inset-0 z-[140] sm:hidden">
+      <div className="fixed inset-0 z-[200] sm:hidden">
         <button
           type="button"
           aria-label="Close sticker picker"

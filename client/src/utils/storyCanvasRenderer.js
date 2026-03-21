@@ -229,17 +229,40 @@ export async function renderStoryToBlob(scene) {
       ctx.translate(px, py);
 
       const fontSize = layer.fontSize || 64;
+      const maxWidth = CANVAS_WIDTH * 0.8;
+
+      // draw background behind text if bgOpacity > 0
+      if (layer.bgOpacity > 0) {
+        ctx.font = `800 ${fontSize}px ${DISPLAY_FONT}`;
+        ctx.textAlign = 'center';
+        // measure text height
+        const words = layer.text.split(' ');
+        let lineCount = 1, testLine = '';
+        for (const word of words) {
+          const test = testLine ? `${testLine} ${word}` : word;
+          if (ctx.measureText(test).width > maxWidth && testLine) { lineCount++; testLine = word; }
+          else { testLine = test; }
+        }
+        const textH = lineCount * fontSize * 1.3;
+        const padX = 24, padY = 16, radius = 20;
+        const bgW = Math.min(maxWidth + padX * 2, CANVAS_WIDTH * 0.85);
+        const bgH = textH + padY * 2;
+        ctx.fillStyle = `rgba(0,0,0,${layer.bgOpacity})`;
+        ctx.beginPath();
+        ctx.roundRect(-bgW / 2, -bgH / 2, bgW, bgH, radius);
+        ctx.fill();
+      }
+
       ctx.font = `800 ${fontSize}px ${DISPLAY_FONT}`;
       ctx.fillStyle = layer.color || '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
       // shadow for readability on photos
-      ctx.shadowColor = 'rgba(0,0,0,0.7)';
-      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 6;
       ctx.shadowOffsetY = 2;
 
-      const maxWidth = CANVAS_WIDTH * 0.8;
       wrapText(ctx, layer.text, 0, 0, maxWidth, fontSize * 1.3);
       ctx.restore();
     }

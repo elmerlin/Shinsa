@@ -43,12 +43,11 @@ export default function TextStoryEditor({ text, onTextChange, style, onStyleChan
           onChange={(e) => onTextChange(e.target.value)}
           placeholder="Type your story..."
           maxLength={420}
-          className="relative z-10 w-full resize-none bg-transparent px-8 py-6 font-display font-black leading-tight placeholder:opacity-40 focus:outline-none"
+          className="absolute inset-0 z-10 h-full w-full resize-none bg-transparent px-8 py-8 font-display font-black leading-tight placeholder:opacity-40 focus:outline-none"
           style={{
             fontSize: activeFontSize.css,
             color: resolvedTextColor,
             textAlign,
-            minHeight: '12rem',
           }}
         />
       </div>

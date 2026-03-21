@@ -21,10 +21,11 @@ function OverlayItem({ item, onPointerDown, onRemove, onUpdate }) {
       >
         <div className="group relative">
           <p
-            className="whitespace-pre-wrap px-2 py-1 font-display text-xl font-black sm:text-2xl"
+            className="whitespace-pre-wrap rounded-lg px-3 py-1.5 font-display text-xl font-black sm:text-2xl"
             style={{
               color: item.color || '#ffffff',
-              textShadow: '0 2px 8px rgba(0,0,0,0.7)',
+              textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+              backgroundColor: item.bgOpacity ? `rgba(0,0,0,${item.bgOpacity})` : 'transparent',
               maxWidth: '70vw',
               wordBreak: 'break-word',
             }}
@@ -114,6 +115,7 @@ export default function ImageCanvasEditor({ imagePreview, overlayState, onOverla
   const [activeTool, setActiveTool] = useState(null); // 'text' | 'sticker' | 'link' | null
   const [textInput, setTextInput] = useState('');
   const [textColor, setTextColor] = useState('#ffffff');
+  const [textBgOpacity, setTextBgOpacity] = useState(0.5);
   const [linkInput, setLinkInput] = useState('');
   const textInputRef = useRef(null);
 
@@ -131,7 +133,7 @@ export default function ImageCanvasEditor({ imagePreview, overlayState, onOverla
 
   const addText = () => {
     if (!textInput.trim()) return;
-    addItem({ type: 'text', text: textInput.trim(), color: textColor });
+    addItem({ type: 'text', text: textInput.trim(), color: textColor, bgOpacity: textBgOpacity });
     setTextInput('');
     setActiveTool(null);
   };
@@ -247,6 +249,19 @@ export default function ImageCanvasEditor({ imagePreview, overlayState, onOverla
               >
                 Add
               </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500">BG</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.1}
+                value={textBgOpacity}
+                onChange={(e) => setTextBgOpacity(parseFloat(e.target.value))}
+                className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/15 accent-cyan-400 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400"
+              />
+              <span className="w-6 text-right text-[10px] text-gray-500">{Math.round(textBgOpacity * 100)}%</span>
             </div>
           </div>
         ) : null}
