@@ -3059,7 +3059,7 @@ function InboxView({
                 </svg>
               </ActionIconButton>
               {optionsOpen ? (
-                <div className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-60 overflow-hidden rounded-2xl border border-piu-border/50 bg-[#0b1424]/98 p-1.5 shadow-[0_24px_56px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                <div className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-60 overflow-hidden rounded-2xl border border-piu-border/50 bg-[#0b1424] p-1.5 shadow-[0_24px_56px_rgba(0,0,0,0.55)]">
                   <button
                     type="button"
                     onClick={() => {
