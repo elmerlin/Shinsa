@@ -21,6 +21,7 @@ export default function App() {
   const [noteType, setNoteType] = useState('tap');
   const [fileLoaded, setFileLoaded] = useState(false);
   const [fileFormat, setFileFormat] = useState('sm'); // 'sm' or 'ssc'
+  const [avMode, setAvMode] = useState(false); // AV/CMOD: constant scroll speed
   const holdStartRef = useRef(null);
 
   // Sync scroll to audio playback position
@@ -209,6 +210,8 @@ export default function App() {
         dirty={state.dirty}
         onSave={handleSave}
         fileFormat={fileFormat}
+        avMode={avMode}
+        onSetAvMode={setAvMode}
       />
 
       {/* Main area: canvas + metadata panel */}
@@ -226,6 +229,8 @@ export default function App() {
             onDeleteNote={handleDeleteNote}
             playing={audio.playing}
             currentBeat={audio.currentBeat}
+            currentTime={audio.currentTime}
+            avMode={avMode}
             holdStartRef={holdStartRef}
           />
         )}

@@ -3,7 +3,7 @@ import {
   PANEL_COLORS, PANEL_ROTATIONS, BEAT_HEIGHT, COLUMN_WIDTH,
   RECEPTOR_Y, NOTE_SIZE, SNAP_COLORS, GAME_TYPES,
 } from '../lib/constants.js';
-import { snapBeat } from '../lib/timing.js';
+import { snapBeat, beatToTime } from '../lib/timing.js';
 
 /**
  * Canvas-based note highway with falling arrows.
@@ -21,6 +21,8 @@ export default function ChartCanvas({
   onDeleteNote,
   playing,
   currentBeat,
+  currentTime,
+  avMode,
   holdStartRef,
 }) {
   const canvasRef = useRef(null);
@@ -40,6 +42,7 @@ export default function ChartCanvas({
     const ctx = canvas.getContext('2d');
     const { width, height } = canvas;
     const effectiveBeat = playing ? currentBeat : scrollBeat;
+    const useAV = avMode && playing;
 
     ctx.clearRect(0, 0, width, height);
 
@@ -49,13 +52,24 @@ export default function ChartCanvas({
 
     const leftMargin = 60;
 
-    // Convert beat to Y position (falling: higher beats are lower on screen)
-    // Receptor is at RECEPTOR_Y, current beat maps to receptor
+    // AV/CMOD: pixels per second (constant visual speed)
+    // Use a base rate that feels similar to normal scroll at 120 BPM
+    const avPixelsPerSec = (120 / 60) * beatHeight; // 2 beats worth of pixels per second
+
+    // Convert beat to Y position
     const beatToY = (beat) => {
+      if (useAV) {
+        // AV mode: position based on time difference (constant scroll speed)
+        const bpms = metadata?.bpms || [{ beat: 0, bpm: 120 }];
+        const stops = metadata?.stops || [];
+        const noteTime = beatToTime(beat, bpms, stops);
+        const refTime = currentTime || 0;
+        return RECEPTOR_Y + (noteTime - refTime) * avPixelsPerSec;
+      }
       return RECEPTOR_Y + (beat - effectiveBeat) * beatHeight;
     };
 
-    // Visible beat range
+    // Visible beat range (approximate for AV mode)
     const topBeat = effectiveBeat - (RECEPTOR_Y / beatHeight);
     const bottomBeat = effectiveBeat + ((height - RECEPTOR_Y) / beatHeight);
 
@@ -241,7 +255,7 @@ export default function ChartCanvas({
     ctx.font = 'bold 11px Inter, sans-serif';
     ctx.fillStyle = '#888899';
     ctx.fillText(`Beat: ${effectiveBeat.toFixed(2)}`, 4, height - 8);
-  }, [chart, scrollBeat, zoom, snapDivision, playing, currentBeat, numColumns, beatHeight]);
+  }, [chart, scrollBeat, zoom, snapDivision, playing, currentBeat, currentTime, avMode, metadata, numColumns, beatHeight]);
 
   // Animation loop
   useEffect(() => {
@@ -373,9 +387,9 @@ export default function ChartCanvas({
 }
 
 /**
- * Draw an arrow/note at position (x, y).
- * For center panel (col 2 or 7), draw a pentagon/star shape.
- * For corner panels, draw a rotated arrow.
+ * Draw a PIU-style arrow at position (x, y).
+ * Corner arrows: wide chevron/arrow shape, rotated per panel direction.
+ * Center panel: regular pentagon (flat-top).
  */
 function drawArrow(ctx, x, y, column, color, alpha, filled) {
   ctx.save();
@@ -383,39 +397,58 @@ function drawArrow(ctx, x, y, column, color, alpha, filled) {
   ctx.translate(x, y);
 
   const col5 = column % 5;
-  const size = NOTE_SIZE / 2;
+  const s = NOTE_SIZE / 2;
 
   if (col5 === 2) {
-    // Center panel: draw a diamond/pentagon shape
+    // Center panel: regular pentagon (flat top)
     ctx.beginPath();
-    ctx.moveTo(0, -size);
-    ctx.lineTo(size, 0);
-    ctx.lineTo(size * 0.6, size);
-    ctx.lineTo(-size * 0.6, size);
-    ctx.lineTo(-size, 0);
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * 2 * Math.PI / 5) - Math.PI / 2;
+      const px = Math.cos(angle) * s;
+      const py = Math.sin(angle) * s;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
     ctx.closePath();
   } else {
-    // Corner arrows: rotated triangle/arrow
+    // Corner arrows: PIU-style wide chevron
     const rotation = PANEL_ROTATIONS[column] * Math.PI / 180;
     ctx.rotate(rotation);
 
+    // Wide chevron arrow pointing up — distinctive PIU shape
+    const w = s * 0.95;  // half-width at widest
+    const h = s;          // half-height
+    const t = s * 0.35;  // thickness of the chevron arms
+    const notch = s * 0.35; // inner notch depth
+
     ctx.beginPath();
-    // Arrow pointing up
-    ctx.moveTo(0, -size);
-    ctx.lineTo(size * 0.8, size * 0.4);
-    ctx.lineTo(size * 0.3, size * 0.1);
-    ctx.lineTo(size * 0.3, size);
-    ctx.lineTo(-size * 0.3, size);
-    ctx.lineTo(-size * 0.3, size * 0.1);
-    ctx.lineTo(-size * 0.8, size * 0.4);
+    // Outer shape: tip, then wide arms
+    ctx.moveTo(0, -h);                      // tip
+    ctx.lineTo(w, h * 0.45);               // right outer
+    ctx.lineTo(w * 0.55, h);               // right base outer
+    ctx.lineTo(0, h * 0.15);               // inner notch center
+    ctx.lineTo(-w * 0.55, h);              // left base outer
+    ctx.lineTo(-w, h * 0.45);              // left outer
     ctx.closePath();
   }
 
   if (filled) {
-    ctx.fillStyle = color;
+    // Gradient fill for depth
+    const grad = ctx.createLinearGradient(0, -s, 0, s);
+    grad.addColorStop(0, lightenColor(color, 40));
+    grad.addColorStop(0.5, color);
+    grad.addColorStop(1, darkenColor(color, 40));
+    ctx.fillStyle = grad;
     ctx.fill();
-    ctx.strokeStyle = '#ffffff';
+
+    // White highlight border
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
     ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Inner bright edge
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 0.5;
     ctx.stroke();
   } else {
     ctx.strokeStyle = color;
@@ -427,22 +460,49 @@ function drawArrow(ctx, x, y, column, color, alpha, filled) {
 }
 
 /**
- * Draw a mine (X shape).
+ * Lighten a hex color by amount (0-255).
+ */
+function lightenColor(hex, amount) {
+  const r = Math.min(255, parseInt(hex.slice(1, 3), 16) + amount);
+  const g = Math.min(255, parseInt(hex.slice(3, 5), 16) + amount);
+  const b = Math.min(255, parseInt(hex.slice(5, 7), 16) + amount);
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * Darken a hex color by amount (0-255).
+ */
+function darkenColor(hex, amount) {
+  const r = Math.max(0, parseInt(hex.slice(1, 3), 16) - amount);
+  const g = Math.max(0, parseInt(hex.slice(3, 5), 16) - amount);
+  const b = Math.max(0, parseInt(hex.slice(5, 7), 16) - amount);
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * Draw a mine (circle with X).
  */
 function drawMine(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
-  ctx.strokeStyle = '#ff4444';
-  ctx.lineWidth = 3;
-  ctx.globalAlpha = 0.8;
 
-  // Circle
+  // Filled dark circle
+  ctx.fillStyle = '#331111';
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.arc(0, 0, size, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Red ring
+  ctx.strokeStyle = '#ff4444';
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.arc(0, 0, size, 0, Math.PI * 2);
   ctx.stroke();
 
   // X
-  const s = size * 0.6;
+  ctx.lineWidth = 2.5;
+  const s = size * 0.55;
   ctx.beginPath();
   ctx.moveTo(-s, -s);
   ctx.lineTo(s, s);

@@ -20,6 +20,8 @@ export default function Toolbar({
   dirty,
   onSave,
   fileFormat,
+  avMode,
+  onSetAvMode,
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2 bg-piu-card border-b border-piu-border shrink-0 flex-wrap">
@@ -47,6 +49,19 @@ export default function Toolbar({
             <option key={r} value={r}>{r}x</option>
           ))}
         </select>
+
+        {/* AV/CMOD toggle */}
+        <button
+          onClick={() => onSetAvMode(!avMode)}
+          className={`px-2 py-1 rounded text-xs font-semibold
+            ${avMode
+              ? 'bg-piu-green text-black'
+              : 'bg-piu-dark text-gray-400 border border-piu-border hover:text-white'
+            }`}
+          title="AV Mode (constant scroll speed during playback)"
+        >
+          AV
+        </button>
       </div>
 
       {/* Position info */}
