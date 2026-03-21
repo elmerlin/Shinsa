@@ -187,15 +187,19 @@ export default function ScoreSnapshotModal({
     [chartLink, directMessageLinkShare, jacketUrl, score],
   );
 
+  const scoreKey = score
+    ? `${score.id || ''}_${score.song_title || score.songTitle || ''}_${score.mode || ''}_${score.level || ''}_${score.score ?? score.new_score ?? ''}`
+    : '';
+
   useEffect(() => {
-    if (!score) return;
+    if (!scoreKey) return;
     setStoryComposerOpen(false);
     setStoryCaption('');
     setStorySubmitting(false);
     setStoryError('');
     setStorySuccess(false);
     setReplayOpen(false);
-  }, [score]);
+  }, [scoreKey]);
 
   if (!score) return null;
 
