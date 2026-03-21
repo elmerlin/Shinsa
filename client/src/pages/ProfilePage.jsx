@@ -4083,7 +4083,7 @@ export default function ProfilePage() {
           onClick={() => setSelectedGroupBadge(null)}
         >
           <div
-            className="w-full max-w-xs rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl p-4"
+            className="w-full max-w-xs max-h-[calc(100dvh-2rem)] rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl p-4 overflow-y-auto"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -4127,10 +4127,10 @@ export default function ProfilePage() {
           onClick={() => setSelectedAchievementBadge(null)}
         >
           <div
-            className="w-full max-w-xs rounded-2xl border border-piu-gold/30 bg-[#0b1220] shadow-2xl p-4"
+            className="w-full max-w-xs max-h-[calc(100dvh-2rem)] rounded-2xl border border-piu-gold/30 bg-[#0b1220] shadow-2xl p-4 overflow-y-auto"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3 sticky top-0 bg-[#0b1220] pb-1 z-10">
               <p className="text-[10px] text-piu-gold/70 font-display uppercase tracking-wide">{selectedAchievementBadge.series_name || 'Achievement'}</p>
               <button
                 type="button"
