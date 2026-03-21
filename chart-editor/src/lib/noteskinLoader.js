@@ -30,19 +30,19 @@ const ASSETS = {
   'mine': BASE + 'mine.png',
 };
 
-// Assets that need a blue variant for DL/DR
-const BLUE_VARIANTS = [
+// Asset types that need color variants
+const COLOR_VARIANT_TYPES = [
   'tap', 'receptor', 'glow', 'hold-body', 'hold-topcap', 'hold-bottomcap', 'roll-body',
 ];
 
 // Column index (mod 5) → rotation in degrees and base asset key prefix
 // DL=0 (blue), UL=1 (red), Center=2 (yellow), UR=3 (red), DR=4 (blue)
 const PANEL_MAP = [
-  { base: 'downleft', rotation: 270 },   // DL - blue
-  { base: 'upleft', rotation: 0 },       // UL - red (original)
-  { base: 'center', rotation: 0 },       // Center - yellow (original)
-  { base: 'upleft', rotation: 90 },      // UR - red (rotated)
-  { base: 'downleft', rotation: 180 },   // DR - blue (rotated)
+  { base: 'downleft', rotation: 270 },    // DL - blue
+  { base: 'upleft', rotation: 0 },        // UL - red (original)
+  { base: 'center-yellow', rotation: 0 }, // Center - yellow (tinted)
+  { base: 'upleft', rotation: 90 },       // UR - red (rotated)
+  { base: 'downleft', rotation: 180 },    // DR - blue (rotated)
 ];
 
 let images = null;
@@ -83,6 +83,36 @@ function createBlueVariant(sourceImg) {
 }
 
 /**
+ * Shift red pixels to yellow/gold for center panel.
+ */
+function createYellowVariant(sourceImg) {
+  const canvas = document.createElement('canvas');
+  canvas.width = sourceImg.naturalWidth;
+  canvas.height = sourceImg.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(sourceImg, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    // Red → Gold/Yellow: keep red high, boost green, reduce blue
+    data[i] = Math.min(255, Math.floor(r * 1.0 + g * 0.1));          // R stays strong
+    data[i + 1] = Math.min(255, Math.floor(r * 0.7 + g * 0.4));      // G boosted from red
+    data[i + 2] = Math.min(255, Math.floor(b * 0.15));                // B suppressed
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  const yellowImg = new Image();
+  yellowImg.src = canvas.toDataURL();
+  return yellowImg;
+}
+
+/**
  * Load all noteskin images. Returns a promise that resolves when all loaded.
  */
 export function loadNoteskin() {
@@ -105,11 +135,20 @@ export function loadNoteskin() {
     const imgs = Object.fromEntries(entries);
 
     // Generate blue variants for DL/DR from the red UL assets
-    for (const type of BLUE_VARIANTS) {
+    for (const type of COLOR_VARIANT_TYPES) {
       const redKey = `upleft-${type}`;
       const blueKey = `downleft-${type}`;
       if (imgs[redKey]) {
         imgs[blueKey] = createBlueVariant(imgs[redKey]);
+      }
+    }
+
+    // Generate yellow variants for center from the red center assets
+    for (const type of COLOR_VARIANT_TYPES) {
+      const centerKey = `center-${type}`;
+      const yellowKey = `center-yellow-${type}`;
+      if (imgs[centerKey]) {
+        imgs[yellowKey] = createYellowVariant(imgs[centerKey]);
       }
     }
 
