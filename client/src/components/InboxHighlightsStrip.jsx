@@ -109,7 +109,8 @@ function StickerRow({ tokens = [] }) {
       {stickers.map((sticker, index) => (
         <span
           key={`${sticker.id}-${index}`}
-          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-black/30 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.28)]"
+          className="animate-story-sticker-float inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/12 bg-black/30 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.28)]"
+          style={{ animationDelay: `${index * 0.4}s` }}
         >
           <StickerAsset sticker={sticker} alt={sticker.label} title={sticker.label} className="h-full w-full object-contain" />
         </span>
@@ -416,7 +417,7 @@ function StoryCard({ story }) {
       <div className="w-full max-w-sm overflow-hidden rounded-[1.8rem] border border-white/10 bg-black/35 shadow-[0_18px_42px_rgba(0,0,0,0.28)]">
         {story.media_url ? <img src={story.media_url} alt="" className="max-h-[30rem] w-full object-cover" /> : null}
         <div className="space-y-3 px-4 py-4">
-          {story.caption ? <div className="text-sm leading-6 text-gray-100">{renderFormattedText(story.caption)}</div> : null}
+          {story.caption ? <div className="animate-story-fade-slide-up text-sm leading-6 text-gray-100">{renderFormattedText(story.caption)}</div> : null}
           {story.link ? renderLinkButton(story.link, 'inline-flex rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-display font-bold text-white hover:bg-white/12') : null}
           <StickerRow tokens={story.sticker_tokens} />
         </div>
@@ -1207,7 +1208,9 @@ export function StoryViewerModal({
             ) : error ? (
               <div className="rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">Story unavailable right now.</div>
             ) : story ? (
-              <StoryCard story={story} />
+              <div key={story.id || storyIndex} className="animate-story-scale-in">
+                <StoryCard story={story} />
+              </div>
             ) : (
               <p className="text-sm text-gray-400">No story yet.</p>
             )}
@@ -1429,252 +1432,8 @@ export function NoteComposerModal({
   );
 }
 
-export function StoryComposerModal({
-  open,
-  scoreOptions = [],
-  submitting = false,
-  error = '',
-  onClose,
-  onSubmit,
-}) {
-  const [storyType, setStoryType] = useState('image');
-  const [caption, setCaption] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
-  const [selectedSource, setSelectedSource] = useState('');
-  const [stickerTokens, setStickerTokens] = useState([]);
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
-  const { user: authUser } = useAuth();
-  const captionInputRef = useRef(null);
-  const {
-    mentionUsers,
-    mentionLoading,
-    showMentions,
-    updateMentionState,
-    applyMention,
-    handleKeyDown: handleMentionKeyDown,
-    clearMentions,
-  } = useMentionComposer({
-    value: caption,
-    setValue: setCaption,
-    inputRef: captionInputRef,
-    enabled: open,
-    searchMentions: searchUsers,
-    excludeUserIds: [authUser?.id].filter(Boolean),
-  });
-
-  useEffect(() => {
-    if (!open) return;
-    setStoryType('image');
-    setCaption('');
-    setLinkUrl('');
-    setSelectedSource(scoreOptions[0]?.value || '');
-    setStickerTokens([]);
-    setImageFile(null);
-    setImagePreview('');
-  }, [open, scoreOptions]);
-
-  useEffect(() => {
-    if (!imageFile) {
-      setImagePreview('');
-      return undefined;
-    }
-    const nextUrl = URL.createObjectURL(imageFile);
-    setImagePreview(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
-  }, [imageFile]);
-
-  useEffect(() => {
-    if (open) return;
-    clearMentions();
-  }, [clearMentions, open]);
-
-  const selectedScore = scoreOptions.find((option) => option.value === selectedSource) || null;
-
-  const handleSubmit = () => {
-    if (storyType === 'image') {
-      onSubmit?.({
-        storyType,
-        caption: caption.trim(),
-        imageFile,
-        stickerTokens,
-      });
-      return;
-    }
-    if (storyType === 'link') {
-      onSubmit?.({
-        storyType,
-        caption: caption.trim(),
-        linkUrl: linkUrl.trim(),
-        title: caption.trim() || 'Shared link',
-        stickerTokens,
-      });
-      return;
-    }
-    if (!selectedScore) return;
-    onSubmit?.({
-      storyType: 'score_snapshot',
-      caption: caption.trim(),
-      sourceKind: selectedScore.sourceKind,
-      sourceId: selectedScore.sourceId,
-      stickerTokens,
-    });
-  };
-
-  const canSubmit = storyType === 'image'
-    ? !!imageFile
-    : storyType === 'link'
-      ? !!caption.trim() || !!linkUrl.trim()
-      : !!selectedScore;
-
-  return (
-    <OverlayShell open={open} onClose={onClose}>
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">Story</p>
-            <h2 className="mt-1 font-display text-2xl font-black text-white">Add to your circle</h2>
-          </div>
-          <button type="button" onClick={onClose} className="text-sm text-gray-400 hover:text-white">Close</button>
-        </div>
-
-        <div className="inline-flex rounded-full border border-white/10 bg-white/6 p-1">
-          {[
-            { value: 'image', label: 'Image' },
-            { value: 'link', label: 'Link' },
-            { value: 'score_snapshot', label: 'Score' },
-          ].map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setStoryType(option.value)}
-              className={`rounded-full px-3 py-1.5 text-xs font-display font-bold transition-colors ${
-                storyType === option.value ? 'bg-cyan-500 text-white' : 'text-gray-300 hover:text-white'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-
-        {storyType === 'image' ? (
-          <div className="space-y-3">
-            <label className="block rounded-[1.4rem] border border-dashed border-white/12 bg-white/5 px-4 py-5 text-center text-sm text-gray-300">
-              <input type="file" accept="image/*" className="hidden" onChange={(event) => setImageFile(event.target.files?.[0] || null)} />
-              {imageFile ? imageFile.name : 'Choose a story image'}
-            </label>
-            {imagePreview ? <img src={imagePreview} alt="" className="max-h-72 w-full rounded-[1.4rem] object-cover" /> : null}
-          </div>
-        ) : null}
-
-        {storyType === 'link' ? (
-          <input
-            value={linkUrl}
-            onChange={(event) => setLinkUrl(event.target.value)}
-            placeholder="https://..."
-            className={MODAL_INPUT_CLASS}
-            style={MODAL_INPUT_STYLE}
-          />
-        ) : null}
-
-        {storyType === 'score_snapshot' ? (
-          scoreOptions.length > 0 ? (
-            <div className="space-y-2">
-              {scoreOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setSelectedSource(option.value)}
-                  className={`flex w-full items-start justify-between rounded-[1.2rem] border px-4 py-3 text-left transition-colors ${
-                    selectedSource === option.value
-                      ? 'border-cyan-300/35 bg-cyan-500/12 text-white'
-                      : 'border-white/10 bg-white/6 text-gray-200 hover:bg-white/8'
-                  }`}
-                >
-                  <span>
-                    <span className="block font-display text-sm font-black">{option.label}</span>
-                    <span className="mt-1 block text-xs text-gray-400">{option.subtitle}</span>
-                  </span>
-                  <span className="text-xs text-gray-500">{option.timeLabel}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-[1.2rem] border border-white/10 bg-white/6 px-4 py-3 text-sm text-gray-300">
-              No recent upscores or clears to turn into a story yet.
-            </p>
-          )
-        ) : null}
-
-        <div className="relative">
-          <MentionSuggestionsPanel
-            open={showMentions || mentionLoading}
-            loading={mentionLoading}
-            users={mentionUsers}
-            onSelect={applyMention}
-          />
-          <textarea
-            ref={captionInputRef}
-            value={caption}
-            onChange={(event) => {
-              setCaption(event.target.value);
-              updateMentionState(event.target.value, event.target.selectionStart);
-            }}
-            onClick={(event) => updateMentionState(caption, event.currentTarget.selectionStart)}
-            onKeyDown={handleMentionKeyDown}
-            maxLength={420}
-            rows={4}
-            placeholder={storyType === 'score_snapshot' ? 'Add a caption to your score snapshot' : 'Add a caption'}
-            className={`resize-none ${MODAL_INPUT_CLASS}`}
-            style={MODAL_INPUT_STYLE}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <DojoCatStickerPicker
-            compact
-            onSelect={(token) => setStickerTokens((prev) => [...prev, token])}
-            buttonClassName="h-10 w-10 rounded-full border border-white/12 bg-white/6 text-base text-gray-200 hover:bg-white/10"
-            align="left"
-          />
-          <span className="text-xs text-gray-500">{caption.trim().length}/420</span>
-        </div>
-
-        {stickerTokens.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {stickerTokens.map((token, index) => {
-              const sticker = getStickerEmoji(token);
-              if (!sticker) return null;
-              return (
-                <button
-                  key={`${token}-${index}`}
-                  type="button"
-                  onClick={() => setStickerTokens((prev) => prev.filter((_, tokenIndex) => tokenIndex !== index))}
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/6 p-1.5"
-                  title="Remove sticker"
-                >
-                  <StickerAsset sticker={sticker} alt={sticker.label} title={sticker.label} className="h-full w-full object-contain" />
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-
-        {error ? <p className="text-sm text-red-300">{error}</p> : null}
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit || submitting}
-            className="rounded-full bg-cyan-500 px-4 py-2 text-sm font-display font-black text-white hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? 'Sharing...' : 'Add story'}
-          </button>
-        </div>
-      </div>
-    </OverlayShell>
-  );
-}
+// StoryComposerModal has been moved to story-composer/StoryComposerModal.jsx
+export { default as StoryComposerModal } from './story-composer/StoryComposerModal';
 
 export function NoteThreadModal({
   open,

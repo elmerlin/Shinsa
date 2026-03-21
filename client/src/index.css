@@ -1365,3 +1365,25 @@
   60% { opacity: 0; }
   100% { opacity: 0; }
 }
+
+/* ── story viewer animations ── */
+@keyframes story-scale-in {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes story-fade-slide-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes story-sticker-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-5px) rotate(2deg); }
+  66% { transform: translateY(-2px) rotate(-1.5deg); }
+}
+@keyframes story-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.animate-story-scale-in { animation: story-scale-in 0.4s ease-out both; }
+.animate-story-fade-slide-up { animation: story-fade-slide-up 0.45s ease-out 0.12s both; }
+.animate-story-sticker-float { animation: story-sticker-float 3s ease-in-out infinite; }
