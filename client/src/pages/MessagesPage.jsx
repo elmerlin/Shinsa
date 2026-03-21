@@ -4275,6 +4275,19 @@ export default function MessagesPage() {
     };
   }, [subscribeTyping, conversationId, user?.id]);
 
+  // scroll to bottom when typing indicator appears (if user is near bottom)
+  useEffect(() => {
+    if (!typingUsers.length) return;
+    const viewport = messagesViewportRef.current;
+    if (!viewport) return;
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    if (distanceFromBottom < 120) {
+      window.requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      });
+    }
+  }, [typingUsers.length]);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !conversationId) {
       setTouchInteractionsEnabled(true);
