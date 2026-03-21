@@ -1525,7 +1525,7 @@
   to { background-position: 0 100px; }
 }
 
-.chat-bg-yahoo-nebula { position: relative; overflow: hidden; }
+.chat-bg-yahoo-nebula { position: relative; clip-path: inset(0); }
 .chat-bg-yahoo-nebula::before {
   content: ''; position: absolute; inset: -50%; z-index: 0;
   pointer-events: none;
@@ -1560,7 +1560,7 @@
   100% { opacity: 0.7; transform: scaleY(1); }
 }
 
-.chat-bg-nxa-particles { position: relative; overflow: hidden; }
+.chat-bg-nxa-particles { position: relative; clip-path: inset(0); }
 .chat-bg-nxa-particles::before {
   content: ''; position: absolute; inset: 0; z-index: 0;
   pointer-events: none;
