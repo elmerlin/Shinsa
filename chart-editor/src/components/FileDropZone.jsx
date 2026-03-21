@@ -12,7 +12,7 @@ export default function FileDropZone({ onLoadSM, onLoadAudio, hasFile }) {
     const files = Array.from(e.dataTransfer.files);
     for (const file of files) {
       if (file.name.endsWith('.sm') || file.name.endsWith('.ssc')) {
-        readTextFile(file).then(onLoadSM);
+        readTextFile(file).then(text => onLoadSM(text, file.name));
       } else if (isAudioFile(file)) {
         readArrayBuffer(file).then(buf => onLoadAudio(buf, file.name));
       }
@@ -30,7 +30,7 @@ export default function FileDropZone({ onLoadSM, onLoadAudio, hasFile }) {
 
   const handleSMInput = useCallback((e) => {
     const file = e.target.files?.[0];
-    if (file) readTextFile(file).then(onLoadSM);
+    if (file) readTextFile(file).then(text => onLoadSM(text, file.name));
   }, [onLoadSM]);
 
   const handleAudioInput = useCallback((e) => {
@@ -46,7 +46,7 @@ export default function FileDropZone({ onLoadSM, onLoadAudio, hasFile }) {
           onClick={() => smInputRef.current?.click()}
           className="text-xs text-piu-blue hover:text-blue-400"
         >
-          Load .sm
+          Load .sm/.ssc
         </button>
         <button
           onClick={() => audioInputRef.current?.click()}
@@ -79,14 +79,14 @@ export default function FileDropZone({ onLoadSM, onLoadAudio, hasFile }) {
           Shinsa Chart Editor
         </h2>
         <p className="text-sm text-gray-500 mb-6">
-          Drop a .sm file and audio here to start editing
+          Drop a .sm/.ssc file and audio here to start editing
         </p>
         <div className="flex gap-3 justify-center">
           <button
             onClick={() => smInputRef.current?.click()}
             className="px-4 py-2 rounded bg-piu-accent text-white font-display font-semibold hover:bg-pink-500"
           >
-            Open .sm File
+            Open .sm/.ssc File
           </button>
           <button
             onClick={() => audioInputRef.current?.click()}

@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { parseSM } from './lib/smParser.js';
 import { serializeSM } from './lib/smSerializer.js';
+import { parseSSC } from './lib/sscParser.js';
+import { serializeSSC } from './lib/sscSerializer.js';
 import { useChartState } from './hooks/useChartState.js';
 import { useAudioSync } from './hooks/useAudioSync.js';
 import ChartCanvas from './components/ChartCanvas.jsx';
@@ -18,6 +20,7 @@ export default function App() {
   const [snapDivision, setSnapDivision] = useState(16);
   const [noteType, setNoteType] = useState('tap');
   const [fileLoaded, setFileLoaded] = useState(false);
+  const [fileFormat, setFileFormat] = useState('sm'); // 'sm' or 'ssc'
   const holdStartRef = useRef(null);
 
   // Sync scroll to audio playback position
@@ -27,8 +30,8 @@ export default function App() {
     }
   }, [audio.playing, audio.currentBeat]);
 
-  // Load .sm file
-  const handleLoadSM = useCallback((text) => {
+  // Load .sm/.ssc file
+  const handleLoadSM = useCallback((text, filename) => {
     if (text === null) {
       // New chart
       dispatch({
@@ -52,19 +55,24 @@ export default function App() {
           }],
         },
       });
+      setFileFormat('sm');
       setFileLoaded(true);
       setScrollBeat(0);
       return;
     }
 
+    const isSSC = filename?.toLowerCase().endsWith('.ssc') || text.includes('#NOTEDATA:');
+    const format = isSSC ? 'ssc' : 'sm';
+
     try {
-      const data = parseSM(text);
+      const data = isSSC ? parseSSC(text) : parseSM(text);
       dispatch({ type: 'LOAD_FILE', payload: data });
+      setFileFormat(format);
       setFileLoaded(true);
       setScrollBeat(0);
     } catch (err) {
-      console.error('Failed to parse .sm file:', err);
-      alert('Failed to parse .sm file: ' + err.message);
+      console.error(`Failed to parse .${format} file:`, err);
+      alert(`Failed to parse .${format} file: ` + err.message);
     }
   }, [dispatch]);
 
@@ -80,22 +88,22 @@ export default function App() {
     }
   }, [audio, dispatch]);
 
-  // Export / save .sm file
+  // Export / save file in original format
   const handleSave = useCallback(() => {
     try {
-      const smText = serializeSM(state);
-      const blob = new Blob([smText], { type: 'text/plain' });
+      const text = fileFormat === 'ssc' ? serializeSSC(state) : serializeSM(state);
+      const blob = new Blob([text], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${state.metadata.title || 'chart'}.sm`;
+      a.download = `${state.metadata.title || 'chart'}.${fileFormat}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to export:', err);
-      alert('Failed to export .sm file: ' + err.message);
+      alert(`Failed to export .${fileFormat} file: ` + err.message);
     }
-  }, [state]);
+  }, [state, fileFormat]);
 
   // Place / delete note handlers
   const handlePlaceNote = useCallback((beat, column, type) => {
