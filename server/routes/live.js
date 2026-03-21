@@ -455,6 +455,15 @@ function loadSongDurationLookup(db) {
         duration_source: String(row.duration_source || '').trim(),
       });
     }
+
+    const titleFallbackKey = `${titleKey}|*`;
+    const existingTitleFallback = lookup.get(titleFallbackKey);
+    if (!existingTitleFallback || durationSeconds > toInt(existingTitleFallback.duration_seconds)) {
+      lookup.set(titleFallbackKey, {
+        duration_seconds: durationSeconds,
+        duration_source: String(row.duration_source || '').trim(),
+      });
+    }
   }
 
   cachedSongDurations = lookup;
@@ -476,8 +485,20 @@ function toCanonicalSongTitle(title, aliases) {
 function getSongDurationForChart(db, title, mode, level) {
   const aliases = loadSongAliases();
   const durationLookup = loadSongDurationLookup(db);
-  const lookupKey = `${toCanonicalSongTitle(title, aliases)}|${normalizeSongName(mode)}|${toInt(level)}`;
-  return durationLookup.get(lookupKey) || null;
+  const titleKey = toCanonicalSongTitle(title, aliases);
+  const modeKey = normalizeSongName(mode);
+  const normalizedLevel = toInt(level);
+  if (!titleKey) return null;
+
+  const directMatch = durationLookup.get(`${titleKey}|${modeKey}|${normalizedLevel}`) || null;
+  if (directMatch) return directMatch;
+
+  // UCS charts often arrive without an official chart level, so fall back to the base song duration.
+  if (modeKey === 'ucs' || normalizedLevel <= 0) {
+    return durationLookup.get(`${titleKey}|*`) || null;
+  }
+
+  return null;
 }
 
 function getEmptyYoutubeSessionFields() {
@@ -2089,29 +2110,7 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
 
 function getSessionPlaysWithDurations(db, liveSessionId) {
   const aliases = loadSongAliases();
-  const durationRows = db.prepare(`
-    SELECT title, mode, level, duration_seconds, duration_source
-    FROM songs
-    WHERE COALESCE(duration_seconds, 0) > 0
-  `).all();
-
-  const durationLookup = new Map();
-  for (const row of durationRows) {
-    const titleKey = toCanonicalSongTitle(row.title, aliases);
-    const modeKey = normalizeSongName(row.mode);
-    const level = toInt(row.level);
-    const durationSeconds = toInt(row.duration_seconds);
-    if (!titleKey || !modeKey || level <= 0 || durationSeconds <= 0) continue;
-
-    const lookupKey = `${titleKey}|${modeKey}|${level}`;
-    const existing = durationLookup.get(lookupKey);
-    if (!existing || durationSeconds > toInt(existing.duration_seconds)) {
-      durationLookup.set(lookupKey, {
-        duration_seconds: durationSeconds,
-        duration_source: String(row.duration_source || '').trim(),
-      });
-    }
-  }
+  const durationLookup = loadSongDurationLookup(db);
 
   const plays = db.prepare(`
     SELECT
@@ -2126,8 +2125,12 @@ function getSessionPlaysWithDurations(db, liveSessionId) {
   `).all(liveSessionId);
 
   return plays.map((play) => {
-    const lookupKey = `${toCanonicalSongTitle(play.song_title, aliases)}|${normalizeSongName(play.mode)}|${toInt(play.level)}`;
-    const durationMatch = durationLookup.get(lookupKey) || null;
+    const titleKey = toCanonicalSongTitle(play.song_title, aliases);
+    const modeKey = normalizeSongName(play.mode);
+    const normalizedLevel = toInt(play.level);
+    const durationMatch = durationLookup.get(`${titleKey}|${modeKey}|${normalizedLevel}`)
+      || ((modeKey === 'ucs' || normalizedLevel <= 0) ? durationLookup.get(`${titleKey}|*`) : null)
+      || null;
     return {
       ...play,
       avatar: normalizeUserAvatarForList(play.avatar, play.user_id, 56, play.avatar_v),

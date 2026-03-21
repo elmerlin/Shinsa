@@ -194,6 +194,14 @@ function getGradeGlowColor(grade, score = 0) {
   return '#6b7280';
 }
 
+function isPassingVisiblePlay(play) {
+  const score = parseInt(play?.score, 10) || 0;
+  if (score <= 0) return false;
+  const parsedGrade = parseGrade(play?.grade || '');
+  if (parsedGrade.isBroken) return false;
+  return parsedGrade.normalized !== 'F';
+}
+
 const HOP_FLASH_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()_-+=[]{}|;:,.<>?';
 
 function buildHopScrambleText(text, progress) {
@@ -4272,7 +4280,7 @@ export default function LivePage() {
     }
 
     if (playPassOnly) {
-      filtered = filtered.filter((play) => (parseInt(play.score, 10) || 0) > 0);
+      filtered = filtered.filter((play) => isPassingVisiblePlay(play));
     }
 
     filtered.sort((a, b) => (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0));
