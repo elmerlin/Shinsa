@@ -3493,9 +3493,9 @@ function ConversationView({
                   </React.Fragment>
                 );
               })}
-              {typingUsers.length > 0 && chatTheme?.typingIndicator != null ? (
-                <div className={`px-2 py-1 text-sm ${chatTheme.typingIndicatorClass || 'text-gray-400'}`}>
-                  {chatTheme.typingIndicator === 'cursor' ? (
+              <div className={`h-7 px-2 text-sm ${typingUsers.length > 0 ? (chatTheme?.typingIndicatorClass || 'text-gray-400') : ''}`}>
+                {typingUsers.length > 0 && chatTheme?.typingIndicator != null ? (
+                  chatTheme.typingIndicator === 'cursor' ? (
                     <span className="chat-typing-cursor">{(chatTheme.typingText || '{user}@shinsa:~$ █').replace('{user}', typingUsers[0]?.username || 'Someone')}</span>
                   ) : chatTheme.typingIndicator === 'wave' ? (
                     <span className="chat-typing-wave"><span /><span /><span /></span>
@@ -3503,9 +3503,9 @@ function ConversationView({
                     <span className="chat-typing-text">{(chatTheme.typingText || '{user} is typing...').replace('{user}', typingUsers[0]?.username || 'Someone')}</span>
                   ) : chatTheme.typingIndicator === 'dots' ? (
                     <span className="chat-typing-dots"><span /><span /><span /></span>
-                  ) : null}
-                </div>
-              ) : null}
+                  ) : null
+                ) : null}
+              </div>
               <div ref={messagesEndRef} />
             </div>
           )}
@@ -4274,19 +4274,6 @@ export default function MessagesPage() {
       typingTimersRef.current = {};
     };
   }, [subscribeTyping, conversationId, user?.id]);
-
-  // scroll to bottom when typing indicator appears (if user is near bottom)
-  useEffect(() => {
-    if (!typingUsers.length) return;
-    const viewport = messagesViewportRef.current;
-    if (!viewport) return;
-    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    if (distanceFromBottom < 120) {
-      window.requestAnimationFrame(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      });
-    }
-  }, [typingUsers.length]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !conversationId) {
