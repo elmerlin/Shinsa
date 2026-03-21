@@ -650,6 +650,9 @@ export const setMessageConversationTheme = (conversationId, theme) => request(`/
   method: 'PUT',
   body: JSON.stringify({ theme }),
 });
+export const sendTypingIndicator = (conversationId) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/typing`, {
+  method: 'POST',
+});
 export const pinMessageConversation = (conversationId, pinned) => request(`/messages/conversations/${encodeURIComponent(conversationId)}/pin`, {
   method: 'PUT',
   body: JSON.stringify({ pinned }),

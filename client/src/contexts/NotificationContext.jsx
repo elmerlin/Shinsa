@@ -38,6 +38,7 @@ export function NotificationProvider({ children }) {
   const streamRef = useRef(null);
   const webPushActiveRef = useRef(false);
   const permissionPromptAttachedRef = useRef(false);
+  const typingListenersRef = useRef(new Set());
 
   const parseNotificationDate = (value) => {
     const raw = String(value || '');
@@ -231,6 +232,15 @@ export function NotificationProvider({ children }) {
         } catch {}
       });
 
+      source.addEventListener('typing', (event) => {
+        try {
+          const data = JSON.parse(event.data || '{}');
+          for (const listener of typingListenersRef.current) {
+            listener(data);
+          }
+        } catch {}
+      });
+
       source.onerror = () => {
         source.close();
         if (closed) return;
@@ -270,8 +280,13 @@ export function NotificationProvider({ children }) {
 
   const totalBadge = unreadCount + invitationCount;
 
+  const subscribeTyping = useCallback((listener) => {
+    typingListenersRef.current.add(listener);
+    return () => typingListenersRef.current.delete(listener);
+  }, []);
+
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, refresh, refreshMessageUnread, markRead, markAllRead, dismiss }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, refresh, refreshMessageUnread, markRead, markAllRead, dismiss, subscribeTyping }}>
       {children}
     </NotificationContext.Provider>
   );

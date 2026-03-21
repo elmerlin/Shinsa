@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
 const { requireAuth } = require('./auth');
 const { createUserNotification } = require('../lib/notifications');
+const { emitEvent } = require('../lib/notificationHub');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const {
   buildReplyTargetPayloadFromRow,
@@ -2348,6 +2349,29 @@ router.post('/conversations/:id/nudge', requireAuth, (req, res) => {
     conversation,
     message: normalizeConversationMessage(messageRow, req.user.id, { reactions: [], viewerReaction: '' }),
   });
+});
+
+// ── Typing indicator (ephemeral, no DB writes) ────────────────────────────
+router.post('/conversations/:id/typing', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.id || '').trim();
+  const member = getConversationMember(db, conversationId, req.user.id);
+  if (!member || member.is_hidden) {
+    return res.status(404).json({ error: 'Conversation not found' });
+  }
+
+  const senderUser = getUserIdentity(db, req.user.id);
+  const recipientIds = getConversationRecipientIds(db, conversationId, req.user.id);
+  for (const recipientId of recipientIds) {
+    emitEvent(recipientId, 'typing', {
+      conversationId,
+      userId: req.user.id,
+      username: senderUser?.username || 'Someone',
+      avatar: senderUser?.avatar || '',
+    });
+  }
+
+  res.status(200).json({ ok: true });
 });
 
 router.delete('/conversations/:id/messages/:messageId', requireAuth, (req, res) => {

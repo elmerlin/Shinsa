@@ -28,6 +28,7 @@ import {
   sendConversationMessage,
   unsendConversationMessage,
   pinMessageConversation,
+  sendTypingIndicator,
 } from '../utils/api';
 import {
   buildClearLinkShare,
@@ -3227,6 +3228,7 @@ function ConversationView({
   readReceipts = [],
   onNudge,
   nudging = false,
+  typingUsers = [],
 }) {
   const isSquad = activeConversation?.kind === 'squad';
   const headerTitle = isSquad
@@ -3471,15 +3473,14 @@ function ConversationView({
                   </React.Fragment>
                 );
               })}
-              {/* Typing indicator (renders when typingUsers is wired up) */}
-              {chatTheme?.typingIndicator !== null && chatTheme?.typingIndicator !== undefined ? (
-                <div className={`px-2 py-1 text-sm ${chatTheme.typingIndicatorClass || 'text-gray-400'}`} style={{ display: 'none' }}>
+              {typingUsers.length > 0 && chatTheme?.typingIndicator != null ? (
+                <div className={`px-2 py-1 text-sm ${chatTheme.typingIndicatorClass || 'text-gray-400'}`}>
                   {chatTheme.typingIndicator === 'cursor' ? (
-                    <span className="chat-typing-cursor">{(chatTheme.typingText || '█').replace('{user}', '')}</span>
+                    <span className="chat-typing-cursor">{(chatTheme.typingText || '{user}@shinsa:~$ █').replace('{user}', typingUsers[0]?.username || 'Someone')}</span>
                   ) : chatTheme.typingIndicator === 'wave' ? (
                     <span className="chat-typing-wave"><span /><span /><span /></span>
                   ) : chatTheme.typingIndicator === 'text' ? (
-                    <span className="chat-typing-text">{(chatTheme.typingText || '{user} is typing...').replace('{user}', '')}</span>
+                    <span className="chat-typing-text">{(chatTheme.typingText || '{user} is typing...').replace('{user}', typingUsers[0]?.username || 'Someone')}</span>
                   ) : chatTheme.typingIndicator === 'dots' ? (
                     <span className="chat-typing-dots"><span /><span /><span /></span>
                   ) : null}
@@ -3570,7 +3571,7 @@ function ConversationView({
 
 export default function MessagesPage() {
   const { user } = useAuth();
-  const { refreshMessageUnread } = useNotifications();
+  const { refreshMessageUnread, subscribeTyping } = useNotifications();
   const navigate = useNavigate();
   const { conversationId = '' } = useParams();
   const messagesEndRef = useRef(null);
@@ -3603,6 +3604,9 @@ export default function MessagesPage() {
   const [expiringMessageId, setExpiringMessageId] = useState('');
 
   const [draft, setDraft] = useState('');
+  const [typingUsers, setTypingUsers] = useState([]);
+  const typingTimersRef = useRef({});
+  const lastTypingEmitRef = useRef(0);
   const [replyTarget, setReplyTarget] = useState(null);
   const [replyHighlightVersion, setReplyHighlightVersion] = useState(0);
   const [touchInteractionsEnabled, setTouchInteractionsEnabled] = useState(() => (
@@ -4223,7 +4227,33 @@ export default function MessagesPage() {
     setExpiringMessageId('');
     lastAutoScrollKeyRef.current = '';
     initialConversationScrollRef.current = '';
+    setTypingUsers([]);
   }, [clearMentions, conversationId]);
+
+  // ── typing indicator subscription ──
+  useEffect(() => {
+    if (!subscribeTyping || !conversationId) return undefined;
+    const unsubscribe = subscribeTyping((data) => {
+      if (data.conversationId !== conversationId) return;
+      const uid = String(data.userId || '');
+      if (!uid || uid === String(user?.id || '')) return;
+      setTypingUsers((prev) => {
+        if (prev.some((u) => u.userId === uid)) return prev;
+        return [...prev, { userId: uid, username: data.username || 'Someone', avatar: data.avatar || '' }];
+      });
+      // auto-clear after 4 seconds
+      clearTimeout(typingTimersRef.current[uid]);
+      typingTimersRef.current[uid] = setTimeout(() => {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== uid));
+        delete typingTimersRef.current[uid];
+      }, 4000);
+    });
+    return () => {
+      unsubscribe();
+      Object.values(typingTimersRef.current).forEach(clearTimeout);
+      typingTimersRef.current = {};
+    };
+  }, [subscribeTyping, conversationId, user?.id]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !conversationId) {
@@ -5028,7 +5058,17 @@ export default function MessagesPage() {
           replyHighlightVersion={replyHighlightVersion}
           touchInteractionsEnabled={touchInteractionsEnabled}
           touchInteractionsBlockedUntil={touchInteractionsBlockedUntil}
-          onDraftChange={setDraft}
+          onDraftChange={(value) => {
+            setDraft(value);
+            if (value.trim() && conversationId) {
+              const now = Date.now();
+              if (now - lastTypingEmitRef.current > 3000) {
+                lastTypingEmitRef.current = now;
+                sendTypingIndicator(conversationId).catch(() => {});
+              }
+            }
+          }}
+          typingUsers={typingUsers}
           onComposerKeyDown={handleComposerKeyDown}
           onSend={handleSend}
           onReply={handleBeginReply}
