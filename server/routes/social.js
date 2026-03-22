@@ -521,7 +521,12 @@ function findSessionReplayLink(db, { userId, songTitle, mode, level }) {
 }
 
 function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'score') {
-  if (!entry || hasJudgmentData(entry)) return entry;
+  if (!entry) return entry;
+
+  const needsJudgments = !hasJudgmentData(entry);
+  const needsMachine = !String(entry.machine_name || '').trim();
+
+  if (!needsJudgments && !needsMachine) return entry;
 
   const lookup = findRecentPlayJudgments(db, {
     userId,
@@ -533,18 +538,26 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
   });
   if (!lookup) return entry;
 
+  if (needsJudgments) {
+    return {
+      ...entry,
+      perfect: toInt(lookup.perfect),
+      great: toInt(lookup.great),
+      good: toInt(lookup.good),
+      bad: toInt(lookup.bad),
+      miss: toInt(lookup.miss),
+      max_combo: Math.max(toInt(entry.max_combo), toInt(lookup.max_combo)),
+      plate: entry.plate || lookup.plate || '',
+      background_url: entry.background_url || lookup.background_url || '',
+      over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
+      machine_name: entry.machine_name || lookup.machine_name || '',
+    };
+  }
+
+  // Already has judgments, just enrich machine_name
   return {
     ...entry,
-    perfect: toInt(lookup.perfect),
-    great: toInt(lookup.great),
-    good: toInt(lookup.good),
-    bad: toInt(lookup.bad),
-    miss: toInt(lookup.miss),
-    max_combo: Math.max(toInt(entry.max_combo), toInt(lookup.max_combo)),
-    plate: entry.plate || lookup.plate || '',
-    background_url: entry.background_url || lookup.background_url || '',
-    over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
-    machine_name: entry.machine_name || lookup.machine_name || '',
+    machine_name: lookup.machine_name || '',
   };
 }
 
