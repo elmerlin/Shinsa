@@ -83,6 +83,16 @@ export const searchTournaments = (q) => request(`/tournaments/search?q=${encodeU
 export const getArchivedTournaments = () => request('/tournaments/archived');
 export const archiveTournament = (id, archived) => request(`/tournaments/${id}/archive`, { method: 'PUT', body: JSON.stringify({ archived }) });
 
+// Phase management
+export const getPhases = (tournamentId) => request(`/phases/tournament/${tournamentId}`);
+export const createPhase = (data) => request('/phases', { method: 'POST', body: JSON.stringify(data) });
+export const updatePhase = (id, data) => request(`/phases/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deletePhase = (id) => request(`/phases/${id}`, { method: 'DELETE' });
+export const activatePhase = (id) => request(`/phases/${id}/activate`, { method: 'POST' });
+export const completePhase = (id) => request(`/phases/${id}/complete`, { method: 'POST' });
+export const generatePhaseMatches = (phaseId) => request(`/matches/phase/${phaseId}/generate`, { method: 'POST' });
+export const getPhaseStandings = (phaseId) => request(`/phases/${phaseId}/standings`);
+
 // Players
 export const getPlayers = (tournamentId) => request(`/players/tournament/${tournamentId}`);
 export const createPlayer = (data) => request('/players', { method: 'POST', body: JSON.stringify(data) });

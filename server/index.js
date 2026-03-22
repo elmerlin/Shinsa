@@ -7,6 +7,7 @@ const { registerSharePreviewRoutes } = require('./sharePreviews');
 const tournamentRoutes = require('./routes/tournaments');
 const playerRoutes = require('./routes/players');
 const matchRoutes = require('./routes/matches');
+const phaseRoutes = require('./routes/phases');
 const songRoutes = require('./routes/songs');
 const noticeRoutes = require('./routes/notices');
 const duelRoutes = require('./routes/duels');
@@ -62,6 +63,7 @@ app.get('/api/dashboard', (req, res) => {
 app.use('/api/tournaments', tournamentRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/matches', matchRoutes);
+app.use('/api/phases', phaseRoutes);
 app.use('/api/songs', songRoutes);
 app.use('/api/notices', noticeRoutes);
 app.use('/api/duels', duelRoutes);

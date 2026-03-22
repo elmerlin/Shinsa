@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
+const {
+  generateSingleElimBracket,
+  generateDoubleElimBracket,
+  generatePoolAssignments,
+  advanceWinner,
+  processByes,
+} = require('../lib/bracketGenerator');
 
 function parseMatchJSON(m) {
   return {
@@ -390,6 +397,23 @@ router.post('/:id/result', (req, res) => {
           .run(match.tournament_id);
       }
     }
+
+    // Bracket advancement (single_elim / double_elim)
+    if (match.bracket && match.phase_id && winner_id) {
+      const loserId = winner_id === match.player1_id ? match.player2_id : match.player1_id;
+      advanceWinner(db, match, winner_id, loserId);
+    }
+
+    // Update phase player stats for phase-aware matches
+    if (match.phase_id && match.player1_id && match.player2_id && !isGauntlet) {
+      if (winner_id === match.player1_id) {
+        db.prepare('UPDATE tournament_phase_players SET wins = wins + 1, points = points + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player1_id);
+        db.prepare('UPDATE tournament_phase_players SET losses = losses + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player2_id);
+      } else if (winner_id === match.player2_id) {
+        db.prepare('UPDATE tournament_phase_players SET wins = wins + 1, points = points + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player2_id);
+        db.prepare('UPDATE tournament_phase_players SET losses = losses + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player1_id);
+      }
+    }
   });
 
   submitResult();
@@ -423,5 +447,289 @@ function updateBuchholz(db, tournamentId) {
     db.prepare('UPDATE players SET buchholz = ? WHERE id = ?').run(buchholz, player.id);
   }
 }
+
+// ─── Phase-aware match generation ───────────────────────────────────
+
+router.post('/phase/:phaseId/generate', (req, res) => {
+  const db = getDb();
+  const phase = db.prepare('SELECT * FROM tournament_phases WHERE id = ?').get(req.params.phaseId);
+  if (!phase) return res.status(404).json({ error: 'Phase not found' });
+
+  const config = JSON.parse(phase.config || '{}');
+  const phasePlayers = db.prepare(
+    'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = "active" ORDER BY pp.seed'
+  ).all(phase.id);
+
+  if (phasePlayers.length < 2 && phase.format !== 'hour_of_power') {
+    return res.status(400).json({ error: 'Need at least 2 active players' });
+  }
+
+  switch (phase.format) {
+    case 'round_robin': return generatePhaseRoundRobin(db, phase, phasePlayers, config, res);
+    case 'pools': return generatePhasePools(db, phase, phasePlayers, config, res);
+    case 'single_elim': return generatePhaseSingleElim(db, phase, phasePlayers, config, res);
+    case 'double_elim': return generatePhaseDoubleElim(db, phase, phasePlayers, config, res);
+    case 'gauntlet': return generatePhaseGauntlet(db, phase, phasePlayers, config, res);
+    case 'hour_of_power': return generatePhaseHourOfPower(db, phase, phasePlayers, config, res);
+    default: return res.status(400).json({ error: `Unknown format: ${phase.format}` });
+  }
+});
+
+function generatePhaseRoundRobin(db, phase, players, config, res) {
+  const diffMin = config.difficulty_min || 18;
+  const diffMax = config.difficulty_max || 19;
+
+  const insertMatch = db.prepare(`
+    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, pool_id)
+    VALUES (?, ?, 1, ?, ?, ?, ?, 'PENDING', ?, 0)
+  `);
+
+  const createRR = db.transaction(() => {
+    for (let i = 0; i < players.length; i++) {
+      for (let j = i + 1; j < players.length; j++) {
+        insertMatch.run(
+          uuidv4(), phase.tournament_id,
+          players[i].player_id, players[j].player_id,
+          diffMin, diffMax, phase.id
+        );
+      }
+    }
+  });
+
+  createRR();
+
+  const matches = db.prepare(
+    'SELECT * FROM matches WHERE phase_id = ? ORDER BY created_at ASC'
+  ).all(phase.id);
+
+  res.status(201).json(matches.map(parseMatchJSON));
+}
+
+function generatePhasePools(db, phase, players, config, res) {
+  const poolCount = config.pool_count || 2;
+  const diffMin = config.difficulty_min || 18;
+  const diffMax = config.difficulty_max || 19;
+
+  const pools = generatePoolAssignments(players, poolCount);
+
+  // Update pool assignments in tournament_phase_players
+  const updatePool = db.prepare('UPDATE tournament_phase_players SET pool_id = ? WHERE phase_id = ? AND player_id = ?');
+
+  const insertMatch = db.prepare(`
+    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, pool_id)
+    VALUES (?, ?, 1, ?, ?, ?, ?, 'PENDING', ?, ?)
+  `);
+
+  const createPools = db.transaction(() => {
+    for (const pool of pools) {
+      // Update each player's pool assignment
+      for (const player of pool.players) {
+        const pid = player.player_id || player.id;
+        updatePool.run(pool.pool_id, phase.id, pid);
+      }
+
+      // Generate round robin within pool
+      for (let i = 0; i < pool.players.length; i++) {
+        for (let j = i + 1; j < pool.players.length; j++) {
+          const p1id = pool.players[i].player_id || pool.players[i].id;
+          const p2id = pool.players[j].player_id || pool.players[j].id;
+          insertMatch.run(
+            uuidv4(), phase.tournament_id,
+            p1id, p2id,
+            diffMin, diffMax, phase.id, pool.pool_id
+          );
+        }
+      }
+    }
+  });
+
+  createPools();
+
+  const matches = db.prepare(
+    'SELECT * FROM matches WHERE phase_id = ? ORDER BY pool_id ASC, created_at ASC'
+  ).all(phase.id);
+
+  res.status(201).json(matches.map(parseMatchJSON));
+}
+
+function generatePhaseSingleElim(db, phase, players, config, res) {
+  const diffMin = config.difficulty_min || 18;
+  const diffMax = config.difficulty_max || 19;
+
+  const bracketMatches = generateSingleElimBracket(players, { difficulty_min: diffMin, difficulty_max: diffMax });
+
+  const insertMatch = db.prepare(`
+    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, bracket, bracket_round, bracket_position)
+    VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, 'winners', ?, ?)
+  `);
+
+  const create = db.transaction(() => {
+    for (const m of bracketMatches) {
+      insertMatch.run(
+        uuidv4(), phase.tournament_id,
+        m.player1_id, m.player2_id,
+        m.difficulty_min, m.difficulty_max,
+        m.status, phase.id,
+        m.bracket_round, m.bracket_position
+      );
+    }
+    // Process byes
+    processByes(db, phase.id);
+  });
+
+  create();
+
+  const matches = db.prepare(
+    'SELECT * FROM matches WHERE phase_id = ? ORDER BY bracket_round ASC, bracket_position ASC'
+  ).all(phase.id);
+
+  res.status(201).json(matches.map(parseMatchJSON));
+}
+
+function generatePhaseDoubleElim(db, phase, players, config, res) {
+  const diffMin = config.difficulty_min || 18;
+  const diffMax = config.difficulty_max || 19;
+
+  const bracket = generateDoubleElimBracket(players, {
+    difficulty_min: diffMin,
+    difficulty_max: diffMax,
+    grand_final_reset: config.grand_final_reset || false,
+  });
+
+  const insertMatch = db.prepare(`
+    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, bracket, bracket_round, bracket_position)
+    VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const create = db.transaction(() => {
+    for (const m of bracket.winners) {
+      insertMatch.run(
+        uuidv4(), phase.tournament_id,
+        m.player1_id, m.player2_id,
+        m.difficulty_min, m.difficulty_max,
+        m.status, phase.id,
+        m.bracket, m.bracket_round, m.bracket_position
+      );
+    }
+    for (const m of bracket.losers) {
+      insertMatch.run(
+        uuidv4(), phase.tournament_id,
+        m.player1_id, m.player2_id,
+        m.difficulty_min, m.difficulty_max,
+        m.status, phase.id,
+        m.bracket, m.bracket_round, m.bracket_position
+      );
+    }
+    if (bracket.grandFinal) {
+      const gf = bracket.grandFinal;
+      insertMatch.run(
+        uuidv4(), phase.tournament_id,
+        gf.player1_id, gf.player2_id,
+        gf.difficulty_min, gf.difficulty_max,
+        gf.status, phase.id,
+        gf.bracket, gf.bracket_round, gf.bracket_position
+      );
+    }
+    if (bracket.resetMatch) {
+      const rm = bracket.resetMatch;
+      insertMatch.run(
+        uuidv4(), phase.tournament_id,
+        rm.player1_id, rm.player2_id,
+        rm.difficulty_min, rm.difficulty_max,
+        rm.status, phase.id,
+        rm.bracket, rm.bracket_round, rm.bracket_position
+      );
+    }
+    // Process byes
+    processByes(db, phase.id);
+  });
+
+  create();
+
+  const matches = db.prepare(
+    'SELECT * FROM matches WHERE phase_id = ? ORDER BY bracket ASC, bracket_round ASC, bracket_position ASC'
+  ).all(phase.id);
+
+  res.status(201).json(matches.map(parseMatchJSON));
+}
+
+function generatePhaseGauntlet(db, phase, players, config, res) {
+  const startSingle = config.gauntlet_start_single_level || 19;
+  const finalSingle = config.gauntlet_final_single_level || 24;
+  const totalMatches = players.length - 1;
+
+  const insertMatch = db.prepare(`
+    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, match_type, gauntlet_order, phase_id)
+    VALUES (?, ?, 0, ?, ?, ?, ?, ?, 'gauntlet', ?, ?)
+  `);
+
+  const createGauntlet = db.transaction(() => {
+    for (let i = 0; i < totalMatches; i++) {
+      const matchOrder = i + 1;
+      let singleLevel, doubleLevel;
+
+      if (matchOrder === totalMatches) {
+        singleLevel = finalSingle;
+        doubleLevel = finalSingle + 1;
+      } else {
+        singleLevel = Math.min(startSingle + i, 23);
+        doubleLevel = singleLevel + 1;
+      }
+
+      const challengerIdx = players.length - 1 - i - 1;
+      const challengerId = players[challengerIdx]?.player_id || players[challengerIdx]?.id || null;
+
+      let opponentId = null;
+      if (i === 0) {
+        opponentId = players[players.length - 1].player_id || players[players.length - 1].id;
+      }
+
+      insertMatch.run(
+        uuidv4(), phase.tournament_id,
+        challengerId, opponentId,
+        singleLevel, doubleLevel,
+        i === 0 ? 'PENDING' : 'WAITING',
+        matchOrder, phase.id
+      );
+    }
+  });
+
+  createGauntlet();
+
+  const matches = db.prepare(
+    "SELECT * FROM matches WHERE phase_id = ? AND match_type = 'gauntlet' ORDER BY gauntlet_order ASC"
+  ).all(phase.id);
+
+  res.status(201).json(matches.map(parseMatchJSON));
+}
+
+function generatePhaseHourOfPower(db, phase, players, config, res) {
+  const durationMinutes = config.duration_minutes || 60;
+
+  const insertMatch = db.prepare(`
+    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, match_type, phase_id)
+    VALUES (?, ?, 0, ?, NULL, 0, 0, 'PENDING', 'hour_of_power', ?)
+  `);
+
+  const create = db.transaction(() => {
+    for (const player of players) {
+      const pid = player.player_id || player.id;
+      insertMatch.run(uuidv4(), phase.tournament_id, pid, phase.id);
+    }
+  });
+
+  create();
+
+  const matches = db.prepare(
+    "SELECT * FROM matches WHERE phase_id = ? AND match_type = 'hour_of_power' ORDER BY created_at ASC"
+  ).all(phase.id);
+
+  res.status(201).json({
+    matches: matches.map(parseMatchJSON),
+    duration_minutes: durationMinutes,
+  });
+}
+
+// ─── End phase-aware match generation ──────────────────────────────
 
 module.exports = router;

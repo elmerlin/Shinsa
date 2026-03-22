@@ -1839,6 +1839,33 @@ function initializeDb() {
   if (!matchColumns.includes('gauntlet_order')) {
     db.exec("ALTER TABLE matches ADD COLUMN gauntlet_order INT DEFAULT 0");
   }
+  if (!matchColumns.includes('phase_id')) {
+    db.exec("ALTER TABLE matches ADD COLUMN phase_id TEXT DEFAULT ''");
+  }
+  if (!matchColumns.includes('pool_id')) {
+    db.exec("ALTER TABLE matches ADD COLUMN pool_id INT DEFAULT 0");
+  }
+  if (!matchColumns.includes('bracket')) {
+    db.exec("ALTER TABLE matches ADD COLUMN bracket TEXT DEFAULT ''");
+  }
+  if (!matchColumns.includes('bracket_round')) {
+    db.exec("ALTER TABLE matches ADD COLUMN bracket_round INT DEFAULT 0");
+  }
+  if (!matchColumns.includes('bracket_position')) {
+    db.exec("ALTER TABLE matches ADD COLUMN bracket_position INT DEFAULT 0");
+  }
+
+  // Migrations for tournaments table - phase support
+  const tournamentCols2 = db.prepare("PRAGMA table_info(tournaments)").all().map(c => c.name);
+  if (!tournamentCols2.includes('current_phase_id')) {
+    db.exec("ALTER TABLE tournaments ADD COLUMN current_phase_id TEXT DEFAULT ''");
+  }
+
+  // Migrations for players table - elimination tracking
+  const playerCols2 = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);
+  if (!playerCols2.includes('eliminated_at_phase')) {
+    db.exec("ALTER TABLE players ADD COLUMN eliminated_at_phase TEXT DEFAULT ''");
+  }
 
   // Migrations for recently played - add breakdown columns
   const recentCols = db.prepare("PRAGMA table_info(user_recently_played)").all().map(c => c.name);
@@ -3596,6 +3623,37 @@ function initializeDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_ui_translation_overrides_locale
       ON ui_translation_overrides(locale, status, updated_at DESC);
+  `);
+
+  // Tournament phases tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tournament_phases (
+      id TEXT PRIMARY KEY,
+      tournament_id TEXT NOT NULL,
+      phase_order INT NOT NULL,
+      format TEXT NOT NULL,
+      name TEXT DEFAULT '',
+      config TEXT DEFAULT '{}',
+      advancement TEXT DEFAULT '{}',
+      status TEXT DEFAULT 'PENDING',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS tournament_phase_players (
+      id TEXT PRIMARY KEY,
+      phase_id TEXT NOT NULL,
+      player_id TEXT NOT NULL,
+      pool_id INT DEFAULT 0,
+      seed INT DEFAULT 0,
+      wins INT DEFAULT 0,
+      losses INT DEFAULT 0,
+      points REAL DEFAULT 0,
+      buchholz REAL DEFAULT 0,
+      status TEXT DEFAULT 'active',
+      FOREIGN KEY (phase_id) REFERENCES tournament_phases(id) ON DELETE CASCADE,
+      FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
   `);
 
   ensureBuiltInAchievementSeries(db);

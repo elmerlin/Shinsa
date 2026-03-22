@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { TranslationProvider } from './i18n/TranslationContext';
 import App from './App';
 import './index.css';
@@ -82,7 +83,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <TranslationProvider locale={initialLocale}>
         <AuthProvider>
           <NotificationProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </NotificationProvider>
         </AuthProvider>
       </TranslationProvider>

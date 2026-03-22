@@ -1,7 +1,66 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createTournament } from '../utils/api';
+import { createTournament, createPhase } from '../utils/api';
+import { FORMAT_LABELS, FORMAT_ICONS, FORMAT_DESCRIPTIONS } from '../utils/tournamentConstants';
 import AvatarPicker from '../components/AvatarPicker';
+import PhaseCard from '../components/tournament/PhaseCard';
+import PhaseConfigPanel from '../components/tournament/PhaseConfigPanel';
+import TournamentPresets from '../components/tournament/TournamentPresets';
+
+const ALL_FORMATS = ['round_robin', 'pools', 'single_elim', 'double_elim', 'gauntlet', 'hour_of_power', 'b15'];
+
+const DEFAULT_CONFIGS = {
+  round_robin: {
+    rounds: 3,
+    round_levels: [
+      { round: 1, min: 18, max: 19 },
+      { round: 2, min: 20, max: 21 },
+      { round: 3, min: 22, max: 23 },
+    ],
+    cards_per_draw: 5,
+    vetoes_per_player: 1,
+    best_of: 3,
+  },
+  pools: {
+    pool_count: 4,
+    rounds_per_pool: 1,
+    difficulty_min: 18,
+    difficulty_max: 21,
+    cards_per_draw: 5,
+    vetoes_per_player: 1,
+    best_of: 3,
+  },
+  single_elim: {
+    difficulty_min: 20,
+    difficulty_max: 23,
+    cards_per_draw: 5,
+    vetoes_per_player: 1,
+    best_of: 3,
+    third_place_match: true,
+  },
+  double_elim: {
+    difficulty_min: 20,
+    difficulty_max: 23,
+    cards_per_draw: 5,
+    vetoes_per_player: 1,
+    best_of: 3,
+    grand_final_reset: true,
+  },
+  gauntlet: {
+    start_single_level: 19,
+    final_single_level: 24,
+  },
+  hour_of_power: {
+    duration_minutes: 60,
+    difficulty_min: 18,
+    difficulty_max: 23,
+  },
+  b15: {
+    duration_minutes: 60,
+    difficulty_min: 18,
+    difficulty_max: 23,
+  },
+};
 
 export default function TournamentSetup() {
   const navigate = useNavigate();
@@ -9,80 +68,120 @@ export default function TournamentSetup() {
     name: '',
     location: '',
     date: new Date().toISOString().split('T')[0],
-    total_rounds: 3,
     avatar: '',
   });
-  const [levels, setLevels] = useState([
-    { round: 1, min: 18, max: 19 },
-    { round: 2, min: 20, max: 21 },
-    { round: 3, min: 22, max: 23 },
-  ]);
-  const [gauntletEnabled, setGauntletEnabled] = useState(false);
-  const [gauntletStartLevel, setGauntletStartLevel] = useState(19);
-  const [gauntletFinalLevel, setGauntletFinalLevel] = useState(24);
+  const [phases, setPhases] = useState([]);
+  const [expandedPhase, setExpandedPhase] = useState(null);
+  const [showFormatPicker, setShowFormatPicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const updateLevel = (idx, field, val) => {
-    const updated = [...levels];
-    updated[idx] = { ...updated[idx], [field]: val === '' ? '' : parseInt(val) || 0 };
-    setLevels(updated);
+  const addPhase = (format) => {
+    const newPhase = {
+      _key: Date.now(),
+      format,
+      name: '',
+      config: { ...DEFAULT_CONFIGS[format] },
+      advancement: { type: 'all' },
+    };
+    setPhases(prev => [...prev, newPhase]);
+    setExpandedPhase(prev => prev === null ? phases.length : prev);
+    setShowFormatPicker(false);
   };
 
-  const handleRoundsChange = (val) => {
-    if (val === '') {
-      setForm(f => ({ ...f, total_rounds: '' }));
-      return;
-    }
-    const n = parseInt(val) || 1;
-    setForm(f => ({ ...f, total_rounds: n }));
-    const newLevels = [];
-    for (let i = 0; i < n; i++) {
-      newLevels.push(levels[i] || { round: i + 1, min: 18 + i * 2, max: 19 + i * 2 });
-    }
-    setLevels(newLevels);
+  const updatePhase = (idx, updated) => {
+    setPhases(prev => prev.map((p, i) => i === idx ? { ...p, ...updated } : p));
+  };
+
+  const removePhase = (idx) => {
+    setPhases(prev => prev.filter((_, i) => i !== idx));
+    if (expandedPhase === idx) setExpandedPhase(null);
+    else if (expandedPhase > idx) setExpandedPhase(expandedPhase - 1);
+  };
+
+  const movePhase = (idx, direction) => {
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= phases.length) return;
+    setPhases(prev => {
+      const updated = [...prev];
+      [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
+      return updated;
+    });
+    if (expandedPhase === idx) setExpandedPhase(newIdx);
+    else if (expandedPhase === newIdx) setExpandedPhase(idx);
+  };
+
+  const loadPreset = (presetPhases) => {
+    setPhases(presetPhases.map((p, i) => ({ ...p, _key: Date.now() + i })));
+    setExpandedPhase(0);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
+    if (phases.length === 0) return;
     setSaving(true);
     try {
-      const sanitizedLevels = levels.map(l => ({
-        ...l,
-        min: parseInt(l.min) || 1,
-        max: parseInt(l.max) || 1,
-      }));
+      // Build legacy config from first phase for backwards compat
+      const firstPhase = phases[0];
+      const legacyConfig = firstPhase.config || {};
+
       const tournament = await createTournament({
         name: form.name,
         location: form.location,
         date: form.date,
-        total_rounds: form.total_rounds,
         avatar: form.avatar,
+        total_rounds: legacyConfig.rounds || 1,
         config: {
-          round_levels: sanitizedLevels,
-          cards_per_draw: 5,
-          vetoes_per_player: 1,
-          best_of: 3,
-          gauntlet_enabled: gauntletEnabled,
-          ...(gauntletEnabled && {
-            gauntlet_start_single_level: parseInt(gauntletStartLevel) || 19,
-            gauntlet_final_single_level: parseInt(gauntletFinalLevel) || 24,
-          }),
+          ...legacyConfig,
+          phases_enabled: true,
         },
       });
+
+      // Create phases in order
+      for (let i = 0; i < phases.length; i++) {
+        const p = phases[i];
+        await createPhase({
+          tournament_id: tournament.id,
+          phase_order: i + 1,
+          format: p.format,
+          name: p.name || '',
+          config: p.config || {},
+          advancement: p.advancement || { type: 'all' },
+        });
+      }
+
       navigate(`/tournament/${tournament.id}`);
     } catch (err) {
+      // Toast will handle this once integrated, fall back to alert for now
       alert(err.message);
     } finally {
       setSaving(false);
     }
   };
 
+  const getFlowPreview = () => {
+    if (phases.length === 0) return null;
+    return phases.map((p, i) => {
+      const label = p.name || FORMAT_LABELS[p.format] || p.format;
+      const adv = p.advancement;
+      let arrow = '';
+      if (i < phases.length - 1 && adv && adv.type !== 'all') {
+        if (adv.type === 'top_n') arrow = ` \u2192 Top ${adv.count || 8}`;
+        else if (adv.type === 'per_pool_top_n') arrow = ` \u2192 Top ${adv.count || 2}/pool`;
+        else if (adv.type === 'threshold') arrow = ` \u2192 ${adv.points || 0}+ pts`;
+      }
+      return { label, arrow, icon: FORMAT_ICONS[p.format] || '' };
+    });
+  };
+
+  const flowPreview = getFlowPreview();
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <h1 className="section-title mb-6">CREATE TOURNAMENT</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* General Info */}
         <div className="card space-y-4">
           <h2 className="font-display font-bold text-lg text-piu-accent">General Info</h2>
 
@@ -128,136 +227,129 @@ export default function TournamentSetup() {
           </div>
         </div>
 
-        <div className="card space-y-4">
-          <h2 className="font-display font-bold text-lg text-piu-accent">Round Robin Format</h2>
-          <p className="text-sm text-gray-500">Each round is a full round robin - every player plays every other player. Best of 3 songs per match.</p>
+        {/* Presets */}
+        {phases.length === 0 && (
+          <TournamentPresets onSelect={loadPreset} />
+        )}
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Number of Rounds</label>
-            <input
-              type="number"
-              className="input-field w-32"
-              min="1"
-              max="10"
-              value={form.total_rounds}
-              onChange={e => handleRoundsChange(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="card space-y-4">
-          <h2 className="font-display font-bold text-lg text-piu-accent">Difficulty Levels per Round</h2>
-          <p className="text-sm text-gray-500">Song draws will pull charts from this level range. Must have Single and Double charts available.</p>
-
-          {levels.map((lvl, idx) => (
-            <div key={idx} className="flex items-center gap-4">
-              <span className="text-sm text-gray-400 w-20 font-display font-bold">Round {idx + 1}</span>
-              <div className="flex items-center gap-2 flex-1">
-                <label className="text-xs text-gray-500">Min</label>
-                <input
-                  type="number"
-                  className="input-field w-20"
-                  min="1"
-                  max="28"
-                  value={lvl.min}
-                  onChange={e => updateLevel(idx, 'min', e.target.value)}
-                  onFocus={e => e.target.select()}
-                />
-                <span className="text-gray-600">-</span>
-                <label className="text-xs text-gray-500">Max</label>
-                <input
-                  type="number"
-                  className="input-field w-20"
-                  min="1"
-                  max="28"
-                  value={lvl.max}
-                  onChange={e => updateLevel(idx, 'max', e.target.value)}
-                  onFocus={e => e.target.select()}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="card space-y-4">
+        {/* Phase Pipeline */}
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-display font-bold text-lg text-piu-accent">Gauntlet</h2>
-              <p className="text-sm text-gray-500">King of the Hill elimination after Round Robin. Bottom-ranked players fight upward.</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={gauntletEnabled}
-                onChange={e => setGauntletEnabled(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-piu-dark rounded-full peer peer-checked:bg-piu-accent transition-colors
-                after:content-[''] after:absolute after:top-[2px] after:left-[2px]
-                after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all
-                peer-checked:after:translate-x-full" />
-            </label>
+            <h2 className="font-display font-bold text-lg text-piu-accent">
+              Tournament Phases {phases.length > 0 && <span className="text-gray-500 text-sm">({phases.length})</span>}
+            </h2>
+            {phases.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setPhases([])}
+                className="text-xs text-gray-500 hover:text-piu-accent transition-colors"
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
-          {gauntletEnabled && (
-            <div className="space-y-4 pt-2 border-t border-piu-border/50">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm text-gray-400 mb-1">Starting Single Level</label>
-                  <input
-                    type="number"
-                    className="input-field w-full"
-                    min="1"
-                    max="28"
-                    value={gauntletStartLevel}
-                    onChange={e => setGauntletStartLevel(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                    onFocus={e => e.target.select()}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">Double will be {(parseInt(gauntletStartLevel) || 0) + 1}</p>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm text-gray-400 mb-1">Final Match Single Level</label>
-                  <input
-                    type="number"
-                    className="input-field w-full"
-                    min="1"
-                    max="28"
-                    value={gauntletFinalLevel}
-                    onChange={e => setGauntletFinalLevel(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                    onFocus={e => e.target.select()}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">Double will be {(parseInt(gauntletFinalLevel) || 0) + 1}</p>
-                </div>
+          {phases.length === 0 && (
+            <div className="card border-dashed border-piu-border/50 text-center py-8">
+              <p className="text-gray-500 text-sm mb-3">No phases added yet</p>
+              <p className="text-gray-600 text-xs">Choose a preset above or add phases manually below</p>
+            </div>
+          )}
+
+          <div className="space-y-6">
+            {phases.map((phase, idx) => (
+              <PhaseCard
+                key={phase._key}
+                phase={phase}
+                index={idx}
+                total={phases.length}
+                isExpanded={expandedPhase === idx}
+                onToggle={() => setExpandedPhase(expandedPhase === idx ? null : idx)}
+                onRemove={() => removePhase(idx)}
+                onMoveUp={() => movePhase(idx, -1)}
+                onMoveDown={() => movePhase(idx, 1)}
+              >
+                <PhaseConfigPanel
+                  phase={phase}
+                  onChange={(updated) => updatePhase(idx, updated)}
+                  isLastPhase={idx === phases.length - 1}
+                />
+              </PhaseCard>
+            ))}
+          </div>
+
+          {/* Add Phase */}
+          {showFormatPicker ? (
+            <div className="card border-piu-accent/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-display font-bold text-sm text-piu-accent">Add Phase</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowFormatPicker(false)}
+                  className="text-gray-500 hover:text-white text-xs transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
-              <div className="text-xs text-gray-500 space-y-1">
-                <p>Difficulty increments by 1 each match, capping at S23/D24 until the final.</p>
-                <p>Each match: 1 Single + 1 Double drawn randomly. Combined score wins.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {ALL_FORMATS.map((format) => (
+                  <button
+                    key={format}
+                    type="button"
+                    onClick={() => addPhase(format)}
+                    className="card border border-piu-border/50 hover:border-piu-accent/50 p-3 text-left transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span>{FORMAT_ICONS[format] || ''}</span>
+                      <span className="font-display font-bold text-xs text-white">{FORMAT_LABELS[format] || format}</span>
+                    </div>
+                    <p className="text-[9px] text-gray-500 leading-relaxed">{FORMAT_DESCRIPTIONS[format] || ''}</p>
+                  </button>
+                ))}
               </div>
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowFormatPicker(true)}
+              className="w-full card border-dashed border-piu-border/50 hover:border-piu-accent/40 text-center py-3 transition-all cursor-pointer"
+            >
+              <span className="text-gray-400 text-sm font-display font-bold">+ Add Phase</span>
+            </button>
           )}
         </div>
 
-        <div className="card p-3 bg-piu-dark/50 border-piu-accent/20">
-          <h3 className="font-display font-bold text-sm text-piu-accent mb-2">Match Rules</h3>
-          <ul className="text-xs text-gray-400 space-y-1">
-            <li>5 cards drawn per match (min 2 Single + 2 Double)</li>
-            <li>1 veto per player (lower seed bans first)</li>
-            <li>Best of 3 songs (match ends early if 2-0)</li>
-            <li>Score per song: 0 - 1,000,000</li>
-            <li>Single charts = Red, Double charts = Green</li>
-            {gauntletEnabled && (
-              <>
-                <li className="text-piu-accent font-bold mt-2">Gauntlet Rules:</li>
-                <li>2 songs per match (1 Single + 1 Double)</li>
-                <li>Combined total score from both songs determines winner</li>
-                <li>No vetoes in gauntlet matches</li>
-              </>
-            )}
-          </ul>
-        </div>
+        {/* Flow Preview */}
+        {flowPreview && flowPreview.length > 0 && (
+          <div className="card bg-piu-dark/50 border-piu-border/30 p-3">
+            <h3 className="font-display font-bold text-[10px] text-gray-500 uppercase tracking-wider mb-2">Tournament Flow</h3>
+            <div className="flex items-center gap-1 flex-wrap text-xs">
+              {flowPreview.map((step, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <span className="text-piu-accent font-bold mx-1">{'\u2192'}</span>}
+                  <span className="inline-flex items-center gap-1 rounded-full border border-piu-border/40 bg-piu-card px-2.5 py-1 font-display font-bold text-white">
+                    <span>{step.icon}</span> {step.label}
+                  </span>
+                  {step.arrow && (
+                    <span className="text-[10px] text-piu-green font-mono">{step.arrow}</span>
+                  )}
+                </React.Fragment>
+              ))}
+              <span className="text-piu-accent font-bold mx-1">{'\u2192'}</span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-piu-gold/40 bg-piu-gold/10 px-2.5 py-1 font-display font-bold text-piu-gold">
+                {'\u{1F3C6}'} Champion
+              </span>
+            </div>
+          </div>
+        )}
 
+        {/* Submit */}
         <div className="flex gap-3">
-          <button type="submit" className="btn-primary flex-1" disabled={saving}>
+          <button
+            type="submit"
+            className="btn-primary flex-1"
+            disabled={saving || phases.length === 0 || !form.name.trim()}
+          >
             {saving ? 'Creating...' : 'Create Tournament'}
           </button>
           <button type="button" onClick={() => navigate('/')} className="btn-secondary">
