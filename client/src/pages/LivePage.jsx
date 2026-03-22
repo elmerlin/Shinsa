@@ -2162,7 +2162,7 @@ function UserIdentity({ avatar, username, skillTitle, isHost, participantRole = 
     <div className={`flex min-w-0 items-center ${compact || dense ? 'gap-1.5' : 'gap-2'} ${className}`.trim()}>
       {hideAvatar ? null : (
         <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-piu-border bg-piu-dark font-display font-bold text-white ${
-          compact ? 'h-7 w-7 text-[10px]' : dense ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
+          compact ? 'h-5 w-5 text-[8px]' : dense ? 'h-7 w-7 text-[10px]' : 'h-8 w-8 text-[11px]'
         }`}>
           {avatar ? (
             <img src={avatar} alt={username || 'User'} className="h-full w-full object-cover" />
@@ -2172,23 +2172,23 @@ function UserIdentity({ avatar, username, skillTitle, isHost, participantRole = 
         </div>
       )}
       <div className="min-w-0">
-        <div className={`flex flex-wrap items-center ${compact || dense ? 'gap-1' : 'gap-1.5'}`}>
-          <p className={`truncate font-display font-bold text-white ${compact ? 'text-[10px]' : dense ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
+        <div className={`flex items-center ${compact ? 'gap-1 flex-nowrap' : dense ? 'gap-1 flex-wrap' : 'gap-1.5 flex-wrap'}`}>
+          <p className={`truncate font-display font-bold text-white ${compact ? 'text-[9px] max-w-[5rem]' : dense ? 'text-[10px]' : 'text-[11px]'}`}>{username || 'Viewer'}</p>
           {roleLabel ? (
-            <span className={`rounded-md border font-display font-semibold ${roleTone} ${
-              compact ? 'px-1.5 py-0.5 text-[8px]' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
+            <span className={`shrink-0 rounded-md border font-display font-semibold ${roleTone} ${
+              compact ? 'px-1 py-px text-[7px] leading-tight' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
             }`}>
               {roleLabel}
             </span>
           ) : null}
-          {skillTitle ? (
-            <span className={`rounded-md border border-cyan-400/20 bg-cyan-500/10 font-display font-semibold text-cyan-200 ${
-              compact ? 'px-1.5 py-0.5 text-[8px]' : dense ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-0.5 text-[9px]'
-            }`}>
-              {skillTitle}
-            </span>
-          ) : null}
         </div>
+        {skillTitle ? (
+          <p className={`truncate font-display font-semibold text-cyan-200/70 ${
+            compact ? 'text-[7px] leading-tight mt-0.5 max-w-[6rem]' : dense ? 'text-[8px] mt-0.5' : 'text-[9px] mt-0.5'
+          }`}>
+            {skillTitle}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -4520,14 +4520,12 @@ export default function LivePage() {
   const handleInsertChatToken = (token) => {
     setChatInput((prev) => `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}${token} `);
     setShowEmoteTray(true);
-    if (chatInputRef.current) {
+    // On mobile, skip focusing the input to avoid triggering the on-screen keyboard
+    if (!isMobileChatLayout && chatInputRef.current) {
       try {
         chatInputRef.current.focus({ preventScroll: true });
       } catch {
         chatInputRef.current.focus();
-      }
-      if (typeof chatInputRef.current.scrollIntoView === 'function') {
-        chatInputRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       }
     }
   };
