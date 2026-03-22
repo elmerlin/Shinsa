@@ -51,6 +51,9 @@ import DojoPage from './pages/DojoPage';
 import LeaderboardsPage from './pages/LeaderboardsPage';
 import LivePage from './pages/LivePage';
 import LiveOverlayPage from './pages/LiveOverlayPage';
+import TournamentWatch from './pages/TournamentWatch';
+import TournamentOverlay from './pages/TournamentOverlay';
+import TournamentEmbed from './pages/TournamentEmbed';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TranslationEditorDrawer from './components/TranslationEditorDrawer';
 import { useI18n } from './i18n/TranslationContext';
@@ -1034,6 +1037,8 @@ export default function App() {
   const consumedPopupUserRef = useRef('');
   const isHome = location.pathname === '/';
   const isLiveOverlay = /^\/live\/[^/]+\/overlay(?:\/|$)/.test(location.pathname);
+  const isTournamentChromeless = /^\/tournament\/[^/]+\/(overlay|embed)(?:\/|$)/.test(location.pathname);
+  const isChromeless = isLiveOverlay || isTournamentChromeless;
   const isMessagesInboxRoute = /^\/messages\/?$/.test(location.pathname);
   const isMessagesConversationRoute = /^\/messages\/[^/]+(?:\/|$)/.test(location.pathname);
   const hideMobileHeader = isMessagesInboxRoute || isMessagesConversationRoute;
@@ -1330,9 +1335,9 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${isLiveOverlay ? '' : 'flex flex-col'}`}>
+    <div className={`min-h-screen ${isChromeless ? '' : 'flex flex-col'}`}>
       {/* Header */}
-      {!isLiveOverlay ? (
+      {!isChromeless ? (
       <header className={`border-b border-piu-border bg-piu-card/80 backdrop-blur-md sticky top-0 z-50 ${hideMobileHeader ? 'hidden sm:block' : ''}`}>
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between">
           <Link to="/" onClick={() => { clearMessageRouteRestore(); scrollToTop(); }} className="group">
@@ -1400,10 +1405,13 @@ export default function App() {
       ) : null}
 
       {/* Main */}
-      <main className={isLiveOverlay ? 'min-h-screen' : `flex-1 ${isMessagesConversationRoute ? 'overflow-hidden' : ''} ${user && !hideMobileBottomNav ? 'pb-16 sm:pb-0' : ''}`}>
+      <main className={isChromeless ? 'min-h-screen' : `flex-1 ${isMessagesConversationRoute ? 'overflow-hidden' : ''} ${user && !hideMobileBottomNav ? 'pb-16 sm:pb-0' : ''}`}>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tournament/new" element={<TournamentSetup />} />
+          <Route path="/tournament/:id/watch" element={<TournamentWatch />} />
+          <Route path="/tournament/:id/overlay" element={<TournamentOverlay />} />
+          <Route path="/tournament/:id/embed" element={<TournamentEmbed />} />
           <Route path="/tournament/:id/*" element={<TournamentView />} />
           <Route path="/match/:id" element={<MatchView />} />
           <Route path="/duel/new" element={<DuelSetup />} />
@@ -1456,7 +1464,7 @@ export default function App() {
         </Routes>
       </main>
 
-      {!isLiveOverlay && groupPopup && (
+      {!isChromeless && groupPopup && (
         <GroupLoginPopupModal
           popup={groupPopup}
           slideIndex={groupPopupSlide}
@@ -1467,13 +1475,13 @@ export default function App() {
           }}
         />
       )}
-      {!isLiveOverlay && showDojoPopup && !groupPopup && (
+      {!isChromeless && showDojoPopup && !groupPopup && (
         <DojoProximityPopupModal
           onClose={() => setShowDojoPopup(false)}
           onOpenCheckin={handleOpenDojoCheckin}
         />
       )}
-      {!isLiveOverlay && showDojoCheckoutPopup && !showDojoPopup && !groupPopup && (
+      {!isChromeless && showDojoCheckoutPopup && !showDojoPopup && !groupPopup && (
         <DojoCheckoutPopupModal
           prompt={dojoCheckoutPrompt}
           loading={dojoCheckoutLoading}
@@ -1484,7 +1492,7 @@ export default function App() {
       )}
 
       {/* Footer — hidden on mobile when logged in (bottom nav takes its place) */}
-      {!isLiveOverlay ? (
+      {!isChromeless ? (
       <footer className={`border-t border-piu-border py-3 sm:py-4 text-center text-xs text-gray-600 ${user ? 'hidden sm:block' : ''}`}>
         <span className="font-display tracking-wider text-piu-gold">PUMP</span>
         {' '}
@@ -1499,7 +1507,7 @@ export default function App() {
       ) : null}
 
       {/* Mobile Bottom Navigation — Instagram style */}
-      {!isLiveOverlay && user && !hideMobileBottomNav && <MobileBottomNav />}
+      {!isChromeless && user && !hideMobileBottomNav && <MobileBottomNav />}
       <TranslationEditorDrawer />
     </div>
   );
