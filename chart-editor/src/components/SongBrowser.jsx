@@ -38,7 +38,15 @@ export default function SongBrowser({ onSelectChart, onLoadSM, onLoadAudio }) {
         c.type === chart.type && parseInt(c.meter) === chart.meter
       );
       if (chartIndex < 0) chartIndex = 0;
-      onSelectChart(data, chartIndex);
+      // Also fetch audio if available
+      let audioBuffer = null;
+      if (song.music) {
+        try {
+          const audioRes = await fetch(`${BASE}presets/${song.music}`);
+          if (audioRes.ok) audioBuffer = await audioRes.arrayBuffer();
+        } catch { /* audio optional */ }
+      }
+      onSelectChart(data, chartIndex, audioBuffer);
     } catch (err) {
       setError(`Failed to load ${song.title}: ${err.message}`);
     } finally {

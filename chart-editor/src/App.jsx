@@ -190,13 +190,16 @@ export default function App() {
   }, [audio, snapDivision, undo, redo]);
 
   // Handle selecting a chart from the song browser
-  const handleSelectChart = useCallback((data, chartIndex) => {
+  const handleSelectChart = useCallback(async (data, chartIndex, audioBuffer) => {
     dispatch({ type: 'LOAD_FILE', payload: data });
     dispatch({ type: 'SET_ACTIVE_CHART', payload: chartIndex });
     setFileLoaded(true);
     setFileFormat('ssc');
     setScrollBeat(0);
-  }, [dispatch]);
+    if (audioBuffer) {
+      try { await audio.loadAudio(audioBuffer); } catch { /* optional */ }
+    }
+  }, [dispatch, audio]);
 
   if (!fileLoaded) {
     return (

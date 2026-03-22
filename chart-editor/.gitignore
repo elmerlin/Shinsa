@@ -1,0 +1,6 @@
+node_modules/
+dist/
+
+# Audio files are too large for git (~400MB)
+# Download from Google Drive and extract to public/presets/PHOENIX/audio/
+public/presets/PHOENIX/audio/*.mp3

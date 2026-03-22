@@ -97,6 +97,7 @@ async function buildManifest() {
         });
 
         if (charts.length > 0) {
+          const music = globalTags.music || '';
           const entry = {
             title,
             artist,
@@ -104,6 +105,7 @@ async function buildManifest() {
             file: `${packName}/${file}`,
             charts,
           };
+          if (music) entry.music = `${packName}/audio/${music}`;
           // Look up jacket
           const jacket = jacketMap[normalize(title)];
           if (jacket) entry.jacket = jacket;
