@@ -4451,6 +4451,36 @@ export default function ProfilePage() {
 
                 <div className="relative p-5">
                   <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    {dmLinkShare && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClassicStoryError('');
+                            setClassicStorySuccess(false);
+                            setClassicStoryOpen(true);
+                          }}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+                            classicStorySuccess
+                              ? 'border-emerald-300/30 text-emerald-200 bg-black/25'
+                              : 'border-white/10 bg-black/25 text-gray-400 hover:border-cyan-300/30 hover:text-white'
+                          }`}
+                          aria-label={classicStorySuccess ? 'Added to story' : 'Add to story'}
+                          title={classicStorySuccess ? 'Added to story' : 'Add to story'}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c1.67 2.72 3.83 4.88 6.55 6.55-2.72 1.67-4.88 3.83-6.55 6.55-1.67-2.72-3.83-4.88-6.55-6.55 2.72-1.67 4.88-3.83 6.55-6.55Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 15.75v4.5m-2.25-2.25h4.5" />
+                          </svg>
+                        </button>
+                        <SendToDirectMessageButton
+                          linkShare={dmLinkShare}
+                          variant="icon"
+                          title="Send to DM"
+                          className="h-8 w-8 justify-center rounded-lg border border-white/10 bg-black/25 text-gray-400 hover:border-cyan-300/30 hover:text-white"
+                        />
+                      </>
+                    )}
                     {styleToggleButton}
                     <button
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:text-white text-xl leading-none"
@@ -4460,7 +4490,7 @@ export default function ProfilePage() {
                     </button>
                   </div>
 
-                  <p className="font-display font-bold text-lg leading-tight pr-20">{p.song_title}</p>
+                  <p className="font-display font-bold text-lg leading-tight pr-40">{p.song_title}</p>
 
                   <div className="flex items-center gap-3 mt-4">
                     <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
@@ -4520,35 +4550,6 @@ export default function ProfilePage() {
                     </p>
                   )}
 
-                  {/* Story + DM action buttons */}
-                  {dmLinkShare && (
-                    <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-piu-border/30">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setClassicStoryError('');
-                          setClassicStorySuccess(false);
-                          setClassicStoryOpen(true);
-                        }}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-display font-bold transition-colors ${
-                          classicStorySuccess
-                            ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
-                            : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-300/30 hover:text-white'
-                        }`}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-3.5 w-3.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c1.67 2.72 3.83 4.88 6.55 6.55-2.72 1.67-4.88 3.83-6.55 6.55-1.67-2.72-3.83-4.88-6.55-6.55 2.72-1.67 4.88-3.83 6.55-6.55Z" />
-                        </svg>
-                        {classicStorySuccess ? 'Added' : 'Story'}
-                      </button>
-                      <SendToDirectMessageButton
-                        linkShare={dmLinkShare}
-                        variant="button"
-                        label="DM"
-                        title="Send to DM"
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
