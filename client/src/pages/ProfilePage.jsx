@@ -231,6 +231,18 @@ function parsePlayDayKey(value) {
   return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
 }
 
+function formatPlayDate(value) {
+  const parsed = parsePlayedAt(value);
+  if (!parsed) return String(value || '').trim();
+  const now = new Date();
+  const sameYear = parsed.getFullYear() === now.getFullYear();
+  const hasTime = /\d{1,2}:\d{2}/.test(String(value || ''));
+  const opts = sameYear
+    ? { month: 'short', day: 'numeric', ...(hasTime && { hour: 'numeric', minute: '2-digit' }) }
+    : { year: 'numeric', month: 'short', day: 'numeric', ...(hasTime && { hour: 'numeric', minute: '2-digit' }) };
+  return parsed.toLocaleString(undefined, opts);
+}
+
 function hexToRgb(hex) {
   const cleaned = String(hex || '').replace('#', '');
   if (cleaned.length !== 6) return null;
@@ -4039,6 +4051,7 @@ export default function ProfilePage() {
                         {overRank > 0 && (
                           <span className="ml-1.5 inline-flex items-center rounded border border-piu-gold/50 bg-piu-gold/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-200 font-display font-black tracking-wide">TOP #{overRank}</span>
                         )}
+                        {p.machine_name ? <span className="ml-1.5 text-gray-600">at {p.machine_name}</span> : null}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
@@ -4057,8 +4070,8 @@ export default function ProfilePage() {
                       )}
                     </div>
                     {p.date_played && (
-                      <span className="text-[10px] text-gray-500 shrink-0 w-16 text-right">
-                        {p.date_played.split(' ')[0]?.replace(/^\d{4}-/, '')}
+                      <span className="text-[10px] text-gray-500 shrink-0 text-right">
+                        {formatPlayDate(p.date_played)}
                       </span>
                     )}
                   </div>
@@ -4070,8 +4083,8 @@ export default function ProfilePage() {
           )}
 
           {piuRecentlyPlayed?.last_sync && (
-            <p className="text-xs text-gray-600 mt-4">
-              Last synced: {new Date(piuRecentlyPlayed.last_sync + 'Z').toLocaleString()}
+            <p className="text-[10px] text-gray-700 mt-4">
+              Synced {new Date(piuRecentlyPlayed.last_sync + 'Z').toLocaleString()}
             </p>
           )}
         </div>
@@ -4327,8 +4340,11 @@ export default function ProfilePage() {
                   </p>
                 )}
 
-                {p.date_played && (
-                  <p className="text-xs text-gray-500 text-right mt-3">{p.date_played}</p>
+                {(p.date_played || p.machine_name) && (
+                  <p className="text-xs text-gray-500 text-right mt-3">
+                    {p.date_played ? formatPlayDate(p.date_played) : ''}
+                    {p.machine_name ? <span className="text-gray-600">{p.date_played ? ' · ' : ''}at {p.machine_name}</span> : null}
+                  </p>
                 )}
               </div>
             </div>

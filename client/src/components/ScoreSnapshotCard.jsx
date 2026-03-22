@@ -159,6 +159,7 @@ export default function ScoreSnapshotCard({
   const songTitle = String(score.song_title || score.songTitle || 'Score details').trim() || 'Score details';
   const username = String(score.username || score.playerName || '').trim();
   const playedAt = formatDateLabel(score.date_played || score.playedAt);
+  const machineName = String(score.machine_name || score.machineName || '').trim();
   const resolvedAvatarUrl = String(avatarUrl || score.playerAvatar || score.avatar || '').trim();
   const resolvedSkillTitle = String(skillTitle || score.playerSkillTitle || score.skillTitle || score.skill_title || '').trim();
   const resolvedRoleLabel = String(roleLabel || score.playerRoleLabel || score.roleLabel || '').trim();
@@ -240,10 +241,11 @@ export default function ScoreSnapshotCard({
                   />
                 ) : null}
                 <div className="min-w-0 flex-1">
-                  {(username || playedAt) ? (
+                  {(username || playedAt || machineName) ? (
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-gray-200/90">
                       {username ? <span className="font-display font-bold text-white">{username}</span> : null}
                       {playedAt ? <span>{playedAt}</span> : null}
+                      {machineName ? <span className="text-gray-400">at {machineName}</span> : null}
                     </div>
                   ) : null}
                   {infoBadges.length > 0 ? (
