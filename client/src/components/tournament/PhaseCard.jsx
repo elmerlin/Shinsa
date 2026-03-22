@@ -148,7 +148,7 @@ export default function PhaseCard({
               onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
               className="p-1 text-gray-500 hover:text-white transition-colors"
             >
-              {isExpanded ? '&#9660;' : '&#9654;'}
+              {isExpanded ? '\u25BC' : '\u25B6'}
             </button>
           </div>
         </div>
