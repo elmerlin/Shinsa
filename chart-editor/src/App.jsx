@@ -117,6 +117,14 @@ export default function App() {
     }
   }, [state, fileFormat]);
 
+  // Wrap togglePlay to seek to scroll position before starting
+  const handleTogglePlay = useCallback(() => {
+    if (!audio.playing && audio.audioLoaded) {
+      audio.seekToBeat(scrollBeat);
+    }
+    audio.togglePlay();
+  }, [audio, scrollBeat]);
+
   // Back to beginning
   const handleSeekToBeginning = useCallback(() => {
     if (audio.playing) audio.togglePlay();
@@ -142,7 +150,7 @@ export default function App() {
       switch (e.key) {
         case ' ':
           e.preventDefault();
-          audio.togglePlay();
+          handleTogglePlay();
           break;
         case 'ArrowUp':
           e.preventDefault();
@@ -187,7 +195,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [audio, snapDivision, undo, redo]);
+  }, [audio, snapDivision, undo, redo, handleTogglePlay, handleSeekToBeginning]);
 
   // Handle selecting a chart from the song browser
   const handleSelectChart = useCallback(async (data, chartIndex, audioBuffer) => {
@@ -230,7 +238,7 @@ export default function App() {
       {/* Toolbar */}
       <Toolbar
         playing={audio.playing}
-        onTogglePlay={audio.togglePlay}
+        onTogglePlay={handleTogglePlay}
         audioLoaded={audio.audioLoaded}
         currentBeat={audio.playing ? audio.currentBeat : scrollBeat}
         currentTime={audio.currentTime}

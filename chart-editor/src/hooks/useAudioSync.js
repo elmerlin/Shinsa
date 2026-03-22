@@ -6,6 +6,7 @@ export function useAudioSync(metadata) {
   const engineRef = useRef(null);
   const timerRef = useRef(null);
   const lastTickRef = useRef(null);
+  const metadataRef = useRef(metadata);
   const [playing, setPlaying] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -25,6 +26,11 @@ export function useAudioSync(metadata) {
     };
   }, []);
 
+  // Keep metadata ref current
+  useEffect(() => {
+    metadataRef.current = metadata;
+  }, [metadata]);
+
   // Update offset when metadata changes
   useEffect(() => {
     if (engineRef.current && metadata) {
@@ -42,13 +48,14 @@ export function useAudioSync(metadata) {
 
     engineRef.current.onTimeUpdate((time) => {
       setCurrentTime(time);
-      if (metadata?.bpms) {
-        const songTime = time - (metadata.offset || 0);
-        const beat = timeToBeat(Math.max(0, songTime), metadata.bpms, metadata.stops || []);
+      const md = metadataRef.current;
+      if (md?.bpms) {
+        const songTime = time - (md.offset || 0);
+        const beat = timeToBeat(Math.max(0, songTime), md.bpms, md.stops || []);
         setCurrentBeat(beat);
       }
     });
-  }, [metadata]);
+  }, []);
 
   // Timer-based beat playback (no audio)
   const startBeatTimer = useCallback(() => {
