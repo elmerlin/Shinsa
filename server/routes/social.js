@@ -356,7 +356,7 @@ let sessionReplayLinkStmt = null;
 function getRecentPlayJudgmentsBeforeStmt(db) {
   if (!recentPlayJudgmentsBeforeStmt) {
     recentPlayJudgmentsBeforeStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank
+      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -382,7 +382,7 @@ function getRecentPlayJudgmentsBeforeStmt(db) {
 function getRecentPlayJudgmentsAnyStmt(db) {
   if (!recentPlayJudgmentsAnyStmt) {
     recentPlayJudgmentsAnyStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank
+      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -409,7 +409,7 @@ function getRecentPlayMetadataBeforeStmt(db) {
     recentPlayMetadataBeforeStmt = db.prepare(`
       SELECT
         perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
-        replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds
+        replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -431,7 +431,7 @@ function getRecentPlayMetadataAnyStmt(db) {
     recentPlayMetadataAnyStmt = db.prepare(`
       SELECT
         perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
-        replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds
+        replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -544,6 +544,7 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
     plate: entry.plate || lookup.plate || '',
     background_url: entry.background_url || lookup.background_url || '',
     over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
+    machine_name: entry.machine_name || lookup.machine_name || '',
   };
 }
 
@@ -602,6 +603,7 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
       || '',
     replay_start_seconds: toInt(row.replay_start_seconds) || toInt(lookup?.replay_start_seconds),
     replay_end_seconds: toInt(row.replay_end_seconds) || toInt(lookup?.replay_end_seconds),
+    machine_name: row.machine_name || lookup?.machine_name || '',
   };
 }
 
