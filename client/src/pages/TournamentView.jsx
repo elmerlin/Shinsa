@@ -97,6 +97,15 @@ export default function TournamentView() {
 
   useEffect(() => { loadData(); }, [id]);
 
+  // Auto-refresh every 15 seconds when tournament is active
+  useEffect(() => {
+    if (!tournament || tournament.phase === 'COMPLETED' || tournament.phase === 'SETUP') return;
+    const interval = setInterval(() => {
+      loadData();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [tournament?.phase, loadData]);
+
   // Legacy handlers
   const handleStartRound = async () => {
     if (players.length < 2) return addToast('Need at least 2 players', 'error');
@@ -222,11 +231,17 @@ export default function TournamentView() {
               {activePhase ? (FORMAT_LABELS[activePhase.format] || activePhase.format) : tournament.phase}
             </span>
           </div>
-          <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 flex-wrap">
+          <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 flex-wrap items-center">
             {tournament.location && <span>{tournament.location}</span>}
             {tournament.date && <span>{tournament.date}</span>}
             <span>{players.length} players</span>
             <span>{completedPhases.length}/{phases.length} phases</span>
+            {tournament.phase !== 'COMPLETED' && tournament.phase !== 'SETUP' && (
+              <span className="text-[10px] text-gray-600 flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-piu-green animate-pulse" />
+                Live
+              </span>
+            )}
           </div>
 
           {/* Phase flow indicator */}
@@ -434,12 +449,18 @@ export default function TournamentView() {
              tournament.phase === 'GAUNTLET' ? 'Gauntlet' : tournament.phase}
           </span>
         </div>
-        <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 flex-wrap">
+        <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 flex-wrap items-center">
           {tournament.location && <span>{tournament.location}</span>}
           {tournament.date && <span>{tournament.date}</span>}
           <span>{players.length} players</span>
           {currentRound > 0 && <span>Round {currentRound}/{totalRounds}</span>}
           {matchesPerRound > 0 && <span>{matchesPerRound} matches/round</span>}
+          {tournament.phase !== 'COMPLETED' && tournament.phase !== 'SETUP' && (
+            <span className="text-[10px] text-gray-600 flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-piu-green animate-pulse" />
+              Live
+            </span>
+          )}
         </div>
       </div>
 

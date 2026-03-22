@@ -3,6 +3,7 @@ import { createPlayer, updatePlayer, deletePlayer, searchUsers, sendInvitation }
 import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
 import { Link } from 'react-router-dom';
 import { getProfilePath } from '../utils/profile';
+import SeedingPanel from './tournament/SeedingPanel';
 
 export const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 export const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -682,6 +683,10 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
           <p className="text-lg">No players registered yet</p>
           {isSetup && <p className="text-sm mt-1">Click "+ Add Player" to register participants</p>}
         </div>
+      )}
+
+      {isSetup && players.length >= 2 && (
+        <SeedingPanel players={players} tournamentId={tournamentId} onUpdate={onUpdate} />
       )}
     </div>
   );

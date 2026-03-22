@@ -7,6 +7,7 @@ import { getCountryFlag } from '../components/PlayerRegistration';
 import { renderFormattedText } from '../utils/formatText';
 import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
+import ArchiveBrowser from '../components/tournament/ArchiveBrowser';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -57,6 +58,7 @@ export default function Dashboard() {
   const [liveSessions, setLiveSessions] = useState([]);
   const [joiningCommunity, setJoiningCommunity] = useState(null);
   const [communityPalettes, setCommunityPalettes] = useState({});
+  const [showArchived, setShowArchived] = useState(false);
 
   const matchesSearch = (value, q) => String(value || '').toLowerCase().includes(q);
   const duelMatchesSearch = (duel, q) => (
@@ -646,7 +648,21 @@ export default function Dashboard() {
 
       {/* Tournaments Section */}
       <div className="mb-6">
-        <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">TOURNAMENTS</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent">TOURNAMENTS</h2>
+          <button
+            onClick={() => setShowArchived(prev => !prev)}
+            className="text-xs font-display font-bold text-gray-500 hover:text-piu-accent transition-colors"
+          >
+            {showArchived ? 'Hide Archived' : 'Archived'}
+          </button>
+        </div>
+
+        {showArchived && (
+          <div className="mb-6">
+            <ArchiveBrowser />
+          </div>
+        )}
         {displayTournaments.length === 0 ? (
           searchResults !== null ? (
             totalSearchResults === 0 ? (
