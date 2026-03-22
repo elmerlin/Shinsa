@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAvatarUrl } from './AvatarPicker';
 
 export default function Gauntlet({ matches, players, onUpdate }) {
   const navigate = useNavigate();
@@ -88,7 +89,10 @@ export default function Gauntlet({ matches, players, onUpdate }) {
 
               {/* Player 1 - ranked challenger */}
               <div className={`flex-1 text-right min-w-0 ${match.winner_id === match.player1_id ? 'text-piu-green' : ''}`}>
-                <div className="font-display font-bold text-sm sm:text-base truncate">
+                <div className="font-display font-bold text-sm sm:text-base truncate flex items-center justify-end gap-1.5">
+                  {p1?.avatar && (
+                    <img src={getAvatarUrl(p1.avatar)} alt="" className="h-5 w-5 rounded-full border border-white/10 shrink-0" />
+                  )}
                   {p1?.name || 'TBD'}
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-500">
@@ -124,7 +128,10 @@ export default function Gauntlet({ matches, players, onUpdate }) {
 
               {/* Player 2 - defender from previous match */}
               <div className={`flex-1 min-w-0 ${match.winner_id === match.player2_id ? 'text-piu-green' : ''}`}>
-                <div className="font-display font-bold text-sm sm:text-base truncate">
+                <div className="font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5">
+                  {p2?.avatar && (
+                    <img src={getAvatarUrl(p2.avatar)} alt="" className="h-5 w-5 rounded-full border border-white/10 shrink-0" />
+                  )}
                   {p2?.name || (isWaiting ? 'TBD' : 'TBD')}
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-500">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getCountryFlag } from './PlayerRegistration';
+import { getAvatarUrl } from './AvatarPicker';
 
 const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
@@ -102,6 +103,9 @@ export default function Standings({ players, matches, showFinal }) {
                   {rank}
                 </div>
                 <div className="col-span-4 flex items-center gap-2 min-w-0">
+                  {player.avatar && (
+                    <img src={getAvatarUrl(player.avatar)} alt="" className="h-5 w-5 rounded-full border border-white/10 shrink-0" />
+                  )}
                   {flag && <span className="text-sm shrink-0">{flag}</span>}
                   <span className="font-display font-bold truncate">{player.name}</span>
                   {genderSymbol && (

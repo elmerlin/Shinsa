@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getMatch, drawCards, vetoSong, submitResult } from '../utils/api';
 import SongCard from '../components/SongCard';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import { useToast } from '../contexts/ToastContext';
 import { useChopSound, useShuffleSound } from '../hooks/useSound';
 
 const STATUS_FLOW = {
@@ -44,6 +45,7 @@ const getSkillColorFromTitle = (title) => {
 export default function MatchView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [drawing, setDrawing] = useState(false);
@@ -52,6 +54,7 @@ export default function MatchView() {
   const [scores, setScores] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [shuffling, setShuffling] = useState(false);
+  const [focusedCardIdx, setFocusedCardIdx] = useState(0);
   const { play: playChop } = useChopSound(0.7);
   const { play: playShuffle, stop: stopShuffle } = useShuffleSound(0.4);
   const [shuffleRevealed, setShuffleRevealed] = useState(false);
@@ -129,7 +132,7 @@ export default function MatchView() {
       await loadMatch();
       setTimeout(() => setShowCards(true), 100);
     } catch (err) {
-      alert(err.message);
+      addToast(err.message, 'error');
     } finally {
       setDrawing(false);
     }
@@ -154,7 +157,7 @@ export default function MatchView() {
         await loadMatch();
       }
     } catch (err) {
-      alert(err.message);
+      addToast(err.message, 'error');
     }
   };
 
@@ -253,13 +256,13 @@ export default function MatchView() {
       const { results, p1Total, p2Total, matchOver, winnerId, allHaveScores } = getGauntletResults();
 
       if (!allHaveScores) {
-        return alert('Enter scores for both songs.');
+        return addToast('Enter scores for both songs.', 'error');
       }
       if (p1Total === p2Total) {
-        return alert('Combined scores are tied. There must be a winner.');
+        return addToast('Combined scores are tied. There must be a winner.', 'error');
       }
       if (!matchOver) {
-        return alert('Match is not decided yet.');
+        return addToast('Match is not decided yet.', 'error');
       }
 
       const playedSongs = results.filter(r => r.hasScores).map(r => ({
@@ -281,7 +284,7 @@ export default function MatchView() {
         });
         await loadMatch();
       } catch (err) {
-        alert(err.message);
+        addToast(err.message, 'error');
       } finally {
         setSubmitting(false);
       }
@@ -289,7 +292,7 @@ export default function MatchView() {
       const { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total } = getSongResults();
 
       if (!matchOver) {
-        return alert('Match is not decided yet.');
+        return addToast('Match is not decided yet.', 'error');
       }
 
       const playedSongs = results.filter(r => r.hasScores && !r.skipped).map(r => ({
@@ -312,7 +315,7 @@ export default function MatchView() {
         });
         await loadMatch();
       } catch (err) {
-        alert(err.message);
+        addToast(err.message, 'error');
       } finally {
         setSubmitting(false);
       }
@@ -491,7 +494,20 @@ export default function MatchView() {
 
           {/* Song Cards Grid - Veto phase: show all 5 */}
           {(status === 'DRAWING' || status === 'VETOING') && (
-            <div className="grid grid-cols-5 gap-1.5 sm:gap-3">
+            <div
+              className="grid grid-cols-5 gap-1.5 sm:gap-3"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                const maxIdx = drawn.length - 1;
+                if (e.key === 'ArrowRight') setFocusedCardIdx(i => Math.min(i + 1, maxIdx));
+                if (e.key === 'ArrowLeft') setFocusedCardIdx(i => Math.max(i - 1, 0));
+                if ((e.key === 'Enter' || e.key === ' ') && vetoTurn) {
+                  const nonVetoed = drawn.filter(s => !vetoedIds.includes(s.id));
+                  const target = nonVetoed[focusedCardIdx];
+                  if (target) handleVeto(target.id);
+                }
+              }}
+            >
               {drawn.map((song, idx) => {
                 const isVetoed = vetoedIds.includes(song.id);
                 const vetoInfo = vetoed.find(v => v.song_id === song.id);

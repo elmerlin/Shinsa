@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { getCountryFlag } from './PlayerRegistration';
 
@@ -58,7 +58,10 @@ export default function FinalStandings({ players, matches, config }) {
 
   const champion = podium.find(p => p.rank === 1)?.player;
 
+  const confettiFired = useRef(false);
   useEffect(() => {
+    if (confettiFired.current) return;
+    confettiFired.current = true;
     const timer = setTimeout(() => {
       confetti({
         particleCount: 80,
@@ -126,6 +129,13 @@ export default function FinalStandings({ players, matches, config }) {
         )}
       </div>
 
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+
       {/* Full Rankings List */}
       <div className="card overflow-hidden p-0">
         <div className="px-3 sm:px-4 py-2 bg-piu-dark">
@@ -181,7 +191,10 @@ function PodiumCard({ entry, isChampion }) {
   const flag = player ? getCountryFlag(player.nationality) : null;
 
   return (
-    <div className={`card text-center border ${medal.bg} ${isChampion ? 'pt-4 sm:pt-6' : 'mt-4 sm:mt-8'} pb-3 sm:pb-4`}>
+    <div
+      className={`card text-center border ${medal.bg} ${isChampion ? 'pt-4 sm:pt-8' : 'mt-4 sm:mt-8'} pb-3 sm:pb-4 ${isChampion ? 'bg-gradient-to-b from-piu-gold/10 to-transparent' : ''}`}
+      style={{ animation: `slideUp 0.5s ease-out ${isChampion ? '0.4s' : rank === 2 ? '0.6s' : '0.8s'} both` }}
+    >
       <div className={`text-3xl sm:text-4xl mb-1 ${isChampion ? 'sm:text-5xl' : ''}`}>
         {medal.icon}
       </div>
