@@ -6,5 +6,11 @@ export default defineConfig({
   base: '/charting/',
   server: {
     port: 5174,
+    proxy: {
+      '/jackets': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
 });

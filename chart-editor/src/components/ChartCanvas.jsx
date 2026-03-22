@@ -3,7 +3,7 @@ import {
   PANEL_COLORS, PANEL_ROTATIONS, BEAT_HEIGHT, COLUMN_WIDTH,
   RECEPTOR_Y, NOTE_SIZE, SNAP_COLORS, GAME_TYPES,
 } from '../lib/constants.js';
-import { snapBeat, beatToTime } from '../lib/timing.js';
+import { snapBeat, beatToTime, timeToBeat } from '../lib/timing.js';
 import {
   loadNoteskin, getNoteskinImages, getPanelInfo,
   TAP_FRAME_W, TAP_FRAME_H,
@@ -26,7 +26,7 @@ export default function ChartCanvas({
   playing,
   currentBeat,
   currentTime,
-  avMode,
+  avSpeed,
   holdStartRef,
 }) {
   const canvasRef = useRef(null);
@@ -52,8 +52,10 @@ export default function ChartCanvas({
     const ctx = canvas.getContext('2d');
     const { width, height } = canvas;
     const effectiveBeat = playing ? currentBeat : scrollBeat;
-    const useAV = avMode && playing;
+    const useAV = avSpeed > 0;
     const imgs = getNoteskinImages();
+    const bpms = metadata?.bpms || [{ beat: 0, bpm: 120 }];
+    const stops = metadata?.stops || [];
 
     ctx.clearRect(0, 0, width, height);
 
@@ -64,25 +66,32 @@ export default function ChartCanvas({
     const leftMargin = 60;
     const noteDrawSize = NOTE_SIZE;
 
-    // AV/CMOD: pixels per second
-    const avPixelsPerSec = (120 / 60) * beatHeight;
+    // AV/CMOD: reference time for positioning
+    const refTime = useAV
+      ? (playing ? (currentTime || 0) : beatToTime(effectiveBeat, bpms, stops))
+      : 0;
 
     const beatToY = (beat) => {
       if (useAV) {
-        const bpms = metadata?.bpms || [{ beat: 0, bpm: 120 }];
-        const stops = metadata?.stops || [];
         const noteTime = beatToTime(beat, bpms, stops);
-        const refTime = currentTime || 0;
-        return RECEPTOR_Y + (noteTime - refTime) * avPixelsPerSec;
+        return RECEPTOR_Y + (noteTime - refTime) * avSpeed;
       }
       return RECEPTOR_Y + (beat - effectiveBeat) * beatHeight;
     };
 
     // Visible beat range
-    const topBeat = effectiveBeat - (RECEPTOR_Y / beatHeight);
-    const bottomBeat = effectiveBeat + ((height - RECEPTOR_Y) / beatHeight);
-    const minBeat = Math.min(topBeat, bottomBeat);
-    const maxBeat = Math.max(topBeat, bottomBeat);
+    let minBeat, maxBeat;
+    if (useAV) {
+      const topTime = refTime - (RECEPTOR_Y / avSpeed);
+      const bottomTime = refTime + ((height - RECEPTOR_Y) / avSpeed);
+      minBeat = timeToBeat(Math.max(0, topTime), bpms, stops);
+      maxBeat = timeToBeat(bottomTime, bpms, stops);
+    } else {
+      const topBeat = effectiveBeat - (RECEPTOR_Y / beatHeight);
+      const bottomBeat = effectiveBeat + ((height - RECEPTOR_Y) / beatHeight);
+      minBeat = Math.min(topBeat, bottomBeat);
+      maxBeat = Math.max(topBeat, bottomBeat);
+    }
 
     // Column backgrounds
     for (let col = 0; col < numColumns; col++) {
@@ -230,7 +239,7 @@ export default function ChartCanvas({
     ctx.font = 'bold 11px Inter, sans-serif';
     ctx.fillStyle = '#888899';
     ctx.fillText(`Beat: ${effectiveBeat.toFixed(2)}`, 4, height - 8);
-  }, [chart, scrollBeat, zoom, snapDivision, playing, currentBeat, currentTime, avMode, metadata, numColumns, beatHeight, skinLoaded]);
+  }, [chart, scrollBeat, zoom, snapDivision, playing, currentBeat, currentTime, avSpeed, metadata, numColumns, beatHeight, skinLoaded]);
 
   // Animation loop
   useEffect(() => {
@@ -285,8 +294,17 @@ export default function ChartCanvas({
     const col = Math.floor((mx - leftMargin) / COLUMN_WIDTH);
     if (col < 0 || col >= numColumns) return;
 
-    const beatOffset = (my - RECEPTOR_Y) / beatHeight;
-    const rawBeat = scrollBeat + beatOffset;
+    let rawBeat;
+    if (avSpeed > 0) {
+      const bpms = metadata?.bpms || [{ beat: 0, bpm: 120 }];
+      const stops = metadata?.stops || [];
+      const clickRefTime = beatToTime(scrollBeat, bpms, stops);
+      const timeOffset = (my - RECEPTOR_Y) / avSpeed;
+      rawBeat = timeToBeat(Math.max(0, clickRefTime + timeOffset), bpms, stops);
+    } else {
+      const beatOffset = (my - RECEPTOR_Y) / beatHeight;
+      rawBeat = scrollBeat + beatOffset;
+    }
     const beat = snapBeat(rawBeat, snapDivision);
 
     if (beat < 0) return;

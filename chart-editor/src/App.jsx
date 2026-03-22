@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { parseSM } from './lib/smParser.js';
 import { serializeSM } from './lib/smSerializer.js';
 import { parseSSC } from './lib/sscParser.js';
@@ -10,6 +10,8 @@ import Toolbar from './components/Toolbar.jsx';
 import MetadataPanel from './components/MetadataPanel.jsx';
 import ChartSelector from './components/ChartSelector.jsx';
 import FileDropZone from './components/FileDropZone.jsx';
+import MeasureGuide from './components/MeasureGuide.jsx';
+import SongBrowser from './components/SongBrowser.jsx';
 
 export default function App() {
   const { state, activeChart, dispatch, undo, redo } = useChartState();
@@ -21,15 +23,24 @@ export default function App() {
   const [noteType, setNoteType] = useState('tap');
   const [fileLoaded, setFileLoaded] = useState(false);
   const [fileFormat, setFileFormat] = useState('sm'); // 'sm' or 'ssc'
-  const [avMode, setAvMode] = useState(false); // AV/CMOD: constant scroll speed
+  const [avSpeed, setAvSpeed] = useState(0); // 0 = off, 100-1200 = AV scroll speed
   const holdStartRef = useRef(null);
 
-  // Sync scroll to audio playback position
+  // Last beat in the active chart (for auto-stop)
+  const lastBeat = useMemo(() => {
+    if (!activeChart?.notes?.length) return 0;
+    return Math.max(...activeChart.notes.map(n => n.beat));
+  }, [activeChart]);
+
+  // Sync scroll to audio playback position + auto-stop after last note
   useEffect(() => {
     if (audio.playing) {
       setScrollBeat(audio.currentBeat);
+      if (lastBeat > 0 && audio.currentBeat > lastBeat + 4) {
+        audio.togglePlay();
+      }
     }
-  }, [audio.playing, audio.currentBeat]);
+  }, [audio.playing, audio.currentBeat, lastBeat]);
 
   // Load .sm/.ssc file
   const handleLoadSM = useCallback((text, filename) => {
@@ -106,6 +117,13 @@ export default function App() {
     }
   }, [state, fileFormat]);
 
+  // Back to beginning
+  const handleSeekToBeginning = useCallback(() => {
+    if (audio.playing) audio.togglePlay();
+    setScrollBeat(0);
+    audio.seekToBeat(0);
+  }, [audio]);
+
   // Place / delete note handlers
   const handlePlaceNote = useCallback((beat, column, type) => {
     dispatch({ type: 'PLACE_NOTE', payload: { beat, column, noteType: type } });
@@ -160,6 +178,10 @@ export default function App() {
           // Cancel hold placement
           holdStartRef.current = null;
           break;
+        case 'Home':
+          e.preventDefault();
+          handleSeekToBeginning();
+          break;
       }
     };
 
@@ -167,10 +189,23 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [audio, snapDivision, undo, redo]);
 
+  // Handle selecting a chart from the song browser
+  const handleSelectChart = useCallback((data, chartIndex) => {
+    dispatch({ type: 'LOAD_FILE', payload: data });
+    dispatch({ type: 'SET_ACTIVE_CHART', payload: chartIndex });
+    setFileLoaded(true);
+    setFileFormat('ssc');
+    setScrollBeat(0);
+  }, [dispatch]);
+
   if (!fileLoaded) {
     return (
       <div className="h-full flex flex-col">
-        <FileDropZone onLoadSM={handleLoadSM} onLoadAudio={handleLoadAudio} hasFile={false} />
+        <SongBrowser
+          onSelectChart={handleSelectChart}
+          onLoadSM={handleLoadSM}
+          onLoadAudio={handleLoadAudio}
+        />
       </div>
     );
   }
@@ -210,12 +245,21 @@ export default function App() {
         dirty={state.dirty}
         onSave={handleSave}
         fileFormat={fileFormat}
-        avMode={avMode}
-        onSetAvMode={setAvMode}
+        avSpeed={avSpeed}
+        onSetAvSpeed={setAvSpeed}
+        onSeekToBeginning={handleSeekToBeginning}
       />
 
-      {/* Main area: canvas + metadata panel */}
+      {/* Main area: minimap + canvas + metadata panel */}
       <div className="flex-1 flex overflow-hidden">
+        {activeChart && (
+          <MeasureGuide
+            chart={activeChart}
+            scrollBeat={scrollBeat}
+            onScrollBeatChange={setScrollBeat}
+            zoom={zoom}
+          />
+        )}
         {activeChart && (
           <ChartCanvas
             chart={activeChart}
@@ -230,7 +274,7 @@ export default function App() {
             playing={audio.playing}
             currentBeat={audio.currentBeat}
             currentTime={audio.currentTime}
-            avMode={avMode}
+            avSpeed={avSpeed}
             holdStartRef={holdStartRef}
           />
         )}

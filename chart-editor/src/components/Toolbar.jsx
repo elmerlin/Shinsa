@@ -20,13 +20,21 @@ export default function Toolbar({
   dirty,
   onSave,
   fileFormat,
-  avMode,
-  onSetAvMode,
+  avSpeed,
+  onSetAvSpeed,
+  onSeekToBeginning,
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2 bg-piu-card border-b border-piu-border shrink-0 flex-wrap">
       {/* Playback controls */}
       <div className="flex items-center gap-2">
+        <button
+          onClick={onSeekToBeginning}
+          className="px-2 py-1.5 rounded font-display font-semibold text-sm bg-piu-dark text-gray-400 border border-piu-border hover:text-white"
+          title="Home"
+        >
+          |◀
+        </button>
         <button
           onClick={onTogglePlay}
           className={`px-3 py-1.5 rounded font-display font-semibold text-sm
@@ -50,18 +58,30 @@ export default function Toolbar({
           ))}
         </select>
 
-        {/* AV/CMOD toggle */}
+        {/* AV/CMOD control */}
         <button
-          onClick={() => onSetAvMode(!avMode)}
+          onClick={() => onSetAvSpeed(avSpeed > 0 ? 0 : 600)}
           className={`px-2 py-1 rounded text-xs font-semibold
-            ${avMode
+            ${avSpeed > 0
               ? 'bg-piu-green text-black'
               : 'bg-piu-dark text-gray-400 border border-piu-border hover:text-white'
             }`}
-          title="AV Mode (constant scroll speed during playback)"
+          title="AV Mode (constant scroll speed)"
         >
           AV
         </button>
+        {avSpeed > 0 && (
+          <input
+            type="number"
+            min="100"
+            max="1200"
+            step="50"
+            value={avSpeed}
+            onChange={e => onSetAvSpeed(Math.max(100, Math.min(1200, parseInt(e.target.value) || 600)))}
+            className="w-16 bg-piu-dark border border-piu-border rounded px-1.5 py-1 text-xs text-center"
+            title="AV scroll speed"
+          />
+        )}
       </div>
 
       {/* Position info */}
