@@ -73,6 +73,6 @@ export const GAME_TYPES = {
 export const BEAT_HEIGHT = 80;        // pixels per beat at zoom 1.0
 export const COLUMN_WIDTH = 48;       // pixels per column
 export const RECEPTOR_Y = 60;         // receptor line Y position from top
-export const NOTE_SIZE = 40;          // note circle/arrow size
+export const NOTE_SIZE = 46;          // note arrow size (nearly fills column)
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 4.0;

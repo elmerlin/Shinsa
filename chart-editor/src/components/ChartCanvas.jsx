@@ -63,7 +63,8 @@ export default function ChartCanvas({
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, width, height);
 
-    const leftMargin = 60;
+    const chartWidth = numColumns * COLUMN_WIDTH;
+    const leftMargin = Math.max(60, Math.floor((width - chartWidth) / 2));
     const noteDrawSize = NOTE_SIZE;
 
     // AV/CMOD: reference time for positioning
@@ -287,9 +288,10 @@ export default function ChartCanvas({
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    const leftMargin = 60;
+    const chartWidth = numColumns * COLUMN_WIDTH;
+    const leftMargin = Math.max(60, Math.floor((canvas.width - chartWidth) / 2));
 
-    if (mx < leftMargin || mx > leftMargin + numColumns * COLUMN_WIDTH) return;
+    if (mx < leftMargin || mx > leftMargin + chartWidth) return;
 
     const col = Math.floor((mx - leftMargin) / COLUMN_WIDTH);
     if (col < 0 || col >= numColumns) return;
@@ -432,12 +434,12 @@ function drawHoldBody(ctx, imgs, column, x, headY, tailY, size, isRoll) {
 
   if (bodyHeight <= 0) return;
 
-  const bodyWidth = size * 0.45;
+  const bodyWidth = size * 0.75;
 
   if (bodyImg) {
     // Tile the body sprite vertically
     ctx.save();
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = 1.0;
     const tileH = bodyWidth; // square tiles
     for (let ty = top; ty < bot; ty += tileH) {
       const drawH = Math.min(tileH, bot - ty);
