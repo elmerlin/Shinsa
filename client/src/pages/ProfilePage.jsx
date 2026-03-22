@@ -15,6 +15,7 @@ import {
   getActivityNotificationPreferences, updateActivityNotificationPreferences,
   getProfileLiveSessions, updateLiveSessionProfileVisibility, deleteLiveSession,
   getOrCreateDirectConversation,
+  createMessageStoryItem,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -29,6 +30,10 @@ import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJac
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
+import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
+import { StoryShareModal, buildStoryDraft } from '../components/ScoreSnapshotModal';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
+import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -998,6 +1003,8 @@ function getActivityCategoryLabel(category) {
   return 'Activity';
 }
 
+const SCORE_CARD_STYLE_KEY = 'shinsa_score_card_style';
+
 export default function ProfilePage() {
   const { id, username } = useParams();
   const navigate = useNavigate();
@@ -1040,6 +1047,19 @@ export default function ProfilePage() {
   const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
+  const [scoreCardStyle, setScoreCardStyle] = useState(() => localStorage.getItem(SCORE_CARD_STYLE_KEY) || 'classic');
+  const [classicStoryOpen, setClassicStoryOpen] = useState(false);
+  const [classicStoryCaption, setClassicStoryCaption] = useState('');
+  const [classicStorySubmitting, setClassicStorySubmitting] = useState(false);
+  const [classicStoryError, setClassicStoryError] = useState('');
+  const [classicStorySuccess, setClassicStorySuccess] = useState(false);
+  useEffect(() => {
+    setClassicStoryOpen(false);
+    setClassicStoryCaption('');
+    setClassicStorySubmitting(false);
+    setClassicStoryError('');
+    setClassicStorySuccess(false);
+  }, [selectedPlay]);
   const [jacketLookup, setJacketLookup] = useState({});
   const [chartKeyMap, setChartKeyMap] = useState({});
   const [topProfileMetricMode, setTopProfileMetricMode] = useState('overall');
@@ -4244,9 +4264,161 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Phoenix Score Card Modal */}
+      {/* Score Card Modal — classic or snapshot style */}
       {selectedPlay && (() => {
         const p = selectedPlay;
+        const modalNorm = (p.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        const modalExactKey = `${modalNorm}|${p.mode}|${p.level}`;
+        const modalBg = jacketLookup[modalExactKey] || jacketLookup[modalNorm] || '';
+        const playChartKey = `${modalNorm}|${p.mode}|${p.level}`;
+        const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[modalNorm];
+        const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(p.song_title || '')}`;
+
+        const dmLinkShare = buildScoreSnapshotLinkShare({
+          kind: 'score_snapshot',
+          sourceId: '',
+          username: profile?.username || '',
+          avatar: profile?.avatar ? getAvatarUrl(profile.avatar) : '',
+          score: { ...p, username: profile?.username || '' },
+          path: playChartLink,
+          chartPath: playChartLink,
+          jacketUrl: modalBg,
+        });
+
+        const toggleStyle = () => {
+          const next = scoreCardStyle === 'classic' ? 'snapshot' : 'classic';
+          setScoreCardStyle(next);
+          localStorage.setItem(SCORE_CARD_STYLE_KEY, next);
+          setClassicStoryOpen(false);
+          setClassicStoryCaption('');
+          setClassicStoryError('');
+          setClassicStorySuccess(false);
+        };
+
+        const styleToggleButton = (
+          <button
+            type="button"
+            onClick={toggleStyle}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-gray-400 transition-colors hover:border-cyan-300/30 hover:text-white"
+            aria-label={scoreCardStyle === 'classic' ? 'Switch to snapshot view' : 'Switch to classic view'}
+            title={scoreCardStyle === 'classic' ? 'Switch to snapshot view' : 'Switch to classic view'}
+          >
+            {scoreCardStyle === 'classic' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            )}
+          </button>
+        );
+
+        if (scoreCardStyle === 'snapshot') {
+          return (
+            <>
+              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm" onClick={() => setSelectedPlay(null)}>
+                <div className="w-full max-w-[23.5rem]" onClick={(event) => event.stopPropagation()}>
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-cyan-200/75">
+                      Run details
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {styleToggleButton}
+                      {dmLinkShare ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClassicStoryError('');
+                              setClassicStorySuccess(false);
+                              setClassicStoryOpen(true);
+                            }}
+                            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border bg-black/25 transition-colors ${
+                              classicStorySuccess
+                                ? 'border-emerald-300/30 text-emerald-100 hover:bg-black/40'
+                                : 'border-white/10 text-gray-100 hover:border-cyan-300/30 hover:bg-black/40 hover:text-white'
+                            }`}
+                            aria-label="Add to story"
+                            title={classicStorySuccess ? 'Added to story' : 'Add to story'}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c1.67 2.72 3.83 4.88 6.55 6.55-2.72 1.67-4.88 3.83-6.55 6.55-1.67-2.72-3.83-4.88-6.55-6.55 2.72-1.67 4.88-3.83 6.55-6.55Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 15.75v4.5m-2.25-2.25h4.5" />
+                            </svg>
+                          </button>
+                          <SendToDirectMessageButton
+                            linkShare={dmLinkShare}
+                            variant="icon"
+                            title="Send to DM"
+                            className="h-10 w-10 justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 hover:border-cyan-300/30 hover:bg-black/40 hover:text-white"
+                          />
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlay(null)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-200 transition-colors hover:border-white/20 hover:bg-black/40 hover:text-white"
+                        aria-label="Close score details"
+                        title="Close"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <ScoreSnapshotCard
+                    score={{ ...p, username: profile?.username || '' }}
+                    jacketUrl={modalBg}
+                    chartLink={playChartLink}
+                    avatarUrl={profile?.avatar ? getAvatarUrl(profile.avatar) : ''}
+                    skillTitle={profile?.skill_title || ''}
+                    roleLabel={profile?.role_label || ''}
+                  />
+                </div>
+              </div>
+              {classicStoryOpen && (() => {
+                const storyDraft = buildStoryDraft(
+                  { ...p, username: profile?.username || '' },
+                  modalBg,
+                  playChartLink,
+                  dmLinkShare,
+                );
+                return (
+                  <StoryShareModal
+                    open
+                    draft={storyDraft}
+                    caption={classicStoryCaption}
+                    submitting={classicStorySubmitting}
+                    success={classicStorySuccess}
+                    error={classicStoryError}
+                    onCaptionChange={setClassicStoryCaption}
+                    onClose={() => { if (!classicStorySubmitting) { setClassicStoryOpen(false); setClassicStoryError(''); } }}
+                    onSubmit={async () => {
+                      if (!storyDraft || classicStorySubmitting) return;
+                      setClassicStorySubmitting(true);
+                      setClassicStoryError('');
+                      try {
+                        await createMessageStoryItem({ ...storyDraft, caption: classicStoryCaption.trim() });
+                        setClassicStorySuccess(true);
+                        setClassicStoryOpen(false);
+                      } catch (err) {
+                        setClassicStoryError(err?.message || 'Failed to add story.');
+                      } finally {
+                        setClassicStorySubmitting(false);
+                      }
+                    }}
+                  />
+                );
+              })()}
+            </>
+          );
+        }
+
+        // Classic style
         const rank = getRank(p.score);
         const displayGrade = parseGrade(p.grade, rank.label);
         const overRank = getOverTop100Rank(p.over_top100_rank);
@@ -4262,93 +4434,159 @@ export default function ProfilePage() {
           { label: 'BAD', value: p.bad || 0, textColor: 'text-fuchsia-400' },
           { label: 'MISS', value: p.miss || 0, textColor: 'text-gray-400' },
         ];
-        const modalNorm = (p.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-        const modalExactKey = `${modalNorm}|${p.mode}|${p.level}`;
-        const modalBg = jacketLookup[modalExactKey] || jacketLookup[modalNorm] || '';
         return (
-          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPlay(null)}>
-            <div
-              className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
-              onClick={e => e.stopPropagation()}
-            >
-              {modalBg && (
-                <div
-                  className="absolute inset-0 bg-cover bg-center opacity-15"
-                  style={{ backgroundImage: `url(${modalBg})` }}
-                />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
+          <>
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPlay(null)}>
+              <div
+                className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                {modalBg && (
+                  <div
+                    className="absolute inset-0 bg-cover bg-center opacity-15"
+                    style={{ backgroundImage: `url(${modalBg})` }}
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
 
-              <div className="relative p-5">
-                <button
-                  className="absolute top-3 right-3 text-gray-500 hover:text-white text-xl leading-none"
-                  onClick={() => setSelectedPlay(null)}
-                >
-                  x
-                </button>
-
-                <p className="font-display font-bold text-lg leading-tight pr-6">{p.song_title}</p>
-
-                <div className="flex items-center gap-3 mt-4">
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
-                    p.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : p.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
-                  }`}>
-                    <span className={`font-display font-bold text-[10px] uppercase ${p.mode === 'Single' ? 'text-red-400' : p.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{p.mode}</span>
-                    <span className={`font-display font-bold text-base ${p.mode === 'Single' ? 'text-red-300' : p.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{p.level}</span>
+                <div className="relative p-5">
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    {styleToggleButton}
+                    <button
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:text-white text-xl leading-none"
+                      onClick={() => setSelectedPlay(null)}
+                    >
+                      &times;
+                    </button>
                   </div>
-                  {overRank > 0 && (
-                    <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
-                      TOP #{overRank}
-                    </span>
-                  )}
-                  <div className="text-center flex-1">
-                    {p.score > 0 ? (
-                      <p
-                        className={`text-3xl font-display font-black ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
-                        data-grade={displayGrade.display}
-                      >
-                        {displayGrade.display}
-                      </p>
-                    ) : (
-                      <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+
+                  <p className="font-display font-bold text-lg leading-tight pr-20">{p.song_title}</p>
+
+                  <div className="flex items-center gap-3 mt-4">
+                    <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
+                      p.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : p.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
+                    }`}>
+                      <span className={`font-display font-bold text-[10px] uppercase ${p.mode === 'Single' ? 'text-red-400' : p.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{p.mode}</span>
+                      <span className={`font-display font-bold text-base ${p.mode === 'Single' ? 'text-red-300' : p.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{p.level}</span>
+                    </div>
+                    {overRank > 0 && (
+                      <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
+                        TOP #{overRank}
+                      </span>
                     )}
+                    <div className="text-center flex-1">
+                      {p.score > 0 ? (
+                        <p
+                          className={`text-3xl font-display font-black ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                          data-grade={displayGrade.display}
+                        >
+                          {displayGrade.display}
+                        </p>
+                      ) : (
+                        <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+                      )}
+                    </div>
                   </div>
+
+                  {plateName && (
+                    <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+                  )}
+
+                  {p.score > 0 && (
+                    <p className="text-center font-mono text-2xl font-bold mt-2">{p.score.toLocaleString()}</p>
+                  )}
+
+                  {hasBreakdown && (
+                    <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
+                      {judgments.map(j => (
+                        <div key={j.label}>
+                          <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
+                          <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!hasBreakdown && p.score > 0 && (
+                    <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
+                      Judgment breakdown not available — try re-syncing
+                    </p>
+                  )}
+
+                  {(p.date_played || p.machine_name) && (
+                    <p className="text-xs text-gray-500 text-right mt-3">
+                      {p.date_played ? formatPlayDate(p.date_played) : ''}
+                      {p.machine_name ? <span className="text-gray-600">{p.date_played ? ' · ' : ''}at {p.machine_name}</span> : null}
+                    </p>
+                  )}
+
+                  {/* Story + DM action buttons */}
+                  {dmLinkShare && (
+                    <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-piu-border/30">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClassicStoryError('');
+                          setClassicStorySuccess(false);
+                          setClassicStoryOpen(true);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-display font-bold transition-colors ${
+                          classicStorySuccess
+                            ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                            : 'border-white/10 bg-white/5 text-gray-300 hover:border-cyan-300/30 hover:text-white'
+                        }`}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-3.5 w-3.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c1.67 2.72 3.83 4.88 6.55 6.55-2.72 1.67-4.88 3.83-6.55 6.55-1.67-2.72-3.83-4.88-6.55-6.55 2.72-1.67 4.88-3.83 6.55-6.55Z" />
+                        </svg>
+                        {classicStorySuccess ? 'Added' : 'Story'}
+                      </button>
+                      <SendToDirectMessageButton
+                        linkShare={dmLinkShare}
+                        variant="button"
+                        label="DM"
+                        title="Send to DM"
+                      />
+                    </div>
+                  )}
                 </div>
-
-                {plateName && (
-                  <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
-                )}
-
-                {p.score > 0 && (
-                  <p className="text-center font-mono text-2xl font-bold mt-2">{p.score.toLocaleString()}</p>
-                )}
-
-                {hasBreakdown && (
-                  <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
-                    {judgments.map(j => (
-                      <div key={j.label}>
-                        <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
-                        <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!hasBreakdown && p.score > 0 && (
-                  <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
-                    Judgment breakdown not available — try re-syncing
-                  </p>
-                )}
-
-                {(p.date_played || p.machine_name) && (
-                  <p className="text-xs text-gray-500 text-right mt-3">
-                    {p.date_played ? formatPlayDate(p.date_played) : ''}
-                    {p.machine_name ? <span className="text-gray-600">{p.date_played ? ' · ' : ''}at {p.machine_name}</span> : null}
-                  </p>
-                )}
               </div>
             </div>
-          </div>
+            {classicStoryOpen && (() => {
+              const storyDraft = buildStoryDraft(
+                { ...p, username: profile?.username || '' },
+                modalBg,
+                playChartLink,
+                dmLinkShare,
+              );
+              return (
+                <StoryShareModal
+                  open
+                  draft={storyDraft}
+                  caption={classicStoryCaption}
+                  submitting={classicStorySubmitting}
+                  success={classicStorySuccess}
+                  error={classicStoryError}
+                  onCaptionChange={setClassicStoryCaption}
+                  onClose={() => { if (!classicStorySubmitting) { setClassicStoryOpen(false); setClassicStoryError(''); } }}
+                  onSubmit={async () => {
+                    if (!storyDraft || classicStorySubmitting) return;
+                    setClassicStorySubmitting(true);
+                    setClassicStoryError('');
+                    try {
+                      await createMessageStoryItem({ ...storyDraft, caption: classicStoryCaption.trim() });
+                      setClassicStorySuccess(true);
+                      setClassicStoryOpen(false);
+                    } catch (err) {
+                      setClassicStoryError(err?.message || 'Failed to add story.');
+                    } finally {
+                      setClassicStorySubmitting(false);
+                    }
+                  }}
+                />
+              );
+            })()}
+          </>
         );
       })()}
     </div>

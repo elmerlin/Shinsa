@@ -56,7 +56,7 @@ function buildStorySnapshot(score, jacketUrl = '', linkShare = null) {
   };
 }
 
-function buildStoryDraft(score, jacketUrl = '', chartLink = '', linkShare = null) {
+export function buildStoryDraft(score, jacketUrl = '', chartLink = '', linkShare = null) {
   const snapshot = buildStorySnapshot(score, jacketUrl, linkShare);
   const playerName = snapshot.playerName || 'Player';
   const chartLine = formatChartLine(snapshot.song_title, snapshot.mode, snapshot.level);
@@ -75,7 +75,7 @@ function buildStoryDraft(score, jacketUrl = '', chartLink = '', linkShare = null
   };
 }
 
-function StoryShareModal({
+export function StoryShareModal({
   open = false,
   draft = null,
   caption = '',
