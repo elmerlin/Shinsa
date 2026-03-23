@@ -6,6 +6,7 @@ import YouTubeReplayModal from './YouTubeReplayModal';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
 import { getCountryFlag } from './PlayerRegistration';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
+import { buildReplayModalTitle } from '../utils/replayTitle';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -214,7 +215,7 @@ function ReplayCard({ play, rank, jacketLookup, onReplayClick, visible }) {
   return (
     <button
       type="button"
-      onClick={() => onReplayClick(play.replay_embed_url, play.song_title)}
+      onClick={() => onReplayClick(play.replay_embed_url, buildReplayModalTitle(play))}
       className={`group relative flex-shrink-0 snap-start ${CARD_W} ${CARD_H} overflow-hidden rounded-lg border border-piu-border/50 text-left transition-all duration-400 ease-out hover:border-sky-400/35 hover:shadow-[0_4px_16px_rgba(56,189,248,0.1)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
     >
       <RankBadge rank={rank} />
