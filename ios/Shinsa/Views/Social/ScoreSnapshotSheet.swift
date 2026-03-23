@@ -18,17 +18,33 @@ struct YouTubePlayerView: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
+        // Use YouTube IFrame Player API with proper origin to avoid error 150/153
         let embedHTML = """
         <!DOCTYPE html>
         <html><head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>body{margin:0;background:#000}iframe{width:100%;height:100%;border:0}</style>
+        <style>body{margin:0;background:#000;overflow:hidden}#player{width:100%;height:100%}</style>
         </head><body>
-        <iframe src="https://www.youtube.com/embed/\(videoId)?playsinline=1&rel=0&modestbranding=1"
-                allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        <div id="player"></div>
+        <script>
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+        function onYouTubeIframeAPIReady() {
+            new YT.Player('player', {
+                videoId: '\(videoId)',
+                playerVars: {
+                    playsinline: 1,
+                    rel: 0,
+                    modestbranding: 1,
+                    origin: 'https://www.youtube.com'
+                }
+            });
+        }
+        </script>
         </body></html>
         """
-        webView.loadHTMLString(embedHTML, baseURL: nil)
+        webView.loadHTMLString(embedHTML, baseURL: URL(string: "https://www.youtube.com"))
     }
 }
 
