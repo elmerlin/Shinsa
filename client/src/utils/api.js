@@ -869,6 +869,7 @@ export const getNewClear = (id) => request(`/social/clears/${id}`);
 // Social — Feed
 export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);
 export const getRecentActivity = () => request('/social/recent-activity');
+export const getDailyHighlights = () => request('/social/daily-highlights');
 
 // ─── Communities ─────────────────────────────────────
 

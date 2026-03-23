@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, getLiveSessions, joinCommunity } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, getLiveSessions, joinCommunity, getDailyHighlights, getJacketMap } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
@@ -8,6 +8,7 @@ import { renderFormattedText } from '../utils/formatText';
 import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import ArchiveBrowser from '../components/tournament/ArchiveBrowser';
+import DailyHighlights from '../components/DailyHighlights';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -59,6 +60,8 @@ export default function Dashboard() {
   const [joiningCommunity, setJoiningCommunity] = useState(null);
   const [communityPalettes, setCommunityPalettes] = useState({});
   const [showArchived, setShowArchived] = useState(false);
+  const [dailyHighlights, setDailyHighlights] = useState(null);
+  const [jacketLookup, setJacketLookup] = useState({});
 
   const matchesSearch = (value, q) => String(value || '').toLowerCase().includes(q);
   const duelMatchesSearch = (duel, q) => (
@@ -76,6 +79,8 @@ export default function Dashboard() {
     getOnlineDuels().then(setOnlineDuels).catch(() => {});
     getNotices().then(setNotices).catch(() => {});
     getRecentActivity().then(setRecentActivity).catch(() => {});
+    getDailyHighlights().then(setDailyHighlights).catch(() => {});
+    getJacketMap().then(setJacketLookup).catch(() => {});
     getFeaturedCommunities()
       .then((rows) => setFeaturedCommunities((rows || []).map((community) => ({
         ...community,
@@ -406,6 +411,10 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+      )}
+
+      {dailyHighlights && searchResults === null && (
+        <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} />
       )}
 
       {user && liveSessions.length > 0 && searchResults === null && (

@@ -2091,5 +2091,166 @@ router.get('/recent-activity', (req, res) => {
   res.json(latestActivities);
 });
 
+// ---------------------------------------------------------------------------
+// GET /api/social/daily-highlights — top plays, upscores, and clears for today
+// ---------------------------------------------------------------------------
+const DAILY_HIGHLIGHTS_TTL_MS = 60 * 1000;
+let dailyHighlightsCache = { data: null, expiresAt: 0 };
+
+function readDailyHighlightsCache() {
+  if (!dailyHighlightsCache.data) return null;
+  if (Date.now() >= dailyHighlightsCache.expiresAt) {
+    dailyHighlightsCache = { data: null, expiresAt: 0 };
+    return null;
+  }
+  return dailyHighlightsCache.data;
+}
+
+function writeDailyHighlightsCache(data) {
+  dailyHighlightsCache = { data, expiresAt: Date.now() + DAILY_HIGHLIGHTS_TTL_MS };
+}
+
+function pickTopNDiverse(items, n, getUserId) {
+  if (items.length <= n) return items.slice(0, n);
+  const uniqueUsers = new Set(items.map(getUserId));
+  if (uniqueUsers.size >= n) {
+    const seen = new Set();
+    const result = [];
+    for (const item of items) {
+      const uid = getUserId(item);
+      if (!seen.has(uid)) {
+        seen.add(uid);
+        result.push(item);
+        if (result.length >= n) break;
+      }
+    }
+    return result;
+  }
+  return items.slice(0, n);
+}
+
+router.get('/daily-highlights', (req, res) => {
+  res.set('Cache-Control', `public, max-age=${Math.floor(DAILY_HIGHLIGHTS_TTL_MS / 1000)}`);
+  const cached = readDailyHighlightsCache();
+  if (cached) return res.json(cached);
+
+  const db = getDb();
+
+  // --- Top 5 replay plays today (highest score) ---
+  const replayPlays = db.prepare(`
+    SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
+           rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
+           rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
+           rp.background_url, rp.date_played, rp.machine_name,
+           u.username, u.avatar, u.nationality
+    FROM user_recently_played rp
+    JOIN users u ON rp.user_id = u.id
+    WHERE rp.replay_embed_url IS NOT NULL AND rp.replay_embed_url != ''
+      AND rp.date_played >= date('now', '-1 day')
+    ORDER BY rp.score DESC
+    LIMIT 20
+  `).all();
+
+  const topReplays = pickTopNDiverse(replayPlays, 5, (r) => r.user_id).map((r) => ({
+    ...r,
+    avatar: normalizeUserAvatarForList(r.avatar, r.user_id, 40),
+  }));
+
+  // --- Top 5 upscores today (by pumbility_gain, player-diverse) ---
+  const upscoreRows = db.prepare(`
+    SELECT us.id as upscore_id, us.user_id, us.upscores_json, us.pumbility_gain as post_pumbility_gain,
+           us.created_at, u.username, u.avatar, u.nationality
+    FROM user_upscores us
+    JOIN users u ON us.user_id = u.id
+    WHERE us.created_at >= datetime('now', '-1 day')
+    ORDER BY us.created_at DESC
+    LIMIT 50
+  `).all();
+
+  const flatUpscores = [];
+  for (const row of upscoreRows) {
+    const enriched = enrichUpscoreRow(db, row);
+    const items = safeParseJsonArray(enriched.upscores_json);
+    for (const item of items) {
+      const delta = (toInt(item.new_score) || toInt(item.score)) - toInt(item.old_score);
+      flatUpscores.push({
+        ...item,
+        upscore_id: row.upscore_id,
+        user_id: row.user_id,
+        username: row.username,
+        avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 40),
+        nationality: row.nationality,
+        pumbility_gain: toInt(item.pumbility_gain) || toInt(item.singles_pumbility_gain),
+        score_delta: delta,
+      });
+    }
+  }
+  flatUpscores.sort((a, b) => (b.pumbility_gain || b.score_delta) - (a.pumbility_gain || a.score_delta));
+  const topUpscores = pickTopNDiverse(flatUpscores, 5, (u) => u.user_id);
+
+  // --- Top 5 new clears today (hardest first, player-diverse) ---
+  const clearRows = db.prepare(`
+    SELECT nc.id as clear_id, nc.user_id, nc.song_title, nc.mode, nc.level, nc.score, nc.grade, nc.plate,
+           nc.background_url, nc.clears_json, nc.pumbility_gain as post_pumbility_gain,
+           nc.created_at, u.username, u.avatar, u.nationality
+    FROM user_new_clears nc
+    JOIN users u ON nc.user_id = u.id
+    WHERE nc.created_at >= datetime('now', '-1 day')
+    ORDER BY nc.created_at DESC
+    LIMIT 50
+  `).all();
+
+  const flatClears = [];
+  for (const row of clearRows) {
+    const enriched = enrichClearRow(db, row);
+    const items = safeParseJsonArray(enriched.clears_json);
+    if (items.length > 0) {
+      for (const item of items) {
+        if (String(item?.entry_type || '') === 'title_unlock') continue;
+        flatClears.push({
+          ...item,
+          clear_id: row.clear_id,
+          user_id: row.user_id,
+          username: row.username,
+          avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 40),
+          nationality: row.nationality,
+          pumbility_gain: toInt(item.pumbility_gain) || toInt(item.singles_pumbility_gain),
+        });
+      }
+    } else {
+      flatClears.push({
+        song_title: row.song_title,
+        mode: row.mode,
+        level: toInt(row.level),
+        score: toInt(row.score),
+        grade: row.grade || '',
+        plate: row.plate || '',
+        background_url: row.background_url || '',
+        clear_id: row.clear_id,
+        user_id: row.user_id,
+        username: row.username,
+        avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 40),
+        nationality: row.nationality,
+        pumbility_gain: toInt(row.post_pumbility_gain),
+      });
+    }
+  }
+  flatClears.sort((a, b) => {
+    const lvlDiff = toInt(b.level) - toInt(a.level);
+    if (lvlDiff !== 0) return lvlDiff;
+    return toInt(b.score) - toInt(a.score);
+  });
+  const topClears = pickTopNDiverse(flatClears, 5, (c) => c.user_id);
+
+  const result = {
+    topReplays,
+    topUpscores,
+    topClears,
+  };
+
+  writeDailyHighlightsCache(result);
+  res.json(result);
+});
+
 module.exports = router;
 module.exports.invalidateRecentActivityCache = invalidateRecentActivityCache;
