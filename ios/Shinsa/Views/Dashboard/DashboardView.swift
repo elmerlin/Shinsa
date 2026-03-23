@@ -46,14 +46,23 @@ struct DashboardView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                HStack(spacing: 0) {
-                    Text("PUMP")
-                        .font(.system(size: 18, weight: .black))
+                HStack(spacing: 2) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 22))
                         .foregroundColor(DojoTheme.piuGold)
-                    Text(" SHINSA")
-                        .font(.system(size: 18, weight: .black))
+                        .overlay(
+                            Text("S")
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundColor(DojoTheme.piuBg)
+                        )
+                    Text("PUMP")
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundColor(DojoTheme.piuGold)
+                    Text("SHINSA")
+                        .font(.system(size: 13, weight: .black))
                         .foregroundColor(.white)
                 }
+                .fixedSize()
             }
         }
         .task { await vm.load() }
