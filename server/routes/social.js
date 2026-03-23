@@ -2137,7 +2137,8 @@ router.get('/daily-highlights', (req, res) => {
   const db = getDb();
 
   // --- Top 5 replay plays today (highest score) ---
-  const replayPlays = db.prepare(`
+  // Source 1: plays with replay_embed_url set directly on user_recently_played
+  const directReplays = db.prepare(`
     SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
            rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
            rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
@@ -2151,7 +2152,37 @@ router.get('/daily-highlights', (req, res) => {
     LIMIT 20
   `).all();
 
-  const topReplays = pickTopNDiverse(replayPlays, 5, (r) => r.user_id).map((r) => ({
+  // Source 2: today's plays that match a chart with a session_youtube_url link
+  const chartLinkedReplays = db.prepare(`
+    SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
+           rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
+           yt.session_youtube_url AS replay_embed_url, '' AS replay_video_id,
+           0 AS replay_start_seconds, 0 AS replay_end_seconds,
+           rp.background_url, rp.date_played, rp.machine_name,
+           u.username, u.avatar, u.nationality
+    FROM user_recently_played rp
+    JOIN users u ON rp.user_id = u.id
+    JOIN songs s ON s.title = rp.song_title AND s.mode = rp.mode AND s.level = rp.level
+    JOIN user_chart_youtube_links yt ON yt.user_id = rp.user_id AND yt.chart_id = s.id
+    WHERE yt.session_youtube_url IS NOT NULL AND yt.session_youtube_url != ''
+      AND (rp.replay_embed_url IS NULL OR rp.replay_embed_url = '')
+      AND rp.date_played >= date('now', '-1 day')
+    ORDER BY rp.score DESC
+    LIMIT 20
+  `).all();
+
+  // Merge both sources, de-dupe by rp.id, sort by score
+  const replayIdSet = new Set(directReplays.map((r) => r.id));
+  const mergedReplays = [...directReplays];
+  for (const r of chartLinkedReplays) {
+    if (!replayIdSet.has(r.id)) {
+      replayIdSet.add(r.id);
+      mergedReplays.push(r);
+    }
+  }
+  mergedReplays.sort((a, b) => toInt(b.score) - toInt(a.score));
+
+  const topReplays = pickTopNDiverse(mergedReplays, 5, (r) => r.user_id).map((r) => ({
     ...r,
     avatar: normalizeUserAvatarForList(r.avatar, r.user_id, 40),
   }));
