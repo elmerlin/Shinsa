@@ -1,4 +1,59 @@
 import SwiftUI
+import WebKit
+
+// MARK: - YouTube Player (WKWebView)
+
+struct YouTubePlayerView: UIViewRepresentable {
+    let videoId: String
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.isScrollEnabled = false
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        let embedHTML = """
+        <!DOCTYPE html>
+        <html><head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>body{margin:0;background:#000}iframe{width:100%;height:100%;border:0}</style>
+        </head><body>
+        <iframe src="https://www.youtube.com/embed/\(videoId)?playsinline=1&rel=0&modestbranding=1"
+                allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </body></html>
+        """
+        webView.loadHTMLString(embedHTML, baseURL: nil)
+    }
+}
+
+func extractYouTubeVideoId(_ url: String) -> String? {
+    // Handle embed URLs: youtube.com/embed/VIDEO_ID
+    if let range = url.range(of: "embed/") {
+        let afterEmbed = String(url[range.upperBound...])
+        return afterEmbed.components(separatedBy: CharacterSet(charactersIn: "?&#")).first
+    }
+    // Handle watch URLs: youtube.com/watch?v=VIDEO_ID
+    if let components = URLComponents(string: url),
+       let vParam = components.queryItems?.first(where: { $0.name == "v" })?.value {
+        return vParam
+    }
+    // Handle short URLs: youtu.be/VIDEO_ID
+    if url.contains("youtu.be/") {
+        let parts = url.components(separatedBy: "youtu.be/")
+        if parts.count > 1 {
+            return parts[1].components(separatedBy: CharacterSet(charactersIn: "?&#")).first
+        }
+    }
+    return nil
+}
+
+// MARK: - Score Snapshot Sheet
 
 struct ScoreSnapshotSheet: View {
     let songTitle: String
@@ -36,23 +91,19 @@ struct ScoreSnapshotSheet: View {
                             judgmentsSection
                         }
 
-                        // Replay button
-                        if let replayUrl = replayEmbedUrl, !replayUrl.isEmpty,
-                           let url = URL(string: replayUrl) {
-                            Link(destination: url) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "play.circle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.red)
-                                    Text("Watch Replay")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundColor(.white)
+                        // YouTube Replay (in-app)
+                        if let replayUrl = replayEmbedUrl, !replayUrl.isEmpty {
+                            let videoId = extractYouTubeVideoId(replayUrl)
+                            if let videoId = videoId {
+                                VStack(spacing: 8) {
+                                    Text("REPLAY")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(DojoTheme.textMuted)
+
+                                    YouTubePlayerView(videoId: videoId)
+                                        .frame(height: 200)
+                                        .cornerRadius(8)
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(Color.red.opacity(0.15))
-                                .cornerRadius(8)
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.red.opacity(0.3), lineWidth: 1))
                             }
                         }
 

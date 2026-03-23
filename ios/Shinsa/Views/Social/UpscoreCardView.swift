@@ -129,6 +129,12 @@ struct UpscoreCardView: View {
                 score: u.newScore ?? 0,
                 grade: DojoTheme.gradeLabel(for: u.newScore ?? 0),
                 backgroundUrl: u.backgroundUrl,
+                perfect: u.perfect,
+                great: u.great,
+                good: u.good,
+                bad: u.bad,
+                miss: u.miss,
+                datePlayed: u.datePlayed,
                 replayEmbedUrl: u.replayEmbedUrl,
                 username: item.username
             )
@@ -174,9 +180,11 @@ struct UpscoreCardView: View {
 
             Spacer()
 
-            // Replay badge
-            if let replayUrl = u.replayEmbedUrl, !replayUrl.isEmpty, let url = URL(string: replayUrl) {
-                Link(destination: url) {
+            // Replay badge (opens score sheet with in-app player)
+            if let replayUrl = u.replayEmbedUrl, !replayUrl.isEmpty {
+                Button {
+                    selectedScore = u
+                } label: {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 14))
                         .foregroundColor(.red)

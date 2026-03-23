@@ -129,6 +129,12 @@ struct NewClearCardView: View {
                 grade: DojoTheme.gradeLabel(for: c.score ?? 0),
                 plate: c.plate,
                 backgroundUrl: c.backgroundUrl,
+                perfect: c.perfect,
+                great: c.great,
+                good: c.good,
+                bad: c.bad,
+                miss: c.miss,
+                datePlayed: c.datePlayed,
                 replayEmbedUrl: c.replayEmbedUrl,
                 username: item.username
             )
@@ -164,9 +170,11 @@ struct NewClearCardView: View {
 
             Spacer()
 
-            // Replay badge
-            if let replayUrl = c.replayEmbedUrl, !replayUrl.isEmpty, let url = URL(string: replayUrl) {
-                Link(destination: url) {
+            // Replay badge (opens score sheet with in-app player)
+            if let replayUrl = c.replayEmbedUrl, !replayUrl.isEmpty {
+                Button {
+                    selectedClear = c
+                } label: {
                     Image(systemName: "play.circle.fill")
                         .font(.system(size: 14))
                         .foregroundColor(.red)

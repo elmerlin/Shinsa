@@ -1,7 +1,7 @@
 import Foundation
 
 struct PumbilityScore: Codable, Identifiable {
-    let id: Int
+    var id: String { "\(songTitle)|\(mode)|\(level)" }
     var userId: String?
     var songTitle: String
     var mode: String
@@ -12,14 +12,16 @@ struct PumbilityScore: Codable, Identifiable {
     var datePlayed: String?
     var rankOrder: Int?
     var rating: Int?
+    var overTop100Rank: Int?
 
     enum CodingKeys: String, CodingKey {
-        case id, mode, level, score, grade, rating
+        case mode, level, score, grade, rating
         case userId = "user_id"
         case songTitle = "song_title"
         case backgroundUrl = "background_url"
         case datePlayed = "date_played"
         case rankOrder = "rank_order"
+        case overTop100Rank = "over_top100_rank"
     }
 }
 

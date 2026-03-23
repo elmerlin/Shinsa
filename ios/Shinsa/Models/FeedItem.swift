@@ -68,8 +68,14 @@ struct FeedItem: Codable, Identifiable {
         var overTop100Rank: Int?
         var replayEmbedUrl: String?
         var replayVideoId: String?
+        var perfect: Int?
+        var great: Int?
+        var good: Int?
+        var bad: Int?
+        var miss: Int?
+        var datePlayed: String?
         enum CodingKeys: String, CodingKey {
-            case mode, level
+            case mode, level, perfect, great, good, bad, miss
             case songTitle = "song_title"
             case oldScore = "old_score"
             case newScore = "new_score"
@@ -81,6 +87,7 @@ struct FeedItem: Codable, Identifiable {
             case overTop100Rank = "over_top100_rank"
             case replayEmbedUrl = "replay_embed_url"
             case replayVideoId = "replay_video_id"
+            case datePlayed = "date_played"
         }
     }
 
@@ -98,8 +105,14 @@ struct FeedItem: Codable, Identifiable {
         var titleName: String?
         var replayEmbedUrl: String?
         var replayVideoId: String?
+        var perfect: Int?
+        var great: Int?
+        var good: Int?
+        var bad: Int?
+        var miss: Int?
+        var datePlayed: String?
         enum CodingKeys: String, CodingKey {
-            case mode, level, score, grade, plate
+            case mode, level, score, grade, plate, perfect, great, good, bad, miss
             case entryType = "entry_type"
             case songTitle = "song_title"
             case backgroundUrl = "background_url"
@@ -107,6 +120,7 @@ struct FeedItem: Codable, Identifiable {
             case titleName = "title_name"
             case replayEmbedUrl = "replay_embed_url"
             case replayVideoId = "replay_video_id"
+            case datePlayed = "date_played"
         }
     }
 
