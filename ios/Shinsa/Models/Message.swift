@@ -137,10 +137,18 @@ struct SquadDetail: Codable {
 }
 
 struct SquadMember: Codable, Identifiable {
-    let id: String
+    var id: String { userId ?? UUID().uuidString }
+    var userId: String?
     var username: String?
     var avatar: String?
     var role: String?
+    var playingStatus: String?
+
+    enum CodingKeys: String, CodingKey {
+        case username, avatar, role
+        case userId = "user_id"
+        case playingStatus = "playing_status"
+    }
 }
 
 // MARK: - Stories
