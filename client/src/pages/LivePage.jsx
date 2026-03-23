@@ -3789,7 +3789,8 @@ export default function LivePage() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isDocumentVisible, live, sessionId, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- use boolean to avoid re-firing on every snapshot update
+  }, [isDocumentVisible, !!live, sessionId, user]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
