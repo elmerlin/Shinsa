@@ -1,51 +1,21 @@
 import SwiftUI
-import WebKit
+import SafariServices
 
-// MARK: - YouTube Player (WKWebView)
+// MARK: - Safari View (for YouTube replays)
 
-struct YouTubePlayerView: UIViewRepresentable {
-    let videoId: String
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
 
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.isScrollEnabled = false
-        return webView
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = false
+        let vc = SFSafariViewController(url: url, configuration: config)
+        vc.preferredBarTintColor = UIColor(red: 0.04, green: 0.04, blue: 0.1, alpha: 1)
+        vc.preferredControlTintColor = .white
+        return vc
     }
 
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        // Use YouTube IFrame Player API with proper origin to avoid error 150/153
-        let embedHTML = """
-        <!DOCTYPE html>
-        <html><head>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>body{margin:0;background:#000;overflow:hidden}#player{width:100%;height:100%}</style>
-        </head><body>
-        <div id="player"></div>
-        <script>
-        var tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        document.head.appendChild(tag);
-        function onYouTubeIframeAPIReady() {
-            new YT.Player('player', {
-                videoId: '\(videoId)',
-                playerVars: {
-                    playsinline: 1,
-                    rel: 0,
-                    modestbranding: 1,
-                    origin: 'https://www.youtube.com'
-                }
-            });
-        }
-        </script>
-        </body></html>
-        """
-        webView.loadHTMLString(embedHTML, baseURL: URL(string: "https://www.youtube.com"))
-    }
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
 
 func extractYouTubeVideoId(_ url: String) -> String? {
@@ -89,6 +59,15 @@ struct ScoreSnapshotSheet: View {
     var username: String? = nil
 
     @Environment(\.dismiss) var dismiss
+    @State private var showReplay = false
+
+    private var replayWatchURL: URL? {
+        guard let replayUrl = replayEmbedUrl, !replayUrl.isEmpty else { return nil }
+        if let videoId = extractYouTubeVideoId(replayUrl) {
+            return URL(string: "https://www.youtube.com/watch?v=\(videoId)")
+        }
+        return URL(string: replayUrl)
+    }
 
     var body: some View {
         NavigationStack {
@@ -107,19 +86,27 @@ struct ScoreSnapshotSheet: View {
                             judgmentsSection
                         }
 
-                        // YouTube Replay (in-app)
-                        if let replayUrl = replayEmbedUrl, !replayUrl.isEmpty {
-                            let videoId = extractYouTubeVideoId(replayUrl)
-                            if let videoId = videoId {
-                                VStack(spacing: 8) {
-                                    Text("REPLAY")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(DojoTheme.textMuted)
-
-                                    YouTubePlayerView(videoId: videoId)
-                                        .frame(height: 200)
-                                        .cornerRadius(8)
+                        // YouTube Replay button
+                        if replayWatchURL != nil {
+                            Button {
+                                showReplay = true
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "play.circle.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.red)
+                                    Text("Watch Replay")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.white)
                                 }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.red.opacity(0.12))
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.red.opacity(0.25), lineWidth: 1)
+                                )
                             }
                         }
 
@@ -139,6 +126,12 @@ struct ScoreSnapshotSheet: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") { dismiss() }
                         .foregroundColor(DojoTheme.piuAccent)
+                }
+            }
+            .fullScreenCover(isPresented: $showReplay) {
+                if let url = replayWatchURL {
+                    SafariView(url: url)
+                        .ignoresSafeArea()
                 }
             }
         }
