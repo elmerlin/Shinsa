@@ -8,6 +8,7 @@ class FeedViewModel: ObservableObject {
     @Published var page = 1
 
     func loadInitial() async {
+        await JacketService.shared.loadIfNeeded()
         page = 1
         isLoading = true
         do {

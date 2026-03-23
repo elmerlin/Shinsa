@@ -192,6 +192,9 @@ class APIService {
         return try await request("/songs\(qs)")
     }
 
+    // MARK: - Song Jackets
+    func getJacketMap() async throws -> [String: String] { try await request("/songs/jacket-map") }
+
     // MARK: - Notices
     func getNotices() async throws -> [Notice] { try await request("/notices") }
     func createNotice(_ data: [String: AnyCodable]) async throws -> Notice { try await request("/notices", method: "POST", body: data) }

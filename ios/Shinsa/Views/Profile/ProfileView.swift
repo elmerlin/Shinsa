@@ -59,6 +59,7 @@ struct ProfileView: View {
         .navigationTitle(vm.user?.username ?? "Profile")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            await JacketService.shared.loadIfNeeded()
             await vm.load()
             await vm.loadRecentPlays()
             await vm.loadAchievements()
@@ -69,128 +70,137 @@ struct ProfileView: View {
 
     private func profileHeader(_ user: User) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
-                AvatarView(user.avatar, name: user.username, size: 64)
-
+            // Two-column layout: left (avatar + info), right (PIU stats + badges)
+            HStack(alignment: .top, spacing: 12) {
+                // LEFT COLUMN: Avatar + user info
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(user.username)
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
+                    HStack(alignment: .top, spacing: 10) {
+                        AvatarView(user.avatar, name: user.username, size: 52)
 
-                        if let gender = user.gender, !gender.isEmpty {
-                            Text(gender == "male" ? "\u{2642}" : gender == "female" ? "\u{2640}" : "")
-                                .font(.system(size: 14))
-                                .foregroundColor(gender == "male" ? Color(hex: "#60a5fa") : Color(hex: "#f472b6"))
-                        }
-                    }
-
-                    // Location row
-                    HStack(spacing: 4) {
-                        if let nat = user.nationality, !nat.isEmpty {
-                            Text(CountryData.flag(for: nat))
-                                .font(.system(size: 14))
-                        }
-                        if let city = user.locationCity, !city.isEmpty {
-                            Text(city)
-                                .font(.system(size: 12))
-                                .foregroundColor(DojoTheme.textMuted)
-                        }
-                        if let country = user.locationCountry, !country.isEmpty {
-                            if user.locationCity != nil {
-                                Text("·")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(DojoTheme.textMuted)
-                            }
-                            Text(country)
-                                .font(.system(size: 12))
-                                .foregroundColor(DojoTheme.textMuted)
-                        }
-                    }
-
-                    HStack(spacing: 6) {
-                        if let skill = user.skillTitle {
-                            Text(skill)
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(DojoTheme.skillColor(for: skill))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(DojoTheme.skillColor(for: skill).opacity(0.15))
-                                .cornerRadius(4)
-                        }
-
-                        if let level = user.skillLevel {
-                            Text("Lv.\(level)")
-                                .font(.system(size: 11))
-                                .foregroundColor(DojoTheme.textMuted)
-                        }
-                    }
-
-                    if let pumbility = user.pumbility, pumbility > 0 {
-                        HStack(spacing: 4) {
-                            Text("Pumbility")
-                                .font(.system(size: 11))
-                                .foregroundColor(DojoTheme.textMuted)
-                            Text("\(pumbility)")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(DojoTheme.piuGold)
-                        }
-                    }
-
-                    // Member since
-                    if let createdAt = user.createdAt {
-                        let memberDate = formatMemberSince(createdAt)
-                        if !memberDate.isEmpty {
-                            Text("Member since \(memberDate)")
-                                .font(.system(size: 10))
-                                .foregroundColor(DojoTheme.textMuted.opacity(0.7))
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-
-            // Group badges row
-            if let badges = user.groupBadges, !badges.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(badges) { badge in
-                            badgeCircle(url: badge.image, name: badge.name, size: 28, borderColor: DojoTheme.piuBorder)
-                        }
-                    }
-                }
-                .padding(.top, 8)
-            }
-
-            // Achievement badges row (highest tier per series)
-            if !vm.achievements.isEmpty {
-                let highest = highestPerSeries
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(highest) { badge in
-                            achievementBadgeImage(badge, size: 28)
-                                .onTapGesture {
-                                    selectedAchievementSeries = badge.seriesId ?? badge.id
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 4) {
+                                if let nat = user.nationality, !nat.isEmpty {
+                                    Text(CountryData.flag(for: nat))
+                                        .font(.system(size: 13))
                                 }
+                                Text(user.username)
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+
+                                if let gender = user.gender, !gender.isEmpty {
+                                    Text(gender == "male" ? "\u{2642}" : gender == "female" ? "\u{2640}" : "")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(gender == "male" ? Color(hex: "#60a5fa") : Color(hex: "#f472b6"))
+                                }
+                            }
+
+                            // Skill title badge
+                            if let skill = user.skillTitle {
+                                Text(skill)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(DojoTheme.skillColor(for: skill))
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(DojoTheme.skillColor(for: skill).opacity(0.15))
+                                    .cornerRadius(3)
+                            }
+
+                            // Location row
+                            HStack(spacing: 3) {
+                                if let city = user.locationCity, !city.isEmpty {
+                                    Text(city)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(DojoTheme.textMuted)
+                                }
+                                if let country = user.locationCountry, !country.isEmpty {
+                                    if user.locationCity != nil {
+                                        Text("\u{00b7}")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(DojoTheme.textMuted)
+                                    }
+                                    Text(country)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(DojoTheme.textMuted)
+                                }
+                            }
+
+                            // Member since
+                            if let createdAt = user.createdAt {
+                                let memberDate = formatMemberSince(createdAt)
+                                if !memberDate.isEmpty {
+                                    Text("Member since \(memberDate)")
+                                        .font(.system(size: 9))
+                                        .foregroundColor(DojoTheme.textMuted.opacity(0.7))
+                                }
+                            }
                         }
                     }
                 }
-                .padding(.top, 4)
-                .sheet(item: Binding<AchievementSeriesID?>(
-                    get: { selectedAchievementSeries.map { AchievementSeriesID(id: $0) } },
-                    set: { selectedAchievementSeries = $0?.id }
-                )) { seriesID in
-                    achievementSeriesSheet(seriesId: seriesID.id)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // RIGHT COLUMN: PIU stats card + badges
+                VStack(spacing: 6) {
+                    // Pumbility box
+                    if let pumbility = user.pumbility, pumbility > 0 {
+                        VStack(spacing: 2) {
+                            Text("PUMBILITY")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(DojoTheme.piuGold)
+                            Text("\(pumbility)")
+                                .font(.system(size: 18, weight: .black))
+                                .foregroundColor(.white)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(DojoTheme.piuDark)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(DojoTheme.piuGold.opacity(0.3), lineWidth: 1)
+                                )
+                        )
+                    }
+
+                    // Achievement + Group badges
+                    let groupBadges = user.groupBadges ?? []
+                    let achievementBadges = highestPerSeries
+                    if !groupBadges.isEmpty || !achievementBadges.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(achievementBadges.prefix(4)) { badge in
+                                achievementBadgeImage(badge, size: 24)
+                                    .onTapGesture {
+                                        selectedAchievementSeries = badge.seriesId ?? badge.id
+                                    }
+                            }
+                            ForEach(groupBadges.prefix(3)) { badge in
+                                badgeCircle(url: badge.image, name: badge.name, size: 24, borderColor: DojoTheme.piuBorder)
+                            }
+                        }
+                    }
                 }
+                .frame(width: 140)
             }
 
+            // Achievement series sheet
+            if !vm.achievements.isEmpty {
+                Color.clear.frame(height: 0)
+                    .sheet(item: Binding<AchievementSeriesID?>(
+                        get: { selectedAchievementSeries.map { AchievementSeriesID(id: $0) } },
+                        set: { selectedAchievementSeries = $0?.id }
+                    )) { seriesID in
+                        achievementSeriesSheet(seriesId: seriesID.id)
+                    }
+            }
+
+            // Bio
             if let bio = user.description, !bio.isEmpty {
                 Text(bio)
-                    .font(.system(size: 13))
+                    .font(.system(size: 12))
                     .foregroundColor(DojoTheme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 10)
+                    .padding(.top, 8)
             }
 
             // Action buttons
@@ -254,7 +264,7 @@ struct ProfileView: View {
 
                 Spacer()
             }
-            .padding(.top, 12)
+            .padding(.top, 10)
         }
         .padding(16)
         .background(DojoTheme.piuCard)
@@ -304,21 +314,17 @@ struct ProfileView: View {
             statItem("\((vm.stats?.tournaments?.count ?? 0) + (vm.stats?.duels?.count ?? 0))", "Competitions")
         }
         .padding(.vertical, 10)
-        .background(DojoTheme.piuDark)
-        .overlay(
-            VStack {
-                Divider().background(DojoTheme.piuBorder)
-                Spacer()
-                Divider().background(DojoTheme.piuBorder)
-            }
-        )
+        .background(DojoTheme.piuCard)
+        .overlay(alignment: .top) {
+            Rectangle().fill(DojoTheme.piuBorder).frame(height: 1)
+        }
     }
 
     private func statItem(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.system(size: 15, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(DojoTheme.piuAccent)
             Text(label)
                 .font(.system(size: 9))
                 .foregroundColor(DojoTheme.textMuted)

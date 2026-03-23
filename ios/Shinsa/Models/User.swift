@@ -177,6 +177,7 @@ struct SocialCounts: Codable {
     var followingCount: Int?
     var postsCount: Int?
     var pumpsReceived: Int?
+    var totalPumps: Int?
     var followerTrend: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -184,6 +185,7 @@ struct SocialCounts: Codable {
         case followingCount = "following_count"
         case postsCount = "posts_count"
         case pumpsReceived = "pumps_received"
+        case totalPumps = "total_pumps"
         case followerTrend = "follower_trend"
     }
 }

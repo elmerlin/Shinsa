@@ -27,6 +27,7 @@
 		9137E549EA80172DAD446C99 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ED63D63BEE9A809BEA3D980 /* APIService.swift */; };
 		A51F114A813A35EA913A7D5A /* AuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B764BED3F0C4642A8E429A16 /* AuthManager.swift */; };
 		BC14253E84D09BA4D21C8139 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8795A1798C6F688596C6F39 /* HapticService.swift */; };
+		59D11D476AFCE195BC5306BC /* JacketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF7720523958608B427A0282 /* JacketService.swift */; };
 		1C6116089DEA22C34955DBDD /* NotificationPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AC0F80F0A0FEA1E46BF2C05 /* NotificationPoller.swift */; };
 		A37055E640B1AAFD096BCE30 /* DojoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ECD499CE307187720463D9F /* DojoTheme.swift */; };
 		CHAT7HEME0001000100010001 /* ChatTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHAT7HEME0002000200020002 /* ChatTheme.swift */; };
@@ -153,6 +154,7 @@
 		8ED63D63BEE9A809BEA3D980 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService.swift"; sourceTree = "<group>"; };
 		B764BED3F0C4642A8E429A16 /* AuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AuthManager.swift"; sourceTree = "<group>"; };
 		F8795A1798C6F688596C6F39 /* HapticService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HapticService.swift"; sourceTree = "<group>"; };
+		DF7720523958608B427A0282 /* JacketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "JacketService.swift"; sourceTree = "<group>"; };
 		8AC0F80F0A0FEA1E46BF2C05 /* NotificationPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationPoller.swift"; sourceTree = "<group>"; };
 		0ECD499CE307187720463D9F /* DojoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DojoTheme.swift"; sourceTree = "<group>"; };
 		CHAT7HEME0002000200020002 /* ChatTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatTheme.swift"; sourceTree = "<group>"; };
@@ -353,6 +355,7 @@
 				8ED63D63BEE9A809BEA3D980 /* APIService.swift */,
 				B764BED3F0C4642A8E429A16 /* AuthManager.swift */,
 				F8795A1798C6F688596C6F39 /* HapticService.swift */,
+				DF7720523958608B427A0282 /* JacketService.swift */,
 				8AC0F80F0A0FEA1E46BF2C05 /* NotificationPoller.swift */,
 			);
 			path = Services;
@@ -778,6 +781,7 @@
 				9137E549EA80172DAD446C99 /* APIService.swift in Sources */,
 				A51F114A813A35EA913A7D5A /* AuthManager.swift in Sources */,
 				BC14253E84D09BA4D21C8139 /* HapticService.swift in Sources */,
+				59D11D476AFCE195BC5306BC /* JacketService.swift in Sources */,
 				1C6116089DEA22C34955DBDD /* NotificationPoller.swift in Sources */,
 				A37055E640B1AAFD096BCE30 /* DojoTheme.swift in Sources */,
 				CHAT7HEME0001000100010001 /* ChatTheme.swift in Sources */,

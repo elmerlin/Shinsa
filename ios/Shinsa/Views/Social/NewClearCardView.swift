@@ -209,10 +209,10 @@ struct NewClearCardView: View {
     // MARK: - Song Jacket
 
     private func jacketView(backgroundUrl: String?, songTitle: String?, mode: String?, level: Int?) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            if let bgUrl = backgroundUrl, !bgUrl.isEmpty,
-               !bgUrl.contains("piugame"),
-               let url = URL(string: bgUrl) {
+        let jacketURL = JacketService.shared.resolveJacketURL(title: songTitle, mode: mode, level: level, backgroundUrl: backgroundUrl)
+
+        return ZStack(alignment: .bottomTrailing) {
+            if let url = jacketURL {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let img):
