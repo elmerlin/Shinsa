@@ -112,38 +112,42 @@ struct ContentView: View {
                         .tag(4)
                     }
                     .tint(DojoTheme.piuAccent)
-                    .safeAreaInset(edge: .top) {
+                    .overlay(alignment: .top) {
                         if isSearching {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(DojoTheme.textMuted)
+                            VStack(spacing: 0) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(DojoTheme.textMuted)
 
-                                TextField("Search players, songs, tournaments...", text: $searchText)
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.white)
-                                    .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.never)
+                                    TextField("Search players, songs, tournaments...", text: $searchText)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white)
+                                        .autocorrectionDisabled()
+                                        .textInputAutocapitalization(.never)
 
-                                if !searchText.isEmpty {
                                     Button {
-                                        searchText = ""
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            isSearching = false
+                                            searchText = ""
+                                        }
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 14))
+                                            .font(.system(size: 16))
                                             .foregroundColor(DojoTheme.textMuted)
                                     }
                                 }
+                                .padding(10)
+                                .background(DojoTheme.piuCard)
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                                )
+                                .padding(.horizontal, 16)
+                                .padding(.top, 4)
                             }
-                            .padding(10)
-                            .background(DojoTheme.piuCard)
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(DojoTheme.piuBorder, lineWidth: 1)
-                            )
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 4)
+                            .frame(maxWidth: .infinity)
                             .background(DojoTheme.piuBg)
                             .transition(.move(edge: .top).combined(with: .opacity))
                         }
