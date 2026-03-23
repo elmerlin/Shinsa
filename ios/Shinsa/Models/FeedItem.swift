@@ -57,23 +57,57 @@ struct FeedItem: Codable, Identifiable {
         var songTitle: String?
         var mode: String?
         var level: Int?
-        var previousScore: Int?
+        var oldScore: Int?
         var newScore: Int?
-        var previousGrade: String?
+        var oldGrade: String?
         var newGrade: String?
+        var backgroundUrl: String?
+        var pumbilityGain: FlexDouble?
+        var singlesPumbilityGain: FlexDouble?
+        var overTop100Rank: Int?
         enum CodingKeys: String, CodingKey {
             case mode, level
             case songTitle = "song_title"
-            case previousScore = "previous_score"
+            case oldScore = "old_score"
             case newScore = "new_score"
-            case previousGrade = "previous_grade"
+            case oldGrade = "old_grade"
             case newGrade = "new_grade"
+            case backgroundUrl = "background_url"
+            case pumbilityGain = "pumbility_gain"
+            case singlesPumbilityGain = "singles_pumbility_gain"
+            case overTop100Rank = "over_top100_rank"
+        }
+    }
+
+    struct ClearItem: Codable {
+        var entryType: String?
+        var songTitle: String?
+        var mode: String?
+        var level: Int?
+        var score: Int?
+        var grade: String?
+        var plate: String?
+        var backgroundUrl: String?
+        var pumbilityGain: FlexDouble?
+        var titleName: String?
+        enum CodingKeys: String, CodingKey {
+            case mode, level, score, grade, plate
+            case entryType = "entry_type"
+            case songTitle = "song_title"
+            case backgroundUrl = "background_url"
+            case pumbilityGain = "pumbility_gain"
+            case titleName = "title_name"
         }
     }
 
     var upscoreItems: [UpscoreItem] {
         guard let raw = upscoresJson, let data = raw.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([UpscoreItem].self, from: data)) ?? []
+    }
+
+    var clearItems: [ClearItem] {
+        guard let raw = clearsJson, let data = raw.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([ClearItem].self, from: data)) ?? []
     }
 
     enum CodingKeys: String, CodingKey {

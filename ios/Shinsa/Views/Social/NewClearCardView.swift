@@ -4,6 +4,7 @@ struct NewClearCardView: View {
     let item: FeedItem
     @State private var pumped: Bool
     @State private var pumpCount: Int
+    @State private var showAll = false
 
     init(item: FeedItem) {
         self.item = item
@@ -21,15 +22,26 @@ struct NewClearCardView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(.cyan)
+                        if let nat = item.nationality, !nat.isEmpty {
+                            Text(CountryData.flag(for: nat))
+                                .font(.system(size: 12))
+                        }
                         Text(item.username ?? "Unknown")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
-                        Text("cleared a new song!")
-                            .font(.system(size: 12))
-                            .foregroundColor(DojoTheme.textMuted)
+                        Text("new clear!")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Color(hex: "#38bdf8"))
+
+                        if let pb = item.pumbilityGain, pb.value > 0 {
+                            Text("+\(Int(pb.value)) PB")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(Color(hex: "#67e8f9"))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.cyan.opacity(0.1))
+                                .cornerRadius(3)
+                        }
                     }
                     if let created = item.createdAt {
                         Text(created.timeAgo)
@@ -40,80 +52,36 @@ struct NewClearCardView: View {
                 Spacer()
             }
 
-            // Song info
-            HStack(spacing: 10) {
-                // Jacket placeholder
-                ZStack {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(
-                            LinearGradient(
-                                colors: item.mode == "Single"
-                                    ? [Color(hex: "#ff3366").opacity(0.3), Color(hex: "#ff6699").opacity(0.15)]
-                                    : [Color(hex: "#33ff66").opacity(0.3), Color(hex: "#66ff99").opacity(0.15)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    if let mode = item.mode {
-                        Text(mode == "Single" ? "S" : "D")
-                            .font(.system(size: 16, weight: .black))
-                            .foregroundColor(mode == "Single" ? DojoTheme.piuAccent.opacity(0.6) : DojoTheme.piuGreen.opacity(0.6))
-                    }
-                }
-                .frame(width: 56, height: 32)
-
-                // Mode badge
-                if let mode = item.mode, let level = item.level {
-                    Text("\(mode == "Single" ? "S" : "D")\(level)")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            LinearGradient(
-                                colors: mode == "Single"
-                                    ? [Color(hex: "#ff3366"), Color(hex: "#ff6699")]
-                                    : [Color(hex: "#33ff66"), Color(hex: "#22cc55")],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(4)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(item.songTitle ?? "Unknown Song")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    HStack(spacing: 8) {
-                        if let score = item.score {
-                            Text(score.formattedScore)
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(DojoTheme.gradeColor(for: score))
-
-                            Text(DojoTheme.gradeLabel(for: score))
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(DojoTheme.gradeColor(for: score))
-                        }
-                        if let plate = item.plate {
-                            Text(plate)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(DojoTheme.piuGold)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(DojoTheme.piuGold.opacity(0.1))
-                                .cornerRadius(3)
+            // Clear rows
+            let clears = item.clearItems
+            if !clears.isEmpty {
+                let visible = showAll ? clears : Array(clears.prefix(5))
+                VStack(spacing: 0) {
+                    ForEach(Array(visible.enumerated()), id: \.offset) { idx, clear in
+                        clearRow(clear)
+                        if idx < visible.count - 1 {
+                            Divider().background(DojoTheme.piuBorder.opacity(0.2))
                         }
                     }
                 }
+                .background(DojoTheme.piuDark)
+                .cornerRadius(8)
 
-                Spacer()
+                if clears.count > 5 && !showAll {
+                    Button {
+                        showAll = true
+                    } label: {
+                        Text("Show \(clears.count - 5) more")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DojoTheme.piuAccent)
+                    }
+                }
+            } else {
+                // Fallback single clear
+                singleClearRow
+                    .background(DojoTheme.piuDark)
+                    .cornerRadius(8)
             }
-            .padding(10)
-            .background(DojoTheme.piuDark)
-            .cornerRadius(8)
 
             // Footer
             HStack(spacing: 16) {
@@ -141,6 +109,183 @@ struct NewClearCardView: View {
         .padding(14)
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+    }
+
+    // MARK: - Clear Row
+
+    private func clearRow(_ c: FeedItem.ClearItem) -> some View {
+        HStack(spacing: 8) {
+            // Jacket
+            jacketView(backgroundUrl: c.backgroundUrl, songTitle: c.songTitle, mode: c.mode, level: c.level)
+
+            // Song info
+            VStack(alignment: .leading, spacing: 2) {
+                Text(c.songTitle ?? "Unknown")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    if let pb = c.pumbilityGain, pb.value > 0 {
+                        Text("+\(Int(pb.value)) PB")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Color(hex: "#67e8f9"))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.cyan.opacity(0.1))
+                            .cornerRadius(3)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Score + Grade + Plate
+            VStack(alignment: .trailing, spacing: 2) {
+                if let score = c.score, score > 0 {
+                    Text(DojoTheme.gradeLabel(for: score))
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(DojoTheme.gradeColor(for: score))
+
+                    Text(formatScore(score))
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+
+                if let plate = c.plate, !plate.isEmpty {
+                    Text(plate)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(DojoTheme.piuDark)
+                        .cornerRadius(3)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Fallback single clear
+
+    private var singleClearRow: some View {
+        HStack(spacing: 10) {
+            jacketView(backgroundUrl: item.backgroundUrl, songTitle: item.songTitle, mode: item.mode, level: item.level)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.songTitle ?? "Unknown Song")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    if let score = item.score {
+                        Text(DojoTheme.gradeLabel(for: score))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DojoTheme.gradeColor(for: score))
+
+                        Text(formatScore(score))
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                    }
+                    if let plate = item.plate, !plate.isEmpty {
+                        Text(plate)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(DojoTheme.piuGold)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(DojoTheme.piuGold.opacity(0.1))
+                            .cornerRadius(3)
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .padding(10)
+    }
+
+    // MARK: - Song Jacket
+
+    private func jacketView(backgroundUrl: String?, songTitle: String?, mode: String?, level: Int?) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            if let bgUrl = backgroundUrl, !bgUrl.isEmpty,
+               !bgUrl.contains("piugame"),
+               let url = URL(string: bgUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFill()
+                    default:
+                        jacketFallback(songTitle: songTitle, mode: mode)
+                    }
+                }
+            } else {
+                jacketFallback(songTitle: songTitle, mode: mode)
+            }
+
+            // Gradient overlay
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.5)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // Mode + Level badge
+            if let mode = mode, let level = level {
+                let isDouble = mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
+                let isCoop = mode.lowercased().hasPrefix("c") || mode.lowercased() == "coop"
+                let prefix = isCoop ? "C" : (isDouble ? "D" : "S")
+                let colors: [Color] = isCoop
+                    ? [Color(hex: "#69c8ff"), Color(hex: "#12457c")]
+                    : isDouble
+                        ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
+                        : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")]
+
+                Text("\(prefix)\(level)")
+                    .font(.system(size: 8, weight: .black))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(
+                        LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                    .cornerRadius(2)
+                    .padding(2)
+            }
+        }
+        .frame(width: 50, height: 28)
+        .cornerRadius(6)
+        .clipped()
+    }
+
+    private func jacketFallback(songTitle: String?, mode: String?) -> some View {
+        let isDouble = (mode ?? "").lowercased().hasPrefix("d")
+        return Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: isDouble
+                        ? [Color(hex: "#0b5d48"), Color(hex: "#16b77f")]
+                        : [Color(hex: "#7a1730"), Color(hex: "#d93d62")],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                Text(String((songTitle ?? "?").prefix(1)).uppercased())
+                    .font(.system(size: 12, weight: .black))
+                    .foregroundColor(.white.opacity(0.4))
+            )
+    }
+
+    private func formatScore(_ score: Int) -> String {
+        let str = String(format: "%06d", score)
+        if str.count >= 3 {
+            let idx = str.index(str.endIndex, offsetBy: -3)
+            return str[str.startIndex..<idx] + "," + str[idx...]
+        }
+        return str
     }
 
     private func togglePump() async {
