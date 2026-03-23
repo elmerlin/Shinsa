@@ -3123,7 +3123,7 @@ export default function LivePage() {
   const useDesktopSidebarLayout = isDesktopViewport && !useDesktopViewerLayout;
   const mobileVideoLockAvailable = !!youtubeId && !isDesktopViewport && hostWorkspaceTab !== 'overlay' && hostWorkspaceTab !== 'chapters';
   const shouldLockMobileVideo = mobileVideoLockAvailable && lockVideo;
-  const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight && isXlViewport
+  const desktopMediaHeightStyle = useDesktopViewerLayout && desktopMediaHeight
     ? { height: `${desktopMediaHeight}px`, maxHeight: `${desktopMediaHeight}px`, minHeight: `${desktopMediaHeight}px` }
     : undefined;
   const desktopChatFallbackHeight = 'clamp(24rem, calc(100dvh - 16rem), 64rem)';
