@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getCountryFlag } from './PlayerRegistration';
+import { getAvatarUrl } from './AvatarPicker';
 
 const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
@@ -102,6 +103,9 @@ export default function Standings({ players, matches, showFinal }) {
                   {rank}
                 </div>
                 <div className="col-span-4 flex items-center gap-2 min-w-0">
+                  {player.avatar && (
+                    <img src={getAvatarUrl(player.avatar)} alt="" className="h-5 w-5 rounded-full border border-white/10 shrink-0" />
+                  )}
                   {flag && <span className="text-sm shrink-0">{flag}</span>}
                   <span className="font-display font-bold truncate">{player.name}</span>
                   {genderSymbol && (
@@ -144,7 +148,7 @@ export default function Standings({ players, matches, showFinal }) {
                         const playedSongs = m.played_songs || [];
                         const isP1 = m.player1_id === player.id;
                         const isGauntlet = m.match_type === 'gauntlet';
-                        const opponentFlag = opponent ? getCountryFlag(opponent.nationality) : '';
+                        const opponentFlag = opponent ? getCountryFlag(opponent.nationality) : null;
 
                         return (
                           <div key={m.id} className={`rounded-lg p-3 ${isWin ? 'bg-piu-green/5 border border-piu-green/20' : 'bg-red-500/5 border border-red-500/20'}`}>

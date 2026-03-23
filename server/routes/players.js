@@ -23,16 +23,16 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const db = getDb();
   const id = uuidv4();
-  const { tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender, nationality } = req.body;
+  const { tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender, nationality, user_id } = req.body;
 
   const count = db.prepare(
     'SELECT COUNT(*) as count FROM players WHERE tournament_id = ?'
   ).get(tournament_id).count;
 
   db.prepare(`
-    INSERT INTO players (id, tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender, nationality, seed_rank)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, tournament_id, name, skill_title || '', skill_level || 1, pumbility || 0, description || '', avatar || '', gender || '', nationality || '', count + 1);
+    INSERT INTO players (id, tournament_id, name, skill_title, skill_level, pumbility, description, avatar, gender, nationality, seed_rank, user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, tournament_id, name, skill_title || '', skill_level || 1, pumbility || 0, description || '', avatar || '', gender || '', nationality || '', count + 1, user_id || '');
 
   const player = db.prepare('SELECT * FROM players WHERE id = ?').get(id);
   db.close();

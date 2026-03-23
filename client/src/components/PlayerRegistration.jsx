@@ -1,16 +1,20 @@
-import React, { useState, useRef } from 'react';
-import { createPlayer, updatePlayer, deletePlayer } from '../utils/api';
+import React, { useState, useCallback } from 'react';
+import { createPlayer, updatePlayer, deletePlayer, searchUsers, sendInvitation } from '../utils/api';
+import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
+import { Link } from 'react-router-dom';
+import { getProfilePath } from '../utils/profile';
+import SeedingPanel from './tournament/SeedingPanel';
 
-const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
-const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const GENDER_OPTIONS = [
+export const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
+export const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const GENDER_OPTIONS = [
   { value: '', label: 'Not specified' },
   { value: 'male', label: 'Male' },
   { value: 'female', label: 'Female' },
 ];
-const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
+export const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
-const COUNTRIES = [
+export const COUNTRIES = [
   { code: '', name: 'Not specified', flag: '' },
   { code: 'AF', name: 'Afghanistan', flag: '\u{1F1E6}\u{1F1EB}' },
   { code: 'AL', name: 'Albania', flag: '\u{1F1E6}\u{1F1F1}' },
@@ -216,19 +220,30 @@ const COUNTRIES = [
 const COUNTRY_MAP = {};
 COUNTRIES.forEach(c => { if (c.code) COUNTRY_MAP[c.code] = c; });
 
-export function getCountryFlag(code) {
-  if (!code) return '';
-  return COUNTRY_MAP[code]?.flag || '';
+export function getCountryFlag(code, className) {
+  if (!code) return null;
+  const country = COUNTRY_MAP[code];
+  if (!country) return null;
+  // Emoji flags on mobile (renders natively on iOS/Android), CDN images on desktop (Windows doesn't render flag emojis)
+  const sizeClass = className
+    ? className.replace(/\binline-block\b\s*/g, '').trim()
+    : "h-[1.1em] align-middle";
+  return (
+    <>
+      <span className="sm:hidden">{country.flag}</span>
+      <img src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`} alt={country.name} className={`hidden sm:inline-block ${sizeClass}`} draggable={false} />
+    </>
+  );
 }
 
-const skillColors = {
+export const skillColors = {
   Beginner: 'bg-green-500/20 text-green-400 border-green-500/30',
   Intermediate: 'bg-piu-bronze/20 text-piu-bronze border-piu-bronze/30',
   Advanced: 'bg-piu-silver/20 text-piu-silver border-piu-silver/30',
   Expert: 'bg-piu-gold/20 text-piu-gold border-piu-gold/30',
 };
 
-const getSkillColor = (title) => {
+export const getSkillColor = (title) => {
   if (!title) return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
   for (const [key, val] of Object.entries(skillColors)) {
     if (title.startsWith(key)) return val;
@@ -253,28 +268,58 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
   const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [form, setForm] = useState({
-    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '',
+    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '',
   });
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef(null);
+  const [userSearch, setUserSearch] = useState('');
+  const [userResults, setUserResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [inviteSent, setInviteSent] = useState({});
 
-  const resetForm = () => {
-    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '' });
-    setEditingPlayer(null);
+  const handleUserSearch = useCallback(async (q) => {
+    if (q.length < 1) { setUserResults([]); return; }
+    setSearching(true);
+    try {
+      const results = await searchUsers(q);
+      setUserResults(results);
+    } catch (e) {
+      setUserResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const fillFromUser = (user) => {
+    const titleParts = (user.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
+    setForm({
+      name: user.username,
+      skill_title: titleParts ? titleParts[1] : 'Beginner',
+      skill_level: titleParts ? parseInt(titleParts[2]) : 1,
+      pumbility: user.pumbility || '',
+      description: user.description || '',
+      avatar: user.avatar || '',
+      gender: user.gender || '',
+      nationality: user.nationality || '',
+      user_id: user.id,
+    });
+    setUserSearch('');
+    setUserResults([]);
   };
 
-  const handleAvatarChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Avatar must be under 5MB');
-      return;
+  const handleInviteUser = async (user) => {
+    try {
+      await sendInvitation({ user_id: user.id, type: 'tournament', tournament_id: tournamentId });
+      setInviteSent(prev => ({ ...prev, [user.id]: true }));
+    } catch (err) {
+      alert(err.message);
     }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setForm(f => ({ ...f, avatar: reader.result }));
-    };
-    reader.readAsDataURL(file);
+  };
+
+  const resetForm = () => {
+    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '' });
+    setEditingPlayer(null);
+    setUserSearch('');
+    setUserResults([]);
   };
 
   const handleSubmit = async (e) => {
@@ -298,6 +343,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
         await createPlayer({
           tournament_id: tournamentId,
           pumbility: parseInt(form.pumbility) || 0,
+          user_id: form.user_id || '',
           ...payload,
         });
       }
@@ -355,35 +401,79 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
             {editingPlayer ? `Edit: ${editingPlayer.name}` : 'Add New Player'}
           </h3>
 
-          {/* Avatar upload */}
-          <div className="flex items-center gap-4">
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="w-16 h-16 rounded-full cursor-pointer overflow-hidden border-2 border-dashed border-piu-border hover:border-piu-accent transition-colors flex items-center justify-center bg-piu-dark shrink-0"
-            >
-              {form.avatar ? (
-                <img src={form.avatar} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xs text-gray-500 text-center leading-tight">Upload<br/>Photo</span>
+          {/* Search registered users */}
+          {!editingPlayer && (
+            <div className="space-y-2">
+              <label className="block text-sm text-gray-400">Search registered players</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Type a username to search..."
+                value={userSearch}
+                onChange={e => {
+                  setUserSearch(e.target.value);
+                  handleUserSearch(e.target.value);
+                }}
+              />
+              {form.user_id && (
+                <div className="flex items-center gap-2 text-xs text-piu-green bg-piu-green/10 px-3 py-1.5 rounded-lg">
+                  <span>Linked to registered user: <strong>{form.name}</strong></span>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, user_id: '' }))} className="text-gray-400 hover:text-red-400 ml-auto">
+                    &#10005;
+                  </button>
+                </div>
               )}
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleAvatarChange}
-            />
-            <div className="flex-1">
-              <p className="text-sm text-gray-400">Player Avatar</p>
-              <p className="text-xs text-gray-600">Tap to upload (max 5MB)</p>
-              {form.avatar && (
-                <button type="button" onClick={() => setForm(f => ({ ...f, avatar: '' }))} className="text-xs text-red-400 hover:text-red-300 mt-1">
-                  Remove
-                </button>
+              {userResults.length > 0 && (
+                <div className="bg-piu-dark border border-piu-border rounded-lg overflow-hidden">
+                  {userResults.map(u => (
+                    <div key={u.id} className="flex items-center gap-3 px-3 py-2 hover:bg-piu-card/50 transition-colors border-b border-piu-border/50 last:border-0">
+                      {u.avatar ? (
+                        <img src={getAvatarUrl(u.avatar)} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs shrink-0">
+                          {u.username[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{u.username}</p>
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          {u.nationality && <span>{getCountryFlag(u.nationality)}</span>}
+                          {u.skill_title && <span className={`badge border text-[10px] ${getSkillColor(u.skill_title)}`}>{u.skill_title}</span>}
+                          {u.pumbility > 0 && <span className="text-piu-gold font-mono">{u.pumbility}</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => fillFromUser(u)}
+                          className="px-2 py-1 bg-piu-accent/20 text-piu-accent text-xs font-display font-bold rounded hover:bg-piu-accent/30 transition-colors"
+                        >
+                          Add directly
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInviteUser(u)}
+                          disabled={inviteSent[u.id]}
+                          className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-display font-bold rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                        >
+                          {inviteSent[u.id] ? 'Sent' : 'Invite'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
+              {searching && <p className="text-xs text-gray-500">Searching...</p>}
             </div>
-          </div>
+          )}
+
+          {/* Avatar picker */}
+          <AvatarPicker
+            value={form.avatar}
+            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
+            shape="circle"
+            size="md"
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -523,7 +613,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
               </div>
 
               {player.avatar ? (
-                <img src={player.avatar} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                <img src={getAvatarUrl(player.avatar)} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
               ) : (
                 <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} flex items-center justify-center font-display font-bold text-sm shrink-0`}>
                   {getInitials(player.name)}
@@ -533,7 +623,13 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   {flag && <span className="text-base shrink-0">{flag}</span>}
-                  <span className="font-display font-bold">{player.name}</span>
+                  {player.user_id ? (
+                    <Link to={getProfilePath(player.user_id, player.name)} className="font-display font-bold text-piu-accent hover:underline">
+                      {player.name}
+                    </Link>
+                  ) : (
+                    <span className="font-display font-bold">{player.name}</span>
+                  )}
                   {genderSymbol && (
                     <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
                       {genderSymbol}
@@ -587,6 +683,10 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
           <p className="text-lg">No players registered yet</p>
           {isSetup && <p className="text-sm mt-1">Click "+ Add Player" to register participants</p>}
         </div>
+      )}
+
+      {isSetup && players.length >= 2 && (
+        <SeedingPanel players={players} tournamentId={tournamentId} onUpdate={onUpdate} />
       )}
     </div>
   );

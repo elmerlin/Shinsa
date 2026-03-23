@@ -1,0 +1,4595 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import {
+  ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ReferenceLine,
+} from 'recharts';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  getUserProfile, getUserProfileByUsername, getUserStats, getUserActivity, getJacketMap, getChartKeyMap, getSongs,
+  getSongAnalytics,
+  getPiugameSyncStatus, getPiugamePumbility, getPiugameBestScores, getPiugameRecentlyPlayed, getPiugameTitles,
+  syncPumbility, syncRecentlyPlayed, syncBestScores, getSyncProgress,
+  getProfileShoes, wearProfileShoe,
+  followUser, unfollowUser, getFollowStatus, getSocialCounts,
+  getUserPosts, getFollowers, getFollowing,
+  getActivityNotificationPreferences, updateActivityNotificationPreferences,
+  getProfileLiveSessions, updateLiveSessionProfileVisibility, deleteLiveSession,
+  getOrCreateDirectConversation,
+  createMessageStoryItem,
+} from '../utils/api';
+import { getAvatarUrl } from '../components/AvatarPicker';
+import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
+import PostCard, { timeAgo } from '../components/PostCard';
+import SongAnalyticsPanel from '../components/SongAnalyticsPanel';
+import SkillBreakdownPanel from '../components/SkillBreakdownPanel';
+import RankingsPanel from '../components/RankingsPanel';
+import GradeGoalTracker from '../components/GradeGoalTracker';
+import TitleProgressTab from '../components/TitleProgressTab';
+import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
+import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
+import LiveDirectoryCard from '../components/LiveDirectoryCard';
+import { getProfilePath } from '../utils/profile';
+import { parseGrade } from '../utils/grades';
+import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
+import { StoryShareModal, buildStoryDraft } from '../components/ScoreSnapshotModal';
+import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
+import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
+
+function getAge(dateStr) {
+  if (!dateStr) return null;
+  const birth = new Date(dateStr);
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  const monthDiff = now.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+function getRank(score) {
+  const s = parseInt(score) || 0;
+  if (s >= 995000) return { label: 'SSS+', color: 'text-sky-300' };
+  if (s >= 990000) return { label: 'SSS', color: 'text-sky-400' };
+  if (s >= 985000) return { label: 'SS+', color: 'text-piu-gold' };
+  if (s >= 980000) return { label: 'SS', color: 'text-yellow-400' };
+  if (s >= 975000) return { label: 'S+', color: 'text-amber-400' };
+  if (s >= 970000) return { label: 'S', color: 'text-amber-500' };
+  if (s >= 960000) return { label: 'AAA+', color: 'text-piu-silver' };
+  if (s >= 950000) return { label: 'AAA', color: 'text-gray-300' };
+  if (s >= 925000) return { label: 'AA+', color: 'text-piu-bronze' };
+  if (s >= 900000) return { label: 'AA', color: 'text-piu-bronze' };
+  if (s >= 825000) return { label: 'A+', color: 'text-amber-700' };
+  if (s >= 750000) return { label: 'A', color: 'text-amber-700' };
+  if (s >= 650000) return { label: 'B', color: 'text-gray-500' };
+  if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
+  if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
+  return { label: 'F', color: 'text-gray-600' };
+}
+
+function getOverTop100Rank(rawRank) {
+  const rank = parseInt(rawRank, 10) || 0;
+  return rank >= 1 && rank <= 100 ? rank : 0;
+}
+
+function formatAchievementThresholdLabel(tier) {
+  const threshold = parseInt(tier?.threshold, 10);
+  if (!Number.isFinite(threshold) || threshold <= 0) return '';
+
+  const seriesKey = String(tier?.series_key || '').trim().toLowerCase();
+  const seriesName = String(tier?.series_name || '').trim().toLowerCase();
+
+  if (seriesKey === 'streak' || seriesName === 'streak') {
+    return `${threshold} day streak`;
+  }
+  if (seriesKey === 'pumps_received' || seriesName.includes('pump')) {
+    return `${threshold} pumps`;
+  }
+  return `Tier ${threshold}`;
+}
+
+function getGradeColor(grade) {
+  const g = parseGrade(grade).normalized.replace('+', '_P');
+  if (g.includes('SSS')) return 'text-sky-300';
+  if (g.includes('SS')) return 'text-piu-gold';
+  if (g.includes('S')) return 'text-amber-400';
+  if (g.includes('AAA')) return 'text-piu-silver';
+  if (g.includes('AA')) return 'text-piu-bronze';
+  if (g.includes('A')) return 'text-amber-700';
+  return 'text-gray-500';
+}
+
+// Rank ranges for distribution chart — ordered from best to worst
+const RANK_RANGES = [
+  { label: 'SSS+', min: 995000, bg: 'bg-sky-300' },
+  { label: 'SSS',  min: 990000, bg: 'bg-sky-400' },
+  { label: 'SS+',  min: 985000, bg: 'bg-yellow-300' },
+  { label: 'SS',   min: 980000, bg: 'bg-yellow-400' },
+  { label: 'S+',   min: 975000, bg: 'bg-amber-400' },
+  { label: 'S',    min: 970000, bg: 'bg-amber-500' },
+  { label: 'AAA+', min: 960000, bg: 'bg-slate-300' },
+  { label: 'AAA',  min: 950000, bg: 'bg-slate-400' },
+  { label: 'AA+',  min: 925000, bg: 'bg-violet-400' },
+  { label: 'AA',   min: 900000, bg: 'bg-violet-500' },
+  { label: 'A+',   min: 825000, bg: 'bg-emerald-400' },
+  { label: 'A',    min: 750000, bg: 'bg-emerald-500' },
+  { label: 'B',    min: 650000, bg: 'bg-gray-400' },
+  { label: 'C',    min: 550000, bg: 'bg-gray-500' },
+  { label: 'D',    min: 450000, bg: 'bg-gray-600' },
+  { label: 'F',    min: 0,      bg: 'bg-gray-700' },
+];
+
+const GRADE_BARS = [
+  { key: 'SSS+', color: '#7dd3fc' },
+  { key: 'SSS', color: '#38bdf8' },
+  { key: 'SS+', color: '#fde047' },
+  { key: 'SS', color: '#facc15' },
+  { key: 'S+', color: '#f59e0b' },
+  { key: 'S', color: '#d97706' },
+  { key: 'AAA+', color: '#cbd5e1' },
+  { key: 'AAA', color: '#94a3b8' },
+  { key: 'AA+', color: '#a78bfa' },
+  { key: 'AA', color: '#8b5cf6' },
+  { key: 'A+', color: '#34d399' },
+  { key: 'A', color: '#10b981' },
+  { key: 'B', color: '#9ca3af' },
+];
+
+const SINGLE_MAX_LEVEL = 26;
+const DOUBLE_MAX_LEVEL = 28;
+const BEST_SCORES_PAGE_SIZE = 40;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function pad2(value) {
+  return String(value).padStart(2, '0');
+}
+
+function toDayKey(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function startOfWeek(date) {
+  const d = startOfDay(date);
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
+function parseDayKey(key) {
+  const m = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+}
+
+function diffDays(startDate, endDate) {
+  return Math.round((startOfDay(endDate).getTime() - startOfDay(startDate).getTime()) / DAY_MS);
+}
+
+function parsePlayedAt(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/[./]/g, '-');
+  const ymd = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/
+  );
+  if (ymd) {
+    const y = parseInt(ymd[1], 10);
+    const m = parseInt(ymd[2], 10) - 1;
+    const d = parseInt(ymd[3], 10);
+    const hh = parseInt(ymd[4] || '0', 10);
+    const mm = parseInt(ymd[5] || '0', 10);
+    const ss = parseInt(ymd[6] || '0', 10);
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const ymdLoose = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (ymdLoose) {
+    const y = parseInt(ymdLoose[1], 10);
+    const m = parseInt(ymdLoose[2], 10) - 1;
+    const d = parseInt(ymdLoose[3], 10);
+    const timeMatch = normalized.match(/(\d{1,2})(?::(\d{2}))(?::(\d{2}))?\s*([APap][Mm])?/);
+    let hh = parseInt(timeMatch?.[1] || '0', 10);
+    const mm = parseInt(timeMatch?.[2] || '0', 10);
+    const ss = parseInt(timeMatch?.[3] || '0', 10);
+    const meridiem = String(timeMatch?.[4] || '').toUpperCase();
+    if (meridiem === 'PM' && hh < 12) hh += 12;
+    if (meridiem === 'AM' && hh === 12) hh = 0;
+    return new Date(y, m, d, hh, mm, ss);
+  }
+
+  const md = normalized.match(/^(\d{1,2})-(\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (md) {
+    const year = new Date().getFullYear();
+    const m = parseInt(md[1], 10) - 1;
+    const d = parseInt(md[2], 10);
+    const hh = parseInt(md[3] || '0', 10);
+    const mm = parseInt(md[4] || '0', 10);
+    return new Date(year, m, d, hh, mm, 0);
+  }
+
+  const direct = new Date(normalized);
+  if (!Number.isNaN(direct.getTime())) return direct;
+
+  return null;
+}
+
+function parsePlayDayKey(value) {
+  const parsed = parsePlayedAt(value);
+  if (parsed) return toDayKey(parsed);
+
+  const fallback = String(value || '').trim().replace(/[./]/g, '-');
+  const m = fallback.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+}
+
+function formatPlayDate(value) {
+  const parsed = parsePlayedAt(value);
+  if (!parsed) return String(value || '').trim();
+  const now = new Date();
+  const sameYear = parsed.getFullYear() === now.getFullYear();
+  const hasTime = /\d{1,2}:\d{2}/.test(String(value || ''));
+  const opts = sameYear
+    ? { month: 'short', day: 'numeric', ...(hasTime && { hour: 'numeric', minute: '2-digit' }) }
+    : { year: 'numeric', month: 'short', day: 'numeric', ...(hasTime && { hour: 'numeric', minute: '2-digit' }) };
+  return parsed.toLocaleString(undefined, opts);
+}
+
+function hexToRgb(hex) {
+  const cleaned = String(hex || '').replace('#', '');
+  if (cleaned.length !== 6) return null;
+  return {
+    r: parseInt(cleaned.slice(0, 2), 16),
+    g: parseInt(cleaned.slice(2, 4), 16),
+    b: parseInt(cleaned.slice(4, 6), 16),
+  };
+}
+
+function toHex(v) {
+  return clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0');
+}
+
+function interpolateHex(fromHex, targetHex, t) {
+  const from = hexToRgb(fromHex);
+  const to = hexToRgb(targetHex);
+  if (!from || !to) return fromHex;
+  const ratio = clamp(t, 0, 1);
+  const r = from.r + (to.r - from.r) * ratio;
+  const g = from.g + (to.g - from.g) * ratio;
+  const b = from.b + (to.b - from.b) * ratio;
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function getSingleLevelColor(level) {
+  const lv = clamp(Number(level) || 0, 1, SINGLE_MAX_LEVEL);
+  const ratio = lv / SINGLE_MAX_LEVEL;
+  return interpolateHex('#fca5a5', '#7f1d1d', ratio);
+}
+
+function getDoubleLevelColor(level) {
+  const lv = clamp(Number(level) || 0, 1, DOUBLE_MAX_LEVEL);
+  const ratio = lv / DOUBLE_MAX_LEVEL;
+  return interpolateHex('#86efac', '#14532d', ratio);
+}
+
+function isStageBreakPlay(play) {
+  return (parseInt(play?.score, 10) || 0) <= 0;
+}
+
+function formatLiveSessionDurationLabel(summary, session) {
+  if (summary?.sessionDurationLabel) return summary.sessionDurationLabel;
+  const start = Date.parse(`${session?.started_at || ''}Z`);
+  const end = Date.parse(`${session?.ended_at || ''}Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '';
+  const minutes = Math.max(0, Math.round((end - start) / 60000));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours > 0 && remainder > 0) return `${hours}h ${remainder}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainder}m`;
+}
+
+function getLiveSessionStreamHost(url) {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+}
+
+function getProfileLiveModeShort(mode) {
+  if (mode === 'Single') return 'S';
+  if (mode === 'Double') return 'D';
+  if (mode === 'CoOp') return 'C';
+  return 'X';
+}
+
+function getProfileLiveTopSongs(summary) {
+  if (Array.isArray(summary?.topSongsByRatingPreview) && summary.topSongsByRatingPreview.length > 0) {
+    return summary.topSongsByRatingPreview.slice(0, 6);
+  }
+  return Array.isArray(summary?.topSongsByRating) ? summary.topSongsByRating.slice(0, 6) : [];
+}
+
+function ProfileLiveTopSongTile({ row }) {
+  const score = parseInt(row?.score, 10) || 0;
+  const rating = parseInt(row?.rating, 10) || 0;
+  const rank = getRank(score);
+  const displayGrade = parseGrade(row?.grade, rank.label);
+  const gradeLabel = displayGrade.display || rank.label || '-';
+  const jacketUrl = resolveChartJacketUrl({
+    title: row?.song_title,
+    mode: row?.mode,
+    level: row?.level,
+    jacketUrl: row?.jacket_url,
+  });
+
+  return (
+    <div
+      className="relative aspect-[4/3] overflow-hidden rounded-lg border border-piu-border/50 bg-piu-dark/70"
+      title={`${row?.song_title || 'Unknown song'} • ${getProfileLiveModeShort(row?.mode)}${parseInt(row?.level, 10) || '?'}${rating > 0 ? ` • Rating ${rating.toLocaleString()}` : ''}${score > 0 ? ` • ${score.toLocaleString()}` : ''}`}
+    >
+        {jacketUrl ? (
+          <img src={jacketUrl} alt={row?.song_title || 'Song jacket'} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-piu-dark text-lg font-display font-black text-gray-500">
+            {String(row?.song_title || '?').trim().charAt(0).toUpperCase() || '?'}
+          </div>
+        )}
+      <div className="absolute inset-0 bg-gradient-to-t from-[#050816]/90 via-[#050816]/30 to-transparent" />
+      {rating > 0 ? (
+        <span className="absolute left-1.5 top-1.5 rounded-md border border-piu-border/60 bg-black/55 px-1.5 py-0.5 text-[9px] font-mono font-bold text-piu-accent">
+          R{rating.toLocaleString()}
+        </span>
+      ) : null}
+      <span className="absolute right-1.5 top-1.5 rounded-md border border-piu-border/60 bg-black/65 px-1.5 py-0.5 text-[9px] font-display font-semibold text-white">
+        {getProfileLiveModeShort(row?.mode)}{parseInt(row?.level, 10) || '?'}
+      </span>
+      <div className="absolute inset-x-1.5 bottom-1.5 flex items-end justify-between gap-1.5">
+        <span
+          className={`rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-display font-black leading-none drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] ${getGradeColor(gradeLabel)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+          data-grade={gradeLabel}
+        >
+          {gradeLabel}
+        </span>
+        <span className="truncate rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] font-mono font-bold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">
+          {score > 0 ? score.toLocaleString() : '-'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ProfileEndedLiveSessionCard({
+  session,
+  summary,
+  profileUsername,
+  isOwner,
+  liveVisibilityBusyId,
+  liveDeleteBusyId,
+  onToggleVisibility,
+  onDeleteSession,
+  playCount,
+  messageCount,
+}) {
+  const endedLabel = session?.ended_at ? timeAgo(session.ended_at) : '';
+  const sessionDuration = formatLiveSessionDurationLabel(summary, session);
+  const streamHost = getLiveSessionStreamHost(session?.stream_url);
+  const songCount = summary?.songCount || playCount || 0;
+  const totalMessages = summary?.messageCount || messageCount || 0;
+  const peakViewers = summary?.viewerPeak || session?.viewer_peak || 0;
+  const isHidden = !!session?.is_hidden_from_profile;
+  const topSongs = getProfileLiveTopSongs(summary);
+  const hasTopSongs = topSongs.length > 0;
+  const isVisibilityBusy = liveVisibilityBusyId === session?.id;
+  const isDeleteBusy = liveDeleteBusyId === session?.id;
+  const metaParts = [
+    sessionDuration || '',
+    `${songCount} plays`,
+    `${totalMessages} messages`,
+    `Peak ${peakViewers}`,
+  ].filter(Boolean);
+
+  return (
+    <Link
+      to={session?.live_url || `/live/${session?.id}`}
+      className="card-hover block p-3 sm:p-3.5"
+    >
+      <div className={`grid gap-3 ${hasTopSongs ? 'lg:grid-cols-[minmax(0,1fr)_170px] xl:grid-cols-[minmax(0,1fr)_186px]' : ''}`}>
+        <div className="min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center rounded-md border border-piu-border/50 bg-piu-dark/60 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-gray-400">
+                  Ended session
+                </span>
+                {streamHost ? (
+                  <span className="inline-flex items-center rounded-md border border-piu-border/40 bg-piu-dark/50 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-gray-500">
+                    {streamHost}
+                  </span>
+                ) : null}
+                {isHidden ? (
+                  <span className="inline-flex items-center rounded-md border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-amber-200">
+                    Hidden
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-2 truncate text-base font-display font-bold text-white">
+                {session?.title || `${profileUsername} live session`}
+              </p>
+              <p className="mt-1 text-[11px] text-gray-400">
+                {metaParts.join(' • ')}
+              </p>
+              {summary?.sessionMachineName ? (
+                <p className="mt-2 truncate text-[12px] text-cyan-100">
+                  {summary.sessionMachineName}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {isOwner ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onToggleVisibility(session.id, !isHidden);
+                    }}
+                    disabled={isVisibilityBusy || isDeleteBusy}
+                    className={`rounded-md border px-2.5 py-1 text-[10px] font-display font-semibold transition-colors ${
+                      isHidden
+                        ? 'border-amber-400/30 bg-amber-500/10 text-amber-200 hover:text-white'
+                        : 'border-piu-border/60 bg-piu-dark/80 text-gray-300 hover:border-piu-accent/50 hover:text-white'
+                    } disabled:opacity-60`}
+                  >
+                    {isVisibilityBusy ? 'Saving...' : isHidden ? 'Show' : 'Hide'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onDeleteSession(session.id, session?.title || `${profileUsername} live session`);
+                    }}
+                    disabled={isVisibilityBusy || isDeleteBusy}
+                    className="rounded-md border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-display font-semibold text-rose-200 transition-colors hover:border-rose-300/60 hover:text-white disabled:opacity-60"
+                  >
+                    {isDeleteBusy ? 'Deleting...' : 'Delete'}
+                  </button>
+                </>
+              ) : null}
+              {endedLabel ? <span className="text-[11px] text-gray-500">{endedLabel}</span> : null}
+            </div>
+          </div>
+        </div>
+
+        {hasTopSongs ? (
+          <div className="rounded-lg border border-piu-border/40 bg-piu-dark/35 p-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
+              {topSongs.map((row, index) => (
+                <ProfileLiveTopSongTile
+                  key={`${session?.id || 'live'}-${row?.song_title || 'song'}-${row?.mode || 'mode'}-${row?.level || index}-${index}`}
+                  row={row}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </Link>
+  );
+}
+
+function isNonClearScoreEntry(entry) {
+  if (entry?.is_uncleared) return true;
+  const score = parseInt(entry?.score, 10) || 0;
+  if (score <= 0) return true;
+  const rawGrade = String(entry?.grade || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!rawGrade) return false;
+  return rawGrade === 'F'
+    || rawGrade === 'STAGEBREAK'
+    || rawGrade === 'STAGE_BREAK'
+    || /^X(?:[_-]|$)/.test(rawGrade);
+}
+
+function normalizeChartMode(mode) {
+  const raw = String(mode || '').trim().toLowerCase();
+  if (raw === 'single' || raw === 'singles' || raw === 's') return 'Single';
+  if (raw === 'double' || raw === 'doubles' || raw === 'd') return 'Double';
+  if (raw === 'coop' || raw === 'co-op' || raw === 'co op' || raw === 'cooperative' || raw === 'c') return 'CoOp';
+  return String(mode || '').trim();
+}
+
+function getDisplayChartMode(mode) {
+  const normalized = normalizeChartMode(mode);
+  return normalized === 'CoOp' ? 'Co-op' : normalized;
+}
+
+function normalizeChartLookupKey(title, mode, level) {
+  const normalizedTitle = String(title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const normalizedMode = normalizeChartMode(mode);
+  const normalizedLevel = parseInt(level, 10) || 0;
+  if (!normalizedTitle || !normalizedMode || normalizedLevel <= 0) return '';
+  return `${normalizedTitle}|${normalizedMode}|${normalizedLevel}`;
+}
+
+function compareBestScoreRows(a, b, sortMode) {
+  const titleCompare = String(a?.song_title || '').localeCompare(String(b?.song_title || ''));
+  if (sortMode === 'name') {
+    if (titleCompare !== 0) return titleCompare;
+    const modeCompare = String(a?.mode || '').localeCompare(String(b?.mode || ''));
+    if (modeCompare !== 0) return modeCompare;
+    return (parseInt(a?.level, 10) || 0) - (parseInt(b?.level, 10) || 0);
+  }
+
+  const aScore = a?.is_uncleared ? -1 : (parseInt(a?.score, 10) || 0);
+  const bScore = b?.is_uncleared ? -1 : (parseInt(b?.score, 10) || 0);
+  if (bScore !== aScore) return bScore - aScore;
+  if (!!a?.is_uncleared !== !!b?.is_uncleared) return a?.is_uncleared ? 1 : -1;
+  if (titleCompare !== 0) return titleCompare;
+  const modeCompare = String(a?.mode || '').localeCompare(String(b?.mode || ''));
+  if (modeCompare !== 0) return modeCompare;
+  return (parseInt(a?.level, 10) || 0) - (parseInt(b?.level, 10) || 0);
+}
+
+function getChartGradeFromScore(score) {
+  const label = getRank(parseInt(score, 10) || 0).label;
+  // Keep chart compact: fold C/D/F into the B bucket.
+  if (label === 'C' || label === 'D' || label === 'F') return 'B';
+  return label;
+}
+
+function DailyLevelGradeChart({ plays }) {
+  const chartData = useMemo(() => {
+    const levelMap = {};
+    const rows = Array.isArray(plays) ? plays : [];
+
+    for (const play of rows) {
+      const level = parseInt(play?.level, 10);
+      if (!Number.isFinite(level) || level <= 0) continue;
+      if (!levelMap[level]) {
+        const seed = { levelLabel: `Lv.${level}`, levelValue: level, stage_break: 0 };
+        for (const g of GRADE_BARS) seed[g.key] = 0;
+        levelMap[level] = seed;
+      }
+
+      if (isStageBreakPlay(play)) {
+        levelMap[level].stage_break -= 1;
+        continue;
+      }
+
+      const grade = getChartGradeFromScore(play.score);
+      if (levelMap[level][grade] !== undefined) {
+        levelMap[level][grade] += 1;
+      }
+    }
+
+    return Object.values(levelMap).sort((a, b) => a.levelValue - b.levelValue);
+  }, [plays]);
+
+  if (chartData.length === 0) return null;
+
+  const maxMagnitude = Math.max(
+    1,
+    ...chartData.map((d) => {
+      const positives = GRADE_BARS.reduce((sum, g) => sum + (d[g.key] || 0), 0);
+      return Math.max(positives, Math.abs(d.stage_break || 0));
+    })
+  );
+
+  const tooltipContent = ({ active, label, payload }) => {
+    if (!active || !Array.isArray(payload)) return null;
+    const rows = payload.filter((item) => (parseInt(item?.value, 10) || 0) !== 0);
+    if (rows.length === 0) return null;
+
+    return (
+      <div className="rounded-lg border border-slate-700 bg-[#0b1220] px-2.5 py-2 shadow-lg">
+        <p className="text-[10px] font-display font-bold text-slate-200 mb-1">{label}</p>
+        <div className="space-y-0.5">
+          {rows.map((item, idx) => {
+            const key = String(item?.dataKey || item?.name || '');
+            const value = Math.abs(parseInt(item?.value, 10) || 0);
+            const text = key === 'stage_break' ? 'Stage Break' : key;
+            return (
+              <div key={`${key}-${idx}`} className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="inline-flex items-center gap-1 text-slate-300">
+                  <span
+                    className="w-2 h-2 rounded-sm"
+                    style={{ backgroundColor: item?.fill || item?.color || '#64748b' }}
+                  />
+                  {text}
+                </span>
+                <span className="font-mono font-bold text-slate-200">{value}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="mt-4">
+      <h4 className="text-[10px] font-display font-bold text-gray-500 mb-2 uppercase tracking-wide">
+        Grade Count by Level (Stage Break below zero)
+      </h4>
+      <div className="h-52 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="2 2" stroke="rgba(148,163,184,0.2)" vertical={false} />
+            <XAxis dataKey="levelLabel" tick={{ fill: '#9ca3af', fontSize: 10 }} />
+            <YAxis
+              domain={[-maxMagnitude, maxMagnitude]}
+              allowDecimals={false}
+              tick={{ fill: '#9ca3af', fontSize: 10 }}
+            />
+            <ReferenceLine y={0} stroke="rgba(148,163,184,0.45)" />
+            <Tooltip content={tooltipContent} />
+            {GRADE_BARS.map((grade) => (
+              <Bar key={grade.key} dataKey={grade.key} stackId="grades" fill={grade.color} />
+            ))}
+            <Bar dataKey="stage_break" fill="#dc2626" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {GRADE_BARS.map((g) => (
+          <span key={g.key} className="inline-flex items-center gap-1 text-[9px] text-gray-400">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: g.color }} />
+            {g.key}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1 text-[9px] text-gray-400">
+          <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#dc2626' }} />
+          Stage Break
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function getRankIndex(score) {
+  for (let i = 0; i < RANK_RANGES.length; i++) {
+    if (score >= RANK_RANGES[i].min) return i;
+  }
+  return RANK_RANGES.length - 1;
+}
+
+// Reusable song jacket with level badge overlay
+function PiuSongJacket({ title, mode, level, bgUrl, jacketLookup, size = 'md' }) {
+  const jacketUrl = resolveChartJacketUrl({
+    title,
+    mode,
+    level,
+    jacketLookup,
+    backgroundUrl: bgUrl,
+  });
+
+  return (
+    <PiuChartJacket
+      title={title}
+      mode={mode}
+      level={level}
+      jacketUrl={jacketUrl}
+      size={size === 'sm' ? 'sm' : 'md'}
+    />
+  );
+}
+
+// Grade distribution bar chart for a single level — grades on x-axis
+// showModeFilter: only show when top-level tab is "All"
+function GradeDistributionChart({
+  scores,
+  rankRanges,
+  showModeFilter = false,
+  modeFilter = '',
+  onModeFilterChange = null,
+}) {
+  const barsContainerRef = useRef(null);
+  const filtered = modeFilter ? scores.filter(s => s.mode === modeFilter) : scores;
+
+  // Build distribution, grouping B and below into one bucket
+  const groupedRanges = [
+    ...rankRanges.filter(r => ['SSS+','SSS','SS+','SS','S+','S','AAA+','AAA','AA+','AA','A+','A'].includes(r.label)),
+    { label: 'B-', min: 0, bg: 'bg-gray-400' },
+  ];
+  const distribution = groupedRanges.map(r => ({ ...r, count: 0 }));
+  let nonClearCount = 0;
+  for (const s of filtered) {
+    if (isNonClearScoreEntry(s)) {
+      nonClearCount++;
+      continue;
+    }
+    let placed = false;
+    for (let i = 0; i < rankRanges.length; i++) {
+      if (s.score >= rankRanges[i].min) {
+        // Is this rank in the non-grouped set (A and above)?
+        const grpIdx = distribution.findIndex(d => d.label === rankRanges[i].label);
+        if (grpIdx !== -1) {
+          distribution[grpIdx].count++;
+        } else {
+          // B, C, D, F — goes into the grouped "B-" bucket
+          distribution[distribution.length - 1].count++;
+        }
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) distribution[distribution.length - 1].count++;
+  }
+
+  // Invert: lowest grade on left, SSS+ on right
+  const displayDistribution = [
+    ...(nonClearCount > 0 ? [{ label: 'NC', bg: 'bg-red-600', count: nonClearCount }] : []),
+    ...[...distribution].reverse(),
+  ];
+
+  const maxCount = Math.max(1, ...displayDistribution.map(d => d.count));
+  const totalCount = displayDistribution.reduce((s, d) => s + d.count, 0);
+  const peakIndex = useMemo(() => {
+    let bestIdx = 0;
+    let bestCount = -1;
+    for (let i = 0; i < displayDistribution.length; i++) {
+      const count = Number(displayDistribution[i]?.count) || 0;
+      if (count > bestCount) {
+        bestCount = count;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
+  }, [displayDistribution]);
+
+  useEffect(() => {
+    const container = barsContainerRef.current;
+    if (!container) return;
+    const peakBar = container.querySelector('[data-peak-grade="true"]');
+    if (!peakBar) return;
+    const target = peakBar.offsetLeft - (container.clientWidth / 2) + (peakBar.clientWidth / 2);
+    container.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+  }, [peakIndex, totalCount, modeFilter]);
+
+  return (
+    <div className="card mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] text-gray-500 font-display">GRADE DISTRIBUTION ({totalCount} scores)</span>
+        {showModeFilter && (
+          <div className="flex gap-1">
+            {[
+              { key: '', label: 'All' },
+              { key: 'Single', label: 'Singles' },
+              { key: 'Double', label: 'Doubles' },
+            ].map(m => (
+              <button
+                key={m.key}
+                onClick={() => onModeFilterChange?.(m.key)}
+                className={`px-2 py-1 rounded text-[10px] font-display font-bold transition-colors ${
+                  modeFilter === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div
+        ref={barsContainerRef}
+        className="overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="flex items-end gap-1 min-w-max px-1" style={{ minHeight: '100px' }}>
+          {displayDistribution.map((d, i) => (
+            <div key={i} data-peak-grade={i === peakIndex ? 'true' : undefined} className="flex flex-col items-center w-8 shrink-0">
+              <div
+                className={`w-full rounded-t ${d.bg} transition-all`}
+                style={{ height: `${d.count > 0 ? Math.max((d.count / maxCount) * 90, 4) : 0}px` }}
+                title={`${d.label}: ${d.count}`}
+              />
+              {d.count > 0 && (
+                <span className="text-[8px] font-mono text-gray-400 mt-0.5">{d.count}</span>
+              )}
+              <span className="text-[7px] font-display font-bold text-gray-500 leading-tight mt-0.5 truncate w-full text-center">{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Vertical distribution bar chart — levels on x-axis, stacked grade segments
+function VerticalDistributionChart({ levels, maxCount, activeLevel, onLevelClick }) {
+  if (levels.length === 0) return null;
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="flex items-end gap-0.5 min-w-0" style={{ minHeight: '172px' }}>
+        {levels.map(({ level, distribution, total }) => (
+          <button
+            key={level}
+            onClick={() => onLevelClick(level)}
+            className={`flex flex-col items-center flex-1 min-w-[22px] group transition-colors rounded-t ${activeLevel === String(level) ? 'bg-piu-dark/80' : 'hover:bg-piu-dark/40'}`}
+          >
+            {/* Stacked vertical bar */}
+            <div className="w-full flex flex-col-reverse rounded-t overflow-hidden bg-piu-dark/30" style={{ height: `${Math.max((total / maxCount) * 152, 8)}px` }}>
+              {distribution.map((d, i) => d.count > 0 ? (
+                <div
+                  key={i}
+                  className={`w-full ${d.bg} relative`}
+                  style={{ height: `${(d.count / total) * 100}%` }}
+                  title={`${d.label}: ${d.count}`}
+                />
+              ) : null)}
+            </div>
+            {/* Count */}
+            <span className="text-[8px] font-mono text-gray-500 mt-0.5">{total}</span>
+            {/* Level label */}
+            <span className="text-[9px] font-display font-bold text-gray-400 leading-tight">{level}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Sync progress bar component
+function SyncProgressBar({ progress, total, label }) {
+  const pct = total > 0 ? Math.round((progress / total) * 100) : 0;
+  return (
+    <div className="card py-3 px-4">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-display font-bold text-piu-accent">{label}</span>
+        <span className="text-xs font-mono text-gray-400">{progress}/{total} pages ({pct}%)</span>
+      </div>
+      <div className="h-2 bg-piu-dark rounded-full overflow-hidden">
+        <div className="h-full bg-gradient-to-r from-piu-accent to-purple-500 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function ActivityIconGlyph({ icon, className = 'w-4 h-4' }) {
+  if (icon === 'post') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+        <path d="M8.5 9.5h7M8.5 12h7M8.5 14.5h4.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (icon === 'comment') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M6 7.5a2.5 2.5 0 0 1 2.5-2.5h7A2.5 2.5 0 0 1 18 7.5v5A2.5 2.5 0 0 1 15.5 15H11l-4.2 3.2c-.4.3-.8 0-.8-.4V15A2.5 2.5 0 0 1 3.5 12.5v-5A2.5 2.5 0 0 1 6 5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'score-up') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <path d="M5 18h14" strokeLinecap="round" />
+        <path d="m7 14 3-3 2.5 2.5L17 9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14.5 9H17v2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'score-clear') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <circle cx="12" cy="12" r="7" />
+        <path d="m9 12 2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'trophy') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M8 5h8v3a4 4 0 0 1-8 0V5Z" />
+        <path d="M10 13h4v2a2 2 0 0 1-4 0v-2Z" />
+        <path d="M9 18h6M6 6h2v1a3 3 0 0 1-3 3H4V8a2 2 0 0 1 2-2Zm12 0h-2v1a3 3 0 0 0 3 3h1V8a2 2 0 0 0-2-2Z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'duel') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+        <path d="m13.5 3.5-7 9h4L9.5 20l7-9h-4l1-7.5Z" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-created') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M9 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM16.5 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
+        <path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 19a3.5 3.5 0 0 1 7 0M19 4v4M17 6h4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-joined') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="M10 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+        <path d="M3 20a7 7 0 0 1 14 0M18.5 9v6M15.5 12h6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (icon === 'community-mod') {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+        <path d="m12 4 6 2.5V12c0 3.8-2.5 6.6-6 8-3.5-1.4-6-4.2-6-8V6.5L12 4Z" />
+        <path d="m9.5 12.5 1.8 1.8 3.4-3.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={className}>
+      <circle cx="12" cy="12" r="7" />
+      <path d="M12 8v4l2.5 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function getActivityVisual(item) {
+  const type = item?.type || '';
+  const category = item?.category || '';
+
+  if (type === 'post_created') {
+    return { icon: 'post', tone: 'text-sky-300 border-sky-400/30 bg-sky-500/10' };
+  }
+  if (type.includes('comment') || type.includes('reply')) {
+    return { icon: 'comment', tone: 'text-violet-300 border-violet-400/30 bg-violet-500/10' };
+  }
+  if (type === 'upscore') {
+    return { icon: 'score-up', tone: 'text-amber-300 border-amber-400/30 bg-amber-500/10' };
+  }
+  if (type === 'new_clear') {
+    return { icon: 'score-clear', tone: 'text-emerald-300 border-emerald-400/30 bg-emerald-500/10' };
+  }
+  if (type.includes('tournament')) {
+    return { icon: 'trophy', tone: 'text-pink-300 border-pink-400/30 bg-pink-500/10' };
+  }
+  if (type.includes('duel')) {
+    return { icon: 'duel', tone: 'text-orange-300 border-orange-400/30 bg-orange-500/10' };
+  }
+  if (type === 'community_created') {
+    return { icon: 'community-created', tone: 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10' };
+  }
+  if (type === 'community_joined') {
+    return { icon: 'community-joined', tone: 'text-teal-300 border-teal-400/30 bg-teal-500/10' };
+  }
+  if (type === 'community_moderator') {
+    return { icon: 'community-mod', tone: 'text-lime-300 border-lime-400/30 bg-lime-500/10' };
+  }
+
+  if (category === 'posts') {
+    return { icon: 'post', tone: 'text-sky-300 border-sky-400/30 bg-sky-500/10' };
+  }
+  if (category === 'comments') {
+    return { icon: 'comment', tone: 'text-violet-300 border-violet-400/30 bg-violet-500/10' };
+  }
+  if (category === 'scores') {
+    return { icon: 'score-up', tone: 'text-amber-300 border-amber-400/30 bg-amber-500/10' };
+  }
+  if (category === 'competitions') {
+    return { icon: 'trophy', tone: 'text-pink-300 border-pink-400/30 bg-pink-500/10' };
+  }
+  if (category === 'community') {
+    return { icon: 'community-joined', tone: 'text-cyan-300 border-cyan-400/30 bg-cyan-500/10' };
+  }
+
+  return { icon: 'default', tone: 'text-gray-300 border-gray-400/25 bg-gray-500/10' };
+}
+
+function getActivityCategoryLabel(category) {
+  if (category === 'posts') return 'Post';
+  if (category === 'comments') return 'Comment';
+  if (category === 'scores') return 'Score';
+  if (category === 'competitions') return 'Competition';
+  if (category === 'community') return 'Community';
+  return 'Activity';
+}
+
+const SCORE_CARD_STYLE_KEY = 'shinsa_score_card_style';
+
+export default function ProfilePage() {
+  const { id, username } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user: authUser } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [stats, setStats] = useState(null);
+  const [tab, setTab] = useState('overview');
+  const [activityItems, setActivityItems] = useState([]);
+  const [activitySubTab, setActivitySubTab] = useState('all');
+  const usernameHandle = (() => {
+    if (!username) return '';
+    try {
+      return decodeURIComponent(String(username));
+    } catch {
+      return String(username);
+    }
+  })();
+  const isUsernameRoute = Boolean(username);
+  const isAtUsernameRoute = isUsernameRoute && usernameHandle.startsWith('@');
+  const normalizedUsername = isAtUsernameRoute ? usernameHandle.slice(1) : '';
+
+  // PIUGame state
+  const [piuStatus, setPiuStatus] = useState(null);
+  const [piuPumbility, setPiuPumbility] = useState(null);
+  const [piuBestScores, setPiuBestScores] = useState(null);
+  const [piuRecentlyPlayed, setPiuRecentlyPlayed] = useState(null);
+  const [overviewRecentlyPlayed, setOverviewRecentlyPlayed] = useState(null);
+  const [piuTitles, setPiuTitles] = useState(null);
+  const [piuScoreMode, setPiuScoreMode] = useState('');  // '' = All
+  const [piuAllSubMode, setPiuAllSubMode] = useState(''); // '', 'Single', 'Double' when piuScoreMode is ''
+  const [piuScoreLevel, setPiuScoreLevel] = useState('');
+  const [piuSyncing, setPiuSyncing] = useState('');
+  const [recentlyPlayedSyncing, setRecentlyPlayedSyncing] = useState(false);
+  const [recentlyPlayedSyncFeedback, setRecentlyPlayedSyncFeedback] = useState('');
+  const [piuDataLoaded, setPiuDataLoaded] = useState(false);
+  const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
+  const [selectedGroupBadge, setSelectedGroupBadge] = useState(null);
+  const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
+  const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
+  const [selectedPlay, setSelectedPlay] = useState(null);
+  const [scoreCardStyle, setScoreCardStyle] = useState(() => localStorage.getItem(SCORE_CARD_STYLE_KEY) || 'classic');
+  const [classicStoryOpen, setClassicStoryOpen] = useState(false);
+  const [classicStoryCaption, setClassicStoryCaption] = useState('');
+  const [classicStorySubmitting, setClassicStorySubmitting] = useState(false);
+  const [classicStoryError, setClassicStoryError] = useState('');
+  const [classicStorySuccess, setClassicStorySuccess] = useState(false);
+  useEffect(() => {
+    setClassicStoryOpen(false);
+    setClassicStoryCaption('');
+    setClassicStorySubmitting(false);
+    setClassicStoryError('');
+    setClassicStorySuccess(false);
+  }, [selectedPlay]);
+  const [jacketLookup, setJacketLookup] = useState({});
+  const [chartKeyMap, setChartKeyMap] = useState({});
+  const [topProfileMetricMode, setTopProfileMetricMode] = useState('overall');
+  const [showTopProfilePumbilityModal, setShowTopProfilePumbilityModal] = useState(false);
+  const [bestScoreSort, setBestScoreSort] = useState('score'); // 'score' | 'name'
+  const [bestScoreSearch, setBestScoreSearch] = useState('');
+  const [showLevelNonClears, setShowLevelNonClears] = useState(false);
+  const [levelCatalogCharts, setLevelCatalogCharts] = useState([]);
+  const [levelCatalogLoading, setLevelCatalogLoading] = useState(false);
+  const [bestScorePage, setBestScorePage] = useState(1);
+  const [syncProgress, setSyncProgress] = useState({ in_progress: '', progress: 0, total: 0 });
+  const [profilePosts, setProfilePosts] = useState([]);
+  const [shoeCabinet, setShoeCabinet] = useState(null);
+  const [shoeLoading, setShoeLoading] = useState(false);
+  const [shoeBusy, setShoeBusy] = useState(false);
+  const [shoeFeedback, setShoeFeedback] = useState('');
+
+  // Social state
+  const [followStatus, setFollowStatus] = useState({ following: false, followers_count: 0, following_count: 0 });
+  const [socialCounts, setSocialCounts] = useState({ followers_count: 0, following_count: 0, posts_count: 0 });
+  const [followLoading, setFollowLoading] = useState(false);
+  const [notifyMenuOpen, setNotifyMenuOpen] = useState(false);
+  const [piuTabsMenuOpen, setPiuTabsMenuOpen] = useState(false);
+  const notifyMenuRef = useRef(null);
+  const piuTabsMenuRef = useRef(null);
+  const [activityNotifyPrefs, setActivityNotifyPrefs] = useState({
+    loading: false,
+    saving: false,
+    subscribed: false,
+    notify_posts: false,
+    notify_upscores: false,
+    notify_new_clears: false,
+  });
+  const [activityNotifyError, setActivityNotifyError] = useState('');
+  const [followersList, setFollowersList] = useState([]);
+  const [followingList, setFollowingList] = useState([]);
+  const [followersLoaded, setFollowersLoaded] = useState(false);
+  const [myFollowingIds, setMyFollowingIds] = useState(new Set());
+  const [followBackLoading, setFollowBackLoading] = useState({});
+  const [competitionsSub, setCompetitionsSub] = useState('tournaments');
+  const [songAnalytics, setSongAnalytics] = useState(null);
+  const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
+  const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
+  const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
+
+  const profileId = profile?.id || null;
+  const isOwner = authUser && profileId && authUser.id === profileId;
+  const hasPiuData = piuStatus && (piuStatus.linked || piuStatus.best_scores_imported || piuStatus.pumbility_value > 0);
+  const overviewHeatmapYear = new Date().getFullYear();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setProfile(null);
+    setLoadError('');
+    setStats(null);
+    setPiuStatus(null);
+    setPiuPumbility(null);
+    setPiuBestScores(null);
+    setPiuRecentlyPlayed(null);
+    setOverviewRecentlyPlayed(null);
+    setPiuTitles(null);
+    setPiuSyncing('');
+    setRecentlyPlayedSyncing(false);
+    setRecentlyPlayedSyncFeedback('');
+    setPiuDataLoaded(false);
+    setShowPumbilityThresholdModal(false);
+    setSelectedGroupBadge(null);
+    setSelectedAchievementBadge(null);
+    setSyncProgress({ in_progress: '', progress: 0, total: 0 });
+    setSocialCounts({ followers_count: 0, following_count: 0, posts_count: 0 });
+    setActivityItems([]);
+    setSongAnalytics(null);
+    setProfileLive({ active_session: null, ended_sessions: [] });
+    setShoeCabinet(null);
+    setShoeLoading(false);
+    setShoeBusy(false);
+    setShoeFeedback('');
+    setFollowersLoaded(false);
+    setTab('overview');
+    setSelectedOverviewDateKey('');
+    setTopProfileMetricMode('overall');
+    setShowTopProfilePumbilityModal(false);
+    setShowLevelNonClears(false);
+    setLevelCatalogCharts([]);
+    setLevelCatalogLoading(false);
+    setActivitySubTab('all');
+    setActivityNotifyPrefs({
+      loading: false,
+      saving: false,
+      subscribed: false,
+      notify_posts: false,
+      notify_upscores: false,
+      notify_new_clears: false,
+    });
+    setActivityNotifyError('');
+    setNotifyMenuOpen(false);
+    setPiuTabsMenuOpen(false);
+
+    const load = async () => {
+      try {
+        if (isUsernameRoute && !isAtUsernameRoute) {
+          if (!cancelled) {
+            setProfile(null);
+            setLoadError('Page not found');
+          }
+          return;
+        }
+
+        const userProfile = username
+          ? await getUserProfileByUsername(normalizedUsername)
+          : await getUserProfile(id);
+        if (cancelled) return;
+
+        setProfile(userProfile);
+
+        if (!username && userProfile?.username && location.pathname.startsWith('/profile/')) {
+          navigate(getProfilePath(userProfile.id, userProfile.username), { replace: true });
+        }
+
+        const uid = userProfile.id;
+        const [statsData, piuStatusData, socialData, activityData, titleData, liveData] = await Promise.all([
+          getUserStats(uid).catch(() => null),
+          getPiugameSyncStatus(uid).catch(() => null),
+          getSocialCounts(uid).catch(() => null),
+          getUserActivity(uid).catch(() => []),
+          getPiugameTitles(uid).catch(() => null),
+          getProfileLiveSessions(uid).catch(() => ({ active_session: null, ended_sessions: [] })),
+        ]);
+
+        if (cancelled) return;
+        if (statsData) setStats(statsData);
+        if (piuStatusData) setPiuStatus(piuStatusData);
+        if (socialData) setSocialCounts(socialData);
+        if (Array.isArray(activityData)) setActivityItems(activityData);
+        if (titleData) setPiuTitles(titleData);
+        setProfileLive(liveData || { active_session: null, ended_sessions: [] });
+
+        if (authUser) {
+          const status = await getFollowStatus(uid).catch(() => null);
+          if (!cancelled && status) setFollowStatus(status);
+        } else {
+          setFollowStatus({ following: false, followers_count: 0, following_count: 0 });
+        }
+      } catch {
+        if (!cancelled) {
+          setProfile(null);
+          setLoadError('Profile not found');
+        }
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [id, username, normalizedUsername, isUsernameRoute, isAtUsernameRoute, authUser, navigate, location.pathname]);
+
+  // Load posts when posts tab is active
+  useEffect(() => {
+    if (tab === 'posts' && profileId) {
+      getUserPosts(profileId, 1).then(setProfilePosts).catch(() => {});
+    }
+  }, [tab, profileId]);
+
+  // Load followers/following when followers tab is active
+  useEffect(() => {
+    if (tab === 'followers' && profileId && !followersLoaded) {
+      setFollowersLoaded(true);
+      getFollowers(profileId).then(setFollowersList).catch(() => {});
+      getFollowing(profileId).then(setFollowingList).catch(() => {});
+      if (authUser) {
+        getFollowing(authUser.id).then(list => {
+          setMyFollowingIds(new Set(list.map(u => u.id)));
+        }).catch(() => {});
+      }
+    }
+  }, [tab, profileId, followersLoaded, authUser]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!profileId) {
+      setSongAnalytics(null);
+      return () => { cancelled = true; };
+    }
+
+    getSongAnalytics(profileId)
+      .then((data) => {
+        if (cancelled) return;
+        setSongAnalytics(data || null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSongAnalytics(null);
+      });
+
+    return () => { cancelled = true; };
+  }, [profileId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!authUser || !profileId || isOwner) {
+      setNotifyMenuOpen(false);
+      setActivityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: false,
+        notify_posts: false,
+        notify_upscores: false,
+        notify_new_clears: false,
+      });
+      return () => { cancelled = true; };
+    }
+
+    setActivityNotifyPrefs(prev => ({ ...prev, loading: true, saving: false }));
+    getActivityNotificationPreferences(profileId)
+      .then((prefs) => {
+        if (cancelled) return;
+        setActivityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: !!prefs?.subscribed,
+          notify_posts: !!prefs?.notify_posts,
+          notify_upscores: !!prefs?.notify_upscores,
+          notify_new_clears: !!prefs?.notify_new_clears,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActivityNotifyPrefs({
+          loading: false,
+          saving: false,
+          subscribed: false,
+          notify_posts: false,
+          notify_upscores: false,
+          notify_new_clears: false,
+        });
+      });
+
+    return () => { cancelled = true; };
+  }, [authUser, profileId, isOwner]);
+
+  async function handleToggleLiveProfileVisibility(sessionId, hidden) {
+    if (!isOwner || !sessionId) return;
+    setLiveVisibilityBusyId(sessionId);
+    try {
+      await updateLiveSessionProfileVisibility(sessionId, hidden);
+      setProfileLive((prev) => ({
+        ...prev,
+        ended_sessions: (Array.isArray(prev?.ended_sessions) ? prev.ended_sessions : []).map((item) => (
+          String(item?.session?.id || '') === String(sessionId)
+            ? {
+                ...item,
+                session: {
+                  ...(item.session || {}),
+                  is_hidden_from_profile: !!hidden,
+                },
+              }
+            : item
+        )),
+      }));
+    } finally {
+      setLiveVisibilityBusyId('');
+    }
+  }
+
+  async function handleDeleteLiveSession(sessionId, sessionTitle = '') {
+    if (!isOwner || !sessionId || liveDeleteBusyId === sessionId) return;
+
+    const label = String(sessionTitle || 'this live session').trim() || 'this live session';
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(`Delete "${label}" from your live session history? This hides the session archive without changing synced scores, clears, or recently played songs from that stream.`);
+      if (!confirmed) return;
+    }
+
+    setLiveDeleteBusyId(sessionId);
+    try {
+      await deleteLiveSession(sessionId);
+      setProfileLive((prev) => ({
+        ...prev,
+        ended_sessions: (Array.isArray(prev?.ended_sessions) ? prev.ended_sessions : []).filter(
+          (item) => String(item?.session?.id || '') !== String(sessionId)
+        ),
+      }));
+    } catch (err) {
+      if (typeof window !== 'undefined') {
+        window.alert(err?.message || 'Failed to delete live session');
+      }
+    } finally {
+      setLiveDeleteBusyId('');
+    }
+  }
+
+  const refreshShoeCabinet = async (options = {}) => {
+    const { silent = false } = options;
+    if (!profileId) return null;
+
+    if (!silent) setShoeLoading(true);
+    try {
+      const data = await getProfileShoes(profileId);
+      const cabinet = data || { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] };
+      setShoeCabinet(cabinet);
+      return cabinet;
+    } catch {
+      const emptyCabinet = { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] };
+      setShoeCabinet(emptyCabinet);
+      return emptyCabinet;
+    } finally {
+      if (!silent) setShoeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (tab !== 'shoes' || !profileId) {
+      return () => { cancelled = true; };
+    }
+
+    setShoeLoading(true);
+    getProfileShoes(profileId)
+      .then((data) => {
+        if (cancelled) return;
+        setShoeCabinet(data || { active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setShoeCabinet({ active_shoe_id: null, lifetime_songs: 0, lifetime_steps: 0, shoes: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setShoeLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [tab, profileId]);
+
+  useEffect(() => {
+    if (!notifyMenuOpen && !piuTabsMenuOpen) return undefined;
+
+    function handleDocumentClick(e) {
+      if (notifyMenuOpen && notifyMenuRef.current && !notifyMenuRef.current.contains(e.target)) {
+        setNotifyMenuOpen(false);
+      }
+      if (piuTabsMenuOpen && piuTabsMenuRef.current && !piuTabsMenuRef.current.contains(e.target)) {
+        setPiuTabsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, [notifyMenuOpen, piuTabsMenuOpen]);
+
+  // Load PIUGame data + jacket lookup when any PIU tab is active
+  const piuTabs = ['pumbility', 'best-scores', 'recently-played', 'titles'];
+  const isPiuTab = piuTabs.includes(tab);
+  const hasJacketLookup = Object.keys(jacketLookup).length > 0;
+
+  useEffect(() => {
+    if (isPiuTab && profileId && !piuDataLoaded) {
+      setPiuDataLoaded(true);
+      getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
+      getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+      getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
+      getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
+      getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
+    }
+  }, [isPiuTab, profileId, piuDataLoaded]);
+
+  const hasChartKeyMap = Object.keys(chartKeyMap).length > 0;
+  useEffect(() => {
+    if (tab !== 'overview' || !profileId || !hasPiuData) return;
+    if (!overviewRecentlyPlayed) {
+      getPiugameRecentlyPlayed(profileId, { year: overviewHeatmapYear, sort: 'desc' })
+        .then(setOverviewRecentlyPlayed)
+        .catch(() => {});
+    }
+    if (!hasJacketLookup) {
+      getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
+    }
+    if (!hasChartKeyMap) {
+      getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
+    }
+  }, [tab, profileId, hasPiuData, overviewRecentlyPlayed, hasJacketLookup, hasChartKeyMap, overviewHeatmapYear]);
+
+  useEffect(() => {
+    if (tab !== 'recently-played' || !profileId || piuRecentlyPlayed) return;
+    getPiugameRecentlyPlayed(profileId, { sort: 'desc' }).then(setPiuRecentlyPlayed).catch(() => {});
+  }, [tab, profileId, piuRecentlyPlayed]);
+
+  // Auto-sync pumbility + recently played (NOT best scores) for profile owner
+  useEffect(() => {
+    if (isPiuTab && profileId && isOwner && piuStatus?.linked && piuSyncing !== 'auto') {
+      setPiuSyncing('auto');
+      Promise.all([
+        syncPumbility().catch(() => null),
+        syncRecentlyPlayed().catch(() => null),
+      ]).then(() => {
+        getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
+        getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+        getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
+        getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
+        getSongAnalytics(profileId).then((data) => setSongAnalytics(data || null)).catch(() => {});
+        if (overviewRecentlyPlayed) {
+          getPiugameRecentlyPlayed(profileId, { year: overviewHeatmapYear, sort: 'desc' })
+            .then(setOverviewRecentlyPlayed)
+            .catch(() => {});
+        }
+        if (piuRecentlyPlayed || tab === 'recently-played') {
+          getPiugameRecentlyPlayed(profileId, { sort: 'desc' }).then(setPiuRecentlyPlayed).catch(() => {});
+        }
+      }).finally(() => setPiuSyncing(''));
+    }
+  }, [isPiuTab, profileId, isOwner, piuStatus?.linked, overviewRecentlyPlayed, piuRecentlyPlayed, tab, overviewHeatmapYear]);
+
+  // Poll sync progress when a background sync is running
+  useEffect(() => {
+    if (!isOwner || !piuStatus?.sync_in_progress) return;
+    setSyncProgress({ in_progress: piuStatus.sync_in_progress, progress: piuStatus.sync_progress || 0, total: piuStatus.sync_total || 0 });
+
+    const interval = setInterval(() => {
+      getSyncProgress().then(data => {
+        setSyncProgress(data);
+        if (!data.in_progress) {
+          clearInterval(interval);
+          // Refresh data after sync completes
+          if (profileId) {
+            getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
+            getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
+            getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isOwner, profileId, piuStatus?.sync_in_progress]);
+
+  const handleFollow = async () => {
+    if (!authUser || followLoading || !profileId) return;
+    setFollowLoading(true);
+    try {
+      if (followStatus.following) {
+        await unfollowUser(profileId);
+        setFollowStatus(s => ({ ...s, following: false, followers_count: s.followers_count - 1 }));
+        setSocialCounts(c => ({ ...c, followers_count: Math.max(0, c.followers_count - 1) }));
+      } else {
+        await followUser(profileId);
+        setFollowStatus(s => ({ ...s, following: true, followers_count: s.followers_count + 1 }));
+        setSocialCounts(c => ({ ...c, followers_count: c.followers_count + 1 }));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!authUser || !profileId || profileId === authUser.id) return;
+    try {
+      const payload = await getOrCreateDirectConversation(profileId);
+      if (payload?.conversation?.id) {
+        navigate(`/messages/${payload.conversation.id}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateActivityPrefs = async (nextPrefs) => {
+    if (!authUser || !profileId || isOwner || activityNotifyPrefs.saving) return;
+
+    const previous = activityNotifyPrefs;
+    const optimistic = {
+      loading: false,
+      saving: true,
+      subscribed: !!(nextPrefs.notify_posts || nextPrefs.notify_upscores || nextPrefs.notify_new_clears),
+      notify_posts: !!nextPrefs.notify_posts,
+      notify_upscores: !!nextPrefs.notify_upscores,
+      notify_new_clears: !!nextPrefs.notify_new_clears,
+    };
+
+    setActivityNotifyError('');
+    setActivityNotifyPrefs(optimistic);
+
+    try {
+      const saved = await updateActivityNotificationPreferences(profileId, {
+        notify_posts: optimistic.notify_posts,
+        notify_upscores: optimistic.notify_upscores,
+        notify_new_clears: optimistic.notify_new_clears,
+      });
+      setActivityNotifyPrefs({
+        loading: false,
+        saving: false,
+        subscribed: !!saved?.subscribed,
+        notify_posts: !!saved?.notify_posts,
+        notify_upscores: !!saved?.notify_upscores,
+        notify_new_clears: !!saved?.notify_new_clears,
+      });
+    } catch (err) {
+      setActivityNotifyPrefs({ ...previous, saving: false, loading: false });
+      setActivityNotifyError(err?.message || 'Failed to update activity notification settings');
+    }
+  };
+
+  const handleToggleActivityPref = (field) => {
+    if (activityNotifyPrefs.loading || activityNotifyPrefs.saving) return;
+    updateActivityPrefs({
+      notify_posts: field === 'notify_posts' ? !activityNotifyPrefs.notify_posts : activityNotifyPrefs.notify_posts,
+      notify_upscores: field === 'notify_upscores' ? !activityNotifyPrefs.notify_upscores : activityNotifyPrefs.notify_upscores,
+      notify_new_clears: field === 'notify_new_clears' ? !activityNotifyPrefs.notify_new_clears : activityNotifyPrefs.notify_new_clears,
+    });
+  };
+
+  const handleSetAllActivityPrefs = (enabled) => {
+    if (activityNotifyPrefs.loading || activityNotifyPrefs.saving) return;
+    updateActivityPrefs({
+      notify_posts: !!enabled,
+      notify_upscores: !!enabled,
+      notify_new_clears: !!enabled,
+    });
+  };
+
+  const handleWearShoe = async (shoeId) => {
+    if (!isOwner || shoeBusy) return;
+    setShoeBusy(true);
+    setShoeFeedback('');
+    try {
+      const data = await wearProfileShoe(shoeId);
+      setShoeCabinet(data?.cabinet || null);
+      setShoeFeedback('Current shoe updated');
+    } catch (err) {
+      setShoeFeedback(err?.message || 'Failed to set current shoe');
+    } finally {
+      setShoeBusy(false);
+    }
+  };
+
+  const [syncFeedback, setSyncFeedback] = useState('');
+  const handleStartBestScoresSync = async () => {
+    try {
+      await syncBestScores();
+      setSyncFeedback('Import started successfully. Check progress in Best Scores tab.');
+      setTimeout(() => setSyncFeedback(''), 6000);
+      // Refresh status to start polling
+      if (profileId) getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {});
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleSyncRecentlyPlayedShortcut = async () => {
+    if (!isOwner || !profileId || !piuStatus?.linked || recentlyPlayedSyncing) return;
+    setRecentlyPlayedSyncing(true);
+    setRecentlyPlayedSyncFeedback('');
+    try {
+      await syncRecentlyPlayed();
+      await Promise.all([
+        (tab === 'recently-played' || piuRecentlyPlayed
+          ? getPiugameRecentlyPlayed(profileId, { sort: 'desc' }).then(setPiuRecentlyPlayed).catch(() => {})
+          : Promise.resolve()),
+        (tab === 'overview' || overviewRecentlyPlayed
+          ? getPiugameRecentlyPlayed(profileId, { year: overviewHeatmapYear, sort: 'desc' })
+            .then(setOverviewRecentlyPlayed)
+            .catch(() => {})
+          : Promise.resolve()),
+        getPiugameSyncStatus(profileId).then(setPiuStatus).catch(() => {}),
+      ]);
+      setRecentlyPlayedSyncFeedback('Recently Played synced');
+      setTimeout(() => setRecentlyPlayedSyncFeedback(''), 4500);
+    } catch (err) {
+      setRecentlyPlayedSyncFeedback(err?.message || 'Failed to sync recently played');
+      setTimeout(() => setRecentlyPlayedSyncFeedback(''), 6000);
+    } finally {
+      setRecentlyPlayedSyncing(false);
+    }
+  };
+
+  // Aggregate all song scores across duels and tournaments
+  const songScores = useMemo(() => {
+    if (!stats) return [];
+    const scores = [];
+
+    for (const { duel, songs } of stats.duelStats) {
+      const isP1 = duel.player1_user_id === profileId;
+      for (const s of songs) {
+        const myScore = isP1 ? s.player1_score : s.player2_score;
+        const opponentScore = isP1 ? s.player2_score : s.player1_score;
+        const won = (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2');
+        if (myScore > 0 || opponentScore > 0) {
+          scores.push({
+            title: s.song_title, artist: s.song_artist, mode: s.song_mode, level: s.song_level,
+            jacket: s.song_jacket_url, myScore, opponentScore, won,
+            draw: s.winner === 'draw', source: `Duel: ${duel.name}`, date: duel.date || duel.created_at,
+          });
+        }
+      }
+    }
+
+    for (const { duel, songs } of (stats.onlineDuelStats || [])) {
+      const isP1 = duel.creator_user_id === profileId;
+      for (const s of songs) {
+        if (s.status !== 'completed') continue;
+        const myScore = isP1 ? s.player1_score : s.player2_score;
+        const opponentScore = isP1 ? s.player2_score : s.player1_score;
+        const won = (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2');
+        if (myScore > 0 || opponentScore > 0) {
+          scores.push({
+            title: s.song_title, artist: s.song_artist, mode: s.song_mode, level: s.song_level,
+            jacket: s.song_jacket_url, myScore, opponentScore, won,
+            draw: s.winner === 'draw', source: `Online Duel: ${duel.name}`, date: duel.created_at,
+          });
+        }
+      }
+    }
+
+    for (const { tournament, matches } of stats.tournamentPlayers) {
+      for (const m of matches) {
+        if (m.status !== 'COMPLETED') continue;
+        const isP1 = m.player1_id === tournament.id;
+        const playedSongs = JSON.parse(m.played_songs || '[]');
+        const matchScores = JSON.parse(m.scores || '{}');
+        for (const ps of playedSongs) {
+          const myScore = isP1 ? (matchScores[ps.id]?.player1 || 0) : (matchScores[ps.id]?.player2 || 0);
+          const oppScore = isP1 ? (matchScores[ps.id]?.player2 || 0) : (matchScores[ps.id]?.player1 || 0);
+          if (myScore > 0 || oppScore > 0) {
+            scores.push({
+              title: ps.title, artist: ps.artist || '', mode: ps.mode, level: ps.level,
+              jacket: ps.jacket_url || '', myScore, opponentScore: oppScore,
+              won: myScore > oppScore, draw: myScore === oppScore,
+              source: `Tournament: ${tournament.tournament_name}`, date: tournament.tournament_date || '',
+            });
+          }
+        }
+      }
+    }
+
+    return scores.sort((a, b) => b.myScore - a.myScore);
+  }, [stats, profileId]);
+
+  // Aggregated stats
+  const aggregated = useMemo(() => {
+    if (!stats) return null;
+    const tournamentCount = stats.tournamentPlayers.length;
+    const onlineDuelCount = (stats.onlineDuelStats || []).length;
+    const duelCount = stats.duelStats.length + onlineDuelCount;
+    let totalWins = 0, totalLosses = 0;
+    for (const { tournament } of stats.tournamentPlayers) {
+      totalWins += tournament.wins || 0;
+      totalLosses += tournament.losses || 0;
+    }
+    let duelWins = 0, duelLosses = 0;
+    for (const { duel } of stats.duelStats) {
+      if (duel.status !== 'COMPLETED') continue;
+      const isP1 = duel.player1_user_id === profileId;
+      if ((isP1 && duel.winner === 'player1') || (!isP1 && duel.winner === 'player2')) duelWins++;
+      else if (duel.winner !== 'draw') duelLosses++;
+    }
+    for (const { duel } of (stats.onlineDuelStats || [])) {
+      if (duel.status !== 'COMPLETED') continue;
+      const isP1 = duel.creator_user_id === profileId;
+      if ((isP1 && duel.winner === 'player1') || (!isP1 && duel.winner === 'player2')) duelWins++;
+      else if (duel.winner !== 'draw') duelLosses++;
+    }
+    const totalSongs = songScores.length;
+    const avgScore = totalSongs > 0 ? Math.round(songScores.reduce((s, sc) => s + sc.myScore, 0) / totalSongs) : 0;
+    const bestScore = totalSongs > 0 ? Math.max(...songScores.map(s => s.myScore)) : 0;
+
+    const levelMap = {};
+    songScores.forEach(s => {
+      if (!levelMap[s.level]) levelMap[s.level] = { count: 0, totalScore: 0 };
+      levelMap[s.level].count++;
+      levelMap[s.level].totalScore += s.myScore;
+    });
+    const byLevel = Object.entries(levelMap)
+      .map(([level, d]) => ({ level: parseInt(level), count: d.count, avg: Math.round(d.totalScore / d.count) }))
+      .sort((a, b) => a.level - b.level);
+
+    return { tournamentCount, duelCount, totalWins, totalLosses, duelWins, duelLosses, totalSongs, avgScore, bestScore, byLevel };
+  }, [stats, songScores, profileId]);
+
+  const recentlyPlayedRows = useMemo(
+    () => (Array.isArray(piuRecentlyPlayed?.plays) ? piuRecentlyPlayed.plays : []),
+    [piuRecentlyPlayed]
+  );
+
+  const overviewHeatmapRows = useMemo(
+    () => (Array.isArray(overviewRecentlyPlayed?.plays) ? overviewRecentlyPlayed.plays : []),
+    [overviewRecentlyPlayed]
+  );
+
+  const overviewPlayHeatmap = useMemo(() => {
+    const plays = overviewHeatmapRows;
+    const dayMap = {};
+    let singleMin = Infinity;
+    let singleMax = 0;
+    let doubleMin = Infinity;
+    let doubleMax = 0;
+    let latestDate = null;
+
+    for (let i = 0; i < plays.length; i++) {
+      const play = plays[i];
+      const parsedAt = parsePlayedAt(play?.played_at_utc || play?.date_played);
+      const dayKey = parsedAt ? toDayKey(parsedAt) : parsePlayDayKey(play?.played_at_utc || play?.date_played);
+      const dayDate = parsedAt ? startOfDay(parsedAt) : parseDayKey(dayKey);
+      if (!dayKey || !dayDate) continue;
+
+      if (!dayMap[dayKey]) {
+        dayMap[dayKey] = {
+          key: dayKey,
+          plays: [],
+          singles: 0,
+          doubles: 0,
+          singleLevelTotal: 0,
+          doubleLevelTotal: 0,
+        };
+      }
+
+      const mode = play?.mode === 'Single' || play?.mode === 'Double' ? play.mode : '';
+      const level = parseInt(play?.level, 10) || 0;
+
+      if (mode === 'Single') {
+        dayMap[dayKey].singles += 1;
+        dayMap[dayKey].singleLevelTotal += level;
+      } else if (mode === 'Double') {
+        dayMap[dayKey].doubles += 1;
+        dayMap[dayKey].doubleLevelTotal += level;
+      }
+
+      if ((parseInt(play?.score, 10) || 0) > 0) {
+        if (mode === 'Single' && level > 0) {
+          singleMin = Math.min(singleMin, level);
+          singleMax = Math.max(singleMax, level);
+        } else if (mode === 'Double' && level > 0) {
+          doubleMin = Math.min(doubleMin, level);
+          doubleMax = Math.max(doubleMax, level);
+        }
+      }
+
+      dayMap[dayKey].plays.push({
+        ...play,
+        _parsedAtMs: parsedAt ? parsedAt.getTime() : null,
+        _index: i,
+      });
+
+      if (!latestDate || dayDate.getTime() > latestDate.getTime()) latestDate = dayDate;
+    }
+
+    const dayEntries = Object.values(dayMap);
+    dayEntries.forEach((d) => {
+      d.total = d.singles + d.doubles;
+      d.singleAvgLevel = d.singles > 0 ? d.singleLevelTotal / d.singles : 0;
+      d.doubleAvgLevel = d.doubles > 0 ? d.doubleLevelTotal / d.doubles : 0;
+      d.singleRatio = d.total > 0 ? d.singles / d.total : 0;
+      d.doubleRatio = d.total > 0 ? d.doubles / d.total : 0;
+      d.singleColor = d.singles > 0 ? getSingleLevelColor(d.singleAvgLevel) : 'transparent';
+      d.doubleColor = d.doubles > 0 ? getDoubleLevelColor(d.doubleAvgLevel) : 'transparent';
+
+      if (d.singles > 0 && d.doubles > 0) {
+        const singlesPct = clamp(d.singleRatio * 100, 0, 100);
+        d.fill = `linear-gradient(90deg, ${d.singleColor} 0%, ${d.singleColor} ${singlesPct}%, ${d.doubleColor} ${singlesPct}%, ${d.doubleColor} 100%)`;
+      } else if (d.singles > 0) {
+        d.fill = d.singleColor;
+      } else if (d.doubles > 0) {
+        d.fill = d.doubleColor;
+      } else {
+        d.fill = 'transparent';
+      }
+
+      d.plays = d.plays.sort((a, b) => {
+        const aTime = a._parsedAtMs ?? -1;
+        const bTime = b._parsedAtMs ?? -1;
+        if (aTime !== bTime) return bTime - aTime;
+        return b._index - a._index;
+      });
+    });
+
+    const today = startOfDay(new Date());
+    const yearStartDate = new Date(today.getFullYear(), 0, 1);
+    const yearEndDate = new Date(today.getFullYear(), 11, 31);
+    const gridStartDate = startOfWeek(yearStartDate);
+    const totalGridDays = diffDays(gridStartDate, yearEndDate) + 1;
+    const weeksCount = Math.ceil(totalGridDays / 7);
+
+    const weeks = [];
+    for (let weekIdx = 0; weekIdx < weeksCount; weekIdx++) {
+      const week = [];
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const date = addDays(gridStartDate, weekIdx * 7 + dayIdx);
+        const key = toDayKey(date);
+        const dayData = dayMap[key] || null;
+        week.push({
+          key,
+          date,
+          data: dayData,
+          fill: dayData?.fill || '#111827',
+          label: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+        });
+      }
+      weeks.push(week);
+    }
+
+    const monthLabels = [];
+    let lastMonthKey = '';
+    for (const week of weeks) {
+      const firstInYear = week.find((cell) => cell.date.getTime() >= yearStartDate.getTime());
+      if (!firstInYear) {
+        monthLabels.push('');
+        continue;
+      }
+      const first = firstInYear.date;
+      const monthKey = `${first.getFullYear()}-${first.getMonth()}`;
+      if (monthKey !== lastMonthKey) {
+        monthLabels.push(first.toLocaleDateString(undefined, { month: 'short' }));
+        lastMonthKey = monthKey;
+      } else {
+        monthLabels.push('');
+      }
+    }
+
+    return {
+      weeks,
+      monthLabels,
+      daysByKey: dayMap,
+      latestDayKey: latestDate ? toDayKey(latestDate) : '',
+      activeDays: dayEntries.length,
+      totalPlays: plays.length,
+      singleLegend: singleMax > 0
+        ? {
+          min: singleMin === Infinity ? singleMax : singleMin,
+          max: singleMax,
+          minColor: getSingleLevelColor(singleMin === Infinity ? singleMax : singleMin),
+          maxColor: getSingleLevelColor(singleMax),
+        }
+        : null,
+      doubleLegend: doubleMax > 0
+        ? {
+          min: doubleMin === Infinity ? doubleMax : doubleMin,
+          max: doubleMax,
+          minColor: getDoubleLevelColor(doubleMin === Infinity ? doubleMax : doubleMin),
+          maxColor: getDoubleLevelColor(doubleMax),
+        }
+        : null,
+    };
+  }, [overviewHeatmapRows]);
+
+  useEffect(() => {
+    if (!overviewPlayHeatmap.latestDayKey) {
+      setSelectedOverviewDateKey('');
+      return;
+    }
+    if (!selectedOverviewDateKey || !overviewPlayHeatmap.daysByKey[selectedOverviewDateKey]) {
+      setSelectedOverviewDateKey(overviewPlayHeatmap.latestDayKey);
+    }
+  }, [overviewPlayHeatmap, selectedOverviewDateKey]);
+
+  const selectedOverviewDay = selectedOverviewDateKey
+    ? overviewPlayHeatmap.daysByKey[selectedOverviewDateKey] || null
+    : null;
+
+  const singleLegendLevels = useMemo(() => {
+    const legend = overviewPlayHeatmap.singleLegend;
+    if (!legend) return [];
+    return Array.from({ length: legend.max - legend.min + 1 }, (_, i) => legend.min + i);
+  }, [overviewPlayHeatmap.singleLegend]);
+
+  const doubleLegendLevels = useMemo(() => {
+    const legend = overviewPlayHeatmap.doubleLegend;
+    if (!legend) return [];
+    return Array.from({ length: legend.max - legend.min + 1 }, (_, i) => legend.min + i);
+  }, [overviewPlayHeatmap.doubleLegend]);
+
+  // Filtered + sorted best scores
+  const effectiveBestScoreMode = useMemo(
+    () => (piuScoreMode || (piuScoreLevel ? piuAllSubMode : '') || ''),
+    [piuScoreMode, piuScoreLevel, piuAllSubMode]
+  );
+
+  const filteredClearedBestScores = useMemo(() => {
+    if (!piuBestScores?.scores) return [];
+    let filtered = piuBestScores.scores;
+    if (effectiveBestScoreMode) {
+      filtered = filtered.filter(s => s.mode === effectiveBestScoreMode);
+    }
+    if (piuScoreLevel) {
+      filtered = filtered.filter(s => s.level === parseInt(piuScoreLevel));
+    }
+    if (bestScoreSearch) {
+      const q = bestScoreSearch.toLowerCase();
+      filtered = filtered.filter(s => s.song_title.toLowerCase().includes(q));
+    }
+    return [...filtered].sort((a, b) => compareBestScoreRows(a, b, bestScoreSort));
+  }, [piuBestScores, effectiveBestScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!showLevelNonClears || !piuScoreLevel) {
+      setLevelCatalogCharts([]);
+      setLevelCatalogLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    const targetLevel = parseInt(piuScoreLevel, 10);
+    if (!Number.isFinite(targetLevel) || targetLevel <= 0) {
+      setLevelCatalogCharts([]);
+      setLevelCatalogLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    const params = {
+      min_level: String(targetLevel),
+      max_level: String(targetLevel),
+    };
+    if (effectiveBestScoreMode) {
+      params.mode = normalizeChartMode(effectiveBestScoreMode);
+    }
+
+    setLevelCatalogLoading(true);
+    getSongs(params)
+      .then((rows) => {
+        if (cancelled) return;
+        setLevelCatalogCharts(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLevelCatalogCharts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLevelCatalogLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [effectiveBestScoreMode, piuScoreLevel, showLevelNonClears]);
+
+  const levelNonClearRows = useMemo(() => {
+    if (!showLevelNonClears || !piuScoreLevel) return [];
+
+    const targetLevel = parseInt(piuScoreLevel, 10);
+    if (!Number.isFinite(targetLevel) || targetLevel <= 0) return [];
+
+    const clearedChartIds = new Set();
+    const clearedChartKeys = new Set();
+    for (const row of (piuBestScores?.scores || [])) {
+      const rowLevel = parseInt(row?.level, 10) || 0;
+      if (rowLevel !== targetLevel) continue;
+      const normalizedMode = normalizeChartMode(row?.mode);
+      if (effectiveBestScoreMode && normalizedMode !== normalizeChartMode(effectiveBestScoreMode)) continue;
+      const lookupKey = normalizeChartLookupKey(row?.song_title, row?.mode, rowLevel);
+      if (lookupKey) {
+        clearedChartKeys.add(lookupKey);
+        const chartId = parseInt(chartKeyMap?.[lookupKey], 10) || 0;
+        if (chartId > 0) clearedChartIds.add(chartId);
+      }
+    }
+
+    let rows = levelCatalogCharts
+      .filter((chart) => {
+        const chartId = parseInt(chart?.id, 10) || 0;
+        if (chartId > 0 && clearedChartIds.has(chartId)) return false;
+        const lookupKey = normalizeChartLookupKey(chart?.title, chart?.mode, chart?.level);
+        if (lookupKey && clearedChartKeys.has(lookupKey)) return false;
+        return true;
+      })
+      .map((chart) => ({
+        chart_id: chart.id,
+        song_title: chart.title,
+        song_artist: chart.artist || '',
+        mode: getDisplayChartMode(chart.mode),
+        level: parseInt(chart.level, 10) || 0,
+        score: null,
+        grade: '',
+        background_url: chart.jacket_url || '',
+        jacket_url: chart.jacket_url || '',
+        is_uncleared: true,
+      }));
+
+    if (bestScoreSearch) {
+      const q = bestScoreSearch.toLowerCase();
+      rows = rows.filter((row) => String(row.song_title || '').toLowerCase().includes(q));
+    }
+    return rows.sort((a, b) => compareBestScoreRows(a, b, bestScoreSort));
+  }, [bestScoreSearch, bestScoreSort, chartKeyMap, effectiveBestScoreMode, levelCatalogCharts, piuBestScores, piuScoreLevel, showLevelNonClears]);
+
+  const filteredBestScores = useMemo(
+    () => (showLevelNonClears ? levelNonClearRows : filteredClearedBestScores),
+    [filteredClearedBestScores, levelNonClearRows, showLevelNonClears]
+  );
+
+  useEffect(() => {
+    setBestScorePage(1);
+  }, [effectiveBestScoreMode, piuScoreLevel, bestScoreSort, bestScoreSearch, showLevelNonClears]);
+
+  useEffect(() => {
+    if (piuScoreMode) {
+      setPiuAllSubMode('');
+    }
+  }, [piuScoreMode]);
+
+  useEffect(() => {
+    if (!piuScoreLevel) {
+      setPiuAllSubMode('');
+      setShowLevelNonClears(false);
+    }
+  }, [piuScoreLevel]);
+
+  const bestScorePagination = useMemo(() => {
+    const total = filteredBestScores.length;
+    const totalPages = Math.max(1, Math.ceil(total / BEST_SCORES_PAGE_SIZE));
+    const page = clamp(bestScorePage, 1, totalPages);
+    const startIndex = (page - 1) * BEST_SCORES_PAGE_SIZE;
+    const endIndex = Math.min(total, startIndex + BEST_SCORES_PAGE_SIZE);
+    return {
+      page,
+      total,
+      totalPages,
+      startIndex,
+      endIndex,
+      rows: filteredBestScores.slice(startIndex, endIndex),
+    };
+  }, [filteredBestScores, bestScorePage]);
+
+  useEffect(() => {
+    if (bestScorePage !== bestScorePagination.page) {
+      setBestScorePage(bestScorePagination.page);
+    }
+  }, [bestScorePage, bestScorePagination.page]);
+
+  // Available levels for filtering
+  const availableLevels = useMemo(() => {
+    if (!piuBestScores?.scores) return [];
+    const levels = new Set();
+    const modeFiltered = effectiveBestScoreMode
+      ? piuBestScores.scores.filter(s => s.mode === effectiveBestScoreMode)
+      : piuBestScores.scores;
+    modeFiltered.forEach(s => levels.add(s.level));
+    return [...levels].sort((a, b) => a - b);
+  }, [piuBestScores, effectiveBestScoreMode]);
+
+  // Level distribution data for chart
+  const levelDistribution = useMemo(() => {
+    if (!piuBestScores?.scores) return { levels: [], maxCount: 0 };
+    const modeFiltered = effectiveBestScoreMode
+      ? piuBestScores.scores.filter(s => s.mode === effectiveBestScoreMode)
+      : piuBestScores.scores;
+
+    const levelMap = {};
+    let maxCount = 0;
+    for (const s of modeFiltered) {
+      if (!levelMap[s.level]) {
+        levelMap[s.level] = RANK_RANGES.map(r => ({ ...r, count: 0 }));
+      }
+      const idx = getRankIndex(s.score);
+      levelMap[s.level][idx].count++;
+    }
+
+    const levels = Object.entries(levelMap)
+      .map(([level, distribution]) => {
+        const total = distribution.reduce((s, d) => s + d.count, 0);
+        if (total > maxCount) maxCount = total;
+        return { level: parseInt(level), distribution, total };
+      })
+      .sort((a, b) => a.level - b.level);
+
+    return { levels, maxCount };
+  }, [piuBestScores, effectiveBestScoreMode]);
+
+  const filteredActivity = useMemo(() => {
+    if (!Array.isArray(activityItems)) return [];
+    if (activitySubTab === 'all') return activityItems;
+    if (activitySubTab === 'posts') return activityItems.filter(a => a.category === 'posts');
+    if (activitySubTab === 'comments') return activityItems.filter(a => a.category === 'comments');
+    if (activitySubTab === 'scores') return activityItems.filter(a => a.category === 'scores');
+    if (activitySubTab === 'competitions') return activityItems.filter(a => a.category === 'competitions');
+    return activityItems;
+  }, [activityItems, activitySubTab]);
+
+  // Group achievements by series, keeping only the highest tier per series for display.
+  const achievementSeriesDisplay = useMemo(() => {
+    const badges = Array.isArray(profile?.achievement_badges) ? profile.achievement_badges : [];
+    if (badges.length === 0) return [];
+    const seriesMap = {};
+    for (const badge of badges) {
+      const sid = badge.series_id;
+      if (!seriesMap[sid]) seriesMap[sid] = { tiers: [], highest: badge };
+      seriesMap[sid].tiers.push(badge);
+      if (badge.threshold > seriesMap[sid].highest.threshold) seriesMap[sid].highest = badge;
+    }
+    return Object.values(seriesMap).map(({ highest, tiers }) => ({
+      ...highest,
+      allTiers: tiers.sort((a, b) => b.threshold - a.threshold),
+    }));
+  }, [profile?.achievement_badges]);
+
+  if (!profile) {
+    if (loadError) {
+      return <div className="text-center py-20 text-gray-500">{loadError}</div>;
+    }
+    return <div className="text-center py-20 text-gray-500">Loading profile...</div>;
+  }
+
+  const age = profile.show_age && profile.date_of_birth ? getAge(profile.date_of_birth) : null;
+  const genderSymbol = profile.gender ? GENDER_SYMBOLS[profile.gender] || '' : '';
+  const flag = getCountryFlag(profile.nationality, "inline-block h-3.5 sm:h-5 align-middle");
+  const locationLabel = [profile.location_city, profile.location_country].filter(Boolean).join(', ');
+  const locationFlag = getCountryFlag(profile.location_country_code || profile.nationality, "inline-block h-3.5 align-middle");
+  const memberSinceLongLabel = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+    : '';
+  const memberSinceShortLabel = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })
+    : '';
+  const computedSkillTitle = piuTitles?.imported ? (piuTitles?.summary?.current_title?.name || '') : '';
+  const displaySkillTitle = computedSkillTitle || profile.skill_title;
+  const activeProfileLiveSession = profileLive?.active_session || null;
+  const endedProfileLiveSessions = Array.isArray(profileLive?.ended_sessions) ? profileLive.ended_sessions : [];
+  const activeProfileLiveUrl = activeProfileLiveSession?.session?.live_url || '';
+  const hasActiveProfileLiveSession = !!activeProfileLiveUrl;
+
+  const tabs = hasPiuData
+    ? ['overview', 'piu', 'posts', 'live', 'shoes', 'competitions', 'activity']
+    : ['overview', 'posts', 'live', 'shoes', 'competitions', 'activity'];
+
+  const tabLabels = {
+    overview: 'Overview', live: 'Live', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
+    piu: 'PIU',
+    pumbility: 'Pumbility', 'best-scores': 'Best Scores', titles: 'Titles', 'recently-played': 'Recently Played',
+  };
+  const piuDropdownOptions = piuTabs.map((piuTab) => ({
+    key: piuTab,
+    label: tabLabels[piuTab],
+  }));
+
+  const competitionsCount = aggregated ? aggregated.duelCount + aggregated.tournamentCount : 0;
+  const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
+  const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
+  const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
+  const overallProfilePumbility = parseInt(songAnalytics?.pumbility, 10) || parseInt(profile?.pumbility, 10) || 0;
+  const singlesProfilePumbility = parseInt(songAnalytics?.singles_pumbility, 10) || 0;
+  const hasSinglesProfilePumbility = singlesProfilePumbility > 0;
+  const activeTopProfileMetricMode = topProfileMetricMode === 'singles' && hasSinglesProfilePumbility
+    ? 'singles'
+    : overallProfilePumbility > 0
+      ? 'overall'
+      : hasSinglesProfilePumbility
+        ? 'singles'
+        : 'overall';
+  const activeTopProfilePumbility = activeTopProfileMetricMode === 'singles' ? singlesProfilePumbility : overallProfilePumbility;
+  const activeTopProfilePumbilityRows = activeTopProfileMetricMode === 'singles'
+    ? songAnalytics?.pumbility_breakdown?.singles_top50 || []
+    : songAnalytics?.pumbility_breakdown?.overall_top50 || [];
+  const canOpenTopProfilePumbilityModal = activeTopProfilePumbility > 0 && activeTopProfilePumbilityRows.length > 0;
+  const pumbilityTopScores = Array.isArray(piuPumbility?.scores) ? piuPumbility.scores : [];
+  const pumbilityAvgScore = pumbilityTopScores.length > 0
+    ? Math.round(pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.score, 10) || 0), 0) / pumbilityTopScores.length)
+    : 0;
+  const pumbilityAvgScoreRank = pumbilityAvgScore > 0 ? getRank(pumbilityAvgScore) : null;
+  const pumbilityAvgLevel = pumbilityTopScores.length > 0
+    ? Math.round((pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.level, 10) || 0), 0) / pumbilityTopScores.length) * 10) / 10
+    : 0;
+  const hasGroupBadges = Array.isArray(profile.group_badges) && profile.group_badges.length > 0;
+  const hasAchievementBadges = Array.isArray(profile.achievement_badges) && profile.achievement_badges.length > 0;
+  const hasAnyBadges = hasGroupBadges || hasAchievementBadges;
+  const hasCompactPiuSummary = overallProfilePumbility > 0 || singlesProfilePumbility > 0 || piuStatus?.highest_single || piuStatus?.highest_double;
+  const showOwnerRecentSyncShortcut = Boolean(isOwner && piuStatus?.linked);
+  const activePiuTabLabel = isPiuTab ? tabLabels[tab] : 'Select';
+
+  const showOverviewHeatmapCard = overviewPlayHeatmap.weeks.length > 0 || hasPiuData;
+  const avatarCore = profile.avatar ? (
+    <img
+      src={getAvatarUrl(profile.avatar)}
+      alt=""
+      className="w-14 h-14 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-piu-border shadow-lg shrink-0"
+    />
+  ) : (
+    <div className="w-14 h-14 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xl sm:text-3xl shadow-lg shrink-0">
+      {profile.username[0].toUpperCase()}
+    </div>
+  );
+  const avatarBlock = hasActiveProfileLiveSession ? (
+    <Link to={activeProfileLiveUrl} className="relative inline-flex shrink-0" title="Open Shinsa Live session">
+      <span className="absolute -inset-1 rounded-full bg-gradient-to-br from-rose-500 via-red-500 to-orange-400 opacity-90 blur-[1px]" />
+      <span className="absolute -inset-[3px] rounded-full border-2 border-rose-300/90 animate-pulse" />
+      <span className="relative">{avatarCore}</span>
+      <span className="absolute -bottom-1 left-1/2 z-10 -translate-x-1/2 rounded-full border border-rose-200/80 bg-rose-500 px-1.5 py-0.5 text-[8px] font-display font-black uppercase tracking-[0.2em] text-white shadow-[0_10px_20px_rgba(244,63,94,0.35)]">
+        Live
+      </span>
+    </Link>
+  ) : avatarCore;
+  const overviewCardsById = {
+    ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
+    'skill-breakdown': { title: 'Skill Breakdown' },
+    rankings: { title: 'Rankings' },
+    ...(isOwner && songAnalytics ? { 'grade-goals': { title: 'Grade Goals' } } : {}),
+    ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
+  };
+
+  const orderedOverviewCardIds = ['play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
+    .filter((cardId) => overviewCardsById[cardId]);
+
+  const renderOverviewCardBody = (cardId) => {
+    if (cardId === 'song-analytics') {
+      return songAnalytics ? <SongAnalyticsPanel analytics={songAnalytics} /> : null;
+    }
+    if (cardId === 'skill-breakdown') {
+      return <SkillBreakdownPanel userId={profileId} />;
+    }
+    if (cardId === 'rankings') {
+      return <RankingsPanel userId={profileId} viewerUserId={authUser?.id || null} />;
+    }
+    if (cardId === 'grade-goals') {
+      return isOwner && songAnalytics
+        ? <GradeGoalTracker userId={profileId} analyticsLevels={songAnalytics.levels} />
+        : null;
+    }
+    if (cardId !== 'play-heatmap') return null;
+
+    return (
+      <div className="card">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-display font-bold text-sm text-piu-accent">Play Activity Heatmap</h3>
+          {overviewPlayHeatmap.activeDays > 0 && (
+            <span className="text-[10px] text-gray-500">
+              {overviewPlayHeatmap.activeDays} active day{overviewPlayHeatmap.activeDays === 1 ? '' : 's'} | {overviewPlayHeatmap.totalPlays} plays
+            </span>
+          )}
+        </div>
+
+        {overviewPlayHeatmap.weeks.length > 0 ? (
+          <>
+            <div className="overflow-x-auto pb-2">
+              <div className="inline-block min-w-max">
+                <div className="flex mb-1">
+                  <div className="w-8 shrink-0" />
+                  <div className="flex gap-1">
+                    {overviewPlayHeatmap.monthLabels.map((label, idx) => (
+                      <div key={`${label}-${idx}`} className="w-4 text-[9px] text-gray-500">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-start gap-1">
+                  <div className="w-8 shrink-0 flex flex-col gap-1 text-[9px] text-gray-600">
+                    <div className="h-4 flex items-center">S</div>
+                    <div className="h-4 flex items-center">M</div>
+                    <div className="h-4 flex items-center">T</div>
+                    <div className="h-4 flex items-center">W</div>
+                    <div className="h-4 flex items-center">T</div>
+                    <div className="h-4 flex items-center">F</div>
+                    <div className="h-4 flex items-center">S</div>
+                  </div>
+                  <div className="flex gap-1">
+                    {overviewPlayHeatmap.weeks.map((week, weekIndex) => (
+                      <div key={weekIndex} className="flex flex-col gap-1">
+                        {week.map((cell, dayIdx) => (
+                          <button
+                            key={`${cell.key}-${dayIdx}`}
+                            onClick={() => cell.data && setSelectedOverviewDateKey(cell.key)}
+                            className={`w-4 h-4 rounded-[3px] border transition-all ${
+                              cell.data
+                                ? selectedOverviewDateKey === cell.key
+                                  ? 'border-white/80 ring-1 ring-piu-accent/70'
+                                  : 'border-piu-border/30 hover:border-white/60'
+                                : 'border-piu-border/20'
+                            }`}
+                            style={{ background: cell.data ? cell.fill : '#111827' }}
+                            title={
+                              cell.data
+                                ? `${cell.label} | ${cell.data.total} plays (${Math.round(cell.data.doubleRatio * 100)}% Double / ${Math.round(cell.data.singleRatio * 100)}% Single)`
+                                : cell.label
+                            }
+                            disabled={!cell.data}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-1.5 flex flex-col items-end">
+              {overviewPlayHeatmap.singleLegend && (
+                <div className="flex items-center justify-end gap-2 w-full">
+                  <span className="text-[10px] font-display font-bold text-red-300 shrink-0">Singles</span>
+                  <div className="flex items-center gap-[2px] justify-end">
+                    {singleLegendLevels.map((level) => (
+                      <span
+                        key={`single-${level}`}
+                        className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                        style={{ backgroundColor: getSingleLevelColor(level) }}
+                        title={`S${level}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-gray-500 shrink-0">
+                    S{overviewPlayHeatmap.singleLegend.min} - S{overviewPlayHeatmap.singleLegend.max}
+                  </span>
+                </div>
+              )}
+              {overviewPlayHeatmap.doubleLegend && (
+                <div className="flex items-center justify-end gap-2 w-full">
+                  <span className="text-[10px] font-display font-bold text-green-300 shrink-0">Doubles</span>
+                  <div className="flex items-center gap-[2px] justify-end">
+                    {doubleLegendLevels.map((level) => (
+                      <span
+                        key={`double-${level}`}
+                        className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                        style={{ backgroundColor: getDoubleLevelColor(level) }}
+                        title={`D${level}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-gray-500 shrink-0">
+                    D{overviewPlayHeatmap.doubleLegend.min} - D{overviewPlayHeatmap.doubleLegend.max}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {selectedOverviewDay && (
+              <div className="mt-4 pt-4 border-t border-piu-border/30">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-display font-bold text-xs text-piu-accent">
+                    {parseDayKey(selectedOverviewDateKey)?.toLocaleDateString(undefined, {
+                      weekday: 'long', year: 'numeric', month: 'short', day: 'numeric',
+                    }) || selectedOverviewDateKey}
+                  </h4>
+                  <span className="text-[10px] text-gray-500">{selectedOverviewDay.total} plays</span>
+                </div>
+
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {selectedOverviewDay.plays.map((play, idx) => {
+                    const rank = getRank(play.score);
+                    const displayGrade = parseGrade(play.grade, rank.label);
+                    const overRank = getOverTop100Rank(play.over_top100_rank);
+                    const isBreak = isStageBreakPlay(play);
+                    const playNorm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                    const playChartKey = `${playNorm}|${play.mode}|${play.level}`;
+                    const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[playNorm];
+                    const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
+                    return (
+                      <div key={`${play.song_title}-${play.mode}-${play.level}-${idx}`} className="flex items-center gap-2 py-1 border-b border-piu-border/20 last:border-0">
+                        <Link to={playChartLink}>
+                          <PiuSongJacket
+                            title={play.song_title}
+                            mode={play.mode}
+                            level={play.level}
+                            bgUrl={play.background_url}
+                            jacketLookup={jacketLookup}
+                            size="sm"
+                          />
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-display font-bold truncate">{play.song_title}</p>
+                          <p className="text-[10px] text-gray-500">
+                            {play.mode === 'Single' ? 'S' : play.mode === 'Double' ? 'D' : 'C'}{play.level}
+                            {play.date_played && (
+                              <span className="ml-1.5 text-gray-600">{String(play.date_played).split(' ').slice(1).join(' ') || ''}</span>
+                            )}
+                            {overRank > 0 && (
+                              <span className="ml-1.5 inline-flex items-center rounded border border-piu-gold/50 bg-piu-gold/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-200 font-display font-black tracking-wide">TOP #{overRank}</span>
+                            )}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                          onClick={() => setSelectedPlay(play)}
+                        >
+                          {isBreak ? (
+                            <span className="text-xs leading-none font-display font-bold text-red-500">STAGE BREAK</span>
+                          ) : (
+                            <>
+                              <span
+                                className={`text-xs leading-none font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                                data-grade={displayGrade.display}
+                              >
+                                {displayGrade.display}
+                              </span>
+                              <p className="text-[11px] leading-none font-mono font-bold mt-0.5">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <DailyLevelGradeChart plays={selectedOverviewDay.plays} />
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-center text-gray-500 text-sm py-4">No recently played data synced yet</p>
+        )}
+      </div>
+    );
+  };
+  const profileActionControls = authUser && !isOwner ? (
+    <div className="mt-2.5 flex justify-start sm:justify-end" ref={notifyMenuRef}>
+      <div className="relative w-fit">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleMessage}
+            className="px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold border border-cyan-400/35 bg-cyan-500/10 text-cyan-100 transition-colors hover:text-white"
+          >
+            Message
+          </button>
+          <button
+            onClick={handleFollow}
+            disabled={followLoading}
+            className={`px-4 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+              followStatus.following
+                ? 'bg-piu-dark text-gray-400 hover:text-red-400 hover:bg-red-500/10 border border-piu-border'
+                : 'bg-piu-accent text-white hover:bg-piu-accent/80'
+            }`}
+          >
+            {followLoading ? '...' : followStatus.following ? 'Following' : 'Follow'}
+          </button>
+          <button
+            onClick={() => setNotifyMenuOpen(v => !v)}
+            className={`px-3.5 py-1 sm:py-1.5 rounded-lg text-xs font-display font-bold border transition-colors ${
+              activityNotifyPrefs.subscribed
+                ? 'bg-piu-dark border-emerald-400/40 text-gray-100'
+                : 'bg-piu-dark border-piu-border text-gray-300 hover:text-white'
+            }`}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <span>Notify</span>
+              {activityNotifyPrefs.subscribed && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
+            </span>
+          </button>
+        </div>
+
+        {notifyMenuOpen && (
+          <div className="absolute right-0 top-full mt-2 z-20 w-64 max-w-[calc(100vw-3rem)] rounded-lg bg-piu-card border border-piu-border/60 p-2.5 shadow-2xl">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-display font-bold text-gray-400 uppercase tracking-wide">
+                Notify About {profile.username}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleSetAllActivityPrefs(true)}
+                  disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                  className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => handleSetAllActivityPrefs(false)}
+                  disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                  className="px-1.5 py-0.5 rounded bg-piu-dark text-[10px] text-gray-300 hover:text-white transition-colors disabled:opacity-60"
+                >
+                  None
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {[
+                { key: 'notify_posts', label: 'New Posts' },
+                { key: 'notify_upscores', label: 'Upscores' },
+                { key: 'notify_new_clears', label: 'New Clears' },
+              ].map(opt => {
+                const enabled = !!activityNotifyPrefs[opt.key];
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => handleToggleActivityPref(opt.key)}
+                    disabled={activityNotifyPrefs.loading || activityNotifyPrefs.saving}
+                    className={`px-2 py-1 rounded-md text-[11px] font-display font-bold border transition-colors disabled:opacity-60 ${
+                      enabled
+                        ? 'bg-piu-dark border-emerald-400/50 text-emerald-300'
+                        : 'bg-piu-dark border-piu-border text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {enabled && <span className="text-emerald-400">✓</span>}
+                      <span>{opt.label}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-[10px] text-gray-500 mt-1.5">
+              {activityNotifyPrefs.loading && 'Loading activity notification settings...'}
+              {!activityNotifyPrefs.loading && activityNotifyPrefs.saving && 'Saving activity notification settings...'}
+              {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && activityNotifyPrefs.subscribed && 'You will get notified for selected activities.'}
+              {!activityNotifyPrefs.loading && !activityNotifyPrefs.saving && !activityNotifyPrefs.subscribed && 'Activity notifications are off.'}
+            </p>
+            {activityNotifyError && (
+              <p className="text-[10px] text-red-400 mt-1">{activityNotifyError}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-4 sm:py-8">
+      {/* Profile Header */}
+      <div className="card mb-4 sm:mb-6 px-3 py-3 sm:p-4">
+        <div className="flex flex-row items-start gap-2.5 sm:gap-6">
+          <div className="grid flex-1 min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 sm:flex sm:items-start sm:gap-6">
+            {avatarBlock}
+            <div className="text-left min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              {flag && <span className="shrink-0">{flag}</span>}
+              <div className="flex items-center gap-1 min-w-0">
+                <h1 className="text-lg sm:text-2xl font-display font-bold truncate">{profile.username}</h1>
+                {genderSymbol && (
+                  <span className={`shrink-0 text-base sm:text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                    {genderSymbol}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
+              {displaySkillTitle && (
+                <span className={`badge border ${getSkillColor(displaySkillTitle)}`}>
+                  {displaySkillTitle}
+                </span>
+              )}
+              {age !== null && (
+                <span className="hidden sm:inline text-xs sm:text-sm text-gray-500">Age {age}</span>
+              )}
+            </div>
+            {profile.playing_status && (
+              <div className="hidden sm:flex items-center gap-1.5 mt-1 sm:mt-2">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-xs sm:text-sm font-display font-bold text-green-400">{profile.playing_status}</span>
+              </div>
+            )}
+            {hasActiveProfileLiveSession && (
+              <div className="hidden sm:flex items-center gap-2 mt-1.5">
+                <span className="inline-flex items-center rounded-full border border-rose-300/40 bg-rose-500/12 px-2 py-0.5 text-[10px] font-display font-black uppercase tracking-[0.2em] text-rose-200">
+                  Live now
+                </span>
+                <Link to={activeProfileLiveUrl} className="text-xs font-display font-bold text-cyan-300 hover:text-white transition-colors">
+                  Open Shinsa Live
+                </Link>
+              </div>
+            )}
+            {profile.description && (
+              <p className="hidden sm:block text-xs sm:text-sm text-gray-400 mt-1 sm:mt-2 line-clamp-2">{profile.description}</p>
+            )}
+            {locationLabel && (
+              <p className="hidden sm:flex text-[11px] sm:text-xs text-gray-500 mt-1 items-center gap-1.5">
+                <span className="text-[12px]">📍</span>
+                {locationFlag && <span>{locationFlag}</span>}
+                <span className="truncate">{locationLabel}</span>
+              </p>
+            )}
+            <p className="hidden sm:block text-[10px] sm:text-xs text-gray-600 mt-0.5 sm:mt-1">
+              Member since {memberSinceLongLabel}
+            </p>
+          </div>
+          <div className="col-span-2 sm:hidden mt-0.5 space-y-1">
+            {age !== null && (
+              <p className="text-xs text-gray-500 whitespace-nowrap">Age {age}</p>
+            )}
+            {profile.playing_status && (
+              <p className="text-xs font-display font-bold text-green-400 truncate">{profile.playing_status}</p>
+            )}
+            {hasActiveProfileLiveSession && (
+              <Link to={activeProfileLiveUrl} className="inline-flex items-center gap-1 text-[10px] font-display font-black uppercase tracking-[0.18em] text-rose-300 hover:text-white transition-colors">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                Live
+              </Link>
+            )}
+            <p className="text-[10px] text-gray-600 truncate">Member since {memberSinceShortLabel}</p>
+            {profile.description && (
+              <p className="text-xs text-gray-400 truncate">{profile.description}</p>
+            )}
+            {locationLabel && (
+              <div className="flex items-center gap-1 text-[10px] text-gray-500 min-w-0">
+                {locationFlag && <span className="shrink-0">{locationFlag}</span>}
+                <span className="truncate">{locationLabel}</span>
+              </div>
+            )}
+          </div>
+          </div>
+          {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut) && (
+            <div className="shrink-0 self-start w-[160px] sm:w-[220px]">
+              {hasCompactPiuSummary && (
+                <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-1.5 py-1 sm:px-3 sm:py-2 flex flex-col gap-0 sm:gap-1">
+                  {(overallProfilePumbility > 0 || singlesProfilePumbility > 0) && (
+                    <div className="flex flex-col">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!hasSinglesProfilePumbility) return;
+                            setTopProfileMetricMode((current) => (current === 'overall' ? 'singles' : 'overall'));
+                          }}
+                          className={`min-w-0 flex-1 text-left font-display transition-colors ${
+                            hasSinglesProfilePumbility ? 'hover:text-white cursor-pointer' : 'cursor-default'
+                          }`}
+                          title={hasSinglesProfilePumbility ? 'Tap to switch between overall and singles pumbility' : undefined}
+                        >
+                          <span className="block truncate whitespace-nowrap text-[10px] sm:text-xs text-gray-400 font-semibold tracking-wide">
+                            {activeTopProfileMetricMode === 'singles' ? 'S. Pumbility' : 'Pumbility'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (canOpenTopProfilePumbilityModal) setShowTopProfilePumbilityModal(true);
+                          }}
+                          disabled={!canOpenTopProfilePumbilityModal}
+                          className={`shrink-0 whitespace-nowrap text-sm sm:text-base leading-tight font-mono font-bold transition-colors ${
+                            activeTopProfileMetricMode === 'singles' ? 'text-red-300' : 'text-piu-gold'
+                          } ${canOpenTopProfilePumbilityModal ? 'hover:text-white' : 'cursor-default'}`}
+                          title={canOpenTopProfilePumbilityModal ? 'Tap to view top songs' : undefined}
+                        >
+                          {activeTopProfilePumbility.toLocaleString()} {activeTopProfileMetricMode === 'singles' ? 'SPB' : 'PB'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {(piuStatus?.highest_single || piuStatus?.highest_double) && (
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs text-gray-400 font-display font-semibold tracking-wide">Best Clears</span>
+                      <span className="shrink-0 whitespace-nowrap text-sm sm:text-base leading-tight font-mono font-bold">
+                        {piuStatus.highest_single && <span className="text-red-400">S{piuStatus.highest_single}</span>}
+                        {piuStatus.highest_single && piuStatus.highest_double && <span className="text-gray-500 mx-0.5 sm:mx-1">/</span>}
+                        {piuStatus.highest_double && <span className="text-green-400">D{piuStatus.highest_double}</span>}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {hasAnyBadges && (
+                <div className={`${hasCompactPiuSummary ? 'mt-2' : ''} rounded-lg bg-piu-dark/50 border border-piu-border/30 px-2 py-2 sm:px-3 sm:py-2.5`}>
+                  <div className="overflow-x-auto touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="inline-flex min-w-full justify-end gap-2">
+                      {achievementSeriesDisplay.map((badge) => (
+                        <button
+                          key={`ach-${badge.series_id}`}
+                          type="button"
+                          className="inline-flex shrink-0 items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-piu-gold/40 bg-piu-dark/55 hover:border-piu-gold/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-gold/70"
+                          title={badge.description || badge.name || 'Achievement'}
+                          aria-label={badge.name || 'Achievement'}
+                          onClick={() => setSelectedAchievementBadge(badge)}
+                        >
+                          {badge.image ? (
+                            <img src={badge.image} alt={badge.name || 'Badge'} className="w-full h-full rounded-md object-contain p-0.5" />
+                          ) : (
+                            <span className="text-[11px] font-display font-bold text-piu-gold">
+                              {String((badge.name || 'A')[0] || 'A').toUpperCase()}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                      {hasGroupBadges && profile.group_badges.map((badge) => (
+                        <button
+                          key={`${badge.id || badge.name}-${badge.group_id || ''}`}
+                          type="button"
+                          className="inline-flex shrink-0 items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-md border border-piu-border/60 bg-piu-dark/55 hover:border-piu-accent/70 transition-colors focus:outline-none focus:ring-1 focus:ring-piu-accent/70"
+                          title={badge.description || badge.name || 'Group Badge'}
+                          aria-label={badge.name || 'Group Badge'}
+                          onClick={() => setSelectedGroupBadge(badge)}
+                        >
+                          {badge.image ? (
+                            <img src={badge.image} alt={badge.name || 'Badge'} className="w-full h-full rounded-md object-contain p-0.5" />
+                          ) : (
+                            <span className="text-[11px] font-display font-bold text-gray-200">
+                              {String((badge.name || 'B')[0] || 'B').toUpperCase()}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {showOwnerRecentSyncShortcut && (
+                <div className={`${hasAnyBadges || hasCompactPiuSummary ? 'mt-2' : ''} flex items-center justify-end gap-2`}>
+                  {recentlyPlayedSyncFeedback && (
+                    <span
+                      className={`text-[10px] ${
+                        recentlyPlayedSyncFeedback.toLowerCase().includes('fail') ? 'text-red-400' : 'text-gray-400'
+                      }`}
+                    >
+                      {recentlyPlayedSyncFeedback}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSyncRecentlyPlayedShortcut}
+                    disabled={recentlyPlayedSyncing}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-piu-border/50 bg-piu-dark/60 text-gray-300 hover:text-white hover:border-piu-accent/70 transition-colors disabled:opacity-60"
+                    title="Sync recently played"
+                    aria-label="Sync recently played"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      className={`w-4 h-4 ${recentlyPlayedSyncing ? 'animate-spin' : ''}`}
+                    >
+                      <path d="M20 12a8 8 0 1 1-2.35-5.65" strokeLinecap="round" />
+                      <path d="M20 4v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        {profileActionControls}
+        {/* Stats integrated into profile card */}
+        <div className="flex items-center justify-around sm:justify-start gap-2 sm:gap-6 mt-3 pt-2.5 sm:pt-3 border-t border-piu-border/30">
+          <button
+            onClick={() => { setTab('followers'); setFollowersLoaded(false); }}
+            className="text-center hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">
+              {socialCounts.followers_count}
+              {socialCounts.followers_count > (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
+                <span className="text-green-400 text-[10px] ml-0.5">&#9650;</span>
+              )}
+              {socialCounts.followers_count < (socialCounts.yesterday_followers ?? socialCounts.followers_count) && (
+                <span className="text-red-400 text-[10px] ml-0.5">&#9660;</span>
+              )}
+            </p>
+            <p className="text-[10px] text-gray-500 font-display">Followers</p>
+          </button>
+          <div className="text-center">
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">{socialCounts.posts_count}</p>
+            <p className="text-[10px] text-gray-500 font-display">Posts</p>
+          </div>
+          <div className="text-center">
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">{socialCounts.total_pumps || 0}</p>
+            <p className="text-[10px] text-gray-500 font-display">Pumps</p>
+          </div>
+          <div className="text-center">
+            <p className="font-mono font-bold text-base sm:text-lg text-piu-accent leading-tight">{competitionsCount}</p>
+            <p className="text-[10px] text-gray-500 font-display">Competitions</p>
+          </div>
+        </div>
+      </div>
+
+      <PumbilityBreakdownModal
+        open={showTopProfilePumbilityModal}
+        title={activeTopProfileMetricMode === 'singles' ? 'Singles Pumbility Top Songs' : 'Pumbility Top Songs'}
+        rows={activeTopProfilePumbilityRows}
+        headerMeta={{ pumbility: activeTopProfilePumbility }}
+        jacketLookup={jacketLookup}
+        onClose={() => setShowTopProfilePumbilityModal(false)}
+      />
+
+      {/* Tabs */}
+      <div className="mb-3" ref={piuTabsMenuRef}>
+        <div className="overflow-x-auto touch-pan-x [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex w-max min-w-full gap-1.5">
+            {tabs.map((t) => {
+              if (t === 'piu') {
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPiuTabsMenuOpen((prev) => !prev)}
+                    className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors inline-flex items-center gap-1.5 ${
+                      isPiuTab
+                        ? 'bg-piu-accent text-white'
+                        : 'bg-piu-card text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <span>{tabLabels[t]}</span>
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className={`w-3 h-3 transition-transform ${piuTabsMenuOpen ? 'rotate-180' : ''}`}
+                    >
+                      <path d="m5 7 5 6 5-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                );
+              }
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setTab(t);
+                    setPiuTabsMenuOpen(false);
+                  }}
+                  className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                    tab === t
+                      ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {tabLabels[t]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {hasPiuData && piuTabsMenuOpen && (
+          <div className="mt-2 rounded-lg border border-piu-border/70 bg-piu-card/95 p-1.5 backdrop-blur">
+            <div className="flex items-center justify-between px-1.5 pb-1">
+              <span className="text-[10px] uppercase tracking-wide text-gray-500 font-display font-bold">PIU Sections</span>
+              <span className="text-[10px] text-gray-500">{activePiuTabLabel}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+              {piuDropdownOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => {
+                    setTab(option.key);
+                    setPiuTabsMenuOpen(false);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-md text-[11px] font-display font-bold transition-colors ${
+                    tab === option.key
+                      ? 'bg-piu-accent text-white'
+                      : 'bg-piu-dark/70 text-gray-300 hover:text-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Syncing indicator */}
+      {piuSyncing === 'auto' && isPiuTab && (
+        <div className="text-center text-xs text-piu-accent animate-pulse py-2 mb-2">
+          Syncing latest data from piugame.com...
+        </div>
+      )}
+
+      {/* Background sync progress bar */}
+      {syncProgress.in_progress && (
+        <div className="mb-4">
+          <SyncProgressBar
+            progress={syncProgress.progress}
+            total={syncProgress.total}
+            label="Importing Best Scores..."
+          />
+        </div>
+      )}
+
+      {/* Tab Content */}
+      {tab === 'overview' && (
+        <div className="space-y-4">
+          {orderedOverviewCardIds.map((cardId) => {
+            const body = renderOverviewCardBody(cardId);
+            return body ? <React.Fragment key={cardId}>{body}</React.Fragment> : null;
+          })}
+        </div>
+      )}
+
+      {tab === 'live' && (
+        <div className="space-y-4">
+          {activeProfileLiveSession ? (
+            <div className="space-y-2">
+              <div className="px-1">
+                <p className="text-base font-display font-semibold text-white">Live now</p>
+                <p className="mt-1 text-sm text-gray-400">Current Shinsa Live session</p>
+              </div>
+              <LiveDirectoryCard item={activeProfileLiveSession} compact />
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 px-1">
+              <div>
+                <p className="text-base font-display font-semibold text-white">Past Shinsa Live sessions</p>
+                <p className="mt-1 text-sm text-gray-400">Ended sessions on this profile</p>
+              </div>
+              <span className="text-[11px] text-gray-500">{endedProfileLiveSessions.length}</span>
+            </div>
+
+            {endedProfileLiveSessions.length === 0 ? (
+              <div className="card text-center text-gray-500 py-8">No ended Shinsa Live sessions yet.</div>
+            ) : (
+              <div className="space-y-4">
+                {endedProfileLiveSessions.map((item) => {
+                  const session = item?.session || {};
+                  const summary = item?.summary || null;
+                  return (
+                    <ProfileEndedLiveSessionCard
+                      key={session.id}
+                      session={session}
+                      summary={summary}
+                      profileUsername={profile.username}
+                      isOwner={isOwner}
+                      liveVisibilityBusyId={liveVisibilityBusyId}
+                      liveDeleteBusyId={liveDeleteBusyId}
+                      onToggleVisibility={handleToggleLiveProfileVisibility}
+                      onDeleteSession={handleDeleteLiveSession}
+                      playCount={item?.play_count}
+                      messageCount={item?.message_count}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'activity' && (
+        <div className="space-y-3">
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'posts', label: 'Posts' },
+              { key: 'comments', label: 'Comments' },
+              { key: 'scores', label: 'Scores' },
+              { key: 'competitions', label: 'Competitions' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setActivitySubTab(opt.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+                  activitySubTab === opt.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {filteredActivity.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No activity yet</p>
+          ) : (
+            <div className="space-y-3.5">
+              {filteredActivity.map(item => {
+                const visual = getActivityVisual(item);
+                const content = (
+                  <div className="card-hover p-3 sm:p-3.5">
+                    <div className="flex items-start gap-3.5">
+                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${visual.tone}`}>
+                        <ActivityIconGlyph icon={visual.icon} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2.5">
+                          <p className="text-sm font-display font-bold text-gray-200 leading-5">{item.message}</p>
+                          <span className="text-[10px] text-gray-600 shrink-0 pt-0.5">{timeAgo(item.created_at)}</span>
+                        </div>
+                        {item.detail && (
+                          <p className="text-xs text-gray-500 mt-1.5 break-words leading-relaxed">{item.detail}</p>
+                        )}
+                        <div className="mt-2.5">
+                          <span className="inline-flex items-center rounded-md border border-piu-border/50 bg-piu-dark/60 px-2 py-0.5 text-[10px] font-display uppercase tracking-wide text-gray-400">
+                            {getActivityCategoryLabel(item.category)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+
+                if (item.link) {
+                  return (
+                    <Link key={item.id} to={item.link} className="block">
+                      {content}
+                    </Link>
+                  );
+                }
+
+                return <div key={item.id}>{content}</div>;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'competitions' && (
+        <div>
+          {/* Sub-tabs for Tournaments, Duels, and Songs */}
+          <div className="flex gap-1 mb-3 flex-wrap">
+            <button
+              onClick={() => setCompetitionsSub('tournaments')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'tournaments' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Tournaments ({aggregated?.tournamentCount || 0})
+            </button>
+            <button
+              onClick={() => setCompetitionsSub('duels')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'duels' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Duels ({aggregated?.duelCount || 0})
+            </button>
+            <button
+              onClick={() => setCompetitionsSub('songs')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'songs' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Songs ({songScores.length})
+            </button>
+          </div>
+
+          {competitionsSub === 'tournaments' && (
+            <div className="space-y-3">
+              {!stats ? (
+                <p className="text-center text-gray-500 py-8">Loading competition history...</p>
+              ) : stats.tournamentPlayers.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No tournament participation yet</p>
+              ) : (
+                stats.tournamentPlayers.map(({ tournament }) => (
+                  <Link
+                    key={tournament.tournament_id || tournament.id}
+                    to={`/tournament/${tournament.tournament_id}`}
+                    className="card-hover flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      {tournament.tournament_avatar ? (
+                        <img src={getAvatarUrl(tournament.tournament_avatar)} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display font-bold">
+                          {(tournament.tournament_name || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
+                          {tournament.tournament_name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {tournament.tournament_date || ''} - {tournament.wins}W {tournament.losses}L
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`badge ${
+                      tournament.tournament_phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
+                    }`}>
+                      {tournament.tournament_phase}
+                    </span>
+                  </Link>
+                ))
+              )}
+            </div>
+          )}
+
+          {competitionsSub === 'duels' && (
+            <div className="space-y-3">
+              {!stats ? (
+                <p className="text-center text-gray-500 py-8">Loading competition history...</p>
+              ) : (stats.duelStats.length === 0 && (stats.onlineDuelStats || []).length === 0) ? (
+                <p className="text-center text-gray-500 py-8">No duel participation yet</p>
+              ) : (
+                <>
+                  {/* Online Duels */}
+                  {(stats.onlineDuelStats || []).map(({ duel, songs }) => {
+                    const isP1 = duel.creator_user_id === profileId;
+                    const opponentName = isP1 ? duel.opponent_username : duel.creator_username;
+                    const completedSongs = songs.filter(s => s.status === 'completed');
+                    const myWins = completedSongs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
+                    const oppWins = completedSongs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
+                    return (
+                      <Link key={duel.id} to={`/online-duel/${duel.id}`} className="card-hover flex items-center justify-between group">
+                        <div>
+                          <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
+                            {duel.name}
+                            <span className="text-[10px] text-piu-accent ml-1.5 font-normal">ONLINE</span>
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            vs {opponentName} - {myWins}W {oppWins}L ({completedSongs.length} songs)
+                          </p>
+                        </div>
+                        <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : duel.status === 'WAITING' ? 'badge-pending' : 'badge-active'}`}>
+                          {duel.status === 'COMPLETED' ? 'Completed' : duel.status === 'WAITING' ? 'Waiting' : 'Active'}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                  {/* Offline Duels */}
+                  {stats.duelStats.map(({ duel, songs }) => {
+                    const isP1 = duel.player1_user_id === profileId;
+                    const opponentName = isP1 ? duel.player2_name : duel.player1_name;
+                    const myWins = songs.filter(s => (isP1 && s.winner === 'player1') || (!isP1 && s.winner === 'player2')).length;
+                    const oppWins = songs.filter(s => (isP1 && s.winner === 'player2') || (!isP1 && s.winner === 'player1')).length;
+                    return (
+                      <Link key={duel.id} to={`/duel/${duel.id}`} className="card-hover flex items-center justify-between group">
+                        <div>
+                          <p className="font-display font-bold group-hover:text-piu-accent transition-colors">
+                            {duel.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            vs {opponentName} - {myWins}W {oppWins}L ({songs.length} songs)
+                          </p>
+                        </div>
+                        <span className={`badge ${duel.status === 'COMPLETED' ? 'badge-completed' : 'badge-active'}`}>
+                          {duel.status === 'COMPLETED' ? 'Completed' : 'Active'}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
+
+          {competitionsSub === 'songs' && (
+            <div className="space-y-4">
+              {aggregated?.byLevel?.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Average Score by Level</h3>
+                  <div className="space-y-1.5">
+                    {aggregated.byLevel.map(l => {
+                      const rank = getRank(l.avg);
+                      return (
+                        <div key={l.level} className="flex items-center gap-2">
+                          <span className="text-xs font-display font-bold w-10 text-gray-400">Lv.{l.level}</span>
+                          <div className="flex-1 h-4 bg-piu-dark rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-piu-accent to-purple-600 rounded-full"
+                              style={{ width: `${(l.avg / 1000000) * 100}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-display font-bold w-8 ${rank.color}`}>{rank.label}</span>
+                          <span className="text-xs font-mono text-gray-500 w-16 text-right">{l.avg.toLocaleString()}</span>
+                          <span className="text-[10px] text-gray-600 w-8 text-right">{l.count}x</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {songScores.length > 0 && (
+                <div className="card">
+                  <h3 className="font-display font-bold text-sm text-piu-accent mb-3">Top Scores</h3>
+                  <div className="space-y-2">
+                    {songScores.slice(0, 10).map((s, i) => {
+                      const rank = getRank(s.myScore);
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="text-xs text-gray-600 font-mono w-4">#{i + 1}</span>
+                          {s.jacket && (
+                            <img src={s.jacket} alt="" className="w-8 h-8 rounded object-cover" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-display font-bold truncate">{s.title}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {s.mode} Lv.{s.level}
+                              <span className="ml-2 text-gray-600">{s.source}</span>
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
+                            <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {songScores.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No song scores recorded yet</p>
+              ) : (
+                songScores.map((s, i) => {
+                  const rank = getRank(s.myScore);
+                  return (
+                    <div key={i} className="card flex items-center gap-3 py-2.5">
+                      {s.jacket && (
+                        <img src={s.jacket} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{s.title}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {s.mode} Lv.{s.level} - {s.source}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`font-display font-bold text-xs ${rank.color}`}>{rank.label}</span>
+                        <p className="font-mono text-xs font-bold">{s.myScore.toLocaleString()}</p>
+                      </div>
+                      <div className="w-6 text-center shrink-0">
+                        {s.won && <span className="text-piu-green text-xs">W</span>}
+                        {!s.won && !s.draw && <span className="text-red-400 text-xs">L</span>}
+                        {s.draw && <span className="text-gray-500 text-xs">D</span>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'shoes' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="font-display font-bold text-base text-piu-accent">SHOE CABINET</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => refreshShoeCabinet().catch(() => {})}
+                  className="px-3 py-1 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                  disabled={shoeBusy || shoeLoading}
+                >
+                  {shoeLoading ? 'Loading...' : 'Refresh'}
+                </button>
+                {isOwner && (
+                  <Link
+                    to="/account"
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white transition-colors"
+                    title="Open shoe settings"
+                    aria-label="Open shoe settings"
+                  >
+                    ⚙
+                  </Link>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Lifetime Steps</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {((shoeCabinet?.lifetime_steps || 0)).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Lifetime Songs</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {((shoeCabinet?.lifetime_songs || 0)).toLocaleString()}
+                </p>
+              </div>
+              <div className="rounded-lg bg-piu-dark/60 border border-piu-border/40 p-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">No. of Shoes</p>
+                <p className="font-mono font-bold text-sm text-piu-accent mt-1">
+                  {cabinetShoes.length.toLocaleString()}
+                </p>
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Syncing recently played asserts your current shoe for fetched plays.
+            </p>
+            {shoeFeedback && <p className="text-xs text-gray-400 mt-2">{shoeFeedback}</p>}
+          </div>
+
+          <div className="space-y-3">
+            {shoeLoading && cabinetShoes.length === 0 ? (
+              <p className="text-center text-gray-500 text-sm py-6">Loading shoes...</p>
+            ) : cabinetShoes.length === 0 ? (
+              <div className="rounded-lg border border-piu-border/40 bg-piu-dark/30 p-4 text-center">
+                <p className="text-gray-500 text-sm">
+                  {isOwner ? 'No shoes in your cabinet yet' : 'No shoes added yet'}
+                </p>
+                {isOwner && (
+                  <Link
+                    to="/account"
+                    className="inline-flex items-center mt-3 px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-accent/20 text-piu-accent border border-piu-accent/40 hover:bg-piu-accent/30 transition-colors"
+                  >
+                    Add your first shoe
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <>
+                {activeCabinetShoes.map((shoe) => {
+                  const shoeLabel = `${shoe.make} ${shoe.model}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+                  const shoeColorway = String(shoe.colorway || '').trim();
+                  return (
+                    <div
+                      key={shoe.id}
+                      className={`card flex items-start gap-3 ${shoe.is_current ? 'bg-emerald-500/10 border-emerald-400/50' : ''}`}
+                    >
+                      {shoe.image_data ? (
+                        <img src={shoe.image_data} alt={shoeLabel} className="w-28 h-16 rounded-lg object-contain bg-piu-dark/60 border border-piu-border/40 shrink-0 p-1" />
+                      ) : (
+                        <div className="w-28 h-16 rounded-lg border border-piu-border/40 bg-piu-dark/60 flex items-center justify-center text-[11px] text-gray-500 text-center shrink-0">
+                          No Photo
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-display font-bold text-sm truncate">{shoeLabel}</p>
+                          {shoe.is_current ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/50">
+                              Current
+                            </span>
+                          ) : null}
+                        </div>
+                        {shoeColorway ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{shoeColorway}</p>
+                        ) : null}
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {shoe.songs_logged?.toLocaleString() || 0} songs
+                          <span className="mx-1.5 text-gray-700">|</span>
+                          {shoe.steps_logged?.toLocaleString() || 0} steps
+                        </p>
+                      </div>
+                      {isOwner && !shoe.is_current && (
+                        <div className="shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleWearShoe(shoe.id)}
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-display font-bold bg-piu-dark text-gray-300 border border-piu-border hover:text-white disabled:opacity-60"
+                            disabled={shoeBusy}
+                          >
+                            Wear
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {retiredCabinetShoes.length > 0 && (
+                  <div className="pt-1">
+                    <p className="text-[11px] font-display font-bold text-gray-400 uppercase tracking-wide">Retired Shoes</p>
+                  </div>
+                )}
+
+                {retiredCabinetShoes.map((shoe) => {
+                  const shoeLabel = `${shoe.make} ${shoe.model}`.replace(/\s+/g, ' ').trim() || 'Unnamed Shoe';
+                  const shoeColorway = String(shoe.colorway || '').trim();
+                  return (
+                    <div key={shoe.id} className="card flex items-start gap-3">
+                      {shoe.image_data ? (
+                        <img src={shoe.image_data} alt={shoeLabel} className="w-28 h-16 rounded-lg object-contain bg-piu-dark/60 border border-piu-border/40 shrink-0 p-1" />
+                      ) : (
+                        <div className="w-28 h-16 rounded-lg border border-piu-border/40 bg-piu-dark/60 flex items-center justify-center text-[11px] text-gray-500 text-center shrink-0">
+                          No Photo
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-display font-bold text-sm truncate">{shoeLabel}</p>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-display font-bold bg-gray-700/60 text-gray-300 border border-gray-500/40">
+                            Retired
+                          </span>
+                        </div>
+                        {shoeColorway ? (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{shoeColorway}</p>
+                        ) : null}
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {shoe.songs_logged?.toLocaleString() || 0} songs
+                          <span className="mx-1.5 text-gray-700">|</span>
+                          {shoe.steps_logged?.toLocaleString() || 0} steps
+                        </p>
+                        <p className="text-[10px] text-gray-600 mt-1">
+                          Retired {new Date(`${shoe.retired_at}Z`).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ────── FOLLOWERS VIEW (accessed via Followers box click) ────── */}
+      {tab === 'followers' && (
+        <div className="space-y-4">
+          <button onClick={() => setTab('overview')} className="text-xs text-gray-500 hover:text-piu-accent font-display">&larr; Back to profile</button>
+          {/* Followers */}
+          <div className="card">
+            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">FOLLOWERS ({followersList.length})</h3>
+            {followersList.length === 0 ? (
+              <p className="text-gray-500 text-xs py-4 text-center">No followers yet</p>
+            ) : (
+              <div className="divide-y divide-piu-border/20">
+                {followersList.map(f => {
+                  const fFlag = getCountryFlag(f.nationality);
+                  const isFollowingBack = myFollowingIds.has(f.id);
+                  const isSelf = authUser && authUser.id === f.id;
+                  return (
+                    <div key={f.id} className="flex items-center gap-3 py-2.5">
+                      <Link to={getProfilePath(f.id, f.username)} className="shrink-0">
+                        {f.avatar ? (
+                          <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
+                            {(f.username || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                      </Link>
+                      <div className="flex-1 min-w-0">
+                        <Link to={getProfilePath(f.id, f.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                          {fFlag && <span className="mr-1">{fFlag}</span>}
+                          {f.username}
+                        </Link>
+                        {f.skill_title && <p className="text-[10px] text-gray-500 truncate">{f.skill_title}</p>}
+                      </div>
+                      {f.pumbility > 0 && (
+                        <span className="text-[10px] font-mono text-piu-accent shrink-0">{f.pumbility}</span>
+                      )}
+                      {authUser && !isSelf && !isFollowingBack && (
+                        <button
+                          onClick={async () => {
+                            setFollowBackLoading(prev => ({ ...prev, [f.id]: true }));
+                            try {
+                              await followUser(f.id);
+                              setMyFollowingIds(prev => new Set([...prev, f.id]));
+                            } catch {}
+                            setFollowBackLoading(prev => ({ ...prev, [f.id]: false }));
+                          }}
+                          disabled={followBackLoading[f.id]}
+                          className="btn-primary text-[10px] px-3 py-1 shrink-0"
+                        >
+                          {followBackLoading[f.id] ? '...' : 'Follow'}
+                        </button>
+                      )}
+                      {authUser && !isSelf && isFollowingBack && (
+                        <span className="text-[10px] text-gray-500 font-display shrink-0">Following</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Following */}
+          <div className="card">
+            <h3 className="font-display font-bold text-sm text-piu-accent mb-3">FOLLOWING ({followingList.length})</h3>
+            {followingList.length === 0 ? (
+              <p className="text-gray-500 text-xs py-4 text-center">Not following anyone yet</p>
+            ) : (
+              <div className="divide-y divide-piu-border/20">
+                {followingList.map(f => {
+                  const fFlag = getCountryFlag(f.nationality);
+                  return (
+                    <div key={f.id} className="flex items-center gap-3 py-2.5">
+                      <Link to={getProfilePath(f.id, f.username)} className="shrink-0">
+                        {f.avatar ? (
+                          <img src={getAvatarUrl(f.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
+                            {(f.username || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                      </Link>
+                      <div className="flex-1 min-w-0">
+                        <Link to={getProfilePath(f.id, f.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors truncate block">
+                          {fFlag && <span className="mr-1">{fFlag}</span>}
+                          {f.username}
+                        </Link>
+                        {f.skill_title && <p className="text-[10px] text-gray-500 truncate">{f.skill_title}</p>}
+                      </div>
+                      {f.pumbility > 0 && (
+                        <span className="text-[10px] font-mono text-piu-accent shrink-0">{f.pumbility}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ────── POSTS TAB ────── */}
+      {tab === 'posts' && (
+        <div className="space-y-3">
+          {profilePosts.length === 0 ? (
+            <p className="text-center text-gray-500 py-8">No posts yet</p>
+          ) : (
+            profilePosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={{ ...post, username: profile.username, avatar: profile.avatar, nationality: profile.nationality }}
+                showAuthor={false}
+              />
+            ))
+          )}
+        </div>
+      )}
+
+      {/* ────── PUMBILITY TAB ────── */}
+      {tab === 'pumbility' && (
+        <div className="space-y-4">
+          {/* Stats Card */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-bold text-base text-piu-accent">PUMBILITY</h3>
+              <div className="text-right">
+                {piuPumbility?.pumbility_value > 0 && (
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="text-2xl font-mono font-bold text-piu-gold">
+                      {piuPumbility.pumbility_value.toLocaleString()}
+                    </span>
+                    {piuPumbility.ranking ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowPumbilityThresholdModal(true)}
+                        className="px-2 py-0.5 rounded border border-piu-gold/40 text-piu-gold text-xs font-display font-bold hover:bg-piu-gold/10 transition-colors"
+                      >
+                        #{piuPumbility.ranking}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowPumbilityThresholdModal(true)}
+                        className="px-2 py-0.5 rounded border border-piu-border/40 text-gray-500 text-[10px] font-display hover:text-gray-300 transition-colors"
+                      >
+                        Outside Top 1000
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {piuPumbility && piuPumbility.pumbility_value > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                {/* Average Rating */}
+                <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Avg Rating</p>
+                  <p className="text-lg font-mono font-bold text-white">{piuPumbility.average_rating?.toLocaleString()}</p>
+                  {piuPumbility.equivalent_level && piuPumbility.equivalent_grade && (
+                    <p className="text-[10px] text-gray-400 font-display mt-0.5">
+                      <span className="text-gray-500">~</span> Lv.{piuPumbility.equivalent_level}{' '}
+                      {(() => {
+                        const equivalentGrade = parseGrade(piuPumbility.equivalent_grade);
+                        return (
+                          <span
+                            className={`${getGradeColor(equivalentGrade.display)} ${equivalentGrade.isBroken ? 'grade-broken' : ''}`}
+                            data-grade={equivalentGrade.display}
+                          >
+                            {equivalentGrade.display}
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  )}
+                </div>
+
+                {/* Min Entry */}
+                <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Min Entry</p>
+                  <p className="text-lg font-mono font-bold text-white">
+                    {piuPumbility.min_entry_rating > 0 ? piuPumbility.min_entry_rating.toLocaleString() : '--'}
+                  </p>
+                  {piuPumbility.min_entry_details && (
+                    <p className="text-[10px] text-gray-400 font-display mt-0.5">
+                      Lv.{piuPumbility.min_entry_details.level}{' '}
+                      {(() => {
+                        const minEntryGrade = parseGrade(piuPumbility.min_entry_details.grade);
+                        return (
+                          <span
+                            className={`${getGradeColor(minEntryGrade.display)} ${minEntryGrade.isBroken ? 'grade-broken' : ''}`}
+                            data-grade={minEntryGrade.display}
+                          >
+                            {minEntryGrade.display}
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  )}
+                </div>
+
+                {/* Average Score */}
+                <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Avg Score</p>
+                  <p className="text-lg font-mono font-bold text-white">
+                    {pumbilityAvgScore > 0 ? pumbilityAvgScore.toLocaleString() : '--'}
+                  </p>
+                  {pumbilityAvgScore > 0 && (
+                    <p className={`text-[10px] font-display mt-0.5 ${pumbilityAvgScoreRank?.color || 'text-gray-500'}`}>
+                      {pumbilityAvgScoreRank?.label || '--'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Average Level */}
+                <div className="bg-piu-dark/50 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-1">Avg Level</p>
+                  <p className="text-lg font-mono font-bold text-white">
+                    {pumbilityAvgLevel > 0 ? pumbilityAvgLevel.toFixed(1) : '--'}
+                  </p>
+                  {pumbilityAvgLevel > 0 && (
+                    <p className="text-[10px] text-gray-500 font-display mt-0.5">
+                      Top 50 average
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {piuPumbility?.last_sync && (
+              <p className="text-xs text-gray-600">
+                Last synced: {new Date(piuPumbility.last_sync + 'Z').toLocaleString()}
+              </p>
+            )}
+          </div>
+
+          {showPumbilityThresholdModal && (
+            <div
+              className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+              onClick={() => setShowPumbilityThresholdModal(false)}
+            >
+              <div
+                className="w-full max-w-sm rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl p-4"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Top 1000 Threshold</p>
+                    <p className="text-xl font-mono font-bold text-white mt-1">
+                      {piuPumbility?.threshold > 0 ? piuPumbility.threshold.toLocaleString() : '--'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPumbilityThresholdModal(false)}
+                    className="text-xs text-gray-400 hover:text-white transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-[11px] text-gray-400">
+                    Current ranking: {piuPumbility?.ranking ? `#${piuPumbility.ranking}` : 'Outside top 1000'}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    Current pumbility: {(piuPumbility?.pumbility_value || 0).toLocaleString()}
+                  </p>
+                  {piuPumbility?.threshold > 0 && piuPumbility?.pumbility_value > 0 ? (
+                    <p className="text-[11px] font-display">
+                      {piuPumbility.pumbility_value >= piuPumbility.threshold ? (
+                        <span className="text-green-400">Qualified for Top 1000</span>
+                      ) : (
+                        <span className="text-gray-400">
+                          {(piuPumbility.threshold - piuPumbility.pumbility_value).toLocaleString()} away from Top 1000
+                        </span>
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Top 50 Scores List */}
+          <div className="card">
+            <h3 className="font-display font-bold text-base text-piu-accent mb-3">TOP 50 SCORES</h3>
+            {piuPumbility?.scores?.length > 0 ? (
+              <div className="space-y-2">
+                {piuPumbility.scores.map((s, i) => {
+                  const rank = getRank(s.score);
+                  const displayGrade = parseGrade(s.grade, rank.label);
+                  const overRank = getOverTop100Rank(s.over_top100_rank);
+                  return (
+                    <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
+                      <span className="text-xs text-gray-500 font-mono w-6 shrink-0 text-right">#{s.rank_order}</span>
+                      <PiuSongJacket
+                        title={s.song_title} mode={s.mode} level={s.level}
+                        bgUrl={s.background_url} jacketLookup={jacketLookup}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${
+                            s.mode === 'Single' ? 'bg-red-600/20 text-red-400' :
+                            s.mode === 'Double' ? 'bg-green-600/20 text-green-400' :
+                            'bg-blue-600/20 text-blue-400'
+                          }`}>
+                            {s.mode === 'Single' ? 'S' : s.mode === 'Double' ? 'D' : 'C'}{s.level}
+                          </span>
+                          {overRank > 0 && (
+                            <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
+                              TOP #{overRank}
+                            </span>
+                          )}
+                        </div>
+                        {s.rating > 0 && (
+                          <p className="text-[10px] text-gray-500 font-mono">
+                            Rating: {s.rating.toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span
+                          className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                          data-grade={displayGrade.display}
+                        >
+                          {displayGrade.display}
+                        </span>
+                        <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 text-sm py-6">No pumbility data synced yet</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ────── BEST SCORES TAB ────── */}
+      {tab === 'best-scores' && (
+        <div className="space-y-4">
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-bold text-base text-piu-accent">BEST SCORES</h3>
+              {isOwner && piuStatus?.linked && !syncProgress.in_progress && (
+                <button
+                  onClick={handleStartBestScoresSync}
+                  className="text-xs text-gray-400 hover:text-piu-accent transition-colors font-display"
+                >
+                  Full Sync
+                </button>
+              )}
+            </div>
+
+            {syncFeedback && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-green-600/20 border border-green-500/30 text-green-400 text-xs font-display">
+                {syncFeedback}
+              </div>
+            )}
+
+            {/* Mode filter: All, Co-op */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <div className="flex gap-1">
+                {[
+                  { key: '', label: 'All' },
+                  { key: 'Co-op', label: 'Co-op' },
+                ].map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => {
+                      setPiuScoreMode(m.key);
+                      setPiuAllSubMode('');
+                      setPiuScoreLevel('');
+                    }}
+                    className={`px-3 py-1.5 rounded text-xs font-display font-bold transition-colors ${
+                      piuScoreMode === m.key ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Level filter */}
+              {availableLevels.length > 0 && (
+                <select
+                  className="input-field text-xs py-1.5 px-2 w-auto"
+                  value={piuScoreLevel}
+                  onChange={e => setPiuScoreLevel(e.target.value)}
+                >
+                  <option value="">All Levels ({(effectiveBestScoreMode ? piuBestScores?.scores?.filter(s => s.mode === effectiveBestScoreMode) : piuBestScores?.scores)?.length || 0})</option>
+                  {availableLevels.map(l => {
+                    const count = (effectiveBestScoreMode
+                      ? piuBestScores?.scores?.filter(s => s.mode === effectiveBestScoreMode && s.level === l)
+                      : piuBestScores?.scores?.filter(s => s.level === l))?.length || 0;
+                    return <option key={l} value={l}>Lv.{l} ({count})</option>;
+                  })}
+                </select>
+              )}
+            </div>
+
+            {/* Distribution chart — vertical bars with levels on x-axis */}
+            {levelDistribution.levels.length > 0 && !piuScoreLevel && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] text-gray-500 font-display">SCORE DISTRIBUTION BY LEVEL</span>
+                  {/* Legend */}
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    {RANK_RANGES.filter((_, i) => i < 8).map(r => (
+                      <div key={r.label} className="flex items-center gap-0.5">
+                        <div className={`w-2 h-2 rounded-sm ${r.bg}`} />
+                        <span className="text-[8px] text-gray-500">{r.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <VerticalDistributionChart
+                  levels={levelDistribution.levels}
+                  maxCount={levelDistribution.maxCount}
+                  activeLevel={piuScoreLevel}
+                  onLevelClick={(level) => setPiuScoreLevel(piuScoreLevel === String(level) ? '' : String(level))}
+                />
+              </div>
+            )}
+
+            {/* Grade distribution chart for selected level */}
+            {piuScoreLevel && piuBestScores?.scores && (
+              <>
+                <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                  <span className="text-[10px] text-gray-500 font-display">
+                    Level {piuScoreLevel} drill-down
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLevelNonClears((prev) => !prev)}
+                    className={`px-2.5 py-1.5 rounded text-[10px] font-display font-bold transition-colors ${
+                      showLevelNonClears
+                        ? 'bg-red-600/20 text-red-300 border border-red-500/40'
+                        : 'bg-piu-dark text-gray-400 hover:text-white border border-piu-border/40'
+                    }`}
+                  >
+                    {showLevelNonClears ? 'Hide Uncleared Songs' : 'Show Uncleared Songs'}
+                  </button>
+                </div>
+                <GradeDistributionChart
+                  scores={[
+                    ...piuBestScores.scores.filter(s => s.level === parseInt(piuScoreLevel, 10)),
+                    ...levelNonClearRows,
+                  ]}
+                  rankRanges={RANK_RANGES}
+                  showModeFilter={piuScoreMode === ''}
+                  modeFilter={piuAllSubMode}
+                  onModeFilterChange={setPiuAllSubMode}
+                />
+              </>
+            )}
+
+            {/* Search + Sort */}
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="text"
+                className="input-field text-xs py-1.5 flex-1"
+                placeholder="Search songs..."
+                value={bestScoreSearch}
+                onChange={e => setBestScoreSearch(e.target.value)}
+              />
+              <div className="flex gap-1 shrink-0">
+                <button
+                  onClick={() => setBestScoreSort('score')}
+                  className={`px-2.5 py-1.5 rounded text-[10px] font-display font-bold transition-colors ${
+                    bestScoreSort === 'score' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Score
+                </button>
+                <button
+                  onClick={() => setBestScoreSort('name')}
+                  className={`px-2.5 py-1.5 rounded text-[10px] font-display font-bold transition-colors ${
+                    bestScoreSort === 'name' ? 'bg-piu-accent text-white' : 'bg-piu-dark text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Name
+                </button>
+              </div>
+            </div>
+
+            {filteredBestScores.length > 0 && (
+              <p className="text-[11px] text-gray-500 mb-2">
+                Showing {bestScorePagination.startIndex + 1}-{bestScorePagination.endIndex} of {bestScorePagination.total} {showLevelNonClears ? 'uncleared charts' : 'charts'}
+              </p>
+            )}
+
+            {showLevelNonClears && levelCatalogLoading && (
+              <p className="text-[11px] text-gray-500 mb-2">Loading uncleared charts for this level...</p>
+            )}
+
+            {/* Song list */}
+            {filteredBestScores.length > 0 ? (
+              <div className="space-y-1.5">
+                {bestScorePagination.rows.map((s, i) => {
+                  const rank = getRank(s.score);
+                  const displayGrade = parseGrade(s.grade, rank.label);
+                  const overRank = getOverTop100Rank(s.over_top100_rank);
+                  const isUncleared = !!s.is_uncleared;
+                  const isNonClear = isNonClearScoreEntry(s);
+                  return (
+                    <div key={`${s.song_title}-${s.mode}-${s.level}-${bestScorePagination.startIndex + i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/30 last:border-0">
+                      <PiuSongJacket
+                        title={s.song_title} mode={s.mode} level={s.level}
+                        bgUrl={s.background_url || ''} jacketLookup={jacketLookup}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{s.song_title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`text-[9px] px-1 py-0.5 rounded font-display font-bold ${
+                            s.mode === 'Single' ? 'bg-red-600/20 text-red-400' :
+                            s.mode === 'Double' ? 'bg-green-600/20 text-green-400' :
+                            'bg-blue-600/20 text-blue-400'
+                          }`}>
+                            {s.mode === 'Single' ? 'S' : s.mode === 'Double' ? 'D' : 'C'}{s.level}
+                          </span>
+                          {overRank > 0 && (
+                            <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
+                              TOP #{overRank}
+                            </span>
+                          )}
+                          {s.plate && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{s.plate}</span>
+                          )}
+                          {isUncleared && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded border border-red-500/40 bg-red-600/15 text-red-300 font-display font-bold">
+                              UNCLEARED
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        {isUncleared ? (
+                          <>
+                            <span className="text-xs font-display font-bold text-red-300">UNCLEARED</span>
+                            <p className="font-mono text-xs font-bold text-gray-500">--</p>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                              data-grade={displayGrade.display}
+                            >
+                              {isNonClear && (parseInt(s.score, 10) || 0) <= 0 ? 'STAGE BREAK' : displayGrade.display}
+                            </span>
+                            <p className="font-mono text-xs font-bold">{s.score.toLocaleString()}</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-gray-500 text-sm py-6">
+                {showLevelNonClears
+                  ? `No uncleared charts found${bestScoreSearch ? ` matching "${bestScoreSearch}"` : ''}`
+                  : piuBestScores?.scores?.length > 0
+                  ? `No scores found${bestScoreSearch ? ` matching "${bestScoreSearch}"` : ''}`
+                  : 'No best scores imported yet'}
+              </p>
+            )}
+
+            {filteredBestScores.length > 0 && bestScorePagination.totalPages > 1 && (
+              <div className="flex items-center justify-between gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={() => setBestScorePage((prev) => Math.max(1, prev - 1))}
+                  disabled={bestScorePagination.page <= 1}
+                  className="px-2.5 py-1.5 rounded text-[10px] font-display font-bold bg-piu-dark text-gray-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <p className="text-[11px] text-gray-500">
+                  Page {bestScorePagination.page} of {bestScorePagination.totalPages}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBestScorePage((prev) => Math.min(bestScorePagination.totalPages, prev + 1))}
+                  disabled={bestScorePagination.page >= bestScorePagination.totalPages}
+                  className="px-2.5 py-1.5 rounded text-[10px] font-display font-bold bg-piu-dark text-gray-300 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+
+            {piuBestScores?.last_sync && (
+              <p className="text-xs text-gray-600 mt-4">
+                Last synced: {new Date(piuBestScores.last_sync + 'Z').toLocaleString()}
+                {piuBestScores?.scores && ` | ${piuBestScores.scores.length} total scores`}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ────── TITLES TAB ────── */}
+      {tab === 'titles' && (
+        <TitleProgressTab
+          data={piuTitles}
+          avatarUrl={profile.avatar ? getAvatarUrl(profile.avatar) : ''}
+          username={profile.username}
+          gender={profile.gender || ''}
+          isOwner={isOwner}
+        />
+      )}
+
+      {/* ────── RECENTLY PLAYED TAB ────── */}
+      {tab === 'recently-played' && (
+        <div className="card">
+          <h3 className="font-display font-bold text-base text-piu-accent mb-4">RECENTLY PLAYED</h3>
+
+          {recentlyPlayedRows.length > 0 ? (
+            <div className="space-y-2">
+              {recentlyPlayedRows.map((p, i) => {
+                const rank = getRank(p.score);
+                const displayGrade = parseGrade(p.grade, rank.label);
+                const overRank = getOverTop100Rank(p.over_top100_rank);
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 py-2 border-b border-piu-border/30 last:border-0 cursor-pointer hover:bg-piu-dark/50 rounded transition-colors"
+                    onClick={() => setSelectedPlay(p)}
+                  >
+                    <PiuSongJacket
+                      title={p.song_title} mode={p.mode} level={p.level}
+                      bgUrl={p.background_url} jacketLookup={jacketLookup}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-display font-bold truncate">{p.song_title}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {p.mode === 'Single' ? 'S' : p.mode === 'Double' ? 'D' : 'C'}{p.level}
+                        {overRank > 0 && (
+                          <span className="ml-1.5 inline-flex items-center rounded border border-piu-gold/50 bg-piu-gold/15 px-1.5 py-0.5 text-[11px] leading-none text-yellow-200 font-display font-black tracking-wide">TOP #{overRank}</span>
+                        )}
+                        {p.machine_name ? <span className="ml-1.5 text-gray-600">at {p.machine_name}</span> : null}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {p.score > 0 ? (
+                        <>
+                          <span
+                            className={`text-xs font-display font-bold ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                            data-grade={displayGrade.display}
+                          >
+                            {displayGrade.display}
+                          </span>
+                          <p className="font-mono text-xs font-bold">{p.score.toLocaleString()}</p>
+                        </>
+                      ) : (
+                        <span className="text-xs font-display font-bold text-red-500">STAGE BREAK</span>
+                      )}
+                    </div>
+                    {p.date_played && (
+                      <span className="text-[10px] text-gray-500 shrink-0 text-right">
+                        {formatPlayDate(p.date_played)}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 text-sm py-6">No recently played data synced yet</p>
+          )}
+
+          {piuRecentlyPlayed?.last_sync && (
+            <p className="text-[10px] text-gray-700 mt-4">
+              Synced {new Date(piuRecentlyPlayed.last_sync + 'Z').toLocaleString()}
+            </p>
+          )}
+        </div>
+      )}
+
+      {selectedGroupBadge && (
+        <div
+          className="fixed inset-0 z-[95] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedGroupBadge(null)}
+        >
+          <div
+            className="w-full max-w-xs max-h-[calc(100dvh-2rem)] rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl p-4 overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Group Badge</p>
+              <button
+                type="button"
+                onClick={() => setSelectedGroupBadge(null)}
+                className="text-xs text-gray-400 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-3 flex flex-col items-center text-center">
+              <div className="w-24 h-24 rounded-xl border border-piu-border/60 bg-piu-dark/55 flex items-center justify-center overflow-hidden">
+                {selectedGroupBadge.image ? (
+                  <img
+                    src={selectedGroupBadge.image}
+                    alt={selectedGroupBadge.name || 'Badge'}
+                    className="w-full h-full object-contain p-1"
+                  />
+                ) : (
+                  <span className="text-2xl font-display font-bold text-gray-200">
+                    {String((selectedGroupBadge.name || 'B')[0] || 'B').toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-lg font-display font-bold text-white break-words">
+                {selectedGroupBadge.name || 'Badge'}
+              </p>
+              <p className="mt-1 text-sm text-gray-400 break-words">
+                {selectedGroupBadge.description || 'No description provided.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedAchievementBadge && (
+        <div
+          className="fixed inset-0 z-[95] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setSelectedAchievementBadge(null)}
+        >
+          <div
+            className="w-full max-w-xs max-h-[calc(100dvh-2rem)] rounded-2xl border border-piu-gold/30 bg-[#0b1220] shadow-2xl p-4 overflow-y-auto"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 sticky top-0 bg-[#0b1220] pb-1 z-10">
+              <p className="text-[10px] text-piu-gold/70 font-display uppercase tracking-wide">{selectedAchievementBadge.series_name || 'Achievement'}</p>
+              <button
+                type="button"
+                onClick={() => setSelectedAchievementBadge(null)}
+                className="text-xs text-gray-400 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-3 flex flex-col items-center text-center">
+              <div className="w-24 h-24 rounded-xl border border-piu-gold/30 bg-piu-dark/55 flex items-center justify-center overflow-hidden">
+                {selectedAchievementBadge.image ? (
+                  <img
+                    src={selectedAchievementBadge.image}
+                    alt={selectedAchievementBadge.name || 'Badge'}
+                    className="w-full h-full object-contain p-1"
+                  />
+                ) : (
+                  <span className="text-2xl font-display font-bold text-piu-gold">
+                    {String((selectedAchievementBadge.name || 'A')[0] || 'A').toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-lg font-display font-bold text-white break-words">
+                {selectedAchievementBadge.name || 'Achievement'}
+              </p>
+              <p className="mt-1 text-sm text-gray-400 break-words">
+                {selectedAchievementBadge.description || 'No description provided.'}
+              </p>
+            </div>
+            {/* Next tier progress */}
+            {selectedAchievementBadge.next_tier && selectedAchievementBadge.current_value != null && (() => {
+              const current = selectedAchievementBadge.current_value;
+              const nextThreshold = selectedAchievementBadge.next_tier.threshold;
+              const highestEarned = selectedAchievementBadge.threshold;
+              const progressRange = nextThreshold - highestEarned;
+              const progressValue = current - highestEarned;
+              const pct = progressRange > 0 ? Math.min(100, Math.max(0, Math.round((progressValue / progressRange) * 100))) : 0;
+              return (
+                <div className="mt-4 pt-3 border-t border-piu-gold/15">
+                  <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-2">Next Tier</p>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 shrink-0 rounded-md border border-white/10 bg-piu-dark/55 flex items-center justify-center overflow-hidden opacity-50">
+                      {selectedAchievementBadge.next_tier.image ? (
+                        <img src={selectedAchievementBadge.next_tier.image} alt={selectedAchievementBadge.next_tier.name || 'Next'} className="w-full h-full object-contain p-0.5" />
+                      ) : (
+                        <span className="text-xs font-display font-bold text-gray-500">?</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-display font-semibold text-gray-300 truncate">{selectedAchievementBadge.next_tier.name}</p>
+                      <div className="mt-1 h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-piu-gold/70 to-piu-gold transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-gray-500">
+                        {current.toLocaleString()} / {nextThreshold.toLocaleString()}
+                        {pct > 0 && <span className="ml-1 text-piu-gold/70">({pct}%)</span>}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            {/* All badges completed */}
+            {!selectedAchievementBadge.next_tier && selectedAchievementBadge.current_value != null && (
+              <div className="mt-4 pt-3 border-t border-piu-gold/15">
+                <p className="text-center text-[10px] text-piu-gold/60 font-display uppercase tracking-wide">All tiers earned ✦</p>
+              </div>
+            )}
+            {selectedAchievementBadge.allTiers && selectedAchievementBadge.allTiers.length > 1 && (
+              <div className="mt-4 pt-3 border-t border-piu-gold/15">
+                <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide mb-2">Earned Tiers</p>
+                <div className="space-y-2">
+                  {selectedAchievementBadge.allTiers.map((tier) => (
+                    <div key={tier.tier_id} className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 shrink-0 rounded-md border border-piu-gold/25 bg-piu-dark/55 flex items-center justify-center overflow-hidden">
+                        {tier.image ? (
+                          <img src={tier.image} alt={tier.name || 'Badge'} className="w-full h-full object-contain p-0.5" />
+                        ) : (
+                          <span className="text-[10px] font-display font-bold text-piu-gold">
+                            {String((tier.name || 'A')[0] || 'A').toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-left min-w-0">
+                        <p className="text-xs font-display font-semibold text-white truncate">{tier.name}</p>
+                        <p className="text-[10px] text-gray-500">{formatAchievementThresholdLabel(tier)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Score Card Modal — classic or snapshot style */}
+      {selectedPlay && (() => {
+        const p = selectedPlay;
+        const modalNorm = (p.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        const modalExactKey = `${modalNorm}|${p.mode}|${p.level}`;
+        const modalBg = jacketLookup[modalExactKey] || jacketLookup[modalNorm] || '';
+        const playChartKey = `${modalNorm}|${p.mode}|${p.level}`;
+        const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[modalNorm];
+        const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(p.song_title || '')}`;
+
+        const dmLinkShare = buildScoreSnapshotLinkShare({
+          kind: 'score_snapshot',
+          sourceId: '',
+          username: profile?.username || '',
+          avatar: profile?.avatar ? getAvatarUrl(profile.avatar) : '',
+          score: { ...p, username: profile?.username || '' },
+          path: playChartLink,
+          chartPath: playChartLink,
+          jacketUrl: modalBg,
+        });
+
+        const toggleStyle = () => {
+          const next = scoreCardStyle === 'classic' ? 'snapshot' : 'classic';
+          setScoreCardStyle(next);
+          localStorage.setItem(SCORE_CARD_STYLE_KEY, next);
+          setClassicStoryOpen(false);
+          setClassicStoryCaption('');
+          setClassicStoryError('');
+          setClassicStorySuccess(false);
+        };
+
+        const styleToggleButton = (
+          <button
+            type="button"
+            onClick={toggleStyle}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-gray-400 transition-colors hover:border-cyan-300/30 hover:text-white"
+            aria-label={scoreCardStyle === 'classic' ? 'Switch to snapshot view' : 'Switch to classic view'}
+            title={scoreCardStyle === 'classic' ? 'Switch to snapshot view' : 'Switch to classic view'}
+          >
+            {scoreCardStyle === 'classic' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            )}
+          </button>
+        );
+
+        if (scoreCardStyle === 'snapshot') {
+          return (
+            <>
+              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/82 p-4 backdrop-blur-sm" onClick={() => setSelectedPlay(null)}>
+                <div className="w-full max-w-[23.5rem]" onClick={(event) => event.stopPropagation()}>
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <p className="text-[10px] font-display font-bold uppercase tracking-[0.22em] text-cyan-200/75">
+                      Run details
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {styleToggleButton}
+                      {dmLinkShare ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClassicStoryError('');
+                              setClassicStorySuccess(false);
+                              setClassicStoryOpen(true);
+                            }}
+                            className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border bg-black/25 transition-colors ${
+                              classicStorySuccess
+                                ? 'border-emerald-300/30 text-emerald-100 hover:bg-black/40'
+                                : 'border-white/10 text-gray-100 hover:border-cyan-300/30 hover:bg-black/40 hover:text-white'
+                            }`}
+                            aria-label="Add to story"
+                            title={classicStorySuccess ? 'Added to story' : 'Add to story'}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c1.67 2.72 3.83 4.88 6.55 6.55-2.72 1.67-4.88 3.83-6.55 6.55-1.67-2.72-3.83-4.88-6.55-6.55 2.72-1.67 4.88-3.83 6.55-6.55Z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 15.75v4.5m-2.25-2.25h4.5" />
+                            </svg>
+                          </button>
+                          <SendToDirectMessageButton
+                            linkShare={dmLinkShare}
+                            variant="icon"
+                            title="Send to DM"
+                            className="h-10 w-10 justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 hover:border-cyan-300/30 hover:bg-black/40 hover:text-white"
+                          />
+                        </>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlay(null)}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-200 transition-colors hover:border-white/20 hover:bg-black/40 hover:text-white"
+                        aria-label="Close score details"
+                        title="Close"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6 6 18" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <ScoreSnapshotCard
+                    score={{ ...p, username: profile?.username || '' }}
+                    jacketUrl={modalBg}
+                    chartLink={playChartLink}
+                    avatarUrl={profile?.avatar ? getAvatarUrl(profile.avatar) : ''}
+                    skillTitle={profile?.skill_title || ''}
+                    roleLabel={profile?.role_label || ''}
+                  />
+                </div>
+              </div>
+              {classicStoryOpen && (() => {
+                const storyDraft = buildStoryDraft(
+                  { ...p, username: profile?.username || '' },
+                  modalBg,
+                  playChartLink,
+                  dmLinkShare,
+                );
+                return (
+                  <StoryShareModal
+                    open
+                    draft={storyDraft}
+                    caption={classicStoryCaption}
+                    submitting={classicStorySubmitting}
+                    success={classicStorySuccess}
+                    error={classicStoryError}
+                    onCaptionChange={setClassicStoryCaption}
+                    onClose={() => { if (!classicStorySubmitting) { setClassicStoryOpen(false); setClassicStoryError(''); } }}
+                    onSubmit={async () => {
+                      if (!storyDraft || classicStorySubmitting) return;
+                      setClassicStorySubmitting(true);
+                      setClassicStoryError('');
+                      try {
+                        await createMessageStoryItem({ ...storyDraft, caption: classicStoryCaption.trim() });
+                        setClassicStorySuccess(true);
+                        setClassicStoryOpen(false);
+                      } catch (err) {
+                        setClassicStoryError(err?.message || 'Failed to add story.');
+                      } finally {
+                        setClassicStorySubmitting(false);
+                      }
+                    }}
+                  />
+                );
+              })()}
+            </>
+          );
+        }
+
+        // Classic style
+        const rank = getRank(p.score);
+        const displayGrade = parseGrade(p.grade, rank.label);
+        const overRank = getOverTop100Rank(p.over_top100_rank);
+        const hasBreakdown = p.perfect > 0 || p.great > 0 || p.good > 0 || p.bad > 0 || p.miss > 0;
+        const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
+        const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
+        const plateName = PLATE_NAMES[p.plate] || p.plate || '';
+        const plateColor = PLATE_COLORS[p.plate] || 'text-gray-400';
+        const judgments = [
+          { label: 'PERFECT', value: p.perfect || 0, textColor: 'text-sky-400' },
+          { label: 'GREAT', value: p.great || 0, textColor: 'text-green-400' },
+          { label: 'GOOD', value: p.good || 0, textColor: 'text-yellow-400' },
+          { label: 'BAD', value: p.bad || 0, textColor: 'text-fuchsia-400' },
+          { label: 'MISS', value: p.miss || 0, textColor: 'text-gray-400' },
+        ];
+        return (
+          <>
+            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPlay(null)}>
+              <div
+                className="relative w-full max-w-sm rounded-2xl overflow-hidden border border-piu-border shadow-2xl"
+                onClick={e => e.stopPropagation()}
+              >
+                {modalBg && (
+                  <div
+                    className="absolute inset-0 bg-cover bg-center opacity-15"
+                    style={{ backgroundImage: `url(${modalBg})` }}
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-piu-bg/85 to-piu-bg" />
+
+                <div className="relative p-5">
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    {dmLinkShare && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClassicStoryError('');
+                            setClassicStorySuccess(false);
+                            setClassicStoryOpen(true);
+                          }}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+                            classicStorySuccess
+                              ? 'border-emerald-300/30 text-emerald-200 bg-black/25'
+                              : 'border-white/10 bg-black/25 text-gray-400 hover:border-cyan-300/30 hover:text-white'
+                          }`}
+                          aria-label={classicStorySuccess ? 'Added to story' : 'Add to story'}
+                          title={classicStorySuccess ? 'Added to story' : 'Add to story'}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75c1.67 2.72 3.83 4.88 6.55 6.55-2.72 1.67-4.88 3.83-6.55 6.55-1.67-2.72-3.83-4.88-6.55-6.55 2.72-1.67 4.88-3.83 6.55-6.55Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 15.75v4.5m-2.25-2.25h4.5" />
+                          </svg>
+                        </button>
+                        <SendToDirectMessageButton
+                          linkShare={dmLinkShare}
+                          variant="icon"
+                          title="Send to DM"
+                          className="h-8 w-8 justify-center rounded-lg border border-white/10 bg-black/25 text-gray-400 hover:border-cyan-300/30 hover:text-white"
+                        />
+                      </>
+                    )}
+                    {styleToggleButton}
+                    <button
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:text-white text-xl leading-none"
+                      onClick={() => setSelectedPlay(null)}
+                    >
+                      &times;
+                    </button>
+                  </div>
+
+                  <p className="font-display font-bold text-lg leading-tight pr-40">{p.song_title}</p>
+
+                  <div className="flex items-center gap-3 mt-4">
+                    <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full border ${
+                      p.mode === 'Single' ? 'border-red-500/50 bg-red-500/10' : p.mode === 'Double' ? 'border-green-500/50 bg-green-500/10' : 'border-blue-500/50 bg-blue-500/10'
+                    }`}>
+                      <span className={`font-display font-bold text-[10px] uppercase ${p.mode === 'Single' ? 'text-red-400' : p.mode === 'Double' ? 'text-green-400' : 'text-blue-400'}`}>{p.mode}</span>
+                      <span className={`font-display font-bold text-base ${p.mode === 'Single' ? 'text-red-300' : p.mode === 'Double' ? 'text-green-300' : 'text-blue-300'}`}>{p.level}</span>
+                    </div>
+                    {overRank > 0 && (
+                      <span className="px-2 py-0.5 rounded-full border border-piu-gold/55 bg-piu-gold/15 text-yellow-200 text-[11px] leading-none font-display font-black tracking-wide">
+                        TOP #{overRank}
+                      </span>
+                    )}
+                    <div className="text-center flex-1">
+                      {p.score > 0 ? (
+                        <p
+                          className={`text-3xl font-display font-black ${getGradeColor(displayGrade.display)} ${displayGrade.isBroken ? 'grade-broken' : ''}`}
+                          data-grade={displayGrade.display}
+                        >
+                          {displayGrade.display}
+                        </p>
+                      ) : (
+                        <p className="text-xl font-display font-black text-red-500">STAGE BREAK</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {plateName && (
+                    <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+                  )}
+
+                  {p.score > 0 && (
+                    <p className="text-center font-mono text-2xl font-bold mt-2">{p.score.toLocaleString()}</p>
+                  )}
+
+                  {hasBreakdown && (
+                    <div className="grid grid-cols-5 gap-1 text-center mt-5 pt-4 border-t border-piu-border/30">
+                      {judgments.map(j => (
+                        <div key={j.label}>
+                          <p className={`text-[10px] font-display font-bold ${j.textColor}`}>{j.label}</p>
+                          <p className="font-mono font-bold text-base mt-0.5">{j.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!hasBreakdown && p.score > 0 && (
+                    <p className="text-center text-xs text-gray-600 mt-4 pt-4 border-t border-piu-border/30">
+                      Judgment breakdown not available — try re-syncing
+                    </p>
+                  )}
+
+                  {(p.date_played || p.machine_name) && (
+                    <p className="text-xs text-gray-500 text-right mt-3">
+                      {p.date_played ? formatPlayDate(p.date_played) : ''}
+                      {p.machine_name ? <span className="text-gray-600">{p.date_played ? ' · ' : ''}at {p.machine_name}</span> : null}
+                    </p>
+                  )}
+
+                </div>
+              </div>
+            </div>
+            {classicStoryOpen && (() => {
+              const storyDraft = buildStoryDraft(
+                { ...p, username: profile?.username || '' },
+                modalBg,
+                playChartLink,
+                dmLinkShare,
+              );
+              return (
+                <StoryShareModal
+                  open
+                  draft={storyDraft}
+                  caption={classicStoryCaption}
+                  submitting={classicStorySubmitting}
+                  success={classicStorySuccess}
+                  error={classicStoryError}
+                  onCaptionChange={setClassicStoryCaption}
+                  onClose={() => { if (!classicStorySubmitting) { setClassicStoryOpen(false); setClassicStoryError(''); } }}
+                  onSubmit={async () => {
+                    if (!storyDraft || classicStorySubmitting) return;
+                    setClassicStorySubmitting(true);
+                    setClassicStoryError('');
+                    try {
+                      await createMessageStoryItem({ ...storyDraft, caption: classicStoryCaption.trim() });
+                      setClassicStorySuccess(true);
+                      setClassicStoryOpen(false);
+                    } catch (err) {
+                      setClassicStoryError(err?.message || 'Failed to add story.');
+                    } finally {
+                      setClassicStorySubmitting(false);
+                    }
+                  }}
+                />
+              );
+            })()}
+          </>
+        );
+      })()}
+    </div>
+  );
+}

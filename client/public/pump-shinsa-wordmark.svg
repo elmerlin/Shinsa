@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
+  <title id="title">Pump Shinsa Logo</title>
+  <desc id="desc">Pump Shinsa wordmark with angular octagon emblem.</desc>
+  <defs>
+    <linearGradient id="wordGold" x1="180" y1="20" x2="330" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffe27a"/>
+      <stop offset="1" stop-color="#ffbe2f"/>
+    </linearGradient>
+    <linearGradient id="wordIce" x1="300" y1="76" x2="620" y2="154" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f6fbff"/>
+      <stop offset="1" stop-color="#abd8ff"/>
+    </linearGradient>
+    <linearGradient id="slash" x1="180" y1="20" x2="668" y2="160" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#29a5ff"/>
+      <stop offset="1" stop-color="#ff2d5e"/>
+    </linearGradient>
+    <linearGradient id="iconBg" x1="16" y1="16" x2="164" y2="164" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#141428"/>
+      <stop offset="1" stop-color="#06060f"/>
+    </linearGradient>
+    <linearGradient id="iconGold" x1="22" y1="22" x2="158" y2="158" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd54d"/>
+      <stop offset="1" stop-color="#ffb300"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(6,10)">
+    <rect x="0" y="0" width="160" height="160" rx="26" fill="url(#iconBg)" stroke="#2a2a4a" stroke-width="2"/>
+    <polygon points="80,12 118,12 148,42 148,118 118,148 42,148 12,118 12,42 42,12" fill="none" stroke="#f4f7ff" stroke-width="5"/>
+    <polygon points="80,18 116,18 142,44 142,116 116,142 44,142 18,116 18,44 44,18" fill="none" stroke="url(#iconGold)" stroke-width="7"/>
+    <path d="M36 52H124L106 70H84L120 106V124H32L50 106H72L36 70V52Z" fill="#f8fbff" stroke="#090910" stroke-width="6" stroke-linejoin="round"/>
+  </g>
+
+  <path d="M174 38L680 38L650 66L204 66Z" fill="url(#slash)" opacity="0.28"/>
+  <path d="M176 138L672 138L640 162L206 162Z" fill="url(#slash)" opacity="0.22"/>
+
+  <text x="188" y="84" fill="url(#wordGold)" font-family="Rajdhani, Inter, Arial, sans-serif" font-size="72" font-weight="700" letter-spacing="3" paint-order="stroke" stroke="#090910" stroke-width="10">PUMP</text>
+  <text x="186" y="84" fill="url(#wordGold)" font-family="Rajdhani, Inter, Arial, sans-serif" font-size="72" font-weight="700" letter-spacing="3" paint-order="stroke" stroke="#090910" stroke-width="4">PUMP</text>
+
+  <text x="372" y="134" fill="url(#wordIce)" font-family="Rajdhani, Inter, Arial, sans-serif" font-size="86" font-weight="700" letter-spacing="2" paint-order="stroke" stroke="#090910" stroke-width="12">SHINSA</text>
+  <text x="370" y="134" fill="url(#wordIce)" font-family="Rajdhani, Inter, Arial, sans-serif" font-size="86" font-weight="700" letter-spacing="2" paint-order="stroke" stroke="#090910" stroke-width="4">SHINSA</text>
+</svg>

@@ -1,0 +1,313 @@
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import {
+  getNotifications,
+  getMessageConversations,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotification,
+  getPushPublicKey,
+  savePushSubscription,
+} from '../utils/api';
+import { useAuth } from './AuthContext';
+
+const NotificationContext = createContext(null);
+
+function supportsWebPush() {
+  if (typeof window === 'undefined') return false;
+  if (typeof Notification === 'undefined') return false;
+  return 'serviceWorker' in navigator && 'PushManager' in window;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const output = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) {
+    output[i] = rawData.charCodeAt(i);
+  }
+  return output;
+}
+
+export function NotificationProvider({ children }) {
+  const { user, loading } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [invitationCount, setInvitationCount] = useState(0);
+  const [messageUnreadCount, setMessageUnreadCount] = useState(0);
+  const streamRef = useRef(null);
+  const webPushActiveRef = useRef(false);
+  const permissionPromptAttachedRef = useRef(false);
+  const typingListenersRef = useRef(new Set());
+  const newMessageListenersRef = useRef(new Set());
+
+  const parseNotificationDate = (value) => {
+    const raw = String(value || '');
+    if (!raw) return 0;
+    const normalized = raw.endsWith('Z') ? raw : `${raw}Z`;
+    const ms = new Date(normalized).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  };
+
+  const upsertIncomingNotification = useCallback((notification) => {
+    if (!notification?.id) return;
+    setNotifications(prev => {
+      if (prev.some(n => n.id === notification.id)) return prev;
+      const merged = [notification, ...prev];
+      merged.sort((a, b) => parseNotificationDate(b.created_at) - parseNotificationDate(a.created_at));
+      return merged.slice(0, 50);
+    });
+    if (!notification.read) {
+      setUnreadCount(c => c + 1);
+    }
+  }, []);
+
+  const showBrowserNotification = useCallback((notification) => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+    try {
+      const n = new Notification(notification.title || 'New notification', {
+        body: notification.message || 'You have a new notification',
+        icon: '/icons/app-icon-192.png',
+        tag: `notification-${notification.id}`,
+      });
+      n.onclick = () => {
+        window.focus();
+        if (notification.link) window.location.href = notification.link;
+      };
+    } catch {}
+  }, []);
+
+  const syncPushSubscription = useCallback(async () => {
+    webPushActiveRef.current = false;
+    if (!user) return;
+    if (!supportsWebPush()) return;
+
+    try {
+      const keyData = await getPushPublicKey();
+      const publicKey = String(keyData?.public_key || '');
+      if (!keyData?.enabled || !publicKey) return;
+
+      // Chrome (especially mobile) may ignore permission prompts that are not
+      // initiated by a user gesture. Ask only from the gesture effect below.
+      if (Notification.permission !== 'granted') return;
+
+      let registration = await navigator.serviceWorker.getRegistration('/');
+      if (!registration) {
+        registration = await navigator.serviceWorker.register('/push-sw.js', { scope: '/' });
+      }
+      if (!registration.active) {
+        registration = await navigator.serviceWorker.ready;
+      }
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          // Spec-compliant option name (Chrome/Android requires it for VAPID).
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
+
+      const payload = subscription?.toJSON ? subscription.toJSON() : subscription;
+      await savePushSubscription(payload);
+      webPushActiveRef.current = true;
+    } catch (err) {
+      webPushActiveRef.current = false;
+      console.error('Web push subscription sync failed:', err?.message || err);
+    }
+  }, [user]);
+
+  const refresh = useCallback(() => {
+    if (!user) return;
+    getNotifications().then(data => {
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unread_count || 0);
+      setInvitationCount(data.invitation_count || 0);
+    }).catch(() => {});
+  }, [user]);
+
+  const refreshMessageUnread = useCallback(() => {
+    if (!user) return Promise.resolve();
+    return getMessageConversations()
+      .then((data) => {
+        const total = Array.isArray(data?.conversations)
+          ? data.conversations.reduce((sum, conversation) => sum + (parseInt(conversation?.unread_count, 10) || 0), 0)
+          : 0;
+        setMessageUnreadCount(total);
+      })
+      .catch(() => {});
+  }, [user]);
+
+  // Poll every 15 seconds when logged in (fallback + invitations count)
+  useEffect(() => {
+    if (loading) return undefined;
+    if (!user) {
+      setNotifications([]);
+      setUnreadCount(0);
+      setInvitationCount(0);
+      setMessageUnreadCount(0);
+      return;
+    }
+    refresh();
+    refreshMessageUnread();
+    const notificationInterval = setInterval(refresh, 15000);
+    const messageInterval = setInterval(refreshMessageUnread, 15000);
+    return () => {
+      clearInterval(notificationInterval);
+      clearInterval(messageInterval);
+    };
+  }, [user, refresh, refreshMessageUnread, loading]);
+
+  // Request notification permission after first user interaction.
+  // This is more reliable on Chrome mobile than auto-prompting on load.
+  useEffect(() => {
+    if (loading || !user) return undefined;
+    if (!supportsWebPush()) return undefined;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'default') return undefined;
+
+    if (permissionPromptAttachedRef.current) return undefined;
+    permissionPromptAttachedRef.current = true;
+
+    const handleFirstInteraction = async () => {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          await syncPushSubscription();
+        }
+      } catch {}
+      permissionPromptAttachedRef.current = false;
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+
+    window.addEventListener('pointerdown', handleFirstInteraction, { once: true });
+    window.addEventListener('keydown', handleFirstInteraction, { once: true });
+
+    return () => {
+      permissionPromptAttachedRef.current = false;
+      window.removeEventListener('pointerdown', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, [user, loading, syncPushSubscription]);
+
+  // Subscribe browser for web push after login
+  useEffect(() => {
+    if (loading) return;
+    syncPushSubscription();
+  }, [loading, syncPushSubscription]);
+
+  // Real-time notification stream (SSE)
+  useEffect(() => {
+    if (loading) return undefined;
+    if (!user) return undefined;
+    const token = localStorage.getItem('token');
+    if (!token) return undefined;
+
+    let closed = false;
+    let retryTimer = null;
+
+    const connect = () => {
+      if (closed) return;
+      const source = new EventSource(`/api/auth/notifications/stream?token=${encodeURIComponent(token)}`);
+      streamRef.current = source;
+
+      source.addEventListener('notification', (event) => {
+        try {
+          const incoming = JSON.parse(event.data || '{}');
+          if (!incoming?.id) return;
+          if (incoming.type === 'direct_message') {
+            refreshMessageUnread();
+            if (!webPushActiveRef.current) {
+              showBrowserNotification(incoming);
+            }
+            return;
+          }
+          upsertIncomingNotification(incoming);
+          if (!webPushActiveRef.current) {
+            showBrowserNotification(incoming);
+          }
+        } catch {}
+      });
+
+      source.addEventListener('typing', (event) => {
+        try {
+          const data = JSON.parse(event.data || '{}');
+          for (const listener of typingListenersRef.current) {
+            listener(data);
+          }
+        } catch {}
+      });
+
+      source.addEventListener('new_message', (event) => {
+        try {
+          const data = JSON.parse(event.data || '{}');
+          for (const listener of newMessageListenersRef.current) {
+            listener(data);
+          }
+          refreshMessageUnread();
+        } catch {}
+      });
+
+      source.onerror = () => {
+        source.close();
+        if (closed) return;
+        retryTimer = setTimeout(connect, 2000);
+      };
+    };
+
+    connect();
+    return () => {
+      closed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (streamRef.current) {
+        streamRef.current.close();
+        streamRef.current = null;
+      }
+    };
+  }, [user, upsertIncomingNotification, showBrowserNotification, refreshMessageUnread, loading]);
+
+  const markRead = async (id) => {
+    await markNotificationRead(id);
+    setNotifications(n => n.map(x => x.id === id ? { ...x, read: 1 } : x));
+    setUnreadCount(c => Math.max(0, c - 1));
+  };
+
+  const markAllRead = async () => {
+    await markAllNotificationsRead();
+    setNotifications(n => n.map(x => ({ ...x, read: 1 })));
+    setUnreadCount(0);
+  };
+
+  const dismiss = async (id) => {
+    await deleteNotification(id);
+    const wasUnread = notifications.find(n => n.id === id && !n.read);
+    setNotifications(n => n.filter(x => x.id !== id));
+    if (wasUnread) setUnreadCount(c => Math.max(0, c - 1));
+  };
+
+  const totalBadge = unreadCount + invitationCount;
+
+  const subscribeTyping = useCallback((listener) => {
+    typingListenersRef.current.add(listener);
+    return () => typingListenersRef.current.delete(listener);
+  }, []);
+
+  const subscribeNewMessage = useCallback((listener) => {
+    newMessageListenersRef.current.add(listener);
+    return () => newMessageListenersRef.current.delete(listener);
+  }, []);
+
+  return (
+    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, refresh, refreshMessageUnread, markRead, markAllRead, dismiss, subscribeTyping, subscribeNewMessage }}>
+      {children}
+    </NotificationContext.Provider>
+  );
+}
+
+export function useNotifications() {
+  return useContext(NotificationContext);
+}

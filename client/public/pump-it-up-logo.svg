@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 28">
+  <defs>
+    <linearGradient id="piu-text-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff3366"/>
+      <stop offset="30%" style="stop-color:#ff6633"/>
+      <stop offset="60%" style="stop-color:#ffd700"/>
+      <stop offset="100%" style="stop-color:#ff3366"/>
+    </linearGradient>
+    <filter id="piu-glow">
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <text x="100" y="20" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="18" fill="url(#piu-text-grad)" letter-spacing="3" filter="url(#piu-glow)" font-style="italic">PUMP IT UP</text>
+</svg>

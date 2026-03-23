@@ -1,0 +1,362 @@
+[
+  {
+    "skill_slug": "jump",
+    "skill_name": "jump",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 21,
+    "source_skill_url": "https://www.piucenter.com/skill/jump",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D21_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "drill",
+    "skill_name": "drill",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 8,
+    "source_skill_url": "https://www.piucenter.com/skill/drill",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S8_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "drill",
+    "skill_name": "drill",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Single",
+    "level": 8,
+    "source_skill_url": "https://www.piucenter.com/skill/drill",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_S8_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "run",
+    "skill_name": "run",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 12,
+    "source_skill_url": "https://www.piucenter.com/skill/run",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S12_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "run",
+    "skill_name": "run",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/run",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "run",
+    "skill_name": "run",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/run",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "anchor_run",
+    "skill_name": "anchor run",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/anchor_run",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "anchor_run",
+    "skill_name": "anchor run",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/anchor_run",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "anchor_run",
+    "skill_name": "anchor run",
+    "title": "Break Through Myself feat. Risa Yuzuki",
+    "mode": "Double",
+    "level": 17,
+    "source_skill_url": "https://www.piucenter.com/skill/anchor_run",
+    "source_chart_url": "https://www.piucenter.com/chart/Break_Through_Myself_feat._Risa_Yuzuki_-_DJ_Myosuke__Laur_D17_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "run_without_twists",
+    "skill_name": "run without twists",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 12,
+    "source_skill_url": "https://www.piucenter.com/skill/run_without_twists",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S12_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "run_without_twists",
+    "skill_name": "run without twists",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/run_without_twists",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "twist_over90",
+    "skill_name": "twist over90",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 12,
+    "source_skill_url": "https://www.piucenter.com/skill/twist_over90",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S12_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "twist_over90",
+    "skill_name": "twist over90",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/twist_over90",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "twist_close",
+    "skill_name": "twist close",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 12,
+    "source_skill_url": "https://www.piucenter.com/skill/twist_close",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S12_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "twist_close",
+    "skill_name": "twist close",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/twist_close",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "twist_close",
+    "skill_name": "twist close",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 21,
+    "source_skill_url": "https://www.piucenter.com/skill/twist_close",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D21_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "twist_far",
+    "skill_name": "twist far",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/twist_far",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "twist_far",
+    "skill_name": "twist far",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 20,
+    "source_skill_url": "https://www.piucenter.com/skill/twist_far",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D20_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "mid6_doubles",
+    "skill_name": "mid6 doubles",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/mid6_doubles",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "mid6_doubles",
+    "skill_name": "mid6 doubles",
+    "title": "Break Through Myself feat. Risa Yuzuki",
+    "mode": "Double",
+    "level": 17,
+    "source_skill_url": "https://www.piucenter.com/skill/mid6_doubles",
+    "source_chart_url": "https://www.piucenter.com/chart/Break_Through_Myself_feat._Risa_Yuzuki_-_DJ_Myosuke__Laur_D17_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "mid4_doubles",
+    "skill_name": "mid4 doubles",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/mid4_doubles",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "doublestep",
+    "skill_name": "doublestep",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/doublestep",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "jack",
+    "skill_name": "jack",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 8,
+    "source_skill_url": "https://www.piucenter.com/skill/jack",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S8_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "jack",
+    "skill_name": "jack",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/jack",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "jack",
+    "skill_name": "jack",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 20,
+    "source_skill_url": "https://www.piucenter.com/skill/jack",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D20_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "footswitch",
+    "skill_name": "footswitch",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 12,
+    "source_skill_url": "https://www.piucenter.com/skill/footswitch",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S12_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "footswitch",
+    "skill_name": "footswitch",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/footswitch",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "footswitch",
+    "skill_name": "footswitch",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 18,
+    "source_skill_url": "https://www.piucenter.com/skill/footswitch",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D18_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "cross-pad_transition",
+    "skill_name": "cross-pad transition",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/cross-pad_transition",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "co-op_pad_transition",
+    "skill_name": "co-op pad transition",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/co-op_pad_transition",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "co-op_pad_transition",
+    "skill_name": "co-op pad transition",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 20,
+    "source_skill_url": "https://www.piucenter.com/skill/co-op_pad_transition",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D20_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "co-op_pad_transition",
+    "skill_name": "co-op pad transition",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 21,
+    "source_skill_url": "https://www.piucenter.com/skill/co-op_pad_transition",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D21_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "bursty",
+    "skill_name": "bursty",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 8,
+    "source_skill_url": "https://www.piucenter.com/skill/bursty",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S8_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "bursty",
+    "skill_name": "bursty",
+    "title": "X Tream",
+    "mode": "Single",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/bursty",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_S15_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "bursty",
+    "skill_name": "bursty",
+    "title": "Up Up (Produced by AWAL)",
+    "mode": "Double",
+    "level": 10,
+    "source_skill_url": "https://www.piucenter.com/skill/bursty",
+    "source_chart_url": "https://www.piucenter.com/chart/Up__Up_(Produced_by_AWAL)_-_Skizzo_D10_ARCADE",
+    "map_method": "unmatched"
+  },
+  {
+    "skill_slug": "sustained",
+    "skill_name": "sustained",
+    "title": "X Tream",
+    "mode": "Double",
+    "level": 15,
+    "source_skill_url": "https://www.piucenter.com/skill/sustained",
+    "source_chart_url": "https://www.piucenter.com/chart/X_Tream_-_BanYa_D15_ARCADE",
+    "map_method": "unmatched"
+  }
+]

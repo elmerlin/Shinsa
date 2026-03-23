@@ -2,6 +2,42 @@ const fs = require('fs');
 const path = require('path');
 const { initializeDb, getDb, DB_PATH } = require('./schema');
 
+function normalizeSongTitle(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function parseSongFlags(flags) {
+  if (Array.isArray(flags)) {
+    return flags
+      .map((flag) => String(flag || '').trim())
+      .filter(Boolean);
+  }
+  return String(flags || '')
+    .split(',')
+    .map((flag) => flag.trim())
+    .filter(Boolean);
+}
+
+function resolveSongTitleForStorage(title, songKey, flags) {
+  const normalizedTitle = normalizeSongTitle(title);
+  if (!normalizedTitle) return '';
+  const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
+  const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
+  if (shortCutSuffixPattern.test(normalizedTitle)) {
+    return normalizedTitle.replace(shortCutSuffixPattern, ' - SHORT CUT -');
+  }
+
+  const isShortCut = normalizedFlags.includes('cut:1')
+    || (
+      normalizedTitle.toLowerCase() === 'yog-sothoth'
+      && String(songKey || '').trim() === '313'
+    );
+  if (isShortCut) {
+    return `${normalizedTitle} - SHORT CUT -`;
+  }
+  return normalizedTitle;
+}
+
 function seedDatabase() {
   const jsonPath = path.join(__dirname, '..', '..', 'pump-phoenix.json');
   if (!fs.existsSync(jsonPath)) {
@@ -32,12 +68,13 @@ function seedDatabase() {
       // Use local jacket path served from client/public/jackets/
       const jacketUrl = song.jacket ? '/jackets/' + song.jacket : '';
       const flags = (song.flags || []).join(',');
+      const songTitle = resolveSongTitleForStorage(song.name, song.saIndex, song.flags);
 
       for (const chart of song.charts) {
         if ((chart.diffClass === 'S' || chart.diffClass === 'D') && chart.style === 'solo') {
           const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
           stmt.run(
-            song.name,
+            songTitle,
             song.artist,
             jacketUrl,
             mode,
