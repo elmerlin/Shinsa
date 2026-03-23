@@ -49,7 +49,9 @@ struct ProfileView: View {
                         tabBar
                         tabContent(user)
                     }
+                    .frame(maxWidth: .infinity)
                 }
+                .clipped()
                 .refreshable { await vm.load() }
             } else {
                 Text("User not found")
@@ -500,6 +502,7 @@ struct ProfileView: View {
                                 Text(t.tournamentName ?? "Tournament")
                                     .font(.system(size: 13))
                                     .foregroundColor(.white)
+                                    .lineLimit(1)
 
                                 Spacer()
 
@@ -516,6 +519,7 @@ struct ProfileView: View {
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Activity Heatmap
@@ -612,27 +616,26 @@ struct ProfileView: View {
     }
 
     private var heatmapGrid: some View {
-        let calendar = Calendar.current
         let weeks = buildWeeks(year: heatmapYear)
         let dayLabels = ["", "M", "", "W", "", "F", ""]
         let monthLabels = buildMonthLabels(year: heatmapYear, weeks: weeks)
         let maxPlays = vm.heatmapData.values.map(\.plays).max() ?? 1
 
-        return VStack(alignment: .leading, spacing: 0) {
-            // Month labels
-            HStack(spacing: 0) {
-                Text("").frame(width: 16) // spacer for day labels
-                ForEach(Array(monthLabels.enumerated()), id: \.offset) { _, label in
-                    Text(label)
-                        .font(.system(size: 8))
-                        .foregroundColor(DojoTheme.textMuted)
-                        .frame(width: 12, alignment: .leading)
+        return ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Month labels row
+                HStack(spacing: 0) {
+                    Text("").frame(width: 16) // spacer for day labels column
+                    ForEach(Array(monthLabels.enumerated()), id: \.offset) { _, label in
+                        Text(label)
+                            .font(.system(size: 8))
+                            .foregroundColor(DojoTheme.textMuted)
+                            .frame(width: 12, alignment: .leading)
+                    }
                 }
-            }
-            .padding(.bottom, 2)
+                .padding(.bottom, 2)
 
-            // Grid
-            ScrollView(.horizontal, showsIndicators: false) {
+                // Grid: day labels + week columns
                 HStack(alignment: .top, spacing: 0) {
                     // Day labels column
                     VStack(spacing: 1) {
