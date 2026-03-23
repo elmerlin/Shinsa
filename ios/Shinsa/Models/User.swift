@@ -19,6 +19,10 @@ struct User: Codable, Identifiable {
     var followerCount: Int?
     var followingCount: Int?
     var postCount: Int?
+    var locationCountry: String?
+    var locationCity: String?
+    var groupBadges: [GroupBadge]?
+    var achievementBadges: [AchievementBadge]?
 
     var shouldShowAge: Bool { showAge != nil && showAge != 0 }
 
@@ -32,7 +36,62 @@ struct User: Codable, Identifiable {
         case followerCount = "follower_count"
         case followingCount = "following_count"
         case postCount = "post_count"
+        case locationCountry = "location_country"
+        case locationCity = "location_city"
+        case groupBadges = "group_badges"
+        case achievementBadges = "achievement_badges"
     }
+}
+
+struct GroupBadge: Codable, Identifiable {
+    let id: String
+    var groupId: String?
+    var name: String?
+    var description: String?
+    var image: String?
+    enum CodingKeys: String, CodingKey {
+        case id, name, description, image
+        case groupId = "group_id"
+    }
+}
+
+struct AchievementBadge: Codable, Identifiable {
+    var id: String { seriesId ?? UUID().uuidString }
+    var seriesId: String?
+    var seriesName: String?
+    var name: String?
+    var description: String?
+    var image: String?
+    var threshold: Int?
+    var currentValue: Int?
+    var nextTier: AchievementNextTier?
+    enum CodingKeys: String, CodingKey {
+        case name, description, image, threshold
+        case seriesId = "series_id"
+        case seriesName = "series_name"
+        case currentValue = "current_value"
+        case nextTier = "next_tier"
+    }
+}
+
+struct AchievementNextTier: Codable {
+    var tierId: String?
+    var name: String?
+    var image: String?
+    var threshold: Int?
+    enum CodingKeys: String, CodingKey {
+        case name, image, threshold
+        case tierId = "tier_id"
+    }
+}
+
+struct HeatmapDay: Identifiable {
+    var id: String { key }
+    let key: String // "YYYY-MM-DD"
+    var plays: Int
+    var singlesAvgLevel: Double
+    var doublesAvgLevel: Double
+    var doubleRatio: Double
 }
 
 struct AuthResponse: Codable {

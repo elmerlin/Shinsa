@@ -8,6 +8,15 @@ class ProfileViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
+    // New data
+    @Published var recentPlays: [RecentlyPlayed] = []
+    @Published var achievements: [AchievementBadge] = []
+    @Published var posts: [Post] = []
+    @Published var heatmapData: [String: HeatmapDay] = [:]
+    @Published var postsPage = 1
+    @Published var hasMorePosts = true
+    @Published var isLoadingPosts = false
+
     let userId: String
 
     init(userId: String) {
@@ -41,5 +50,85 @@ class ProfileViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func loadRecentPlays(year: Int? = nil) async {
+        do {
+            let plays: [RecentlyPlayed]
+            if let y = year {
+                plays = try await APIService.shared.getPiugameRecentlyPlayed(userId, year: y)
+            } else {
+                plays = try await APIService.shared.getPiugameRecentlyPlayed(userId)
+            }
+            recentPlays = plays
+            buildHeatmapData(from: plays)
+        } catch {
+            // Silently fail - heatmap will be empty
+        }
+    }
+
+    func loadAchievements() async {
+        do {
+            achievements = try await APIService.shared.getUserAchievements(userId)
+        } catch {
+            // Silently fail
+        }
+    }
+
+    func loadPosts(reset: Bool = false) async {
+        guard !isLoadingPosts else { return }
+        if reset {
+            postsPage = 1
+            hasMorePosts = true
+            posts = []
+        }
+        guard hasMorePosts else { return }
+        isLoadingPosts = true
+        do {
+            let newPosts = try await APIService.shared.getUserPosts(userId, page: postsPage)
+            if reset {
+                posts = newPosts
+            } else {
+                posts.append(contentsOf: newPosts)
+            }
+            hasMorePosts = newPosts.count >= 10
+            postsPage += 1
+        } catch {
+            // Silently fail
+        }
+        isLoadingPosts = false
+    }
+
+    private func buildHeatmapData(from plays: [RecentlyPlayed]) {
+        var map: [String: (plays: Int, singlesLevels: [Int], doublesLevels: [Int])] = [:]
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        for play in plays {
+            guard let datePlayed = play.datePlayed else { continue }
+            // Extract just the date portion (YYYY-MM-DD)
+            let dateKey = String(datePlayed.prefix(10))
+
+            var entry = map[dateKey] ?? (plays: 0, singlesLevels: [], doublesLevels: [])
+            entry.plays += 1
+            let mode = play.mode.lowercased()
+            if mode.hasPrefix("s") || mode == "single" {
+                entry.singlesLevels.append(play.level)
+            } else {
+                entry.doublesLevels.append(play.level)
+            }
+            map[dateKey] = entry
+        }
+
+        var result: [String: HeatmapDay] = [:]
+        for (key, val) in map {
+            let singlesAvg = val.singlesLevels.isEmpty ? 0.0 : Double(val.singlesLevels.reduce(0, +)) / Double(val.singlesLevels.count)
+            let doublesAvg = val.doublesLevels.isEmpty ? 0.0 : Double(val.doublesLevels.reduce(0, +)) / Double(val.doublesLevels.count)
+            let total = val.singlesLevels.count + val.doublesLevels.count
+            let doubleRatio = total == 0 ? 0.0 : Double(val.doublesLevels.count) / Double(total)
+            result[key] = HeatmapDay(key: key, plays: val.plays, singlesAvgLevel: singlesAvg, doublesAvgLevel: doublesAvg, doubleRatio: doubleRatio)
+        }
+        heatmapData = result
     }
 }

@@ -12,6 +12,24 @@ struct ProfileView: View {
         auth.userId == vm.userId
     }
 
+    @State private var selectedTab = "overview"
+    @State private var selectedHeatmapDay: HeatmapDay?
+    @State private var heatmapYear: Int = Calendar.current.component(.year, from: Date())
+
+    private var tabs: [(String, String, String)] {
+        var t: [(String, String, String)] = [
+            ("overview", "Overview", "chart.xyaxis.line"),
+            ("posts", "Posts", "square.and.pencil"),
+            ("followers", "Followers", "person.2"),
+            ("following", "Following", "person.badge.plus"),
+        ]
+        if vm.user?.pumbility != nil && (vm.user?.pumbility ?? 0) > 0 {
+            t.append(("piu", "PIU Data", "gamecontroller"))
+        }
+        t.append(("stats", "Stats", "trophy"))
+        return t
+    }
+
     var body: some View {
         ZStack {
             DojoTheme.piuBg.ignoresSafeArea()
@@ -20,15 +38,12 @@ struct ProfileView: View {
                 ProgressView().tint(DojoTheme.piuAccent)
             } else if let user = vm.user {
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 0) {
                         profileHeader(user)
-                        socialStats(user)
-
-                        if let stats = vm.stats {
-                            statsSection(stats)
-                        }
+                        statsBar(user)
+                        tabBar
+                        tabContent(user)
                     }
-                    .padding()
                 }
                 .refreshable { await vm.load() }
             } else {
@@ -38,162 +53,1197 @@ struct ProfileView: View {
         }
         .navigationTitle(vm.user?.username ?? "Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            await vm.loadRecentPlays()
+            await vm.loadAchievements()
+        }
     }
 
-    // MARK: - Header
+    // MARK: - Profile Header
 
     private func profileHeader(_ user: User) -> some View {
-        VStack(spacing: 12) {
-            AvatarView(user.avatar, name: user.username, size: 80)
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
+                AvatarView(user.avatar, name: user.username, size: 64)
 
-            Text(user.username)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.white)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(user.username)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
 
-            HStack(spacing: 8) {
-                if let nat = user.nationality, !nat.isEmpty {
-                    Text(CountryData.flag(for: nat))
-                        .font(.system(size: 16))
+                        if let gender = user.gender, !gender.isEmpty {
+                            Text(gender == "male" ? "\u{2642}" : gender == "female" ? "\u{2640}" : "")
+                                .font(.system(size: 14))
+                                .foregroundColor(gender == "male" ? Color(hex: "#60a5fa") : Color(hex: "#f472b6"))
+                        }
+                    }
+
+                    // Location row
+                    HStack(spacing: 4) {
+                        if let nat = user.nationality, !nat.isEmpty {
+                            Text(CountryData.flag(for: nat))
+                                .font(.system(size: 14))
+                        }
+                        if let city = user.locationCity, !city.isEmpty {
+                            Text(city)
+                                .font(.system(size: 12))
+                                .foregroundColor(DojoTheme.textMuted)
+                        }
+                        if let country = user.locationCountry, !country.isEmpty {
+                            if user.locationCity != nil {
+                                Text("·")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DojoTheme.textMuted)
+                            }
+                            Text(country)
+                                .font(.system(size: 12))
+                                .foregroundColor(DojoTheme.textMuted)
+                        }
+                    }
+
+                    HStack(spacing: 6) {
+                        if let skill = user.skillTitle {
+                            Text(skill)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.skillColor(for: skill))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(DojoTheme.skillColor(for: skill).opacity(0.15))
+                                .cornerRadius(4)
+                        }
+
+                        if let level = user.skillLevel {
+                            Text("Lv.\(level)")
+                                .font(.system(size: 11))
+                                .foregroundColor(DojoTheme.textMuted)
+                        }
+                    }
+
+                    if let pumbility = user.pumbility, pumbility > 0 {
+                        HStack(spacing: 4) {
+                            Text("Pumbility")
+                                .font(.system(size: 11))
+                                .foregroundColor(DojoTheme.textMuted)
+                            Text("\(pumbility)")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(DojoTheme.piuGold)
+                        }
+                    }
+
+                    // Member since
+                    if let createdAt = user.createdAt {
+                        let memberDate = formatMemberSince(createdAt)
+                        if !memberDate.isEmpty {
+                            Text("Member since \(memberDate)")
+                                .font(.system(size: 10))
+                                .foregroundColor(DojoTheme.textMuted.opacity(0.7))
+                        }
+                    }
                 }
-                if let skill = user.skillTitle {
-                    Text(skill)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(DojoTheme.skillColor(for: skill))
+
+                Spacer()
+            }
+
+            // Group badges row
+            if let badges = user.groupBadges, !badges.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(badges) { badge in
+                            badgeCircle(url: badge.image, name: badge.name, size: 28, borderColor: DojoTheme.piuBorder)
+                        }
+                    }
                 }
-                if let level = user.skillLevel {
-                    Text("Lv.\(level)")
-                        .font(.system(size: 12))
-                        .foregroundColor(DojoTheme.textMuted)
+                .padding(.top, 8)
+            }
+
+            // Achievement badges row
+            if let badges = user.achievementBadges, !badges.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(badges) { badge in
+                            badgeCircle(url: badge.image, name: badge.name, size: 28, borderColor: DojoTheme.piuGold)
+                        }
+                    }
                 }
-                if let gender = user.gender, !gender.isEmpty {
-                    Text(gender == "male" ? "\u{2642}" : gender == "female" ? "\u{2640}" : "")
-                        .font(.system(size: 12))
-                        .foregroundColor(DojoTheme.textMuted)
-                }
+                .padding(.top, 4)
             }
 
             if let bio = user.description, !bio.isEmpty {
                 Text(bio)
                     .font(.system(size: 13))
                     .foregroundColor(DojoTheme.textSecondary)
-                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 10)
             }
 
-            if let pumbility = user.pumbility, pumbility > 0 {
-                HStack(spacing: 4) {
-                    Text("Pumbility")
-                        .font(.system(size: 11))
-                        .foregroundColor(DojoTheme.textMuted)
-                    Text("\(pumbility)")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(DojoTheme.piuGold)
-                }
-            }
-
-            if !isOwnProfile {
-                Button {
-                    Task { await vm.toggleFollow() }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: vm.isFollowing ? "person.fill.checkmark" : "person.badge.plus")
-                        Text(vm.isFollowing ? "Following" : "Follow")
+            // Action buttons
+            HStack(spacing: 8) {
+                if !isOwnProfile {
+                    Button {
+                        Task { await vm.toggleFollow() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: vm.isFollowing ? "checkmark" : "plus")
+                                .font(.system(size: 11))
+                            Text(vm.isFollowing ? "Following" : "Follow")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(vm.isFollowing ? DojoTheme.piuCard : DojoTheme.piuAccent)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(vm.isFollowing ? DojoTheme.piuBorder : Color.clear, lineWidth: 1)
+                        )
                     }
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-                    .background(vm.isFollowing ? DojoTheme.piuCard : DojoTheme.piuAccent)
-                    .cornerRadius(20)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(vm.isFollowing ? DojoTheme.piuBorder : Color.clear, lineWidth: 1)
-                    )
+
+                    NavigationLink {
+                        MessagesListView()
+                    } label: {
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white)
+                            .padding(8)
+                            .background(DojoTheme.piuCard)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                            )
+                    }
+                } else {
+                    NavigationLink {
+                        MyAccountView()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 11))
+                            Text("Edit Profile")
+                                .font(.system(size: 13, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(DojoTheme.piuCard)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                        )
+                    }
                 }
+
+                Spacer()
+            }
+            .padding(.top, 12)
+        }
+        .padding(16)
+        .background(DojoTheme.piuCard)
+    }
+
+    // MARK: - Badge Circle
+
+    private func badgeCircle(url: String?, name: String?, size: CGFloat, borderColor: Color) -> some View {
+        Group {
+            if let urlStr = url, let imageUrl = URL(string: urlStr) {
+                AsyncImage(url: imageUrl) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFill()
+                    default:
+                        Circle().fill(DojoTheme.piuBorder)
+                    }
+                }
+            } else {
+                Circle().fill(DojoTheme.piuBorder)
+                    .overlay(
+                        Text(String((name ?? "?").prefix(1)))
+                            .font(.system(size: size * 0.4, weight: .bold))
+                            .foregroundColor(.white)
+                    )
             }
         }
-        .padding()
-        .background(DojoTheme.piuCard)
-        .cornerRadius(12)
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(borderColor, lineWidth: 1.5))
     }
 
-    // MARK: - Social Stats
+    // MARK: - Stats Bar
 
-    private func socialStats(_ user: User) -> some View {
+    private func statsBar(_ user: User) -> some View {
         HStack(spacing: 0) {
-            socialStat("\(user.followerCount ?? 0)", "Followers")
-            Divider().frame(height: 30).background(DojoTheme.piuBorder)
-            socialStat("\(user.followingCount ?? 0)", "Following")
-            Divider().frame(height: 30).background(DojoTheme.piuBorder)
-            socialStat("\(user.postCount ?? 0)", "Posts")
+            statItem("\(user.followerCount ?? 0)", "Followers")
+            statDivider
+            statItem("\(user.postCount ?? 0)", "Posts")
+            statDivider
+            statItem("\(user.pumbility ?? 0)", "Pumps")
+            statDivider
+            statItem("\((vm.stats?.tournaments?.count ?? 0) + (vm.stats?.duels?.count ?? 0))", "Competitions")
         }
-        .padding(.vertical, 12)
-        .background(DojoTheme.piuCard)
-        .cornerRadius(10)
+        .padding(.vertical, 10)
+        .background(DojoTheme.piuDark)
+        .overlay(
+            VStack {
+                Divider().background(DojoTheme.piuBorder)
+                Spacer()
+                Divider().background(DojoTheme.piuBorder)
+            }
+        )
     }
 
-    private func socialStat(_ value: String, _ label: String) -> some View {
+    private func statItem(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.white)
             Text(label)
-                .font(.system(size: 11))
+                .font(.system(size: 9))
                 .foregroundColor(DojoTheme.textMuted)
         }
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Stats
+    private var statDivider: some View {
+        Rectangle()
+            .fill(DojoTheme.piuBorder)
+            .frame(width: 1, height: 28)
+    }
 
-    private func statsSection(_ stats: UserStats) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("STATS")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(DojoTheme.piuAccent)
+    // MARK: - Tab Bar
 
-            if let tournaments = stats.tournaments, !tournaments.isEmpty {
-                Text("Tournaments")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(tabs, id: \.0) { id, label, icon in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { selectedTab = id }
+                        if id == "posts" && vm.posts.isEmpty {
+                            Task { await vm.loadPosts(reset: true) }
+                        }
+                    } label: {
+                        VStack(spacing: 6) {
+                            HStack(spacing: 4) {
+                                Image(systemName: icon)
+                                    .font(.system(size: 11))
+                                Text(label)
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundColor(selectedTab == id ? DojoTheme.piuAccent : DojoTheme.textMuted)
 
-                ForEach(tournaments) { t in
-                    HStack {
-                        Text(t.tournamentName ?? "Tournament")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text("\(t.wins ?? 0)W \(t.losses ?? 0)L")
-                            .font(.system(size: 12))
-                            .foregroundColor(DojoTheme.textMuted)
+                            Rectangle()
+                                .fill(selectedTab == id ? DojoTheme.piuAccent : Color.clear)
+                                .frame(height: 2)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.top, 10)
                     }
-                    .padding(8)
-                    .background(DojoTheme.piuCard)
-                    .cornerRadius(6)
-                }
-            }
-
-            if let duels = stats.duels, !duels.isEmpty {
-                Text("Duels")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.top, 4)
-
-                ForEach(duels) { d in
-                    HStack {
-                        Text(d.name ?? "Duel")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text(d.winner != nil ? "Completed" : "Active")
-                            .font(.system(size: 12))
-                            .foregroundColor(DojoTheme.textMuted)
-                    }
-                    .padding(8)
-                    .background(DojoTheme.piuCard)
-                    .cornerRadius(6)
                 }
             }
         }
+        .background(DojoTheme.piuCard)
+    }
+
+    // MARK: - Tab Content
+
+    @ViewBuilder
+    private func tabContent(_ user: User) -> some View {
+        switch selectedTab {
+        case "overview":
+            overviewTab(user)
+        case "posts":
+            postsTab
+        case "followers":
+            followersTab
+        case "following":
+            followingTab
+        case "piu":
+            piuDataTab(user)
+        case "stats":
+            statsTab
+        default:
+            EmptyView()
+        }
+    }
+
+    // MARK: - Overview Tab
+
+    private func overviewTab(_ user: User) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Activity Heatmap
+            activityHeatmap
+
+            // Selected day plays
+            if let day = selectedHeatmapDay {
+                selectedDayPlays(day)
+            }
+
+            // Pumbility card
+            if let pumbility = user.pumbility, pumbility > 0 {
+                NavigationLink {
+                    PumbilityBreakdownView(userId: vm.userId)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("PUMBILITY")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.piuGold)
+                            Text("\(pumbility)")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+                    .padding(16)
+                    .background(
+                        LinearGradient(colors: [DojoTheme.piuGold.opacity(0.1), DojoTheme.piuCard], startPoint: .leading, endPoint: .trailing)
+                    )
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(DojoTheme.piuGold.opacity(0.2), lineWidth: 1)
+                    )
+                }
+            }
+
+            // Song analytics
+            NavigationLink {
+                SongAnalyticsView(userId: vm.userId)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("SONG ANALYTICS")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DojoTheme.piuBlue)
+                        Text("Play activity, grades, and stats")
+                            .font(.system(size: 12))
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+                .padding(16)
+                .background(DojoTheme.piuCard)
+                .cornerRadius(12)
+            }
+
+            // Head to head (other profiles)
+            if !isOwnProfile {
+                NavigationLink {
+                    HeadToHeadView()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("HEAD TO HEAD")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.piuAccent)
+                            Text("Compare scores on shared songs")
+                                .font(.system(size: 12))
+                                .foregroundColor(DojoTheme.textMuted)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+                    .padding(16)
+                    .background(DojoTheme.piuCard)
+                    .cornerRadius(12)
+                }
+            }
+
+            // Tournament/duel stats preview
+            if let stats = vm.stats {
+                if let tournaments = stats.tournaments, !tournaments.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("RECENT COMPETITIONS")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DojoTheme.piuAccent)
+
+                        ForEach(tournaments.prefix(3)) { t in
+                            HStack {
+                                Image(systemName: "trophy.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DojoTheme.piuGold)
+                                    .frame(width: 24)
+
+                                Text(t.tournamentName ?? "Tournament")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white)
+
+                                Spacer()
+
+                                Text("\(t.wins ?? 0)W \(t.losses ?? 0)L")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(DojoTheme.textMuted)
+                            }
+                            .padding(10)
+                            .background(DojoTheme.piuCard)
+                            .cornerRadius(8)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+    }
+
+    // MARK: - Activity Heatmap
+
+    private var activityHeatmap: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("ACTIVITY")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DojoTheme.piuGreen)
+
+                Spacer()
+
+                // Year selector
+                HStack(spacing: 12) {
+                    Button {
+                        heatmapYear -= 1
+                        Task { await vm.loadRecentPlays(year: heatmapYear) }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+
+                    Text("\(String(heatmapYear))")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+
+                    Button {
+                        let currentYear = Calendar.current.component(.year, from: Date())
+                        if heatmapYear < currentYear {
+                            heatmapYear += 1
+                            Task { await vm.loadRecentPlays(year: heatmapYear) }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(heatmapYear < Calendar.current.component(.year, from: Date()) ? DojoTheme.textMuted : DojoTheme.textMuted.opacity(0.3))
+                    }
+                }
+            }
+
+            // Legend
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(DojoTheme.piuGreen)
+                        .frame(width: 8, height: 8)
+                    Text("Doubles")
+                        .font(.system(size: 9))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+                HStack(spacing: 4) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(DojoTheme.piuAccent)
+                        .frame(width: 8, height: 8)
+                    Text("Singles")
+                        .font(.system(size: 9))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+                Spacer()
+                HStack(spacing: 2) {
+                    Text("Less")
+                        .font(.system(size: 9))
+                        .foregroundColor(DojoTheme.textMuted)
+                    ForEach([0.1, 0.3, 0.5, 0.8, 1.0], id: \.self) { opacity in
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(DojoTheme.piuGreen.opacity(opacity))
+                            .frame(width: 8, height: 8)
+                    }
+                    Text("More")
+                        .font(.system(size: 9))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+            }
+
+            if vm.recentPlays.isEmpty && !vm.isLoading {
+                Text("No play data for \(String(heatmapYear))")
+                    .font(.system(size: 12))
+                    .foregroundColor(DojoTheme.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 20)
+            } else {
+                heatmapGrid
+            }
+        }
+        .padding(12)
+        .background(DojoTheme.piuCard)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(DojoTheme.piuBorder, lineWidth: 1)
+        )
+    }
+
+    private var heatmapGrid: some View {
+        let calendar = Calendar.current
+        let weeks = buildWeeks(year: heatmapYear)
+        let dayLabels = ["", "M", "", "W", "", "F", ""]
+        let monthLabels = buildMonthLabels(year: heatmapYear, weeks: weeks)
+        let maxPlays = vm.heatmapData.values.map(\.plays).max() ?? 1
+
+        return VStack(alignment: .leading, spacing: 0) {
+            // Month labels
+            HStack(spacing: 0) {
+                Text("").frame(width: 16) // spacer for day labels
+                ForEach(Array(monthLabels.enumerated()), id: \.offset) { _, label in
+                    Text(label)
+                        .font(.system(size: 8))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .frame(width: 12, alignment: .leading)
+                }
+            }
+            .padding(.bottom, 2)
+
+            // Grid
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 0) {
+                    // Day labels column
+                    VStack(spacing: 1) {
+                        ForEach(0..<7, id: \.self) { dayIndex in
+                            Text(dayLabels[dayIndex])
+                                .font(.system(size: 7))
+                                .foregroundColor(DojoTheme.textMuted)
+                                .frame(width: 14, height: 10)
+                        }
+                    }
+
+                    // Weeks
+                    ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+                        VStack(spacing: 1) {
+                            ForEach(0..<7, id: \.self) { dayIndex in
+                                if dayIndex < week.count, let date = week[dayIndex] {
+                                    let formatter = DateFormatter()
+                                    let _ = formatter.dateFormat = "yyyy-MM-dd"
+                                    let key = formatter.string(from: date)
+                                    let dayData = vm.heatmapData[key]
+                                    let plays = dayData?.plays ?? 0
+                                    let doubleRatio = dayData?.doubleRatio ?? 0.5
+
+                                    heatmapCell(plays: plays, maxPlays: maxPlays, doubleRatio: doubleRatio, key: key, dayData: dayData)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 2)
+                                        .fill(Color.clear)
+                                        .frame(width: 10, height: 10)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func heatmapCell(plays: Int, maxPlays: Int, doubleRatio: Double, key: String, dayData: HeatmapDay?) -> some View {
+        let intensity = plays == 0 ? 0.0 : max(0.15, min(1.0, Double(plays) / Double(max(maxPlays, 1))))
+        let color: Color = plays == 0
+            ? DojoTheme.piuBorder.opacity(0.3)
+            : (doubleRatio > 0.5 ? DojoTheme.piuGreen.opacity(intensity) : DojoTheme.piuAccent.opacity(intensity))
+
+        return RoundedRectangle(cornerRadius: 2)
+            .fill(color)
+            .frame(width: 10, height: 10)
+            .overlay(
+                selectedHeatmapDay?.key == key
+                    ? RoundedRectangle(cornerRadius: 2).stroke(Color.white, lineWidth: 1)
+                    : nil
+            )
+            .onTapGesture {
+                if let data = dayData {
+                    selectedHeatmapDay = selectedHeatmapDay?.key == key ? nil : data
+                } else {
+                    selectedHeatmapDay = nil
+                }
+            }
+    }
+
+    // MARK: - Selected Day Plays
+
+    private func selectedDayPlays(_ day: HeatmapDay) -> some View {
+        let playsForDay = vm.recentPlays.filter { play in
+            guard let datePlayed = play.datePlayed else { return false }
+            return datePlayed.hasPrefix(day.key)
+        }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(formatHeatmapDate(day.key))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(day.plays) plays")
+                    .font(.system(size: 12))
+                    .foregroundColor(DojoTheme.textMuted)
+            }
+
+            ForEach(Array(playsForDay.enumerated()), id: \.offset) { _, play in
+                HStack(spacing: 10) {
+                    // Jacket image
+                    if let bgUrl = play.backgroundUrl, let url = URL(string: bgUrl) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable().scaledToFill()
+                            default:
+                                RoundedRectangle(cornerRadius: 4).fill(DojoTheme.piuBorder)
+                            }
+                        }
+                        .frame(width: 36, height: 36)
+                        .cornerRadius(4)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(play.songTitle)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+
+                        HStack(spacing: 6) {
+                            modeBadge(play.mode, level: play.level)
+
+                            if let grade = play.grade {
+                                Text(grade)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(gradeColor(grade))
+                            }
+                        }
+                    }
+
+                    Spacer()
+
+                    Text("\(play.score)")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(DojoTheme.textSecondary)
+                }
+                .padding(8)
+                .background(DojoTheme.piuCard)
+                .cornerRadius(8)
+            }
+        }
+        .padding(12)
+        .background(DojoTheme.piuBg)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(DojoTheme.piuBorder, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Posts Tab
+
+    private var postsTab: some View {
+        LazyVStack(spacing: 12) {
+            if vm.posts.isEmpty && !vm.isLoadingPosts {
+                VStack(spacing: 8) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 28))
+                        .foregroundColor(DojoTheme.textMuted.opacity(0.4))
+                    Text("No posts yet")
+                        .font(.system(size: 13))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(40)
+            } else {
+                ForEach(vm.posts) { post in
+                    postCard(post)
+                }
+
+                if vm.isLoadingPosts {
+                    ProgressView().tint(DojoTheme.piuAccent)
+                        .padding()
+                } else if vm.hasMorePosts {
+                    Color.clear
+                        .frame(height: 1)
+                        .onAppear {
+                            Task { await vm.loadPosts() }
+                        }
+                }
+            }
+        }
+        .padding(16)
+        .task {
+            if vm.posts.isEmpty {
+                await vm.loadPosts(reset: true)
+            }
+        }
+    }
+
+    private func postCard(_ post: Post) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            HStack(spacing: 8) {
+                AvatarView(post.avatar, name: post.username ?? "User", size: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(post.username ?? "User")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                    if let date = post.createdAt {
+                        Text(timeAgo(date))
+                            .font(.system(size: 10))
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+                }
+                Spacer()
+            }
+
+            // Content
+            Text(post.content)
+                .font(.system(size: 13))
+                .foregroundColor(DojoTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Images
+            let urls = post.imageUrls
+            if !urls.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(urls, id: \.self) { urlStr in
+                            if let url = URL(string: urlStr) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .success(let img):
+                                        img.resizable().scaledToFill()
+                                    default:
+                                        RoundedRectangle(cornerRadius: 8).fill(DojoTheme.piuBorder)
+                                    }
+                                }
+                                .frame(width: 160, height: 120)
+                                .cornerRadius(8)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Footer
+            HStack(spacing: 16) {
+                HStack(spacing: 4) {
+                    Image(systemName: post.isPumped ? "flame.fill" : "flame")
+                        .font(.system(size: 12))
+                        .foregroundColor(post.isPumped ? DojoTheme.piuAccent : DojoTheme.textMuted)
+                    Text("\(post.pumpCount ?? 0)")
+                        .font(.system(size: 11))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+
+                HStack(spacing: 4) {
+                    Image(systemName: "bubble.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted)
+                    Text("\(post.commentCount ?? 0)")
+                        .font(.system(size: 11))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+
+                Spacer()
+            }
+        }
+        .padding(12)
+        .background(DojoTheme.piuCard)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(DojoTheme.piuBorder, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Followers Tab
+
+    private var followersTab: some View {
+        NavigationLink {
+            FollowersListView(userId: vm.userId, listType: "followers")
+        } label: {
+            HStack {
+                Text("View all followers")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(vm.user?.followerCount ?? 0)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(DojoTheme.piuAccent)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(DojoTheme.textMuted)
+            }
+            .padding(16)
+            .background(DojoTheme.piuCard)
+            .cornerRadius(12)
+        }
+        .padding(16)
+    }
+
+    // MARK: - Following Tab
+
+    private var followingTab: some View {
+        NavigationLink {
+            FollowersListView(userId: vm.userId, listType: "following")
+        } label: {
+            HStack {
+                Text("View all following")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(vm.user?.followingCount ?? 0)")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(DojoTheme.piuAccent)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12))
+                    .foregroundColor(DojoTheme.textMuted)
+            }
+            .padding(16)
+            .background(DojoTheme.piuCard)
+            .cornerRadius(12)
+        }
+        .padding(16)
+    }
+
+    // MARK: - PIU Data Tab
+
+    private func piuDataTab(_ user: User) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            NavigationLink {
+                PumbilityBreakdownView(userId: vm.userId)
+            } label: {
+                piuRow(icon: "chart.bar.fill", title: "Pumbility Breakdown", color: DojoTheme.piuGold)
+            }
+
+            NavigationLink {
+                SongAnalyticsView(userId: vm.userId)
+            } label: {
+                piuRow(icon: "music.note.list", title: "Best Scores", color: DojoTheme.piuBlue)
+            }
+
+            NavigationLink {
+                SkillsView()
+            } label: {
+                piuRow(icon: "star.fill", title: "Skills", color: Color.orange)
+            }
+
+            // Achievements
+            if !vm.achievements.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ACHIEVEMENTS")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(DojoTheme.piuGold)
+                        .padding(.top, 8)
+
+                    ForEach(vm.achievements) { badge in
+                        achievementRow(badge)
+                    }
+                }
+            }
+        }
+        .padding(16)
+    }
+
+    private func achievementRow(_ badge: AchievementBadge) -> some View {
+        HStack(spacing: 12) {
+            badgeCircle(url: badge.image, name: badge.name, size: 40, borderColor: DojoTheme.piuGold)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(badge.name ?? "Achievement")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+
+                if let desc = badge.description {
+                    Text(desc)
+                        .font(.system(size: 11))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .lineLimit(2)
+                }
+
+                // Progress bar if has threshold
+                if let threshold = badge.threshold, let current = badge.currentValue, threshold > 0 {
+                    let progress = min(1.0, Double(current) / Double(threshold))
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(DojoTheme.piuBorder)
+                                .frame(height: 4)
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(DojoTheme.piuGold)
+                                .frame(width: geo.size.width * progress, height: 4)
+                        }
+                    }
+                    .frame(height: 4)
+
+                    Text("\(current)/\(threshold)")
+                        .font(.system(size: 9))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(DojoTheme.piuCard)
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(DojoTheme.piuGold.opacity(0.2), lineWidth: 1)
+        )
+    }
+
+    private func piuRow(icon: String, title: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(color)
+                .frame(width: 32, height: 32)
+                .background(color.opacity(0.15))
+                .cornerRadius(8)
+
+            Text(title)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12))
+                .foregroundColor(DojoTheme.textMuted)
+        }
+        .padding(14)
+        .background(DojoTheme.piuCard)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(DojoTheme.piuBorder, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Stats Tab
+
+    private var statsTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let stats = vm.stats {
+                if let tournaments = stats.tournaments, !tournaments.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("TOURNAMENTS")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(DojoTheme.piuAccent)
+
+                        ForEach(tournaments) { t in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(t.tournamentName ?? "Tournament")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(.white)
+                                    if let date = t.tournamentDate {
+                                        Text(date)
+                                            .font(.system(size: 11))
+                                            .foregroundColor(DojoTheme.textMuted)
+                                    }
+                                }
+                                Spacer()
+                                HStack(spacing: 8) {
+                                    Text("\(t.wins ?? 0)W")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(DojoTheme.piuGreen)
+                                    Text("\(t.losses ?? 0)L")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(DojoTheme.piuAccent)
+                                }
+                            }
+                            .padding(12)
+                            .background(DojoTheme.piuCard)
+                            .cornerRadius(10)
+                        }
+                    }
+                }
+
+                if let duels = stats.duels, !duels.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("DUELS")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(DojoTheme.piuAccent)
+
+                        ForEach(duels) { d in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(d.name ?? "Duel")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(.white)
+                                    Text("\(d.player1Name ?? "?") vs \(d.player2Name ?? "?")")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(DojoTheme.textMuted)
+                                }
+                                Spacer()
+                                Text(d.winner != nil ? "Completed" : "Active")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(d.winner != nil ? DojoTheme.piuGreen : DojoTheme.piuGold)
+                            }
+                            .padding(12)
+                            .background(DojoTheme.piuCard)
+                            .cornerRadius(10)
+                        }
+                    }
+                }
+            }
+
+            if (vm.stats?.tournaments?.isEmpty ?? true) && (vm.stats?.duels?.isEmpty ?? true) {
+                VStack(spacing: 8) {
+                    Image(systemName: "trophy")
+                        .font(.system(size: 28))
+                        .foregroundColor(DojoTheme.textMuted.opacity(0.4))
+                    Text("No competition history yet")
+                        .font(.system(size: 13))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(40)
+            }
+        }
+        .padding(16)
+    }
+
+    // MARK: - Helpers
+
+    private func modeBadge(_ mode: String, level: Int) -> some View {
+        let isDouble = mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
+        let label = isDouble ? "D" : "S"
+        let color = isDouble ? DojoTheme.piuGreen : DojoTheme.piuAccent
+
+        return HStack(spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold))
+            Text("\(level)")
+                .font(.system(size: 10, weight: .bold))
+        }
+        .foregroundColor(color)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.15))
+        .cornerRadius(4)
+    }
+
+    private func gradeColor(_ grade: String) -> Color {
+        switch grade.uppercased() {
+        case "SSS+", "SSS": return DojoTheme.piuGold
+        case "SS+", "SS": return Color(hex: "#c0c0c0")
+        case "S+", "S": return DojoTheme.piuBlue
+        case "A+", "A": return DojoTheme.piuGreen
+        default: return DojoTheme.textMuted
+        }
+    }
+
+    private func formatMemberSince(_ dateStr: String) -> String {
+        let formatter = DateFormatter()
+        // Try ISO8601 first
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+        if let date = formatter.date(from: dateStr) {
+            let output = DateFormatter()
+            output.dateFormat = "MMM yyyy"
+            return output.string(from: date)
+        }
+        // Try simple date
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let date = formatter.date(from: dateStr) {
+            let output = DateFormatter()
+            output.dateFormat = "MMM yyyy"
+            return output.string(from: date)
+        }
+        return ""
+    }
+
+    private func formatHeatmapDate(_ key: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: key) else { return key }
+        let output = DateFormatter()
+        output.dateFormat = "EEEE, MMM d"
+        return output.string(from: date)
+    }
+
+    private func timeAgo(_ dateStr: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+        guard let date = formatter.date(from: dateStr) else { return dateStr }
+        let interval = Date().timeIntervalSince(date)
+        if interval < 60 { return "just now" }
+        if interval < 3600 { return "\(Int(interval / 60))m ago" }
+        if interval < 86400 { return "\(Int(interval / 3600))h ago" }
+        if interval < 604800 { return "\(Int(interval / 86400))d ago" }
+        let output = DateFormatter()
+        output.dateFormat = "MMM d"
+        return output.string(from: date)
+    }
+
+    // MARK: - Heatmap Data Helpers
+
+    private func buildWeeks(year: Int) -> [[Date?]] {
+        let calendar = Calendar.current
+        var components = DateComponents()
+        components.year = year
+        components.month = 1
+        components.day = 1
+        guard let startOfYear = calendar.date(from: components) else { return [] }
+
+        components.year = year
+        components.month = 12
+        components.day = 31
+        guard let endOfYear = calendar.date(from: components) else { return [] }
+
+        // Adjust to start from Sunday
+        let startWeekday = calendar.component(.weekday, from: startOfYear) - 1 // 0 = Sunday
+
+        var weeks: [[Date?]] = []
+        var currentWeek: [Date?] = Array(repeating: nil, count: startWeekday)
+        var currentDate = startOfYear
+
+        while currentDate <= endOfYear {
+            currentWeek.append(currentDate)
+            if currentWeek.count == 7 {
+                weeks.append(currentWeek)
+                currentWeek = []
+            }
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+
+        // Pad last week
+        if !currentWeek.isEmpty {
+            while currentWeek.count < 7 {
+                currentWeek.append(nil)
+            }
+            weeks.append(currentWeek)
+        }
+
+        return weeks
+    }
+
+    private func buildMonthLabels(year: Int, weeks: [[Date?]]) -> [String] {
+        let calendar = Calendar.current
+        let monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        var labels: [String] = []
+        var lastMonth = -1
+
+        for week in weeks {
+            // Use the first non-nil date in the week
+            if let date = week.compactMap({ $0 }).first {
+                let month = calendar.component(.month, from: date)
+                if month != lastMonth {
+                    labels.append(monthNames[month - 1])
+                    lastMonth = month
+                } else {
+                    labels.append("")
+                }
+            } else {
+                labels.append("")
+            }
+        }
+
+        return labels
     }
 }
