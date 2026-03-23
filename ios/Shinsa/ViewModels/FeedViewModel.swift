@@ -15,6 +15,7 @@ class FeedViewModel: ObservableObject {
             items = response
             hasMore = !response.isEmpty
         } catch {
+            print("[FeedVM] loadInitial error: \(error)")
             items = []
         }
         isLoading = false

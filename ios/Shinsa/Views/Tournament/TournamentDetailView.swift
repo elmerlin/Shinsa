@@ -20,7 +20,12 @@ struct TournamentDetailView: View {
                     // Header
                     tournamentHeader(tournament)
 
-                    // Phase action button
+                    // Phase cards (if tournament has phases)
+                    if tournament.hasPhases {
+                        phaseCardsRow
+                    }
+
+                    // Phase action buttons
                     phaseAction(tournament)
 
                     // Tabs
@@ -74,7 +79,11 @@ struct TournamentDetailView: View {
             HStack(spacing: 16) {
                 statItem("\(vm.players.count)", "Players")
                 statItem("\(vm.matches.count)", "Matches")
-                statItem("R\(t.currentRound)/\(t.totalRounds)", "Round")
+                if t.hasPhases {
+                    statItem("\(vm.phases.count)", "Phases")
+                } else {
+                    statItem("R\(t.currentRound)/\(t.totalRounds)", "Round")
+                }
             }
         }
         .padding()
@@ -93,32 +102,69 @@ struct TournamentDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Phase Cards Row
+
+    private var phaseCardsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(vm.phases) { phase in
+                    PhaseCardView(
+                        phase: phase,
+                        isSelected: vm.selectedPhase?.id == phase.id
+                    ) {
+                        vm.selectedPhase = phase
+                        // Reset tab to first available
+                        if let firstTab = vm.availableTabs.first {
+                            vm.activeTab = firstTab
+                        }
+                    }
+                    .frame(width: 240)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+        .background(DojoTheme.piuBg)
+    }
+
     // MARK: - Phase Action
 
     @ViewBuilder
     private func phaseAction(_ t: Tournament) -> some View {
-        switch t.phase {
-        case "SETUP":
-            if vm.players.count >= 3 {
-                actionButton("Start Round Robin") {
-                    await vm.generateRoundRobin()
-                }
-            }
-        case "ROUND_ROBIN":
-            let allComplete = vm.roundsForCurrentView.allSatisfy { $0.status == "COMPLETED" }
-            if allComplete && t.currentRound < t.totalRounds {
-                actionButton("Generate Next Round") {
-                    await vm.generateRoundRobin()
-                }
-            } else if allComplete && t.currentRound >= t.totalRounds {
-                if t.config.gauntletEnabled == true {
-                    actionButton("Start Gauntlet") {
-                        await vm.generateGauntlet()
+        // Phase-aware action buttons
+        if t.hasPhases, let phase = vm.selectedPhase {
+            PhaseActionButtons(
+                phase: phase,
+                playerCount: vm.players.count,
+                onActivate: { await vm.activatePhase(phase.id) },
+                onComplete: { await vm.completePhase(phase.id) },
+                onGenerate: { await vm.generatePhaseMatches(phase.id) }
+            )
+        } else {
+            // Legacy action buttons
+            switch t.phase {
+            case "SETUP":
+                if vm.players.count >= 3 {
+                    actionButton("Start Round Robin") {
+                        await vm.generateRoundRobin()
                     }
                 }
+            case "ROUND_ROBIN":
+                let allComplete = vm.roundsForCurrentView.allSatisfy { $0.status == "COMPLETED" }
+                if allComplete && t.currentRound < t.totalRounds {
+                    actionButton("Generate Next Round") {
+                        await vm.generateRoundRobin()
+                    }
+                } else if allComplete && t.currentRound >= t.totalRounds {
+                    if t.config.gauntletEnabled == true {
+                        actionButton("Start Gauntlet") {
+                            await vm.generateGauntlet()
+                        }
+                    }
+                }
+            default:
+                EmptyView()
             }
-        default:
-            EmptyView()
         }
     }
 
@@ -173,6 +219,9 @@ struct TournamentDetailView: View {
         case "standings": return "Standings"
         case "gauntlet": return "Gauntlet"
         case "final": return "Final"
+        case "bracket": return "Bracket"
+        case "pools": return "Pools"
+        case "seeding": return "Seeding"
         default: return tab.capitalized
         }
     }
@@ -193,12 +242,71 @@ struct TournamentDetailView: View {
                 GauntletTabView(vm: vm)
             case "final":
                 FinalStandingsView(vm: vm)
+            case "bracket":
+                bracketContent
+            case "pools":
+                PoolsView(
+                    matches: vm.matchesForSelectedPhase,
+                    players: vm.players,
+                    phasePlayers: vm.phasePlayersForSelected
+                )
+            case "seeding":
+                SeedingPanelView(
+                    phasePlayers: Binding(
+                        get: { vm.selectedPhase?.players ?? [] },
+                        set: { newPlayers in
+                            if let idx = vm.phases.firstIndex(where: { $0.id == vm.selectedPhase?.id }) {
+                                vm.phases[idx].players = newPlayers
+                                vm.selectedPhase = vm.phases[idx]
+                            }
+                        }
+                    ),
+                    onAutoSeed: {
+                        // Sort by pumbility descending
+                        if let idx = vm.phases.firstIndex(where: { $0.id == vm.selectedPhase?.id }) {
+                            vm.phases[idx].players?.sort { ($0.pumbility ?? 0) > ($1.pumbility ?? 0) }
+                            if var sorted = vm.phases[idx].players {
+                                for i in sorted.indices { sorted[i].seed = i + 1 }
+                                vm.phases[idx].players = sorted
+                            }
+                            vm.selectedPhase = vm.phases[idx]
+                        }
+                    },
+                    onSave: {
+                        // Save seeding via API would go here
+                    }
+                )
             default:
                 Text("Unknown tab")
                     .foregroundColor(DojoTheme.textMuted)
             }
         }
         .refreshable { await vm.load() }
+    }
+
+    @ViewBuilder
+    private var bracketContent: some View {
+        if let phase = vm.selectedPhase {
+            if phase.format == "double_elim" {
+                DoubleElimBracketView(
+                    matches: vm.matchesForSelectedPhase,
+                    players: vm.players,
+                    phasePlayers: vm.phasePlayersForSelected
+                )
+            } else {
+                BracketView(
+                    matches: vm.matchesForSelectedPhase,
+                    players: vm.players,
+                    phasePlayers: vm.phasePlayersForSelected
+                )
+            }
+        } else {
+            BracketView(
+                matches: vm.matches,
+                players: vm.players,
+                phasePlayers: []
+            )
+        }
     }
 }
 
@@ -264,12 +372,27 @@ struct StandingsTabView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
 
-            let sorted = vm.players.sorted { a, b in
+            // Use phase players if available, otherwise tournament players
+            let standingsData: [(id: String, name: String, avatar: String?, nationality: String?, wins: Int, losses: Int, points: Int, buchholz: Double)] = {
+                if let phasePlayers = vm.selectedPhase?.players, !phasePlayers.isEmpty {
+                    return phasePlayers.map { pp in
+                        (id: pp.id, name: pp.name ?? "?", avatar: pp.avatar, nationality: pp.nationality,
+                         wins: pp.wins, losses: pp.losses, points: pp.points, buchholz: pp.buchholz)
+                    }
+                } else {
+                    return vm.players.map { p in
+                        (id: p.id, name: p.name, avatar: p.avatar, nationality: p.nationality,
+                         wins: p.wins, losses: p.losses, points: p.points, buchholz: p.buchholz)
+                    }
+                }
+            }()
+
+            let sorted = standingsData.sorted { a, b in
                 if a.points != b.points { return a.points > b.points }
                 return a.buchholz > b.buchholz
             }
 
-            ForEach(Array(sorted.enumerated()), id: \.element.id) { index, player in
+            ForEach(Array(sorted.enumerated()), id: \.element.id) { index, entry in
                 HStack {
                     Text("\(index + 1)")
                         .frame(width: 24)
@@ -277,12 +400,12 @@ struct StandingsTabView: View {
                         .foregroundColor(index < 3 ? DojoTheme.piuGold : .white)
 
                     HStack(spacing: 6) {
-                        AvatarView(player.avatar, name: player.name, size: 24)
+                        AvatarView(entry.avatar, name: entry.name, size: 24)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(player.name)
+                            Text(entry.name)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(.white)
-                            if let nat = player.nationality, !nat.isEmpty {
+                            if let nat = entry.nationality, !nat.isEmpty {
                                 Text(CountryData.flag(for: nat))
                                     .font(.system(size: 10))
                             }
@@ -290,14 +413,14 @@ struct StandingsTabView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    Text("\(player.wins)").frame(width: 30)
+                    Text("\(entry.wins)").frame(width: 30)
                         .foregroundColor(DojoTheme.piuGreen)
-                    Text("\(player.losses)").frame(width: 30)
+                    Text("\(entry.losses)").frame(width: 30)
                         .foregroundColor(DojoTheme.piuAccent)
-                    Text("\(player.points)").frame(width: 36)
+                    Text("\(entry.points)").frame(width: 36)
                         .foregroundColor(.white)
                         .fontWeight(.bold)
-                    Text(String(format: "%.1f", player.buchholz)).frame(width: 44)
+                    Text(String(format: "%.1f", entry.buchholz)).frame(width: 44)
                         .foregroundColor(DojoTheme.textMuted)
                 }
                 .font(.system(size: 12))
@@ -313,7 +436,13 @@ struct StandingsTabView: View {
 struct GauntletTabView: View {
     @ObservedObject var vm: TournamentViewModel
     var body: some View {
-        let gauntletMatches = vm.matches.filter { $0.roundNumber == -1 }
+        let gauntletMatches: [Match] = {
+            if vm.selectedPhase != nil {
+                return vm.matchesForSelectedPhase
+            }
+            return vm.matches.filter { $0.roundNumber == -1 }
+        }()
+
         VStack(spacing: 8) {
             if gauntletMatches.isEmpty {
                 Text("No gauntlet matches yet")

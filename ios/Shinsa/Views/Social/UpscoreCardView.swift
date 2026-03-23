@@ -40,39 +40,79 @@ struct UpscoreCardView: View {
                 Spacer()
             }
 
-            // Score upgrade
-            HStack {
-                if let mode = item.mode, let level = item.level {
-                    Text("\(mode == "Single" ? "S" : "D")\(level)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(mode == "Single" ? .red : .green)
-                        .frame(width: 30)
-                }
+            // Score upgrades
+            if !item.upscoreItems.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(Array(item.upscoreItems.enumerated()), id: \.offset) { _, upscore in
+                        HStack {
+                            if let mode = upscore.mode, let level = upscore.level {
+                                Text("\(mode == "Single" ? "S" : "D")\(level)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(mode == "Single" ? .red : .green)
+                                    .frame(width: 30)
+                            }
 
-                Text(item.songTitle ?? "Unknown")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                            Text(upscore.songTitle ?? "Unknown")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
 
-                Spacer()
+                            Spacer()
 
-                if let old = item.previousScore, let new = item.newScore {
-                    HStack(spacing: 4) {
-                        Text(old.formattedScore)
-                            .font(.system(size: 11))
-                            .foregroundColor(DojoTheme.textMuted)
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 8))
-                            .foregroundColor(DojoTheme.piuGreen)
-                        Text(new.formattedScore)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(DojoTheme.piuGreen)
+                            if let old = upscore.previousScore, let new = upscore.newScore {
+                                HStack(spacing: 4) {
+                                    Text(old.formattedScore)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(DojoTheme.textMuted)
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 8))
+                                        .foregroundColor(DojoTheme.piuGreen)
+                                    Text(new.formattedScore)
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(DojoTheme.piuGreen)
+                                }
+                            }
+                        }
+                        .padding(6)
+                        .background(DojoTheme.piuDark)
+                        .cornerRadius(4)
                     }
                 }
+            } else {
+                // Fallback: single item from flat fields
+                HStack {
+                    if let mode = item.mode, let level = item.level {
+                        Text("\(mode == "Single" ? "S" : "D")\(level)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(mode == "Single" ? .red : .green)
+                            .frame(width: 30)
+                    }
+
+                    Text(item.songTitle ?? "Unknown")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if let old = item.previousScore, let new = item.newScore {
+                        HStack(spacing: 4) {
+                            Text(old.formattedScore)
+                                .font(.system(size: 11))
+                                .foregroundColor(DojoTheme.textMuted)
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 8))
+                                .foregroundColor(DojoTheme.piuGreen)
+                            Text(new.formattedScore)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.piuGreen)
+                        }
+                    }
+                }
+                .padding(6)
+                .background(DojoTheme.piuDark)
+                .cornerRadius(4)
             }
-            .padding(6)
-            .background(DojoTheme.piuDark)
-            .cornerRadius(4)
 
             // Footer
             HStack(spacing: 16) {

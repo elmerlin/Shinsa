@@ -3,6 +3,7 @@ import Foundation
 struct Match: Codable, Identifiable {
     let id: String
     var tournamentId: String
+    var phaseId: String?
     var roundNumber: Int
     var player1Id: String?
     var player2Id: String?
@@ -17,6 +18,10 @@ struct Match: Codable, Identifiable {
     var scores: MatchScores?
     var matchType: String?
     var gauntletOrder: Int?
+    var bracket: String?          // "winners", "losers", "grand_final"
+    var bracketRound: Int?
+    var bracketPosition: Int?
+    var poolId: Int?
     var createdAt: String?
 
     // Populated when fetching single match
@@ -24,10 +29,15 @@ struct Match: Codable, Identifiable {
     var player2: Player?
 
     var isByeMatch: Bool { isBye != 0 }
+    var isGauntlet: Bool { matchType == "gauntlet" }
+    var isGrandFinal: Bool { bracket == "grand_final" }
+    var isWinnersBracket: Bool { bracket == "winners" }
+    var isLosersBracket: Bool { bracket == "losers" }
 
     enum CodingKeys: String, CodingKey {
-        case id, status, scores, player1, player2
+        case id, status, scores, player1, player2, bracket
         case tournamentId = "tournament_id"
+        case phaseId = "phase_id"
         case roundNumber = "round_number"
         case player1Id = "player1_id"
         case player2Id = "player2_id"
@@ -40,6 +50,9 @@ struct Match: Codable, Identifiable {
         case playedSongs = "played_songs"
         case matchType = "match_type"
         case gauntletOrder = "gauntlet_order"
+        case bracketRound = "bracket_round"
+        case bracketPosition = "bracket_position"
+        case poolId = "pool_id"
         case createdAt = "created_at"
     }
 }

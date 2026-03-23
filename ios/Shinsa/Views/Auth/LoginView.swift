@@ -20,13 +20,15 @@ struct LoginView: View {
 
                     // Logo & Title
                     VStack(spacing: 8) {
-                        Text("PUMP")
-                            .font(.system(size: 42, weight: .black))
-                            .foregroundColor(DojoTheme.piuAccent)
-                        Text("SHINSA")
-                            .font(.system(size: 42, weight: .black))
-                            .foregroundColor(DojoTheme.piuGold)
-                        Text("Tournament Platform")
+                        HStack(spacing: 8) {
+                            Text("PUMP")
+                                .font(.system(size: 36, weight: .black))
+                                .foregroundColor(DojoTheme.piuAccent)
+                            Text("SHINSA")
+                                .font(.system(size: 36, weight: .black))
+                                .foregroundColor(DojoTheme.piuGold)
+                        }
+                        Text("Pump up your socials")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(DojoTheme.textSecondary)
                     }
@@ -34,10 +36,10 @@ struct LoginView: View {
                     // Login Form
                     VStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Username")
+                            Text("Pump Alias")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(DojoTheme.textSecondary)
-                            TextField("", text: $username)
+                            TextField("Your username", text: $username)
                                 .textFieldStyle(.plain)
                                 .padding(12)
                                 .background(DojoTheme.piuDark)

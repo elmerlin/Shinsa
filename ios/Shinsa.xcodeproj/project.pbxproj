@@ -77,6 +77,58 @@
 		F40A13131313131313131313 /* FollowersListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40A14141414141414141414 /* FollowersListView.swift */; };
 		553442B1C5024F8F8A77E409 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 45B25D553C9A4B703C6E1639 /* Assets.xcassets */; };
 		F1B601767EAC6F66C0E9EB38 /* Charts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9040730A5F62BEB6AD6A55DD /* Charts.framework */; };
+		08C3254C326E19FBD8B42D3A /* BracketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E109BC1D1D87DF03C89C60FC /* BracketView.swift */; };
+		641619C682D242A6E92FFDDE /* Changelog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C74D952106FEA2F2AA34AC /* Changelog.swift */; };
+		A8D778C9BDBB65B09AFCA7D0 /* ChangelogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F11ADAB180D69E0DBA23E7F /* ChangelogView.swift */; };
+		6BC5D01435492B7002FE0319 /* ChatBotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C3D9379D60EE534E3E895CD /* ChatBotView.swift */; };
+		C1E09D6558DBF1CC34534A02 /* Checkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5482852E8699739B695DC0E7 /* Checkin.swift */; };
+		DBBB14101E4F856F1ABC4EF1 /* CheckinView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A2B2AF5D28A32667CB2841 /* CheckinView.swift */; };
+		7777AEF4D67FE8081DEF15EA /* CommunitiesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D216EBF0DD6FD6078D5E074 /* CommunitiesListView.swift */; };
+		B661E2D6C1A4DD4823D855E1 /* Community.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3BBF1451147C56D04409B3 /* Community.swift */; };
+		85925D486C37E0583E73BDBF /* CommunitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5E94E2AC17E6784F33E1DD /* CommunitySettingsView.swift */; };
+		E5F3C6874409EBFA5FA771D7 /* CommunitySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DFACB9F61855F0CA04234B /* CommunitySetupView.swift */; };
+		24F83062672D700AD8480087 /* CommunityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA5820A668FF84ECB8BC9DF /* CommunityView.swift */; };
+		733C0BFD26F5D6C5FABE302C /* CommunityViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5C64EBA411EDB97B3D26D3 /* CommunityViewModel.swift */; };
+		3C5100E94713246A6580184D /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54D77360BF7210422C196A9C /* ConversationView.swift */; };
+		C31A7BEC33AB156D80990130 /* DoubleElimBracketView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16701266C58DBE312AF7BF87 /* DoubleElimBracketView.swift */; };
+		C4C58697B79B501568709629 /* Duel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75E359F5FB07F93D362D848 /* Duel.swift */; };
+		8A56D84EF0C104784EB8A8CB /* DuelSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4239BD81A523652F899DD76F /* DuelSetupView.swift */; };
+		B2EE3B232929248CF675BB89 /* DuelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCDD4962C019A9C5E69E9A59 /* DuelView.swift */; };
+		4946B144A4E14D8B6C80794D /* HeadToHeadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C80110D3311A64B75BB750B /* HeadToHeadView.swift */; };
+		BC98035F29B688BCE63F2043 /* Leaderboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4059BDB7AE577096A4ECCCB5 /* Leaderboard.swift */; };
+		F21B3036A704AB460EFE4608 /* LeaderboardsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1887EF4E28AB837726A759B1 /* LeaderboardsView.swift */; };
+		EF142E13DDA9A456047F70ED /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 185D6CDBEA3C69DC48F7B5B9 /* ListsView.swift */; };
+		1482BA8C98EC8B2D20A4390A /* LiveDirectoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FB99DC7470A4257D41D8537 /* LiveDirectoryView.swift */; };
+		51474FC8E63221C3F1500833 /* LiveSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04AC4687604ACD2C93658F9B /* LiveSession.swift */; };
+		EF80331108BDFF5F04C8ADEF /* LiveSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7BA48ED10D93DD6DBD8C7A /* LiveSessionView.swift */; };
+		0D57E51F9643A5EABE177930 /* LiveViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A39D1C7ED6D8B4089631CFA8 /* LiveViewModel.swift */; };
+		11AFADFE6FB6FAE54F0B0EFA /* MarkdownContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DBC2A446FF8CC133631F98 /* MarkdownContentView.swift */; };
+		1F0B2D0AF960280734292515 /* MembershipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6DECF9DCB99E4947F7F93BB /* MembershipView.swift */; };
+		786BAEDCAF10546012D35A3C /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7499480AF8B516246A39958B /* Message.swift */; };
+		70E5162BC621EF35872CD85C /* MessagesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69E7E681CAB0825647168261 /* MessagesListView.swift */; };
+		81D1495C9CB6FEEDB427E67F /* MessagesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844FEB4907B9163F45EB5B69 /* MessagesViewModel.swift */; };
+		D3FB1C1C5FC873C36BD48915 /* OptimiseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66A4CD8E2965811F0883628C /* OptimiseView.swift */; };
+		715E6F7FE44F0B06CD0DF96D /* Phase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B79ABBCD1938C3F043488D5 /* Phase.swift */; };
+		B510BD245AE3FE58CEBBD9AF /* PhaseCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C100E83093C0295CED8A995A /* PhaseCardView.swift */; };
+		F7827F17BC579A8A2A90B471 /* PoolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD18D862E503958CFBBD791B /* PoolsView.swift */; };
+		DD0FA6EB621046C772AFC4A2 /* PumbilityBreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57946E199ACC70D58579150 /* PumbilityBreakdownView.swift */; };
+		05C890BD263078E96C724500 /* QRLoginApproveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFA9D43227B5C6290A089549 /* QRLoginApproveView.swift */; };
+		B85C8949DC63FFE2AD4686E7 /* SeedingPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 944973D164C0382D07B4CC48 /* SeedingPanelView.swift */; };
+		DC5FA0D8A10064F02674E061 /* Shoe.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7C37EFAC03EC7BB44875EEB /* Shoe.swift */; };
+		05634887EC2D0240459CC92D /* ShoesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0FD2D5CF3CE809F98561DE1 /* ShoesView.swift */; };
+		9A2D5572CEA73C32E4089934 /* SkillChartsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083E64EEE07352FB046B416B /* SkillChartsView.swift */; };
+		D53424EB0BC17621609A48BA /* SkillsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7692126AE2B06144192F56 /* SkillsView.swift */; };
+		2589D88EC9EC606E9A2872E6 /* SongAnalyticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC47CC61448F32F27EECBD7 /* SongAnalyticsView.swift */; };
+		24A5307F9C742B3F8E862BB8 /* SongChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E54514754FF49612B9E03F0 /* SongChartView.swift */; };
+		FCFD3F8250F2BD4F5AAF8847 /* SongExtended.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CD4BF685C5FE82B4848D652 /* SongExtended.swift */; };
+		AF51624EF8B1AC632FEA9D04 /* SongsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFCA1EBECF4243890976682 /* SongsView.swift */; };
+		67AD7A13C17FEA6A9102A374 /* SongsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF917FE88CF5B58AD34B3496 /* SongsViewModel.swift */; };
+		11A934F120C13C0D1AC34E3A /* TiersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E351BF93D0369542DD600BF2 /* TiersView.swift */; };
+		982D20A1A2D05A8F01410FA0 /* TournamentPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA536081222AC5D37041D052 /* TournamentPresetsView.swift */; };
+		366C7BF05E10609E74CA58A4 /* VenueAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1913D1D353477C44302B1EA6 /* VenueAccess.swift */; };
+		03446E9871FE692DE9F32DEC /* WorldMax.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3133259257158639A9CE82A5 /* WorldMax.swift */; };
+		87A472B68A1366A8601E6EA2 /* WorldMaxMachineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D98BD5FD335E1B2417615D7 /* WorldMaxMachineView.swift */; };
+		B04C2869769817D6359AFB75 /* WorldMaxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF2D058C10AD9C777E950D /* WorldMaxView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -151,6 +203,58 @@
 		F40A10101010101010101010 /* TextFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TextFormatter.swift"; sourceTree = "<group>"; };
 		F40A12121212121212121212 /* PIUGameSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PIUGameSyncView.swift"; sourceTree = "<group>"; };
 		F40A14141414141414141414 /* FollowersListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FollowersListView.swift"; sourceTree = "<group>"; };
+		E109BC1D1D87DF03C89C60FC /* BracketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BracketView.swift"; sourceTree = "<group>"; };
+		77C74D952106FEA2F2AA34AC /* Changelog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Changelog.swift"; sourceTree = "<group>"; };
+		8F11ADAB180D69E0DBA23E7F /* ChangelogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChangelogView.swift"; sourceTree = "<group>"; };
+		4C3D9379D60EE534E3E895CD /* ChatBotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatBotView.swift"; sourceTree = "<group>"; };
+		5482852E8699739B695DC0E7 /* Checkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Checkin.swift"; sourceTree = "<group>"; };
+		70A2B2AF5D28A32667CB2841 /* CheckinView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CheckinView.swift"; sourceTree = "<group>"; };
+		7D216EBF0DD6FD6078D5E074 /* CommunitiesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CommunitiesListView.swift"; sourceTree = "<group>"; };
+		FC3BBF1451147C56D04409B3 /* Community.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Community.swift"; sourceTree = "<group>"; };
+		FB5E94E2AC17E6784F33E1DD /* CommunitySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CommunitySettingsView.swift"; sourceTree = "<group>"; };
+		89DFACB9F61855F0CA04234B /* CommunitySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CommunitySetupView.swift"; sourceTree = "<group>"; };
+		8CA5820A668FF84ECB8BC9DF /* CommunityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CommunityView.swift"; sourceTree = "<group>"; };
+		FB5C64EBA411EDB97B3D26D3 /* CommunityViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CommunityViewModel.swift"; sourceTree = "<group>"; };
+		54D77360BF7210422C196A9C /* ConversationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView.swift"; sourceTree = "<group>"; };
+		16701266C58DBE312AF7BF87 /* DoubleElimBracketView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DoubleElimBracketView.swift"; sourceTree = "<group>"; };
+		E75E359F5FB07F93D362D848 /* Duel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Duel.swift"; sourceTree = "<group>"; };
+		4239BD81A523652F899DD76F /* DuelSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuelSetupView.swift"; sourceTree = "<group>"; };
+		DCDD4962C019A9C5E69E9A59 /* DuelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DuelView.swift"; sourceTree = "<group>"; };
+		0C80110D3311A64B75BB750B /* HeadToHeadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeadToHeadView.swift"; sourceTree = "<group>"; };
+		4059BDB7AE577096A4ECCCB5 /* Leaderboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Leaderboard.swift"; sourceTree = "<group>"; };
+		1887EF4E28AB837726A759B1 /* LeaderboardsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LeaderboardsView.swift"; sourceTree = "<group>"; };
+		185D6CDBEA3C69DC48F7B5B9 /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ListsView.swift"; sourceTree = "<group>"; };
+		4FB99DC7470A4257D41D8537 /* LiveDirectoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveDirectoryView.swift"; sourceTree = "<group>"; };
+		04AC4687604ACD2C93658F9B /* LiveSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveSession.swift"; sourceTree = "<group>"; };
+		DA7BA48ED10D93DD6DBD8C7A /* LiveSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveSessionView.swift"; sourceTree = "<group>"; };
+		A39D1C7ED6D8B4089631CFA8 /* LiveViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveViewModel.swift"; sourceTree = "<group>"; };
+		E5DBC2A446FF8CC133631F98 /* MarkdownContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MarkdownContentView.swift"; sourceTree = "<group>"; };
+		F6DECF9DCB99E4947F7F93BB /* MembershipView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MembershipView.swift"; sourceTree = "<group>"; };
+		7499480AF8B516246A39958B /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Message.swift"; sourceTree = "<group>"; };
+		69E7E681CAB0825647168261 /* MessagesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessagesListView.swift"; sourceTree = "<group>"; };
+		844FEB4907B9163F45EB5B69 /* MessagesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessagesViewModel.swift"; sourceTree = "<group>"; };
+		66A4CD8E2965811F0883628C /* OptimiseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OptimiseView.swift"; sourceTree = "<group>"; };
+		4B79ABBCD1938C3F043488D5 /* Phase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Phase.swift"; sourceTree = "<group>"; };
+		C100E83093C0295CED8A995A /* PhaseCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PhaseCardView.swift"; sourceTree = "<group>"; };
+		AD18D862E503958CFBBD791B /* PoolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PoolsView.swift"; sourceTree = "<group>"; };
+		C57946E199ACC70D58579150 /* PumbilityBreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PumbilityBreakdownView.swift"; sourceTree = "<group>"; };
+		CFA9D43227B5C6290A089549 /* QRLoginApproveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "QRLoginApproveView.swift"; sourceTree = "<group>"; };
+		944973D164C0382D07B4CC48 /* SeedingPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SeedingPanelView.swift"; sourceTree = "<group>"; };
+		E7C37EFAC03EC7BB44875EEB /* Shoe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shoe.swift"; sourceTree = "<group>"; };
+		E0FD2D5CF3CE809F98561DE1 /* ShoesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShoesView.swift"; sourceTree = "<group>"; };
+		083E64EEE07352FB046B416B /* SkillChartsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SkillChartsView.swift"; sourceTree = "<group>"; };
+		0A7692126AE2B06144192F56 /* SkillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SkillsView.swift"; sourceTree = "<group>"; };
+		CBC47CC61448F32F27EECBD7 /* SongAnalyticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongAnalyticsView.swift"; sourceTree = "<group>"; };
+		8E54514754FF49612B9E03F0 /* SongChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongChartView.swift"; sourceTree = "<group>"; };
+		4CD4BF685C5FE82B4848D652 /* SongExtended.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongExtended.swift"; sourceTree = "<group>"; };
+		BAFCA1EBECF4243890976682 /* SongsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongsView.swift"; sourceTree = "<group>"; };
+		DF917FE88CF5B58AD34B3496 /* SongsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SongsViewModel.swift"; sourceTree = "<group>"; };
+		E351BF93D0369542DD600BF2 /* TiersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TiersView.swift"; sourceTree = "<group>"; };
+		BA536081222AC5D37041D052 /* TournamentPresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TournamentPresetsView.swift"; sourceTree = "<group>"; };
+		1913D1D353477C44302B1EA6 /* VenueAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VenueAccess.swift"; sourceTree = "<group>"; };
+		3133259257158639A9CE82A5 /* WorldMax.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorldMax.swift"; sourceTree = "<group>"; };
+		9D98BD5FD335E1B2417615D7 /* WorldMaxMachineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorldMaxMachineView.swift"; sourceTree = "<group>"; };
+		88CF2D058C10AD9C777E950D /* WorldMaxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorldMaxView.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -210,21 +314,33 @@
 			isa = PBXGroup;
 			children = (
 				197019DFBFA1C9E10C8AF2AC /* AppNotification.swift */,
+				77C74D952106FEA2F2AA34AC /* Changelog.swift */,
 				F5152ECDDDF0357D048E501B /* ChatMessage.swift */,
+				5482852E8699739B695DC0E7 /* Checkin.swift */,
+				FC3BBF1451147C56D04409B3 /* Community.swift */,
+				E75E359F5FB07F93D362D848 /* Duel.swift */,
 				A011A8BE675A235A57C95DA1 /* FeedItem.swift */,
 				46E43D74929493F24341554C /* Invitation.swift */,
+				4059BDB7AE577096A4ECCCB5 /* Leaderboard.swift */,
+				04AC4687604ACD2C93658F9B /* LiveSession.swift */,
 				6540B4B807AAF4D45B4E5075 /* Match.swift */,
+				7499480AF8B516246A39958B /* Message.swift */,
 				223E89A3D6C7B0CB7EC554E6 /* NewClear.swift */,
 				FABE2C0D7E4E7D90287E6414 /* Notice.swift */,
 				FF9647F4C274B70A28A5EDE9 /* OnlineDuel.swift */,
+				4B79ABBCD1938C3F043488D5 /* Phase.swift */,
 				3BA0BE2351FDBA66D985292C /* PIUGameData.swift */,
 				04B354C8164243030C7B6541 /* Player.swift */,
 				148D02ACF49F375FB80DB135 /* Post.swift */,
+				D10A02020202020202020202 /* RecentActivity.swift */,
+				E7C37EFAC03EC7BB44875EEB /* Shoe.swift */,
 				3DB419E2298EBE886D2693C0 /* Song.swift */,
+				4CD4BF685C5FE82B4848D652 /* SongExtended.swift */,
 				E84591844B936FB9A1E4DE92 /* Tournament.swift */,
 				2399A5FEE4648C892B5F76E6 /* Upscore.swift */,
 				AF5FA2307CAD25018FBBC72A /* User.swift */,
-				D10A02020202020202020202 /* RecentActivity.swift */,
+				1913D1D353477C44302B1EA6 /* VenueAccess.swift */,
+				3133259257158639A9CE82A5 /* WorldMax.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -262,14 +378,18 @@
 		CCEEED150BFF0B4335BB41EE /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				FB5C64EBA411EDB97B3D26D3 /* CommunityViewModel.swift */,
 				D10A04040404040404040404 /* DashboardViewModel.swift */,
+				E30A08080808080808080808 /* FeedViewModel.swift */,
+				A39D1C7ED6D8B4089631CFA8 /* LiveViewModel.swift */,
+				E30A02020202020202020202 /* MatchViewModel.swift */,
+				844FEB4907B9163F45EB5B69 /* MessagesViewModel.swift */,
+				F40A02020202020202020202 /* OnlineDuelViewModel.swift */,
+				D20A06060606060606060606 /* PlayerViewModel.swift */,
+				E30A18181818181818181818 /* ProfileViewModel.swift */,
+				DF917FE88CF5B58AD34B3496 /* SongsViewModel.swift */,
 				D20A02020202020202020202 /* TournamentSetupViewModel.swift */,
 				D20A04040404040404040404 /* TournamentViewModel.swift */,
-				D20A06060606060606060606 /* PlayerViewModel.swift */,
-				E30A02020202020202020202 /* MatchViewModel.swift */,
-				E30A08080808080808080808 /* FeedViewModel.swift */,
-				E30A18181818181818181818 /* ProfileViewModel.swift */,
-				F40A02020202020202020202 /* OnlineDuelViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -279,15 +399,31 @@
 			children = (
 				7E870551F275E409176FE323 /* Account */,
 				56E21E473ED9B8C5A56F50A1 /* Admin */,
+				75FD4B41EBE9E13588A4C324 /* Analysis */,
 				E8D894A3D476FABC8C7C3A5A /* Auth */,
+				F385B56701C4BB1FD89E9B73 /* Changelog */,
+				CAE038E84EF6B49E9D391155 /* Chat */,
+				036892A9BF52E10C3433AEA4 /* Checkin */,
+				52BB1706B98672E43E2B64BF /* Community */,
 				B51BF8E7BC9C0A7A3E40A249 /* Components */,
 				AEFDBC3C81C0C31A01227B29 /* Dashboard */,
+				F3D7B4D82D3F025C47B79EA5 /* Duel */,
+				7D7CFCA1E22E4315AA87B81B /* Leaderboards */,
+				2E7084B29C48E9CDA38894AB /* Lists */,
+				625C6E4A48EF3A2CEE565E4F /* Live */,
 				715059B8DBBE72F6E7580B03 /* Match */,
+				F6E11E428A2866E2EE6FDE8A /* Membership */,
+				7B7938C4A866BB69EEDB9704 /* Messages */,
 				CEE1EA8AE3ECD36503D6390E /* OnlineDuel */,
 				DA221D475BF4831BA7F67593 /* Player */,
 				45FC072FC453136415BEE0CA /* Profile */,
+				59727163BE19CF79BE200261 /* Shoes */,
+				5A8EBA9750076D76B82A1F19 /* Skills */,
 				C0BD8E0C177D1E7708030FE0 /* Social */,
+				CA647E4BDA3743D65350F0F7 /* Songs */,
+				3B09D12D9AEC3E55CC97B94E /* Tiers */,
 				19A0CFC50979408900EF1B9B /* Tournament */,
+				E1973470BC776B4873687DF2 /* WorldMax */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -296,6 +432,7 @@
 			isa = PBXGroup;
 			children = (
 				31A9A8B5B3C47A6C2DACCAED /* LoginView.swift */,
+				CFA9D43227B5C6290A089549 /* QRLoginApproveView.swift */,
 				4F3A5826A5475B89DC122D89 /* RegisterView.swift */,
 			);
 			path = Auth;
@@ -304,10 +441,11 @@
 		B51BF8E7BC9C0A7A3E40A249 /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				AF204BA56091D62DCF38A098 /* CountryPickerView.swift */,
 				D10A0C0C0C0C0C0C0C0C0C0C /* AvatarView.swift */,
-				D10A0E0E0E0E0E0E0E0E0E0E /* StatusBadgeView.swift */,
+				AF204BA56091D62DCF38A098 /* CountryPickerView.swift */,
+				E5DBC2A446FF8CC133631F98 /* MarkdownContentView.swift */,
 				E30A12121212121212121212 /* PumpButtonView.swift */,
+				D10A0E0E0E0E0E0E0E0E0E0E /* StatusBadgeView.swift */,
 				F40A0E0E0E0E0E0E0E0E0E0E /* UserSearchView.swift */,
 			);
 			path = Components;
@@ -371,8 +509,10 @@
 		45FC072FC453136415BEE0CA /* Profile */ = {
 			isa = PBXGroup;
 			children = (
-				E30A1A1A1A1A1A1A1A1A1A1A /* ProfileView.swift */,
 				F40A14141414141414141414 /* FollowersListView.swift */,
+				E30A1A1A1A1A1A1A1A1A1A1A /* ProfileView.swift */,
+				C57946E199ACC70D58579150 /* PumbilityBreakdownView.swift */,
+				CBC47CC61448F32F27EECBD7 /* SongAnalyticsView.swift */,
 			);
 			path = Profile;
 			sourceTree = "<group>";
@@ -396,10 +536,154 @@
 		19A0CFC50979408900EF1B9B /* Tournament */ = {
 			isa = PBXGroup;
 			children = (
-				D20A08080808080808080808 /* TournamentSetupView.swift */,
+				E109BC1D1D87DF03C89C60FC /* BracketView.swift */,
+				16701266C58DBE312AF7BF87 /* DoubleElimBracketView.swift */,
+				C100E83093C0295CED8A995A /* PhaseCardView.swift */,
+				AD18D862E503958CFBBD791B /* PoolsView.swift */,
+				944973D164C0382D07B4CC48 /* SeedingPanelView.swift */,
 				D20A0A0A0A0A0A0A0A0A0A0A /* TournamentDetailView.swift */,
+				BA536081222AC5D37041D052 /* TournamentPresetsView.swift */,
+				D20A08080808080808080808 /* TournamentSetupView.swift */,
 			);
 			path = Tournament;
+			sourceTree = "<group>";
+		};
+		75FD4B41EBE9E13588A4C324 /* Analysis */ = {
+			isa = PBXGroup;
+			children = (
+				0C80110D3311A64B75BB750B /* HeadToHeadView.swift */,
+				66A4CD8E2965811F0883628C /* OptimiseView.swift */,
+			);
+			path = Analysis;
+			sourceTree = "<group>";
+		};
+		F385B56701C4BB1FD89E9B73 /* Changelog */ = {
+			isa = PBXGroup;
+			children = (
+				8F11ADAB180D69E0DBA23E7F /* ChangelogView.swift */,
+			);
+			path = Changelog;
+			sourceTree = "<group>";
+		};
+		CAE038E84EF6B49E9D391155 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				4C3D9379D60EE534E3E895CD /* ChatBotView.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		036892A9BF52E10C3433AEA4 /* Checkin */ = {
+			isa = PBXGroup;
+			children = (
+				70A2B2AF5D28A32667CB2841 /* CheckinView.swift */,
+			);
+			path = Checkin;
+			sourceTree = "<group>";
+		};
+		52BB1706B98672E43E2B64BF /* Community */ = {
+			isa = PBXGroup;
+			children = (
+				7D216EBF0DD6FD6078D5E074 /* CommunitiesListView.swift */,
+				FB5E94E2AC17E6784F33E1DD /* CommunitySettingsView.swift */,
+				89DFACB9F61855F0CA04234B /* CommunitySetupView.swift */,
+				8CA5820A668FF84ECB8BC9DF /* CommunityView.swift */,
+			);
+			path = Community;
+			sourceTree = "<group>";
+		};
+		F3D7B4D82D3F025C47B79EA5 /* Duel */ = {
+			isa = PBXGroup;
+			children = (
+				4239BD81A523652F899DD76F /* DuelSetupView.swift */,
+				DCDD4962C019A9C5E69E9A59 /* DuelView.swift */,
+			);
+			path = Duel;
+			sourceTree = "<group>";
+		};
+		7D7CFCA1E22E4315AA87B81B /* Leaderboards */ = {
+			isa = PBXGroup;
+			children = (
+				1887EF4E28AB837726A759B1 /* LeaderboardsView.swift */,
+			);
+			path = Leaderboards;
+			sourceTree = "<group>";
+		};
+		2E7084B29C48E9CDA38894AB /* Lists */ = {
+			isa = PBXGroup;
+			children = (
+				185D6CDBEA3C69DC48F7B5B9 /* ListsView.swift */,
+			);
+			path = Lists;
+			sourceTree = "<group>";
+		};
+		625C6E4A48EF3A2CEE565E4F /* Live */ = {
+			isa = PBXGroup;
+			children = (
+				4FB99DC7470A4257D41D8537 /* LiveDirectoryView.swift */,
+				DA7BA48ED10D93DD6DBD8C7A /* LiveSessionView.swift */,
+			);
+			path = Live;
+			sourceTree = "<group>";
+		};
+		F6E11E428A2866E2EE6FDE8A /* Membership */ = {
+			isa = PBXGroup;
+			children = (
+				F6DECF9DCB99E4947F7F93BB /* MembershipView.swift */,
+			);
+			path = Membership;
+			sourceTree = "<group>";
+		};
+		7B7938C4A866BB69EEDB9704 /* Messages */ = {
+			isa = PBXGroup;
+			children = (
+				54D77360BF7210422C196A9C /* ConversationView.swift */,
+				69E7E681CAB0825647168261 /* MessagesListView.swift */,
+			);
+			path = Messages;
+			sourceTree = "<group>";
+		};
+		59727163BE19CF79BE200261 /* Shoes */ = {
+			isa = PBXGroup;
+			children = (
+				E0FD2D5CF3CE809F98561DE1 /* ShoesView.swift */,
+			);
+			path = Shoes;
+			sourceTree = "<group>";
+		};
+		5A8EBA9750076D76B82A1F19 /* Skills */ = {
+			isa = PBXGroup;
+			children = (
+				083E64EEE07352FB046B416B /* SkillChartsView.swift */,
+				0A7692126AE2B06144192F56 /* SkillsView.swift */,
+			);
+			path = Skills;
+			sourceTree = "<group>";
+		};
+		CA647E4BDA3743D65350F0F7 /* Songs */ = {
+			isa = PBXGroup;
+			children = (
+				8E54514754FF49612B9E03F0 /* SongChartView.swift */,
+				BAFCA1EBECF4243890976682 /* SongsView.swift */,
+			);
+			path = Songs;
+			sourceTree = "<group>";
+		};
+		3B09D12D9AEC3E55CC97B94E /* Tiers */ = {
+			isa = PBXGroup;
+			children = (
+				E351BF93D0369542DD600BF2 /* TiersView.swift */,
+			);
+			path = Tiers;
+			sourceTree = "<group>";
+		};
+		E1973470BC776B4873687DF2 /* WorldMax */ = {
+			isa = PBXGroup;
+			children = (
+				9D98BD5FD335E1B2417615D7 /* WorldMaxMachineView.swift */,
+				88CF2D058C10AD9C777E950D /* WorldMaxView.swift */,
+			);
+			path = WorldMax;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -539,6 +823,58 @@
 				F40A0F0F0F0F0F0F0F0F0F0F /* TextFormatter.swift in Sources */,
 				F40A11111111111111111111 /* PIUGameSyncView.swift in Sources */,
 				F40A13131313131313131313 /* FollowersListView.swift in Sources */,
+				08C3254C326E19FBD8B42D3A /* BracketView.swift in Sources */,
+				641619C682D242A6E92FFDDE /* Changelog.swift in Sources */,
+				A8D778C9BDBB65B09AFCA7D0 /* ChangelogView.swift in Sources */,
+				6BC5D01435492B7002FE0319 /* ChatBotView.swift in Sources */,
+				C1E09D6558DBF1CC34534A02 /* Checkin.swift in Sources */,
+				DBBB14101E4F856F1ABC4EF1 /* CheckinView.swift in Sources */,
+				7777AEF4D67FE8081DEF15EA /* CommunitiesListView.swift in Sources */,
+				B661E2D6C1A4DD4823D855E1 /* Community.swift in Sources */,
+				85925D486C37E0583E73BDBF /* CommunitySettingsView.swift in Sources */,
+				E5F3C6874409EBFA5FA771D7 /* CommunitySetupView.swift in Sources */,
+				24F83062672D700AD8480087 /* CommunityView.swift in Sources */,
+				733C0BFD26F5D6C5FABE302C /* CommunityViewModel.swift in Sources */,
+				3C5100E94713246A6580184D /* ConversationView.swift in Sources */,
+				C31A7BEC33AB156D80990130 /* DoubleElimBracketView.swift in Sources */,
+				C4C58697B79B501568709629 /* Duel.swift in Sources */,
+				8A56D84EF0C104784EB8A8CB /* DuelSetupView.swift in Sources */,
+				B2EE3B232929248CF675BB89 /* DuelView.swift in Sources */,
+				4946B144A4E14D8B6C80794D /* HeadToHeadView.swift in Sources */,
+				BC98035F29B688BCE63F2043 /* Leaderboard.swift in Sources */,
+				F21B3036A704AB460EFE4608 /* LeaderboardsView.swift in Sources */,
+				EF142E13DDA9A456047F70ED /* ListsView.swift in Sources */,
+				1482BA8C98EC8B2D20A4390A /* LiveDirectoryView.swift in Sources */,
+				51474FC8E63221C3F1500833 /* LiveSession.swift in Sources */,
+				EF80331108BDFF5F04C8ADEF /* LiveSessionView.swift in Sources */,
+				0D57E51F9643A5EABE177930 /* LiveViewModel.swift in Sources */,
+				11AFADFE6FB6FAE54F0B0EFA /* MarkdownContentView.swift in Sources */,
+				1F0B2D0AF960280734292515 /* MembershipView.swift in Sources */,
+				786BAEDCAF10546012D35A3C /* Message.swift in Sources */,
+				70E5162BC621EF35872CD85C /* MessagesListView.swift in Sources */,
+				81D1495C9CB6FEEDB427E67F /* MessagesViewModel.swift in Sources */,
+				D3FB1C1C5FC873C36BD48915 /* OptimiseView.swift in Sources */,
+				715E6F7FE44F0B06CD0DF96D /* Phase.swift in Sources */,
+				B510BD245AE3FE58CEBBD9AF /* PhaseCardView.swift in Sources */,
+				F7827F17BC579A8A2A90B471 /* PoolsView.swift in Sources */,
+				DD0FA6EB621046C772AFC4A2 /* PumbilityBreakdownView.swift in Sources */,
+				05C890BD263078E96C724500 /* QRLoginApproveView.swift in Sources */,
+				B85C8949DC63FFE2AD4686E7 /* SeedingPanelView.swift in Sources */,
+				DC5FA0D8A10064F02674E061 /* Shoe.swift in Sources */,
+				05634887EC2D0240459CC92D /* ShoesView.swift in Sources */,
+				9A2D5572CEA73C32E4089934 /* SkillChartsView.swift in Sources */,
+				D53424EB0BC17621609A48BA /* SkillsView.swift in Sources */,
+				2589D88EC9EC606E9A2872E6 /* SongAnalyticsView.swift in Sources */,
+				24A5307F9C742B3F8E862BB8 /* SongChartView.swift in Sources */,
+				FCFD3F8250F2BD4F5AAF8847 /* SongExtended.swift in Sources */,
+				AF51624EF8B1AC632FEA9D04 /* SongsView.swift in Sources */,
+				67AD7A13C17FEA6A9102A374 /* SongsViewModel.swift in Sources */,
+				11A934F120C13C0D1AC34E3A /* TiersView.swift in Sources */,
+				982D20A1A2D05A8F01410FA0 /* TournamentPresetsView.swift in Sources */,
+				366C7BF05E10609E74CA58A4 /* VenueAccess.swift in Sources */,
+				03446E9871FE692DE9F32DEC /* WorldMax.swift in Sources */,
+				87A472B68A1366A8601E6EA2 /* WorldMaxMachineView.swift in Sources */,
+				B04C2869769817D6359AFB75 /* WorldMaxView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

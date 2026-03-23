@@ -69,8 +69,30 @@ class APIService {
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
-            throw APIError.decodingError(error.localizedDescription)
+            let preview = String(data: data.prefix(500), encoding: .utf8) ?? "(binary)"
+            print("[API] Decode error for \(path): \(error)\nResponse preview: \(preview)")
+            throw APIError.decodingError("\(error)")
         }
+    }
+
+    private func requestRaw(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> Data {
+        guard let url = URL(string: "\(baseURL)/api\(path)") else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.timeoutInterval = 8
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let t = token { req.setValue("Bearer \(t)", forHTTPHeaderField: "Authorization") }
+        if let body = body {
+            req.httpBody = try JSONEncoder().encode(body)
+        }
+        let (data, response) = try await URLSession.shared.data(for: req)
+        if let http = response as? HTTPURLResponse {
+            if http.statusCode == 401 { throw APIError.unauthorized }
+            if http.statusCode >= 400 {
+                throw APIError.serverError("Request failed (\(http.statusCode))")
+            }
+        }
+        return data
     }
 
     private func requestVoid(_ path: String, method: String = "GET", body: Encodable? = nil) async throws {
@@ -195,7 +217,13 @@ class APIService {
     func searchUsers(_ q: String) async throws -> [User] { try await request("/auth/search?q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q)") }
     func getUserProfile(_ id: String) async throws -> User { try await request("/auth/user/\(id)") }
     func getUserStats(_ id: String) async throws -> UserStats { try await request("/auth/user/\(id)/stats") }
-    func getUserAchievements(_ id: String) async throws -> [AchievementBadge] { try await request("/auth/user/\(id)/achievements") }
+    func getUserAchievements(_ id: String) async throws -> [AchievementBadge] {
+        let response: AchievementsWrapper = try await request("/auth/user/\(id)/achievements")
+        return response.achievements ?? []
+    }
+    private struct AchievementsWrapper: Codable {
+        var achievements: [AchievementBadge]?
+    }
     func getInvitations() async throws -> [Invitation] { try await request("/auth/invitations") }
     func respondInvitation(_ id: String, status: String) async throws -> GenericResponse { try await request("/auth/invitations/\(id)", method: "PUT", body: ["status": status]) }
     func sendInvitation(_ data: [String: AnyCodable]) async throws -> GenericResponse { try await request("/auth/invite", method: "POST", body: data) }
@@ -234,8 +262,17 @@ class APIService {
         if let m = mode { path += "?mode=\(m)" }
         return try await request(path)
     }
-    func getPiugameRecentlyPlayed(_ userId: String) async throws -> [RecentlyPlayed] { try await request("/piugame/recently-played/\(userId)") }
-    func getPiugameRecentlyPlayed(_ userId: String, year: Int) async throws -> [RecentlyPlayed] { try await request("/piugame/recently-played/\(userId)?year=\(year)") }
+    func getPiugameRecentlyPlayed(_ userId: String) async throws -> [RecentlyPlayed] {
+        let response: RecentlyPlayedWrapper = try await request("/piugame/recently-played/\(userId)")
+        return response.plays ?? []
+    }
+    func getPiugameRecentlyPlayed(_ userId: String, year: Int) async throws -> [RecentlyPlayed] {
+        let response: RecentlyPlayedWrapper = try await request("/piugame/recently-played/\(userId)?year=\(year)")
+        return response.plays ?? []
+    }
+    private struct RecentlyPlayedWrapper: Codable {
+        var plays: [RecentlyPlayed]?
+    }
     func getPiugameSyncStatus(_ userId: String) async throws -> PiugameSyncStatus { try await request("/piugame/sync-status/\(userId)") }
     func getSyncProgress() async throws -> SyncProgressResponse { try await request("/piugame/sync/progress") }
 
@@ -306,7 +343,25 @@ class APIService {
     func getNewClear(_ id: Int) async throws -> NewClear { try await request("/social/clears/\(id)") }
 
     // MARK: - Social: Feed
-    func getFeed(page: Int = 1) async throws -> [FeedItem] { try await request("/social/feed?page=\(page)") }
+    func getFeed(page: Int = 1) async throws -> [FeedItem] {
+        // Use lossy decoding so one bad item doesn't kill the whole feed
+        let data = try await requestRaw("/social/feed?page=\(page)")
+        guard let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+        var items: [FeedItem] = []
+        for dict in array {
+            if let itemData = try? JSONSerialization.data(withJSONObject: dict),
+               let item = try? JSONDecoder().decode(FeedItem.self, from: itemData) {
+                items.append(item)
+            } else {
+                let type = dict["type"] as? String ?? "unknown"
+                let id = dict["id"] ?? "?"
+                print("[Feed] Failed to decode item type=\(type) id=\(id)")
+            }
+        }
+        return items
+    }
     func getRecentActivity() async throws -> [RecentActivity] { try await request("/social/recent-activity") }
 
     // MARK: - Phases

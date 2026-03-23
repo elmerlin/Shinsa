@@ -1,47 +1,30 @@
 import Foundation
 
-struct FeedUser: Codable {
-    var id: String?
+struct FeedItem: Codable, Identifiable {
+    var id: String { "\(type)_\(itemId)" }
+
+    let type: String // "post", "upscore", "clear"
+
+    // Flat user fields
+    var userId: String?
     var username: String?
     var avatar: String?
-    var countryCode: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, username, avatar
-        case countryCode = "country_code"
-    }
-}
-
-struct FeedItem: Codable, Identifiable {
-    var id: String { "\(entryType)_\(itemId)" }
-
-    let entryType: String // "post", "upscore", "new_clear"
-    var user: FeedUser?
-
-    // Computed convenience accessors for views
-    var userId: String? { user?.id }
-    var username: String? { user?.username }
-    var avatar: String? { user?.avatar }
-    var nationality: String? { user?.countryCode }
+    var nationality: String?
 
     // Common fields
     var pumpCount: Int?
     var commentCount: Int?
-    var pumped: BoolOrInt?
+    var userPumped: BoolOrInt?
     var createdAt: String?
 
-    // Type-specific IDs
-    var upscoreId: Int?
-    var clearId: Int?
-    var postId: Int?
+    // Generic ID from server
+    var feedId: Int?
 
-    var itemId: Int {
-        upscoreId ?? clearId ?? postId ?? 0
-    }
+    var itemId: Int { feedId ?? 0 }
 
     // Post fields
     var content: String?
-    var images: [String]?
+    var images: String? // Raw JSON string from server
     var youtubeUrl: String?
 
     // Upscore fields
@@ -52,30 +35,65 @@ struct FeedItem: Codable, Identifiable {
     var newScore: Int?
     var previousGrade: String?
     var newGrade: String?
-    var pumbilityGain: Double?
+    var pumbilityGain: FlexDouble?
+    var singlesPumbilityGain: FlexDouble?
+    var upscoresJson: String?
 
-    // New clear fields
+    // Clear fields
     var score: Int?
     var grade: String?
     var plate: String?
+    var clearsJson: String?
+    var backgroundUrl: String?
 
-    var isPumped: Bool { pumped?.boolValue ?? false }
+    var isPumped: Bool { userPumped?.boolValue ?? false }
+
+    var imageUrls: [String] {
+        guard let raw = images, let data = raw.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+    }
+
+    struct UpscoreItem: Codable {
+        var songTitle: String?
+        var mode: String?
+        var level: Int?
+        var previousScore: Int?
+        var newScore: Int?
+        var previousGrade: String?
+        var newGrade: String?
+        enum CodingKeys: String, CodingKey {
+            case mode, level
+            case songTitle = "song_title"
+            case previousScore = "previous_score"
+            case newScore = "new_score"
+            case previousGrade = "previous_grade"
+            case newGrade = "new_grade"
+        }
+    }
+
+    var upscoreItems: [UpscoreItem] {
+        guard let raw = upscoresJson, let data = raw.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([UpscoreItem].self, from: data)) ?? []
+    }
 
     enum CodingKeys: String, CodingKey {
-        case entryType = "entry_type"
-        case user, content, images, mode, level, score, grade, plate, pumped
+        case type, content, images, mode, level, score, grade, plate, username, avatar, nationality
+        case userId = "user_id"
         case pumpCount = "pump_count"
         case commentCount = "comment_count"
+        case userPumped = "user_pumped"
         case createdAt = "created_at"
         case youtubeUrl = "youtube_url"
         case songTitle = "song_title"
-        case upscoreId = "upscore_id"
-        case clearId = "clear_id"
-        case postId = "post_id"
+        case feedId = "id"
         case previousScore = "previous_score"
         case newScore = "new_score"
         case previousGrade = "previous_grade"
         case newGrade = "new_grade"
         case pumbilityGain = "pumbility_gain"
+        case singlesPumbilityGain = "singles_pumbility_gain"
+        case upscoresJson = "upscores_json"
+        case clearsJson = "clears_json"
+        case backgroundUrl = "background_url"
     }
 }

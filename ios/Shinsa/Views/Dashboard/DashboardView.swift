@@ -13,6 +13,12 @@ struct DashboardView: View {
                     // Header
                     headerSection
 
+                    // Quick Action Buttons (2x2 grid)
+                    quickActionsGrid
+
+                    // Search
+                    searchSection
+
                     // Notices
                     if !vm.notices.isEmpty {
                         noticesSection
@@ -35,15 +41,11 @@ struct DashboardView: View {
                     if vm.searchResults == nil {
                         createButtonsSection
                     }
-
-                    // Search
-                    searchSection
                 }
                 .padding()
             }
             .refreshable { await vm.load() }
         }
-        .navigationTitle("PUMP SHINSA")
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.load() }
         .sheet(item: $vm.selectedNotice) { notice in
@@ -54,25 +56,131 @@ struct DashboardView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 0) {
-                Text("PUMP")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(DojoTheme.piuGold)
-                Text(" SHINSA")
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.white)
+        HStack(spacing: 0) {
+            Text("PUMP")
+                .font(.system(size: 36, weight: .black))
+                .foregroundColor(DojoTheme.piuGold)
+            Text(" SHINSA")
+                .font(.system(size: 36, weight: .black))
+                .foregroundColor(.white)
+        }
+    }
+
+    // MARK: - Quick Actions Grid
+
+    private var quickActionsGrid: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                NavigationLink {
+                    LiveDirectoryView()
+                } label: {
+                    quickActionButton(
+                        icon: "video.fill",
+                        title: "Live",
+                        gradientColors: [Color(hex: "#06b6d4"), Color(hex: "#3b82f6")]
+                    )
+                }
+
+                NavigationLink {
+                    SongsView()
+                } label: {
+                    quickActionButton(
+                        icon: "music.note",
+                        title: "Songs",
+                        gradientColors: [Color(hex: "#10b981"), Color(hex: "#14b8a6")]
+                    )
+                }
             }
 
-            HStack(spacing: 6) {
-                ForEach(["Social", "Score Tracking", "Competitive", "Communities"], id: \.self) { tag in
-                    Text(tag)
-                        .font(.system(size: 10, weight: .medium))
+            HStack(spacing: 10) {
+                NavigationLink {
+                    ListsView()
+                } label: {
+                    quickActionButton(
+                        icon: "checkmark.circle.fill",
+                        title: "Lists",
+                        gradientColors: [Color(hex: "#8b5cf6"), Color(hex: "#a855f7")]
+                    )
+                }
+
+                NavigationLink {
+                    HeadToHeadView()
+                } label: {
+                    quickActionButton(
+                        icon: "person.2.fill",
+                        title: "Rival",
+                        gradientColors: [Color(hex: "#f59e0b"), Color(hex: "#f97316")]
+                    )
+                }
+            }
+        }
+    }
+
+    private func quickActionButton(icon: String, title: String, gradientColors: [Color]) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text(title)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 90)
+        .background(
+            LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .cornerRadius(14)
+        .shadow(color: gradientColors[0].opacity(0.3), radius: 8, y: 4)
+    }
+
+    // MARK: - Search
+
+    private var searchSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(DojoTheme.textMuted)
+                TextField("Search tournaments, locations, players...", text: Binding(
+                    get: { vm.searchQuery },
+                    set: { vm.search($0) }
+                ))
+                .foregroundColor(.white)
+                .autocorrectionDisabled()
+
+                if vm.isSearching {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(DojoTheme.textMuted)
+                }
+
+                if !vm.searchQuery.isEmpty {
+                    Button { vm.clearSearch() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+                }
+            }
+            .padding(12)
+            .background(DojoTheme.piuCard)
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(DojoTheme.piuBorder, lineWidth: 1)
+            )
+
+            if let results = vm.searchResults {
+                HStack {
+                    Text("\(results.count) result\(results.count != 1 ? "s" : "") for \"\(vm.searchQuery)\"")
+                        .font(.system(size: 11))
                         .foregroundColor(DojoTheme.textMuted)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.white.opacity(0.05))
-                        .cornerRadius(4)
+
+                    Spacer()
+
+                    Button("Clear search") { vm.clearSearch() }
+                        .font(.system(size: 11))
+                        .foregroundColor(DojoTheme.piuAccent)
                 }
             }
         }
@@ -81,10 +189,55 @@ struct DashboardView: View {
     // MARK: - Notices
 
     private var noticesSection: some View {
-        VStack(spacing: 6) {
-            ForEach(vm.notices) { notice in
-                Button { vm.selectedNotice = notice } label: {
-                    NoticeCardView(notice: notice)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("NOTICE BOARD")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(DojoTheme.piuAccent)
+
+            VStack(spacing: 6) {
+                ForEach(vm.notices) { notice in
+                    Button { vm.selectedNotice = notice } label: {
+                        HStack(spacing: 10) {
+                            if notice.isPinned {
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DojoTheme.piuGold)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(notice.title)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(notice.isPinned ? DojoTheme.piuGold : .white)
+                                    .lineLimit(1)
+
+                                if let created = notice.createdAt {
+                                    Text(created.asDate?.formatted(date: .abbreviated, time: .omitted) ?? "")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(DojoTheme.textMuted)
+                                }
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10))
+                                .foregroundColor(DojoTheme.textMuted)
+                        }
+                        .padding(12)
+                        .background(
+                            notice.isPinned
+                                ? DojoTheme.piuGold.opacity(0.08)
+                                : DojoTheme.piuCard
+                        )
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(
+                                    notice.isPinned ? DojoTheme.piuGold.opacity(0.3) : DojoTheme.piuBorder,
+                                    lineWidth: 1
+                                )
+                        )
+                    }
                 }
             }
         }
@@ -99,7 +252,7 @@ struct DashboardView: View {
                 .foregroundColor(DojoTheme.piuAccent)
 
             VStack(spacing: 0) {
-                ForEach(Array(vm.recentActivity.prefix(15).enumerated()), id: \.offset) { index, activity in
+                ForEach(Array(vm.recentActivity.prefix(10).enumerated()), id: \.offset) { index, activity in
                     NavigationLink(value: activity.link) {
                         HStack(spacing: 10) {
                             Text(activity.icon)
@@ -135,7 +288,7 @@ struct DashboardView: View {
                         .padding(.horizontal, 4)
                     }
 
-                    if index < min(vm.recentActivity.count, 15) - 1 {
+                    if index < min(vm.recentActivity.count, 10) - 1 {
                         Divider()
                             .background(DojoTheme.piuBorder.opacity(0.3))
                     }
@@ -264,53 +417,6 @@ struct DashboardView: View {
                         )
                     )
                     .cornerRadius(10)
-            }
-        }
-    }
-
-    // MARK: - Search
-
-    private var searchSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(DojoTheme.textMuted)
-                TextField("Search tournaments, locations, players...", text: Binding(
-                    get: { vm.searchQuery },
-                    set: { vm.search($0) }
-                ))
-                .foregroundColor(.white)
-                .autocorrectionDisabled()
-
-                if vm.isSearching {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                        .tint(DojoTheme.textMuted)
-                }
-
-                if !vm.searchQuery.isEmpty {
-                    Button { vm.clearSearch() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(DojoTheme.textMuted)
-                    }
-                }
-            }
-            .padding(12)
-            .background(DojoTheme.piuCard)
-            .cornerRadius(10)
-
-            if let results = vm.searchResults {
-                HStack {
-                    Text("\(results.count) result\(results.count != 1 ? "s" : "") for \"\(vm.searchQuery)\"")
-                        .font(.system(size: 11))
-                        .foregroundColor(DojoTheme.textMuted)
-
-                    Spacer()
-
-                    Button("Clear search") { vm.clearSearch() }
-                        .font(.system(size: 11))
-                        .foregroundColor(DojoTheme.piuAccent)
-                }
             }
         }
     }

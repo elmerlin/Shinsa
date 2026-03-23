@@ -48,8 +48,8 @@ struct PostCardView: View {
             }
 
             // Images
-            if let urls = item.images, !urls.isEmpty {
-                ImageGridView(urls: urls)
+            if !item.imageUrls.isEmpty {
+                ImageGridView(urls: item.imageUrls)
             }
 
             // YouTube

@@ -56,20 +56,27 @@ struct GroupBadge: Codable, Identifiable {
 }
 
 struct AchievementBadge: Codable, Identifiable {
-    var id: String { seriesId ?? UUID().uuidString }
+    var id: String { tierId ?? UUID().uuidString }
+    var tierId: String?
     var seriesId: String?
+    var seriesKey: String?
     var seriesName: String?
     var name: String?
     var description: String?
-    var image: String?
+    var image: String?  // base64 image data
     var threshold: Int?
     var currentValue: Int?
+    var awardedAt: String?
     var nextTier: AchievementNextTier?
+
     enum CodingKeys: String, CodingKey {
         case name, description, image, threshold
+        case tierId = "tier_id"
         case seriesId = "series_id"
+        case seriesKey = "series_key"
         case seriesName = "series_name"
         case currentValue = "current_value"
+        case awardedAt = "awarded_at"
         case nextTier = "next_tier"
     }
 }
@@ -167,12 +174,14 @@ struct FollowStatus: Codable {
 
 struct SocialCounts: Codable {
     var followersCount: Int?
+    var followingCount: Int?
     var postsCount: Int?
     var pumpsReceived: Int?
     var followerTrend: Int?
 
     enum CodingKeys: String, CodingKey {
         case followersCount = "followers_count"
+        case followingCount = "following_count"
         case postsCount = "posts_count"
         case pumpsReceived = "pumps_received"
         case followerTrend = "follower_trend"

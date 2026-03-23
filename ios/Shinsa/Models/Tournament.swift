@@ -11,14 +11,35 @@ struct Tournament: Codable, Identifiable {
     var config: TournamentConfig
     var avatar: String?
     var archived: Int
+    var currentPhaseId: String?
     var createdAt: String?
 
+    // Phase-aware tournaments
+    var phases: [Phase]?
+
     var isArchived: Bool { archived != 0 }
+    var hasPhases: Bool { phases != nil && !(phases?.isEmpty ?? true) }
+
+    var activePhase: Phase? {
+        phases?.first { $0.status == "ACTIVE" }
+    }
+
+    var currentPhase: Phase? {
+        if let cpId = currentPhaseId {
+            return phases?.first { $0.id == cpId }
+        }
+        return activePhase ?? phases?.last
+    }
+
+    var nextPendingPhase: Phase? {
+        phases?.first { $0.status == "PENDING" }
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, location, date, phase, config, avatar, archived
+        case id, name, location, date, phase, config, avatar, archived, phases
         case currentRound = "current_round"
         case totalRounds = "total_rounds"
+        case currentPhaseId = "current_phase_id"
         case createdAt = "created_at"
     }
 }

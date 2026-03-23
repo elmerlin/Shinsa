@@ -44,13 +44,14 @@ struct BestScore: Codable, Identifiable {
 struct RecentlyPlayed: Codable, Identifiable {
     let id: Int
     var userId: String?
-    var songTitle: String
-    var mode: String
-    var level: Int
-    var score: Int
+    var songTitle: String?
+    var mode: String?
+    var level: Int?
+    var score: Int?
     var grade: String?
     var backgroundUrl: String?
     var datePlayed: String?
+    var playedAtUtc: String?
     var perfect: Int?
     var great: Int?
     var good: Int?
@@ -60,12 +61,20 @@ struct RecentlyPlayed: Codable, Identifiable {
     var kcal: Double?
     var plate: String?
 
+    /// Best available date string for this play
+    var effectiveDate: String? {
+        let utc = playedAtUtc ?? ""
+        let dp = datePlayed ?? ""
+        return !utc.isEmpty ? utc : (!dp.isEmpty ? dp : nil)
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, mode, level, score, grade, perfect, great, good, bad, miss, kcal, plate
         case userId = "user_id"
         case songTitle = "song_title"
         case backgroundUrl = "background_url"
         case datePlayed = "date_played"
+        case playedAtUtc = "played_at_utc"
         case maxCombo = "max_combo"
     }
 }

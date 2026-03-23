@@ -5,6 +5,7 @@ class ProfileViewModel: ObservableObject {
     @Published var user: User?
     @Published var stats: UserStats?
     @Published var followStatus: FollowStatus?
+    @Published var socialCounts: SocialCounts?
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -28,10 +29,12 @@ class ProfileViewModel: ObservableObject {
         async let u = APIService.shared.getUserProfile(userId)
         async let s = APIService.shared.getUserStats(userId)
         async let f = APIService.shared.getFollowStatus(userId)
+        async let c = APIService.shared.getSocialCounts(userId)
 
         user = try? await u
         stats = try? await s
         followStatus = try? await f
+        socialCounts = try? await c
         isLoading = false
     }
 
@@ -102,21 +105,20 @@ class ProfileViewModel: ObservableObject {
     private func buildHeatmapData(from plays: [RecentlyPlayed]) {
         var map: [String: (plays: Int, singlesLevels: [Int], doublesLevels: [Int])] = [:]
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-
         for play in plays {
-            guard let datePlayed = play.datePlayed else { continue }
+            guard let datePlayed = play.effectiveDate else { continue }
             // Extract just the date portion (YYYY-MM-DD)
             let dateKey = String(datePlayed.prefix(10))
+            guard dateKey.count == 10 else { continue }
 
             var entry = map[dateKey] ?? (plays: 0, singlesLevels: [], doublesLevels: [])
             entry.plays += 1
-            let mode = play.mode.lowercased()
+            let mode = (play.mode ?? "").lowercased()
+            let level = play.level ?? 0
             if mode.hasPrefix("s") || mode == "single" {
-                entry.singlesLevels.append(play.level)
+                entry.singlesLevels.append(level)
             } else {
-                entry.doublesLevels.append(play.level)
+                entry.doublesLevels.append(level)
             }
             map[dateKey] = entry
         }

@@ -1,5 +1,9 @@
 import SwiftUI
 
+private struct AchievementSeriesID: Identifiable {
+    let id: String
+}
+
 struct ProfileView: View {
     @StateObject private var vm: ProfileViewModel
     @EnvironmentObject var auth: AuthManager
@@ -15,6 +19,7 @@ struct ProfileView: View {
     @State private var selectedTab = "overview"
     @State private var selectedHeatmapDay: HeatmapDay?
     @State private var heatmapYear: Int = Calendar.current.component(.year, from: Date())
+    @State private var selectedAchievementSeries: String?
 
     private var tabs: [(String, String, String)] {
         var t: [(String, String, String)] = [
@@ -158,16 +163,26 @@ struct ProfileView: View {
                 .padding(.top, 8)
             }
 
-            // Achievement badges row
-            if let badges = user.achievementBadges, !badges.isEmpty {
+            // Achievement badges row (highest tier per series)
+            if !vm.achievements.isEmpty {
+                let highest = highestPerSeries
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ForEach(badges) { badge in
-                            badgeCircle(url: badge.image, name: badge.name, size: 28, borderColor: DojoTheme.piuGold)
+                        ForEach(highest) { badge in
+                            achievementBadgeImage(badge, size: 28)
+                                .onTapGesture {
+                                    selectedAchievementSeries = badge.seriesId ?? badge.id
+                                }
                         }
                     }
                 }
                 .padding(.top, 4)
+                .sheet(item: Binding<AchievementSeriesID?>(
+                    get: { selectedAchievementSeries.map { AchievementSeriesID(id: $0) } },
+                    set: { selectedAchievementSeries = $0?.id }
+                )) { seriesID in
+                    achievementSeriesSheet(seriesId: seriesID.id)
+                }
             }
 
             if let bio = user.description, !bio.isEmpty {
@@ -249,7 +264,11 @@ struct ProfileView: View {
 
     private func badgeCircle(url: String?, name: String?, size: CGFloat, borderColor: Color) -> some View {
         Group {
-            if let urlStr = url, let imageUrl = URL(string: urlStr) {
+            if let uiImage = decodeBase64Image(url) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if let urlStr = url, let imageUrl = URL(string: urlStr), urlStr.hasPrefix("http") {
                 AsyncImage(url: imageUrl) { phase in
                     switch phase {
                     case .success(let img):
@@ -276,11 +295,11 @@ struct ProfileView: View {
 
     private func statsBar(_ user: User) -> some View {
         HStack(spacing: 0) {
-            statItem("\(user.followerCount ?? 0)", "Followers")
+            statItem("\(vm.socialCounts?.followersCount ?? 0)", "Followers")
             statDivider
-            statItem("\(user.postCount ?? 0)", "Posts")
+            statItem("\(vm.socialCounts?.postsCount ?? 0)", "Posts")
             statDivider
-            statItem("\(user.pumbility ?? 0)", "Pumps")
+            statItem("\(vm.socialCounts?.pumpsReceived ?? 0)", "Pumps")
             statDivider
             statItem("\((vm.stats?.tournaments?.count ?? 0) + (vm.stats?.duels?.count ?? 0))", "Competitions")
         }
@@ -704,13 +723,13 @@ struct ProfileView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(play.songTitle)
+                        Text(play.songTitle ?? "Unknown")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.white)
                             .lineLimit(1)
 
                         HStack(spacing: 6) {
-                            modeBadge(play.mode, level: play.level)
+                            modeBadge(play.mode ?? "S", level: play.level ?? 0)
 
                             if let grade = play.grade {
                                 Text(grade)
@@ -722,7 +741,7 @@ struct ProfileView: View {
 
                     Spacer()
 
-                    Text("\(play.score)")
+                    Text("\(play.score ?? 0)")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                         .foregroundColor(DojoTheme.textSecondary)
                 }
@@ -950,7 +969,7 @@ struct ProfileView: View {
 
     private func achievementRow(_ badge: AchievementBadge) -> some View {
         HStack(spacing: 12) {
-            badgeCircle(url: badge.image, name: badge.name, size: 40, borderColor: DojoTheme.piuGold)
+            achievementBadgeImage(badge, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(badge.name ?? "Achievement")
@@ -1107,6 +1126,95 @@ struct ProfileView: View {
             }
         }
         .padding(16)
+    }
+
+    // MARK: - Achievement Helpers
+
+    private var highestPerSeries: [AchievementBadge] {
+        var seen: [String: AchievementBadge] = [:]
+        for badge in vm.achievements {
+            let key = badge.seriesId ?? badge.id
+            let existing = seen[key]
+            if existing == nil || (badge.threshold ?? 0) > (existing?.threshold ?? 0) {
+                seen[key] = badge
+            }
+        }
+        return Array(seen.values).sorted { ($0.seriesName ?? "") < ($1.seriesName ?? "") }
+    }
+
+    private func achievementBadgeImage(_ badge: AchievementBadge, size: CGFloat) -> some View {
+        Group {
+            if let uiImage = decodeBase64Image(badge.image) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+            } else if let urlStr = badge.image, let url = URL(string: urlStr), urlStr.hasPrefix("http") {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFit()
+                    default:
+                        badgePlaceholder(badge.name, size: size)
+                    }
+                }
+            } else {
+                badgePlaceholder(badge.name, size: size)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(DojoTheme.piuGold, lineWidth: 1.5))
+    }
+
+    private func badgePlaceholder(_ name: String?, size: CGFloat) -> some View {
+        Circle().fill(DojoTheme.piuBorder)
+            .overlay(
+                Text(String((name ?? "?").prefix(1)))
+                    .font(.system(size: size * 0.4, weight: .bold))
+                    .foregroundColor(.white)
+            )
+    }
+
+    /// Decode base64 image, handling optional data URL prefix
+    private func decodeBase64Image(_ str: String?) -> UIImage? {
+        guard let str = str, !str.isEmpty else { return nil }
+        // Strip data URL prefix if present
+        let base64: String
+        if let range = str.range(of: ";base64,") {
+            base64 = String(str[range.upperBound...])
+        } else {
+            base64 = str
+        }
+        guard let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters) else { return nil }
+        return UIImage(data: data)
+    }
+
+    private func achievementSeriesSheet(seriesId: String) -> some View {
+        let badges = vm.achievements.filter { ($0.seriesId ?? $0.id) == seriesId }
+        let seriesName = badges.first?.seriesName ?? "Achievements"
+
+        return NavigationStack {
+            ZStack {
+                DojoTheme.piuBg.ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 12) {
+                        ForEach(badges) { badge in
+                            achievementRow(badge)
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle(seriesName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { selectedAchievementSeries = nil }
+                        .foregroundColor(DojoTheme.piuAccent)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Helpers

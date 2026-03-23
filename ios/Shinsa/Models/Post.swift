@@ -80,6 +80,29 @@ struct PumpResponse: Codable {
     }
 }
 
+/// Handles API returning double as string, int, or double
+struct FlexDouble: Codable {
+    let value: Double
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let d = try? container.decode(Double.self) {
+            value = d
+        } else if let i = try? container.decode(Int.self) {
+            value = Double(i)
+        } else if let s = try? container.decode(String.self), let d = Double(s) {
+            value = d
+        } else {
+            value = 0
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
+}
+
 // Handles API returning either bool or int for pumped status
 enum BoolOrInt: Codable {
     case bool(Bool)
